@@ -17,20 +17,16 @@
  *   3 - Firebase API error
  */
 
-import { initializeApp, cert } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 
 const email = process.env.EMAIL || process.argv[2];
 const action = process.env.ACTION || process.argv[3];
 const appIdsRaw = process.env.APP_IDS || process.argv[4];
 
 if (!email || !action || !appIdsRaw) {
-  console.error(
-    "Error: email, action, and app_ids arguments are all required.",
-  );
-  console.error(
-    "Usage: node scripts/manage-access.js <email> <action> <app_ids>",
-  );
+  console.error('Error: email, action, and app_ids arguments are all required.');
+  console.error('Usage: node scripts/manage-access.js <email> <action> <app_ids>');
   process.exit(1);
 }
 
@@ -40,39 +36,33 @@ if (!emailPattern.test(email)) {
   process.exit(1);
 }
 
-const validActions = ["grant", "revoke", "set"];
+const validActions = ['grant', 'revoke', 'set'];
 if (!validActions.includes(action)) {
-  console.error(
-    `Error: invalid action "${action}". Must be one of: ${validActions.join(", ")}.`,
-  );
+  console.error(`Error: invalid action "${action}". Must be one of: ${validActions.join(', ')}.`);
   process.exit(1);
 }
 
 const newAppIds = appIdsRaw
-  .split(",")
+  .split(',')
   .map((id) => id.trim())
   .filter((id) => id.length > 0);
 
 if (newAppIds.length === 0) {
-  console.error(
-    "Error: no valid app IDs provided. Please provide comma-separated app IDs.",
-  );
+  console.error('Error: no valid app IDs provided. Please provide comma-separated app IDs.');
   process.exit(1);
 }
 
 const invalidAppIds = newAppIds.filter((id) => !/^[A-Za-z0-9_-]+$/.test(id));
 if (invalidAppIds.length > 0) {
   console.error(
-    `Error: invalid app ID(s): ${invalidAppIds.join(", ")}. App IDs must contain only letters, numbers, underscores, or hyphens.`,
+    `Error: invalid app ID(s): ${invalidAppIds.join(', ')}. App IDs must contain only letters, numbers, underscores, or hyphens.`
   );
   process.exit(1);
 }
 
 const saKeyJson = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!saKeyJson) {
-  console.error(
-    "Error: FIREBASE_SERVICE_ACCOUNT environment variable is not set.",
-  );
+  console.error('Error: FIREBASE_SERVICE_ACCOUNT environment variable is not set.');
   process.exit(1);
 }
 
@@ -80,7 +70,7 @@ let serviceAccount;
 try {
   serviceAccount = JSON.parse(saKeyJson);
 } catch {
-  console.error("Error: FIREBASE_SERVICE_ACCOUNT is not valid JSON.");
+  console.error('Error: FIREBASE_SERVICE_ACCOUNT is not valid JSON.');
   process.exit(1);
 }
 
@@ -92,11 +82,11 @@ try {
   const currentClaims = user.customClaims || {};
   let apps = currentClaims.apps || [];
 
-  if (action === "grant") {
+  if (action === 'grant') {
     apps = [...new Set([...apps, ...newAppIds])];
-  } else if (action === "revoke") {
+  } else if (action === 'revoke') {
     apps = apps.filter((id) => !newAppIds.includes(id));
-  } else if (action === "set") {
+  } else if (action === 'set') {
     apps = newAppIds;
   }
 
@@ -104,12 +94,12 @@ try {
 
   console.log(`Access updated for ${email}`);
   console.log(`Action: ${action}`);
-  console.log(`Apps: ${apps.join(", ")}`);
+  console.log(`Apps: ${apps.join(', ')}`);
 } catch (err) {
-  if (err.code === "auth/user-not-found") {
+  if (err.code === 'auth/user-not-found') {
     console.error(`Error: no user found with email "${email}".`);
     process.exit(3);
   }
-  console.error(`Firebase error (${err.code || "unknown"}): ${err.message}`);
+  console.error(`Firebase error (${err.code || 'unknown'}): ${err.message}`);
   process.exit(3);
 }
