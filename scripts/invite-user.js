@@ -60,7 +60,13 @@ try {
   });
   console.log(`Created user: ${userRecord.uid} (${userRecord.email})`);
 
-  const resetLink = await auth.generatePasswordResetLink(email);
+  const actionCodeSettings = {
+    url: process.env.APP_URL || "https://olympus-dfa00.web.app",
+  };
+  const resetLink = await auth.generatePasswordResetLink(
+    email,
+    actionCodeSettings,
+  );
   console.log("Invitation link generated successfully.");
 
   if (process.env.GITHUB_OUTPUT) {
