@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       email:
-        description: 'User email address'
+        description: "Email address of the user"
         required: true
         type: string
       action:
-        description: 'Action to perform'
+        description: "Action to perform"
         required: true
         type: choice
         options:
@@ -16,77 +16,58 @@ on:
           - revoke
           - set
       app_ids:
-        description: 'Comma-separated app IDs (e.g., app1,app2,app3)'
+        description: "Comma-separated app IDs (e.g., app1,app2,app3)"
         required: true
         type: string
+
+permissions:
+  contents: read
 
 jobs:
   manage_access:
     runs-on: ubuntu-latest
-    
+    environment: production
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
-      - name: Install dependencies
-        run: npm install firebase-admin
-      
-      - name: Manage user access
-        run: |
-          cat > manage-access.js << 'EOF'
-          const admin = require('firebase-admin');
-          
-          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-          admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-          });
-          
-          async function manageAccess(email, action, appIds) {
-            try {
-              const user = await admin.auth().getUserByEmail(email);
-              const currentClaims = user.customClaims || {};
-              let apps = currentClaims.apps || [];
-              
-              const newAppIds = appIds.split(',').map(id => id.trim());
-              
-              if (action === 'grant') {
-                // Add new apps, avoiding duplicates
-                apps = [...new Set([...apps, ...newAppIds])];
-              } else if (action === 'revoke') {
-                // Remove specified apps
-                apps = apps.filter(id => !newAppIds.includes(id));
-              } else if (action === 'set') {
-                // Replace with new list
-                apps = newAppIds;
-              }
-              
-              await admin.auth().setCustomUserClaims(user.uid, { apps });
-              
-              console.log(`✅ Access updated for ${email}`);
-              console.log(`Action: ${action}`);
-              console.log(`Apps: ${apps.join(', ')}`);
-              
-            } catch (error) {
-              console.error('❌ Error:', error.message);
-              process.exit(1);
-            }
-          }
-          
-          manageAccess(process.argv[2], process.argv[3], process.argv[4]);
-          EOF
-          
-          node manage-access.js "${{ inputs.email }}" "${{ inputs.action }}" "${{ inputs.app_ids }}"
+      - name: Validate email format
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      
-      - name: Summary
+          EMAIL: ${{ inputs.email }}
         run: |
-          echo "### ✅ Access Updated" >> $GITHUB_STEP_SUMMARY
-          echo "**Email:** ${{ inputs.email }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Action:** ${{ inputs.action }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Apps:** ${{ inputs.app_ids }}" >> $GITHUB_STEP_SUMMARY
+          if [[ ! "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            echo "::error::Invalid email format: $EMAIL"
+            exit 1
+          fi
+          echo "Email format valid: $EMAIL"
+
+      - uses: actions/checkout@v4
+
+      - name: Install script dependencies
+        run: npm install --prefix scripts
+
+      - name: Manage user access
+        id: manage
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          EMAIL: ${{ inputs.email }}
+          ACTION: ${{ inputs.action }}
+          APP_IDS: ${{ inputs.app_ids }}
+        run: node scripts/manage-access.js
+
+      - name: Summary
+        if: always()
+        run: |
+          if [[ "${{ steps.manage.outcome }}" == "success" ]]; then
+            echo "## Access Updated" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Email:** ${{ inputs.email }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Action:** ${{ inputs.action }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Apps:** ${{ inputs.app_ids }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Access Update Failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Email:** ${{ inputs.email }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Action:** ${{ inputs.action }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Apps:** ${{ inputs.app_ids }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Check the logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
