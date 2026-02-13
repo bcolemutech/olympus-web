@@ -20,3 +20,11 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
           channelId: live
           projectId: olympus-dfa00
+  deploy_firestore_rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: w9jds/setup-firebase@main
+        with:
+          gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+      - run: firebase deploy --only firestore:rules --project olympus-dfa00
