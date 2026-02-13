@@ -7,6 +7,7 @@
  * a password-reset link that serves as the invitation.
  *
  * Usage:
+ *   FIREBASE_SERVICE_ACCOUNT='<json>' EMAIL='user@example.com' node scripts/invite-user.js
  *   FIREBASE_SERVICE_ACCOUNT='<json>' node scripts/invite-user.js user@example.com
  *
  * Exit codes:
@@ -19,10 +20,16 @@
 import { initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 
-const email = process.argv[2];
+const email = process.env.EMAIL || process.argv[2];
 if (!email) {
   console.error("Error: email argument is required.");
-  console.error("Usage: node invite-user.js <email>");
+  console.error("Usage: EMAIL='user@example.com' node invite-user.js");
+  process.exit(1);
+}
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+if (!emailPattern.test(email)) {
+  console.error(`Error: invalid email format: "${email}".`);
   process.exit(1);
 }
 
