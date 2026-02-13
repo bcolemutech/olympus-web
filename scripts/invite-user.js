@@ -61,12 +61,12 @@ try {
   console.log(`Created user: ${userRecord.uid} (${userRecord.email})`);
 
   const resetLink = await auth.generatePasswordResetLink(email);
-  console.log(`Invitation link: ${resetLink}`);
+  console.log("Invitation link generated successfully.");
 
   if (process.env.GITHUB_OUTPUT) {
     const { appendFileSync } = await import("node:fs");
     appendFileSync(process.env.GITHUB_OUTPUT, `uid=${userRecord.uid}\n`);
-    appendFileSync(process.env.GITHUB_OUTPUT, `link=${resetLink}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `link_generated=true\n`);
   }
 } catch (err) {
   if (err.code === "auth/email-already-exists") {

@@ -46,9 +46,8 @@ jobs:
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "- **Email:** ${{ inputs.email }}" >> "$GITHUB_STEP_SUMMARY"
             echo "- **UID:** ${{ steps.invite.outputs.uid }}" >> "$GITHUB_STEP_SUMMARY"
-            echo "- **Invitation Link:** ${{ steps.invite.outputs.link }}" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "> Send the invitation link to the user. They will use it to set their password." >> "$GITHUB_STEP_SUMMARY"
+            echo "> Invitation link generated. The user can sign in using the password reset flow for their email." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## Invitation Failed" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
