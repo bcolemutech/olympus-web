@@ -12,6 +12,7 @@ permissions:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v4
       - uses: FirebaseExtended/action-hosting-deploy@v0
@@ -22,6 +23,7 @@ jobs:
           projectId: olympus-dfa00
   deploy_firestore_rules:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v4
       - uses: w9jds/setup-firebase@v1.0.0
