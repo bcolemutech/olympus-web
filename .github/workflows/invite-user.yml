@@ -1,0 +1,55 @@
+name: Invite User to Firebase
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Email address of the user to invite"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  invite:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate email format
+        run: |
+          email="${{ inputs.email }}"
+          if [[ ! "$email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            echo "::error::Invalid email format: $email"
+            exit 1
+          fi
+          echo "Email format valid: $email"
+
+      - uses: actions/checkout@v4
+
+      - name: Install script dependencies
+        run: npm install --prefix scripts
+
+      - name: Invite user
+        id: invite
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+        run: node scripts/invite-user.js "${{ inputs.email }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          if [[ "${{ steps.invite.outcome }}" == "success" ]]; then
+            echo "## User Invited Successfully" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Email:** ${{ inputs.email }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **UID:** ${{ steps.invite.outputs.uid }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Invitation Link:** ${{ steps.invite.outputs.link }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> Send the invitation link to the user. They will use it to set their password." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Invitation Failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Email:** ${{ inputs.email }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Check the logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
