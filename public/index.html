@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Olympus - Coming Soon</title>
+    <title>Olympus</title>
 
     <!-- update the version number as needed -->
     <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
@@ -43,6 +43,12 @@
         align-items: center;
         justify-content: center;
       }
+
+      .hidden {
+        display: none !important;
+      }
+
+      /* ── Stars ── */
 
       .stars {
         position: fixed;
@@ -87,6 +93,50 @@
         pointer-events: none;
         z-index: 0;
       }
+
+      /* ── Loading Screen ── */
+
+      .loading-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0a0e1a;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(255, 183, 77, 0.15);
+        border-top-color: #ffb74d;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      .spinner--small {
+        width: 18px;
+        height: 18px;
+        border-width: 2px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .loading-text {
+        margin-top: 1rem;
+        color: #90a4ae;
+        font-size: 0.9rem;
+        font-style: italic;
+        letter-spacing: 0.05em;
+      }
+
+      /* ── Landing Container ── */
 
       .container {
         position: relative;
@@ -207,6 +257,287 @@
         margin-top: 1rem;
       }
 
+      /* ── Login Button ── */
+
+      .login-btn {
+        display: inline-block;
+        margin-top: 2rem;
+        padding: 0.85rem 2.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #0a0e1a;
+        background: linear-gradient(135deg, #ffd54f, #ffb74d, #ff8a65);
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .login-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(255, 183, 77, 0.35);
+      }
+
+      .login-btn:active {
+        transform: translateY(0);
+      }
+
+      /* ── Login Modal ── */
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(5, 7, 15, 0.85);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        padding: 1rem;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.3s,
+          visibility 0.3s;
+      }
+
+      .modal-overlay.active {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .login-modal {
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+        background: #111827;
+        border: 1px solid rgba(255, 183, 77, 0.2);
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        text-align: center;
+        transform: translateY(20px) scale(0.97);
+        transition: transform 0.3s;
+      }
+
+      .modal-overlay.active .login-modal {
+        transform: translateY(0) scale(1);
+      }
+
+      .modal-close {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 32px;
+        height: 32px;
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        color: #90a4ae;
+        font-size: 1.1rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          border-color 0.2s,
+          color 0.2s;
+        line-height: 1;
+      }
+
+      .modal-close:hover {
+        border-color: rgba(255, 183, 77, 0.4);
+        color: #ffb74d;
+      }
+
+      .modal-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
+        display: block;
+      }
+
+      .modal-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        background: linear-gradient(135deg, #ffd54f, #ffb74d);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.35rem;
+        text-transform: uppercase;
+      }
+
+      .modal-subtitle {
+        font-size: 0.9rem;
+        color: #6b7280;
+        font-style: italic;
+        margin-bottom: 1.75rem;
+        letter-spacing: 0.03em;
+      }
+
+      .form-group {
+        margin-bottom: 1rem;
+        text-align: left;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 0.75rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.4rem;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        font-size: 0.95rem;
+        font-family: inherit;
+        color: #e0e0e0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .form-input::placeholder {
+        color: #4b5563;
+      }
+
+      .form-input:focus {
+        border-color: rgba(255, 183, 77, 0.5);
+        box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.1);
+      }
+
+      .form-submit {
+        width: 100%;
+        margin-top: 0.75rem;
+        padding: 0.8rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        font-family: inherit;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #0a0e1a;
+        background: linear-gradient(135deg, #ffd54f, #ffb74d, #ff8a65);
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s,
+          opacity 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      .form-submit:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(255, 183, 77, 0.3);
+      }
+
+      .form-submit:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+
+      .error-message {
+        margin-top: 1rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.85rem;
+        color: #fca5a5;
+        background: rgba(220, 38, 38, 0.1);
+        border: 1px solid rgba(220, 38, 38, 0.2);
+        border-radius: 8px;
+        line-height: 1.5;
+        font-style: italic;
+      }
+
+      /* ── Authenticated View ── */
+
+      .auth-view {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+        padding: 2rem;
+        max-width: 600px;
+      }
+
+      .auth-icon {
+        font-size: 64px;
+        margin-bottom: 1rem;
+        display: inline-block;
+        animation: float 3s ease-in-out infinite;
+      }
+
+      .auth-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        background: linear-gradient(135deg, #ffd54f, #ffb74d, #ff8a65);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+      }
+
+      .auth-subtitle {
+        font-size: 1rem;
+        color: #90a4ae;
+        font-style: italic;
+        margin-bottom: 0.5rem;
+      }
+
+      .auth-email {
+        font-size: 0.85rem;
+        color: #6b7280;
+        margin-bottom: 2rem;
+      }
+
+      .auth-divider {
+        width: 80px;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #ffb74d, transparent);
+        margin: 0 auto 2rem;
+      }
+
+      .signout-btn {
+        display: inline-block;
+        padding: 0.65rem 2rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        font-family: inherit;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #90a4ae;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          border-color 0.2s,
+          color 0.2s;
+      }
+
+      .signout-btn:hover {
+        border-color: rgba(255, 183, 77, 0.4);
+        color: #ffb74d;
+      }
+
+      /* ── Mobile ── */
+
       @media (max-width: 600px) {
         h1 {
           font-size: 2.2rem;
@@ -232,14 +563,38 @@
         .icon {
           font-size: 56px;
         }
+
+        .login-btn {
+          width: 100%;
+          padding: 0.9rem 1.5rem;
+        }
+
+        .login-modal {
+          padding: 2rem 1.5rem;
+        }
+
+        .modal-title {
+          font-size: 1.25rem;
+        }
+
+        .auth-title {
+          font-size: 1.8rem;
+        }
       }
     </style>
   </head>
   <body>
+    <!-- Loading screen shown while auth state resolves -->
+    <div class="loading-screen" id="loading-screen">
+      <div class="spinner"></div>
+      <p class="loading-text">Consulting the Oracle&hellip;</p>
+    </div>
+
     <div class="stars" id="stars"></div>
     <div class="glow-ring"></div>
 
-    <div class="container">
+    <!-- Landing page (shown when logged out) -->
+    <div class="container hidden" id="landing">
       <div class="icon" aria-hidden="true">&#127964;</div>
       <h1>Olympus</h1>
       <p class="tagline">The gods are forging something legendary</p>
@@ -271,17 +626,71 @@
         Coming Soon
         <span class="bolt" aria-hidden="true">&#9889;</span>
       </p>
+
+      <button class="login-btn" id="open-login" type="button">Enter Olympus</button>
+    </div>
+
+    <!-- Login modal -->
+    <div class="modal-overlay" id="login-modal" role="dialog" aria-modal="true" aria-label="Login">
+      <div class="login-modal">
+        <button class="modal-close" id="close-login" type="button" aria-label="Close">
+          &times;
+        </button>
+        <span class="modal-icon" aria-hidden="true">&#128268;</span>
+        <h2 class="modal-title">The Gates of Olympus</h2>
+        <p class="modal-subtitle">Only the chosen may enter</p>
+
+        <form id="login-form" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="email">Email</label>
+            <input
+              class="form-input"
+              id="email"
+              type="email"
+              placeholder="your@email.com"
+              autocomplete="email"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="password">Password</label>
+            <input
+              class="form-input"
+              id="password"
+              type="password"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <button class="form-submit" id="submit-btn" type="submit">
+            <span id="submit-text">Enter</span>
+          </button>
+        </form>
+
+        <div class="error-message hidden" id="error-message" role="alert"></div>
+      </div>
+    </div>
+
+    <!-- Authenticated view (shown when logged in) -->
+    <div class="auth-view hidden" id="auth-view">
+      <div class="auth-icon" aria-hidden="true">&#127964;</div>
+      <h1 class="auth-title">Welcome to Olympus</h1>
+      <p class="auth-subtitle">The gods have granted you passage</p>
+      <p class="auth-email" id="auth-email"></p>
+      <div class="auth-divider"></div>
+      <button class="signout-btn" id="signout-btn" type="button">Leave Olympus</button>
     </div>
 
     <script>
       // Generate twinkling stars
       (function () {
-        const container = document.getElementById('stars');
-        const count = 80;
-        for (let i = 0; i < count; i++) {
-          const star = document.createElement('div');
+        var container = document.getElementById('stars');
+        var count = 80;
+        for (var i = 0; i < count; i++) {
+          var star = document.createElement('div');
           star.classList.add('star');
-          const size = Math.random() * 2.5 + 0.5;
+          var size = Math.random() * 2.5 + 0.5;
           star.style.width = size + 'px';
           star.style.height = size + 'px';
           star.style.top = Math.random() * 100 + '%';
@@ -293,9 +702,21 @@
       })();
 
       document.addEventListener('DOMContentLoaded', function () {
+        var loadingScreen = document.getElementById('loading-screen');
+        var landing = document.getElementById('landing');
+        var loginModal = document.getElementById('login-modal');
+        var authView = document.getElementById('auth-view');
+        var loginForm = document.getElementById('login-form');
+        var emailInput = document.getElementById('email');
+        var passwordInput = document.getElementById('password');
+        var submitBtn = document.getElementById('submit-btn');
+        var submitText = document.getElementById('submit-text');
+        var errorMessage = document.getElementById('error-message');
+        var authEmail = document.getElementById('auth-email');
+
         try {
-          let app = firebase.app();
-          let features = [
+          var app = firebase.app();
+          var features = [
             'auth',
             'database',
             'firestore',
@@ -305,11 +726,123 @@
             'analytics',
             'remoteConfig',
             'performance',
-          ].filter((feature) => typeof app[feature] === 'function');
-          console.log(`Firebase SDK loaded with ${features.join(', ')}`);
+          ].filter(function (feature) {
+            return typeof app[feature] === 'function';
+          });
+          console.log('Firebase SDK loaded with ' + features.join(', '));
         } catch (e) {
           console.error(e);
         }
+
+        // Map Firebase error codes to themed messages
+        function getErrorMessage(code) {
+          var messages = {
+            'auth/wrong-password': 'The gates remain sealed. Your credentials displease the gods.',
+            'auth/invalid-credential':
+              'The gates remain sealed. Your credentials displease the gods.',
+            'auth/user-not-found': 'The Fates have not woven your thread into Olympus.',
+            'auth/invalid-email': 'The oracle cannot decipher this inscription.',
+            'auth/user-disabled': 'Your passage has been revoked by decree of the gods.',
+            'auth/too-many-requests':
+              'You have angered the gods with too many attempts. Wait before trying again.',
+            'auth/network-request-failed':
+              'The winds of Hermes cannot carry your message. Check your connection.',
+          };
+          return messages[code] || 'An unknown force blocks your path. Try again.';
+        }
+
+        // Show / hide helpers
+        function showLanding() {
+          landing.classList.remove('hidden');
+          authView.classList.add('hidden');
+        }
+
+        function showAuthView(user) {
+          landing.classList.add('hidden');
+          authView.classList.remove('hidden');
+          authEmail.textContent = user.email;
+        }
+
+        function openModal() {
+          loginForm.reset();
+          errorMessage.classList.add('hidden');
+          errorMessage.textContent = '';
+          resetSubmitButton();
+          loginModal.classList.add('active');
+          emailInput.focus();
+        }
+
+        function closeModal() {
+          loginModal.classList.remove('active');
+        }
+
+        function resetSubmitButton() {
+          submitBtn.disabled = false;
+          submitText.textContent = 'Enter';
+        }
+
+        // Auth state observer
+        firebase.auth().onAuthStateChanged(function (user) {
+          loadingScreen.classList.add('hidden');
+          if (user) {
+            closeModal();
+            showAuthView(user);
+          } else {
+            showLanding();
+          }
+        });
+
+        // Open login modal
+        document.getElementById('open-login').addEventListener('click', openModal);
+
+        // Close modal
+        document.getElementById('close-login').addEventListener('click', closeModal);
+
+        // Close modal on overlay click
+        loginModal.addEventListener('click', function (e) {
+          if (e.target === loginModal) {
+            closeModal();
+          }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && loginModal.classList.contains('active')) {
+            closeModal();
+          }
+        });
+
+        // Login form submission
+        loginForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var email = emailInput.value.trim();
+          var password = passwordInput.value;
+
+          if (!email || !password) {
+            errorMessage.textContent = 'The gods require both name and secret word.';
+            errorMessage.classList.remove('hidden');
+            return;
+          }
+
+          // Set loading state
+          submitBtn.disabled = true;
+          submitText.textContent = 'The gates are opening\u2026';
+          errorMessage.classList.add('hidden');
+
+          firebase
+            .auth()
+            .signInWithEmailAndPassword(email, password)
+            .catch(function (error) {
+              errorMessage.textContent = getErrorMessage(error.code);
+              errorMessage.classList.remove('hidden');
+              resetSubmitButton();
+            });
+        });
+
+        // Sign out
+        document.getElementById('signout-btn').addEventListener('click', function () {
+          firebase.auth().signOut();
+        });
       });
     </script>
   </body>
