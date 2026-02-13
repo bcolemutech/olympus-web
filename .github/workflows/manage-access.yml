@@ -1,0 +1,73 @@
+name: Manage App Access
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Email address of the user"
+        required: true
+        type: string
+      action:
+        description: "Action to perform"
+        required: true
+        type: choice
+        options:
+          - grant
+          - revoke
+          - set
+      app_ids:
+        description: "Comma-separated app IDs (e.g., app1,app2,app3)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  manage_access:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Validate email format
+        env:
+          EMAIL: ${{ inputs.email }}
+        run: |
+          if [[ ! "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            echo "::error::Invalid email format: $EMAIL"
+            exit 1
+          fi
+          echo "Email format valid: $EMAIL"
+
+      - uses: actions/checkout@v4
+
+      - name: Install script dependencies
+        run: npm install --prefix scripts
+
+      - name: Manage user access
+        id: manage
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          EMAIL: ${{ inputs.email }}
+          ACTION: ${{ inputs.action }}
+          APP_IDS: ${{ inputs.app_ids }}
+        run: node scripts/manage-access.js
+
+      - name: Summary
+        if: always()
+        run: |
+          if [[ "${{ steps.manage.outcome }}" == "success" ]]; then
+            echo "## Access Updated" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Email:** ${{ inputs.email }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Action:** ${{ inputs.action }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Apps:** ${{ inputs.app_ids }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Access Update Failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Email:** ${{ inputs.email }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Action:** ${{ inputs.action }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Apps:** ${{ inputs.app_ids }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Check the logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
