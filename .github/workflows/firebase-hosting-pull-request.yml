@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: w9jds/setup-firebase@main
+      - uses: w9jds/setup-firebase@v2.0.0
         with:
           gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
       - name: Validate Firestore rules
