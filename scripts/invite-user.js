@@ -52,10 +52,13 @@ try {
 
 const app = initializeApp({ credential: cert(serviceAccount) });
 const auth = getAuth(app);
+const continueUrl =
+  process.env.APP_URL || "https://olympus-dfa00.web.app";
 
+let userRecord;
 try {
   // Step 1: Create the user (no password — they will set it via the email link)
-  const userRecord = await auth.createUser({
+  userRecord = await auth.createUser({
     email,
     emailVerified: false,
     disabled: false,
@@ -80,6 +83,7 @@ try {
       body: JSON.stringify({
         requestType: "PASSWORD_RESET",
         email,
+        continueUrl,
         returnOobLink: false,
       }),
     },
@@ -87,9 +91,11 @@ try {
 
   if (!response.ok) {
     const body = await response.json();
-    throw new Error(
+    const error = new Error(
       `Identity Toolkit API error (${response.status}): ${body.error?.message || JSON.stringify(body)}`,
     );
+    error.code = "identitytoolkit";
+    throw error;
   }
 
   console.log(`Password reset email sent to ${email}.`);
@@ -104,6 +110,20 @@ try {
     console.error(`Error: A user with email "${email}" already exists.`);
     process.exit(2);
   }
+
+  // Clean up orphaned user if creation succeeded but email sending failed
+  if (userRecord) {
+    console.error("Email sending failed — deleting orphaned user...");
+    try {
+      await auth.deleteUser(userRecord.uid);
+      console.error(`Deleted user ${userRecord.uid}.`);
+    } catch (deleteErr) {
+      console.error(
+        `Warning: failed to delete orphaned user ${userRecord.uid}: ${deleteErr.message}`,
+      );
+    }
+  }
+
   console.error(`Firebase error (${err.code || "unknown"}): ${err.message}`);
   process.exit(3);
 }
