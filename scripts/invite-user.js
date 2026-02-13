@@ -3,8 +3,8 @@
 /**
  * Invite a user to the Olympus Firebase project.
  *
- * Creates a Firebase Auth user with the given email, then generates
- * a password-reset link that serves as the invitation.
+ * Creates a Firebase Auth user with the given email, then sends
+ * a password-reset email via the Identity Toolkit API as the invitation.
  *
  * Usage:
  *   FIREBASE_SERVICE_ACCOUNT='<json>' EMAIL='user@example.com' node scripts/invite-user.js
@@ -19,6 +19,7 @@
 
 import { initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { GoogleAuth } from "google-auth-library";
 
 const email = process.env.EMAIL || process.argv[2];
 if (!email) {
@@ -53,6 +54,7 @@ const app = initializeApp({ credential: cert(serviceAccount) });
 const auth = getAuth(app);
 
 try {
+  // Step 1: Create the user (no password — they will set it via the email link)
   const userRecord = await auth.createUser({
     email,
     emailVerified: false,
@@ -60,19 +62,42 @@ try {
   });
   console.log(`Created user: ${userRecord.uid} (${userRecord.email})`);
 
-  const actionCodeSettings = {
-    url: process.env.APP_URL || "https://olympus-dfa00.web.app",
-  };
-  const resetLink = await auth.generatePasswordResetLink(
-    email,
-    actionCodeSettings,
+  // Step 2: Send password reset email via Identity Toolkit REST API
+  const googleAuth = new GoogleAuth({
+    credentials: serviceAccount,
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  });
+  const accessToken = await googleAuth.getAccessToken();
+
+  const response = await fetch(
+    "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        requestType: "PASSWORD_RESET",
+        email,
+        returnOobLink: false,
+      }),
+    },
   );
-  console.log("Invitation link generated successfully.");
+
+  if (!response.ok) {
+    const body = await response.json();
+    throw new Error(
+      `Identity Toolkit API error (${response.status}): ${body.error?.message || JSON.stringify(body)}`,
+    );
+  }
+
+  console.log(`Password reset email sent to ${email}.`);
 
   if (process.env.GITHUB_OUTPUT) {
     const { appendFileSync } = await import("node:fs");
     appendFileSync(process.env.GITHUB_OUTPUT, `uid=${userRecord.uid}\n`);
-    appendFileSync(process.env.GITHUB_OUTPUT, `link_generated=true\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `email_sent=true\n`);
   }
 } catch (err) {
   if (err.code === "auth/email-already-exists") {
