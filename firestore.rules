@@ -3,7 +3,8 @@ rules_version='2'
 service cloud.firestore {
   match /databases/{database}/documents {
     match /apps/{appId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+                  && appId in request.auth.token.apps;
       allow write: if false;
     }
     match /{document=**} {

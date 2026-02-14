@@ -1075,29 +1075,47 @@
           apps.forEach((a) => {
             const tile = document.createElement('div');
             tile.className = 'app-tile';
-            tile.innerHTML =
-              '<span class="app-tile-icon" aria-hidden="true">' +
-              a.icon +
-              '</span>' +
-              '<div class="app-tile-title">' +
-              a.name +
-              '</div>' +
-              '<p class="app-tile-desc">' +
-              a.description +
-              '</p>';
+
+            const icon = document.createElement('span');
+            icon.className = 'app-tile-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.textContent = a.icon;
+
+            const title = document.createElement('div');
+            title.className = 'app-tile-title';
+            title.textContent = a.name;
+
+            const desc = document.createElement('p');
+            desc.className = 'app-tile-desc';
+            desc.textContent = a.description;
+
+            tile.appendChild(icon);
+            tile.appendChild(title);
+            tile.appendChild(desc);
             grid.appendChild(tile);
           });
         };
 
         const fetchGrantedApps = async (appIds) => {
           if (!appIds || appIds.length === 0) return [];
-          const snapshot = await db
-            .collection('apps')
-            .where(firebase.firestore.FieldPath.documentId(), 'in', appIds.slice(0, 10))
-            .where('enabled', '==', true)
-            .orderBy('order')
-            .get();
-          return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          // Firestore 'in' queries are limited to 10 items; chunk if needed
+          const chunks = [];
+          for (let i = 0; i < appIds.length; i += 10) {
+            chunks.push(appIds.slice(i, i + 10));
+          }
+          const results = await Promise.all(
+            chunks.map((chunk) =>
+              db
+                .collection('apps')
+                .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
+                .where('enabled', '==', true)
+                .orderBy('order')
+                .get()
+            )
+          );
+          return results
+            .flatMap((snapshot) => snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
         };
 
         const loadAppsForUser = async (user) => {

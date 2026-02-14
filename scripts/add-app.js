@@ -22,7 +22,7 @@
  */
 
 import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const appId = process.env.APP_ID || process.argv[2];
 const appName = process.env.APP_NAME || process.argv[3];
@@ -50,6 +50,11 @@ if (!/^[A-Za-z0-9_-]+$/.test(appId)) {
 const validTypes = ['embedded', 'redirect'];
 if (!validTypes.includes(appType)) {
   console.error(`Error: invalid type "${appType}". Must be one of: ${validTypes.join(', ')}.`);
+  process.exit(1);
+}
+
+if (appType === 'redirect' && !appUrl) {
+  console.error('Error: redirect apps require a non-empty URL (APP_URL).');
   process.exit(1);
 }
 
@@ -86,8 +91,10 @@ const docData = {
 
 if (appType === 'redirect') {
   docData.url = appUrl;
+  docData.path = FieldValue.delete();
 } else {
   docData.path = appUrl;
+  docData.url = FieldValue.delete();
 }
 
 try {

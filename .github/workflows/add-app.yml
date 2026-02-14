@@ -45,15 +45,21 @@ jobs:
     environment: production
 
     steps:
-      - name: Validate app ID format
+      - name: Validate inputs
         env:
           APP_ID: ${{ inputs.app_id }}
+          APP_TYPE: ${{ inputs.app_type }}
+          APP_URL: ${{ inputs.app_url }}
         run: |
           if [[ ! "$APP_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
             echo "::error::Invalid app ID format: $APP_ID"
             exit 1
           fi
           echo "App ID valid: $APP_ID"
+          if [[ "$APP_TYPE" == "redirect" && -z "$APP_URL" ]]; then
+            echo "::error::Redirect apps require a non-empty URL"
+            exit 1
+          fi
 
       - uses: actions/checkout@v4
 
