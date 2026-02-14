@@ -464,59 +464,68 @@
         font-style: italic;
       }
 
-      /* ── Authenticated View ── */
+      /* ── Grand Hall (Authenticated View) ── */
 
       .auth-view {
-        position: relative;
+        position: fixed;
+        inset: 0;
         z-index: 1;
-        text-align: center;
-        padding: 2rem;
-        max-width: 600px;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
       }
 
-      .auth-icon {
-        font-size: 64px;
-        margin-bottom: 1rem;
-        display: inline-block;
-        animation: float 3s ease-in-out infinite;
+      .hall-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 2rem;
+        background: rgba(17, 24, 39, 0.9);
+        border-bottom: 1px solid rgba(255, 183, 77, 0.15);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
       }
 
-      .auth-title {
-        font-size: 2.5rem;
+      .hall-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .hall-brand-icon {
+        font-size: 1.75rem;
+      }
+
+      .hall-brand-title {
+        font-size: 1.1rem;
         font-weight: 700;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         background: linear-gradient(135deg, #ffd54f, #ffb74d, #ff8a65);
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
-        text-transform: uppercase;
       }
 
-      .auth-subtitle {
-        font-size: 1rem;
-        color: #90a4ae;
-        font-style: italic;
-        margin-bottom: 0.5rem;
+      .hall-user {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
       }
 
-      .auth-email {
-        font-size: 0.85rem;
+      .hall-email {
+        font-size: 0.8rem;
         color: #6b7280;
-        margin-bottom: 2rem;
-      }
-
-      .auth-divider {
-        width: 80px;
-        height: 2px;
-        background: linear-gradient(90deg, transparent, #ffb74d, transparent);
-        margin: 0 auto 2rem;
+        letter-spacing: 0.03em;
       }
 
       .signout-btn {
         display: inline-block;
-        padding: 0.65rem 2rem;
-        font-size: 0.85rem;
+        padding: 0.5rem 1.25rem;
+        font-size: 0.75rem;
         font-weight: 600;
         font-family: inherit;
         letter-spacing: 0.08em;
@@ -534,6 +543,113 @@
       .signout-btn:hover {
         border-color: rgba(255, 183, 77, 0.4);
         color: #ffb74d;
+      }
+
+      .hall-content {
+        flex: 1;
+        padding: 3rem 2rem;
+        max-width: 1100px;
+        width: 100%;
+        margin: 0 auto;
+      }
+
+      .hall-title {
+        font-size: 2.2rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        background: linear-gradient(135deg, #ffd54f, #ffb74d, #ff8a65);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-transform: uppercase;
+        text-align: center;
+        margin-bottom: 0.5rem;
+      }
+
+      .hall-subtitle {
+        font-size: 1rem;
+        color: #90a4ae;
+        font-style: italic;
+        text-align: center;
+        margin-bottom: 0.75rem;
+        letter-spacing: 0.03em;
+      }
+
+      .hall-divider {
+        width: 80px;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #ffb74d, transparent);
+        margin: 0 auto 2.5rem;
+      }
+
+      .app-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .app-tile {
+        padding: 1.75rem 1.5rem;
+        background: rgba(17, 24, 39, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        text-align: center;
+        cursor: default;
+        transition:
+          border-color 0.3s,
+          box-shadow 0.3s,
+          transform 0.3s;
+      }
+
+      .app-tile:hover {
+        border-color: rgba(255, 183, 77, 0.35);
+        box-shadow: 0 4px 24px rgba(255, 183, 77, 0.08);
+        transform: translateY(-4px);
+      }
+
+      .app-tile-icon {
+        font-size: 2.75rem;
+        margin-bottom: 0.75rem;
+        display: block;
+      }
+
+      .app-tile-title {
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        background: linear-gradient(135deg, #ffd54f, #ffb74d);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.4rem;
+      }
+
+      .app-tile-desc {
+        font-size: 0.85rem;
+        color: #6b7280;
+        line-height: 1.5;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+      }
+
+      .empty-state-icon {
+        font-size: 3.5rem;
+        margin-bottom: 1rem;
+        display: block;
+        opacity: 0.6;
+      }
+
+      .empty-state-text {
+        font-size: 1rem;
+        color: #546e7a;
+        font-style: italic;
+        line-height: 1.6;
+        max-width: 400px;
+        margin: 0 auto;
       }
 
       /* ── Mobile ── */
@@ -577,8 +693,27 @@
           font-size: 1.25rem;
         }
 
-        .auth-title {
-          font-size: 1.8rem;
+        .hall-header {
+          flex-direction: column;
+          gap: 0.75rem;
+          text-align: center;
+        }
+
+        .hall-user {
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .hall-content {
+          padding: 2rem 1rem;
+        }
+
+        .hall-title {
+          font-size: 1.6rem;
+        }
+
+        .app-grid {
+          grid-template-columns: 1fr;
         }
       }
     </style>
@@ -672,14 +807,40 @@
       </div>
     </div>
 
-    <!-- Authenticated view (shown when logged in) -->
+    <!-- Authenticated view — The Grand Hall (shown when logged in) -->
     <div class="auth-view hidden" id="auth-view">
-      <div class="auth-icon" aria-hidden="true">&#127963;</div>
-      <h1 class="auth-title">Welcome to Olympus</h1>
-      <p class="auth-subtitle">The gods have granted you passage</p>
-      <p class="auth-email" id="auth-email"></p>
-      <div class="auth-divider"></div>
-      <button class="signout-btn" id="signout-btn" type="button">Leave Olympus</button>
+      <header class="hall-header">
+        <div class="hall-brand">
+          <span class="hall-brand-icon" aria-hidden="true">&#127963;</span>
+          <span class="hall-brand-title">The Grand Hall</span>
+        </div>
+        <div class="hall-user">
+          <span class="hall-email" id="hall-email"></span>
+          <button class="signout-btn" id="signout-btn" type="button">Leave Olympus</button>
+        </div>
+      </header>
+
+      <main class="hall-content">
+        <h1 class="hall-title">The Grand Hall of Olympus</h1>
+        <p class="hall-subtitle">The gods have granted you passage</p>
+        <div class="hall-divider"></div>
+
+        <div class="app-grid" id="app-grid">
+          <div class="app-tile">
+            <span class="app-tile-icon" aria-hidden="true">&#128296;</span>
+            <div class="app-tile-title">Forge of Hephaestus</div>
+            <p class="app-tile-desc">Where divine tools are crafted</p>
+          </div>
+        </div>
+
+        <div class="empty-state hidden" id="empty-state">
+          <span class="empty-state-icon" aria-hidden="true">&#128302;</span>
+          <p class="empty-state-text">
+            The gods have yet to reveal your path.<br />
+            Seek an Oracle to gain passage.
+          </p>
+        </div>
+      </main>
     </div>
 
     <script>
@@ -712,7 +873,7 @@
         const submitBtn = document.getElementById('submit-btn');
         const submitText = document.getElementById('submit-text');
         const errorMessage = document.getElementById('error-message');
-        const authEmail = document.getElementById('auth-email');
+        const hallEmail = document.getElementById('hall-email');
 
         // Map Firebase error codes to themed messages
         const ERROR_MESSAGES = {
@@ -761,7 +922,7 @@
         const showAuthView = (user) => {
           landing.classList.add('hidden');
           authView.classList.remove('hidden');
-          authEmail.textContent = user.email;
+          hallEmail.textContent = user.email;
         };
 
         const resetSubmitButton = () => {
