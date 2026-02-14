@@ -1,0 +1,92 @@
+name: Add App to Registry
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_id:
+        description: 'App ID (letters, numbers, hyphens, underscores)'
+        required: true
+        type: string
+      app_name:
+        description: 'Display name (e.g., Forge of Hephaestus)'
+        required: true
+        type: string
+      app_icon:
+        description: "Emoji icon (e.g., \U0001F528)"
+        required: true
+        type: string
+      app_type:
+        description: 'App type'
+        required: true
+        type: choice
+        options:
+          - embedded
+          - redirect
+      app_desc:
+        description: 'Short description'
+        required: true
+        type: string
+      app_url:
+        description: 'URL (redirect) or path (embedded)'
+        required: false
+        type: string
+      app_order:
+        description: 'Display order (integer, default 0)'
+        required: false
+        type: string
+        default: '0'
+
+permissions:
+  contents: read
+
+jobs:
+  add_app:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Validate app ID format
+        env:
+          APP_ID: ${{ inputs.app_id }}
+        run: |
+          if [[ ! "$APP_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "::error::Invalid app ID format: $APP_ID"
+            exit 1
+          fi
+          echo "App ID valid: $APP_ID"
+
+      - uses: actions/checkout@v4
+
+      - name: Install script dependencies
+        run: npm install --prefix scripts
+
+      - name: Add app to registry
+        id: add_app
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          APP_ID: ${{ inputs.app_id }}
+          APP_NAME: ${{ inputs.app_name }}
+          APP_ICON: ${{ inputs.app_icon }}
+          APP_TYPE: ${{ inputs.app_type }}
+          APP_DESC: ${{ inputs.app_desc }}
+          APP_URL: ${{ inputs.app_url }}
+          APP_ORDER: ${{ inputs.app_order }}
+        run: node scripts/add-app.js
+
+      - name: Summary
+        if: always()
+        run: |
+          if [[ "${{ steps.add_app.outcome }}" == "success" ]]; then
+            echo "## App Added Successfully" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **ID:** ${{ inputs.app_id }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Name:** ${{ inputs.app_name }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Type:** ${{ inputs.app_type }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Order:** ${{ inputs.app_order }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## App Addition Failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **ID:** ${{ inputs.app_id }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Check the logs above for details.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
