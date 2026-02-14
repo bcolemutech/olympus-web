@@ -594,7 +594,7 @@
         border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: 14px;
         text-align: center;
-        cursor: default;
+        cursor: pointer;
         transition:
           border-color 0.3s,
           box-shadow 0.3s,
@@ -814,7 +814,7 @@
           <span class="hall-brand-icon" aria-hidden="true">&#127963;</span>
           <span class="hall-brand-title">The Grand Hall</span>
         </div>
-        <div class="hall-user">
+        <div class="hall-user" aria-label="Current user">
           <span class="hall-email" id="hall-email"></span>
           <button class="signout-btn" id="signout-btn" type="button">Leave Olympus</button>
         </div>
@@ -825,13 +825,7 @@
         <p class="hall-subtitle">The gods have granted you passage</p>
         <div class="hall-divider"></div>
 
-        <div class="app-grid" id="app-grid">
-          <div class="app-tile">
-            <span class="app-tile-icon" aria-hidden="true">&#128296;</span>
-            <div class="app-tile-title">Forge of Hephaestus</div>
-            <p class="app-tile-desc">Where divine tools are crafted</p>
-          </div>
-        </div>
+        <div class="app-grid hidden" id="app-grid"></div>
 
         <div class="empty-state hidden" id="empty-state">
           <span class="empty-state-icon" aria-hidden="true">&#128302;</span>
@@ -874,6 +868,8 @@
         const submitText = document.getElementById('submit-text');
         const errorMessage = document.getElementById('error-message');
         const hallEmail = document.getElementById('hall-email');
+        const appGrid = document.getElementById('app-grid');
+        const emptyState = document.getElementById('empty-state');
 
         // Map Firebase error codes to themed messages
         const ERROR_MESSAGES = {
@@ -913,6 +909,41 @@
           return;
         }
 
+        // Placeholder apps — replace with dynamic Firestore data later
+        const PLACEHOLDER_APPS = [
+          {
+            icon: '\uD83D\uDD28',
+            title: 'Forge of Hephaestus',
+            desc: 'Where divine tools are crafted',
+          },
+        ];
+
+        const renderAppGrid = (apps) => {
+          appGrid.innerHTML = '';
+          if (apps.length === 0) {
+            appGrid.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+            return;
+          }
+          emptyState.classList.add('hidden');
+          appGrid.classList.remove('hidden');
+          apps.forEach((app) => {
+            const tile = document.createElement('div');
+            tile.className = 'app-tile';
+            tile.innerHTML =
+              '<span class="app-tile-icon" aria-hidden="true">' +
+              app.icon +
+              '</span>' +
+              '<div class="app-tile-title">' +
+              app.title +
+              '</div>' +
+              '<p class="app-tile-desc">' +
+              app.desc +
+              '</p>';
+            appGrid.appendChild(tile);
+          });
+        };
+
         // Show / hide helpers
         const showLanding = () => {
           landing.classList.remove('hidden');
@@ -923,6 +954,7 @@
           landing.classList.add('hidden');
           authView.classList.remove('hidden');
           hallEmail.textContent = user.email;
+          renderAppGrid(PLACEHOLDER_APPS);
         };
 
         const resetSubmitButton = () => {
