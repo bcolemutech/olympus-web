@@ -160,13 +160,14 @@
             class="scroll-input"
             id="scroll-input"
             placeholder="Write upon the scroll&hellip;"
+            aria-label="Write your message"
             rows="2"
           ></textarea>
           <button class="app-btn" id="save-scroll" type="button">Inscribe</button>
         </div>
 
         <div class="scroll-count hidden" id="scroll-count"></div>
-        <div id="scrolls-list"></div>
+        <ul id="scrolls-list" role="list" style="list-style: none"></ul>
 
         <div class="scrolls-empty" id="scrolls-empty">
           <span class="scrolls-empty-icon" aria-hidden="true">&#128220;</span>
@@ -216,7 +217,11 @@
         }
 
         function saveScrolls(scrolls) {
-          localStorage.setItem(storageKey, JSON.stringify(scrolls));
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(scrolls));
+          } catch (e) {
+            console.error('Failed to save scrolls:', e);
+          }
         }
 
         function renderScrolls() {
@@ -242,8 +247,9 @@
               return new Date(b.timestamp) - new Date(a.timestamp);
             })
             .forEach(function (scroll) {
-              var item = document.createElement('div');
+              var item = document.createElement('li');
               item.className = 'scroll-item';
+              item.setAttribute('role', 'listitem');
 
               var text = document.createElement('div');
               text.className = 'scroll-text';

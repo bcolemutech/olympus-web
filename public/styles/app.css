@@ -61,9 +61,12 @@ body {
     color 0.2s;
 }
 
-.app-header-back:hover {
+.app-header-back:hover,
+.app-header-back:focus-visible {
   border-color: rgba(255, 183, 77, 0.4);
   color: #ffb74d;
+  outline: 2px solid rgba(255, 183, 77, 0.7);
+  outline-offset: 2px;
 }
 
 .app-header-name {
@@ -101,9 +104,12 @@ body {
     color 0.2s;
 }
 
-.app-header-link:hover {
+.app-header-link:hover,
+.app-header-link:focus-visible {
   border-color: rgba(255, 183, 77, 0.4);
   color: #ffb74d;
+  outline: 2px solid #ffb74d;
+  outline-offset: 2px;
 }
 
 /* ── App Main Content ── */
@@ -180,6 +186,12 @@ body {
 .app-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(255, 183, 77, 0.3);
+}
+
+.app-btn:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.6);
 }
 
 .app-btn:active {

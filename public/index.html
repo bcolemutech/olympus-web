@@ -1094,6 +1094,9 @@
           apps.forEach((a) => {
             const tile = document.createElement('div');
             tile.className = 'app-tile';
+            tile.setAttribute('tabindex', '0');
+            tile.setAttribute('role', 'button');
+            tile.setAttribute('aria-label', a.name);
 
             const icon = document.createElement('span');
             icon.className = 'app-tile-icon';
@@ -1112,11 +1115,19 @@
             tile.appendChild(title);
             tile.appendChild(desc);
 
-            tile.addEventListener('click', () => {
+            const activateTile = () => {
               if (a.type === 'redirect' && a.url) {
-                window.open(a.url, '_blank', 'noopener');
+                window.open(a.url, '_blank', 'noopener,noreferrer');
               } else if (a.type === 'embedded' && a.path) {
                 window.location.href = a.path;
+              }
+            };
+
+            tile.addEventListener('click', activateTile);
+            tile.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                activateTile();
               }
             });
 
