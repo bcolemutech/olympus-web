@@ -723,6 +723,16 @@
         font-style: italic;
       }
 
+      .raw-claims {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.8rem;
+        color: #90a4ae;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 0;
+        line-height: 1.6;
+      }
+
       /* ── Mobile ── */
 
       @media (max-width: 600px) {
@@ -978,6 +988,14 @@
             </p>
           </div>
         </section>
+
+        <!-- Raw Claims (debug) -->
+        <section class="profile-section">
+          <h2 class="profile-section-title">Raw App Claims</h2>
+          <div class="profile-card">
+            <pre class="raw-claims" id="raw-app-claims">Loading&hellip;</pre>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -1022,6 +1040,7 @@
         const profileAppGrid = document.getElementById('profile-app-grid');
         const profileEmptyState = document.getElementById('profile-empty-state');
         const profileAppsLoading = document.getElementById('profile-apps-loading');
+        const rawAppClaims = document.getElementById('raw-app-claims');
 
         // Map Firebase error codes to themed messages
         const ERROR_MESSAGES = {
@@ -1119,8 +1138,9 @@
         };
 
         const loadAppsForUser = async (user) => {
-          const tokenResult = await user.getIdTokenResult();
-          const appIds = tokenResult.claims.apps || [];
+          // Force refresh to pick up custom claims set via Admin SDK
+          const tokenResult = await user.getIdTokenResult(true);
+          const appIds = Array.isArray(tokenResult.claims.apps) ? tokenResult.claims.apps : [];
           return fetchGrantedApps(appIds);
         };
 
@@ -1166,13 +1186,20 @@
           profileAppGrid.classList.add('hidden');
           profileEmptyState.classList.add('hidden');
           profileAppsLoading.classList.remove('hidden');
+          rawAppClaims.textContent = 'Loading\u2026';
 
           try {
-            const apps = await loadAppsForUser(user);
+            const tokenResult = await user.getIdTokenResult(true);
+            const appsClaim = tokenResult.claims.apps;
+            rawAppClaims.textContent = JSON.stringify(appsClaim ?? null, null, 2);
+
+            const appIds = Array.isArray(appsClaim) ? appsClaim : [];
+            const apps = await fetchGrantedApps(appIds);
             profileAppsLoading.classList.add('hidden');
             renderAppTiles(apps, profileAppGrid, profileEmptyState);
           } catch (err) {
             console.error('Failed to load profile apps:', err);
+            rawAppClaims.textContent = 'Error: ' + err.message;
             profileAppsLoading.classList.add('hidden');
             renderAppTiles([], profileAppGrid, profileEmptyState);
           }

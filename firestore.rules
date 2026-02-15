@@ -4,6 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /apps/{appId} {
       allow read: if request.auth != null
+                  && request.auth.token.apps is list
                   && appId in request.auth.token.apps;
       allow write: if false;
     }
