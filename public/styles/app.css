@@ -1,0 +1,255 @@
+/*
+ * Olympus – Shared styles for embedded apps
+ * Include alongside the app-header component for a consistent look.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0a0e1a;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ── App Header ── */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: rgba(17, 24, 39, 0.9);
+  border-bottom: 1px solid rgba(255, 183, 77, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.app-header-back {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #90a4ae;
+  text-decoration: none;
+  padding: 0.45rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.app-header-back:hover,
+.app-header-back:focus-visible {
+  border-color: rgba(255, 183, 77, 0.4);
+  color: #ffb74d;
+  outline: 2px solid rgba(255, 183, 77, 0.7);
+  outline-offset: 2px;
+}
+
+.app-header-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #ffd54f, #ffb74d, #ff8a65);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.app-header-link {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #90a4ae;
+  text-decoration: none;
+  padding: 0.45rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  font-family: inherit;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.app-header-link:hover,
+.app-header-link:focus-visible {
+  border-color: rgba(255, 183, 77, 0.4);
+  color: #ffb74d;
+  outline: 2px solid #ffb74d;
+  outline-offset: 2px;
+}
+
+/* ── App Main Content ── */
+
+.app-main {
+  flex: 1;
+  padding: 3rem 2rem;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.app-title {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  background: linear-gradient(135deg, #ffd54f, #ffb74d, #ff8a65);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.app-subtitle {
+  font-size: 1rem;
+  color: #90a4ae;
+  font-style: italic;
+  text-align: center;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.03em;
+}
+
+.app-divider {
+  width: 80px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ffb74d, transparent);
+  margin: 0 auto 2.5rem;
+}
+
+/* ── Shared Components ── */
+
+.app-card {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.app-card:hover {
+  border-color: rgba(255, 183, 77, 0.15);
+}
+
+.app-btn {
+  display: inline-block;
+  padding: 0.7rem 1.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0a0e1a;
+  background: linear-gradient(135deg, #ffd54f, #ffb74d, #ff8a65);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+.app-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(255, 183, 77, 0.3);
+}
+
+.app-btn:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.6);
+}
+
+.app-btn:active {
+  transform: translateY(0);
+}
+
+/* ── Loading State ── */
+
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+}
+
+.app-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 183, 77, 0.15);
+  border-top-color: #ffb74d;
+  border-radius: 50%;
+  animation: app-spin 0.8s linear infinite;
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-loading-text {
+  margin-top: 1rem;
+  color: #90a4ae;
+  font-size: 0.9rem;
+  font-style: italic;
+  letter-spacing: 0.05em;
+}
+
+/* ── Mobile ── */
+
+@media (max-width: 600px) {
+  .app-header {
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+  }
+
+  .app-header-right {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .app-main {
+    padding: 2rem 1rem;
+  }
+
+  .app-title {
+    font-size: 1.5rem;
+  }
+}
