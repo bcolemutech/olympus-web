@@ -1111,6 +1111,15 @@
             tile.appendChild(icon);
             tile.appendChild(title);
             tile.appendChild(desc);
+
+            tile.addEventListener('click', () => {
+              if (a.type === 'redirect' && a.url) {
+                window.open(a.url, '_blank', 'noopener');
+              } else if (a.type === 'embedded' && a.path) {
+                window.location.href = a.path;
+              }
+            });
+
             grid.appendChild(tile);
           });
         };

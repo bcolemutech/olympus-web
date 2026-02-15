@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>App Name — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- App-specific styles (add your own below) -->
+    <style>
+      /* Add custom styles for this app here */
+    </style>
+  </head>
+  <body>
+    <!-- Shared header — rendered by app-header.js -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard — shown while checking auth state -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Consulting the Oracle&hellip;</p>
+    </div>
+
+    <!-- Main content — hidden until authenticated -->
+    <main class="app-main hidden" id="app-main">
+      <h1 class="app-title">App Name</h1>
+      <p class="app-subtitle">A brief description of this app</p>
+      <div class="app-divider"></div>
+
+      <!-- Your app content goes here -->
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        firebase.auth().onAuthStateChanged(function (user) {
+          if (!user) {
+            window.location.href = '/';
+            return;
+          }
+
+          // Render the shared header
+          window.OlympusHeader.render('App Name');
+
+          // Hide loading, show main content
+          document.getElementById('app-loading').classList.add('hidden');
+          document.getElementById('app-main').classList.remove('hidden');
+
+          // Initialize your app here
+          initializeApp(user);
+        });
+      });
+
+      function initializeApp(user) {
+        // Your app logic goes here
+        // user.uid, user.email, etc. are available
+      }
+    </script>
+  </body>
+</html>

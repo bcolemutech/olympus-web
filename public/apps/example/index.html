@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hermes' Scrolls — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <style>
+      .scrolls-container {
+        margin-top: 1.5rem;
+      }
+
+      .scroll-input-group {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 2rem;
+      }
+
+      .scroll-input {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        font-size: 0.95rem;
+        font-family: inherit;
+        color: #e0e0e0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        outline: none;
+        resize: vertical;
+        min-height: 60px;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .scroll-input::placeholder {
+        color: #4b5563;
+        font-style: italic;
+      }
+
+      .scroll-input:focus {
+        border-color: rgba(255, 183, 77, 0.5);
+        box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.1);
+      }
+
+      .scroll-item {
+        background: rgba(17, 24, 39, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1rem;
+        transition: border-color 0.3s;
+      }
+
+      .scroll-item:hover {
+        border-color: rgba(255, 183, 77, 0.2);
+      }
+
+      .scroll-text {
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: #e0e0e0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .scroll-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+      }
+
+      .scroll-time {
+        font-size: 0.75rem;
+        color: #546e7a;
+        font-style: italic;
+        letter-spacing: 0.03em;
+      }
+
+      .scroll-delete {
+        font-size: 0.7rem;
+        color: #546e7a;
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        padding: 0.3rem 0.7rem;
+        cursor: pointer;
+        font-family: inherit;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        transition:
+          color 0.2s,
+          border-color 0.2s;
+      }
+
+      .scroll-delete:hover {
+        color: #ef5350;
+        border-color: rgba(239, 83, 80, 0.3);
+      }
+
+      .scrolls-empty {
+        text-align: center;
+        padding: 3rem 2rem;
+      }
+
+      .scrolls-empty-icon {
+        font-size: 3rem;
+        margin-bottom: 0.75rem;
+        display: block;
+        opacity: 0.5;
+      }
+
+      .scrolls-empty-text {
+        font-size: 0.95rem;
+        color: #546e7a;
+        font-style: italic;
+        line-height: 1.6;
+      }
+
+      .scroll-count {
+        text-align: center;
+        font-size: 0.8rem;
+        color: #546e7a;
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.05em;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Shared header -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Unrolling the scrolls&hellip;</p>
+    </div>
+
+    <!-- Main content -->
+    <main class="app-main hidden" id="app-main">
+      <h1 class="app-title">Hermes' Scrolls</h1>
+      <p class="app-subtitle">Inscribe your thoughts upon the divine parchment</p>
+      <div class="app-divider"></div>
+
+      <div class="scrolls-container">
+        <div class="scroll-input-group">
+          <textarea
+            class="scroll-input"
+            id="scroll-input"
+            placeholder="Write upon the scroll&hellip;"
+            rows="2"
+          ></textarea>
+          <button class="app-btn" id="save-scroll" type="button">Inscribe</button>
+        </div>
+
+        <div class="scroll-count hidden" id="scroll-count"></div>
+        <div id="scrolls-list"></div>
+
+        <div class="scrolls-empty" id="scrolls-empty">
+          <span class="scrolls-empty-icon" aria-hidden="true">&#128220;</span>
+          <p class="scrolls-empty-text">
+            The scrolls are bare.<br />
+            Let Hermes carry your first message.
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        firebase.auth().onAuthStateChanged(function (user) {
+          if (!user) {
+            window.location.href = '/';
+            return;
+          }
+
+          window.OlympusHeader.render("Hermes' Scrolls");
+
+          document.getElementById('app-loading').classList.add('hidden');
+          document.getElementById('app-main').classList.remove('hidden');
+
+          initializeScrolls(user);
+        });
+      });
+
+      function initializeScrolls(user) {
+        var input = document.getElementById('scroll-input');
+        var saveBtn = document.getElementById('save-scroll');
+        var listEl = document.getElementById('scrolls-list');
+        var emptyEl = document.getElementById('scrolls-empty');
+        var countEl = document.getElementById('scroll-count');
+
+        var storageKey = 'olympus_scrolls_' + user.uid;
+
+        function loadScrolls() {
+          try {
+            return JSON.parse(localStorage.getItem(storageKey) || '[]');
+          } catch (e) {
+            return [];
+          }
+        }
+
+        function saveScrolls(scrolls) {
+          localStorage.setItem(storageKey, JSON.stringify(scrolls));
+        }
+
+        function renderScrolls() {
+          var scrolls = loadScrolls();
+
+          listEl.innerHTML = '';
+
+          if (scrolls.length === 0) {
+            emptyEl.classList.remove('hidden');
+            countEl.classList.add('hidden');
+            return;
+          }
+
+          emptyEl.classList.add('hidden');
+          countEl.classList.remove('hidden');
+          countEl.textContent =
+            scrolls.length + (scrolls.length === 1 ? ' scroll' : ' scrolls') + ' inscribed';
+
+          // Show newest first
+          scrolls
+            .slice()
+            .sort(function (a, b) {
+              return new Date(b.timestamp) - new Date(a.timestamp);
+            })
+            .forEach(function (scroll) {
+              var item = document.createElement('div');
+              item.className = 'scroll-item';
+
+              var text = document.createElement('div');
+              text.className = 'scroll-text';
+              text.textContent = scroll.text;
+
+              var meta = document.createElement('div');
+              meta.className = 'scroll-meta';
+
+              var time = document.createElement('span');
+              time.className = 'scroll-time';
+              time.textContent = new Date(scroll.timestamp).toLocaleString();
+
+              var deleteBtn = document.createElement('button');
+              deleteBtn.className = 'scroll-delete';
+              deleteBtn.type = 'button';
+              deleteBtn.textContent = 'Erase';
+              deleteBtn.addEventListener('click', function () {
+                var all = loadScrolls().filter(function (s) {
+                  return s.id !== scroll.id;
+                });
+                saveScrolls(all);
+                renderScrolls();
+              });
+
+              meta.appendChild(time);
+              meta.appendChild(deleteBtn);
+              item.appendChild(text);
+              item.appendChild(meta);
+              listEl.appendChild(item);
+            });
+        }
+
+        saveBtn.addEventListener('click', function () {
+          var value = input.value.trim();
+          if (!value) return;
+
+          var scrolls = loadScrolls();
+          scrolls.push({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            text: value,
+            timestamp: new Date().toISOString(),
+          });
+          saveScrolls(scrolls);
+          input.value = '';
+          renderScrolls();
+        });
+
+        // Allow Ctrl+Enter to save
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            saveBtn.click();
+          }
+        });
+
+        renderScrolls();
+      }
+    </script>
+  </body>
+</html>
