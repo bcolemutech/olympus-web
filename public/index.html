@@ -652,6 +652,77 @@
         margin: 0 auto;
       }
 
+      /* ── Profile View ── */
+
+      .profile-section {
+        margin-bottom: 2.5rem;
+      }
+
+      .profile-section-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: linear-gradient(135deg, #ffd54f, #ffb74d);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 1rem;
+      }
+
+      .profile-card {
+        background: rgba(17, 24, 39, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        padding: 1.5rem;
+      }
+
+      .profile-field {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.85rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+
+      .profile-field:last-child {
+        border-bottom: none;
+      }
+
+      .profile-field-label {
+        font-size: 0.8rem;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .profile-field-value {
+        font-size: 0.95rem;
+        color: #e0e0e0;
+        text-align: right;
+      }
+
+      .profile-field-mono {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.8rem;
+        color: #90a4ae;
+        word-break: break-all;
+      }
+
+      .profile-apps-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 2rem;
+      }
+
+      .profile-apps-loading-text {
+        font-size: 0.9rem;
+        color: #90a4ae;
+        font-style: italic;
+      }
+
       /* ── Mobile ── */
 
       @media (max-width: 600px) {
@@ -714,6 +785,16 @@
 
         .app-grid {
           grid-template-columns: 1fr;
+        }
+
+        .profile-field {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.25rem;
+        }
+
+        .profile-field-value {
+          text-align: left;
         }
       }
     </style>
@@ -816,6 +897,7 @@
         </div>
         <div class="hall-user" aria-label="Current user">
           <span class="hall-email" id="hall-email"></span>
+          <button class="signout-btn" id="profile-btn" type="button">The Oracle's Mirror</button>
           <button class="signout-btn" id="signout-btn" type="button">Leave Olympus</button>
         </div>
       </header>
@@ -834,6 +916,68 @@
             Seek an Oracle to gain passage.
           </p>
         </div>
+      </main>
+    </div>
+
+    <!-- Profile view — The Oracle's Mirror (shown when viewing profile) -->
+    <div class="auth-view hidden" id="profile-view">
+      <header class="hall-header">
+        <div class="hall-brand">
+          <span class="hall-brand-icon" aria-hidden="true">&#128302;</span>
+          <span class="hall-brand-title">The Oracle's Mirror</span>
+        </div>
+        <div class="hall-user">
+          <button class="signout-btn" id="back-to-hall" type="button">&larr; The Grand Hall</button>
+        </div>
+      </header>
+
+      <main class="hall-content">
+        <h1 class="hall-title">The Oracle's Mirror</h1>
+        <p class="hall-subtitle">Gaze upon your divine reflection</p>
+        <div class="hall-divider"></div>
+
+        <!-- Divine Credentials -->
+        <section class="profile-section">
+          <h2 class="profile-section-title">Divine Credentials</h2>
+          <div class="profile-card">
+            <div class="profile-field">
+              <span class="profile-field-label">Email</span>
+              <span class="profile-field-value" id="profile-email"></span>
+            </div>
+            <div class="profile-field">
+              <span class="profile-field-label">Verified</span>
+              <span class="profile-field-value" id="profile-verified"></span>
+            </div>
+            <div class="profile-field">
+              <span class="profile-field-label">Unique Identifier</span>
+              <span class="profile-field-value profile-field-mono" id="profile-uid"></span>
+            </div>
+            <div class="profile-field">
+              <span class="profile-field-label">Joined Olympus</span>
+              <span class="profile-field-value" id="profile-created"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Granted Dominions -->
+        <section class="profile-section">
+          <h2 class="profile-section-title">Granted Dominions</h2>
+
+          <div class="profile-apps-loading hidden" id="profile-apps-loading">
+            <div class="spinner spinner--small"></div>
+            <span class="profile-apps-loading-text">Consulting the scrolls&hellip;</span>
+          </div>
+
+          <div class="app-grid hidden" id="profile-app-grid"></div>
+
+          <div class="empty-state hidden" id="profile-empty-state">
+            <span class="empty-state-icon" aria-hidden="true">&#128302;</span>
+            <p class="empty-state-text">
+              No dominions have been granted yet.<br />
+              Seek an Oracle to gain passage.
+            </p>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -870,6 +1014,14 @@
         const hallEmail = document.getElementById('hall-email');
         const appGrid = document.getElementById('app-grid');
         const emptyState = document.getElementById('empty-state');
+        const profileView = document.getElementById('profile-view');
+        const profileEmail = document.getElementById('profile-email');
+        const profileVerified = document.getElementById('profile-verified');
+        const profileUid = document.getElementById('profile-uid');
+        const profileCreated = document.getElementById('profile-created');
+        const profileAppGrid = document.getElementById('profile-app-grid');
+        const profileEmptyState = document.getElementById('profile-empty-state');
+        const profileAppsLoading = document.getElementById('profile-apps-loading');
 
         // Map Firebase error codes to themed messages
         const ERROR_MESSAGES = {
@@ -909,52 +1061,121 @@
           return;
         }
 
-        // Placeholder apps — replace with dynamic Firestore data later
-        const PLACEHOLDER_APPS = [
-          {
-            icon: '\uD83D\uDD28',
-            title: 'Forge of Hephaestus',
-            desc: 'Where divine tools are crafted',
-          },
-        ];
+        const db = firebase.firestore();
 
-        const renderAppGrid = (apps) => {
-          appGrid.innerHTML = '';
+        const renderAppTiles = (apps, grid, empty) => {
+          grid.innerHTML = '';
           if (apps.length === 0) {
-            appGrid.classList.add('hidden');
-            emptyState.classList.remove('hidden');
+            grid.classList.add('hidden');
+            empty.classList.remove('hidden');
             return;
           }
-          emptyState.classList.add('hidden');
-          appGrid.classList.remove('hidden');
-          apps.forEach((app) => {
+          empty.classList.add('hidden');
+          grid.classList.remove('hidden');
+          apps.forEach((a) => {
             const tile = document.createElement('div');
             tile.className = 'app-tile';
-            tile.innerHTML =
-              '<span class="app-tile-icon" aria-hidden="true">' +
-              app.icon +
-              '</span>' +
-              '<div class="app-tile-title">' +
-              app.title +
-              '</div>' +
-              '<p class="app-tile-desc">' +
-              app.desc +
-              '</p>';
-            appGrid.appendChild(tile);
+
+            const icon = document.createElement('span');
+            icon.className = 'app-tile-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.textContent = a.icon;
+
+            const title = document.createElement('div');
+            title.className = 'app-tile-title';
+            title.textContent = a.name;
+
+            const desc = document.createElement('p');
+            desc.className = 'app-tile-desc';
+            desc.textContent = a.description;
+
+            tile.appendChild(icon);
+            tile.appendChild(title);
+            tile.appendChild(desc);
+            grid.appendChild(tile);
           });
+        };
+
+        const fetchGrantedApps = async (appIds) => {
+          if (!appIds || appIds.length === 0) return [];
+          // Firestore 'in' queries are limited to 10 items; chunk if needed
+          const chunks = [];
+          for (let i = 0; i < appIds.length; i += 10) {
+            chunks.push(appIds.slice(i, i + 10));
+          }
+          const results = await Promise.all(
+            chunks.map((chunk) =>
+              db
+                .collection('apps')
+                .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
+                .where('enabled', '==', true)
+                .orderBy('order')
+                .get()
+            )
+          );
+          return results
+            .flatMap((snapshot) => snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+        };
+
+        const loadAppsForUser = async (user) => {
+          const tokenResult = await user.getIdTokenResult();
+          const appIds = tokenResult.claims.apps || [];
+          return fetchGrantedApps(appIds);
         };
 
         // Show / hide helpers
         const showLanding = () => {
           landing.classList.remove('hidden');
           authView.classList.add('hidden');
+          profileView.classList.add('hidden');
         };
 
-        const showAuthView = (user) => {
+        const showAuthView = async (user) => {
           landing.classList.add('hidden');
+          profileView.classList.add('hidden');
           authView.classList.remove('hidden');
           hallEmail.textContent = user.email;
-          renderAppGrid(PLACEHOLDER_APPS);
+
+          // Show empty state while loading
+          appGrid.classList.add('hidden');
+          emptyState.classList.remove('hidden');
+
+          try {
+            const apps = await loadAppsForUser(user);
+            renderAppTiles(apps, appGrid, emptyState);
+          } catch (err) {
+            console.error('Failed to load apps:', err);
+            renderAppTiles([], appGrid, emptyState);
+          }
+        };
+
+        const showProfileView = async (user) => {
+          authView.classList.add('hidden');
+          profileView.classList.remove('hidden');
+
+          profileEmail.textContent = user.email;
+          profileVerified.textContent = user.emailVerified ? 'Yes' : 'No';
+          profileUid.textContent = user.uid;
+          profileCreated.textContent = new Date(user.metadata.creationTime).toLocaleDateString(
+            undefined,
+            { year: 'numeric', month: 'long', day: 'numeric' }
+          );
+
+          // Load granted apps
+          profileAppGrid.classList.add('hidden');
+          profileEmptyState.classList.add('hidden');
+          profileAppsLoading.classList.remove('hidden');
+
+          try {
+            const apps = await loadAppsForUser(user);
+            profileAppsLoading.classList.add('hidden');
+            renderAppTiles(apps, profileAppGrid, profileEmptyState);
+          } catch (err) {
+            console.error('Failed to load profile apps:', err);
+            profileAppsLoading.classList.add('hidden');
+            renderAppTiles([], profileAppGrid, profileEmptyState);
+          }
         };
 
         const resetSubmitButton = () => {
@@ -1040,6 +1261,17 @@
               errorMessage.classList.remove('hidden');
               resetSubmitButton();
             });
+        });
+
+        // Profile navigation
+        document.getElementById('profile-btn').addEventListener('click', () => {
+          const user = firebase.auth().currentUser;
+          if (user) showProfileView(user);
+        });
+
+        document.getElementById('back-to-hall').addEventListener('click', () => {
+          const user = firebase.auth().currentUser;
+          if (user) showAuthView(user);
         });
 
         // Sign out
