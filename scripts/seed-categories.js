@@ -40,7 +40,17 @@ const categories = [
     id: 'spirit',
     name: 'Spirits',
     type: 'ingredient',
-    subcategories: ['bourbon', 'rye', 'scotch', 'vodka', 'gin', 'rum', 'tequila', 'mezcal', 'brandy'],
+    subcategories: [
+      'bourbon',
+      'rye',
+      'scotch',
+      'vodka',
+      'gin',
+      'rum',
+      'tequila',
+      'mezcal',
+      'brandy',
+    ],
     sortOrder: 1,
   },
   {
