@@ -2,12 +2,43 @@ rules_version='2'
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function hasApp(appId) {
+      return request.auth != null
+          && request.auth.token.apps is list
+          && appId in request.auth.token.apps;
+    }
+
     match /apps/{appId} {
       allow read: if request.auth != null
                   && request.auth.token.apps is list
                   && appId in request.auth.token.apps;
       allow write: if false;
     }
+
+    // ── The Symposium ──────────────────────────────────────
+
+    match /symposium_ingredients/{ingredientId} {
+      allow read: if hasApp('symposium');
+      allow create: if hasApp('symposium')
+                    && request.resource.data.keys().hasAll([
+                         'name', 'category', 'unit', 'type',
+                         'inStock', 'quantity', 'createdAt', 'updatedAt'
+                       ]);
+      allow update: if hasApp('symposium')
+                    && request.resource.data.keys().hasAll([
+                         'name', 'category', 'unit', 'type',
+                         'inStock', 'quantity', 'createdAt', 'updatedAt'
+                       ]);
+      allow delete: if hasApp('symposium');
+    }
+
+    match /symposium_categories/{categoryId} {
+      allow read: if hasApp('symposium');
+      allow write: if false;
+    }
+
+    // ── Default deny ───────────────────────────────────────
+
     match /{document=**} {
       allow read, write: if false;
     }
