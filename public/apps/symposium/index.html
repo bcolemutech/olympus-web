@@ -16,7 +16,392 @@
 
     <!-- App-specific styles -->
     <style>
-      /* The Symposium — Where Dionysus keeps his ledger */
+      /* ── Toolbar ─────────────────────────────────────── */
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1.5rem;
+      }
+
+      /* ── Category filter chips ───────────────────────── */
+      .filter-chips {
+        display: flex;
+        gap: 0.5rem;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .filter-chip {
+        flex-shrink: 0;
+        padding: 0.4rem 1rem;
+        font-size: 0.8rem;
+        font-family: inherit;
+        color: #90a4ae;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        transition:
+          color 0.2s,
+          background 0.2s,
+          border-color 0.2s;
+      }
+
+      .filter-chip:hover {
+        color: #e0e0e0;
+        border-color: rgba(255, 183, 77, 0.3);
+      }
+
+      .filter-chip.active {
+        color: #0a0e1a;
+        background: linear-gradient(135deg, #ffd54f, #ffb74d);
+        border-color: transparent;
+      }
+
+      /* ── Ingredient count ────────────────────────────── */
+      .ingredient-count {
+        text-align: center;
+        font-size: 0.8rem;
+        color: #546e7a;
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.05em;
+      }
+
+      /* ── Ingredient cards ────────────────────────────── */
+      .ingredient-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .ingredient-card {
+        background: rgba(17, 24, 39, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem;
+        transition: border-color 0.3s;
+      }
+
+      .ingredient-card:hover {
+        border-color: rgba(255, 183, 77, 0.2);
+      }
+
+      .ingredient-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .ingredient-name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #e0e0e0;
+        margin: 0;
+      }
+
+      .ingredient-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        font-size: 0.7rem;
+        border-radius: 999px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .badge-category {
+        color: #ffb74d;
+        background: rgba(255, 183, 77, 0.12);
+        border: 1px solid rgba(255, 183, 77, 0.2);
+      }
+
+      .badge-subcategory {
+        color: #90a4ae;
+        background: rgba(144, 164, 174, 0.1);
+        border: 1px solid rgba(144, 164, 174, 0.15);
+      }
+
+      .badge-stock {
+        font-weight: 600;
+      }
+
+      .badge-in-stock {
+        color: #66bb6a;
+        background: rgba(102, 187, 106, 0.1);
+        border: 1px solid rgba(102, 187, 106, 0.2);
+      }
+
+      .badge-out-of-stock {
+        color: #ef5350;
+        background: rgba(239, 83, 80, 0.1);
+        border: 1px solid rgba(239, 83, 80, 0.2);
+      }
+
+      .ingredient-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 0.75rem;
+        font-size: 0.85rem;
+        color: #90a4ae;
+      }
+
+      .ingredient-detail-label {
+        color: #546e7a;
+      }
+
+      .ingredient-notes {
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+        color: #78909c;
+        font-style: italic;
+      }
+
+      .ingredient-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+
+      .btn-icon {
+        padding: 0.35rem 0.65rem;
+        font-size: 0.7rem;
+        font-family: inherit;
+        color: #546e7a;
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        transition:
+          color 0.2s,
+          border-color 0.2s;
+      }
+
+      .btn-edit:hover {
+        color: #ffb74d;
+        border-color: rgba(255, 183, 77, 0.3);
+      }
+
+      .btn-delete:hover {
+        color: #ef5350;
+        border-color: rgba(239, 83, 80, 0.3);
+      }
+
+      /* ── Empty state ─────────────────────────────────── */
+      .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+      }
+
+      .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 0.75rem;
+        display: block;
+        opacity: 0.5;
+      }
+
+      .empty-state-text {
+        font-size: 0.95rem;
+        color: #546e7a;
+        font-style: italic;
+        line-height: 1.6;
+      }
+
+      /* ── Modal ───────────────────────────────────────── */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 1rem;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.2s,
+          visibility 0.2s;
+      }
+
+      .modal-overlay.open {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .modal-dialog {
+        background: #111827;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 520px;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 2rem;
+      }
+
+      .modal-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #e0e0e0;
+        margin: 0 0 1.5rem;
+      }
+
+      /* ── Form ────────────────────────────────────────── */
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+      }
+
+      .form-group.full-width {
+        grid-column: 1 / -1;
+      }
+
+      .form-label {
+        font-size: 0.75rem;
+        color: #90a4ae;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .form-input,
+      .form-select,
+      .form-textarea {
+        padding: 0.65rem 0.85rem;
+        font-size: 0.9rem;
+        font-family: inherit;
+        color: #e0e0e0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .form-input:focus,
+      .form-select:focus,
+      .form-textarea:focus {
+        border-color: rgba(255, 183, 77, 0.5);
+        box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.1);
+      }
+
+      .form-input::placeholder,
+      .form-textarea::placeholder {
+        color: #4b5563;
+        font-style: italic;
+      }
+
+      .form-select {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2390a4ae' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        padding-right: 2rem;
+      }
+
+      .form-select option {
+        background: #111827;
+        color: #e0e0e0;
+      }
+
+      .form-textarea {
+        resize: vertical;
+        min-height: 60px;
+      }
+
+      .form-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding-top: 0.25rem;
+      }
+
+      .form-checkbox {
+        accent-color: #ffb74d;
+        width: 16px;
+        height: 16px;
+      }
+
+      .form-checkbox-label {
+        font-size: 0.85rem;
+        color: #e0e0e0;
+      }
+
+      .form-error {
+        font-size: 0.75rem;
+        color: #ef5350;
+        min-height: 1em;
+      }
+
+      .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+      }
+
+      .btn-cancel {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.85rem;
+        font-family: inherit;
+        color: #90a4ae;
+        background: none;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          color 0.2s,
+          border-color 0.2s;
+      }
+
+      .btn-cancel:hover {
+        color: #e0e0e0;
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      @media (max-width: 600px) {
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .toolbar {
+          justify-content: stretch;
+        }
+
+        .toolbar .app-btn {
+          width: 100%;
+        }
+
+        .ingredient-card-header {
+          flex-direction: column;
+        }
+
+        .ingredient-actions {
+          align-self: flex-end;
+        }
+      }
     </style>
   </head>
   <body>
@@ -35,8 +420,138 @@
       <p class="app-subtitle">Where Dionysus keeps his ledger</p>
       <div class="app-divider"></div>
 
-      <!-- App content will be built out in Phase 1+ stories -->
+      <div class="toolbar">
+        <button class="app-btn" id="btn-add" type="button">+ Add Ingredient</button>
+      </div>
+
+      <div class="filter-chips" id="filter-chips"></div>
+
+      <div class="ingredient-count hidden" id="ingredient-count"></div>
+
+      <div class="ingredient-list" id="ingredient-list"></div>
+
+      <div class="empty-state" id="empty-state">
+        <span class="empty-state-icon" aria-hidden="true">&#127863;</span>
+        <p class="empty-state-text">The Cellar awaits its first offering.</p>
+      </div>
     </main>
+
+    <!-- Modal overlay -->
+    <div class="modal-overlay" id="modal-overlay">
+      <div class="modal-dialog" role="dialog" aria-labelledby="modal-title">
+        <h2 class="modal-title" id="modal-title">Add Ingredient</h2>
+        <form id="ingredient-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label class="form-label" for="field-name">Name</label>
+              <input
+                class="form-input"
+                id="field-name"
+                type="text"
+                placeholder="e.g. Buffalo Trace"
+                required
+              />
+              <span class="form-error" id="error-name"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field-category">Category</label>
+              <select class="form-select" id="field-category" required>
+                <option value="">Select&hellip;</option>
+              </select>
+              <span class="form-error" id="error-category"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field-subcategory">Subcategory</label>
+              <select class="form-select" id="field-subcategory" required>
+                <option value="">Select category first</option>
+              </select>
+              <span class="form-error" id="error-subcategory"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field-unit">Unit</label>
+              <select class="form-select" id="field-unit" required>
+                <option value="">Select&hellip;</option>
+                <option value="oz">oz</option>
+                <option value="ml">ml</option>
+                <option value="dash">dash</option>
+                <option value="each">each</option>
+                <option value="splash">splash</option>
+              </select>
+              <span class="form-error" id="error-unit"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field-quantity">Quantity</label>
+              <input
+                class="form-input"
+                id="field-quantity"
+                type="number"
+                min="0"
+                step="0.25"
+                value="0"
+              />
+              <span class="form-error" id="error-quantity"></span>
+            </div>
+
+            <div class="form-group">
+              <div class="form-checkbox-row">
+                <input class="form-checkbox" id="field-instock" type="checkbox" />
+                <label class="form-checkbox-label" for="field-instock">In Stock</label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="field-threshold">Low Stock Threshold</label>
+              <input
+                class="form-input"
+                id="field-threshold"
+                type="number"
+                min="0"
+                step="0.25"
+                value="0"
+              />
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="field-tags">Tags (comma-separated)</label>
+              <input
+                class="form-input"
+                id="field-tags"
+                type="text"
+                placeholder="e.g. bourbon, whiskey, american"
+              />
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="field-notes">Notes</label>
+              <textarea
+                class="form-textarea"
+                id="field-notes"
+                placeholder="Tasting notes, brand info&hellip;"
+                rows="2"
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <div class="form-checkbox-row">
+                <input class="form-checkbox" id="field-shopping" type="checkbox" />
+                <label class="form-checkbox-label" for="field-shopping"
+                  >Shopping List Default</label
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-cancel" id="btn-cancel" type="button">Cancel</button>
+            <button class="app-btn" id="btn-save" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- Shared header component -->
     <script src="/js/components/app-header.js"></script>
@@ -61,8 +576,467 @@
         });
       });
 
-      function initializeApp(user) {
-        // The Symposium app logic — built out in Phase 1+ stories
+      function initializeApp() {
+        var db = firebase.firestore();
+        var serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
+
+        // State
+        var categoryMap = {};
+        var allIngredients = [];
+        var activeFilter = 'all';
+        var editingId = null;
+
+        // DOM refs
+        var listEl = document.getElementById('ingredient-list');
+        var emptyEl = document.getElementById('empty-state');
+        var countEl = document.getElementById('ingredient-count');
+        var chipsEl = document.getElementById('filter-chips');
+        var modalEl = document.getElementById('modal-overlay');
+        var modalTitle = document.getElementById('modal-title');
+        var formEl = document.getElementById('ingredient-form');
+        var btnAdd = document.getElementById('btn-add');
+        var btnCancel = document.getElementById('btn-cancel');
+
+        // Form fields
+        var fieldName = document.getElementById('field-name');
+        var fieldCategory = document.getElementById('field-category');
+        var fieldSubcategory = document.getElementById('field-subcategory');
+        var fieldUnit = document.getElementById('field-unit');
+        var fieldQuantity = document.getElementById('field-quantity');
+        var fieldInStock = document.getElementById('field-instock');
+        var fieldTags = document.getElementById('field-tags');
+        var fieldNotes = document.getElementById('field-notes');
+        var fieldShopping = document.getElementById('field-shopping');
+        var fieldThreshold = document.getElementById('field-threshold');
+
+        // ── Load categories (one-time) ──────────────────
+        function loadCategories() {
+          return db
+            .collection('symposium_categories')
+            .orderBy('sortOrder')
+            .get()
+            .then(function (snapshot) {
+              snapshot.forEach(function (doc) {
+                categoryMap[doc.id] = doc.data();
+              });
+              populateCategorySelect();
+              renderFilterChips();
+            });
+        }
+
+        function populateCategorySelect() {
+          var keys = Object.keys(categoryMap);
+          keys.forEach(function (id) {
+            var opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = categoryMap[id].name;
+            fieldCategory.appendChild(opt);
+          });
+        }
+
+        // ── Category filter chips ───────────────────────
+        function renderFilterChips() {
+          chipsEl.innerHTML = '';
+
+          var allChip = document.createElement('button');
+          allChip.type = 'button';
+          allChip.className = 'filter-chip' + (activeFilter === 'all' ? ' active' : '');
+          allChip.textContent = 'All';
+          allChip.addEventListener('click', function () {
+            activeFilter = 'all';
+            renderFilterChips();
+            renderList();
+          });
+          chipsEl.appendChild(allChip);
+
+          Object.keys(categoryMap).forEach(function (id) {
+            var chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'filter-chip' + (activeFilter === id ? ' active' : '');
+            chip.textContent = categoryMap[id].name;
+            chip.addEventListener('click', function () {
+              activeFilter = id;
+              renderFilterChips();
+              renderList();
+            });
+            chipsEl.appendChild(chip);
+          });
+        }
+
+        // ── Subscribe to ingredients ────────────────────
+        function subscribeToIngredients() {
+          db.collection('symposium_ingredients')
+            .orderBy('category')
+            .orderBy('name')
+            .onSnapshot(function (snapshot) {
+              allIngredients = [];
+              snapshot.forEach(function (doc) {
+                allIngredients.push(Object.assign({ id: doc.id }, doc.data()));
+              });
+              renderList();
+            });
+        }
+
+        // ── Render ingredient list ──────────────────────
+        function renderList() {
+          var filtered =
+            activeFilter === 'all'
+              ? allIngredients
+              : allIngredients.filter(function (ing) {
+                  return ing.category === activeFilter;
+                });
+
+          listEl.innerHTML = '';
+
+          if (filtered.length === 0) {
+            emptyEl.classList.remove('hidden');
+            countEl.classList.add('hidden');
+            if (activeFilter !== 'all' && allIngredients.length > 0) {
+              emptyEl.querySelector('.empty-state-text').textContent =
+                'No ingredients in this category yet.';
+            } else {
+              emptyEl.querySelector('.empty-state-text').textContent =
+                'The Cellar awaits its first offering.';
+            }
+            return;
+          }
+
+          emptyEl.classList.add('hidden');
+          countEl.classList.remove('hidden');
+          countEl.textContent =
+            filtered.length + (filtered.length === 1 ? ' ingredient' : ' ingredients');
+
+          filtered.forEach(function (ing) {
+            listEl.appendChild(renderCard(ing));
+          });
+        }
+
+        // ── Render a single ingredient card ─────────────
+        function renderCard(ing) {
+          var card = document.createElement('div');
+          card.className = 'ingredient-card';
+
+          var header = document.createElement('div');
+          header.className = 'ingredient-card-header';
+
+          var info = document.createElement('div');
+
+          var name = document.createElement('h3');
+          name.className = 'ingredient-name';
+          name.textContent = ing.name;
+
+          var meta = document.createElement('div');
+          meta.className = 'ingredient-meta';
+
+          var catBadge = document.createElement('span');
+          catBadge.className = 'badge badge-category';
+          catBadge.textContent = categoryMap[ing.category]
+            ? categoryMap[ing.category].name
+            : ing.category;
+          meta.appendChild(catBadge);
+
+          if (ing.subcategory) {
+            var subBadge = document.createElement('span');
+            subBadge.className = 'badge badge-subcategory';
+            subBadge.textContent = ing.subcategory;
+            meta.appendChild(subBadge);
+          }
+
+          var stockBadge = document.createElement('span');
+          stockBadge.className =
+            'badge badge-stock ' + (ing.inStock ? 'badge-in-stock' : 'badge-out-of-stock');
+          stockBadge.textContent = ing.inStock ? 'In Stock' : 'Out of Stock';
+          meta.appendChild(stockBadge);
+
+          info.appendChild(name);
+          info.appendChild(meta);
+
+          var actions = document.createElement('div');
+          actions.className = 'ingredient-actions';
+
+          var editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn-icon btn-edit';
+          editBtn.textContent = 'Edit';
+          editBtn.addEventListener('click', function () {
+            openModal(ing);
+          });
+
+          var deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.className = 'btn-icon btn-delete';
+          deleteBtn.textContent = 'Delete';
+          deleteBtn.addEventListener('click', function () {
+            handleDelete(ing);
+          });
+
+          actions.appendChild(editBtn);
+          actions.appendChild(deleteBtn);
+
+          header.appendChild(info);
+          header.appendChild(actions);
+          card.appendChild(header);
+
+          // Details row
+          var details = document.createElement('div');
+          details.className = 'ingredient-details';
+
+          var qtyDetail = document.createElement('span');
+          qtyDetail.innerHTML =
+            '<span class="ingredient-detail-label">Qty:</span> ' +
+            (ing.quantity || 0) +
+            ' ' +
+            (ing.unit || '');
+          details.appendChild(qtyDetail);
+
+          if (ing.lowStockThreshold > 0) {
+            var threshDetail = document.createElement('span');
+            threshDetail.innerHTML =
+              '<span class="ingredient-detail-label">Low at:</span> ' +
+              ing.lowStockThreshold +
+              ' ' +
+              (ing.unit || '');
+            details.appendChild(threshDetail);
+          }
+
+          card.appendChild(details);
+
+          if (ing.tags && Array.isArray(ing.tags) && ing.tags.length > 0) {
+            var tagsRow = document.createElement('div');
+            tagsRow.className = 'ingredient-meta';
+            tagsRow.style.marginTop = '0.5rem';
+            ing.tags.forEach(function (tag) {
+              var tagBadge = document.createElement('span');
+              tagBadge.className = 'badge badge-subcategory';
+              tagBadge.textContent = tag;
+              tagsRow.appendChild(tagBadge);
+            });
+            card.appendChild(tagsRow);
+          }
+
+          if (ing.notes) {
+            var notes = document.createElement('div');
+            notes.className = 'ingredient-notes';
+            notes.textContent = ing.notes;
+            card.appendChild(notes);
+          }
+
+          return card;
+        }
+
+        // ── Modal open / close ──────────────────────────
+        function openModal(ingredient) {
+          editingId = ingredient ? ingredient.id : null;
+          modalTitle.textContent = ingredient ? 'Edit Ingredient' : 'Add Ingredient';
+
+          clearErrors();
+
+          if (ingredient) {
+            fieldName.value = ingredient.name || '';
+            fieldCategory.value = ingredient.category || '';
+            populateSubcategories(ingredient.category);
+            fieldSubcategory.value = ingredient.subcategory || '';
+            fieldUnit.value = ingredient.unit || '';
+            fieldQuantity.value = ingredient.quantity != null ? ingredient.quantity : 0;
+            fieldInStock.checked = !!ingredient.inStock;
+            fieldTags.value =
+              ingredient.tags && Array.isArray(ingredient.tags) ? ingredient.tags.join(', ') : '';
+            fieldNotes.value = ingredient.notes || '';
+            fieldShopping.checked = !!ingredient.shoppingListDefault;
+            fieldThreshold.value =
+              ingredient.lowStockThreshold != null ? ingredient.lowStockThreshold : 0;
+          } else {
+            formEl.reset();
+            fieldQuantity.value = '0';
+            fieldThreshold.value = '0';
+            fieldSubcategory.innerHTML = '<option value="">Select category first</option>';
+          }
+
+          modalEl.classList.add('open');
+          fieldName.focus();
+        }
+
+        function closeModal() {
+          modalEl.classList.remove('open');
+          editingId = null;
+        }
+
+        // ── Subcategory cascade ─────────────────────────
+        function populateSubcategories(categoryId) {
+          fieldSubcategory.innerHTML = '<option value="">Select&hellip;</option>';
+          var cat = categoryMap[categoryId];
+          if (cat && cat.subcategories) {
+            cat.subcategories.forEach(function (sub) {
+              var opt = document.createElement('option');
+              opt.value = sub;
+              opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
+              fieldSubcategory.appendChild(opt);
+            });
+          }
+        }
+
+        // ── Validation ──────────────────────────────────
+        function clearErrors() {
+          var errors = formEl.querySelectorAll('.form-error');
+          errors.forEach(function (el) {
+            el.textContent = '';
+          });
+        }
+
+        function setError(fieldId, msg) {
+          var el = document.getElementById('error-' + fieldId);
+          if (el) el.textContent = msg;
+        }
+
+        function validateForm() {
+          clearErrors();
+          var valid = true;
+
+          if (!fieldName.value.trim()) {
+            setError('name', 'Name is required');
+            valid = false;
+          }
+          if (!fieldCategory.value) {
+            setError('category', 'Category is required');
+            valid = false;
+          }
+          if (!fieldSubcategory.value) {
+            setError('subcategory', 'Subcategory is required');
+            valid = false;
+          }
+          if (!fieldUnit.value) {
+            setError('unit', 'Unit is required');
+            valid = false;
+          }
+          if (fieldQuantity.value === '' || parseFloat(fieldQuantity.value) < 0) {
+            setError('quantity', 'Quantity must be 0 or greater');
+            valid = false;
+          }
+
+          return valid;
+        }
+
+        // ── Duplicate check ─────────────────────────────
+        function checkDuplicate(name, category) {
+          var trimmed = name.trim().toLowerCase();
+          return allIngredients.some(function (ing) {
+            return (
+              ing.id !== editingId &&
+              ing.name.toLowerCase() === trimmed &&
+              ing.category === category
+            );
+          });
+        }
+
+        // ── Form submit ─────────────────────────────────
+        function handleSubmit(e) {
+          e.preventDefault();
+          if (!validateForm()) return;
+
+          var name = fieldName.value.trim();
+          var category = fieldCategory.value;
+
+          if (checkDuplicate(name, category)) {
+            setError('name', 'An ingredient with this name already exists in this category');
+            return;
+          }
+
+          var tags = fieldTags.value
+            .split(',')
+            .map(function (t) {
+              return t.trim();
+            })
+            .filter(Boolean);
+
+          var data = {
+            name: name,
+            category: category,
+            subcategory: fieldSubcategory.value,
+            tags: tags,
+            unit: fieldUnit.value,
+            type: 'consumable',
+            inStock: fieldInStock.checked,
+            quantity: parseFloat(fieldQuantity.value) || 0,
+            notes: fieldNotes.value.trim(),
+            shoppingListDefault: fieldShopping.checked,
+            lowStockThreshold: parseFloat(fieldThreshold.value) || 0,
+            updatedAt: serverTimestamp(),
+          };
+
+          var btnSave = document.getElementById('btn-save');
+          btnSave.disabled = true;
+          btnSave.textContent = 'Saving\u2026';
+
+          var promise;
+          if (editingId) {
+            data.createdAt = allIngredients.find(function (ing) {
+              return ing.id === editingId;
+            }).createdAt;
+            promise = db.collection('symposium_ingredients').doc(editingId).set(data);
+          } else {
+            data.createdAt = serverTimestamp();
+            promise = db.collection('symposium_ingredients').add(data);
+          }
+
+          promise
+            .then(function () {
+              closeModal();
+            })
+            .catch(function (err) {
+              console.error('Failed to save ingredient:', err);
+              setError('name', 'Failed to save. Check console for details.');
+            })
+            .finally(function () {
+              btnSave.disabled = false;
+              btnSave.textContent = 'Save';
+            });
+        }
+
+        // ── Delete ──────────────────────────────────────
+        function handleDelete(ing) {
+          if (!window.confirm('Remove "' + ing.name + '" from the cellar?')) {
+            return;
+          }
+
+          db.collection('symposium_ingredients')
+            .doc(ing.id)
+            .delete()
+            .catch(function (err) {
+              console.error('Failed to delete ingredient:', err);
+            });
+        }
+
+        // ── Event listeners ─────────────────────────────
+        btnAdd.addEventListener('click', function () {
+          openModal(null);
+        });
+
+        btnCancel.addEventListener('click', closeModal);
+
+        modalEl.addEventListener('click', function (e) {
+          if (e.target === modalEl) closeModal();
+        });
+
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && modalEl.classList.contains('open')) {
+            closeModal();
+          }
+        });
+
+        fieldCategory.addEventListener('change', function () {
+          populateSubcategories(fieldCategory.value);
+        });
+
+        formEl.addEventListener('submit', handleSubmit);
+
+        // ── Init ────────────────────────────────────────
+        loadCategories()
+          .then(function () {
+            subscribeToIngredients();
+          })
+          .catch(function (err) {
+            console.error('Failed to load categories:', err);
+          });
       }
     </script>
   </body>
