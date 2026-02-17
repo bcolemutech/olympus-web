@@ -2,12 +2,52 @@ rules_version='2'
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function hasApp(appId) {
+      return request.auth != null
+          && request.auth.token.apps is list
+          && appId in request.auth.token.apps;
+    }
+
     match /apps/{appId} {
-      allow read: if request.auth != null
-                  && request.auth.token.apps is list
-                  && appId in request.auth.token.apps;
+      allow read: if hasApp(appId);
       allow write: if false;
     }
+
+    // ── The Symposium ──────────────────────────────────────
+
+    match /symposium_ingredients/{ingredientId} {
+      function validIngredient() {
+        let data = request.resource.data;
+        return data.keys().hasAll([
+                 'name', 'category', 'subcategory', 'tags',
+                 'unit', 'type', 'inStock', 'quantity',
+                 'notes', 'shoppingListDefault', 'lowStockThreshold',
+                 'createdAt', 'updatedAt'
+               ])
+            && data.type == 'consumable'
+            && data.unit in ['oz', 'ml', 'dash', 'each', 'splash']
+            && exists(/databases/$(database)/documents/symposium_categories/$(data.category));
+      }
+
+      allow read: if hasApp('symposium');
+      allow create: if hasApp('symposium')
+                    && validIngredient()
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if hasApp('symposium')
+                    && validIngredient()
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.updatedAt == request.time;
+      allow delete: if hasApp('symposium');
+    }
+
+    match /symposium_categories/{categoryId} {
+      allow read: if hasApp('symposium');
+      allow write: if false;
+    }
+
+    // ── Default deny ───────────────────────────────────────
+
     match /{document=**} {
       allow read, write: if false;
     }

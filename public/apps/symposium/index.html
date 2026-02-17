@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Symposium — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- App-specific styles -->
+    <style>
+      /* The Symposium — Where Dionysus keeps his ledger */
+    </style>
+  </head>
+  <body>
+    <!-- Shared header — rendered by app-header.js -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard — shown while checking auth state -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Consulting the Oracle&hellip;</p>
+    </div>
+
+    <!-- Main content — hidden until authenticated -->
+    <main class="app-main hidden" id="app-main">
+      <h1 class="app-title">The Symposium</h1>
+      <p class="app-subtitle">Where Dionysus keeps his ledger</p>
+      <div class="app-divider"></div>
+
+      <!-- App content will be built out in Phase 1+ stories -->
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        firebase.auth().onAuthStateChanged(function (user) {
+          if (!user) {
+            window.location.href = '/';
+            return;
+          }
+
+          // Render the shared header
+          window.OlympusHeader.render('The Symposium');
+
+          // Hide loading, show main content
+          document.getElementById('app-loading').classList.add('hidden');
+          document.getElementById('app-main').classList.remove('hidden');
+
+          // Initialize the app
+          initializeApp(user);
+        });
+      });
+
+      function initializeApp(user) {
+        // The Symposium app logic — built out in Phase 1+ stories
+      }
+    </script>
+  </body>
+</html>
