@@ -18,15 +18,26 @@ service cloud.firestore {
     match /symposium_ingredients/{ingredientId} {
       function validIngredient() {
         let data = request.resource.data;
-        return data.keys().hasAll([
-                 'name', 'category', 'subcategory', 'tags',
-                 'unit', 'type', 'inStock', 'quantity',
-                 'notes', 'shoppingListDefault', 'lowStockThreshold',
-                 'createdAt', 'updatedAt'
-               ])
+        let required = [
+          'name', 'category', 'subcategory', 'tags',
+          'unit', 'type', 'inStock', 'quantity',
+          'notes', 'shoppingListDefault', 'lowStockThreshold',
+          'createdAt', 'updatedAt'
+        ];
+        let allowed = [
+          'name', 'category', 'subcategory', 'tags',
+          'unit', 'type', 'inStock', 'quantity',
+          'notes', 'shoppingListDefault', 'lowStockThreshold',
+          'createdAt', 'updatedAt', 'openBottleLevel'
+        ];
+        let validLevels = ['full', 'three-quarter', 'half', 'quarter', 'empty'];
+
+        return data.keys().hasAll(required)
+            && data.keys().hasOnly(allowed)
             && data.type == 'consumable'
             && data.unit in ['oz', 'ml', 'dash', 'each', 'splash']
-            && exists(/databases/$(database)/documents/symposium_categories/$(data.category));
+            && exists(/databases/$(database)/documents/symposium_categories/$(data.category))
+            && (!data.keys().hasAny(['openBottleLevel']) || data.openBottleLevel in validLevels);
       }
 
       allow read: if hasApp('symposium');
