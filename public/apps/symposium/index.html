@@ -92,9 +92,13 @@
 
       .ingredient-card-header {
         display: flex;
-        justify-content: space-between;
         align-items: flex-start;
         gap: 1rem;
+      }
+
+      .ingredient-card-header > div:first-child {
+        flex: 1;
+        min-width: 0;
       }
 
       .ingredient-name {
@@ -381,6 +385,132 @@
         border-color: rgba(255, 255, 255, 0.2);
       }
 
+      /* ── Amphora bottle level indicator ──────────── */
+      .amphora-indicator {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.25rem 0.5rem;
+        background: none;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
+        flex-shrink: 0;
+        font-family: inherit;
+        color: inherit;
+      }
+
+      .amphora-indicator:hover {
+        border-color: rgba(255, 183, 77, 0.3);
+        background: rgba(255, 183, 77, 0.05);
+      }
+
+      .amphora-indicator:focus-visible {
+        outline: 2px solid rgba(255, 183, 77, 0.7);
+        outline-offset: 2px;
+      }
+
+      .amphora-label {
+        font-size: 0.6rem;
+        color: #546e7a;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+
+      .amphora-indicator.amphora-sealed .amphora-label {
+        color: #37474f;
+      }
+
+      /* ── Amphora level popover ───────────────────── */
+      .amphora-popover {
+        position: fixed;
+        z-index: 1100;
+        background: #111827;
+        border: 1px solid rgba(255, 183, 77, 0.2);
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        min-width: 200px;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.15s,
+          visibility 0.15s;
+      }
+
+      .amphora-popover.open {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .amphora-popover-title {
+        font-size: 0.75rem;
+        color: #90a4ae;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 0.75rem;
+        text-align: center;
+      }
+
+      .amphora-level-options {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .amphora-level-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+        font-family: inherit;
+        color: #90a4ae;
+        background: none;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          color 0.2s,
+          background 0.2s,
+          border-color 0.2s;
+        text-align: left;
+        width: 100%;
+      }
+
+      .amphora-level-btn:hover {
+        color: #e0e0e0;
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .amphora-level-btn.active {
+        color: #ffb74d;
+        background: rgba(255, 183, 77, 0.08);
+        border-color: rgba(255, 183, 77, 0.25);
+      }
+
+      .amphora-level-btn:focus-visible {
+        outline: 2px solid rgba(255, 183, 77, 0.7);
+        outline-offset: 2px;
+      }
+
+      .amphora-level-divider {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.06);
+        margin: 0.35rem 0;
+      }
+
+      .amphora-sealed-btn {
+        color: #546e7a;
+        font-style: italic;
+      }
+
       @media (max-width: 600px) {
         .form-grid {
           grid-template-columns: 1fr;
@@ -398,8 +528,23 @@
           flex-direction: column;
         }
 
+        .amphora-actions-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          align-self: stretch;
+        }
+
         .ingredient-actions {
           align-self: flex-end;
+        }
+
+        .amphora-popover {
+          left: 50% !important;
+          transform: translateX(-50%);
+          top: auto !important;
+          bottom: 1rem;
+          max-width: calc(100vw - 2rem);
         }
       }
     </style>
@@ -553,6 +698,12 @@
       </div>
     </div>
 
+    <!-- Amphora level popover -->
+    <div class="amphora-popover" id="amphora-popover">
+      <div class="amphora-popover-title">Bottle Level</div>
+      <div class="amphora-level-options" id="amphora-level-options"></div>
+    </div>
+
     <!-- Shared header component -->
     <script src="/js/components/app-header.js"></script>
 
@@ -585,6 +736,7 @@
         var allIngredients = [];
         var activeFilter = 'all';
         var editingId = null;
+        var amphoraPopoverIng = null;
 
         // DOM refs
         var listEl = document.getElementById('ingredient-list');
@@ -596,6 +748,8 @@
         var formEl = document.getElementById('ingredient-form');
         var btnAdd = document.getElementById('btn-add');
         var btnCancel = document.getElementById('btn-cancel');
+        var amphoraPopoverEl = document.getElementById('amphora-popover');
+        var amphoraOptionsEl = document.getElementById('amphora-level-options');
 
         // Form fields
         var fieldName = document.getElementById('field-name');
@@ -608,6 +762,152 @@
         var fieldNotes = document.getElementById('field-notes');
         var fieldShopping = document.getElementById('field-shopping');
         var fieldThreshold = document.getElementById('field-threshold');
+
+        // ── Amphora bottle-level constants ─────────────
+        var BOTTLE_LEVELS = {
+          full: { label: 'Full', fill: 1.0 },
+          'three-quarter': { label: '3/4', fill: 0.75 },
+          half: { label: 'Half', fill: 0.5 },
+          quarter: { label: '1/4', fill: 0.25 },
+          empty: { label: 'Empty', fill: 0.0 },
+        };
+
+        var LEVEL_ORDER = ['full', 'three-quarter', 'half', 'quarter', 'empty'];
+
+        // ── Amphora SVG helper ────────────────────────
+        function createAmphoraSVG(level, size) {
+          var ns = 'http://www.w3.org/2000/svg';
+          var fillPct = level && BOTTLE_LEVELS[level] ? BOTTLE_LEVELS[level].fill : -1;
+          var isSealed = fillPct < 0;
+          var w = size || 24;
+          var h = Math.round(w * 1.4);
+          var uid = Math.random().toString(36).substr(2, 6);
+
+          var svg = document.createElementNS(ns, 'svg');
+          svg.setAttribute('width', w);
+          svg.setAttribute('height', h);
+          svg.setAttribute('viewBox', '0 0 40 56');
+          svg.setAttribute('aria-hidden', 'true');
+
+          var defs = document.createElementNS(ns, 'defs');
+
+          var clipPath = document.createElementNS(ns, 'clipPath');
+          clipPath.setAttribute('id', 'bc-' + uid);
+
+          var clipShape = document.createElementNS(ns, 'path');
+          clipShape.setAttribute(
+            'd',
+            'M16,8 L16,14 C8,18 4,26 4,34 C4,44 10,52 20,52 C30,52 36,44 36,34 C36,26 32,18 24,14 L24,8 Z'
+          );
+          clipPath.appendChild(clipShape);
+          defs.appendChild(clipPath);
+
+          var grad = document.createElementNS(ns, 'linearGradient');
+          grad.setAttribute('id', 'lg-' + uid);
+          grad.setAttribute('x1', '0');
+          grad.setAttribute('y1', '0');
+          grad.setAttribute('x2', '0');
+          grad.setAttribute('y2', '1');
+
+          var stop1 = document.createElementNS(ns, 'stop');
+          stop1.setAttribute('offset', '0%');
+          stop1.setAttribute('stop-color', '#ffd54f');
+          var stop2 = document.createElementNS(ns, 'stop');
+          stop2.setAttribute('offset', '100%');
+          stop2.setAttribute('stop-color', '#ff8a65');
+          grad.appendChild(stop1);
+          grad.appendChild(stop2);
+          defs.appendChild(grad);
+
+          svg.appendChild(defs);
+
+          // Bottle outline
+          var outline = document.createElementNS(ns, 'path');
+          outline.setAttribute(
+            'd',
+            'M15,2 L25,2 L25,8 L24,8 L24,14 ' +
+              'C32,18 38,26 38,34 C38,46 30,54 20,54 ' +
+              'C10,54 2,46 2,34 C2,26 8,18 16,14 L16,8 L15,8 Z'
+          );
+          outline.setAttribute('fill', 'none');
+          outline.setAttribute('stroke', isSealed ? '#37474f' : '#90a4ae');
+          outline.setAttribute('stroke-width', '1.5');
+          svg.appendChild(outline);
+
+          // Handles
+          var handleL = document.createElementNS(ns, 'path');
+          handleL.setAttribute('d', 'M8,20 C-2,24 -2,38 8,42');
+          handleL.setAttribute('fill', 'none');
+          handleL.setAttribute('stroke', isSealed ? '#37474f' : '#90a4ae');
+          handleL.setAttribute('stroke-width', '1.5');
+          handleL.setAttribute('stroke-linecap', 'round');
+          svg.appendChild(handleL);
+
+          var handleR = document.createElementNS(ns, 'path');
+          handleR.setAttribute('d', 'M32,20 C42,24 42,38 32,42');
+          handleR.setAttribute('fill', 'none');
+          handleR.setAttribute('stroke', isSealed ? '#37474f' : '#90a4ae');
+          handleR.setAttribute('stroke-width', '1.5');
+          handleR.setAttribute('stroke-linecap', 'round');
+          svg.appendChild(handleR);
+
+          // Liquid fill
+          if (!isSealed && fillPct > 0) {
+            var fillGroup = document.createElementNS(ns, 'g');
+            fillGroup.setAttribute('clip-path', 'url(#bc-' + uid + ')');
+
+            var fillHeight = 44 * fillPct;
+            var fillY = 52 - fillHeight;
+
+            var fillRect = document.createElementNS(ns, 'rect');
+            fillRect.setAttribute('x', '0');
+            fillRect.setAttribute('y', String(fillY));
+            fillRect.setAttribute('width', '40');
+            fillRect.setAttribute('height', String(fillHeight));
+            fillRect.setAttribute('fill', 'url(#lg-' + uid + ')');
+            fillRect.setAttribute('opacity', '0.85');
+            fillGroup.appendChild(fillRect);
+
+            svg.appendChild(fillGroup);
+          }
+
+          // Empty state: red X
+          if (!isSealed && fillPct === 0) {
+            var emptyLine1 = document.createElementNS(ns, 'line');
+            emptyLine1.setAttribute('x1', '14');
+            emptyLine1.setAttribute('y1', '28');
+            emptyLine1.setAttribute('x2', '26');
+            emptyLine1.setAttribute('y2', '40');
+            emptyLine1.setAttribute('stroke', '#ef5350');
+            emptyLine1.setAttribute('stroke-width', '1.5');
+            emptyLine1.setAttribute('opacity', '0.6');
+            svg.appendChild(emptyLine1);
+
+            var emptyLine2 = document.createElementNS(ns, 'line');
+            emptyLine2.setAttribute('x1', '26');
+            emptyLine2.setAttribute('y1', '28');
+            emptyLine2.setAttribute('x2', '14');
+            emptyLine2.setAttribute('y2', '40');
+            emptyLine2.setAttribute('stroke', '#ef5350');
+            emptyLine2.setAttribute('stroke-width', '1.5');
+            emptyLine2.setAttribute('opacity', '0.6');
+            svg.appendChild(emptyLine2);
+          }
+
+          // Sealed state: cork cap
+          if (isSealed) {
+            var cork = document.createElementNS(ns, 'rect');
+            cork.setAttribute('x', '14');
+            cork.setAttribute('y', '0');
+            cork.setAttribute('width', '12');
+            cork.setAttribute('height', '6');
+            cork.setAttribute('rx', '2');
+            cork.setAttribute('fill', '#37474f');
+            svg.appendChild(cork);
+          }
+
+          return svg;
+        }
 
         // ── Load categories (one-time) ──────────────────
         function loadCategories() {
@@ -773,7 +1073,31 @@
           actions.appendChild(editBtn);
           actions.appendChild(deleteBtn);
 
+          // Amphora bottle level indicator
+          var amphoraBtn = document.createElement('button');
+          amphoraBtn.type = 'button';
+          amphoraBtn.className =
+            'amphora-indicator' + (!ing.openBottleLevel ? ' amphora-sealed' : '');
+          amphoraBtn.title = ing.openBottleLevel
+            ? 'Bottle level: ' + (BOTTLE_LEVELS[ing.openBottleLevel] || {}).label
+            : 'No open bottle (sealed)';
+
+          amphoraBtn.appendChild(createAmphoraSVG(ing.openBottleLevel, 24));
+
+          var amphoraLabelEl = document.createElement('span');
+          amphoraLabelEl.className = 'amphora-label';
+          amphoraLabelEl.textContent = ing.openBottleLevel
+            ? (BOTTLE_LEVELS[ing.openBottleLevel] || {}).label || '?'
+            : 'Sealed';
+          amphoraBtn.appendChild(amphoraLabelEl);
+
+          amphoraBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            openAmphoraPopover(ing, amphoraBtn);
+          });
+
           header.appendChild(info);
+          header.appendChild(amphoraBtn);
           header.appendChild(actions);
           card.appendChild(header);
 
@@ -969,9 +1293,13 @@
 
           var promise;
           if (editingId) {
-            data.createdAt = allIngredients.find(function (ing) {
+            var existingIng = allIngredients.find(function (ing) {
               return ing.id === editingId;
-            }).createdAt;
+            });
+            data.createdAt = existingIng.createdAt;
+            if (existingIng.openBottleLevel) {
+              data.openBottleLevel = existingIng.openBottleLevel;
+            }
             promise = db.collection('symposium_ingredients').doc(editingId).set(data);
           } else {
             data.createdAt = serverTimestamp();
@@ -1006,6 +1334,162 @@
             });
         }
 
+        // ── Amphora popover ────────────────────────────
+        function openAmphoraPopover(ing, anchorEl) {
+          if (
+            amphoraPopoverIng &&
+            amphoraPopoverIng.id === ing.id &&
+            amphoraPopoverEl.classList.contains('open')
+          ) {
+            closeAmphoraPopover();
+            return;
+          }
+
+          amphoraPopoverIng = ing;
+          renderAmphoraOptions(ing);
+
+          var rect = anchorEl.getBoundingClientRect();
+          var popW = 220;
+          var left = rect.left + rect.width / 2 - popW / 2;
+          var top = rect.bottom + 8;
+
+          if (left < 8) left = 8;
+          if (left + popW > window.innerWidth - 8) left = window.innerWidth - 8 - popW;
+          if (top + 300 > window.innerHeight) {
+            top = rect.top - 8 - 300;
+            if (top < 8) top = 8;
+          }
+
+          amphoraPopoverEl.style.left = left + 'px';
+          amphoraPopoverEl.style.top = top + 'px';
+          amphoraPopoverEl.classList.add('open');
+        }
+
+        function closeAmphoraPopover() {
+          amphoraPopoverEl.classList.remove('open');
+          amphoraPopoverIng = null;
+        }
+
+        function renderAmphoraOptions(ing) {
+          amphoraOptionsEl.innerHTML = '';
+
+          LEVEL_ORDER.forEach(function (levelKey) {
+            var levelInfo = BOTTLE_LEVELS[levelKey];
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className =
+              'amphora-level-btn' + (ing.openBottleLevel === levelKey ? ' active' : '');
+
+            btn.appendChild(createAmphoraSVG(levelKey, 18));
+
+            var labelSpan = document.createElement('span');
+            labelSpan.textContent = levelInfo.label;
+            btn.appendChild(labelSpan);
+
+            btn.addEventListener('click', function () {
+              handleAmphoraLevelChange(ing, levelKey);
+            });
+
+            amphoraOptionsEl.appendChild(btn);
+          });
+
+          var divider = document.createElement('div');
+          divider.className = 'amphora-level-divider';
+          amphoraOptionsEl.appendChild(divider);
+
+          var sealedBtn = document.createElement('button');
+          sealedBtn.type = 'button';
+          sealedBtn.className =
+            'amphora-level-btn amphora-sealed-btn' + (!ing.openBottleLevel ? ' active' : '');
+
+          sealedBtn.appendChild(createAmphoraSVG(null, 18));
+
+          var sealedLabel = document.createElement('span');
+          sealedLabel.textContent = 'Sealed (no open bottle)';
+          sealedBtn.appendChild(sealedLabel);
+
+          sealedBtn.addEventListener('click', function () {
+            handleAmphoraLevelChange(ing, null);
+          });
+
+          amphoraOptionsEl.appendChild(sealedBtn);
+        }
+
+        // ── Amphora level change ──────────────────────
+        function handleAmphoraLevelChange(ing, newLevel) {
+          var oldLevel = ing.openBottleLevel || null;
+
+          if (newLevel === oldLevel) {
+            closeAmphoraPopover();
+            return;
+          }
+
+          // Optimistic UI update
+          var localIng = allIngredients.find(function (i) {
+            return i.id === ing.id;
+          });
+          if (localIng) {
+            if (newLevel) {
+              localIng.openBottleLevel = newLevel;
+            } else {
+              delete localIng.openBottleLevel;
+            }
+          }
+
+          renderList();
+          closeAmphoraPopover();
+
+          // Prompt on empty
+          var setShoppingList = false;
+          if (newLevel === 'empty') {
+            if (window.confirm('Bottle empty! Move "' + ing.name + '" to the shopping list?')) {
+              setShoppingList = true;
+              if (localIng) localIng.shoppingListDefault = true;
+            }
+          }
+
+          // Build full document for .set()
+          var currentDoc = allIngredients.find(function (i) {
+            return i.id === ing.id;
+          });
+          if (!currentDoc) return;
+
+          var data = {
+            name: currentDoc.name,
+            category: currentDoc.category,
+            subcategory: currentDoc.subcategory,
+            tags: currentDoc.tags || [],
+            unit: currentDoc.unit,
+            type: 'consumable',
+            inStock: currentDoc.inStock,
+            quantity: currentDoc.quantity || 0,
+            notes: currentDoc.notes || '',
+            shoppingListDefault: setShoppingList ? true : currentDoc.shoppingListDefault,
+            lowStockThreshold: currentDoc.lowStockThreshold || 0,
+            createdAt: currentDoc.createdAt,
+            updatedAt: serverTimestamp(),
+          };
+
+          if (newLevel) {
+            data.openBottleLevel = newLevel;
+          }
+
+          db.collection('symposium_ingredients')
+            .doc(ing.id)
+            .set(data)
+            .catch(function (err) {
+              console.error('Failed to update bottle level:', err);
+              if (localIng) {
+                if (oldLevel) {
+                  localIng.openBottleLevel = oldLevel;
+                } else {
+                  delete localIng.openBottleLevel;
+                }
+              }
+              renderList();
+            });
+        }
+
         // ── Event listeners ─────────────────────────────
         btnAdd.addEventListener('click', function () {
           openModal(null);
@@ -1018,8 +1502,38 @@
         });
 
         document.addEventListener('keydown', function (e) {
-          if (e.key === 'Escape' && modalEl.classList.contains('open')) {
-            closeModal();
+          if (e.key === 'Escape') {
+            if (amphoraPopoverEl.classList.contains('open')) {
+              closeAmphoraPopover();
+            } else if (modalEl.classList.contains('open')) {
+              closeModal();
+            }
+          }
+        });
+
+        document.addEventListener('click', function (e) {
+          if (
+            amphoraPopoverEl.classList.contains('open') &&
+            !amphoraPopoverEl.contains(e.target) &&
+            !e.target.closest('.amphora-indicator')
+          ) {
+            closeAmphoraPopover();
+          }
+        });
+
+        window.addEventListener(
+          'scroll',
+          function () {
+            if (amphoraPopoverEl.classList.contains('open')) {
+              closeAmphoraPopover();
+            }
+          },
+          true
+        );
+
+        window.addEventListener('resize', function () {
+          if (amphoraPopoverEl.classList.contains('open')) {
+            closeAmphoraPopover();
           }
         });
 
