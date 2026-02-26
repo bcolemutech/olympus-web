@@ -1,0 +1,23 @@
+name: Seed Symposium Categories
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install script dependencies
+        run: npm ci --prefix scripts
+      - name: Seed categories
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+        run: node scripts/seed-categories.js
