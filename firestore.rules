@@ -52,6 +52,40 @@ service cloud.firestore {
       allow delete: if hasApp('symposium');
     }
 
+    match /symposium_equipment/{equipmentId} {
+      function validEquipment() {
+        let data = request.resource.data;
+        let required = [
+          'name', 'category', 'subcategory', 'tags',
+          'type', 'quantity', 'condition',
+          'notes', 'createdAt', 'updatedAt'
+        ];
+        let allowed = [
+          'name', 'category', 'subcategory', 'tags',
+          'type', 'quantity', 'condition',
+          'notes', 'createdAt', 'updatedAt'
+        ];
+        let validConditions = ['good', 'fair', 'replace'];
+
+        return data.keys().hasAll(required)
+            && data.keys().hasOnly(allowed)
+            && data.type == 'reusable'
+            && data.condition in validConditions
+            && exists(/databases/$(database)/documents/symposium_categories/$(data.category));
+      }
+
+      allow read: if hasApp('symposium');
+      allow create: if hasApp('symposium')
+                    && validEquipment()
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if hasApp('symposium')
+                    && validEquipment()
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.updatedAt == request.time;
+      allow delete: if hasApp('symposium');
+    }
+
     match /symposium_categories/{categoryId} {
       allow read: if hasApp('symposium');
       allow write: if false;

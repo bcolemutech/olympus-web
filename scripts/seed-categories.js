@@ -102,6 +102,36 @@ const categories = [
     subcategories: ['egg', 'dairy', 'spice', 'misc'],
     sortOrder: 8,
   },
+  {
+    id: 'glassware',
+    name: 'Glassware',
+    type: 'equipment',
+    subcategories: [
+      'rocks glass',
+      'coupe',
+      'highball',
+      'martini',
+      'wine',
+      'champagne',
+      'shot',
+      'pint',
+    ],
+    sortOrder: 9,
+  },
+  {
+    id: 'tools',
+    name: 'Tools',
+    type: 'equipment',
+    subcategories: ['shaker', 'strainer', 'jigger', 'muddler', 'bar spoon', 'peeler', 'zester'],
+    sortOrder: 10,
+  },
+  {
+    id: 'appliance',
+    name: 'Appliances',
+    type: 'equipment',
+    subcategories: ['blender', 'ice maker', 'refrigerator', 'juicer'],
+    sortOrder: 11,
+  },
 ];
 
 try {
