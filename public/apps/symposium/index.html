@@ -23,43 +23,195 @@
         margin-bottom: 1.5rem;
       }
 
-      /* ── Category filter chips ───────────────────────── */
-      .filter-chips {
-        display: flex;
-        gap: 0.5rem;
-        overflow-x: auto;
-        padding-bottom: 0.5rem;
-        margin-bottom: 1.5rem;
-        -webkit-overflow-scrolling: touch;
+      /* ── Oracle search bar ───────────────────────────── */
+      .oracle-search-row {
+        margin-bottom: 1rem;
       }
 
-      .filter-chip {
-        flex-shrink: 0;
-        padding: 0.4rem 1rem;
+      .oracle-search-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      .oracle-search-icon {
+        position: absolute;
+        left: 0.85rem;
+        font-size: 0.9rem;
+        pointer-events: none;
+      }
+
+      .oracle-search-input {
+        width: 100%;
+        padding: 0.65rem 2.5rem 0.65rem 2.4rem;
+        font-size: 0.95rem;
+        font-family: inherit;
+        color: #e0e0e0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .oracle-search-input:focus {
+        border-color: rgba(255, 183, 77, 0.5);
+        box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.1);
+      }
+
+      .oracle-search-input::placeholder {
+        color: #4b5563;
+        font-style: italic;
+      }
+
+      .oracle-clear-btn {
+        position: absolute;
+        right: 0.65rem;
+        background: none;
+        border: none;
+        color: #546e7a;
+        font-size: 0.9rem;
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        line-height: 1;
+        border-radius: 4px;
+        font-family: inherit;
+      }
+
+      .oracle-clear-btn:hover {
+        color: #e0e0e0;
+      }
+
+      /* ── Browse controls row ─────────────────────────── */
+      .browse-controls-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .sort-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .sort-label {
+        font-size: 0.75rem;
+        color: #546e7a;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .sort-select {
+        padding: 0.4rem 1.8rem 0.4rem 0.75rem;
         font-size: 0.8rem;
         font-family: inherit;
         color: #90a4ae;
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.05)
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%2390a4ae' d='M6 8L1 3h10z'/%3E%3C/svg%3E")
+          no-repeat right 0.6rem center;
+        appearance: none;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
+        border-radius: 8px;
+        outline: none;
+        cursor: pointer;
+      }
+
+      .sort-select option {
+        background: #111827;
+        color: #e0e0e0;
+      }
+
+      .stock-toggle-group {
+        display: flex;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .stock-toggle-btn {
+        flex: 1;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.75rem;
+        font-family: inherit;
+        color: #546e7a;
+        background: none;
+        border: none;
         cursor: pointer;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.04em;
+        transition:
+          color 0.2s,
+          background 0.2s;
+      }
+
+      .stock-toggle-btn + .stock-toggle-btn {
+        border-left: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .stock-toggle-btn.active {
+        color: #ffb74d;
+        background: rgba(255, 183, 77, 0.1);
+      }
+
+      .stock-toggle-btn:hover:not(.active) {
+        color: #90a4ae;
+      }
+
+      /* ── Category browse grid ────────────────────────── */
+      .category-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 0.6rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .category-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.75rem 0.5rem;
+        font-family: inherit;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        cursor: pointer;
+        color: #90a4ae;
+        text-align: center;
         transition:
           color 0.2s,
           background 0.2s,
           border-color 0.2s;
       }
 
-      .filter-chip:hover {
+      .category-card:hover {
         color: #e0e0e0;
-        border-color: rgba(255, 183, 77, 0.3);
+        border-color: rgba(255, 183, 77, 0.25);
       }
 
-      .filter-chip.active {
-        color: #0a0e1a;
-        background: linear-gradient(135deg, #ffd54f, #ffb74d);
-        border-color: transparent;
+      .category-card.active {
+        color: #ffb74d;
+        background: rgba(255, 183, 77, 0.1);
+        border-color: rgba(255, 183, 77, 0.4);
+      }
+
+      .category-card-count {
+        font-size: 1.4rem;
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: 0.3rem;
+      }
+
+      .category-card-name {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
       }
 
       /* ── Ingredient count ────────────────────────────── */
@@ -524,6 +676,27 @@
           width: 100%;
         }
 
+        .browse-controls-row {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .sort-group {
+          justify-content: space-between;
+        }
+
+        .sort-select {
+          flex: 1;
+        }
+
+        .stock-toggle-group {
+          width: 100%;
+        }
+
+        .category-grid {
+          grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+        }
+
         .ingredient-card-header {
           flex-direction: column;
         }
@@ -569,7 +742,63 @@
         <button class="app-btn" id="btn-add" type="button">+ Add Ingredient</button>
       </div>
 
-      <div class="filter-chips" id="filter-chips"></div>
+      <!-- Oracle search bar -->
+      <div class="oracle-search-row">
+        <div class="oracle-search-wrapper">
+          <span class="oracle-search-icon" aria-hidden="true">&#x1f52e;</span>
+          <input
+            class="oracle-search-input"
+            id="oracle-search"
+            type="text"
+            placeholder="Consult the Oracle&hellip;"
+            autocomplete="off"
+          />
+          <button
+            class="oracle-clear-btn hidden"
+            id="oracle-clear"
+            type="button"
+            aria-label="Clear search"
+          >
+            &#x2715;
+          </button>
+        </div>
+      </div>
+
+      <!-- Browse controls: sort + stock filter -->
+      <div class="browse-controls-row">
+        <div class="sort-group">
+          <label class="sort-label" for="sort-select">Sort</label>
+          <select class="sort-select" id="sort-select">
+            <option value="category">Category</option>
+            <option value="alpha">Alphabetical</option>
+            <option value="stock">Stock Status</option>
+          </select>
+        </div>
+        <div class="stock-toggle-group" role="group" aria-label="Stock filter">
+          <button
+            class="stock-toggle-btn active"
+            id="stock-btn-all"
+            type="button"
+            data-filter="all"
+          >
+            All
+          </button>
+          <button class="stock-toggle-btn" id="stock-btn-in" type="button" data-filter="in-stock">
+            In Stock
+          </button>
+          <button
+            class="stock-toggle-btn"
+            id="stock-btn-out"
+            type="button"
+            data-filter="out-of-stock"
+          >
+            Out of Stock
+          </button>
+        </div>
+      </div>
+
+      <!-- Category browse grid -->
+      <div class="category-grid" id="category-grid"></div>
 
       <div class="ingredient-count hidden" id="ingredient-count"></div>
 
@@ -735,6 +964,9 @@
         var categoryMap = {};
         var allIngredients = [];
         var activeFilter = 'all';
+        var searchQuery = '';
+        var sortOption = 'category';
+        var stockFilter = 'all';
         var editingId = null;
         var amphoraPopoverIng = null;
 
@@ -742,7 +974,11 @@
         var listEl = document.getElementById('ingredient-list');
         var emptyEl = document.getElementById('empty-state');
         var countEl = document.getElementById('ingredient-count');
-        var chipsEl = document.getElementById('filter-chips');
+        var categoryGridEl = document.getElementById('category-grid');
+        var oracleSearchEl = document.getElementById('oracle-search');
+        var oracleClearEl = document.getElementById('oracle-clear');
+        var sortSelectEl = document.getElementById('sort-select');
+        var stockBtns = document.querySelectorAll('.stock-toggle-btn');
         var modalEl = document.getElementById('modal-overlay');
         var modalTitle = document.getElementById('modal-title');
         var formEl = document.getElementById('ingredient-form');
@@ -920,7 +1156,7 @@
                 categoryMap[doc.id] = doc.data();
               });
               populateCategorySelect();
-              renderFilterChips();
+              renderCategoryGrid();
             });
         }
 
@@ -934,33 +1170,41 @@
           });
         }
 
-        // ── Category filter chips ───────────────────────
-        function renderFilterChips() {
-          chipsEl.innerHTML = '';
+        // ── Category browse grid ────────────────────────
+        function renderCategoryGrid() {
+          categoryGridEl.innerHTML = '';
+          var allCard = makeCategoryCard('all', 'All', allIngredients.length);
+          categoryGridEl.appendChild(allCard);
+          Object.keys(categoryMap).forEach(function (id) {
+            var count = allIngredients.filter(function (i) {
+              return i.category === id;
+            }).length;
+            categoryGridEl.appendChild(makeCategoryCard(id, categoryMap[id].name, count));
+          });
+        }
 
-          var allChip = document.createElement('button');
-          allChip.type = 'button';
-          allChip.className = 'filter-chip' + (activeFilter === 'all' ? ' active' : '');
-          allChip.textContent = 'All';
-          allChip.addEventListener('click', function () {
-            activeFilter = 'all';
-            renderFilterChips();
+        function makeCategoryCard(id, name, count) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'category-card' + (activeFilter === id ? ' active' : '');
+
+          var countEl2 = document.createElement('span');
+          countEl2.className = 'category-card-count';
+          countEl2.textContent = count;
+
+          var nameEl = document.createElement('span');
+          nameEl.className = 'category-card-name';
+          nameEl.textContent = name;
+
+          btn.appendChild(countEl2);
+          btn.appendChild(nameEl);
+
+          btn.addEventListener('click', function () {
+            activeFilter = id;
+            renderCategoryGrid();
             renderList();
           });
-          chipsEl.appendChild(allChip);
-
-          Object.keys(categoryMap).forEach(function (id) {
-            var chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'filter-chip' + (activeFilter === id ? ' active' : '');
-            chip.textContent = categoryMap[id].name;
-            chip.addEventListener('click', function () {
-              activeFilter = id;
-              renderFilterChips();
-              renderList();
-            });
-            chipsEl.appendChild(chip);
-          });
+          return btn;
         }
 
         // ── Subscribe to ingredients ────────────────────
@@ -973,25 +1217,71 @@
               snapshot.forEach(function (doc) {
                 allIngredients.push(Object.assign({ id: doc.id }, doc.data()));
               });
+              renderCategoryGrid();
               renderList();
             });
         }
 
         // ── Render ingredient list ──────────────────────
         function renderList() {
-          var filtered =
-            activeFilter === 'all'
-              ? allIngredients
-              : allIngredients.filter(function (ing) {
-                  return ing.category === activeFilter;
+          var result = allIngredients.slice();
+
+          // 1. Category filter
+          if (activeFilter !== 'all') {
+            result = result.filter(function (ing) {
+              return ing.category === activeFilter;
+            });
+          }
+
+          // 2. Search filter — name, category name, or tags (case-insensitive)
+          if (searchQuery) {
+            var q = searchQuery.toLowerCase();
+            result = result.filter(function (ing) {
+              var catName = (
+                categoryMap[ing.category] ? categoryMap[ing.category].name : ''
+              ).toLowerCase();
+              var tagHit =
+                ing.tags &&
+                ing.tags.some(function (t) {
+                  return t.toLowerCase().includes(q);
                 });
+              return ing.name.toLowerCase().includes(q) || catName.includes(q) || tagHit;
+            });
+          }
+
+          // 3. Stock filter
+          if (stockFilter === 'in-stock') {
+            result = result.filter(function (ing) {
+              return ing.inStock;
+            });
+          } else if (stockFilter === 'out-of-stock') {
+            result = result.filter(function (ing) {
+              return !ing.inStock;
+            });
+          }
+
+          // 4. Sort
+          if (sortOption === 'alpha') {
+            result.sort(function (a, b) {
+              return a.name.localeCompare(b.name);
+            });
+          } else if (sortOption === 'stock') {
+            result.sort(function (a, b) {
+              if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
+              return a.name.localeCompare(b.name);
+            });
+          }
+          // 'category': Firestore already delivers category → name order
 
           listEl.innerHTML = '';
 
-          if (filtered.length === 0) {
+          if (result.length === 0) {
             emptyEl.classList.remove('hidden');
             countEl.classList.add('hidden');
-            if (activeFilter !== 'all' && allIngredients.length > 0) {
+            if (searchQuery) {
+              emptyEl.querySelector('.empty-state-text').textContent =
+                'The Oracle finds nothing by that name.';
+            } else if (activeFilter !== 'all' && allIngredients.length > 0) {
               emptyEl.querySelector('.empty-state-text').textContent =
                 'No ingredients in this category yet.';
             } else {
@@ -1004,9 +1294,9 @@
           emptyEl.classList.add('hidden');
           countEl.classList.remove('hidden');
           countEl.textContent =
-            filtered.length + (filtered.length === 1 ? ' ingredient' : ' ingredients');
+            result.length + (result.length === 1 ? ' ingredient' : ' ingredients');
 
-          filtered.forEach(function (ing) {
+          result.forEach(function (ing) {
             listEl.appendChild(renderCard(ing));
           });
         }
@@ -1491,6 +1781,38 @@
         }
 
         // ── Event listeners ─────────────────────────────
+
+        // Oracle search
+        oracleSearchEl.addEventListener('input', function () {
+          searchQuery = oracleSearchEl.value.trim();
+          oracleClearEl.classList.toggle('hidden', searchQuery === '');
+          renderList();
+        });
+
+        oracleClearEl.addEventListener('click', function () {
+          oracleSearchEl.value = '';
+          searchQuery = '';
+          oracleClearEl.classList.add('hidden');
+          renderList();
+        });
+
+        // Sort select
+        sortSelectEl.addEventListener('change', function () {
+          sortOption = sortSelectEl.value;
+          renderList();
+        });
+
+        // Stock filter toggle
+        stockBtns.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            stockFilter = btn.dataset.filter;
+            stockBtns.forEach(function (b) {
+              b.classList.toggle('active', b === btn);
+            });
+            renderList();
+          });
+        });
+
         btnAdd.addEventListener('click', function () {
           openModal(null);
         });
