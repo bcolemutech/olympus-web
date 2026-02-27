@@ -93,6 +93,17 @@
           var diff = orderA - orderB;
           return diff !== 0 ? diff : a.name.localeCompare(b.name);
         });
+      } else if (state.equipSortOption === 'category') {
+        result.sort(function (a, b) {
+          var catA = state.categoryMap[a.category];
+          var catB = state.categoryMap[b.category];
+          var orderA =
+            catA && typeof catA.sortOrder === 'number' ? catA.sortOrder : Number.MAX_SAFE_INTEGER;
+          var orderB =
+            catB && typeof catB.sortOrder === 'number' ? catB.sortOrder : Number.MAX_SAFE_INTEGER;
+          var diff = orderA - orderB;
+          return diff !== 0 ? diff : a.name.localeCompare(b.name);
+        });
       }
 
       Symposium.renderListSection({

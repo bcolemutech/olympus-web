@@ -1,7 +1,8 @@
 (function () {
   'use strict';
 
-  var S = (window.Symposium = {});
+  window.Symposium = window.Symposium || {};
+  var S = window.Symposium;
 
   // ── Amphora bottle-level constants ─────────────
   S.BOTTLE_LEVELS = {

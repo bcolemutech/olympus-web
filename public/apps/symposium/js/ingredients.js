@@ -90,8 +90,18 @@
           if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
           return a.name.localeCompare(b.name);
         });
+      } else if (state.sortOption === 'category') {
+        result.sort(function (a, b) {
+          var catA = state.categoryMap[a.category];
+          var catB = state.categoryMap[b.category];
+          var orderA =
+            catA && typeof catA.sortOrder === 'number' ? catA.sortOrder : Number.MAX_SAFE_INTEGER;
+          var orderB =
+            catB && typeof catB.sortOrder === 'number' ? catB.sortOrder : Number.MAX_SAFE_INTEGER;
+          if (orderA !== orderB) return orderA - orderB;
+          return a.name.localeCompare(b.name);
+        });
       }
-      // 'category': Firestore already delivers category → name order
 
       Symposium.renderListSection({
         items: result,
@@ -214,20 +224,24 @@
       details.className = 'ingredient-details';
 
       var qtyDetail = document.createElement('span');
-      qtyDetail.innerHTML =
-        '<span class="ingredient-detail-label">Qty:</span> ' +
-        (ing.quantity || 0) +
-        ' ' +
-        (ing.unit || '');
+      var qtyLabel = document.createElement('span');
+      qtyLabel.className = 'ingredient-detail-label';
+      qtyLabel.textContent = 'Qty:';
+      qtyDetail.appendChild(qtyLabel);
+      qtyDetail.appendChild(
+        document.createTextNode(' ' + (ing.quantity || 0) + ' ' + (ing.unit || ''))
+      );
       details.appendChild(qtyDetail);
 
       if (ing.lowStockThreshold > 0) {
         var threshDetail = document.createElement('span');
-        threshDetail.innerHTML =
-          '<span class="ingredient-detail-label">Low at:</span> ' +
-          ing.lowStockThreshold +
-          ' ' +
-          (ing.unit || '');
+        var threshLabel = document.createElement('span');
+        threshLabel.className = 'ingredient-detail-label';
+        threshLabel.textContent = 'Low at:';
+        threshDetail.appendChild(threshLabel);
+        threshDetail.appendChild(
+          document.createTextNode(' ' + ing.lowStockThreshold + ' ' + (ing.unit || ''))
+        );
         details.appendChild(threshDetail);
       }
 
@@ -425,8 +439,12 @@
         var existingIng = state.allIngredients.find(function (ing) {
           return ing.id === state.editingId;
         });
-        data.createdAt = existingIng.createdAt;
-        if (existingIng.openBottleLevel) {
+        if (existingIng && existingIng.createdAt) {
+          data.createdAt = existingIng.createdAt;
+        } else {
+          data.createdAt = state.serverTimestamp();
+        }
+        if (existingIng && existingIng.openBottleLevel) {
           data.openBottleLevel = existingIng.openBottleLevel;
         }
         promise = state.db.collection('symposium_ingredients').doc(state.editingId).set(data);

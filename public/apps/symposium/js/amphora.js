@@ -254,36 +254,25 @@
         }
       }
 
-      // Build full document for .set()
-      var currentDoc = state.allIngredients.find(function (i) {
-        return i.id === ing.id;
-      });
-      if (!currentDoc) return;
-
-      var data = {
-        name: currentDoc.name,
-        category: currentDoc.category,
-        subcategory: currentDoc.subcategory,
-        tags: currentDoc.tags || [],
-        unit: currentDoc.unit,
-        type: 'consumable',
-        inStock: currentDoc.inStock,
-        quantity: currentDoc.quantity || 0,
-        notes: currentDoc.notes || '',
-        shoppingListDefault: setShoppingList ? true : currentDoc.shoppingListDefault,
-        lowStockThreshold: currentDoc.lowStockThreshold || 0,
-        createdAt: currentDoc.createdAt,
+      // Build partial update for Firestore
+      var updateData = {
         updatedAt: state.serverTimestamp(),
       };
 
+      if (setShoppingList) {
+        updateData.shoppingListDefault = true;
+      }
+
       if (newLevel) {
-        data.openBottleLevel = newLevel;
+        updateData.openBottleLevel = newLevel;
+      } else {
+        updateData.openBottleLevel = firebase.firestore.FieldValue.delete();
       }
 
       state.db
         .collection('symposium_ingredients')
         .doc(ing.id)
-        .set(data)
+        .update(updateData)
         .catch(function (err) {
           console.error('Failed to update bottle level:', err);
           if (localIng) {
