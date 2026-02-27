@@ -7,7 +7,9 @@
   // ── Low/empty item count ──────────────────────────
   function getLowEmptyCount() {
     var ingLow = state.allIngredients.filter(function (ing) {
-      return !ing.inStock || (ing.lowStockThreshold > 0 && ing.quantity <= ing.lowStockThreshold);
+      var quantity = Number(ing.quantity) || 0;
+      var threshold = Number(ing.lowStockThreshold) || 0;
+      return !ing.inStock || (threshold > 0 && quantity <= threshold);
     }).length;
     var equipReplace = state.allEquipment.filter(function (eq) {
       return eq.condition === 'replace';
@@ -77,7 +79,8 @@
   }
 
   function _makeResultCard(item, type) {
-    var card = document.createElement('div');
+    var card = document.createElement('button');
+    card.type = 'button';
     card.className = 'combined-result-card';
 
     var badge = document.createElement('span');
