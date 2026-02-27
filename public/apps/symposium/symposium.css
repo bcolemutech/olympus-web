@@ -884,3 +884,108 @@
     width: 100%;
   }
 }
+
+/* ── Inventory dashboard card ─────────────────────── */
+.inventory-dashboard {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.dashboard-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.dashboard-count {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #ffb74d;
+  line-height: 1;
+}
+
+.dashboard-label {
+  font-size: 0.75rem;
+  color: #546e7a;
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.has-alerts .dashboard-count {
+  color: #ef5350;
+}
+
+/* ── Combined search results panel ──────────────── */
+.combined-count {
+  font-size: 0.85rem;
+  color: #546e7a;
+  margin-bottom: 0.75rem;
+}
+
+.combined-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.combined-result-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: inherit;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.combined-result-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 183, 77, 0.25);
+}
+
+.combined-result-name {
+  flex: 1;
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.combined-result-detail {
+  font-size: 0.8rem;
+  color: #546e7a;
+}
+
+/* ── Result type badges ──────────────────────────── */
+.result-type-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.result-type-ingredient {
+  background: rgba(255, 183, 77, 0.15);
+  color: #ffb74d;
+}
+
+.result-type-equipment {
+  background: rgba(77, 208, 225, 0.15);
+  color: #4dd0e1;
+}
