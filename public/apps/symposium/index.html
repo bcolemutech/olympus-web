@@ -1278,16 +1278,27 @@
           if (result.length === 0) {
             emptyEl.classList.remove('hidden');
             countEl.classList.add('hidden');
-            if (searchQuery) {
-              emptyEl.querySelector('.empty-state-text').textContent =
-                'The Oracle finds nothing by that name.';
+            var emptyMsg;
+            if (searchQuery && activeFilter !== 'all') {
+              emptyMsg = 'The Oracle finds nothing matching that name in this category.';
+            } else if (searchQuery) {
+              emptyMsg = 'The Oracle finds nothing by that name.';
+            } else if (stockFilter === 'in-stock') {
+              emptyMsg =
+                activeFilter !== 'all'
+                  ? 'No in-stock ingredients in this category.'
+                  : 'No in-stock ingredients found.';
+            } else if (stockFilter === 'out-of-stock') {
+              emptyMsg =
+                activeFilter !== 'all'
+                  ? 'No out-of-stock ingredients in this category.'
+                  : 'No out-of-stock ingredients found.';
             } else if (activeFilter !== 'all' && allIngredients.length > 0) {
-              emptyEl.querySelector('.empty-state-text').textContent =
-                'No ingredients in this category yet.';
+              emptyMsg = 'No ingredients in this category yet.';
             } else {
-              emptyEl.querySelector('.empty-state-text').textContent =
-                'The Cellar awaits its first offering.';
+              emptyMsg = 'The Cellar awaits its first offering.';
             }
+            emptyEl.querySelector('.empty-state-text').textContent = emptyMsg;
             return;
           }
 
