@@ -35,6 +35,8 @@
     equipSortOption: 'category',
     conditionFilter: 'all',
     equipEditingId: null,
+    globalSearchQuery: '',
+    currentView: 'ingredients',
   };
 
   // ── Lazy-cached DOM ref helpers ────────────────

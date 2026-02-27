@@ -33,6 +33,44 @@
       <p class="app-subtitle">Where Dionysus keeps his ledger</p>
       <div class="app-divider"></div>
 
+      <!-- Inventory summary dashboard card -->
+      <div class="inventory-dashboard" id="inventory-dashboard">
+        <div class="dashboard-stat">
+          <span class="dashboard-count" id="dash-ingredient-count">0</span>
+          <span class="dashboard-label">Ingredients</span>
+        </div>
+        <div class="dashboard-stat">
+          <span class="dashboard-count" id="dash-equipment-count">0</span>
+          <span class="dashboard-label">Equipment</span>
+        </div>
+        <div class="dashboard-stat" id="dash-alert-stat">
+          <span class="dashboard-count" id="dash-alert-count">0</span>
+          <span class="dashboard-label">Low / Empty</span>
+        </div>
+      </div>
+
+      <!-- Global oracle search bar (searches all inventory) -->
+      <div class="oracle-search-row">
+        <div class="oracle-search-wrapper">
+          <span class="oracle-search-icon" aria-hidden="true">&#x1f52e;</span>
+          <input
+            class="oracle-search-input"
+            id="oracle-search-global"
+            type="text"
+            placeholder="Search all inventory&hellip;"
+            autocomplete="off"
+          />
+          <button
+            class="oracle-clear-btn hidden"
+            id="oracle-clear-global"
+            type="button"
+            aria-label="Clear search"
+          >
+            &#x2715;
+          </button>
+        </div>
+      </div>
+
       <!-- View tabs: Ingredients / Equipment -->
       <div class="view-tabs" role="tablist" aria-label="Inventory view">
         <button
@@ -59,32 +97,20 @@
         </button>
       </div>
 
+      <!-- Combined search results panel (shown when global search is active) -->
+      <div id="panel-combined" class="hidden" role="region" aria-label="Search results">
+        <div class="combined-count hidden" id="combined-count"></div>
+        <div class="combined-list" id="combined-list"></div>
+        <div class="empty-state" id="empty-state-combined">
+          <span class="empty-state-icon" aria-hidden="true">&#x1f52e;</span>
+          <p class="empty-state-text">The Oracle found nothing.</p>
+        </div>
+      </div>
+
       <!-- Ingredients panel -->
       <div id="panel-ingredients" role="tabpanel" aria-labelledby="tab-ingredients">
         <div class="toolbar">
           <button class="app-btn" id="btn-add" type="button">+ Add Ingredient</button>
-        </div>
-
-        <!-- Oracle search bar -->
-        <div class="oracle-search-row">
-          <div class="oracle-search-wrapper">
-            <span class="oracle-search-icon" aria-hidden="true">&#x1f52e;</span>
-            <input
-              class="oracle-search-input"
-              id="oracle-search"
-              type="text"
-              placeholder="Consult the Oracle&hellip;"
-              autocomplete="off"
-            />
-            <button
-              class="oracle-clear-btn hidden"
-              id="oracle-clear"
-              type="button"
-              aria-label="Clear search"
-            >
-              &#x2715;
-            </button>
-          </div>
         </div>
 
         <!-- Browse controls: sort + stock filter -->
@@ -139,28 +165,6 @@
           <button class="app-btn app-btn-equipment" id="btn-add-equipment" type="button">
             + Add Equipment
           </button>
-        </div>
-
-        <!-- Oracle search bar (equipment) -->
-        <div class="oracle-search-row">
-          <div class="oracle-search-wrapper">
-            <span class="oracle-search-icon" aria-hidden="true">&#x1f50d;</span>
-            <input
-              class="oracle-search-input"
-              id="oracle-search-equip"
-              type="text"
-              placeholder="Search equipment&hellip;"
-              autocomplete="off"
-            />
-            <button
-              class="oracle-clear-btn hidden"
-              id="oracle-clear-equip"
-              type="button"
-              aria-label="Clear search"
-            >
-              &#x2715;
-            </button>
-          </div>
         </div>
 
         <!-- Browse controls: sort + condition filter -->
@@ -448,6 +452,7 @@
     <script src="/apps/symposium/js/amphora.js"></script>
     <script src="/apps/symposium/js/ingredients.js"></script>
     <script src="/apps/symposium/js/equipment.js"></script>
+    <script src="/apps/symposium/js/inventory.js"></script>
     <script src="/apps/symposium/js/app.js"></script>
 
     <script>

@@ -4,20 +4,42 @@
   var Symposium = window.Symposium;
   var state = Symposium.state;
 
-  // ── View tab switching ────────────────────────
+  // ── Scroll position memory ────────────────────────
+  var tabScrollPositions = {};
+
+  // ── View tab switching ────────────────────────────
   function switchView(view) {
     var tabIngredients = Symposium.getRef('tab-ingredients');
     var tabEquipment = Symposium.getRef('tab-equipment');
     var panelIngredients = Symposium.getRef('panel-ingredients');
     var panelEquipment = Symposium.getRef('panel-equipment');
 
+    // Save current tab's scroll position before switching
+    if (state.currentView) {
+      tabScrollPositions[state.currentView] = window.scrollY;
+    }
+    state.currentView = view;
+
     tabIngredients.classList.toggle('active', view === 'ingredients');
     tabIngredients.setAttribute('aria-selected', view === 'ingredients' ? 'true' : 'false');
     tabEquipment.classList.toggle('active', view === 'equipment');
     tabEquipment.setAttribute('aria-selected', view === 'equipment' ? 'true' : 'false');
 
+    // Hide combined panel, show the selected tab panel
+    Symposium.getRef('panel-combined').classList.add('hidden');
     panelIngredients.classList.toggle('hidden', view !== 'ingredients');
     panelEquipment.classList.toggle('hidden', view !== 'equipment');
+
+    // Clear global search when switching tabs
+    state.globalSearchQuery = '';
+    var globalSearchEl = Symposium.getRef('oracle-search-global');
+    if (globalSearchEl) {
+      globalSearchEl.value = '';
+      Symposium.getRef('oracle-clear-global').classList.add('hidden');
+    }
+
+    // Restore scroll position
+    window.scrollTo(0, tabScrollPositions[view] || 0);
   }
 
   Symposium.app = {
@@ -25,6 +47,9 @@
       // Set up Firestore references
       state.db = firebase.firestore();
       state.serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
+
+      // Wire switchView into inventory module for cross-tab navigation
+      Symposium.inventory._switchToTab = switchView;
 
       // ── Wire Firestore callbacks ─────────────────
       Symposium.firestore._onCategoriesLoaded = function () {
@@ -37,28 +62,43 @@
       Symposium.firestore._onIngredientsChanged = function () {
         Symposium.ingredients.renderCategoryGrid();
         Symposium.ingredients.renderList();
+        Symposium.inventory.renderDashboard();
+        if (state.globalSearchQuery) Symposium.inventory.renderCombinedSearch();
       };
 
       Symposium.firestore._onEquipmentChanged = function () {
         Symposium.equipment.renderCategoryGrid();
         Symposium.equipment.renderList();
+        Symposium.inventory.renderDashboard();
+        if (state.globalSearchQuery) Symposium.inventory.renderCombinedSearch();
       };
 
-      // ── Ingredient search ───────────────────────
-      var oracleSearchEl = Symposium.getRef('oracle-search');
-      var oracleClearEl = Symposium.getRef('oracle-clear');
+      // ── Global search ────────────────────────────
+      var globalSearchEl = Symposium.getRef('oracle-search-global');
+      var globalClearEl = Symposium.getRef('oracle-clear-global');
 
-      oracleSearchEl.addEventListener('input', function () {
-        state.searchQuery = oracleSearchEl.value.trim();
-        oracleClearEl.classList.toggle('hidden', state.searchQuery === '');
-        Symposium.ingredients.renderList();
+      globalSearchEl.addEventListener('input', function () {
+        state.globalSearchQuery = globalSearchEl.value.trim();
+        globalClearEl.classList.toggle('hidden', state.globalSearchQuery === '');
+        var hasQuery = state.globalSearchQuery !== '';
+        Symposium.getRef('panel-combined').classList.toggle('hidden', !hasQuery);
+        Symposium.getRef('panel-ingredients').classList.toggle(
+          'hidden',
+          hasQuery || state.currentView !== 'ingredients'
+        );
+        Symposium.getRef('panel-equipment').classList.toggle(
+          'hidden',
+          hasQuery || state.currentView !== 'equipment'
+        );
+        if (hasQuery) Symposium.inventory.renderCombinedSearch();
       });
 
-      oracleClearEl.addEventListener('click', function () {
-        oracleSearchEl.value = '';
-        state.searchQuery = '';
-        oracleClearEl.classList.add('hidden');
-        Symposium.ingredients.renderList();
+      globalClearEl.addEventListener('click', function () {
+        globalSearchEl.value = '';
+        state.globalSearchQuery = '';
+        globalClearEl.classList.add('hidden');
+        Symposium.getRef('panel-combined').classList.add('hidden');
+        Symposium.getRef('panel-' + state.currentView).classList.remove('hidden');
       });
 
       // ── Ingredient sort ─────────────────────────
@@ -154,23 +194,6 @@
       });
       Symposium.getRef('tab-equipment').addEventListener('click', function () {
         switchView('equipment');
-      });
-
-      // ── Equipment search ────────────────────────
-      var equipSearchEl = Symposium.getRef('oracle-search-equip');
-      var equipClearEl = Symposium.getRef('oracle-clear-equip');
-
-      equipSearchEl.addEventListener('input', function () {
-        state.equipSearchQuery = equipSearchEl.value.trim();
-        equipClearEl.classList.toggle('hidden', state.equipSearchQuery === '');
-        Symposium.equipment.renderList();
-      });
-
-      equipClearEl.addEventListener('click', function () {
-        equipSearchEl.value = '';
-        state.equipSearchQuery = '';
-        equipClearEl.classList.add('hidden');
-        Symposium.equipment.renderList();
       });
 
       // ── Equipment sort ──────────────────────────
