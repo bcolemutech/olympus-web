@@ -1713,6 +1713,35 @@
             });
         }
 
+        // ── Shared list rendering helper ─────────────────
+        function renderListSection(config) {
+          var items = config.items;
+          var targetListEl = config.listEl;
+          var targetEmptyEl = config.emptyEl;
+          var targetCountEl = config.countEl;
+          var cardFn = config.renderCard;
+          var getEmptyMessage = config.getEmptyMessage;
+          var noun = config.noun || 'item';
+
+          targetListEl.innerHTML = '';
+
+          if (items.length === 0) {
+            targetEmptyEl.classList.remove('hidden');
+            targetCountEl.classList.add('hidden');
+            targetEmptyEl.querySelector('.empty-state-text').textContent = getEmptyMessage();
+            return;
+          }
+
+          targetEmptyEl.classList.add('hidden');
+          targetCountEl.classList.remove('hidden');
+          targetCountEl.textContent =
+            items.length + (items.length === 1 ? ' ' + noun : ' ' + noun + 's');
+
+          items.forEach(function (item) {
+            targetListEl.appendChild(cardFn(item));
+          });
+        }
+
         // ── Render ingredient list ──────────────────────
         function renderList() {
           var result = allIngredients.slice();
@@ -1764,42 +1793,31 @@
           }
           // 'category': Firestore already delivers category → name order
 
-          listEl.innerHTML = '';
-
-          if (result.length === 0) {
-            emptyEl.classList.remove('hidden');
-            countEl.classList.add('hidden');
-            var emptyMsg;
-            if (searchQuery && activeFilter !== 'all') {
-              emptyMsg = 'The Oracle finds nothing matching that name in this category.';
-            } else if (searchQuery) {
-              emptyMsg = 'The Oracle finds nothing by that name.';
-            } else if (stockFilter === 'in-stock') {
-              emptyMsg =
-                activeFilter !== 'all'
+          renderListSection({
+            items: result,
+            listEl: listEl,
+            emptyEl: emptyEl,
+            countEl: countEl,
+            renderCard: renderCard,
+            noun: 'ingredient',
+            getEmptyMessage: function () {
+              if (searchQuery && activeFilter !== 'all') {
+                return 'The Oracle finds nothing matching that name in this category.';
+              } else if (searchQuery) {
+                return 'The Oracle finds nothing by that name.';
+              } else if (stockFilter === 'in-stock') {
+                return activeFilter !== 'all'
                   ? 'No in-stock ingredients in this category.'
                   : 'No in-stock ingredients found.';
-            } else if (stockFilter === 'out-of-stock') {
-              emptyMsg =
-                activeFilter !== 'all'
+              } else if (stockFilter === 'out-of-stock') {
+                return activeFilter !== 'all'
                   ? 'No out-of-stock ingredients in this category.'
                   : 'No out-of-stock ingredients found.';
-            } else if (activeFilter !== 'all' && allIngredients.length > 0) {
-              emptyMsg = 'No ingredients in this category yet.';
-            } else {
-              emptyMsg = 'The Cellar awaits its first offering.';
-            }
-            emptyEl.querySelector('.empty-state-text').textContent = emptyMsg;
-            return;
-          }
-
-          emptyEl.classList.add('hidden');
-          countEl.classList.remove('hidden');
-          countEl.textContent =
-            result.length + (result.length === 1 ? ' ingredient' : ' ingredients');
-
-          result.forEach(function (ing) {
-            listEl.appendChild(renderCard(ing));
+              } else if (activeFilter !== 'all' && allIngredients.length > 0) {
+                return 'No ingredients in this category yet.';
+              }
+              return 'The Cellar awaits its first offering.';
+            },
           });
         }
 
@@ -1978,17 +1996,21 @@
         }
 
         // ── Subcategory cascade ─────────────────────────
-        function populateSubcategories(categoryId) {
-          fieldSubcategory.innerHTML = '<option value="">Select&hellip;</option>';
+        function populateSubcategoryDropdown(categoryId, dropdownEl) {
+          dropdownEl.innerHTML = '<option value="">Select&hellip;</option>';
           var cat = categoryMap[categoryId];
           if (cat && cat.subcategories) {
             cat.subcategories.forEach(function (sub) {
               var opt = document.createElement('option');
               opt.value = sub;
               opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
-              fieldSubcategory.appendChild(opt);
+              dropdownEl.appendChild(opt);
             });
           }
+        }
+
+        function populateSubcategories(categoryId) {
+          populateSubcategoryDropdown(categoryId, fieldSubcategory);
         }
 
         // ── Validation ──────────────────────────────────
@@ -2168,42 +2190,41 @@
           } else if (equipSortOption === 'condition') {
             var condOrder = { replace: 0, fair: 1, good: 2 };
             result.sort(function (a, b) {
-              var diff = (condOrder[a.condition] || 0) - (condOrder[b.condition] || 0);
+              var orderA = Object.prototype.hasOwnProperty.call(condOrder, a.condition)
+                ? condOrder[a.condition]
+                : 3;
+              var orderB = Object.prototype.hasOwnProperty.call(condOrder, b.condition)
+                ? condOrder[b.condition]
+                : 3;
+              var diff = orderA - orderB;
               return diff !== 0 ? diff : a.name.localeCompare(b.name);
             });
           }
 
-          equipListEl.innerHTML = '';
-
-          if (result.length === 0) {
-            equipEmptyEl.classList.remove('hidden');
-            equipCountEl.classList.add('hidden');
-            var emptyMsg;
-            if (equipSearchQuery && equipActiveFilter !== 'all') {
-              emptyMsg = 'No equipment matches that search in this category.';
-            } else if (equipSearchQuery) {
-              emptyMsg = 'No equipment matches that search.';
-            } else if (conditionFilter !== 'all') {
-              emptyMsg =
-                'No equipment with \u201c' +
-                conditionFilter +
-                '\u201d condition' +
-                (equipActiveFilter !== 'all' ? ' in this category.' : '.');
-            } else if (equipActiveFilter !== 'all' && allEquipment.length > 0) {
-              emptyMsg = 'No equipment in this category yet.';
-            } else {
-              emptyMsg = 'The Workshop awaits its first tool.';
-            }
-            equipEmptyEl.querySelector('.empty-state-text').textContent = emptyMsg;
-            return;
-          }
-
-          equipEmptyEl.classList.add('hidden');
-          equipCountEl.classList.remove('hidden');
-          equipCountEl.textContent = result.length + (result.length === 1 ? ' item' : ' items');
-
-          result.forEach(function (eq) {
-            equipListEl.appendChild(renderEquipCard(eq));
+          renderListSection({
+            items: result,
+            listEl: equipListEl,
+            emptyEl: equipEmptyEl,
+            countEl: equipCountEl,
+            renderCard: renderEquipCard,
+            noun: 'item',
+            getEmptyMessage: function () {
+              if (equipSearchQuery && equipActiveFilter !== 'all') {
+                return 'No equipment matches that search in this category.';
+              } else if (equipSearchQuery) {
+                return 'No equipment matches that search.';
+              } else if (conditionFilter !== 'all') {
+                return (
+                  'No equipment with \u201c' +
+                  conditionFilter +
+                  '\u201d condition' +
+                  (equipActiveFilter !== 'all' ? ' in this category.' : '.')
+                );
+              } else if (equipActiveFilter !== 'all' && allEquipment.length > 0) {
+                return 'No equipment in this category yet.';
+              }
+              return 'The Workshop awaits its first tool.';
+            },
           });
         }
 
@@ -2238,9 +2259,14 @@
             meta.appendChild(subBadge);
           }
 
+          var allowedConditions = ['good', 'fair', 'replace'];
+          var condition =
+            typeof eq.condition === 'string' && allowedConditions.indexOf(eq.condition) !== -1
+              ? eq.condition
+              : 'good';
           var condBadge = document.createElement('span');
-          condBadge.className = 'badge badge-condition badge-condition-' + eq.condition;
-          condBadge.textContent = eq.condition.charAt(0).toUpperCase() + eq.condition.slice(1);
+          condBadge.className = 'badge badge-condition badge-condition-' + condition;
+          condBadge.textContent = condition.charAt(0).toUpperCase() + condition.slice(1);
           meta.appendChild(condBadge);
 
           info.appendChild(name);
@@ -2276,8 +2302,11 @@
           var details = document.createElement('div');
           details.className = 'ingredient-details';
           var qtyDetail = document.createElement('span');
-          qtyDetail.innerHTML =
-            '<span class="ingredient-detail-label">Qty:</span> ' + (eq.quantity || 0);
+          var qtyLabel = document.createElement('span');
+          qtyLabel.className = 'ingredient-detail-label';
+          qtyLabel.textContent = 'Qty:';
+          qtyDetail.appendChild(qtyLabel);
+          qtyDetail.appendChild(document.createTextNode(' ' + (eq.quantity || 0)));
           details.appendChild(qtyDetail);
           card.appendChild(details);
 
@@ -2340,16 +2369,7 @@
 
         // ── Equipment subcategory cascade ──────────────
         function populateEquipSubcategories(categoryId) {
-          eqFieldSubcategory.innerHTML = '<option value="">Select&hellip;</option>';
-          var cat = categoryMap[categoryId];
-          if (cat && cat.subcategories) {
-            cat.subcategories.forEach(function (sub) {
-              var opt = document.createElement('option');
-              opt.value = sub;
-              opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
-              eqFieldSubcategory.appendChild(opt);
-            });
-          }
+          populateSubcategoryDropdown(categoryId, eqFieldSubcategory);
         }
 
         // ── Equipment validation ──────────────────────
@@ -2446,7 +2466,7 @@
             var existingEq = allEquipment.find(function (eq) {
               return eq.id === equipEditingId;
             });
-            data.createdAt = existingEq.createdAt;
+            data.createdAt = (existingEq && existingEq.createdAt) || serverTimestamp();
             promise = db.collection('symposium_equipment').doc(equipEditingId).set(data);
           } else {
             data.createdAt = serverTimestamp();
