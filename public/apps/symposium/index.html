@@ -720,6 +720,188 @@
           max-width: calc(100vw - 2rem);
         }
       }
+
+      /* ── View tabs ─────────────────────────────────── */
+      .view-tabs {
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        margin-bottom: 2rem;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .view-tab {
+        flex: 1;
+        max-width: 200px;
+        padding: 0.6rem 1.25rem;
+        font-size: 0.85rem;
+        font-family: inherit;
+        font-weight: 600;
+        color: #546e7a;
+        background: none;
+        border: none;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        transition:
+          color 0.2s,
+          background 0.2s;
+      }
+
+      .view-tab + .view-tab {
+        border-left: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .view-tab.active[data-view='ingredients'] {
+        color: #ffb74d;
+        background: rgba(255, 183, 77, 0.1);
+      }
+
+      .view-tab.active[data-view='equipment'] {
+        color: #4dd0e1;
+        background: rgba(77, 208, 225, 0.1);
+      }
+
+      .view-tab:hover:not(.active) {
+        color: #90a4ae;
+      }
+
+      /* ── Equipment cards ───────────────────────────── */
+      .equipment-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .equipment-card {
+        background: rgba(17, 24, 39, 0.7);
+        border: 1px solid rgba(77, 208, 225, 0.1);
+        border-left: 3px solid rgba(77, 208, 225, 0.3);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem;
+        transition: border-color 0.3s;
+      }
+
+      .equipment-card:hover {
+        border-color: rgba(77, 208, 225, 0.3);
+        border-left-color: rgba(77, 208, 225, 0.6);
+      }
+
+      .equipment-count {
+        text-align: center;
+        font-size: 0.8rem;
+        color: #546e7a;
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.05em;
+      }
+
+      /* ── Condition badges ──────────────────────────── */
+      .badge-condition {
+        font-weight: 600;
+      }
+
+      .badge-condition-good {
+        color: #66bb6a;
+        background: rgba(102, 187, 106, 0.1);
+        border: 1px solid rgba(102, 187, 106, 0.2);
+      }
+
+      .badge-condition-fair {
+        color: #ffa726;
+        background: rgba(255, 167, 38, 0.1);
+        border: 1px solid rgba(255, 167, 38, 0.2);
+      }
+
+      .badge-condition-replace {
+        color: #ef5350;
+        background: rgba(239, 83, 80, 0.15);
+        border: 1px solid rgba(239, 83, 80, 0.3);
+        font-weight: 700;
+      }
+
+      /* ── Condition filter toggle ────────────────────── */
+      .condition-toggle-group {
+        display: flex;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .condition-toggle-btn {
+        flex: 1;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.75rem;
+        font-family: inherit;
+        color: #546e7a;
+        background: none;
+        border: none;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        transition:
+          color 0.2s,
+          background 0.2s;
+      }
+
+      .condition-toggle-btn + .condition-toggle-btn {
+        border-left: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .condition-toggle-btn.active {
+        color: #4dd0e1;
+        background: rgba(77, 208, 225, 0.1);
+      }
+
+      .condition-toggle-btn:hover:not(.active) {
+        color: #90a4ae;
+      }
+
+      /* ── Equipment button accent ────────────────────── */
+      .app-btn-equipment {
+        background: linear-gradient(135deg, #4dd0e1, #00acc1, #0097a7);
+      }
+
+      .app-btn-equipment:hover {
+        box-shadow: 0 4px 16px rgba(77, 208, 225, 0.3);
+      }
+
+      /* ── Equipment category grid accent ─────────────── */
+      #category-grid-equip .category-card:hover {
+        border-color: rgba(77, 208, 225, 0.25);
+      }
+
+      #category-grid-equip .category-card.active {
+        color: #4dd0e1;
+        background: rgba(77, 208, 225, 0.1);
+        border-color: rgba(77, 208, 225, 0.4);
+      }
+
+      /* ── Equipment modal focus colors ───────────────── */
+      .modal-dialog-equipment .form-input:focus,
+      .modal-dialog-equipment .form-select:focus,
+      .modal-dialog-equipment .form-textarea:focus {
+        border-color: rgba(77, 208, 225, 0.5);
+        box-shadow: 0 0 0 3px rgba(77, 208, 225, 0.1);
+      }
+
+      @media (max-width: 600px) {
+        .view-tabs {
+          margin-bottom: 1.5rem;
+        }
+
+        .view-tab {
+          font-size: 0.75rem;
+          padding: 0.5rem 0.75rem;
+        }
+
+        .condition-toggle-group {
+          width: 100%;
+        }
+      }
     </style>
   </head>
   <body>
@@ -738,75 +920,193 @@
       <p class="app-subtitle">Where Dionysus keeps his ledger</p>
       <div class="app-divider"></div>
 
-      <div class="toolbar">
-        <button class="app-btn" id="btn-add" type="button">+ Add Ingredient</button>
+      <!-- View tabs: Ingredients / Equipment -->
+      <div class="view-tabs" role="tablist" aria-label="Inventory view">
+        <button
+          class="view-tab active"
+          id="tab-ingredients"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="panel-ingredients"
+          data-view="ingredients"
+        >
+          &#127863; Ingredients
+        </button>
+        <button
+          class="view-tab"
+          id="tab-equipment"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-equipment"
+          data-view="equipment"
+        >
+          &#128295; Equipment
+        </button>
       </div>
 
-      <!-- Oracle search bar -->
-      <div class="oracle-search-row">
-        <div class="oracle-search-wrapper">
-          <span class="oracle-search-icon" aria-hidden="true">&#x1f52e;</span>
-          <input
-            class="oracle-search-input"
-            id="oracle-search"
-            type="text"
-            placeholder="Consult the Oracle&hellip;"
-            autocomplete="off"
-          />
-          <button
-            class="oracle-clear-btn hidden"
-            id="oracle-clear"
-            type="button"
-            aria-label="Clear search"
-          >
-            &#x2715;
-          </button>
+      <!-- Ingredients panel -->
+      <div id="panel-ingredients" role="tabpanel" aria-labelledby="tab-ingredients">
+        <div class="toolbar">
+          <button class="app-btn" id="btn-add" type="button">+ Add Ingredient</button>
+        </div>
+
+        <!-- Oracle search bar -->
+        <div class="oracle-search-row">
+          <div class="oracle-search-wrapper">
+            <span class="oracle-search-icon" aria-hidden="true">&#x1f52e;</span>
+            <input
+              class="oracle-search-input"
+              id="oracle-search"
+              type="text"
+              placeholder="Consult the Oracle&hellip;"
+              autocomplete="off"
+            />
+            <button
+              class="oracle-clear-btn hidden"
+              id="oracle-clear"
+              type="button"
+              aria-label="Clear search"
+            >
+              &#x2715;
+            </button>
+          </div>
+        </div>
+
+        <!-- Browse controls: sort + stock filter -->
+        <div class="browse-controls-row">
+          <div class="sort-group">
+            <label class="sort-label" for="sort-select">Sort</label>
+            <select class="sort-select" id="sort-select">
+              <option value="category">Category</option>
+              <option value="alpha">Alphabetical</option>
+              <option value="stock">Stock Status</option>
+            </select>
+          </div>
+          <div class="stock-toggle-group" role="group" aria-label="Stock filter">
+            <button
+              class="stock-toggle-btn active"
+              id="stock-btn-all"
+              type="button"
+              data-filter="all"
+            >
+              All
+            </button>
+            <button class="stock-toggle-btn" id="stock-btn-in" type="button" data-filter="in-stock">
+              In Stock
+            </button>
+            <button
+              class="stock-toggle-btn"
+              id="stock-btn-out"
+              type="button"
+              data-filter="out-of-stock"
+            >
+              Out of Stock
+            </button>
+          </div>
+        </div>
+
+        <!-- Category browse grid -->
+        <div class="category-grid" id="category-grid"></div>
+
+        <div class="ingredient-count hidden" id="ingredient-count"></div>
+
+        <div class="ingredient-list" id="ingredient-list"></div>
+
+        <div class="empty-state" id="empty-state">
+          <span class="empty-state-icon" aria-hidden="true">&#127863;</span>
+          <p class="empty-state-text">The Cellar awaits its first offering.</p>
         </div>
       </div>
 
-      <!-- Browse controls: sort + stock filter -->
-      <div class="browse-controls-row">
-        <div class="sort-group">
-          <label class="sort-label" for="sort-select">Sort</label>
-          <select class="sort-select" id="sort-select">
-            <option value="category">Category</option>
-            <option value="alpha">Alphabetical</option>
-            <option value="stock">Stock Status</option>
-          </select>
-        </div>
-        <div class="stock-toggle-group" role="group" aria-label="Stock filter">
-          <button
-            class="stock-toggle-btn active"
-            id="stock-btn-all"
-            type="button"
-            data-filter="all"
-          >
-            All
-          </button>
-          <button class="stock-toggle-btn" id="stock-btn-in" type="button" data-filter="in-stock">
-            In Stock
-          </button>
-          <button
-            class="stock-toggle-btn"
-            id="stock-btn-out"
-            type="button"
-            data-filter="out-of-stock"
-          >
-            Out of Stock
+      <!-- Equipment panel -->
+      <div id="panel-equipment" role="tabpanel" aria-labelledby="tab-equipment" class="hidden">
+        <div class="toolbar">
+          <button class="app-btn app-btn-equipment" id="btn-add-equipment" type="button">
+            + Add Equipment
           </button>
         </div>
-      </div>
 
-      <!-- Category browse grid -->
-      <div class="category-grid" id="category-grid"></div>
+        <!-- Oracle search bar (equipment) -->
+        <div class="oracle-search-row">
+          <div class="oracle-search-wrapper">
+            <span class="oracle-search-icon" aria-hidden="true">&#x1f50d;</span>
+            <input
+              class="oracle-search-input"
+              id="oracle-search-equip"
+              type="text"
+              placeholder="Search equipment&hellip;"
+              autocomplete="off"
+            />
+            <button
+              class="oracle-clear-btn hidden"
+              id="oracle-clear-equip"
+              type="button"
+              aria-label="Clear search"
+            >
+              &#x2715;
+            </button>
+          </div>
+        </div>
 
-      <div class="ingredient-count hidden" id="ingredient-count"></div>
+        <!-- Browse controls: sort + condition filter -->
+        <div class="browse-controls-row">
+          <div class="sort-group">
+            <label class="sort-label" for="sort-select-equip">Sort</label>
+            <select class="sort-select" id="sort-select-equip">
+              <option value="category">Category</option>
+              <option value="alpha">Alphabetical</option>
+              <option value="condition">Condition</option>
+            </select>
+          </div>
+          <div class="condition-toggle-group" role="group" aria-label="Condition filter">
+            <button
+              class="condition-toggle-btn active"
+              id="cond-btn-all"
+              type="button"
+              data-filter="all"
+            >
+              All
+            </button>
+            <button
+              class="condition-toggle-btn"
+              id="cond-btn-good"
+              type="button"
+              data-filter="good"
+            >
+              Good
+            </button>
+            <button
+              class="condition-toggle-btn"
+              id="cond-btn-fair"
+              type="button"
+              data-filter="fair"
+            >
+              Fair
+            </button>
+            <button
+              class="condition-toggle-btn"
+              id="cond-btn-replace"
+              type="button"
+              data-filter="replace"
+            >
+              Replace
+            </button>
+          </div>
+        </div>
 
-      <div class="ingredient-list" id="ingredient-list"></div>
+        <!-- Category browse grid (equipment) -->
+        <div class="category-grid" id="category-grid-equip"></div>
 
-      <div class="empty-state" id="empty-state">
-        <span class="empty-state-icon" aria-hidden="true">&#127863;</span>
-        <p class="empty-state-text">The Cellar awaits its first offering.</p>
+        <div class="equipment-count hidden" id="equipment-count"></div>
+
+        <div class="equipment-list" id="equipment-list"></div>
+
+        <div class="empty-state" id="empty-state-equip">
+          <span class="empty-state-icon" aria-hidden="true">&#128295;</span>
+          <p class="empty-state-text">The Workshop awaits its first tool.</p>
+        </div>
       </div>
     </main>
 
@@ -927,6 +1227,99 @@
       </div>
     </div>
 
+    <!-- Equipment modal overlay -->
+    <div class="modal-overlay" id="modal-overlay-equip">
+      <div
+        class="modal-dialog modal-dialog-equipment"
+        role="dialog"
+        aria-labelledby="modal-title-equip"
+      >
+        <h2 class="modal-title" id="modal-title-equip">Add Equipment</h2>
+        <form id="equipment-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label class="form-label" for="eq-field-name">Name</label>
+              <input
+                class="form-input"
+                id="eq-field-name"
+                type="text"
+                placeholder="e.g. Hawthorne Strainer"
+                required
+              />
+              <span class="form-error" id="eq-error-name"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="eq-field-category">Category</label>
+              <select class="form-select" id="eq-field-category" required>
+                <option value="">Select&hellip;</option>
+              </select>
+              <span class="form-error" id="eq-error-category"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="eq-field-subcategory">Subcategory</label>
+              <select class="form-select" id="eq-field-subcategory" required>
+                <option value="">Select category first</option>
+              </select>
+              <span class="form-error" id="eq-error-subcategory"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="eq-field-quantity">Quantity</label>
+              <input
+                class="form-input"
+                id="eq-field-quantity"
+                type="number"
+                min="0"
+                step="1"
+                value="1"
+              />
+              <span class="form-error" id="eq-error-quantity"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="eq-field-condition">Condition</label>
+              <select class="form-select" id="eq-field-condition" required>
+                <option value="">Select&hellip;</option>
+                <option value="good">Good</option>
+                <option value="fair">Fair</option>
+                <option value="replace">Replace</option>
+              </select>
+              <span class="form-error" id="eq-error-condition"></span>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="eq-field-tags">Tags (comma-separated)</label>
+              <input
+                class="form-input"
+                id="eq-field-tags"
+                type="text"
+                placeholder="e.g. stainless, cocktail, essential"
+              />
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="eq-field-notes">Notes</label>
+              <textarea
+                class="form-textarea"
+                id="eq-field-notes"
+                placeholder="Brand, material, size&hellip;"
+                rows="2"
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-cancel" id="btn-cancel-equip" type="button">Cancel</button>
+            <button class="app-btn app-btn-equipment" id="btn-save-equip" type="submit">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Amphora level popover -->
     <div class="amphora-popover" id="amphora-popover">
       <div class="amphora-popover-title">Bottle Level</div>
@@ -962,6 +1355,8 @@
 
         // State
         var categoryMap = {};
+        var ingredientCategoryMap = {};
+        var equipmentCategoryMap = {};
         var allIngredients = [];
         var activeFilter = 'all';
         var searchQuery = '';
@@ -969,6 +1364,14 @@
         var stockFilter = 'all';
         var editingId = null;
         var amphoraPopoverIng = null;
+
+        // Equipment state
+        var allEquipment = [];
+        var equipActiveFilter = 'all';
+        var equipSearchQuery = '';
+        var equipSortOption = 'category';
+        var conditionFilter = 'all';
+        var equipEditingId = null;
 
         // DOM refs
         var listEl = document.getElementById('ingredient-list');
@@ -987,6 +1390,29 @@
         var amphoraPopoverEl = document.getElementById('amphora-popover');
         var amphoraOptionsEl = document.getElementById('amphora-level-options');
 
+        // View tab refs
+        var tabIngredients = document.getElementById('tab-ingredients');
+        var tabEquipment = document.getElementById('tab-equipment');
+        var panelIngredients = document.getElementById('panel-ingredients');
+        var panelEquipment = document.getElementById('panel-equipment');
+
+        // Equipment panel refs
+        var equipListEl = document.getElementById('equipment-list');
+        var equipEmptyEl = document.getElementById('empty-state-equip');
+        var equipCountEl = document.getElementById('equipment-count');
+        var equipCategoryGridEl = document.getElementById('category-grid-equip');
+        var equipSearchEl = document.getElementById('oracle-search-equip');
+        var equipClearEl = document.getElementById('oracle-clear-equip');
+        var equipSortSelectEl = document.getElementById('sort-select-equip');
+        var condBtns = document.querySelectorAll('.condition-toggle-btn');
+
+        // Equipment modal refs
+        var equipModalEl = document.getElementById('modal-overlay-equip');
+        var equipModalTitle = document.getElementById('modal-title-equip');
+        var equipFormEl = document.getElementById('equipment-form');
+        var btnAddEquip = document.getElementById('btn-add-equipment');
+        var btnCancelEquip = document.getElementById('btn-cancel-equip');
+
         // Form fields
         var fieldName = document.getElementById('field-name');
         var fieldCategory = document.getElementById('field-category');
@@ -998,6 +1424,15 @@
         var fieldNotes = document.getElementById('field-notes');
         var fieldShopping = document.getElementById('field-shopping');
         var fieldThreshold = document.getElementById('field-threshold');
+
+        // Equipment form fields
+        var eqFieldName = document.getElementById('eq-field-name');
+        var eqFieldCategory = document.getElementById('eq-field-category');
+        var eqFieldSubcategory = document.getElementById('eq-field-subcategory');
+        var eqFieldQuantity = document.getElementById('eq-field-quantity');
+        var eqFieldCondition = document.getElementById('eq-field-condition');
+        var eqFieldTags = document.getElementById('eq-field-tags');
+        var eqFieldNotes = document.getElementById('eq-field-notes');
 
         // ── Amphora bottle-level constants ─────────────
         var BOTTLE_LEVELS = {
@@ -1155,38 +1590,73 @@
               snapshot.forEach(function (doc) {
                 categoryMap[doc.id] = doc.data();
               });
+              // Split categories by type
+              Object.keys(categoryMap).forEach(function (id) {
+                if (categoryMap[id].type === 'equipment') {
+                  equipmentCategoryMap[id] = categoryMap[id];
+                } else {
+                  ingredientCategoryMap[id] = categoryMap[id];
+                }
+              });
               populateCategorySelect();
+              populateEquipCategorySelect();
               renderCategoryGrid();
+              renderEquipCategoryGrid();
             });
         }
 
         function populateCategorySelect() {
-          var keys = Object.keys(categoryMap);
-          keys.forEach(function (id) {
+          Object.keys(ingredientCategoryMap).forEach(function (id) {
             var opt = document.createElement('option');
             opt.value = id;
-            opt.textContent = categoryMap[id].name;
+            opt.textContent = ingredientCategoryMap[id].name;
             fieldCategory.appendChild(opt);
+          });
+        }
+
+        function populateEquipCategorySelect() {
+          Object.keys(equipmentCategoryMap).forEach(function (id) {
+            var opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = equipmentCategoryMap[id].name;
+            eqFieldCategory.appendChild(opt);
           });
         }
 
         // ── Category browse grid ────────────────────────
         function renderCategoryGrid() {
           categoryGridEl.innerHTML = '';
-          var allCard = makeCategoryCard('all', 'All', allIngredients.length);
+          var allCard = makeCategoryCard('all', 'All', allIngredients.length, 'ingredients');
           categoryGridEl.appendChild(allCard);
-          Object.keys(categoryMap).forEach(function (id) {
+          Object.keys(ingredientCategoryMap).forEach(function (id) {
             var count = allIngredients.filter(function (i) {
               return i.category === id;
             }).length;
-            categoryGridEl.appendChild(makeCategoryCard(id, categoryMap[id].name, count));
+            categoryGridEl.appendChild(
+              makeCategoryCard(id, ingredientCategoryMap[id].name, count, 'ingredients')
+            );
           });
         }
 
-        function makeCategoryCard(id, name, count) {
+        function renderEquipCategoryGrid() {
+          equipCategoryGridEl.innerHTML = '';
+          var allCard = makeCategoryCard('all', 'All', allEquipment.length, 'equipment');
+          equipCategoryGridEl.appendChild(allCard);
+          Object.keys(equipmentCategoryMap).forEach(function (id) {
+            var count = allEquipment.filter(function (e) {
+              return e.category === id;
+            }).length;
+            equipCategoryGridEl.appendChild(
+              makeCategoryCard(id, equipmentCategoryMap[id].name, count, 'equipment')
+            );
+          });
+        }
+
+        function makeCategoryCard(id, name, count, view) {
+          var isActive = (view === 'equipment' ? equipActiveFilter : activeFilter) === id;
           var btn = document.createElement('button');
           btn.type = 'button';
-          btn.className = 'category-card' + (activeFilter === id ? ' active' : '');
+          btn.className = 'category-card' + (isActive ? ' active' : '');
 
           var countEl2 = document.createElement('span');
           countEl2.className = 'category-card-count';
@@ -1200,9 +1670,15 @@
           btn.appendChild(nameEl);
 
           btn.addEventListener('click', function () {
-            activeFilter = id;
-            renderCategoryGrid();
-            renderList();
+            if (view === 'equipment') {
+              equipActiveFilter = id;
+              renderEquipCategoryGrid();
+              renderEquipList();
+            } else {
+              activeFilter = id;
+              renderCategoryGrid();
+              renderList();
+            }
           });
           return btn;
         }
@@ -1219,6 +1695,21 @@
               });
               renderCategoryGrid();
               renderList();
+            });
+        }
+
+        // ── Subscribe to equipment ────────────────────
+        function subscribeToEquipment() {
+          db.collection('symposium_equipment')
+            .orderBy('category')
+            .orderBy('name')
+            .onSnapshot(function (snapshot) {
+              allEquipment = [];
+              snapshot.forEach(function (doc) {
+                allEquipment.push(Object.assign({ id: doc.id }, doc.data()));
+              });
+              renderEquipCategoryGrid();
+              renderEquipList();
             });
         }
 
@@ -1635,6 +2126,372 @@
             });
         }
 
+        // ── Render equipment list ──────────────────────
+        function renderEquipList() {
+          var result = allEquipment.slice();
+
+          // 1. Category filter
+          if (equipActiveFilter !== 'all') {
+            result = result.filter(function (eq) {
+              return eq.category === equipActiveFilter;
+            });
+          }
+
+          // 2. Search filter
+          if (equipSearchQuery) {
+            var q = equipSearchQuery.toLowerCase();
+            result = result.filter(function (eq) {
+              var catName = (
+                categoryMap[eq.category] ? categoryMap[eq.category].name : ''
+              ).toLowerCase();
+              var tagHit =
+                eq.tags &&
+                eq.tags.some(function (t) {
+                  return t.toLowerCase().includes(q);
+                });
+              return eq.name.toLowerCase().includes(q) || catName.includes(q) || tagHit;
+            });
+          }
+
+          // 3. Condition filter
+          if (conditionFilter !== 'all') {
+            result = result.filter(function (eq) {
+              return eq.condition === conditionFilter;
+            });
+          }
+
+          // 4. Sort
+          if (equipSortOption === 'alpha') {
+            result.sort(function (a, b) {
+              return a.name.localeCompare(b.name);
+            });
+          } else if (equipSortOption === 'condition') {
+            var condOrder = { replace: 0, fair: 1, good: 2 };
+            result.sort(function (a, b) {
+              var diff = (condOrder[a.condition] || 0) - (condOrder[b.condition] || 0);
+              return diff !== 0 ? diff : a.name.localeCompare(b.name);
+            });
+          }
+
+          equipListEl.innerHTML = '';
+
+          if (result.length === 0) {
+            equipEmptyEl.classList.remove('hidden');
+            equipCountEl.classList.add('hidden');
+            var emptyMsg;
+            if (equipSearchQuery && equipActiveFilter !== 'all') {
+              emptyMsg = 'No equipment matches that search in this category.';
+            } else if (equipSearchQuery) {
+              emptyMsg = 'No equipment matches that search.';
+            } else if (conditionFilter !== 'all') {
+              emptyMsg =
+                'No equipment with \u201c' +
+                conditionFilter +
+                '\u201d condition' +
+                (equipActiveFilter !== 'all' ? ' in this category.' : '.');
+            } else if (equipActiveFilter !== 'all' && allEquipment.length > 0) {
+              emptyMsg = 'No equipment in this category yet.';
+            } else {
+              emptyMsg = 'The Workshop awaits its first tool.';
+            }
+            equipEmptyEl.querySelector('.empty-state-text').textContent = emptyMsg;
+            return;
+          }
+
+          equipEmptyEl.classList.add('hidden');
+          equipCountEl.classList.remove('hidden');
+          equipCountEl.textContent = result.length + (result.length === 1 ? ' item' : ' items');
+
+          result.forEach(function (eq) {
+            equipListEl.appendChild(renderEquipCard(eq));
+          });
+        }
+
+        // ── Render a single equipment card ─────────────
+        function renderEquipCard(eq) {
+          var card = document.createElement('div');
+          card.className = 'equipment-card';
+
+          var header = document.createElement('div');
+          header.className = 'ingredient-card-header';
+
+          var info = document.createElement('div');
+
+          var name = document.createElement('h3');
+          name.className = 'ingredient-name';
+          name.textContent = eq.name;
+
+          var meta = document.createElement('div');
+          meta.className = 'ingredient-meta';
+
+          var catBadge = document.createElement('span');
+          catBadge.className = 'badge badge-category';
+          catBadge.textContent = categoryMap[eq.category]
+            ? categoryMap[eq.category].name
+            : eq.category;
+          meta.appendChild(catBadge);
+
+          if (eq.subcategory) {
+            var subBadge = document.createElement('span');
+            subBadge.className = 'badge badge-subcategory';
+            subBadge.textContent = eq.subcategory;
+            meta.appendChild(subBadge);
+          }
+
+          var condBadge = document.createElement('span');
+          condBadge.className = 'badge badge-condition badge-condition-' + eq.condition;
+          condBadge.textContent = eq.condition.charAt(0).toUpperCase() + eq.condition.slice(1);
+          meta.appendChild(condBadge);
+
+          info.appendChild(name);
+          info.appendChild(meta);
+
+          var actions = document.createElement('div');
+          actions.className = 'ingredient-actions';
+
+          var editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn-icon btn-edit';
+          editBtn.textContent = 'Edit';
+          editBtn.addEventListener('click', function () {
+            openEquipModal(eq);
+          });
+
+          var deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.className = 'btn-icon btn-delete';
+          deleteBtn.textContent = 'Delete';
+          deleteBtn.addEventListener('click', function () {
+            handleEquipDelete(eq);
+          });
+
+          actions.appendChild(editBtn);
+          actions.appendChild(deleteBtn);
+
+          header.appendChild(info);
+          header.appendChild(actions);
+          card.appendChild(header);
+
+          // Details row
+          var details = document.createElement('div');
+          details.className = 'ingredient-details';
+          var qtyDetail = document.createElement('span');
+          qtyDetail.innerHTML =
+            '<span class="ingredient-detail-label">Qty:</span> ' + (eq.quantity || 0);
+          details.appendChild(qtyDetail);
+          card.appendChild(details);
+
+          // Tags
+          if (eq.tags && Array.isArray(eq.tags) && eq.tags.length > 0) {
+            var tagsRow = document.createElement('div');
+            tagsRow.className = 'ingredient-meta';
+            tagsRow.style.marginTop = '0.5rem';
+            eq.tags.forEach(function (tag) {
+              var tagBadge = document.createElement('span');
+              tagBadge.className = 'badge badge-subcategory';
+              tagBadge.textContent = tag;
+              tagsRow.appendChild(tagBadge);
+            });
+            card.appendChild(tagsRow);
+          }
+
+          // Notes
+          if (eq.notes) {
+            var notes = document.createElement('div');
+            notes.className = 'ingredient-notes';
+            notes.textContent = eq.notes;
+            card.appendChild(notes);
+          }
+
+          return card;
+        }
+
+        // ── Equipment modal open / close ──────────────
+        function openEquipModal(equipment) {
+          equipEditingId = equipment ? equipment.id : null;
+          equipModalTitle.textContent = equipment ? 'Edit Equipment' : 'Add Equipment';
+
+          clearEquipErrors();
+
+          if (equipment) {
+            eqFieldName.value = equipment.name || '';
+            eqFieldCategory.value = equipment.category || '';
+            populateEquipSubcategories(equipment.category);
+            eqFieldSubcategory.value = equipment.subcategory || '';
+            eqFieldQuantity.value = equipment.quantity != null ? equipment.quantity : 1;
+            eqFieldCondition.value = equipment.condition || '';
+            eqFieldTags.value =
+              equipment.tags && Array.isArray(equipment.tags) ? equipment.tags.join(', ') : '';
+            eqFieldNotes.value = equipment.notes || '';
+          } else {
+            equipFormEl.reset();
+            eqFieldQuantity.value = '1';
+            eqFieldSubcategory.innerHTML = '<option value="">Select category first</option>';
+          }
+
+          equipModalEl.classList.add('open');
+          eqFieldName.focus();
+        }
+
+        function closeEquipModal() {
+          equipModalEl.classList.remove('open');
+          equipEditingId = null;
+        }
+
+        // ── Equipment subcategory cascade ──────────────
+        function populateEquipSubcategories(categoryId) {
+          eqFieldSubcategory.innerHTML = '<option value="">Select&hellip;</option>';
+          var cat = categoryMap[categoryId];
+          if (cat && cat.subcategories) {
+            cat.subcategories.forEach(function (sub) {
+              var opt = document.createElement('option');
+              opt.value = sub;
+              opt.textContent = sub.charAt(0).toUpperCase() + sub.slice(1);
+              eqFieldSubcategory.appendChild(opt);
+            });
+          }
+        }
+
+        // ── Equipment validation ──────────────────────
+        function clearEquipErrors() {
+          var errors = equipFormEl.querySelectorAll('.form-error');
+          errors.forEach(function (el) {
+            el.textContent = '';
+          });
+        }
+
+        function setEquipError(fieldId, msg) {
+          var el = document.getElementById('eq-error-' + fieldId);
+          if (el) el.textContent = msg;
+        }
+
+        function validateEquipForm() {
+          clearEquipErrors();
+          var valid = true;
+
+          if (!eqFieldName.value.trim()) {
+            setEquipError('name', 'Name is required');
+            valid = false;
+          }
+          if (!eqFieldCategory.value) {
+            setEquipError('category', 'Category is required');
+            valid = false;
+          }
+          if (!eqFieldSubcategory.value) {
+            setEquipError('subcategory', 'Subcategory is required');
+            valid = false;
+          }
+          if (eqFieldQuantity.value === '' || parseInt(eqFieldQuantity.value, 10) < 0) {
+            setEquipError('quantity', 'Quantity must be 0 or greater');
+            valid = false;
+          }
+          if (!eqFieldCondition.value) {
+            setEquipError('condition', 'Condition is required');
+            valid = false;
+          }
+
+          return valid;
+        }
+
+        // ── Equipment duplicate check ─────────────────
+        function checkEquipDuplicate(name, category) {
+          var trimmed = name.trim().toLowerCase();
+          return allEquipment.some(function (eq) {
+            return (
+              eq.id !== equipEditingId &&
+              eq.name.toLowerCase() === trimmed &&
+              eq.category === category
+            );
+          });
+        }
+
+        // ── Equipment form submit ─────────────────────
+        function handleEquipSubmit(e) {
+          e.preventDefault();
+          if (!validateEquipForm()) return;
+
+          var name = eqFieldName.value.trim();
+          var category = eqFieldCategory.value;
+
+          if (checkEquipDuplicate(name, category)) {
+            setEquipError('name', 'Equipment with this name already exists in this category');
+            return;
+          }
+
+          var tags = eqFieldTags.value
+            .split(',')
+            .map(function (t) {
+              return t.trim();
+            })
+            .filter(Boolean);
+
+          var data = {
+            name: name,
+            category: category,
+            subcategory: eqFieldSubcategory.value,
+            tags: tags,
+            type: 'reusable',
+            quantity: parseInt(eqFieldQuantity.value, 10) || 0,
+            condition: eqFieldCondition.value,
+            notes: eqFieldNotes.value.trim(),
+            updatedAt: serverTimestamp(),
+          };
+
+          var btnSave = document.getElementById('btn-save-equip');
+          btnSave.disabled = true;
+          btnSave.textContent = 'Saving\u2026';
+
+          var promise;
+          if (equipEditingId) {
+            var existingEq = allEquipment.find(function (eq) {
+              return eq.id === equipEditingId;
+            });
+            data.createdAt = existingEq.createdAt;
+            promise = db.collection('symposium_equipment').doc(equipEditingId).set(data);
+          } else {
+            data.createdAt = serverTimestamp();
+            promise = db.collection('symposium_equipment').add(data);
+          }
+
+          promise
+            .then(function () {
+              closeEquipModal();
+            })
+            .catch(function (err) {
+              console.error('Failed to save equipment:', err);
+              setEquipError('name', 'Failed to save. Check console for details.');
+            })
+            .finally(function () {
+              btnSave.disabled = false;
+              btnSave.textContent = 'Save';
+            });
+        }
+
+        // ── Equipment delete ──────────────────────────
+        function handleEquipDelete(eq) {
+          if (!window.confirm('Remove "' + eq.name + '" from the workshop?')) {
+            return;
+          }
+
+          db.collection('symposium_equipment')
+            .doc(eq.id)
+            .delete()
+            .catch(function (err) {
+              console.error('Failed to delete equipment:', err);
+            });
+        }
+
+        // ── View tab switching ────────────────────────
+        function switchView(view) {
+          tabIngredients.classList.toggle('active', view === 'ingredients');
+          tabIngredients.setAttribute('aria-selected', view === 'ingredients' ? 'true' : 'false');
+          tabEquipment.classList.toggle('active', view === 'equipment');
+          tabEquipment.setAttribute('aria-selected', view === 'equipment' ? 'true' : 'false');
+
+          panelIngredients.classList.toggle('hidden', view !== 'ingredients');
+          panelEquipment.classList.toggle('hidden', view !== 'equipment');
+        }
+
         // ── Amphora popover ────────────────────────────
         function openAmphoraPopover(ing, anchorEl) {
           if (
@@ -1840,6 +2697,8 @@
               closeAmphoraPopover();
             } else if (modalEl.classList.contains('open')) {
               closeModal();
+            } else if (equipModalEl.classList.contains('open')) {
+              closeEquipModal();
             }
           }
         });
@@ -1876,10 +2735,67 @@
 
         formEl.addEventListener('submit', handleSubmit);
 
+        // ── View tab switching ───────────────────────────
+        tabIngredients.addEventListener('click', function () {
+          switchView('ingredients');
+        });
+        tabEquipment.addEventListener('click', function () {
+          switchView('equipment');
+        });
+
+        // ── Equipment search ─────────────────────────────
+        equipSearchEl.addEventListener('input', function () {
+          equipSearchQuery = equipSearchEl.value.trim();
+          equipClearEl.classList.toggle('hidden', equipSearchQuery === '');
+          renderEquipList();
+        });
+
+        equipClearEl.addEventListener('click', function () {
+          equipSearchEl.value = '';
+          equipSearchQuery = '';
+          equipClearEl.classList.add('hidden');
+          renderEquipList();
+        });
+
+        // ── Equipment sort ───────────────────────────────
+        equipSortSelectEl.addEventListener('change', function () {
+          equipSortOption = equipSortSelectEl.value;
+          renderEquipList();
+        });
+
+        // ── Condition filter toggle ──────────────────────
+        condBtns.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            conditionFilter = btn.dataset.filter;
+            condBtns.forEach(function (b) {
+              b.classList.toggle('active', b === btn);
+            });
+            renderEquipList();
+          });
+        });
+
+        // ── Equipment add/modal ──────────────────────────
+        btnAddEquip.addEventListener('click', function () {
+          openEquipModal(null);
+        });
+
+        btnCancelEquip.addEventListener('click', closeEquipModal);
+
+        equipModalEl.addEventListener('click', function (e) {
+          if (e.target === equipModalEl) closeEquipModal();
+        });
+
+        eqFieldCategory.addEventListener('change', function () {
+          populateEquipSubcategories(eqFieldCategory.value);
+        });
+
+        equipFormEl.addEventListener('submit', handleEquipSubmit);
+
         // ── Init ────────────────────────────────────────
         loadCategories()
           .then(function () {
             subscribeToIngredients();
+            subscribeToEquipment();
           })
           .catch(function (err) {
             console.error('Failed to load categories:', err);
