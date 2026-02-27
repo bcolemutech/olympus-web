@@ -511,13 +511,163 @@
         font-style: italic;
       }
 
+      /* ── Oracle search bar ──────────────────────────── */
+      .oracle-search-wrap {
+        flex: 1;
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .oracle-search-icon {
+        position: absolute;
+        left: 0.85rem;
+        font-size: 0.9rem;
+        color: #546e7a;
+        pointer-events: none;
+      }
+
+      .oracle-search-input {
+        width: 100%;
+        padding: 0.65rem 2.5rem 0.65rem 2.5rem;
+        font-size: 0.9rem;
+        font-family: inherit;
+        color: #e0e0e0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        outline: none;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .oracle-search-input::placeholder {
+        color: #4b5563;
+        font-style: italic;
+      }
+
+      .oracle-search-input:focus {
+        border-color: rgba(255, 183, 77, 0.5);
+        box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.1);
+      }
+
+      .oracle-clear-btn {
+        position: absolute;
+        right: 0.5rem;
+        background: none;
+        border: none;
+        color: #546e7a;
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0.25rem 0.5rem;
+        line-height: 1;
+        font-family: inherit;
+        transition: color 0.2s;
+      }
+
+      .oracle-clear-btn:hover {
+        color: #e0e0e0;
+      }
+
+      /* ── Controls row (sort + stock filter) ─────────── */
+      .controls-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .sort-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .controls-label {
+        font-size: 0.75rem;
+        color: #546e7a;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+      }
+
+      .controls-select {
+        padding: 0.4rem 2rem 0.4rem 0.75rem;
+        font-size: 0.8rem;
+        min-width: 140px;
+      }
+
+      .stock-toggle {
+        margin-left: auto;
+      }
+
+      .stock-toggle.active {
+        color: #0a0e1a;
+        background: linear-gradient(135deg, #66bb6a, #43a047);
+        border-color: transparent;
+      }
+
+      /* ── Category browse grid ───────────────────────── */
+      .category-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .category-card {
+        background: rgba(17, 24, 39, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        padding: 1.5rem 1.25rem;
+        text-align: center;
+        cursor: pointer;
+        font-family: inherit;
+        transition:
+          border-color 0.3s,
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .category-card:hover {
+        border-color: rgba(255, 183, 77, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(255, 183, 77, 0.1);
+      }
+
+      .category-card-name {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #e0e0e0;
+        margin-bottom: 0.5rem;
+      }
+
+      .category-card-count {
+        font-size: 0.8rem;
+        color: #90a4ae;
+      }
+
+      .category-card-stock {
+        font-size: 0.7rem;
+        color: #546e7a;
+        margin-top: 0.25rem;
+      }
+
       @media (max-width: 600px) {
         .form-grid {
           grid-template-columns: 1fr;
         }
 
         .toolbar {
-          justify-content: stretch;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .oracle-search-wrap {
+          width: 100%;
         }
 
         .toolbar .app-btn {
@@ -537,6 +687,20 @@
 
         .ingredient-actions {
           align-self: flex-end;
+        }
+
+        .controls-row {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .stock-toggle {
+          margin-left: 0;
+          text-align: center;
+        }
+
+        .category-grid {
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
         }
 
         .amphora-popover {
@@ -566,10 +730,35 @@
       <div class="app-divider"></div>
 
       <div class="toolbar">
+        <div class="oracle-search-wrap">
+          <span class="oracle-search-icon" aria-hidden="true">&#128270;</span>
+          <input
+            class="oracle-search-input"
+            id="oracle-search"
+            type="text"
+            placeholder="Consult the Oracle&hellip;"
+            aria-label="Search ingredients"
+          />
+          <button class="oracle-clear-btn hidden" id="oracle-clear" type="button" aria-label="Clear search">&times;</button>
+        </div>
         <button class="app-btn" id="btn-add" type="button">+ Add Ingredient</button>
       </div>
 
+      <div class="controls-row hidden" id="controls-row">
+        <div class="sort-group">
+          <label class="controls-label" for="sort-select">Sort</label>
+          <select class="form-select controls-select" id="sort-select">
+            <option value="category">Category</option>
+            <option value="alpha">Alphabetical</option>
+            <option value="stock">Stock Status</option>
+          </select>
+        </div>
+        <button class="filter-chip stock-toggle" id="stock-toggle" type="button">In Stock Only</button>
+      </div>
+
       <div class="filter-chips" id="filter-chips"></div>
+
+      <div class="category-grid" id="category-grid"></div>
 
       <div class="ingredient-count hidden" id="ingredient-count"></div>
 
@@ -737,6 +926,10 @@
         var activeFilter = 'all';
         var editingId = null;
         var amphoraPopoverIng = null;
+        var searchQuery = '';
+        var activeSort = 'category';
+        var stockFilter = 'all';
+        var searchTimer = null;
 
         // DOM refs
         var listEl = document.getElementById('ingredient-list');
@@ -750,6 +943,12 @@
         var btnCancel = document.getElementById('btn-cancel');
         var amphoraPopoverEl = document.getElementById('amphora-popover');
         var amphoraOptionsEl = document.getElementById('amphora-level-options');
+        var searchInput = document.getElementById('oracle-search');
+        var searchClear = document.getElementById('oracle-clear');
+        var sortSelect = document.getElementById('sort-select');
+        var stockToggle = document.getElementById('stock-toggle');
+        var controlsRow = document.getElementById('controls-row');
+        var categoryGrid = document.getElementById('category-grid');
 
         // Form fields
         var fieldName = document.getElementById('field-name');
@@ -945,7 +1144,7 @@
           allChip.addEventListener('click', function () {
             activeFilter = 'all';
             renderFilterChips();
-            renderList();
+            renderView();
           });
           chipsEl.appendChild(allChip);
 
@@ -957,7 +1156,7 @@
             chip.addEventListener('click', function () {
               activeFilter = id;
               renderFilterChips();
-              renderList();
+              renderView();
             });
             chipsEl.appendChild(chip);
           });
@@ -973,28 +1172,152 @@
               snapshot.forEach(function (doc) {
                 allIngredients.push(Object.assign({ id: doc.id }, doc.data()));
               });
-              renderList();
+              renderView();
             });
+        }
+
+        // ── Filtering & sorting pipeline ─────────────────
+        function getFilteredAndSorted() {
+          var result = allIngredients.slice();
+
+          // 1. Search filter (name, category name, tags)
+          if (searchQuery) {
+            var q = searchQuery.toLowerCase();
+            result = result.filter(function (ing) {
+              if (ing.name.toLowerCase().indexOf(q) !== -1) return true;
+              var catName = categoryMap[ing.category] ? categoryMap[ing.category].name : '';
+              if (catName.toLowerCase().indexOf(q) !== -1) return true;
+              if (ing.tags && Array.isArray(ing.tags)) {
+                return ing.tags.some(function (tag) {
+                  return tag.toLowerCase().indexOf(q) !== -1;
+                });
+              }
+              return false;
+            });
+          }
+
+          // 2. Category filter
+          if (activeFilter !== 'all') {
+            result = result.filter(function (ing) {
+              return ing.category === activeFilter;
+            });
+          }
+
+          // 3. Stock filter
+          if (stockFilter === 'in-stock') {
+            result = result.filter(function (ing) {
+              return ing.inStock === true;
+            });
+          }
+
+          // 4. Sort
+          result.sort(function (a, b) {
+            if (activeSort === 'alpha') {
+              return a.name.localeCompare(b.name);
+            } else if (activeSort === 'category') {
+              var catA = categoryMap[a.category] ? categoryMap[a.category].name : '';
+              var catB = categoryMap[b.category] ? categoryMap[b.category].name : '';
+              var catCmp = catA.localeCompare(catB);
+              if (catCmp !== 0) return catCmp;
+              return a.name.localeCompare(b.name);
+            } else if (activeSort === 'stock') {
+              if (a.inStock === b.inStock) return a.name.localeCompare(b.name);
+              return a.inStock ? -1 : 1;
+            }
+            return 0;
+          });
+
+          return result;
+        }
+
+        // ── Category browse grid ──────────────────────────
+        function shouldShowCategoryGrid() {
+          return activeFilter === 'all' && !searchQuery && stockFilter === 'all';
+        }
+
+        function renderCategoryGrid() {
+          categoryGrid.innerHTML = '';
+
+          var catIds = Object.keys(categoryMap);
+          catIds.forEach(function (catId) {
+            var cat = categoryMap[catId];
+            var count = allIngredients.filter(function (ing) {
+              return ing.category === catId;
+            }).length;
+            var inStockCount = allIngredients.filter(function (ing) {
+              return ing.category === catId && ing.inStock;
+            }).length;
+
+            var card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'category-card';
+
+            var nameEl = document.createElement('div');
+            nameEl.className = 'category-card-name';
+            nameEl.textContent = cat.name;
+
+            var countEl2 = document.createElement('div');
+            countEl2.className = 'category-card-count';
+            countEl2.textContent = count + (count === 1 ? ' ingredient' : ' ingredients');
+
+            var stockEl = document.createElement('div');
+            stockEl.className = 'category-card-stock';
+            stockEl.textContent = inStockCount + ' in stock';
+
+            card.appendChild(nameEl);
+            card.appendChild(countEl2);
+            card.appendChild(stockEl);
+
+            card.addEventListener('click', function () {
+              activeFilter = catId;
+              renderFilterChips();
+              renderView();
+            });
+
+            categoryGrid.appendChild(card);
+          });
+        }
+
+        // ── Master view orchestrator ──────────────────────
+        function renderView() {
+          if (shouldShowCategoryGrid()) {
+            categoryGrid.classList.remove('hidden');
+            controlsRow.classList.add('hidden');
+            listEl.innerHTML = '';
+            emptyEl.classList.add('hidden');
+            countEl.classList.add('hidden');
+            renderCategoryGrid();
+          } else {
+            categoryGrid.classList.add('hidden');
+            controlsRow.classList.remove('hidden');
+            renderList();
+          }
         }
 
         // ── Render ingredient list ──────────────────────
         function renderList() {
-          var filtered =
-            activeFilter === 'all'
-              ? allIngredients
-              : allIngredients.filter(function (ing) {
-                  return ing.category === activeFilter;
-                });
+          var filtered = getFilteredAndSorted();
 
           listEl.innerHTML = '';
 
           if (filtered.length === 0) {
             emptyEl.classList.remove('hidden');
             countEl.classList.add('hidden');
-            if (activeFilter !== 'all' && allIngredients.length > 0) {
+
+            if (searchQuery) {
+              emptyEl.querySelector('.empty-state-icon').innerHTML = '&#128302;';
+              emptyEl.querySelector('.empty-state-text').textContent =
+                'The Oracle finds nothing by that name.';
+            } else if (stockFilter !== 'all') {
+              emptyEl.querySelector('.empty-state-icon').innerHTML = '&#127863;';
+              emptyEl.querySelector('.empty-state-text').textContent =
+                'No ingredients match this filter.';
+            } else if (activeFilter !== 'all' && allIngredients.length > 0) {
+              emptyEl.querySelector('.empty-state-icon').innerHTML = '&#127863;';
               emptyEl.querySelector('.empty-state-text').textContent =
                 'No ingredients in this category yet.';
             } else {
+              emptyEl.querySelector('.empty-state-icon').innerHTML = '&#127863;';
               emptyEl.querySelector('.empty-state-text').textContent =
                 'The Cellar awaits its first offering.';
             }
@@ -1436,7 +1759,7 @@
             }
           }
 
-          renderList();
+          renderView();
           closeAmphoraPopover();
 
           // Prompt on empty
@@ -1486,7 +1809,7 @@
                   delete localIng.openBottleLevel;
                 }
               }
-              renderList();
+              renderView();
             });
         }
 
@@ -1542,6 +1865,50 @@
         });
 
         formEl.addEventListener('submit', handleSubmit);
+
+        // Search (debounced)
+        searchInput.addEventListener('input', function () {
+          clearTimeout(searchTimer);
+          searchTimer = setTimeout(function () {
+            var val = searchInput.value.trim();
+            searchQuery = val;
+
+            if (val) {
+              searchClear.classList.remove('hidden');
+            } else {
+              searchClear.classList.add('hidden');
+            }
+
+            renderView();
+          }, 200);
+        });
+
+        searchClear.addEventListener('click', function () {
+          searchInput.value = '';
+          searchQuery = '';
+          searchClear.classList.add('hidden');
+          renderView();
+        });
+
+        // Sort
+        sortSelect.addEventListener('change', function () {
+          activeSort = sortSelect.value;
+          renderView();
+        });
+
+        // Stock filter toggle
+        stockToggle.addEventListener('click', function () {
+          if (stockFilter === 'all') {
+            stockFilter = 'in-stock';
+            stockToggle.classList.add('active');
+            stockToggle.textContent = 'In Stock Only \u2713';
+          } else {
+            stockFilter = 'all';
+            stockToggle.classList.remove('active');
+            stockToggle.textContent = 'In Stock Only';
+          }
+          renderView();
+        });
 
         // ── Init ────────────────────────────────────────
         loadCategories()
