@@ -14,7 +14,10 @@
     <!-- Shared Olympus styles -->
     <link rel="stylesheet" href="/styles/app.css" />
 
-    <!-- App-specific styles (add your own below) -->
+    <!-- App-specific styles -->
+    <!-- For small apps, inline styles here work fine.
+         When styles exceed ~100 lines, extract to an external file:
+         <link rel="stylesheet" href="/apps/APP_NAME/APP_NAME.css" /> -->
     <style>
       /* Add custom styles for this app here */
     </style>
@@ -40,6 +43,19 @@
 
     <!-- Shared header component -->
     <script src="/js/components/app-header.js"></script>
+
+    <!-- App modules — when your app grows beyond ~300 lines of JS, split into
+         external files using the namespace pattern (see symposium for a full example):
+
+         <script src="/apps/APP_NAME/js/state.js"></script>
+         <script src="/apps/APP_NAME/js/app.js"></script>
+
+         Each file should be an IIFE that reads/extends window.AppName:
+           (function () {
+             var AppName = window.AppName = window.AppName || {};
+             AppName.state = { ... };
+           })();
+    -->
 
     <script>
       document.addEventListener('DOMContentLoaded', function () {

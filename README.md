@@ -109,7 +109,12 @@ Add the following secret to your GitHub repository:
 ```
 olympus-web/
 ├── public/              # Static files served by Firebase Hosting
-│   └── index.html       # Main entry point
+│   ├── index.html       # Main entry point (Grand Hall)
+│   ├── styles/          # Shared CSS
+│   ├── js/components/   # Shared JS components (e.g. app-header.js)
+│   └── apps/            # Individual apps
+│       ├── _template/   # Starter template for new apps
+│       └── symposium/   # Example multi-file app
 ├── .github/workflows/   # GitHub Actions CI/CD
 ├── firebase.json        # Firebase configuration
 ├── firestore.rules      # Firestore security rules
@@ -119,6 +124,34 @@ olympus-web/
 ├── eslint.config.js     # ESLint configuration
 └── .prettierrc          # Prettier configuration
 ```
+
+## App Structure
+
+Each app lives in `public/apps/<app-name>/`. Small apps can keep everything inline in `index.html` (see `_template/`). When an app grows beyond ~300 lines of inline JS, split into external files:
+
+```
+public/apps/<app-name>/
+├── index.html          # HTML markup + auth guard + <script> tags
+├── <app-name>.css      # App-specific styles (extracted from inline <style>)
+└── js/
+    ├── state.js        # Namespace init, constants, shared state, helpers
+    ├── <module>.js     # Feature modules (IIFE, extends namespace)
+    └── app.js          # Event listeners, init sequence (loads last)
+```
+
+**Namespace pattern** — each JS file is a self-executing IIFE that reads/extends a global namespace:
+
+```js
+(function () {
+  'use strict';
+  var AppName = window.AppName;
+  AppName.myModule = {
+    doSomething: function () { /* ... */ }
+  };
+})();
+```
+
+Script loading order matters — `state.js` first, `app.js` last. See `symposium/` for a complete example.
 
 ## Available Scripts
 
