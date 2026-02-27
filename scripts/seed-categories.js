@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Seed the symposium_categories collection with initial ingredient categories.
+ * Seed the symposium_categories collection with ingredient and equipment categories.
  *
  * Idempotent — safe to re-run. Uses set({ merge: true }) so existing
  * documents are updated rather than overwritten.
@@ -101,6 +101,36 @@ const categories = [
     type: 'ingredient',
     subcategories: ['egg', 'dairy', 'spice', 'misc'],
     sortOrder: 8,
+  },
+  {
+    id: 'glassware',
+    name: 'Glassware',
+    type: 'equipment',
+    subcategories: [
+      'rocks glass',
+      'coupe',
+      'highball',
+      'martini',
+      'wine',
+      'champagne',
+      'shot',
+      'pint',
+    ],
+    sortOrder: 9,
+  },
+  {
+    id: 'tools',
+    name: 'Tools',
+    type: 'equipment',
+    subcategories: ['shaker', 'strainer', 'jigger', 'muddler', 'bar spoon', 'peeler', 'zester'],
+    sortOrder: 10,
+  },
+  {
+    id: 'appliance',
+    name: 'Appliances',
+    type: 'equipment',
+    subcategories: ['blender', 'ice maker', 'refrigerator', 'juicer'],
+    sortOrder: 11,
   },
 ];
 

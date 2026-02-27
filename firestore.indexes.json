@@ -23,6 +23,22 @@
         { "fieldPath": "inStock", "order": "ASCENDING" },
         { "fieldPath": "category", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "symposium_equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "symposium_equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "condition", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
