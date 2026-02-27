@@ -7,8 +7,7 @@
   // ── Low/empty item count ──────────────────────────
   function getLowEmptyCount() {
     var ingLow = state.allIngredients.filter(function (ing) {
-      return !ing.inStock ||
-        (ing.lowStockThreshold > 0 && ing.quantity <= ing.lowStockThreshold);
+      return !ing.inStock || (ing.lowStockThreshold > 0 && ing.quantity <= ing.lowStockThreshold);
     }).length;
     var equipReplace = state.allEquipment.filter(function (eq) {
       return eq.condition === 'replace';
@@ -33,20 +32,26 @@
     var countEl = Symposium.getRef('combined-count');
 
     var ingResults = state.allIngredients.filter(function (ing) {
-      var catName = (state.categoryMap[ing.category]
-        ? state.categoryMap[ing.category].name : '').toLowerCase();
-      var tagHit = ing.tags && ing.tags.some(function (t) {
-        return t.toLowerCase().includes(q);
-      });
+      var catName = (
+        state.categoryMap[ing.category] ? state.categoryMap[ing.category].name : ''
+      ).toLowerCase();
+      var tagHit =
+        ing.tags &&
+        ing.tags.some(function (t) {
+          return t.toLowerCase().includes(q);
+        });
       return ing.name.toLowerCase().includes(q) || catName.includes(q) || tagHit;
     });
 
     var equipResults = state.allEquipment.filter(function (eq) {
-      var catName = (state.categoryMap[eq.category]
-        ? state.categoryMap[eq.category].name : '').toLowerCase();
-      var tagHit = eq.tags && eq.tags.some(function (t) {
-        return t.toLowerCase().includes(q);
-      });
+      var catName = (
+        state.categoryMap[eq.category] ? state.categoryMap[eq.category].name : ''
+      ).toLowerCase();
+      var tagHit =
+        eq.tags &&
+        eq.tags.some(function (t) {
+          return t.toLowerCase().includes(q);
+        });
       return eq.name.toLowerCase().includes(q) || catName.includes(q) || tagHit;
     });
 
