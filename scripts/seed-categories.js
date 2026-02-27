@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Seed the symposium_categories collection with initial ingredient categories.
+ * Seed the symposium_categories collection with ingredient and equipment categories.
  *
  * Idempotent — safe to re-run. Uses set({ merge: true }) so existing
  * documents are updated rather than overwritten.

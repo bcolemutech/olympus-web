@@ -60,11 +60,7 @@ service cloud.firestore {
           'type', 'quantity', 'condition',
           'notes', 'createdAt', 'updatedAt'
         ];
-        let allowed = [
-          'name', 'category', 'subcategory', 'tags',
-          'type', 'quantity', 'condition',
-          'notes', 'createdAt', 'updatedAt'
-        ];
+        let allowed = required;
         let validConditions = ['good', 'fair', 'replace'];
 
         return data.keys().hasAll(required)
