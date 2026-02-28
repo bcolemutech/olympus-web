@@ -22,8 +22,10 @@
     categoryMap: {},
     ingredientCategoryMap: {},
     equipmentCategoryMap: {},
+    recipeCategoryMap: {},
     allIngredients: [],
     allEquipment: [],
+    allRecipes: [],
     activeFilter: 'all',
     searchQuery: '',
     sortOption: 'category',
@@ -37,6 +39,12 @@
     equipEditingId: null,
     globalSearchQuery: '',
     currentView: 'ingredients',
+    recipeActiveFilter: 'all',
+    recipeSearchQuery: '',
+    recipeSortOption: 'category',
+    recipeFavoriteFilter: false,
+    recipeEditingId: null,
+    recipeDetailId: null,
   };
 
   // ── Lazy-cached DOM ref helpers ────────────────

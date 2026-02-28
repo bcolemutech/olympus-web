@@ -9,6 +9,7 @@
     _onCategoriesLoaded: null,
     _onIngredientsChanged: null,
     _onEquipmentChanged: null,
+    _onRecipesChanged: null,
 
     loadCategories: function () {
       return state.db
@@ -23,6 +24,8 @@
           Object.keys(state.categoryMap).forEach(function (id) {
             if (state.categoryMap[id].type === 'equipment') {
               state.equipmentCategoryMap[id] = state.categoryMap[id];
+            } else if (state.categoryMap[id].type === 'recipe') {
+              state.recipeCategoryMap[id] = state.categoryMap[id];
             } else {
               state.ingredientCategoryMap[id] = state.categoryMap[id];
             }
@@ -61,6 +64,22 @@
           });
           if (Symposium.firestore._onEquipmentChanged) {
             Symposium.firestore._onEquipmentChanged();
+          }
+        });
+    },
+
+    subscribeToRecipes: function () {
+      state.db
+        .collection('symposium_recipes')
+        .orderBy('category')
+        .orderBy('name')
+        .onSnapshot(function (snapshot) {
+          state.allRecipes = [];
+          snapshot.forEach(function (doc) {
+            state.allRecipes.push(Object.assign({ id: doc.id }, doc.data()));
+          });
+          if (Symposium.firestore._onRecipesChanged) {
+            Symposium.firestore._onRecipesChanged();
           }
         });
     },

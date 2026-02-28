@@ -47,6 +47,10 @@
           <span class="dashboard-count" id="dash-alert-count">0</span>
           <span class="dashboard-label">Low / Empty</span>
         </div>
+        <div class="dashboard-stat">
+          <span class="dashboard-count" id="dash-recipe-count">0</span>
+          <span class="dashboard-label">Recipes</span>
+        </div>
       </div>
 
       <!-- Global oracle search bar (searches all inventory) -->
@@ -94,6 +98,17 @@
           data-view="equipment"
         >
           &#128295; Equipment
+        </button>
+        <button
+          class="view-tab"
+          id="tab-recipes"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-recipes"
+          data-view="recipes"
+        >
+          &#127860; Recipes
         </button>
       </div>
 
@@ -223,6 +238,57 @@
         <div class="empty-state" id="empty-state-equip">
           <span class="empty-state-icon" aria-hidden="true">&#128295;</span>
           <p class="empty-state-text">The Workshop awaits its first tool.</p>
+        </div>
+      </div>
+
+      <!-- Recipes panel -->
+      <div id="panel-recipes" role="tabpanel" aria-labelledby="tab-recipes" class="hidden">
+        <div class="toolbar">
+          <button class="app-btn app-btn-recipe" id="btn-add-recipe" type="button">
+            + Add Recipe
+          </button>
+        </div>
+
+        <!-- Browse controls: sort + favorite filter -->
+        <div class="browse-controls-row">
+          <div class="sort-group">
+            <label class="sort-label" for="sort-select-recipe">Sort</label>
+            <select class="sort-select" id="sort-select-recipe">
+              <option value="category">Category</option>
+              <option value="alpha">Alphabetical</option>
+              <option value="favorite">Favorites First</option>
+            </select>
+          </div>
+          <div class="favorite-toggle-group" role="group" aria-label="Favorite filter">
+            <button
+              class="favorite-toggle-btn active"
+              id="fav-btn-all"
+              type="button"
+              data-filter="all"
+            >
+              All
+            </button>
+            <button
+              class="favorite-toggle-btn"
+              id="fav-btn-yes"
+              type="button"
+              data-filter="favorites"
+            >
+              &#9733; Favorites
+            </button>
+          </div>
+        </div>
+
+        <!-- Category browse grid (recipes) -->
+        <div class="category-grid" id="category-grid-recipe"></div>
+
+        <div class="recipe-count hidden" id="recipe-count"></div>
+
+        <div class="recipe-list" id="recipe-list"></div>
+
+        <div class="empty-state" id="empty-state-recipe">
+          <span class="empty-state-icon" aria-hidden="true">&#127860;</span>
+          <p class="empty-state-text">The Libations await their first offering.</p>
         </div>
       </div>
     </main>
@@ -437,6 +503,196 @@
       </div>
     </div>
 
+    <!-- Recipe form modal overlay -->
+    <div class="modal-overlay" id="modal-overlay-recipe">
+      <div
+        class="modal-dialog modal-dialog-recipe"
+        role="dialog"
+        aria-labelledby="modal-title-recipe"
+      >
+        <h2 class="modal-title" id="modal-title-recipe">Add Recipe</h2>
+        <form id="recipe-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label class="form-label" for="rec-field-name">Name</label>
+              <input
+                class="form-input"
+                id="rec-field-name"
+                type="text"
+                placeholder="e.g. Old Fashioned"
+                required
+              />
+              <span class="form-error" id="rec-error-name"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="rec-field-category">Category</label>
+              <select class="form-select" id="rec-field-category" required>
+                <option value="">Select&hellip;</option>
+              </select>
+              <span class="form-error" id="rec-error-category"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="rec-field-subcategory">Subcategory</label>
+              <select class="form-select" id="rec-field-subcategory" required>
+                <option value="">Select category first</option>
+              </select>
+              <span class="form-error" id="rec-error-subcategory"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="rec-field-glassware">Glassware</label>
+              <input
+                class="form-input"
+                id="rec-field-glassware"
+                type="text"
+                placeholder="e.g. Rocks glass"
+                required
+              />
+              <span class="form-error" id="rec-error-glassware"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="rec-field-servings">Servings</label>
+              <input
+                class="form-input"
+                id="rec-field-servings"
+                type="number"
+                min="1"
+                step="1"
+                value="1"
+                required
+              />
+              <span class="form-error" id="rec-error-servings"></span>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="rec-field-garnish">Garnish</label>
+              <input
+                class="form-input"
+                id="rec-field-garnish"
+                type="text"
+                placeholder="e.g. Orange twist (leave blank if none)"
+              />
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="rec-field-description">Description</label>
+              <textarea
+                class="form-textarea"
+                id="rec-field-description"
+                placeholder="Brief tasting notes or background&hellip;"
+                rows="2"
+                required
+              ></textarea>
+              <span class="form-error" id="rec-error-description"></span>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="rec-field-instructions">Instructions</label>
+              <textarea
+                class="form-textarea"
+                id="rec-field-instructions"
+                placeholder="Step-by-step instructions&hellip;"
+                rows="5"
+                required
+              ></textarea>
+              <span class="form-error" id="rec-error-instructions"></span>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="rec-field-tags">Tags (comma-separated)</label>
+              <input
+                class="form-input"
+                id="rec-field-tags"
+                type="text"
+                placeholder="e.g. classic, stirred, whiskey"
+              />
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="rec-field-source">Source / Attribution</label>
+              <input
+                class="form-input"
+                id="rec-field-source"
+                type="text"
+                placeholder="e.g. Death &amp; Co., Cocktail Codex p.42"
+              />
+            </div>
+
+            <div class="form-group">
+              <div class="form-checkbox-row">
+                <input class="form-checkbox" id="rec-field-favorite" type="checkbox" />
+                <label class="form-checkbox-label" for="rec-field-favorite">&#9733; Favorite</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ingredient Selector -->
+          <div class="selector-section">
+            <div class="selector-section-header">
+              <span class="selector-section-title">Ingredients</span>
+              <span class="form-error" id="rec-error-ingredients"></span>
+            </div>
+            <div class="selector-search-wrapper">
+              <input
+                class="form-input selector-search-input"
+                id="rec-ing-search"
+                type="text"
+                placeholder="Search ingredients to add&hellip;"
+                autocomplete="off"
+              />
+              <div class="selector-dropdown hidden" id="rec-ing-dropdown"></div>
+            </div>
+            <div class="selected-list" id="rec-selected-ingredients"></div>
+          </div>
+
+          <!-- Equipment Selector -->
+          <div class="selector-section">
+            <div class="selector-section-header">
+              <span class="selector-section-title">Equipment</span>
+            </div>
+            <div class="selector-search-wrapper">
+              <input
+                class="form-input selector-search-input"
+                id="rec-equip-search"
+                type="text"
+                placeholder="Search equipment to add&hellip;"
+                autocomplete="off"
+              />
+              <div class="selector-dropdown hidden" id="rec-equip-dropdown"></div>
+            </div>
+            <div class="selected-list" id="rec-selected-equipment"></div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-cancel" id="btn-cancel-recipe" type="button">Cancel</button>
+            <button class="app-btn app-btn-recipe" id="btn-save-recipe" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Recipe detail modal overlay -->
+    <div class="modal-overlay" id="modal-overlay-recipe-detail">
+      <div
+        class="modal-dialog modal-dialog-recipe modal-dialog-recipe-detail"
+        role="dialog"
+        aria-labelledby="modal-title-recipe-detail"
+      >
+        <div class="recipe-detail-header">
+          <h2 class="modal-title" id="modal-title-recipe-detail"></h2>
+          <div class="recipe-detail-header-actions">
+            <button class="btn-icon btn-edit" id="btn-detail-edit" type="button">Edit</button>
+            <button class="btn-icon btn-delete" id="btn-detail-delete" type="button">Delete</button>
+            <button class="btn-cancel" id="btn-detail-close" type="button">Close</button>
+          </div>
+        </div>
+        <div id="recipe-detail-body"></div>
+      </div>
+    </div>
+
     <!-- Amphora level popover -->
     <div class="amphora-popover" id="amphora-popover">
       <div class="amphora-popover-title">Bottle Level</div>
@@ -453,6 +709,7 @@
     <script src="/apps/symposium/js/ingredients.js"></script>
     <script src="/apps/symposium/js/equipment.js"></script>
     <script src="/apps/symposium/js/inventory.js"></script>
+    <script src="/apps/symposium/js/recipes.js"></script>
     <script src="/apps/symposium/js/app.js"></script>
 
     <script>
