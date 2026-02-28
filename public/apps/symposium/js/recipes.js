@@ -753,6 +753,17 @@
       if (el) el.textContent = msg;
     },
 
+    _checkDuplicate: function (name, category) {
+      var trimmed = name.trim().toLowerCase();
+      return state.allRecipes.some(function (r) {
+        return (
+          r.id !== state.recipeEditingId &&
+          r.name.toLowerCase() === trimmed &&
+          r.category === category
+        );
+      });
+    },
+
     _validateForm: function () {
       Symposium.recipes._clearErrors();
       var valid = true;
@@ -798,6 +809,16 @@
       e.preventDefault();
       if (!Symposium.recipes._validateForm()) return;
 
+      var name = Symposium.getRef('rec-field-name').value.trim();
+      var category = Symposium.getRef('rec-field-category').value;
+      if (Symposium.recipes._checkDuplicate(name, category)) {
+        Symposium.recipes._setError(
+          'name',
+          'A recipe with this name already exists in this category'
+        );
+        return;
+      }
+
       var ingList = _selectedIngredients.map(function (sel) {
         return {
           id: sel.id,
@@ -821,8 +842,8 @@
         .filter(Boolean);
 
       var data = {
-        name: Symposium.getRef('rec-field-name').value.trim(),
-        category: Symposium.getRef('rec-field-category').value,
+        name: name,
+        category: category,
         subcategory: Symposium.getRef('rec-field-subcategory').value,
         tags: tags,
         description: Symposium.getRef('rec-field-description').value.trim(),

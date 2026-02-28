@@ -86,6 +86,8 @@
         Symposium.recipes.renderList();
         Symposium.inventory.renderDashboard();
         if (state.globalSearchQuery) Symposium.inventory.renderCombinedSearch();
+        // If ingredients already loaded, recompute canMake for newly-arrived recipes
+        if (state.allIngredients.length > 0) Symposium.recipes.updateCanMakeAll();
       };
 
       // ── Global search ────────────────────────────
