@@ -43,6 +43,7 @@
     recipeSearchQuery: '',
     recipeSortOption: 'category',
     recipeFavoriteFilter: false,
+    recipeCanMakeFilter: false,
     recipeEditingId: null,
     recipeDetailId: null,
   };

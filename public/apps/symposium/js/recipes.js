@@ -21,6 +21,28 @@
     });
   }
 
+  // ── Three-state availability computation ───────────────────────────────
+  // Returns 'green' (all in stock), 'amber' (all required in stock, some optional
+  // missing), or 'red' (at least one required ingredient out of stock).
+  function _getAvailabilityStatus(recipeIngredients) {
+    var hasRequiredMissing = recipeIngredients.some(function (ri) {
+      if (ri.optional) return false;
+      var ing = state.allIngredients.find(function (i) {
+        return i.id === ri.id;
+      });
+      return !ing || !ing.inStock;
+    });
+    if (hasRequiredMissing) return 'red';
+    var hasOptionalMissing = recipeIngredients.some(function (ri) {
+      if (!ri.optional) return false;
+      var ing = state.allIngredients.find(function (i) {
+        return i.id === ri.id;
+      });
+      return !ing || !ing.inStock;
+    });
+    return hasOptionalMissing ? 'amber' : 'green';
+  }
+
   // ── Ingredient selector helpers ────────────────────────────────────────
   function _filterIngredientSearch(query) {
     if (!query) return [];
@@ -358,6 +380,34 @@
       ingUl.appendChild(li);
     });
     ingSection.appendChild(ingUl);
+
+    // "Add missing to shopping list" button
+    var missingRefs = (recipe.ingredients || []).filter(function (ri) {
+      var ing = state.allIngredients.find(function (i) {
+        return i.id === ri.id;
+      });
+      return !ing || !ing.inStock;
+    });
+    if (missingRefs.length > 0) {
+      var shoppingBtn = document.createElement('button');
+      shoppingBtn.type = 'button';
+      shoppingBtn.className = 'btn btn-outline recipe-shopping-btn';
+      shoppingBtn.textContent =
+        'Add ' +
+        missingRefs.length +
+        ' missing ingredient' +
+        (missingRefs.length > 1 ? 's' : '') +
+        ' to shopping list';
+      (function (refs, btn) {
+        btn.addEventListener('click', function () {
+          Symposium.recipes.addMissingToShoppingList(refs);
+          btn.textContent = 'Added to shopping list';
+          btn.disabled = true;
+        });
+      })(missingRefs, shoppingBtn);
+      ingSection.appendChild(shoppingBtn);
+    }
+
     frag.appendChild(ingSection);
 
     // Equipment list (if any)
@@ -480,6 +530,13 @@
         });
       }
 
+      // 3b. Can Make filter
+      if (state.recipeCanMakeFilter) {
+        result = result.filter(function (r) {
+          return r.canMake;
+        });
+      }
+
       // 4. Sort
       if (state.recipeSortOption === 'alpha') {
         result.sort(function (a, b) {
@@ -513,6 +570,7 @@
         noun: 'recipe',
         getEmptyMessage: function () {
           if (state.recipeSearchQuery) return 'No recipes match that search.';
+          if (state.recipeCanMakeFilter) return 'No recipes are currently makeable with your stock.';
           if (state.recipeFavoriteFilter) return 'No favorites yet. Star a recipe to save it here.';
           if (state.recipeActiveFilter !== 'all' && state.allRecipes.length > 0)
             return 'No recipes in this category yet.';
@@ -564,6 +622,14 @@
         subBadge.textContent = recipe.subcategory;
         meta.appendChild(subBadge);
       }
+
+      // Availability badge
+      var availStatus = _getAvailabilityStatus(recipe.ingredients || []);
+      var statusLabels = { green: 'Can Make', amber: 'Missing Optionals', red: "Can't Make" };
+      var availBadge = document.createElement('span');
+      availBadge.className = 'badge badge-availability-' + availStatus;
+      availBadge.textContent = statusLabels[availStatus];
+      meta.appendChild(availBadge);
 
       info.appendChild(meta);
 
@@ -925,6 +991,20 @@
               console.error('Failed to update canMake for', recipe.name, err);
             });
         }
+      });
+    },
+
+    // Marks each missing ingredient's shoppingListDefault as true.
+    // Called when user taps "Add missing to shopping list" in recipe detail.
+    addMissingToShoppingList: function (missingRefs) {
+      missingRefs.forEach(function (ri) {
+        state.db
+          .collection('symposium_ingredients')
+          .doc(ri.id)
+          .update({ shoppingListDefault: true, updatedAt: state.serverTimestamp() })
+          .catch(function (err) {
+            console.error('Failed to add ingredient to shopping list:', err);
+          });
       });
     },
 
