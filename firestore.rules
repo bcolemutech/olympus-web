@@ -82,6 +82,82 @@ service cloud.firestore {
       allow delete: if hasApp('symposium');
     }
 
+    match /symposium_recipes/{recipeId} {
+      function validRecipe() {
+        let data = request.resource.data;
+        let required = [
+          'name', 'category', 'subcategory', 'tags',
+          'description', 'instructions', 'ingredients', 'equipment',
+          'garnish', 'glassware', 'servings', 'canMake',
+          'favorite', 'createdAt', 'updatedAt'
+        ];
+        let allowed = [
+          'name', 'category', 'subcategory', 'tags',
+          'description', 'instructions', 'ingredients', 'equipment',
+          'garnish', 'glassware', 'servings', 'canMake',
+          'imageUrl', 'source', 'favorite', 'createdAt', 'updatedAt'
+        ];
+
+        let cat = get(/databases/$(database)/documents/symposium_categories/$(data.category)).data;
+
+        return data.keys().hasAll(required)
+            && data.keys().hasOnly(allowed)
+            // numeric / boolean fields
+            && data.servings is int
+            && data.servings > 0
+            && data.canMake is bool
+            && data.favorite is bool
+            // core string fields
+            && data.name is string
+            && data.name.size() > 0
+            && data.name.size() <= 200
+            && data.subcategory is string
+            && data.subcategory.size() > 0
+            && data.subcategory.size() <= 100
+            && data.description is string
+            && data.description.size() > 0
+            && data.description.size() <= 5000
+            && data.instructions is string
+            && data.instructions.size() > 0
+            && data.instructions.size() <= 5000
+            && data.garnish is string
+            && data.garnish.size() <= 1000
+            && data.glassware is string
+            && data.glassware.size() > 0
+            && data.glassware.size() <= 200
+            // optional string fields
+            && (!data.keys().hasAny(['imageUrl'])
+                || (data.imageUrl is string
+                    && data.imageUrl.size() > 0
+                    && data.imageUrl.size() <= 2000))
+            && (!data.keys().hasAny(['source'])
+                || (data.source is string
+                    && data.source.size() > 0
+                    && data.source.size() <= 2000))
+            // list fields
+            && data.ingredients is list
+            && data.ingredients.size() <= 200
+            && data.equipment is list
+            && data.equipment.size() <= 200
+            && data.tags is list
+            && data.tags.size() <= 200
+            // category must be a recipe category with valid subcategory
+            && cat.type == 'recipe'
+            && data.subcategory in cat.subcategories;
+      }
+
+      allow read: if hasApp('symposium');
+      allow create: if hasApp('symposium')
+                    && validRecipe()
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if hasApp('symposium')
+                    && validRecipe()
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.updatedAt == request.time;
+      allow delete: if hasApp('symposium');
+    }
+
     match /symposium_categories/{categoryId} {
       allow read: if hasApp('symposium');
       allow write: if false;
