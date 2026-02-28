@@ -132,6 +132,41 @@ const categories = [
     subcategories: ['blender', 'ice maker', 'refrigerator', 'juicer'],
     sortOrder: 11,
   },
+  {
+    id: 'classic',
+    name: 'Classic Cocktails',
+    type: 'recipe',
+    subcategories: ['whiskey-based', 'gin-based', 'vodka-based', 'rum-based', 'tequila-based'],
+    sortOrder: 12,
+  },
+  {
+    id: 'tiki',
+    name: 'Tiki',
+    type: 'recipe',
+    subcategories: ['rum-based', 'tropical', 'frozen'],
+    sortOrder: 13,
+  },
+  {
+    id: 'modern',
+    name: 'Modern',
+    type: 'recipe',
+    subcategories: ['contemporary', 'low-abv', 'sour'],
+    sortOrder: 14,
+  },
+  {
+    id: 'shots',
+    name: 'Shots',
+    type: 'recipe',
+    subcategories: ['layered', 'simple'],
+    sortOrder: 15,
+  },
+  {
+    id: 'non-alcoholic',
+    name: 'Non-Alcoholic',
+    type: 'recipe',
+    subcategories: ['mocktail', 'juice', 'soda'],
+    sortOrder: 16,
+  },
 ];
 
 try {

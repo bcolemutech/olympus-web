@@ -82,6 +82,46 @@ service cloud.firestore {
       allow delete: if hasApp('symposium');
     }
 
+    match /symposium_recipes/{recipeId} {
+      function validRecipe() {
+        let data = request.resource.data;
+        let required = [
+          'name', 'category', 'subcategory', 'tags',
+          'description', 'instructions', 'ingredients', 'equipment',
+          'garnish', 'glassware', 'servings', 'canMake',
+          'favorite', 'createdAt', 'updatedAt'
+        ];
+        let allowed = [
+          'name', 'category', 'subcategory', 'tags',
+          'description', 'instructions', 'ingredients', 'equipment',
+          'garnish', 'glassware', 'servings', 'canMake',
+          'imageUrl', 'source', 'favorite', 'createdAt', 'updatedAt'
+        ];
+
+        return data.keys().hasAll(required)
+            && data.keys().hasOnly(allowed)
+            && data.servings is int
+            && data.servings > 0
+            && data.canMake is bool
+            && data.favorite is bool
+            && data.ingredients is list
+            && data.equipment is list
+            && data.tags is list
+            && exists(/databases/$(database)/documents/symposium_categories/$(data.category));
+      }
+
+      allow read: if hasApp('symposium');
+      allow create: if hasApp('symposium')
+                    && validRecipe()
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if hasApp('symposium')
+                    && validRecipe()
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.updatedAt == request.time;
+      allow delete: if hasApp('symposium');
+    }
+
     match /symposium_categories/{categoryId} {
       allow read: if hasApp('symposium');
       allow write: if false;
