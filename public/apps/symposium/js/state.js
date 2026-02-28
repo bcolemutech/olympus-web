@@ -24,6 +24,7 @@
     equipmentCategoryMap: {},
     recipeCategoryMap: {},
     allIngredients: [],
+    ingredientsLoaded: false,
     allEquipment: [],
     allRecipes: [],
     activeFilter: 'all',

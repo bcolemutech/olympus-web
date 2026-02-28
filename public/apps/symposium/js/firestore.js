@@ -46,6 +46,7 @@
           snapshot.forEach(function (doc) {
             state.allIngredients.push(Object.assign({ id: doc.id }, doc.data()));
           });
+          state.ingredientsLoaded = true;
           if (Symposium.firestore._onIngredientsChanged) {
             Symposium.firestore._onIngredientsChanged();
           }

@@ -10,35 +10,39 @@
   var _selectedIngredients = [];
   var _selectedEquipment = [];
 
+  // ── Stock lookup map (id → inStock) ────────────────────────────────────
+  // Rebuilt once per render via _rebuildStockMap() to avoid O(n²) lookups.
+  var _stockMap = null;
+
+  function _rebuildStockMap() {
+    _stockMap = {};
+    state.allIngredients.forEach(function (i) {
+      _stockMap[i.id] = i.inStock;
+    });
+  }
+
   // ── canMake computation ────────────────────────────────────────────────
   function _computeCanMake(recipeIngredients) {
     return recipeIngredients.every(function (ri) {
       if (ri.optional) return true;
-      var ing = state.allIngredients.find(function (i) {
-        return i.id === ri.id;
-      });
-      return ing && ing.inStock;
+      return !!_stockMap[ri.id];
     });
   }
 
   // ── Three-state availability computation ───────────────────────────────
   // Returns 'green' (all in stock), 'amber' (all required in stock, some optional
-  // missing), or 'red' (at least one required ingredient out of stock).
+  // missing), 'red' (at least one required ingredient out of stock), or
+  // 'unknown' when ingredient data has not yet loaded.
   function _getAvailabilityStatus(recipeIngredients) {
+    if (!state.ingredientsLoaded) return 'unknown';
     var hasRequiredMissing = recipeIngredients.some(function (ri) {
       if (ri.optional) return false;
-      var ing = state.allIngredients.find(function (i) {
-        return i.id === ri.id;
-      });
-      return !ing || !ing.inStock;
+      return !_stockMap[ri.id];
     });
     if (hasRequiredMissing) return 'red';
     var hasOptionalMissing = recipeIngredients.some(function (ri) {
       if (!ri.optional) return false;
-      var ing = state.allIngredients.find(function (i) {
-        return i.id === ri.id;
-      });
-      return !ing || !ing.inStock;
+      return !_stockMap[ri.id];
     });
     return hasOptionalMissing ? 'amber' : 'green';
   }
@@ -382,12 +386,12 @@
     ingSection.appendChild(ingUl);
 
     // "Add missing to shopping list" button
-    var missingRefs = (recipe.ingredients || []).filter(function (ri) {
-      var ing = state.allIngredients.find(function (i) {
-        return i.id === ri.id;
-      });
-      return !ing || !ing.inStock;
-    });
+    // Only shown when stock data is loaded; only includes known out-of-stock ingredients.
+    var missingRefs = state.ingredientsLoaded
+      ? (recipe.ingredients || []).filter(function (ri) {
+          return _stockMap.hasOwnProperty(ri.id) && !_stockMap[ri.id];
+        })
+      : [];
     if (missingRefs.length > 0) {
       var shoppingBtn = document.createElement('button');
       shoppingBtn.type = 'button';
@@ -400,9 +404,16 @@
         ' to shopping list';
       (function (refs, btn) {
         btn.addEventListener('click', function () {
-          Symposium.recipes.addMissingToShoppingList(refs);
-          btn.textContent = 'Added to shopping list';
           btn.disabled = true;
+          Symposium.recipes
+            .addMissingToShoppingList(refs)
+            .then(function () {
+              btn.textContent = 'Added to shopping list';
+            })
+            .catch(function () {
+              btn.disabled = false;
+              btn.textContent = 'Failed \u2013 tap to retry';
+            });
         });
       })(missingRefs, shoppingBtn);
       ingSection.appendChild(shoppingBtn);
@@ -498,6 +509,7 @@
     },
 
     renderList: function () {
+      _rebuildStockMap();
       var result = state.allRecipes.slice();
 
       // 1. Category filter
@@ -624,13 +636,15 @@
         meta.appendChild(subBadge);
       }
 
-      // Availability badge
+      // Availability badge (omitted until ingredient stock data has loaded)
       var availStatus = _getAvailabilityStatus(recipe.ingredients || []);
-      var statusLabels = { green: 'Can Make', amber: 'Missing Optionals', red: "Can't Make" };
-      var availBadge = document.createElement('span');
-      availBadge.className = 'badge badge-availability-' + availStatus;
-      availBadge.textContent = statusLabels[availStatus];
-      meta.appendChild(availBadge);
+      if (availStatus !== 'unknown') {
+        var statusLabels = { green: 'Can Make', amber: 'Missing Optionals', red: "Can't Make" };
+        var availBadge = document.createElement('span');
+        availBadge.className = 'badge badge-availability-' + availStatus;
+        availBadge.textContent = statusLabels[availStatus];
+        meta.appendChild(availBadge);
+      }
 
       info.appendChild(meta);
 
@@ -978,6 +992,7 @@
     // Recomputes canMake for all recipes and writes changed values.
     // Called from _onIngredientsChanged to keep canMake accurate.
     updateCanMakeAll: function () {
+      _rebuildStockMap();
       state.allRecipes.forEach(function (recipe) {
         var newCanMake = _computeCanMake(recipe.ingredients || []);
         if (newCanMake !== recipe.canMake) {
@@ -997,15 +1012,24 @@
 
     // Marks each missing ingredient's shoppingListDefault as true.
     // Called when user taps "Add missing to shopping list" in recipe detail.
+    // Returns a Promise that resolves when all updates are committed.
     addMissingToShoppingList: function (missingRefs) {
+      if (!missingRefs || !missingRefs.length) {
+        return Promise.resolve();
+      }
+
+      var batch = state.db.batch();
       missingRefs.forEach(function (ri) {
-        state.db
-          .collection('symposium_ingredients')
-          .doc(ri.id)
-          .update({ shoppingListDefault: true, updatedAt: state.serverTimestamp() })
-          .catch(function (err) {
-            console.error('Failed to add ingredient to shopping list:', err);
-          });
+        var docRef = state.db.collection('symposium_ingredients').doc(ri.id);
+        batch.update(docRef, {
+          shoppingListDefault: true,
+          updatedAt: state.serverTimestamp(),
+        });
+      });
+
+      return batch.commit().catch(function (err) {
+        console.error('Failed to add ingredient(s) to shopping list:', err);
+        throw err;
       });
     },
 
