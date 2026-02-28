@@ -1391,6 +1391,59 @@
   background: #ef5350;
 }
 
+/* ── Availability badges ──────────────────────────────────────────── */
+.badge-availability-green {
+  color: #66bb6a;
+  background: rgba(102, 187, 106, 0.1);
+  border: 1px solid rgba(102, 187, 106, 0.2);
+}
+
+.badge-availability-amber {
+  color: #ffa726;
+  background: rgba(255, 167, 38, 0.1);
+  border: 1px solid rgba(255, 167, 38, 0.2);
+}
+
+.badge-availability-red {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.1);
+  border: 1px solid rgba(239, 83, 80, 0.2);
+}
+
+/* ── Can Make filter toggle button ───────────────────────────────── */
+.can-make-toggle-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: #546e7a;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.can-make-toggle-btn.active {
+  color: #66bb6a;
+  background: rgba(102, 187, 106, 0.1);
+  border-color: rgba(102, 187, 106, 0.3);
+}
+
+.can-make-toggle-btn:hover:not(.active) {
+  color: #90a4ae;
+}
+
+/* ── Shopping list button in recipe detail view ───────────────────── */
+.recipe-shopping-btn {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+}
+
 .recipe-detail-tags {
   margin-top: 1rem;
   padding-top: 0.75rem;

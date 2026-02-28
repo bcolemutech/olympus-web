@@ -24,6 +24,7 @@
     equipmentCategoryMap: {},
     recipeCategoryMap: {},
     allIngredients: [],
+    ingredientsLoaded: false,
     allEquipment: [],
     allRecipes: [],
     activeFilter: 'all',
@@ -43,6 +44,7 @@
     recipeSearchQuery: '',
     recipeSortOption: 'category',
     recipeFavoriteFilter: false,
+    recipeCanMakeFilter: false,
     recipeEditingId: null,
     recipeDetailId: null,
   };

@@ -286,6 +286,13 @@
         });
       });
 
+      // ── Can Make filter toggle ──────────────────
+      Symposium.getRef('can-make-btn').addEventListener('click', function () {
+        state.recipeCanMakeFilter = !state.recipeCanMakeFilter;
+        Symposium.getRef('can-make-btn').classList.toggle('active', state.recipeCanMakeFilter);
+        Symposium.recipes.renderList();
+      });
+
       // ── Recipe modal ────────────────────────────
       var recipeModalEl = Symposium.getRef('modal-overlay-recipe');
       var recipeDetailModalEl = Symposium.getRef('modal-overlay-recipe-detail');
