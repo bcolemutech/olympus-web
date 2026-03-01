@@ -21,12 +21,14 @@ service cloud.firestore {
         let required = [
           'name', 'category', 'subcategory', 'tags',
           'unit', 'type', 'inStock', 'quantity',
+          'trackingType', 'stock', 'bottleSize', 'bottleSizeUnit',
           'notes', 'shoppingListDefault', 'lowStockThreshold',
           'createdAt', 'updatedAt'
         ];
         let allowed = [
           'name', 'category', 'subcategory', 'tags',
           'unit', 'type', 'inStock', 'quantity',
+          'trackingType', 'stock', 'bottleSize', 'bottleSizeUnit',
           'notes', 'shoppingListDefault', 'lowStockThreshold',
           'createdAt', 'updatedAt', 'openBottleLevel'
         ];
@@ -36,6 +38,10 @@ service cloud.firestore {
             && data.keys().hasOnly(allowed)
             && data.type == 'consumable'
             && data.unit in ['oz', 'ml', 'dash', 'each', 'splash']
+            && data.trackingType in ['volume', 'quantity']
+            && data.stock is int && data.stock >= 0
+            && data.bottleSize is number && data.bottleSize >= 0
+            && data.bottleSizeUnit in ['ml', 'oz']
             && exists(/databases/$(database)/documents/symposium_categories/$(data.category))
             && (!data.keys().hasAny(['openBottleLevel']) || data.openBottleLevel in validLevels);
       }

@@ -163,6 +163,12 @@
         );
       });
 
+      Symposium.getRef('field-unit').addEventListener('change', function () {
+        Symposium.ingredients._toggleTrackingFields(
+          Symposium.getRef('field-unit').value
+        );
+      });
+
       Symposium.getRef('ingredient-form').addEventListener('submit', function (e) {
         Symposium.ingredients.handleSubmit(e);
       });

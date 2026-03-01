@@ -132,6 +132,7 @@
     },
 
     renderCard: function (ing) {
+      var isVolume = ing.trackingType === 'volume';
       var card = document.createElement('div');
       card.className = 'ingredient-card';
 
@@ -192,30 +193,35 @@
       actions.appendChild(editBtn);
       actions.appendChild(deleteBtn);
 
-      // Amphora bottle level indicator
-      var amphoraBtn = document.createElement('button');
-      amphoraBtn.type = 'button';
-      amphoraBtn.className = 'amphora-indicator' + (!ing.openBottleLevel ? ' amphora-sealed' : '');
-      amphoraBtn.title = ing.openBottleLevel
-        ? 'Bottle level: ' + (Symposium.BOTTLE_LEVELS[ing.openBottleLevel] || {}).label
-        : 'No open bottle (sealed)';
-
-      amphoraBtn.appendChild(Symposium.amphora.createSVG(ing.openBottleLevel, 24));
-
-      var amphoraLabelEl = document.createElement('span');
-      amphoraLabelEl.className = 'amphora-label';
-      amphoraLabelEl.textContent = ing.openBottleLevel
-        ? (Symposium.BOTTLE_LEVELS[ing.openBottleLevel] || {}).label || '?'
-        : 'Sealed';
-      amphoraBtn.appendChild(amphoraLabelEl);
-
-      amphoraBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        Symposium.amphora.openPopover(ing, amphoraBtn);
-      });
-
       header.appendChild(info);
-      header.appendChild(amphoraBtn);
+
+      // Amphora bottle level indicator — only for volume items
+      if (isVolume) {
+        var amphoraBtn = document.createElement('button');
+        amphoraBtn.type = 'button';
+        amphoraBtn.className =
+          'amphora-indicator' + (!ing.openBottleLevel ? ' amphora-sealed' : '');
+        amphoraBtn.title = ing.openBottleLevel
+          ? 'Bottle level: ' + (Symposium.BOTTLE_LEVELS[ing.openBottleLevel] || {}).label
+          : 'No open bottle (sealed)';
+
+        amphoraBtn.appendChild(Symposium.amphora.createSVG(ing.openBottleLevel, 24));
+
+        var amphoraLabelEl = document.createElement('span');
+        amphoraLabelEl.className = 'amphora-label';
+        amphoraLabelEl.textContent = ing.openBottleLevel
+          ? (Symposium.BOTTLE_LEVELS[ing.openBottleLevel] || {}).label || '?'
+          : 'Sealed';
+        amphoraBtn.appendChild(amphoraLabelEl);
+
+        amphoraBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          Symposium.amphora.openPopover(ing, amphoraBtn);
+        });
+
+        header.appendChild(amphoraBtn);
+      }
+
       header.appendChild(actions);
       card.appendChild(header);
 
@@ -223,15 +229,86 @@
       var details = document.createElement('div');
       details.className = 'ingredient-details';
 
-      var qtyDetail = document.createElement('span');
-      var qtyLabel = document.createElement('span');
-      qtyLabel.className = 'ingredient-detail-label';
-      qtyLabel.textContent = 'Qty:';
-      qtyDetail.appendChild(qtyLabel);
-      qtyDetail.appendChild(
-        document.createTextNode(' ' + (ing.quantity || 0) + ' ' + (ing.unit || ''))
-      );
-      details.appendChild(qtyDetail);
+      if (isVolume) {
+        // Stock count with +/- controls
+        var stockDetail = document.createElement('span');
+        stockDetail.className = 'stock-controls';
+
+        var stockLabel = document.createElement('span');
+        stockLabel.className = 'ingredient-detail-label';
+        stockLabel.textContent = 'Stock:';
+        stockDetail.appendChild(stockLabel);
+
+        var minusBtn = document.createElement('button');
+        minusBtn.type = 'button';
+        minusBtn.className = 'btn-adjust btn-adjust-minus';
+        minusBtn.textContent = '\u2212';
+        minusBtn.addEventListener('click', function () {
+          Symposium.ingredients.adjustStock(ing, -1);
+        });
+        stockDetail.appendChild(minusBtn);
+
+        var stockValue = document.createElement('span');
+        stockValue.className = 'adjust-value';
+        stockValue.textContent = Number(ing.stock) || 0;
+        stockDetail.appendChild(stockValue);
+
+        var plusBtn = document.createElement('button');
+        plusBtn.type = 'button';
+        plusBtn.className = 'btn-adjust btn-adjust-plus';
+        plusBtn.textContent = '+';
+        plusBtn.addEventListener('click', function () {
+          Symposium.ingredients.adjustStock(ing, 1);
+        });
+        stockDetail.appendChild(plusBtn);
+
+        details.appendChild(stockDetail);
+
+        // Bottle size info
+        var sizeDetail = document.createElement('span');
+        var sizeLabel = document.createElement('span');
+        sizeLabel.className = 'ingredient-detail-label';
+        sizeLabel.textContent = 'Bottle:';
+        sizeDetail.appendChild(sizeLabel);
+        sizeDetail.appendChild(
+          document.createTextNode(' ' + (ing.bottleSize || 0) + (ing.bottleSizeUnit || 'ml'))
+        );
+        details.appendChild(sizeDetail);
+      } else {
+        // Quantity with +/- controls
+        var qtyDetail = document.createElement('span');
+        qtyDetail.className = 'qty-controls';
+
+        var qtyLabel = document.createElement('span');
+        qtyLabel.className = 'ingredient-detail-label';
+        qtyLabel.textContent = 'Qty:';
+        qtyDetail.appendChild(qtyLabel);
+
+        var qtyMinusBtn = document.createElement('button');
+        qtyMinusBtn.type = 'button';
+        qtyMinusBtn.className = 'btn-adjust btn-adjust-minus';
+        qtyMinusBtn.textContent = '\u2212';
+        qtyMinusBtn.addEventListener('click', function () {
+          Symposium.ingredients.adjustQuantity(ing, -1);
+        });
+        qtyDetail.appendChild(qtyMinusBtn);
+
+        var qtyValue = document.createElement('span');
+        qtyValue.className = 'adjust-value';
+        qtyValue.textContent = Number(ing.quantity) || 0;
+        qtyDetail.appendChild(qtyValue);
+
+        var qtyPlusBtn = document.createElement('button');
+        qtyPlusBtn.type = 'button';
+        qtyPlusBtn.className = 'btn-adjust btn-adjust-plus';
+        qtyPlusBtn.textContent = '+';
+        qtyPlusBtn.addEventListener('click', function () {
+          Symposium.ingredients.adjustQuantity(ing, 1);
+        });
+        qtyDetail.appendChild(qtyPlusBtn);
+
+        details.appendChild(qtyDetail);
+      }
 
       if (ing.lowStockThreshold > 0) {
         var threshDetail = document.createElement('span');
@@ -240,7 +317,7 @@
         threshLabel.textContent = 'Low at:';
         threshDetail.appendChild(threshLabel);
         threshDetail.appendChild(
-          document.createTextNode(' ' + ing.lowStockThreshold + ' ' + (ing.unit || ''))
+          document.createTextNode(' ' + ing.lowStockThreshold)
         );
         details.appendChild(threshDetail);
       }
@@ -270,6 +347,70 @@
       return card;
     },
 
+    adjustStock: function (ing, delta) {
+      var currentStock = Number(ing.stock) || 0;
+      var newStock = Math.max(0, currentStock + delta);
+      if (newStock === currentStock) return;
+
+      var localIng = state.allIngredients.find(function (i) {
+        return i.id === ing.id;
+      });
+      if (localIng) {
+        localIng.stock = newStock;
+        localIng.inStock = Symposium.computeInStock('volume', newStock, 0);
+      }
+      Symposium.ingredients.renderList();
+
+      state.db
+        .collection('symposium_ingredients')
+        .doc(ing.id)
+        .update({
+          stock: newStock,
+          inStock: Symposium.computeInStock('volume', newStock, 0),
+          updatedAt: state.serverTimestamp(),
+        })
+        .catch(function (err) {
+          console.error('Failed to update stock:', err);
+          if (localIng) {
+            localIng.stock = currentStock;
+            localIng.inStock = Symposium.computeInStock('volume', currentStock, 0);
+          }
+          Symposium.ingredients.renderList();
+        });
+    },
+
+    adjustQuantity: function (ing, delta) {
+      var currentQty = Number(ing.quantity) || 0;
+      var newQty = Math.max(0, currentQty + delta);
+      if (newQty === currentQty) return;
+
+      var localIng = state.allIngredients.find(function (i) {
+        return i.id === ing.id;
+      });
+      if (localIng) {
+        localIng.quantity = newQty;
+        localIng.inStock = Symposium.computeInStock('quantity', 0, newQty);
+      }
+      Symposium.ingredients.renderList();
+
+      state.db
+        .collection('symposium_ingredients')
+        .doc(ing.id)
+        .update({
+          quantity: newQty,
+          inStock: Symposium.computeInStock('quantity', 0, newQty),
+          updatedAt: state.serverTimestamp(),
+        })
+        .catch(function (err) {
+          console.error('Failed to update quantity:', err);
+          if (localIng) {
+            localIng.quantity = currentQty;
+            localIng.inStock = Symposium.computeInStock('quantity', 0, currentQty);
+          }
+          Symposium.ingredients.renderList();
+        });
+    },
+
     populateCategorySelect: function () {
       var fieldCategory = Symposium.getRef('field-category');
       Object.keys(state.ingredientCategoryMap).forEach(function (id) {
@@ -278,6 +419,13 @@
         opt.textContent = state.ingredientCategoryMap[id].name;
         fieldCategory.appendChild(opt);
       });
+    },
+
+    _toggleTrackingFields: function (unit) {
+      var isVolume = Symposium.inferTrackingType(unit) === 'volume';
+      Symposium.getRef('volume-fields-stock').classList.toggle('hidden', !isVolume);
+      Symposium.getRef('volume-fields-size').classList.toggle('hidden', !isVolume);
+      Symposium.getRef('quantity-fields').classList.toggle('hidden', isVolume);
     },
 
     openModal: function (ingredient) {
@@ -292,7 +440,9 @@
       var fieldSubcategory = Symposium.getRef('field-subcategory');
       var fieldUnit = Symposium.getRef('field-unit');
       var fieldQuantity = Symposium.getRef('field-quantity');
-      var fieldInStock = Symposium.getRef('field-instock');
+      var fieldStock = Symposium.getRef('field-stock');
+      var fieldBottleSize = Symposium.getRef('field-bottle-size');
+      var fieldBottleSizeUnit = Symposium.getRef('field-bottle-size-unit');
       var fieldTags = Symposium.getRef('field-tags');
       var fieldNotes = Symposium.getRef('field-notes');
       var fieldShopping = Symposium.getRef('field-shopping');
@@ -306,19 +456,26 @@
         Symposium.populateSubcategoryDropdown(ingredient.category, fieldSubcategory);
         fieldSubcategory.value = ingredient.subcategory || '';
         fieldUnit.value = ingredient.unit || '';
+        fieldStock.value = ingredient.stock != null ? ingredient.stock : 0;
+        fieldBottleSize.value = ingredient.bottleSize != null ? ingredient.bottleSize : 750;
+        fieldBottleSizeUnit.value = ingredient.bottleSizeUnit || 'ml';
         fieldQuantity.value = ingredient.quantity != null ? ingredient.quantity : 0;
-        fieldInStock.checked = !!ingredient.inStock;
         fieldTags.value =
           ingredient.tags && Array.isArray(ingredient.tags) ? ingredient.tags.join(', ') : '';
         fieldNotes.value = ingredient.notes || '';
         fieldShopping.checked = !!ingredient.shoppingListDefault;
         fieldThreshold.value =
           ingredient.lowStockThreshold != null ? ingredient.lowStockThreshold : 0;
+        Symposium.ingredients._toggleTrackingFields(ingredient.unit || '');
       } else {
         formEl.reset();
+        fieldStock.value = '0';
+        fieldBottleSize.value = '750';
+        fieldBottleSizeUnit.value = 'ml';
         fieldQuantity.value = '0';
         fieldThreshold.value = '0';
         fieldSubcategory.innerHTML = '<option value="">Select category first</option>';
+        Symposium.ingredients._toggleTrackingFields('');
       }
 
       Symposium.getRef('modal-overlay').classList.add('open');
@@ -358,14 +515,31 @@
         Symposium.ingredients._setError('subcategory', 'Subcategory is required');
         valid = false;
       }
-      if (!Symposium.getRef('field-unit').value) {
+
+      var unit = Symposium.getRef('field-unit').value;
+      if (!unit) {
         Symposium.ingredients._setError('unit', 'Unit is required');
         valid = false;
       }
-      var qty = Symposium.getRef('field-quantity');
-      if (qty.value === '' || parseFloat(qty.value) < 0) {
-        Symposium.ingredients._setError('quantity', 'Quantity must be 0 or greater');
-        valid = false;
+
+      var trackingType = Symposium.inferTrackingType(unit);
+      if (trackingType === 'volume') {
+        var stock = Symposium.getRef('field-stock');
+        if (stock.value === '' || parseInt(stock.value, 10) < 0) {
+          Symposium.ingredients._setError('stock', 'Stock must be 0 or greater');
+          valid = false;
+        }
+        var bottleSize = Symposium.getRef('field-bottle-size');
+        if (bottleSize.value === '' || parseFloat(bottleSize.value) < 0) {
+          Symposium.ingredients._setError('bottle-size', 'Bottle size must be 0 or greater');
+          valid = false;
+        }
+      } else {
+        var qty = Symposium.getRef('field-quantity');
+        if (qty.value === '' || parseInt(qty.value, 10) < 0) {
+          Symposium.ingredients._setError('quantity', 'Quantity must be 0 or greater');
+          valid = false;
+        }
       }
 
       return valid;
@@ -391,7 +565,9 @@
       var fieldSubcategory = Symposium.getRef('field-subcategory');
       var fieldUnit = Symposium.getRef('field-unit');
       var fieldQuantity = Symposium.getRef('field-quantity');
-      var fieldInStock = Symposium.getRef('field-instock');
+      var fieldStock = Symposium.getRef('field-stock');
+      var fieldBottleSize = Symposium.getRef('field-bottle-size');
+      var fieldBottleSizeUnit = Symposium.getRef('field-bottle-size-unit');
       var fieldTags = Symposium.getRef('field-tags');
       var fieldNotes = Symposium.getRef('field-notes');
       var fieldShopping = Symposium.getRef('field-shopping');
@@ -415,18 +591,30 @@
         })
         .filter(Boolean);
 
+      var unit = fieldUnit.value;
+      var trackingType = Symposium.inferTrackingType(unit);
+
+      var stock = trackingType === 'volume' ? parseInt(fieldStock.value, 10) || 0 : 0;
+      var bottleSize = trackingType === 'volume' ? parseFloat(fieldBottleSize.value) || 0 : 0;
+      var bottleSizeUnit = trackingType === 'volume' ? fieldBottleSizeUnit.value : 'ml';
+      var quantity = trackingType === 'quantity' ? parseInt(fieldQuantity.value, 10) || 0 : 0;
+
       var data = {
         name: name,
         category: category,
         subcategory: fieldSubcategory.value,
         tags: tags,
-        unit: fieldUnit.value,
+        unit: unit,
         type: 'consumable',
-        inStock: fieldInStock.checked,
-        quantity: parseFloat(fieldQuantity.value) || 0,
+        trackingType: trackingType,
+        stock: stock,
+        bottleSize: bottleSize,
+        bottleSizeUnit: bottleSizeUnit,
+        quantity: quantity,
+        inStock: Symposium.computeInStock(trackingType, stock, quantity),
         notes: fieldNotes.value.trim(),
         shoppingListDefault: fieldShopping.checked,
-        lowStockThreshold: parseFloat(fieldThreshold.value) || 0,
+        lowStockThreshold: parseInt(fieldThreshold.value, 10) || 0,
         updatedAt: state.serverTimestamp(),
       };
 

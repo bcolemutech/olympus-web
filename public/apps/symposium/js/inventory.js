@@ -7,9 +7,11 @@
   // ── Low/empty item count ──────────────────────────
   function getLowEmptyCount() {
     var ingLow = state.allIngredients.filter(function (ing) {
-      var quantity = Number(ing.quantity) || 0;
       var threshold = Number(ing.lowStockThreshold) || 0;
-      return !ing.inStock || (threshold > 0 && quantity <= threshold);
+      var current = ing.trackingType === 'volume'
+        ? (Number(ing.stock) || 0)
+        : (Number(ing.quantity) || 0);
+      return !ing.inStock || (threshold > 0 && current <= threshold);
     }).length;
     var equipReplace = state.allEquipment.filter(function (eq) {
       return eq.condition === 'replace';
