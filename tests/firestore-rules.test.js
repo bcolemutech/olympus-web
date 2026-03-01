@@ -61,7 +61,7 @@ describe('symposium_recipes — Firestore Security Rules', function () {
     testEnv = await initializeTestEnvironment({
       projectId: PROJECT_ID,
       firestore: {
-        host: 'localhost',
+        host: '127.0.0.1',
         port: 8080,
         rules: readFileSync(RULES_PATH, 'utf8'),
       },
