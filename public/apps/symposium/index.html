@@ -348,24 +348,44 @@
               <span class="form-error" id="error-unit"></span>
             </div>
 
-            <div class="form-group">
+            <!-- Volume tracking fields (shown when unit != each) -->
+            <div class="form-group" id="volume-fields-stock">
+              <label class="form-label" for="field-stock">Stock (bottles)</label>
+              <input class="form-input" id="field-stock" type="number" min="0" step="1" value="0" />
+              <span class="form-error" id="error-stock"></span>
+            </div>
+
+            <div class="form-group" id="volume-fields-size">
+              <label class="form-label" for="field-bottle-size">Bottle Size</label>
+              <div class="bottle-size-row">
+                <input
+                  class="form-input bottle-size-input"
+                  id="field-bottle-size"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value="750"
+                />
+                <select class="form-select bottle-size-unit" id="field-bottle-size-unit">
+                  <option value="ml">ml</option>
+                  <option value="oz">oz</option>
+                </select>
+              </div>
+              <span class="form-error" id="error-bottle-size"></span>
+            </div>
+
+            <!-- Quantity tracking fields (shown when unit == each) -->
+            <div class="form-group hidden" id="quantity-fields">
               <label class="form-label" for="field-quantity">Quantity</label>
               <input
                 class="form-input"
                 id="field-quantity"
                 type="number"
                 min="0"
-                step="0.25"
+                step="1"
                 value="0"
               />
               <span class="form-error" id="error-quantity"></span>
-            </div>
-
-            <div class="form-group">
-              <div class="form-checkbox-row">
-                <input class="form-checkbox" id="field-instock" type="checkbox" />
-                <label class="form-checkbox-label" for="field-instock">In Stock</label>
-              </div>
             </div>
 
             <div class="form-group">
@@ -375,7 +395,7 @@
                 id="field-threshold"
                 type="number"
                 min="0"
-                step="0.25"
+                step="1"
                 value="0"
               />
             </div>

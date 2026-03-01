@@ -15,6 +15,15 @@
 
   S.LEVEL_ORDER = ['full', 'three-quarter', 'half', 'quarter', 'empty'];
 
+  // ── Tracking-type helpers ────────────────────────
+  S.computeInStock = function (trackingType, stock, quantity) {
+    return trackingType === 'volume' ? stock > 0 : quantity > 0;
+  };
+
+  S.inferTrackingType = function (unit) {
+    return unit === 'each' ? 'quantity' : 'volume';
+  };
+
   // ── Shared mutable state ───────────────────────
   S.state = {
     db: null,

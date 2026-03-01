@@ -645,6 +645,73 @@
   font-style: italic;
 }
 
+/* ── Amphora stock info in popover ────────────── */
+.amphora-stock-info {
+  font-size: 0.75rem;
+  color: #90a4ae;
+  text-align: center;
+  padding: 0.25rem 0.5rem;
+}
+
+/* ── Bottle size row in form ─────────────────── */
+.bottle-size-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.bottle-size-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.bottle-size-unit {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+/* ── Stock / Quantity +/- controls on cards ───── */
+.stock-controls,
+.qty-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-adjust {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 0.85rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: #90a4ae;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.btn-adjust:hover {
+  color: #ffb74d;
+  background: rgba(255, 183, 77, 0.1);
+  border-color: rgba(255, 183, 77, 0.3);
+}
+
+.adjust-value {
+  min-width: 1.5em;
+  text-align: center;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
 @media (max-width: 600px) {
   .form-grid {
     grid-template-columns: 1fr;
