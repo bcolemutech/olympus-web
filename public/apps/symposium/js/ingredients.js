@@ -316,9 +316,7 @@
         threshLabel.className = 'ingredient-detail-label';
         threshLabel.textContent = 'Low at:';
         threshDetail.appendChild(threshLabel);
-        threshDetail.appendChild(
-          document.createTextNode(' ' + ing.lowStockThreshold)
-        );
+        threshDetail.appendChild(document.createTextNode(' ' + ing.lowStockThreshold));
         details.appendChild(threshDetail);
       }
 

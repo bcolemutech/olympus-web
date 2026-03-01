@@ -8,9 +8,8 @@
   function getLowEmptyCount() {
     var ingLow = state.allIngredients.filter(function (ing) {
       var threshold = Number(ing.lowStockThreshold) || 0;
-      var current = ing.trackingType === 'volume'
-        ? (Number(ing.stock) || 0)
-        : (Number(ing.quantity) || 0);
+      var current =
+        ing.trackingType === 'volume' ? Number(ing.stock) || 0 : Number(ing.quantity) || 0;
       return !ing.inStock || (threshold > 0 && current <= threshold);
     }).length;
     var equipReplace = state.allEquipment.filter(function (eq) {

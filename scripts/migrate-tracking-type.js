@@ -60,18 +60,16 @@ async function migrate() {
 
     const update = {
       trackingType: trackingType,
-      stock: isEach ? 0 : (data.inStock ? 1 : 0),
+      stock: isEach ? 0 : data.inStock ? 1 : 0,
       bottleSize: isEach ? 0 : 750,
       bottleSizeUnit: 'ml',
-      quantity: isEach ? (Number(data.quantity) || 0) : 0,
-      inStock: isEach
-        ? (Number(data.quantity) || 0) > 0
-        : (data.inStock ? true : false),
+      quantity: isEach ? Number(data.quantity) || 0 : 0,
+      inStock: isEach ? (Number(data.quantity) || 0) > 0 : data.inStock ? true : false,
     };
 
     console.log(
       `  ${data.name} (${data.unit}) → ${trackingType}, ` +
-      `stock=${update.stock}, qty=${update.quantity}, inStock=${update.inStock}`
+        `stock=${update.stock}, qty=${update.quantity}, inStock=${update.inStock}`
     );
 
     if (!dryRun) {

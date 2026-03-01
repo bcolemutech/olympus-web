@@ -186,8 +186,12 @@
       stockInfo.className = 'amphora-stock-info';
       var stockCount = Number(ing.stock) || 0;
       stockInfo.textContent =
-        stockCount + (stockCount === 1 ? ' bottle' : ' bottles') +
-        ' (' + (ing.bottleSize || 0) + (ing.bottleSizeUnit || 'ml') + ' each)';
+        stockCount +
+        (stockCount === 1 ? ' bottle' : ' bottles') +
+        ' (' +
+        (ing.bottleSize || 0) +
+        (ing.bottleSizeUnit || 'ml') +
+        ' each)';
       optionsEl.appendChild(stockInfo);
 
       var dividerTop = document.createElement('div');
@@ -258,18 +262,12 @@
           // More bottles remain — consume this one, rotate to next sealed bottle
           newStock = currentStock - 1;
           finalLevel = null; // reset to sealed
-          window.alert(
-            'Bottle finished! Stock reduced to ' + newStock + '.'
-          );
+          window.alert('Bottle finished! Stock reduced to ' + newStock + '.');
         } else {
           // Last bottle — out of stock
           newStock = 0;
           finalLevel = 'empty';
-          if (
-            window.confirm(
-              'Last bottle empty! Move "' + ing.name + '" to the shopping list?'
-            )
-          ) {
+          if (window.confirm('Last bottle empty! Move "' + ing.name + '" to the shopping list?')) {
             setShoppingList = true;
             if (localIng) localIng.shoppingListDefault = true;
           }
@@ -285,7 +283,9 @@
         }
         localIng.stock = newStock;
         localIng.inStock = Symposium.computeInStock(
-          localIng.trackingType, newStock, localIng.quantity
+          localIng.trackingType,
+          newStock,
+          localIng.quantity
         );
       }
 
@@ -324,7 +324,9 @@
             }
             localIng.stock = currentStock;
             localIng.inStock = Symposium.computeInStock(
-              localIng.trackingType, currentStock, localIng.quantity
+              localIng.trackingType,
+              currentStock,
+              localIng.quantity
             );
           }
           Symposium.ingredients.renderList();
