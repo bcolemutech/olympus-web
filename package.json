@@ -12,7 +12,9 @@
     "emulator": "firebase emulators:start",
     "emulator:hosting": "firebase emulators:start --only hosting",
     "deploy:preview": "firebase hosting:channel:deploy preview",
-    "deploy": "firebase deploy --only hosting"
+    "deploy": "firebase deploy --only hosting",
+    "test": "cd tests && npm test",
+    "test:install": "cd tests && npm install"
   },
   "devDependencies": {
     "eslint": "^9.0.0",
