@@ -35,6 +35,7 @@
     allIngredients: [],
     ingredientsLoaded: false,
     allEquipment: [],
+    equipmentLoaded: false,
     allRecipes: [],
     activeFilter: 'all',
     searchQuery: '',

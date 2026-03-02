@@ -315,25 +315,94 @@
   function _filterEquipmentSearch(query) {
     if (!query) return [];
     var q = query.toLowerCase();
-    var alreadySelected = _selectedEquipment.map(function (s) {
-      return s.id;
-    });
+    var alreadyLinkedIds = _selectedEquipment
+      .filter(function (s) {
+        return !s.pending;
+      })
+      .map(function (s) {
+        return s.id;
+      });
+    var alreadyPendingNames = _selectedEquipment
+      .filter(function (s) {
+        return s.pending;
+      })
+      .map(function (s) {
+        return s.name.toLowerCase();
+      });
     return state.allEquipment
       .filter(function (eq) {
-        if (alreadySelected.indexOf(eq.id) !== -1) return false;
+        if (alreadyLinkedIds.indexOf(eq.id) !== -1) return false;
         var catName = (
           state.categoryMap[eq.category] ? state.categoryMap[eq.category].name : ''
         ).toLowerCase();
         return eq.name.toLowerCase().indexOf(q) !== -1 || catName.indexOf(q) !== -1;
       })
+      .filter(function (eq) {
+        return alreadyPendingNames.indexOf(eq.name.toLowerCase()) === -1;
+      })
       .slice(0, 10);
   }
 
-  function _renderEquipmentDropdown(results) {
+  function _findCloseEquipmentMatch(query) {
+    var q = query.toLowerCase().trim();
+    if (q.length < 3) return null;
+    var alreadyLinkedIds = _selectedEquipment
+      .filter(function (s) {
+        return !s.pending;
+      })
+      .map(function (s) {
+        return s.id;
+      });
+    return (
+      state.allEquipment.find(function (eq) {
+        if (alreadyLinkedIds.indexOf(eq.id) !== -1) return false;
+        var name = eq.name.toLowerCase();
+        if (name.indexOf(q) !== -1 || q.indexOf(name) !== -1) return true;
+        if (Math.abs(name.length - q.length) > 5) return false;
+        return _editDistance(name, q, 2) <= 2;
+      }) || null
+    );
+  }
+
+  function _renderEquipmentDropdown(results, query) {
     var dropdown = Symposium.getRef('rec-equip-dropdown');
     dropdown.innerHTML = '';
-    if (results.length === 0) {
+    if (results.length === 0 && !query) {
       dropdown.classList.add('hidden');
+      return;
+    }
+    if (results.length === 0 && query && !state.equipmentLoaded) {
+      var loadingEl = document.createElement('div');
+      loadingEl.className = 'selector-dropdown-loading';
+      loadingEl.textContent = 'Loading equipment\u2026';
+      dropdown.appendChild(loadingEl);
+      dropdown.classList.remove('hidden');
+      return;
+    }
+    if (results.length === 0 && query) {
+      var addItem = document.createElement('button');
+      addItem.type = 'button';
+      addItem.className = 'selector-dropdown-item selector-dropdown-add-new';
+      addItem.textContent = '+ Add as new equipment: \u201c' + query + '\u201d';
+      (function (q) {
+        addItem.addEventListener('click', function () {
+          _addPendingEquipment(q);
+          Symposium.getRef('rec-equip-search').value = '';
+          dropdown.classList.add('hidden');
+          Symposium.getRef('rec-equip-search').focus();
+        });
+      })(query);
+      dropdown.appendChild(addItem);
+
+      var closeMatch = _findCloseEquipmentMatch(query);
+      if (closeMatch) {
+        var warnEl = document.createElement('div');
+        warnEl.className = 'selector-dropdown-warning';
+        warnEl.textContent = '\u26a0 Similar equipment exists: ' + closeMatch.name;
+        dropdown.appendChild(warnEl);
+      }
+
+      dropdown.classList.remove('hidden');
       return;
     }
     results.forEach(function (eq) {
@@ -367,6 +436,14 @@
     _renderSelectedEquipment();
   }
 
+  function _addPendingEquipment(name) {
+    _selectedEquipment.push({
+      name: name.trim(),
+      pending: true,
+    });
+    _renderSelectedEquipment();
+  }
+
   function _renderSelectedEquipment() {
     var container = Symposium.getRef('rec-selected-equipment');
     container.innerHTML = '';
@@ -377,6 +454,16 @@
       var nameBadge = document.createElement('span');
       nameBadge.className = 'selected-item-name';
       nameBadge.textContent = sel.name;
+
+      if (sel.pending) {
+        var pendingBadge = document.createElement('span');
+        pendingBadge.className = 'badge badge-pending';
+        pendingBadge.textContent = 'Uncharted Tool';
+        row.appendChild(nameBadge);
+        row.appendChild(pendingBadge);
+      } else {
+        row.appendChild(nameBadge);
+      }
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -390,7 +477,6 @@
         });
       })(index);
 
-      row.appendChild(nameBadge);
       row.appendChild(removeBtn);
       container.appendChild(row);
     });
@@ -560,11 +646,19 @@
       var eqUl = document.createElement('ul');
       eqUl.className = 'recipe-detail-equipment-list';
       recipe.equipment.forEach(function (re) {
-        var eq = state.allEquipment.find(function (e) {
-          return e.id === re.id;
-        });
         var li = document.createElement('li');
-        li.textContent = eq ? eq.name : re.id;
+        if (re.pending) {
+          li.appendChild(document.createTextNode(re.name + '\u00a0'));
+          var pendingTag = document.createElement('span');
+          pendingTag.className = 'badge badge-pending';
+          pendingTag.textContent = 'Uncharted Tool';
+          li.appendChild(pendingTag);
+        } else {
+          var eq = state.allEquipment.find(function (e) {
+            return e.id === re.id;
+          });
+          li.textContent = eq ? eq.name : re.id;
+        }
         eqUl.appendChild(li);
       });
       eqSection.appendChild(eqUl);
@@ -902,13 +996,20 @@
         // Pre-populate equipment selector
         if (recipe.equipment && Array.isArray(recipe.equipment)) {
           recipe.equipment.forEach(function (re) {
-            var eq = state.allEquipment.find(function (e) {
-              return e.id === re.id;
-            });
-            _selectedEquipment.push({
-              id: re.id,
-              name: eq ? eq.name : re.id,
-            });
+            if (re.pending) {
+              _selectedEquipment.push({
+                name: re.name,
+                pending: true,
+              });
+            } else {
+              var eq = state.allEquipment.find(function (e) {
+                return e.id === re.id;
+              });
+              _selectedEquipment.push({
+                id: re.id,
+                name: eq ? eq.name : re.id,
+              });
+            }
           });
         }
       } else {
@@ -1060,6 +1161,9 @@
       }).length;
 
       var equipList = _selectedEquipment.map(function (sel) {
+        if (sel.pending) {
+          return { name: sel.name, pending: true };
+        }
         return { id: sel.id };
       });
 
@@ -1201,8 +1305,9 @@
 
       var equipSearchEl = Symposium.getRef('rec-equip-search');
       equipSearchEl.addEventListener('input', function () {
-        var results = _filterEquipmentSearch(equipSearchEl.value.trim());
-        _renderEquipmentDropdown(results);
+        var q = equipSearchEl.value.trim();
+        var results = _filterEquipmentSearch(q);
+        _renderEquipmentDropdown(results, q);
       });
       equipSearchEl.addEventListener('blur', function () {
         window.setTimeout(function () {
