@@ -12,7 +12,10 @@ const {
 } = require('firebase/firestore');
 
 const RULES_PATH = resolve(__dirname, '../firestore.rules');
-const PROJECT_ID = 'demo-olympus-rules-test';
+const PROJECT_ID =
+  process.env.FIREBASE_PROJECT_ID ||
+  process.env.GCLOUD_PROJECT ||
+  'demo-olympus-rules-test';
 
 // Seed data: a recipe category that passes validRecipe()'s category checks
 const TEST_CATEGORY_ID = 'cat-classic';
@@ -58,13 +61,32 @@ describe('symposium_recipes — Firestore Security Rules', function () {
   var authedDb;
 
   beforeAll(async function () {
+    var firestoreConfig = {
+      rules: readFileSync(RULES_PATH, 'utf8'),
+    };
+
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      var host = parts[0];
+      var portString = parts[1];
+      if (host) {
+        firestoreConfig.host = host;
+      }
+      if (portString) {
+        var parsedPort = parseInt(portString, 10);
+        if (!isNaN(parsedPort)) {
+          firestoreConfig.port = parsedPort;
+        }
+      }
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+
     testEnv = await initializeTestEnvironment({
       projectId: PROJECT_ID,
-      firestore: {
-        host: '127.0.0.1',
-        port: 8080,
-        rules: readFileSync(RULES_PATH, 'utf8'),
-      },
+      firestore: firestoreConfig,
     });
 
     // Seed the category document (bypass rules)
