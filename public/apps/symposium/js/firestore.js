@@ -63,6 +63,7 @@
           snapshot.forEach(function (doc) {
             state.allEquipment.push(Object.assign({ id: doc.id }, doc.data()));
           });
+          state.equipmentLoaded = true;
           if (Symposium.firestore._onEquipmentChanged) {
             Symposium.firestore._onEquipmentChanged();
           }
