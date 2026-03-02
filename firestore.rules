@@ -89,6 +89,56 @@ service cloud.firestore {
     }
 
     match /symposium_recipes/{recipeId} {
+      // ── Ingredient ref helpers ────────────────────────────────────────
+      // NOTE: Firestore Security Rules cannot iterate variable-length lists.
+      // These helpers are applied only to ingredients[0] / equipment[0] as a
+      // spot-check. Full per-item validation is enforced by the frontend.
+
+      function validLinkedIngredient(item) {
+        return item.keys().hasAll(['id', 'amount', 'unit', 'optional'])
+            && item.keys().hasOnly(['id', 'amount', 'unit', 'optional'])
+            && item.id is string && item.id.size() > 0
+            && item.amount is string
+            && item.unit is string && item.unit.size() > 0
+            && item.optional is bool;
+      }
+
+      function validPendingIngredient(item) {
+        return item.keys().hasAll(['name', 'amount', 'unit', 'optional', 'pending'])
+            && item.keys().hasOnly(['name', 'amount', 'unit', 'optional', 'pending'])
+            && item.name is string && item.name.size() > 0 && item.name.size() <= 200
+            && item.amount is string
+            && item.unit is string && item.unit.size() > 0
+            && item.optional is bool
+            && item.pending == true;
+      }
+
+      function validIngredientItem(item) {
+        return 'pending' in item
+            ? validPendingIngredient(item)
+            : validLinkedIngredient(item);
+      }
+
+      // ── Equipment ref helpers ─────────────────────────────────────────
+
+      function validLinkedEquipment(item) {
+        return item.keys().hasAll(['id']) && item.keys().hasOnly(['id'])
+            && item.id is string && item.id.size() > 0;
+      }
+
+      function validPendingEquipment(item) {
+        return item.keys().hasAll(['name', 'pending'])
+            && item.keys().hasOnly(['name', 'pending'])
+            && item.name is string && item.name.size() > 0 && item.name.size() <= 200
+            && item.pending == true;
+      }
+
+      function validEquipmentItem(item) {
+        return 'pending' in item
+            ? validPendingEquipment(item)
+            : validLinkedEquipment(item);
+      }
+
       function validRecipe() {
         let data = request.resource.data;
         let required = [
@@ -101,7 +151,7 @@ service cloud.firestore {
           'name', 'category', 'subcategory', 'tags',
           'description', 'instructions', 'ingredients', 'equipment',
           'garnish', 'glassware', 'servings', 'canMake',
-          'imageUrl', 'source', 'favorite', 'createdAt', 'updatedAt'
+          'imageUrl', 'source', 'pendingCount', 'favorite', 'createdAt', 'updatedAt'
         ];
 
         let cat = get(/databases/$(database)/documents/symposium_categories/$(data.category)).data;
@@ -140,11 +190,18 @@ service cloud.firestore {
                 || (data.source is string
                     && data.source.size() > 0
                     && data.source.size() <= 2000))
-            // list fields
+            // pendingCount: optional, non-negative integer
+            && (!data.keys().hasAny(['pendingCount'])
+                || (data.pendingCount is int && data.pendingCount >= 0))
+            // list fields — size bounds enforced for all; first-item shape spot-checked
             && data.ingredients is list
             && data.ingredients.size() <= 200
+            && (data.ingredients.size() == 0
+                || validIngredientItem(data.ingredients[0]))
             && data.equipment is list
             && data.equipment.size() <= 200
+            && (data.equipment.size() == 0
+                || validEquipmentItem(data.equipment[0]))
             && data.tags is list
             && data.tags.size() <= 200
             // category must be a recipe category with valid subcategory
