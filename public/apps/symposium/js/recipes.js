@@ -88,9 +88,7 @@
       var rowMin = i;
       for (var j = 1; j <= n; j++) {
         curr[j] =
-          a[i - 1] === b[j - 1]
-            ? prev[j - 1]
-            : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
+          a[i - 1] === b[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
         if (curr[j] < rowMin) rowMin = curr[j];
       }
       if (maxDist !== undefined && rowMin > maxDist) return rowMin;
