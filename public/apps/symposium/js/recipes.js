@@ -25,6 +25,7 @@
   function _computeCanMake(recipeIngredients) {
     return recipeIngredients.every(function (ri) {
       if (ri.optional) return true;
+      if (ri.pending) return true; // Pending ingredients not yet in cellar; don't block canMake
       return !!_stockMap[ri.id];
     });
   }
@@ -35,12 +36,15 @@
   // 'unknown' when ingredient data has not yet loaded.
   function _getAvailabilityStatus(recipeIngredients) {
     if (!state.ingredientsLoaded) return 'unknown';
-    var hasRequiredMissing = recipeIngredients.some(function (ri) {
+    var linked = recipeIngredients.filter(function (ri) {
+      return !ri.pending;
+    });
+    var hasRequiredMissing = linked.some(function (ri) {
       if (ri.optional) return false;
       return !_stockMap[ri.id];
     });
     if (hasRequiredMissing) return 'red';
-    var hasOptionalMissing = recipeIngredients.some(function (ri) {
+    var hasOptionalMissing = linked.some(function (ri) {
       if (!ri.optional) return false;
       return !_stockMap[ri.id];
     });
@@ -51,9 +55,13 @@
   function _filterIngredientSearch(query) {
     if (!query) return [];
     var q = query.toLowerCase();
-    var alreadySelected = _selectedIngredients.map(function (s) {
-      return s.id;
-    });
+    var alreadySelected = _selectedIngredients
+      .filter(function (s) {
+        return !s.pending;
+      })
+      .map(function (s) {
+        return s.id;
+      });
     return state.allIngredients
       .filter(function (ing) {
         if (alreadySelected.indexOf(ing.id) !== -1) return false;
@@ -65,11 +73,97 @@
       .slice(0, 10);
   }
 
-  function _renderIngredientDropdown(results) {
+  // ── Fuzzy-match helpers for duplicate detection ────────────────────────
+  function _editDistance(a, b, maxDist) {
+    var m = a.length,
+      n = b.length;
+    // Use two rolling arrays instead of a full matrix, and bail out early when
+    // the minimum value in a row already exceeds maxDist (the distance can only
+    // increase from that point on).
+    var prev = [];
+    var curr = [];
+    for (var j = 0; j <= n; j++) prev[j] = j;
+    for (var i = 1; i <= m; i++) {
+      curr[0] = i;
+      var rowMin = i;
+      for (var j = 1; j <= n; j++) {
+        curr[j] =
+          a[i - 1] === b[j - 1]
+            ? prev[j - 1]
+            : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
+        if (curr[j] < rowMin) rowMin = curr[j];
+      }
+      if (maxDist !== undefined && rowMin > maxDist) return rowMin;
+      var tmp = prev;
+      prev = curr;
+      curr = tmp;
+    }
+    return prev[n];
+  }
+
+  function _findCloseIngredientMatch(query) {
+    var q = query.toLowerCase().trim();
+    if (q.length < 3) return null;
+    var alreadyLinkedIds = _selectedIngredients
+      .filter(function (s) {
+        return !s.pending;
+      })
+      .map(function (s) {
+        return s.id;
+      });
+    return (
+      state.allIngredients.find(function (ing) {
+        if (alreadyLinkedIds.indexOf(ing.id) !== -1) return false;
+        var name = ing.name.toLowerCase();
+        if (name.indexOf(q) !== -1 || q.indexOf(name) !== -1) return true;
+        if (Math.abs(name.length - q.length) > 5) return false;
+        return _editDistance(name, q, 2) <= 2;
+      }) || null
+    );
+  }
+
+  function _renderIngredientDropdown(results, query) {
     var dropdown = Symposium.getRef('rec-ing-dropdown');
     dropdown.innerHTML = '';
-    if (results.length === 0) {
+    if (results.length === 0 && !query) {
       dropdown.classList.add('hidden');
+      return;
+    }
+    if (results.length === 0 && query && !state.ingredientsLoaded) {
+      // Ingredients haven't arrived from Firestore yet — don't offer pending entry
+      var loadingEl = document.createElement('div');
+      loadingEl.className = 'selector-dropdown-loading';
+      loadingEl.textContent = 'Loading ingredients\u2026';
+      dropdown.appendChild(loadingEl);
+      dropdown.classList.remove('hidden');
+      return;
+    }
+    if (results.length === 0 && query) {
+      // Show "Summon from the Cornucopia" option
+      var addItem = document.createElement('button');
+      addItem.type = 'button';
+      addItem.className = 'selector-dropdown-item selector-dropdown-add-new';
+      addItem.textContent = '+ Summon from the Cornucopia: \u201c' + query + '\u201d';
+      (function (q) {
+        addItem.addEventListener('click', function () {
+          _addPendingIngredient(q);
+          Symposium.getRef('rec-ing-search').value = '';
+          dropdown.classList.add('hidden');
+          Symposium.getRef('rec-ing-search').focus();
+        });
+      })(query);
+      dropdown.appendChild(addItem);
+
+      // Fuzzy duplicate warning
+      var closeMatch = _findCloseIngredientMatch(query);
+      if (closeMatch) {
+        var warnEl = document.createElement('div');
+        warnEl.className = 'selector-dropdown-warning';
+        warnEl.textContent = '\u26a0 Similar ingredient exists: ' + closeMatch.name;
+        dropdown.appendChild(warnEl);
+      }
+
+      dropdown.classList.remove('hidden');
       return;
     }
     results.forEach(function (ing) {
@@ -110,6 +204,18 @@
     Symposium.recipes._setError('ingredients', '');
   }
 
+  function _addPendingIngredient(name) {
+    _selectedIngredients.push({
+      name: name.trim(),
+      amount: '',
+      unit: 'oz',
+      optional: false,
+      pending: true,
+    });
+    _renderSelectedIngredients();
+    Symposium.recipes._setError('ingredients', '');
+  }
+
   function _renderSelectedIngredients() {
     var container = Symposium.getRef('rec-selected-ingredients');
     container.innerHTML = '';
@@ -121,6 +227,16 @@
       var nameBadge = document.createElement('span');
       nameBadge.className = 'selected-item-name';
       nameBadge.textContent = sel.name;
+
+      if (sel.pending) {
+        var pendingBadge = document.createElement('span');
+        pendingBadge.className = 'badge badge-pending';
+        pendingBadge.textContent = 'Unnamed Offering';
+        row.appendChild(nameBadge);
+        row.appendChild(pendingBadge);
+      } else {
+        row.appendChild(nameBadge);
+      }
 
       var amountInput = document.createElement('input');
       amountInput.type = 'text';
@@ -189,7 +305,6 @@
         });
       })(index);
 
-      row.appendChild(nameBadge);
       row.appendChild(amountInput);
       row.appendChild(unitSelect);
       row.appendChild(optLabel);
@@ -365,22 +480,36 @@
     var ingUl = document.createElement('ul');
     ingUl.className = 'recipe-detail-ingredients-list';
     (recipe.ingredients || []).forEach(function (ri) {
-      var ing = state.allIngredients.find(function (i) {
-        return i.id === ri.id;
-      });
       var li = document.createElement('li');
       li.className = 'recipe-detail-ingredient-item';
 
-      var dot = document.createElement('span');
-      dot.className = 'recipe-stock-dot ' + (ing && ing.inStock ? 'stock-dot-in' : 'stock-dot-out');
-      dot.setAttribute('aria-hidden', 'true');
-
-      var ingName = ing ? ing.name : ri.id;
       var amountText = ri.amount ? ri.amount + '\u00a0' + ri.unit + '\u00a0' : '';
       var optText = ri.optional ? ' (optional)' : '';
 
-      li.appendChild(dot);
-      li.appendChild(document.createTextNode(amountText + ingName + optText));
+      if (ri.pending) {
+        var pendingDot = document.createElement('span');
+        pendingDot.className = 'recipe-stock-dot stock-dot-pending';
+        pendingDot.setAttribute('aria-hidden', 'true');
+        li.appendChild(pendingDot);
+        li.appendChild(document.createTextNode(amountText + ri.name + optText));
+        var pendingTag = document.createElement('span');
+        pendingTag.className = 'badge badge-pending';
+        pendingTag.textContent = 'Unnamed Offering';
+        li.appendChild(document.createTextNode('\u00a0'));
+        li.appendChild(pendingTag);
+      } else {
+        var ing = state.allIngredients.find(function (i) {
+          return i.id === ri.id;
+        });
+        var dot = document.createElement('span');
+        dot.className =
+          'recipe-stock-dot ' + (ing && ing.inStock ? 'stock-dot-in' : 'stock-dot-out');
+        dot.setAttribute('aria-hidden', 'true');
+        var ingName = ing ? ing.name : ri.id;
+        li.appendChild(dot);
+        li.appendChild(document.createTextNode(amountText + ingName + optText));
+      }
+
       ingUl.appendChild(li);
     });
     ingSection.appendChild(ingUl);
@@ -389,7 +518,7 @@
     // Only shown when stock data is loaded; only includes known out-of-stock ingredients.
     var missingRefs = state.ingredientsLoaded
       ? (recipe.ingredients || []).filter(function (ri) {
-          return _stockMap.hasOwnProperty(ri.id) && !_stockMap[ri.id];
+          return !ri.pending && _stockMap.hasOwnProperty(ri.id) && !_stockMap[ri.id];
         })
       : [];
     if (missingRefs.length > 0) {
@@ -749,16 +878,26 @@
         // Pre-populate ingredient selector
         if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
           recipe.ingredients.forEach(function (ri) {
-            var ing = state.allIngredients.find(function (i) {
-              return i.id === ri.id;
-            });
-            _selectedIngredients.push({
-              id: ri.id,
-              name: ing ? ing.name : ri.id,
-              amount: ri.amount || '',
-              unit: ri.unit || 'oz',
-              optional: !!ri.optional,
-            });
+            if (ri.pending) {
+              _selectedIngredients.push({
+                name: ri.name,
+                amount: ri.amount || '',
+                unit: ri.unit || 'oz',
+                optional: !!ri.optional,
+                pending: true,
+              });
+            } else {
+              var ing = state.allIngredients.find(function (i) {
+                return i.id === ri.id;
+              });
+              _selectedIngredients.push({
+                id: ri.id,
+                name: ing ? ing.name : ri.id,
+                amount: ri.amount || '',
+                unit: ri.unit || 'oz',
+                optional: !!ri.optional,
+              });
+            }
           });
         }
 
@@ -901,6 +1040,15 @@
       }
 
       var ingList = _selectedIngredients.map(function (sel) {
+        if (sel.pending) {
+          return {
+            name: sel.name,
+            amount: sel.amount,
+            unit: sel.unit,
+            optional: sel.optional,
+            pending: true,
+          };
+        }
         return {
           id: sel.id,
           amount: sel.amount,
@@ -908,6 +1056,10 @@
           optional: sel.optional,
         };
       });
+
+      var pendingCount = _selectedIngredients.filter(function (s) {
+        return s.pending;
+      }).length;
 
       var equipList = _selectedEquipment.map(function (sel) {
         return { id: sel.id };
@@ -935,6 +1087,7 @@
         glassware: Symposium.getRef('rec-field-glassware').value.trim(),
         servings: parseInt(Symposium.getRef('rec-field-servings').value, 10),
         canMake: canMake,
+        pendingCount: pendingCount,
         favorite: Symposium.getRef('rec-field-favorite').checked,
         updatedAt: state.serverTimestamp(),
       };
@@ -1038,8 +1191,9 @@
     initSearchListeners: function () {
       var ingSearchEl = Symposium.getRef('rec-ing-search');
       ingSearchEl.addEventListener('input', function () {
-        var results = _filterIngredientSearch(ingSearchEl.value.trim());
-        _renderIngredientDropdown(results);
+        var q = ingSearchEl.value.trim();
+        var results = _filterIngredientSearch(q);
+        _renderIngredientDropdown(results, q);
       });
       ingSearchEl.addEventListener('blur', function () {
         window.setTimeout(function () {
