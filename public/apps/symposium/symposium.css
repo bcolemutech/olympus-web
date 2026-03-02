@@ -286,6 +286,12 @@
   border: 1px solid rgba(239, 83, 80, 0.2);
 }
 
+.badge-pending {
+  color: #ab47bc;
+  background: rgba(171, 71, 188, 0.1);
+  border: 1px solid rgba(171, 71, 188, 0.2);
+}
+
 .ingredient-details {
   display: flex;
   flex-wrap: wrap;
@@ -1286,6 +1292,23 @@
   background: rgba(229, 115, 115, 0.08);
 }
 
+.selector-dropdown-add-new {
+  color: #ab47bc;
+  font-style: italic;
+}
+
+.selector-dropdown-add-new:hover {
+  background: rgba(171, 71, 188, 0.1);
+}
+
+.selector-dropdown-warning {
+  padding: 0.4rem 1rem;
+  font-size: 0.75rem;
+  color: #ffa726;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
 .selector-item-name {
   flex: 1;
 }
@@ -1456,6 +1479,11 @@
 
 .stock-dot-out {
   background: #ef5350;
+}
+
+.stock-dot-pending {
+  background: #78909c;
+  opacity: 0.5;
 }
 
 /* ── Availability badges ──────────────────────────────────────────── */
