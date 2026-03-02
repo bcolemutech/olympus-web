@@ -74,22 +74,31 @@
   }
 
   // ── Fuzzy-match helpers for duplicate detection ────────────────────────
-  function _editDistance(a, b) {
+  function _editDistance(a, b, maxDist) {
     var m = a.length,
       n = b.length;
-    var dp = [];
-    for (var i = 0; i <= m; i++) {
-      dp[i] = [i];
+    // Use two rolling arrays instead of a full matrix, and bail out early when
+    // the minimum value in a row already exceeds maxDist (the distance can only
+    // increase from that point on).
+    var prev = [];
+    var curr = [];
+    for (var j = 0; j <= n; j++) prev[j] = j;
+    for (var i = 1; i <= m; i++) {
+      curr[0] = i;
+      var rowMin = i;
       for (var j = 1; j <= n; j++) {
-        dp[i][j] =
-          i === 0
-            ? j
-            : a[i - 1] === b[j - 1]
-              ? dp[i - 1][j - 1]
-              : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        curr[j] =
+          a[i - 1] === b[j - 1]
+            ? prev[j - 1]
+            : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
+        if (curr[j] < rowMin) rowMin = curr[j];
       }
+      if (maxDist !== undefined && rowMin > maxDist) return rowMin;
+      var tmp = prev;
+      prev = curr;
+      curr = tmp;
     }
-    return dp[m][n];
+    return prev[n];
   }
 
   function _findCloseIngredientMatch(query) {
@@ -108,7 +117,7 @@
         var name = ing.name.toLowerCase();
         if (name.indexOf(q) !== -1 || q.indexOf(name) !== -1) return true;
         if (Math.abs(name.length - q.length) > 5) return false;
-        return _editDistance(name, q) <= 2;
+        return _editDistance(name, q, 2) <= 2;
       }) || null
     );
   }
@@ -118,6 +127,15 @@
     dropdown.innerHTML = '';
     if (results.length === 0 && !query) {
       dropdown.classList.add('hidden');
+      return;
+    }
+    if (results.length === 0 && query && !state.ingredientsLoaded) {
+      // Ingredients haven't arrived from Firestore yet — don't offer pending entry
+      var loadingEl = document.createElement('div');
+      loadingEl.className = 'selector-dropdown-loading';
+      loadingEl.textContent = 'Loading ingredients\u2026';
+      dropdown.appendChild(loadingEl);
+      dropdown.classList.remove('hidden');
       return;
     }
     if (results.length === 0 && query) {
