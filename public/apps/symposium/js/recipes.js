@@ -1051,7 +1051,12 @@
       updatedIngredients = updatedIngredients.map(function (ri) {
         if (!matched && ri.pending && ri.name === item.name) {
           matched = true;
-          return { id: newIngRef.id, amount: item.amount, unit: item.unit, optional: item.optional };
+          return {
+            id: newIngRef.id,
+            amount: item.amount,
+            unit: item.unit,
+            optional: item.optional,
+          };
         }
         return ri;
       });
@@ -1656,12 +1661,16 @@
       var dupeLinkBtn = document.getElementById('altar-dupe-link-btn');
       var existingName =
         dupeColl === 'symposium_ingredients'
-          ? (state.allIngredients.find(function (i) {
-              return i.id === dupeId;
-            }) || {}).name
-          : (state.allEquipment.find(function (e) {
-              return e.id === dupeId;
-            }) || {}).name;
+          ? (
+              state.allIngredients.find(function (i) {
+                return i.id === dupeId;
+              }) || {}
+            ).name
+          : (
+              state.allEquipment.find(function (e) {
+                return e.id === dupeId;
+              }) || {}
+            ).name;
       if (warningText)
         warningText.textContent =
           'Will link to existing: \u201c' + (existingName || dupeId) + '\u201d';
