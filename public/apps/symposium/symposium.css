@@ -1603,3 +1603,175 @@
   background: rgba(77, 208, 225, 0.12);
   border: 1px solid rgba(77, 208, 225, 0.2);
 }
+
+/* ── Altar of Creation modal ─────────────────────── */
+.modal-dialog-altar {
+  max-width: 520px;
+}
+
+.altar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.altar-header .modal-title {
+  margin-bottom: 0.25rem;
+}
+
+.altar-subtitle {
+  font-size: 0.85rem;
+  color: #90a4ae;
+  margin: 0;
+  font-style: italic;
+}
+
+.altar-progress {
+  font-size: 0.75rem;
+  color: #546e7a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 0.3rem;
+}
+
+/* Duplicate warning banner */
+.altar-dupe-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.85rem;
+  margin-bottom: 1rem;
+  background: rgba(255, 167, 38, 0.08);
+  border: 1px solid rgba(255, 167, 38, 0.25);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #ffa726;
+}
+
+.altar-dupe-warning-icon {
+  flex-shrink: 0;
+}
+
+.altar-dupe-link-btn {
+  margin-left: auto;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: #ffa726;
+  background: none;
+  border: 1px solid rgba(255, 167, 38, 0.4);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.altar-dupe-link-btn:hover {
+  background: rgba(255, 167, 38, 0.12);
+}
+
+/* Altar form area */
+.altar-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.altar-name-field {
+  grid-column: 1 / -1;
+}
+
+.altar-name-value {
+  display: block;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+
+.altar-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.altar-form-group.altar-full-width {
+  grid-column: 1 / -1;
+}
+
+.altar-instock-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  grid-column: 1 / -1;
+  font-size: 0.9rem;
+  color: #b0bec5;
+  cursor: pointer;
+}
+
+/* Actions row */
+.altar-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+#btn-altar-later {
+  margin-right: auto;
+}
+
+/* Altar modal focus colors (purple accent matching badge-pending) */
+.modal-dialog-altar .form-select:focus,
+.modal-dialog-altar .form-input:focus {
+  border-color: rgba(171, 71, 188, 0.5);
+  box-shadow: 0 0 0 3px rgba(171, 71, 188, 0.1);
+}
+
+/* "Visit the Altar" button in recipe detail header */
+.btn-resolve {
+  background: rgba(171, 71, 188, 0.12);
+  color: #ce93d8;
+  border: 1px solid rgba(171, 71, 188, 0.3);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.btn-resolve:hover {
+  background: rgba(171, 71, 188, 0.22);
+  border-color: rgba(171, 71, 188, 0.5);
+}
+
+@media (max-width: 600px) {
+  .altar-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .altar-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #btn-altar-later {
+    margin-right: 0;
+    order: 3;
+  }
+}
