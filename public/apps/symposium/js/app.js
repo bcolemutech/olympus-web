@@ -52,9 +52,11 @@
     }
 
     // Ensure recipes list reflects cleared search when viewing Recipes
-    if (view === 'recipes' &&
-        Symposium.recipes &&
-        typeof Symposium.recipes.renderList === 'function') {
+    if (
+      view === 'recipes' &&
+      Symposium.recipes &&
+      typeof Symposium.recipes.renderList === 'function'
+    ) {
       Symposium.recipes.renderList();
     }
     // Restore scroll position
