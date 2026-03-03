@@ -188,6 +188,8 @@
             Symposium.recipes.closeModal();
           } else if (recipeDetailModalEl.classList.contains('open')) {
             Symposium.recipes.closeDetail();
+          } else if (altarModalEl && altarModalEl.classList.contains('open')) {
+            Symposium.recipes.closeAltar();
           }
         }
       });
@@ -330,6 +332,37 @@
 
       Symposium.getRef('btn-detail-close').addEventListener('click', function () {
         Symposium.recipes.closeDetail();
+      });
+
+      // ── Altar of Creation modal ──────────────────
+      var altarModalEl = document.getElementById('modal-overlay-altar');
+
+      altarModalEl.addEventListener('click', function (e) {
+        if (e.target === altarModalEl) Symposium.recipes.closeAltar();
+      });
+
+      document.getElementById('btn-altar-later').addEventListener('click', function () {
+        Symposium.recipes.closeAltar();
+      });
+
+      document.getElementById('btn-altar-skip').addEventListener('click', function () {
+        Symposium.recipes._skipAltarItem();
+      });
+
+      document.getElementById('btn-altar-submit').addEventListener('click', function () {
+        Symposium.recipes._submitAltarStep();
+      });
+
+      document.getElementById('altar-dupe-link-btn').addEventListener('click', function () {
+        Symposium.recipes._triggerDupeLink();
+      });
+
+      // Delegate category change inside the altar form container for subcategory cascade
+      document.getElementById('altar-form-container').addEventListener('change', function (e) {
+        if (e.target && e.target.id === 'altar-field-category') {
+          var subEl = document.getElementById('altar-field-subcategory');
+          if (subEl) Symposium.populateSubcategoryDropdown(e.target.value, subEl);
+        }
       });
 
       Symposium.getRef('rec-field-category').addEventListener('change', function () {

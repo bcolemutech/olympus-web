@@ -729,10 +729,51 @@
           <div class="recipe-detail-header-actions">
             <button class="btn-icon btn-edit" id="btn-detail-edit" type="button">Edit</button>
             <button class="btn-icon btn-delete" id="btn-detail-delete" type="button">Delete</button>
+            <button class="btn-icon btn-resolve hidden" id="btn-detail-resolve" type="button">
+              Visit the Altar
+            </button>
             <button class="btn-cancel" id="btn-detail-close" type="button">Close</button>
           </div>
         </div>
         <div id="recipe-detail-body"></div>
+      </div>
+    </div>
+
+    <!-- Altar of Creation — pending item resolution modal -->
+    <div class="modal-overlay" id="modal-overlay-altar">
+      <div
+        class="modal-dialog modal-dialog-altar"
+        role="dialog"
+        aria-labelledby="modal-title-altar"
+        aria-modal="true"
+      >
+        <div class="altar-header">
+          <div>
+            <h2 class="modal-title" id="modal-title-altar">The Altar of Creation</h2>
+            <p class="altar-subtitle" id="altar-subtitle"></p>
+          </div>
+          <span class="altar-progress" id="altar-progress"></span>
+        </div>
+
+        <!-- Duplicate warning banner (hidden by default) -->
+        <div class="altar-dupe-warning hidden" id="altar-dupe-warning">
+          <span class="altar-dupe-warning-icon" aria-hidden="true">&#9888;</span>
+          <span id="altar-dupe-warning-text"></span>
+          <button class="altar-dupe-link-btn" id="altar-dupe-link-btn" type="button">
+            Link to existing instead
+          </button>
+        </div>
+
+        <!-- Step form: swapped out per item -->
+        <div id="altar-form-container"></div>
+
+        <div class="altar-actions">
+          <button class="btn-cancel" id="btn-altar-later" type="button">I'll do this later</button>
+          <button class="btn-icon" id="btn-altar-skip" type="button">Skip This Item</button>
+          <button class="app-btn app-btn-recipe" id="btn-altar-submit" type="button">
+            The Offering is Accepted
+          </button>
+        </div>
       </div>
     </div>
 

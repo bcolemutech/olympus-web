@@ -10,6 +10,18 @@
   var _selectedIngredients = [];
   var _selectedEquipment = [];
 
+  // ── Altar of Creation — private resolution state ────────────────────────
+  // _altarRecipeId : Firestore ID of the recipe being resolved
+  // _altarItems    : flat array of { type, index, name, amount?, unit?, optional? }
+  // _altarTotal    : total count of items when altar was opened (for progress display)
+  // _altarCursor   : index into _altarItems of the currently displayed step
+  // _altarDupeTarget: { id, collection } when user picks "link to existing"
+  var _altarRecipeId = null;
+  var _altarItems = [];
+  var _altarTotal = 0;
+  var _altarCursor = 0;
+  var _altarDupeTarget = null;
+
   // ── Stock lookup map (id → inStock) ────────────────────────────────────
   // Rebuilt once per render via _rebuildStockMap() to avoid O(n²) lookups.
   var _stockMap = null;
@@ -689,6 +701,569 @@
     return frag;
   }
 
+  // ── Altar of Creation helpers ───────────────────────────────────────────
+
+  function _buildAltarItems(recipe) {
+    var items = [];
+    (recipe.ingredients || []).forEach(function (ri, idx) {
+      if (ri.pending) {
+        items.push({
+          type: 'ingredient',
+          index: idx,
+          name: ri.name,
+          amount: ri.amount || '',
+          unit: ri.unit || 'oz',
+          optional: !!ri.optional,
+        });
+      }
+    });
+    (recipe.equipment || []).forEach(function (re, idx) {
+      if (re.pending) {
+        items.push({
+          type: 'equipment',
+          index: idx,
+          name: re.name,
+        });
+      }
+    });
+    return items;
+  }
+
+  function _findDuplicateIngredient(name) {
+    var q = name.toLowerCase().trim();
+    var exact = state.allIngredients.find(function (ing) {
+      return ing.name.toLowerCase() === q;
+    });
+    if (exact) return exact;
+    if (q.length < 3) return null;
+    return (
+      state.allIngredients.find(function (ing) {
+        var n = ing.name.toLowerCase();
+        if (n.indexOf(q) !== -1 || q.indexOf(n) !== -1) return true;
+        if (Math.abs(n.length - q.length) > 5) return false;
+        return _editDistance(n, q, 2) <= 2;
+      }) || null
+    );
+  }
+
+  function _findDuplicateEquipment(name) {
+    var q = name.toLowerCase().trim();
+    var exact = state.allEquipment.find(function (eq) {
+      return eq.name.toLowerCase() === q;
+    });
+    if (exact) return exact;
+    if (q.length < 3) return null;
+    return (
+      state.allEquipment.find(function (eq) {
+        var n = eq.name.toLowerCase();
+        if (n.indexOf(q) !== -1 || q.indexOf(n) !== -1) return true;
+        if (Math.abs(n.length - q.length) > 5) return false;
+        return _editDistance(n, q, 2) <= 2;
+      }) || null
+    );
+  }
+
+  function _validateAltarStep(item) {
+    var catEl = document.getElementById('altar-field-category');
+    var subEl = document.getElementById('altar-field-subcategory');
+    var errCat = document.getElementById('altar-error-category');
+    var errSub = document.getElementById('altar-error-subcategory');
+    var valid = true;
+
+    if (errCat) errCat.textContent = '';
+    if (errSub) errSub.textContent = '';
+
+    if (!catEl || !catEl.value) {
+      if (errCat) errCat.textContent = 'Category is required';
+      valid = false;
+    }
+    if (!subEl || !subEl.value) {
+      if (errSub) errSub.textContent = 'Subcategory is required';
+      valid = false;
+    }
+
+    if (item.type === 'ingredient') {
+      var unitEl = document.getElementById('altar-field-unit');
+      var errUnit = document.getElementById('altar-error-unit');
+      if (errUnit) errUnit.textContent = '';
+      if (!unitEl || !unitEl.value) {
+        if (errUnit) errUnit.textContent = 'Unit is required';
+        valid = false;
+      }
+    }
+
+    return valid;
+  }
+
+  function _renderAltarStep() {
+    if (_altarCursor >= _altarItems.length) {
+      // All items processed — close
+      Symposium.recipes.closeAltar();
+      return;
+    }
+
+    var item = _altarItems[_altarCursor];
+    var stepNum = _altarCursor + 1;
+
+    document.getElementById('altar-subtitle').textContent =
+      (item.type === 'ingredient' ? 'Ingredient' : 'Equipment') + ': ' + item.name;
+    document.getElementById('altar-progress').textContent =
+      'Item ' + stepNum + ' of ' + _altarTotal;
+
+    // Duplicate detection
+    _altarDupeTarget = null;
+    var dupeWarningEl = document.getElementById('altar-dupe-warning');
+    var dupe =
+      item.type === 'ingredient'
+        ? _findDuplicateIngredient(item.name)
+        : _findDuplicateEquipment(item.name);
+
+    if (dupe) {
+      document.getElementById('altar-dupe-warning-text').textContent =
+        'Similar item already exists: \u201c' + dupe.name + '\u201d';
+      var dupeLinkBtn = document.getElementById('altar-dupe-link-btn');
+      dupeLinkBtn.textContent = 'Link to existing instead';
+      dupeLinkBtn.classList.remove('hidden');
+      dupeWarningEl.classList.remove('hidden');
+      // Store candidate for _triggerDupeLink
+      dupeWarningEl.dataset.dupeId = dupe.id;
+      dupeWarningEl.dataset.dupeCollection =
+        item.type === 'ingredient' ? 'symposium_ingredients' : 'symposium_equipment';
+    } else {
+      dupeWarningEl.classList.add('hidden');
+      delete dupeWarningEl.dataset.dupeId;
+      delete dupeWarningEl.dataset.dupeCollection;
+    }
+
+    // Build form
+    var container = document.getElementById('altar-form-container');
+    container.innerHTML = '';
+
+    var grid = document.createElement('div');
+    grid.className = 'altar-form-grid';
+
+    // Name (read-only)
+    var nameGroup = document.createElement('div');
+    nameGroup.className = 'altar-form-group altar-name-field';
+    var nameLabel = document.createElement('label');
+    nameLabel.className = 'form-label';
+    nameLabel.textContent = 'Name';
+    var nameVal = document.createElement('span');
+    nameVal.className = 'altar-name-value';
+    nameVal.textContent = item.name;
+    nameGroup.appendChild(nameLabel);
+    nameGroup.appendChild(nameVal);
+    grid.appendChild(nameGroup);
+
+    // Category
+    var catGroup = document.createElement('div');
+    catGroup.className = 'altar-form-group';
+    var catLabel = document.createElement('label');
+    catLabel.className = 'form-label';
+    catLabel.setAttribute('for', 'altar-field-category');
+    catLabel.textContent = 'Category';
+    var catSelect = document.createElement('select');
+    catSelect.className = 'form-select';
+    catSelect.id = 'altar-field-category';
+    var catPlaceholder = document.createElement('option');
+    catPlaceholder.value = '';
+    catPlaceholder.textContent = 'Select\u2026';
+    catSelect.appendChild(catPlaceholder);
+    var catMap =
+      item.type === 'ingredient' ? state.ingredientCategoryMap : state.equipmentCategoryMap;
+    Object.keys(catMap).forEach(function (id) {
+      var opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = catMap[id].name;
+      catSelect.appendChild(opt);
+    });
+    catSelect.addEventListener('change', function () {
+      var subEl = document.getElementById('altar-field-subcategory');
+      if (subEl) Symposium.populateSubcategoryDropdown(catSelect.value, subEl);
+    });
+    var catErr = document.createElement('span');
+    catErr.className = 'form-error';
+    catErr.id = 'altar-error-category';
+    catGroup.appendChild(catLabel);
+    catGroup.appendChild(catSelect);
+    catGroup.appendChild(catErr);
+    grid.appendChild(catGroup);
+
+    // Subcategory
+    var subGroup = document.createElement('div');
+    subGroup.className = 'altar-form-group';
+    var subLabel = document.createElement('label');
+    subLabel.className = 'form-label';
+    subLabel.setAttribute('for', 'altar-field-subcategory');
+    subLabel.textContent = 'Subcategory';
+    var subSelect = document.createElement('select');
+    subSelect.className = 'form-select';
+    subSelect.id = 'altar-field-subcategory';
+    subSelect.innerHTML = '<option value="">Select category first</option>';
+    var subErr = document.createElement('span');
+    subErr.className = 'form-error';
+    subErr.id = 'altar-error-subcategory';
+    subGroup.appendChild(subLabel);
+    subGroup.appendChild(subSelect);
+    subGroup.appendChild(subErr);
+    grid.appendChild(subGroup);
+
+    if (item.type === 'ingredient') {
+      // Unit
+      var unitGroup = document.createElement('div');
+      unitGroup.className = 'altar-form-group';
+      var unitLabel = document.createElement('label');
+      unitLabel.className = 'form-label';
+      unitLabel.setAttribute('for', 'altar-field-unit');
+      unitLabel.textContent = 'Unit';
+      var unitSelect = document.createElement('select');
+      unitSelect.className = 'form-select';
+      unitSelect.id = 'altar-field-unit';
+      ['oz', 'ml', 'dash', 'splash', 'each'].forEach(function (u) {
+        var opt = document.createElement('option');
+        opt.value = u;
+        opt.textContent = u;
+        if (u === item.unit) opt.selected = true;
+        unitSelect.appendChild(opt);
+      });
+      var unitErr = document.createElement('span');
+      unitErr.className = 'form-error';
+      unitErr.id = 'altar-error-unit';
+      unitGroup.appendChild(unitLabel);
+      unitGroup.appendChild(unitSelect);
+      unitGroup.appendChild(unitErr);
+      grid.appendChild(unitGroup);
+
+      // In Stock
+      var instockLabel = document.createElement('label');
+      instockLabel.className = 'altar-instock-label';
+      var instockCheck = document.createElement('input');
+      instockCheck.type = 'checkbox';
+      instockCheck.className = 'form-checkbox';
+      instockCheck.id = 'altar-field-instock';
+      instockLabel.appendChild(instockCheck);
+      instockLabel.appendChild(document.createTextNode('\u00a0In Stock'));
+      grid.appendChild(instockLabel);
+    }
+
+    container.appendChild(grid);
+
+    // Reset submit button text
+    var submitBtn = document.getElementById('btn-altar-submit');
+    if (submitBtn) submitBtn.textContent = 'The Offering is Accepted';
+  }
+
+  function _advanceAltarCursor() {
+    _altarCursor++;
+    // Skip items that are already resolved in the live recipe
+    while (_altarCursor < _altarItems.length) {
+      var liveRecipe = state.allRecipes.find(function (r) {
+        return r.id === _altarRecipeId;
+      });
+      if (!liveRecipe) break;
+      var item = _altarItems[_altarCursor];
+      var stillPending;
+      if (item.type === 'ingredient') {
+        var ingList = liveRecipe.ingredients || [];
+        var ing = ingList[item.index];
+        stillPending = !!(ing && ing.pending);
+      } else {
+        var eqList = liveRecipe.equipment || [];
+        var eq = eqList[item.index];
+        stillPending = !!(eq && eq.pending);
+      }
+      if (stillPending) break;
+      _altarCursor++;
+    }
+    _altarDupeTarget = null;
+    if (_altarCursor >= _altarItems.length) {
+      Symposium.recipes.closeAltar();
+    } else {
+      _renderAltarStep();
+    }
+  }
+
+  function _submitAltarStep() {
+    // If user has chosen "link to existing", delegate
+    if (_altarDupeTarget) {
+      _linkExistingItem(_altarDupeTarget.id);
+      return;
+    }
+
+    var item = _altarItems[_altarCursor];
+    if (!_validateAltarStep(item)) return;
+
+    var category = document.getElementById('altar-field-category').value;
+    var subcategory = document.getElementById('altar-field-subcategory').value;
+
+    // Fetch live recipe
+    var liveRecipe = state.allRecipes.find(function (r) {
+      return r.id === _altarRecipeId;
+    });
+    if (!liveRecipe) {
+      var errEl = document.getElementById('altar-error-category');
+      if (errEl) errEl.textContent = 'Recipe not found. It may have been deleted.';
+      return;
+    }
+
+    var submitBtn = document.getElementById('btn-altar-submit');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating\u2026';
+
+    var batch = state.db.batch();
+    var recipeRef = state.db.collection('symposium_recipes').doc(_altarRecipeId);
+    var updatedIngredients = (liveRecipe.ingredients || []).slice();
+    var updatedEquipment = (liveRecipe.equipment || []).slice();
+    var replacementOccurred = false;
+
+    if (item.type === 'ingredient') {
+      var unitEl = document.getElementById('altar-field-unit');
+      var unit = unitEl ? unitEl.value : 'oz';
+      var instockEl = document.getElementById('altar-field-instock');
+      var isInStock = instockEl ? instockEl.checked : false;
+      var trackingType = Symposium.inferTrackingType(unit);
+      var stock = trackingType === 'volume' && isInStock ? 1 : 0;
+      var qty = trackingType === 'quantity' && isInStock ? 1 : 0;
+
+      var ingData = {
+        name: item.name,
+        category: category,
+        subcategory: subcategory,
+        tags: [],
+        unit: unit,
+        type: 'consumable',
+        trackingType: trackingType,
+        stock: stock,
+        bottleSize: 750,
+        bottleSizeUnit: 'ml',
+        quantity: qty,
+        inStock: Symposium.computeInStock(trackingType, stock, qty),
+        notes: '',
+        shoppingListDefault: false,
+        lowStockThreshold: 0,
+        createdAt: state.serverTimestamp(),
+        updatedAt: state.serverTimestamp(),
+      };
+
+      var newIngRef = state.db.collection('symposium_ingredients').doc();
+      batch.set(newIngRef, ingData);
+
+      // Replace the pending entry using the stable index captured in _buildAltarItems;
+      // fall back to first-by-name match for resilience.
+      var replacementIng = {
+        id: newIngRef.id,
+        amount: item.amount,
+        unit: unit,
+        optional: item.optional,
+      };
+      if (
+        typeof item.index === 'number' &&
+        item.index >= 0 &&
+        item.index < updatedIngredients.length &&
+        updatedIngredients[item.index] &&
+        updatedIngredients[item.index].pending
+      ) {
+        updatedIngredients[item.index] = replacementIng;
+        replacementOccurred = true;
+      } else {
+        var matched = false;
+        updatedIngredients = updatedIngredients.map(function (ri) {
+          if (!matched && ri.pending && ri.name === item.name) {
+            matched = true;
+            return replacementIng;
+          }
+          return ri;
+        });
+        replacementOccurred = matched;
+      }
+    } else {
+      var eqData = {
+        name: item.name,
+        category: category,
+        subcategory: subcategory,
+        tags: [],
+        type: 'reusable',
+        quantity: 1,
+        condition: 'good',
+        notes: '',
+        createdAt: state.serverTimestamp(),
+        updatedAt: state.serverTimestamp(),
+      };
+
+      var newEqRef = state.db.collection('symposium_equipment').doc();
+      batch.set(newEqRef, eqData);
+
+      if (
+        typeof item.index === 'number' &&
+        item.index >= 0 &&
+        item.index < updatedEquipment.length &&
+        updatedEquipment[item.index] &&
+        updatedEquipment[item.index].pending
+      ) {
+        updatedEquipment[item.index] = { id: newEqRef.id };
+        replacementOccurred = true;
+      } else {
+        var matchedEq = false;
+        updatedEquipment = updatedEquipment.map(function (re) {
+          if (!matchedEq && re.pending && re.name === item.name) {
+            matchedEq = true;
+            return { id: newEqRef.id };
+          }
+          return re;
+        });
+        replacementOccurred = matchedEq;
+      }
+    }
+
+    var newPendingCount = replacementOccurred
+      ? Math.max(0, (liveRecipe.pendingCount || 0) - 1)
+      : liveRecipe.pendingCount || 0;
+
+    var newCanMake = _computeCanMake(updatedIngredients);
+
+    batch.update(recipeRef, {
+      ingredients: updatedIngredients,
+      equipment: updatedEquipment,
+      pendingCount: newPendingCount,
+      canMake: newCanMake,
+      updatedAt: state.serverTimestamp(),
+    });
+
+    batch
+      .commit()
+      .then(function () {
+        _advanceAltarCursor();
+      })
+      .catch(function (err) {
+        console.error('Failed to resolve pending item:', err);
+        var errEl = document.getElementById('altar-error-category');
+        if (errEl) errEl.textContent = 'Failed to save. Please try again.';
+      })
+      .finally(function () {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'The Offering is Accepted';
+        }
+      });
+  }
+
+  function _linkExistingItem(existingId) {
+    var item = _altarItems[_altarCursor];
+
+    var liveRecipe = state.allRecipes.find(function (r) {
+      return r.id === _altarRecipeId;
+    });
+    if (!liveRecipe) {
+      _advanceAltarCursor();
+      return;
+    }
+
+    var submitBtn = document.getElementById('btn-altar-submit');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Linking\u2026';
+
+    var updatedIngredients = (liveRecipe.ingredients || []).slice();
+    var updatedEquipment = (liveRecipe.equipment || []).slice();
+    var linkOccurred = false;
+
+    if (item.type === 'ingredient') {
+      var replacementIng = {
+        id: existingId,
+        amount: item.amount,
+        unit: item.unit,
+        optional: item.optional,
+      };
+      if (
+        typeof item.index === 'number' &&
+        item.index >= 0 &&
+        item.index < updatedIngredients.length &&
+        updatedIngredients[item.index] &&
+        updatedIngredients[item.index].pending
+      ) {
+        updatedIngredients[item.index] = replacementIng;
+        linkOccurred = true;
+      } else {
+        var matchedIng = false;
+        updatedIngredients = updatedIngredients.map(function (ri) {
+          if (!matchedIng && ri.pending && ri.name === item.name) {
+            matchedIng = true;
+            return replacementIng;
+          }
+          return ri;
+        });
+        linkOccurred = matchedIng;
+      }
+    } else {
+      if (
+        typeof item.index === 'number' &&
+        item.index >= 0 &&
+        item.index < updatedEquipment.length &&
+        updatedEquipment[item.index] &&
+        updatedEquipment[item.index].pending
+      ) {
+        updatedEquipment[item.index] = { id: existingId };
+        linkOccurred = true;
+      } else {
+        var matchedEqLink = false;
+        updatedEquipment = updatedEquipment.map(function (re) {
+          if (!matchedEqLink && re.pending && re.name === item.name) {
+            matchedEqLink = true;
+            return { id: existingId };
+          }
+          return re;
+        });
+        linkOccurred = matchedEqLink;
+      }
+    }
+
+    var newPendingCount = linkOccurred
+      ? Math.max(0, (liveRecipe.pendingCount || 0) - 1)
+      : liveRecipe.pendingCount || 0;
+
+    var newCanMake = _computeCanMake(updatedIngredients);
+    var recipeRef = state.db.collection('symposium_recipes').doc(_altarRecipeId);
+
+    recipeRef
+      .update({
+        ingredients: updatedIngredients,
+        equipment: updatedEquipment,
+        pendingCount: newPendingCount,
+        canMake: newCanMake,
+        updatedAt: state.serverTimestamp(),
+      })
+      .then(function () {
+        _advanceAltarCursor();
+      })
+      .catch(function (err) {
+        console.error('Failed to link existing item:', err);
+        var errEl = document.getElementById('altar-error-category');
+        if (errEl) errEl.textContent = 'Failed to link. Please try again.';
+      })
+      .finally(function () {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+        }
+      });
+  }
+
+  function _waitForRecipeAndOpenAltar(recipeId) {
+    var attempts = 0;
+    var maxAttempts = 50;
+    function tryOpen() {
+      attempts++;
+      var recipe = state.allRecipes.find(function (r) {
+        return r.id === recipeId;
+      });
+      if (recipe) {
+        Symposium.recipes.openAltar(recipe);
+      } else if (attempts < maxAttempts) {
+        window.setTimeout(tryOpen, 200);
+      }
+      // If maxAttempts reached silently give up — user can open from detail view
+    }
+    tryOpen();
+  }
+
   // ── Main module ────────────────────────────────────────────────────────
   Symposium.recipes = {
     renderCategoryGrid: function () {
@@ -1079,6 +1654,24 @@
         Symposium.recipes.handleDelete(recipe);
       };
 
+      // Show / wire the "Visit the Altar" button only when there are pending items
+      var resolveBtn = Symposium.getRef('btn-detail-resolve');
+      if (recipe.pendingCount > 0) {
+        resolveBtn.classList.remove('hidden');
+        resolveBtn.onclick = function () {
+          Symposium.recipes.closeDetail();
+          // Fetch the live recipe snapshot in case it was updated since the detail opened
+          var liveRecipe =
+            state.allRecipes.find(function (r) {
+              return r.id === recipe.id;
+            }) || recipe;
+          Symposium.recipes.openAltar(liveRecipe);
+        };
+      } else {
+        resolveBtn.classList.add('hidden');
+        resolveBtn.onclick = null;
+      }
+
       var body = Symposium.getRef('recipe-detail-body');
       body.innerHTML = '';
       body.appendChild(_buildDetailBody(recipe));
@@ -1089,6 +1682,68 @@
     closeDetail: function () {
       Symposium.getRef('modal-overlay-recipe-detail').classList.remove('open');
       state.recipeDetailId = null;
+    },
+
+    // ── Altar of Creation — public API ──────────────────────────────────
+    openAltar: function (recipe) {
+      _altarItems = _buildAltarItems(recipe);
+      if (_altarItems.length === 0) return;
+      _altarRecipeId = recipe.id;
+      _altarTotal = _altarItems.length;
+      _altarCursor = 0;
+      _altarDupeTarget = null;
+      _renderAltarStep();
+      document.getElementById('modal-overlay-altar').classList.add('open');
+    },
+
+    closeAltar: function () {
+      document.getElementById('modal-overlay-altar').classList.remove('open');
+      _altarRecipeId = null;
+      _altarItems = [];
+      _altarTotal = 0;
+      _altarCursor = 0;
+      _altarDupeTarget = null;
+    },
+
+    _skipAltarItem: function () {
+      _advanceAltarCursor();
+    },
+
+    _submitAltarStep: function () {
+      _submitAltarStep();
+    },
+
+    _triggerDupeLink: function () {
+      var dupeWarningEl = document.getElementById('altar-dupe-warning');
+      var dupeId = dupeWarningEl && dupeWarningEl.dataset.dupeId;
+      var dupeColl = dupeWarningEl && dupeWarningEl.dataset.dupeCollection;
+      if (!dupeId || !dupeColl) return;
+
+      _altarDupeTarget = { id: dupeId, collection: dupeColl };
+
+      // Update the warning text and button
+      var warningText = document.getElementById('altar-dupe-warning-text');
+      var dupeLinkBtn = document.getElementById('altar-dupe-link-btn');
+      var existingName =
+        dupeColl === 'symposium_ingredients'
+          ? (
+              state.allIngredients.find(function (i) {
+                return i.id === dupeId;
+              }) || {}
+            ).name
+          : (
+              state.allEquipment.find(function (e) {
+                return e.id === dupeId;
+              }) || {}
+            ).name;
+      if (warningText)
+        warningText.textContent =
+          'Will link to existing: \u201c' + (existingName || dupeId) + '\u201d';
+      if (dupeLinkBtn) dupeLinkBtn.classList.add('hidden');
+
+      // Update submit button text
+      var submitBtn = document.getElementById('btn-altar-submit');
+      if (submitBtn) submitBtn.textContent = 'Link to Existing';
     },
 
     _clearErrors: function () {
@@ -1239,22 +1894,29 @@
       btnSave.disabled = true;
       btnSave.textContent = 'Saving\u2026';
 
+      var editingId = state.recipeEditingId;
       var promise;
-      if (state.recipeEditingId) {
+      if (editingId) {
         var existingRcp = state.allRecipes.find(function (r) {
-          return r.id === state.recipeEditingId;
+          return r.id === editingId;
         });
         data.createdAt =
           existingRcp && existingRcp.createdAt ? existingRcp.createdAt : state.serverTimestamp();
-        promise = state.db.collection('symposium_recipes').doc(state.recipeEditingId).set(data);
+        promise = state.db.collection('symposium_recipes').doc(editingId).set(data);
       } else {
         data.createdAt = state.serverTimestamp();
         promise = state.db.collection('symposium_recipes').add(data);
       }
 
       promise
-        .then(function () {
+        .then(function (docRef) {
+          // docRef is a DocumentReference for new recipes (add), undefined for updates (set)
+          var savedId = editingId || (docRef && docRef.id);
           Symposium.recipes.closeModal();
+          // Auto-open Altar of Creation if there are pending items to resolve
+          if (pendingCount > 0 && savedId) {
+            _waitForRecipeAndOpenAltar(savedId);
+          }
         })
         .catch(function (err) {
           console.error('Failed to save recipe:', err);
