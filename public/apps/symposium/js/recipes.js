@@ -962,14 +962,16 @@
       });
       if (!liveRecipe) break;
       var item = _altarItems[_altarCursor];
-      var stillPending =
-        item.type === 'ingredient'
-          ? (liveRecipe.ingredients || []).some(function (ri) {
-              return ri.pending && ri.name === item.name;
-            })
-          : (liveRecipe.equipment || []).some(function (re) {
-              return re.pending && re.name === item.name;
-            });
+      var stillPending;
+      if (item.type === 'ingredient') {
+        var ingList = liveRecipe.ingredients || [];
+        var ing = ingList[item.index];
+        stillPending = !!(ing && ing.pending);
+      } else {
+        var eqList = liveRecipe.equipment || [];
+        var eq = eqList[item.index];
+        stillPending = !!(eq && eq.pending);
+      }
       if (stillPending) break;
       _altarCursor++;
     }
@@ -1012,7 +1014,7 @@
     var recipeRef = state.db.collection('symposium_recipes').doc(_altarRecipeId);
     var updatedIngredients = (liveRecipe.ingredients || []).slice();
     var updatedEquipment = (liveRecipe.equipment || []).slice();
-    var newPendingCount = Math.max(0, (liveRecipe.pendingCount || 0) - 1);
+    var replacementOccurred = false;
 
     if (item.type === 'ingredient') {
       var unitEl = document.getElementById('altar-field-unit');
@@ -1046,20 +1048,34 @@
       var newIngRef = state.db.collection('symposium_ingredients').doc();
       batch.set(newIngRef, ingData);
 
-      // Replace the pending entry in the ingredients array by name match (first occurrence)
-      var matched = false;
-      updatedIngredients = updatedIngredients.map(function (ri) {
-        if (!matched && ri.pending && ri.name === item.name) {
-          matched = true;
-          return {
-            id: newIngRef.id,
-            amount: item.amount,
-            unit: item.unit,
-            optional: item.optional,
-          };
-        }
-        return ri;
-      });
+      // Replace the pending entry using the stable index captured in _buildAltarItems;
+      // fall back to first-by-name match for resilience.
+      var replacementIng = {
+        id: newIngRef.id,
+        amount: item.amount,
+        unit: unit,
+        optional: item.optional,
+      };
+      if (
+        typeof item.index === 'number' &&
+        item.index >= 0 &&
+        item.index < updatedIngredients.length &&
+        updatedIngredients[item.index] &&
+        updatedIngredients[item.index].pending
+      ) {
+        updatedIngredients[item.index] = replacementIng;
+        replacementOccurred = true;
+      } else {
+        var matched = false;
+        updatedIngredients = updatedIngredients.map(function (ri) {
+          if (!matched && ri.pending && ri.name === item.name) {
+            matched = true;
+            return replacementIng;
+          }
+          return ri;
+        });
+        replacementOccurred = matched;
+      }
     } else {
       var eqData = {
         name: item.name,
@@ -1077,15 +1093,31 @@
       var newEqRef = state.db.collection('symposium_equipment').doc();
       batch.set(newEqRef, eqData);
 
-      var matchedEq = false;
-      updatedEquipment = updatedEquipment.map(function (re) {
-        if (!matchedEq && re.pending && re.name === item.name) {
-          matchedEq = true;
-          return { id: newEqRef.id };
-        }
-        return re;
-      });
+      if (
+        typeof item.index === 'number' &&
+        item.index >= 0 &&
+        item.index < updatedEquipment.length &&
+        updatedEquipment[item.index] &&
+        updatedEquipment[item.index].pending
+      ) {
+        updatedEquipment[item.index] = { id: newEqRef.id };
+        replacementOccurred = true;
+      } else {
+        var matchedEq = false;
+        updatedEquipment = updatedEquipment.map(function (re) {
+          if (!matchedEq && re.pending && re.name === item.name) {
+            matchedEq = true;
+            return { id: newEqRef.id };
+          }
+          return re;
+        });
+        replacementOccurred = matchedEq;
+      }
     }
+
+    var newPendingCount = replacementOccurred
+      ? Math.max(0, (liveRecipe.pendingCount || 0) - 1)
+      : liveRecipe.pendingCount || 0;
 
     var newCanMake = _computeCanMake(updatedIngredients);
 
@@ -1132,27 +1164,61 @@
 
     var updatedIngredients = (liveRecipe.ingredients || []).slice();
     var updatedEquipment = (liveRecipe.equipment || []).slice();
-    var newPendingCount = Math.max(0, (liveRecipe.pendingCount || 0) - 1);
+    var linkOccurred = false;
 
     if (item.type === 'ingredient') {
-      var matchedIng = false;
-      updatedIngredients = updatedIngredients.map(function (ri) {
-        if (!matchedIng && ri.pending && ri.name === item.name) {
-          matchedIng = true;
-          return { id: existingId, amount: item.amount, unit: item.unit, optional: item.optional };
-        }
-        return ri;
-      });
+      var replacementIng = {
+        id: existingId,
+        amount: item.amount,
+        unit: item.unit,
+        optional: item.optional,
+      };
+      if (
+        typeof item.index === 'number' &&
+        item.index >= 0 &&
+        item.index < updatedIngredients.length &&
+        updatedIngredients[item.index] &&
+        updatedIngredients[item.index].pending
+      ) {
+        updatedIngredients[item.index] = replacementIng;
+        linkOccurred = true;
+      } else {
+        var matchedIng = false;
+        updatedIngredients = updatedIngredients.map(function (ri) {
+          if (!matchedIng && ri.pending && ri.name === item.name) {
+            matchedIng = true;
+            return replacementIng;
+          }
+          return ri;
+        });
+        linkOccurred = matchedIng;
+      }
     } else {
-      var matchedEqLink = false;
-      updatedEquipment = updatedEquipment.map(function (re) {
-        if (!matchedEqLink && re.pending && re.name === item.name) {
-          matchedEqLink = true;
-          return { id: existingId };
-        }
-        return re;
-      });
+      if (
+        typeof item.index === 'number' &&
+        item.index >= 0 &&
+        item.index < updatedEquipment.length &&
+        updatedEquipment[item.index] &&
+        updatedEquipment[item.index].pending
+      ) {
+        updatedEquipment[item.index] = { id: existingId };
+        linkOccurred = true;
+      } else {
+        var matchedEqLink = false;
+        updatedEquipment = updatedEquipment.map(function (re) {
+          if (!matchedEqLink && re.pending && re.name === item.name) {
+            matchedEqLink = true;
+            return { id: existingId };
+          }
+          return re;
+        });
+        linkOccurred = matchedEqLink;
+      }
     }
+
+    var newPendingCount = linkOccurred
+      ? Math.max(0, (liveRecipe.pendingCount || 0) - 1)
+      : liveRecipe.pendingCount || 0;
 
     var newCanMake = _computeCanMake(updatedIngredients);
     var recipeRef = state.db.collection('symposium_recipes').doc(_altarRecipeId);
@@ -1176,14 +1242,13 @@
       .finally(function () {
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Link to Existing';
         }
       });
   }
 
   function _waitForRecipeAndOpenAltar(recipeId) {
     var attempts = 0;
-    var maxAttempts = 20;
+    var maxAttempts = 50;
     function tryOpen() {
       attempts++;
       var recipe = state.allRecipes.find(function (r) {
@@ -1192,7 +1257,7 @@
       if (recipe) {
         Symposium.recipes.openAltar(recipe);
       } else if (attempts < maxAttempts) {
-        window.setTimeout(tryOpen, 100);
+        window.setTimeout(tryOpen, 200);
       }
       // If maxAttempts reached silently give up — user can open from detail view
     }
