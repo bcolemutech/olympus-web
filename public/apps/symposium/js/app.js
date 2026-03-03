@@ -51,6 +51,12 @@
       Symposium.getRef('oracle-clear-recipe').classList.add('hidden');
     }
 
+    // Ensure recipes list reflects cleared search when viewing Recipes
+    if (view === 'recipes' &&
+        Symposium.recipes &&
+        typeof Symposium.recipes.renderList === 'function') {
+      Symposium.recipes.renderList();
+    }
     // Restore scroll position
     window.scrollTo(0, tabScrollPositions[view] || 0);
   }
