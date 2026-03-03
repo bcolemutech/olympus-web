@@ -812,8 +812,7 @@
           if (state.recipeSearchQuery) return 'No recipes match that search.';
           if (state.recipeCanMakeFilter)
             return 'No recipes are currently makeable with your stock.';
-          if (state.recipePendingFilter)
-            return 'No recipes have items awaiting creation.';
+          if (state.recipePendingFilter) return 'No recipes have items awaiting creation.';
           if (state.recipeFavoriteFilter) return 'No favorites yet. Star a recipe to save it here.';
           if (state.recipeActiveFilter !== 'all' && state.allRecipes.length > 0)
             return 'No recipes in this category yet.';
