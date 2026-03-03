@@ -43,6 +43,22 @@
       Symposium.getRef('oracle-clear-global').classList.add('hidden');
     }
 
+    // Clear recipe search when switching tabs
+    state.recipeSearchQuery = '';
+    var recipeSearchEl = Symposium.getRef('oracle-search-recipe');
+    if (recipeSearchEl) {
+      recipeSearchEl.value = '';
+      Symposium.getRef('oracle-clear-recipe').classList.add('hidden');
+    }
+
+    // Ensure recipes list reflects cleared search when viewing Recipes
+    if (
+      view === 'recipes' &&
+      Symposium.recipes &&
+      typeof Symposium.recipes.renderList === 'function'
+    ) {
+      Symposium.recipes.renderList();
+    }
     // Restore scroll position
     window.scrollTo(0, tabScrollPositions[view] || 0);
   }
@@ -278,6 +294,23 @@
       var recipeSortSelectEl = Symposium.getRef('sort-select-recipe');
       recipeSortSelectEl.addEventListener('change', function () {
         state.recipeSortOption = recipeSortSelectEl.value;
+        Symposium.recipes.renderList();
+      });
+
+      // ── Recipe search ────────────────────────────
+      var recipeSearchEl = Symposium.getRef('oracle-search-recipe');
+      var recipeClearEl = Symposium.getRef('oracle-clear-recipe');
+
+      recipeSearchEl.addEventListener('input', function () {
+        state.recipeSearchQuery = recipeSearchEl.value.trim();
+        recipeClearEl.classList.toggle('hidden', state.recipeSearchQuery === '');
+        Symposium.recipes.renderList();
+      });
+
+      recipeClearEl.addEventListener('click', function () {
+        recipeSearchEl.value = '';
+        state.recipeSearchQuery = '';
+        recipeClearEl.classList.add('hidden');
         Symposium.recipes.renderList();
       });
 

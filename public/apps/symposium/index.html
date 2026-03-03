@@ -249,6 +249,28 @@
           </button>
         </div>
 
+        <!-- Recipe search bar -->
+        <div class="oracle-search-row">
+          <div class="oracle-search-wrapper">
+            <span class="oracle-search-icon" aria-hidden="true">&#x1f52e;</span>
+            <input
+              class="oracle-search-input"
+              id="oracle-search-recipe"
+              type="text"
+              placeholder="Search recipes&hellip;"
+              autocomplete="off"
+            />
+            <button
+              class="oracle-clear-btn hidden"
+              id="oracle-clear-recipe"
+              type="button"
+              aria-label="Clear search"
+            >
+              &#x2715;
+            </button>
+          </div>
+        </div>
+
         <!-- Browse controls: sort + favorite filter -->
         <div class="browse-controls-row">
           <div class="sort-group">
@@ -257,6 +279,7 @@
               <option value="category">Category</option>
               <option value="alpha">Alphabetical</option>
               <option value="favorite">Favorites First</option>
+              <option value="recent">Recently Added</option>
             </select>
           </div>
           <div class="favorite-toggle-group" role="group" aria-label="Favorite filter">
