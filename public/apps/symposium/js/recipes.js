@@ -1327,7 +1327,25 @@
             r.tags.some(function (t) {
               return t.toLowerCase().indexOf(q) !== -1;
             });
-          return r.name.toLowerCase().indexOf(q) !== -1 || catName.indexOf(q) !== -1 || tagHit;
+          var ingHit =
+            r.ingredients &&
+            r.ingredients.some(function (ri) {
+              var ingName = ri.pending
+                ? (ri.name || '').toLowerCase()
+                : (function () {
+                    var found = state.allIngredients.find(function (i) {
+                      return i.id === ri.id;
+                    });
+                    return found ? found.name.toLowerCase() : '';
+                  })();
+              return ingName.indexOf(q) !== -1;
+            });
+          return (
+            r.name.toLowerCase().indexOf(q) !== -1 ||
+            catName.indexOf(q) !== -1 ||
+            tagHit ||
+            ingHit
+          );
         });
       }
 
@@ -1361,6 +1379,12 @@
         result.sort(function (a, b) {
           if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
           return a.name.localeCompare(b.name);
+        });
+      } else if (state.recipeSortOption === 'recent') {
+        result.sort(function (a, b) {
+          var tA = a.createdAt ? a.createdAt.toMillis() : 0;
+          var tB = b.createdAt ? b.createdAt.toMillis() : 0;
+          return tB - tA;
         });
       } else {
         // 'category'
