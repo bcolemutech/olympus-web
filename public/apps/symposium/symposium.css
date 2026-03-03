@@ -1533,6 +1533,58 @@
   color: #90a4ae;
 }
 
+/* ── Pending items filter toggle button ──────────────────────────── */
+.pending-filter-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: #546e7a;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.pending-filter-btn.active {
+  color: #ab47bc;
+  background: rgba(171, 71, 188, 0.1);
+  border-color: rgba(171, 71, 188, 0.3);
+}
+
+.pending-filter-btn:hover:not(.active) {
+  color: #90a4ae;
+}
+
+/* ── Offerings Await banner ──────────────────────────────────────── */
+.pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.75rem;
+  background: rgba(171, 71, 188, 0.08);
+  border: 1px solid rgba(171, 71, 188, 0.2);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #ab47bc;
+}
+
+.pending-banner-icon {
+  flex-shrink: 0;
+}
+
+.pending-banner-label {
+  margin-left: auto;
+  font-style: italic;
+  opacity: 0.8;
+}
+
 /* ── Shopping list button in recipe detail view ───────────────────── */
 .recipe-shopping-btn {
   margin-top: 0.75rem;

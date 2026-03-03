@@ -770,6 +770,13 @@
         });
       }
 
+      // 3c. Pending items filter
+      if (state.recipePendingFilter) {
+        result = result.filter(function (r) {
+          return r.pendingCount > 0;
+        });
+      }
+
       // 4. Sort
       if (state.recipeSortOption === 'alpha') {
         result.sort(function (a, b) {
@@ -805,12 +812,28 @@
           if (state.recipeSearchQuery) return 'No recipes match that search.';
           if (state.recipeCanMakeFilter)
             return 'No recipes are currently makeable with your stock.';
+          if (state.recipePendingFilter) return 'No recipes have items awaiting creation.';
           if (state.recipeFavoriteFilter) return 'No favorites yet. Star a recipe to save it here.';
           if (state.recipeActiveFilter !== 'all' && state.allRecipes.length > 0)
             return 'No recipes in this category yet.';
           return 'The Libations await their first offering.';
         },
       });
+      Symposium.recipes.renderPendingBanner();
+    },
+
+    renderPendingBanner: function () {
+      var banner = Symposium.getRef('pending-banner');
+      var count = state.allRecipes.filter(function (r) {
+        return r.pendingCount > 0;
+      }).length;
+      if (count === 0) {
+        banner.classList.add('hidden');
+        return;
+      }
+      banner.classList.remove('hidden');
+      Symposium.getRef('pending-banner-text').textContent =
+        count + (count === 1 ? ' recipe has' : ' recipes have') + ' items awaiting creation.';
     },
 
     renderCard: function (recipe) {
@@ -865,6 +888,14 @@
         availBadge.className = 'badge badge-availability-' + availStatus;
         availBadge.textContent = statusLabels[availStatus];
         meta.appendChild(availBadge);
+      }
+
+      // Pending items badge
+      if (recipe.pendingCount > 0) {
+        var pendingBadge = document.createElement('span');
+        pendingBadge.className = 'badge badge-pending';
+        pendingBadge.textContent = recipe.pendingCount + ' awaiting altar';
+        meta.appendChild(pendingBadge);
       }
 
       info.appendChild(meta);
@@ -1156,9 +1187,13 @@
         };
       });
 
-      var pendingCount = _selectedIngredients.filter(function (s) {
-        return s.pending;
-      }).length;
+      var pendingCount =
+        _selectedIngredients.filter(function (s) {
+          return s.pending;
+        }).length +
+        _selectedEquipment.filter(function (s) {
+          return s.pending;
+        }).length;
 
       var equipList = _selectedEquipment.map(function (sel) {
         if (sel.pending) {

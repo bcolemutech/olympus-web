@@ -84,6 +84,7 @@
       Symposium.firestore._onRecipesChanged = function () {
         Symposium.recipes.renderCategoryGrid();
         Symposium.recipes.renderList();
+        Symposium.recipes.renderPendingBanner();
         Symposium.inventory.renderDashboard();
         if (state.globalSearchQuery) Symposium.inventory.renderCombinedSearch();
         // If ingredients already loaded, recompute canMake for newly-arrived recipes
@@ -294,6 +295,16 @@
       Symposium.getRef('can-make-btn').addEventListener('click', function () {
         state.recipeCanMakeFilter = !state.recipeCanMakeFilter;
         Symposium.getRef('can-make-btn').classList.toggle('active', state.recipeCanMakeFilter);
+        Symposium.recipes.renderList();
+      });
+
+      // ── Pending items filter toggle ─────────────
+      Symposium.getRef('pending-filter-btn').addEventListener('click', function () {
+        state.recipePendingFilter = !state.recipePendingFilter;
+        Symposium.getRef('pending-filter-btn').classList.toggle(
+          'active',
+          state.recipePendingFilter
+        );
         Symposium.recipes.renderList();
       });
 

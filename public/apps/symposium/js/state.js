@@ -55,6 +55,7 @@
     recipeSortOption: 'category',
     recipeFavoriteFilter: false,
     recipeCanMakeFilter: false,
+    recipePendingFilter: false,
     recipeEditingId: null,
     recipeDetailId: null,
   };
