@@ -1341,10 +1341,7 @@
               return ingName.indexOf(q) !== -1;
             });
           return (
-            r.name.toLowerCase().indexOf(q) !== -1 ||
-            catName.indexOf(q) !== -1 ||
-            tagHit ||
-            ingHit
+            r.name.toLowerCase().indexOf(q) !== -1 || catName.indexOf(q) !== -1 || tagHit || ingHit
           );
         });
       }
