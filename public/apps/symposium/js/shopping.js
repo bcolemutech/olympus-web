@@ -380,9 +380,20 @@
     },
 
     renderSuggestions: function () {
-      var suggestions = _computeSuggestions();
       var sectionEl = Symposium.getRef('suggestions-section');
       var listEl = Symposium.getRef('suggestion-list');
+
+      if (!state.ingredientsLoaded || !state.shoppingListLoaded) {
+        if (listEl) {
+          listEl.innerHTML = '';
+        }
+        if (sectionEl) {
+          sectionEl.classList.add('hidden');
+        }
+        return;
+      }
+
+      var suggestions = _computeSuggestions();
 
       listEl.innerHTML = '';
 
