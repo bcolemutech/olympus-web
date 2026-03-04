@@ -221,6 +221,44 @@ service cloud.firestore {
       allow delete: if hasApp('symposium');
     }
 
+    match /symposium_shopping_list/{itemId} {
+      function validShoppingListItem() {
+        let data = request.resource.data;
+        let required = [
+          'name', 'quantity', 'unit', 'category', 'checked',
+          'addedFrom', 'ingredientId', 'sourceRecipeId', 'notes',
+          'createdAt', 'updatedAt'
+        ];
+        let allowed = required;
+        let validSources = ['manual', 'auto-suggest', 'recipe'];
+
+        return data.keys().hasAll(required)
+            && data.keys().hasOnly(allowed)
+            && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+            && data.quantity is number && data.quantity >= 0
+            && data.unit is string && data.unit.size() <= 50
+            && data.category is string && data.category.size() <= 100
+            && data.checked is bool
+            && data.addedFrom in validSources
+            && (data.ingredientId == null
+                || (data.ingredientId is string && data.ingredientId.size() > 0))
+            && (data.sourceRecipeId == null
+                || (data.sourceRecipeId is string && data.sourceRecipeId.size() > 0))
+            && data.notes is string && data.notes.size() <= 1000;
+      }
+
+      allow read: if hasApp('symposium');
+      allow create: if hasApp('symposium')
+                    && validShoppingListItem()
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if hasApp('symposium')
+                    && validShoppingListItem()
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.updatedAt == request.time;
+      allow delete: if hasApp('symposium');
+    }
+
     match /symposium_categories/{categoryId} {
       allow read: if hasApp('symposium');
       allow write: if false;
