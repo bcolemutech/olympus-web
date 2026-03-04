@@ -156,11 +156,11 @@
       nameEl.textContent = item.name;
       content.appendChild(nameEl);
 
-      if (item.quantity || item.unit) {
+      if (item.quantity != null || item.unit) {
         var metaEl = document.createElement('span');
         metaEl.className = 'provision-item-meta';
         var parts = [];
-        if (item.quantity) parts.push(item.quantity);
+        if (item.quantity != null) parts.push(item.quantity);
         if (item.unit) parts.push(item.unit);
         metaEl.textContent = parts.join('\u00a0');
         content.appendChild(metaEl);
@@ -173,6 +173,11 @@
         content.appendChild(notesEl);
       }
 
+      (function (i) {
+        content.addEventListener('click', function () {
+          Symposium.shopping.openModal(i);
+        });
+      })(item);
       row.appendChild(content);
 
       // Delete button
@@ -202,11 +207,15 @@
 
     openModal: function (item) {
       state.shoppingEditingId = item ? item.id : null;
-      _linkedIngredientId = item ? item.ingredientId || null : null;
+      _linkedIngredientId = item ? (item.ingredientId != null ? item.ingredientId : null) : null;
 
       Symposium.getRef('prov-ing-search').value = item ? item.name : '';
       Symposium.getRef('prov-ing-dropdown').classList.add('hidden');
-      Symposium.getRef('prov-field-quantity').value = item ? item.quantity || 1 : 1;
+      Symposium.getRef('prov-field-quantity').value = item
+        ? item.quantity != null
+          ? item.quantity
+          : 1
+        : 1;
       Symposium.getRef('prov-field-unit').value = item ? item.unit || '' : '';
       Symposium.getRef('prov-field-category').value = item ? item.category || '' : '';
       Symposium.getRef('prov-field-notes').value = item ? item.notes || '' : '';
@@ -248,7 +257,7 @@
         unit: unit,
         category: category,
         checked: false,
-        addedFrom: 'manual',
+        addedFrom: _linkedIngredientId ? 'auto-suggest' : 'manual',
         ingredientId: _linkedIngredientId || null,
         sourceRecipeId: null,
         notes: notes,
