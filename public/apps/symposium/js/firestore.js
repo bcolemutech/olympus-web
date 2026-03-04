@@ -10,6 +10,7 @@
     _onIngredientsChanged: null,
     _onEquipmentChanged: null,
     _onRecipesChanged: null,
+    _onShoppingListChanged: null,
 
     loadCategories: function () {
       return state.db
@@ -82,6 +83,23 @@
           });
           if (Symposium.firestore._onRecipesChanged) {
             Symposium.firestore._onRecipesChanged();
+          }
+        });
+    },
+
+    subscribeToShoppingList: function () {
+      state.db
+        .collection('symposium_shopping_list')
+        .orderBy('category')
+        .orderBy('createdAt')
+        .onSnapshot(function (snapshot) {
+          state.allShoppingList = [];
+          snapshot.forEach(function (doc) {
+            state.allShoppingList.push(Object.assign({ id: doc.id }, doc.data()));
+          });
+          state.shoppingListLoaded = true;
+          if (Symposium.firestore._onShoppingListChanged) {
+            Symposium.firestore._onShoppingListChanged();
           }
         });
     },

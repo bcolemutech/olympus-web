@@ -1775,3 +1775,184 @@
     order: 3;
   }
 }
+
+/* ═══════════════════════════════════════════════════
+   The Provisions — Shopping List
+   ═══════════════════════════════════════════════════ */
+
+/* ── Provisions button accent ──────────────────────── */
+.app-btn-provisions {
+  background: linear-gradient(135deg, #81c784, #388e3c, #2e7d32);
+}
+
+.app-btn-provisions:hover {
+  box-shadow: 0 4px 16px rgba(129, 199, 132, 0.3);
+}
+
+/* ── Tab badge (unchecked item count) ──────────────── */
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: #ffb74d;
+  color: #1a1a2e;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* ── Provision list container ──────────────────────── */
+.provision-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.provision-count {
+  font-size: 0.85rem;
+  color: #546e7a;
+  margin: 8px 0;
+}
+
+/* ── Category header ───────────────────────────────── */
+.provision-category-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #546e7a;
+  margin: 16px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.provision-category-header:first-child {
+  margin-top: 8px;
+}
+
+/* ── Provision item row ────────────────────────────── */
+.provision-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  transition: background 0.15s;
+}
+
+.provision-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.provision-item--checked {
+  opacity: 0.55;
+}
+
+/* ── Checkbox button ───────────────────────────────── */
+.provision-checkbox {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #ffb74d;
+  background: transparent;
+  color: #ffb74d;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+  padding: 0;
+}
+
+.provision-checkbox:hover {
+  background: rgba(255, 183, 77, 0.15);
+}
+
+.provision-checkbox--checked {
+  background: #ffb74d;
+  color: #1a1a2e;
+  border-color: #ffb74d;
+}
+
+/* ── Item content ──────────────────────────────────── */
+.provision-item-content {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.provision-item-name {
+  font-size: 0.95rem;
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.provision-item--checked .provision-item-name {
+  text-decoration: line-through;
+  color: #546e7a;
+}
+
+.provision-item-meta {
+  font-size: 0.8rem;
+  color: #546e7a;
+}
+
+.provision-item-notes {
+  width: 100%;
+  font-size: 0.78rem;
+  color: #546e7a;
+  font-style: italic;
+}
+
+/* ── Delete button ─────────────────────────────────── */
+.provision-item-delete {
+  flex-shrink: 0;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.provision-item:hover .provision-item-delete {
+  opacity: 0.8;
+}
+
+/* ── Clear Checked button ──────────────────────────── */
+.btn-clear-checked {
+  background: transparent;
+  border: 1px solid rgba(239, 83, 80, 0.4);
+  color: #ef5350;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.btn-clear-checked:hover {
+  background: rgba(239, 83, 80, 0.1);
+  border-color: rgba(239, 83, 80, 0.7);
+}
+
+@media (max-width: 600px) {
+  .provision-item {
+    padding: 8px 10px;
+  }
+}

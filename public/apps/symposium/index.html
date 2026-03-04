@@ -110,6 +110,18 @@
         >
           &#127860; Recipes
         </button>
+        <button
+          class="view-tab"
+          id="tab-provisions"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-provisions"
+          data-view="provisions"
+        >
+          &#128722; Provisions
+          <span class="tab-badge hidden" id="tab-provisions-badge">0</span>
+        </button>
       </div>
 
       <!-- Combined search results panel (shown when global search is active) -->
@@ -335,6 +347,26 @@
         <div class="empty-state" id="empty-state-recipe">
           <span class="empty-state-icon" aria-hidden="true">&#127860;</span>
           <p class="empty-state-text">The Libations await their first offering.</p>
+        </div>
+      </div>
+      <!-- Provisions panel -->
+      <div id="panel-provisions" role="tabpanel" aria-labelledby="tab-provisions" class="hidden">
+        <div class="toolbar">
+          <button class="app-btn app-btn-provisions" id="btn-add-provision" type="button">
+            + Add to Provisions
+          </button>
+          <button class="btn-clear-checked hidden" id="btn-clear-checked" type="button">
+            Clear Checked
+          </button>
+        </div>
+
+        <div class="provision-count hidden" id="provision-count"></div>
+
+        <div class="provision-list" id="provision-list"></div>
+
+        <div class="empty-state" id="empty-state-provisions">
+          <span class="empty-state-icon" aria-hidden="true">&#128722;</span>
+          <p class="empty-state-text">The Provisions are complete &mdash; Dionysus approves.</p>
         </div>
       </div>
     </main>
@@ -800,6 +832,86 @@
       </div>
     </div>
 
+    <!-- Provisions modal overlay -->
+    <div class="modal-overlay" id="modal-overlay-provisions">
+      <div class="modal-dialog" role="dialog" aria-labelledby="modal-title-provisions">
+        <h2 class="modal-title" id="modal-title-provisions">Add to Provisions</h2>
+        <form id="provisions-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label class="form-label" for="prov-ing-search"
+                >Item (search ingredients or type freely)</label
+              >
+              <div class="selector-search-wrapper">
+                <input
+                  class="form-input"
+                  id="prov-ing-search"
+                  type="text"
+                  placeholder="e.g. Buffalo Trace, Lime Juice&hellip;"
+                  autocomplete="off"
+                />
+                <div class="selector-dropdown hidden" id="prov-ing-dropdown"></div>
+              </div>
+              <span class="form-error" id="prov-error-name"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="prov-field-quantity">Quantity</label>
+              <input
+                class="form-input"
+                id="prov-field-quantity"
+                type="number"
+                min="0"
+                step="0.25"
+                value="1"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="prov-field-unit">Unit</label>
+              <select class="form-select" id="prov-field-unit">
+                <option value="">&mdash;</option>
+                <option value="oz">oz</option>
+                <option value="ml">ml</option>
+                <option value="dash">dash</option>
+                <option value="each">each</option>
+                <option value="splash">splash</option>
+                <option value="bottle">bottle</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="prov-field-category">Category</label>
+              <input
+                class="form-input"
+                id="prov-field-category"
+                type="text"
+                placeholder="e.g. Spirits, Citrus&hellip;"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="prov-field-notes">Notes</label>
+              <input
+                class="form-input"
+                id="prov-field-notes"
+                type="text"
+                placeholder="Optional notes&hellip;"
+              />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-cancel" id="btn-cancel-provisions" type="button">Cancel</button>
+            <button class="app-btn app-btn-provisions" id="btn-save-provisions" type="submit">
+              Add to List
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Amphora level popover -->
     <div class="amphora-popover" id="amphora-popover">
       <div class="amphora-popover-title">Bottle Level</div>
@@ -817,6 +929,7 @@
     <script src="/apps/symposium/js/equipment.js"></script>
     <script src="/apps/symposium/js/inventory.js"></script>
     <script src="/apps/symposium/js/recipes.js"></script>
+    <script src="/apps/symposium/js/shopping.js"></script>
     <script src="/apps/symposium/js/app.js"></script>
 
     <script>

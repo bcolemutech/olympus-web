@@ -432,3 +432,329 @@ describe('symposium_recipes — Firestore Security Rules', function () {
     });
   });
 });
+
+// ── symposium_shopping_list — Firestore Security Rules ────────────────────────
+
+function makeShoppingItem(overrides) {
+  var base = {
+    name: 'Buffalo Trace',
+    quantity: 1,
+    unit: 'bottle',
+    category: 'spirits',
+    checked: false,
+    addedFrom: 'manual',
+    ingredientId: null,
+    sourceRecipeId: null,
+    notes: '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  return Object.assign({}, base, overrides || {});
+}
+
+describe('symposium_shopping_list — Firestore Security Rules', function () {
+  var testEnv;
+  var authedDb;
+
+  beforeAll(async function () {
+    var firestoreConfig = {
+      rules: readFileSync(RULES_PATH, 'utf8'),
+    };
+
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      var host = parts[0];
+      var portString = parts[1];
+      if (host) {
+        firestoreConfig.host = host;
+      }
+      if (portString) {
+        var parsedPort = parseInt(portString, 10);
+        if (!isNaN(parsedPort)) {
+          firestoreConfig.port = parsedPort;
+        }
+      }
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: firestoreConfig,
+    });
+
+    authedDb = testEnv.authenticatedContext('user-001', SYMPOSIUM_TOKEN).firestore();
+  });
+
+  afterAll(async function () {
+    await testEnv.cleanup();
+  });
+
+  afterEach(async function () {
+    await testEnv.clearFirestore();
+  });
+
+  // ── 1. Read access ────────────────────────────────────────────────────────
+
+  describe('read access', function () {
+    it('allows read for authenticated symposium user', async function () {
+      await assertSucceeds(
+        getDoc(doc(authedDb, 'symposium_shopping_list', 'item-read-test'))
+      );
+    });
+
+    it('denies read for unauthenticated user', async function () {
+      var unauthDb = testEnv.unauthenticatedContext().firestore();
+      await assertFails(
+        getDoc(doc(unauthDb, 'symposium_shopping_list', 'item-read-test'))
+      );
+    });
+
+    it('denies read for user without symposium app claim', async function () {
+      var wrongDb = testEnv
+        .authenticatedContext('user-002', { apps: ['other-app'] })
+        .firestore();
+      await assertFails(
+        getDoc(doc(wrongDb, 'symposium_shopping_list', 'item-read-test'))
+      );
+    });
+  });
+
+  // ── 2. Valid creates ──────────────────────────────────────────────────────
+
+  describe('valid creates', function () {
+    it('allows create of a freeform item (ingredientId null)', async function () {
+      await assertSucceeds(
+        setDoc(doc(authedDb, 'symposium_shopping_list', 'item-freeform'), makeShoppingItem())
+      );
+    });
+
+    it('allows create of a linked item (ingredientId set)', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-linked'),
+          makeShoppingItem({ ingredientId: 'ing-001' })
+        )
+      );
+    });
+
+    it('allows create of a checked item', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-checked'),
+          makeShoppingItem({ checked: true })
+        )
+      );
+    });
+
+    it('allows create with addedFrom auto-suggest', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-autosuggest'),
+          makeShoppingItem({ addedFrom: 'auto-suggest' })
+        )
+      );
+    });
+
+    it('allows create with addedFrom recipe and sourceRecipeId set', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-from-recipe'),
+          makeShoppingItem({ addedFrom: 'recipe', sourceRecipeId: 'recipe-001' })
+        )
+      );
+    });
+
+    it('allows create with non-empty notes', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-with-notes'),
+          makeShoppingItem({ notes: 'Prefer small-batch if available' })
+        )
+      );
+    });
+
+    it('allows create with quantity 0', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-qty-0'),
+          makeShoppingItem({ quantity: 0 })
+        )
+      );
+    });
+  });
+
+  // ── 3. Valid updates ──────────────────────────────────────────────────────
+
+  describe('valid updates', function () {
+    it('allows update to toggle checked state', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_shopping_list', 'item-toggle'), {
+          name: 'Lime Juice',
+          quantity: 2,
+          unit: 'oz',
+          category: 'citrus',
+          checked: false,
+          addedFrom: 'manual',
+          ingredientId: null,
+          sourceRecipeId: null,
+          notes: '',
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      var updateData = makeShoppingItem({
+        name: 'Lime Juice',
+        quantity: 2,
+        unit: 'oz',
+        category: 'citrus',
+        checked: true,
+        createdAt: new Date('2024-01-01'),
+        updatedAt: serverTimestamp(),
+      });
+      await assertSucceeds(
+        setDoc(doc(authedDb, 'symposium_shopping_list', 'item-toggle'), updateData)
+      );
+    });
+
+    it('rejects update that changes createdAt', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_shopping_list', 'item-immutable-cat'), {
+          name: 'Angostura',
+          quantity: 1,
+          unit: 'bottle',
+          category: 'bitters',
+          checked: false,
+          addedFrom: 'manual',
+          ingredientId: null,
+          sourceRecipeId: null,
+          notes: '',
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      var updateData = makeShoppingItem({
+        name: 'Angostura',
+        category: 'bitters',
+        createdAt: new Date('2025-06-01'), // changed!
+        updatedAt: serverTimestamp(),
+      });
+      await assertFails(
+        setDoc(doc(authedDb, 'symposium_shopping_list', 'item-immutable-cat'), updateData)
+      );
+    });
+  });
+
+  // ── 4. Delete ─────────────────────────────────────────────────────────────
+
+  describe('delete', function () {
+    const { deleteDoc } = require('firebase/firestore');
+
+    it('allows delete by authenticated symposium user', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_shopping_list', 'item-to-delete'), {
+          name: 'Delete Me',
+          quantity: 1,
+          unit: 'each',
+          category: 'misc',
+          checked: false,
+          addedFrom: 'manual',
+          ingredientId: null,
+          sourceRecipeId: null,
+          notes: '',
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      await assertSucceeds(
+        deleteDoc(doc(authedDb, 'symposium_shopping_list', 'item-to-delete'))
+      );
+    });
+  });
+
+  // ── 5. Rejection cases ────────────────────────────────────────────────────
+
+  describe('rejection cases', function () {
+    it('rejects create with missing required field (name)', async function () {
+      var data = makeShoppingItem();
+      delete data.name;
+      await assertFails(setDoc(doc(authedDb, 'symposium_shopping_list', 'item-no-name'), data));
+    });
+
+    it('rejects create with missing required field (checked)', async function () {
+      var data = makeShoppingItem();
+      delete data.checked;
+      await assertFails(
+        setDoc(doc(authedDb, 'symposium_shopping_list', 'item-no-checked'), data)
+      );
+    });
+
+    it('rejects create with quantity as string', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-qty-string'),
+          makeShoppingItem({ quantity: '2' })
+        )
+      );
+    });
+
+    it('rejects create with empty name', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-empty-name'),
+          makeShoppingItem({ name: '' })
+        )
+      );
+    });
+
+    it('rejects create with invalid addedFrom value', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-bad-source'),
+          makeShoppingItem({ addedFrom: 'imported' })
+        )
+      );
+    });
+
+    it('rejects create with unknown extra field', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-extra-field'),
+          makeShoppingItem({ unexpectedField: 'surprise' })
+        )
+      );
+    });
+
+    it('rejects create with name exceeding 200 characters', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-long-name'),
+          makeShoppingItem({ name: 'A'.repeat(201) })
+        )
+      );
+    });
+
+    it('rejects create with checked as string', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-checked-string'),
+          makeShoppingItem({ checked: 'true' })
+        )
+      );
+    });
+
+    it('rejects create with negative quantity', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_shopping_list', 'item-negative-qty'),
+          makeShoppingItem({ quantity: -1 })
+        )
+      );
+    });
+  });
+});

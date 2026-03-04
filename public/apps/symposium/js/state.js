@@ -58,6 +58,9 @@
     recipePendingFilter: false,
     recipeEditingId: null,
     recipeDetailId: null,
+    allShoppingList: [],
+    shoppingListLoaded: false,
+    shoppingEditingId: null,
   };
 
   // ── Lazy-cached DOM ref helpers ────────────────

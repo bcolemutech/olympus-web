@@ -12,9 +12,11 @@
     var tabIngredients = Symposium.getRef('tab-ingredients');
     var tabEquipment = Symposium.getRef('tab-equipment');
     var tabRecipes = Symposium.getRef('tab-recipes');
+    var tabProvisions = Symposium.getRef('tab-provisions');
     var panelIngredients = Symposium.getRef('panel-ingredients');
     var panelEquipment = Symposium.getRef('panel-equipment');
     var panelRecipes = Symposium.getRef('panel-recipes');
+    var panelProvisions = Symposium.getRef('panel-provisions');
 
     // Save current tab's scroll position before switching
     if (state.currentView) {
@@ -28,12 +30,15 @@
     tabEquipment.setAttribute('aria-selected', view === 'equipment' ? 'true' : 'false');
     tabRecipes.classList.toggle('active', view === 'recipes');
     tabRecipes.setAttribute('aria-selected', view === 'recipes' ? 'true' : 'false');
+    tabProvisions.classList.toggle('active', view === 'provisions');
+    tabProvisions.setAttribute('aria-selected', view === 'provisions' ? 'true' : 'false');
 
     // Hide combined panel, show the selected tab panel
     Symposium.getRef('panel-combined').classList.add('hidden');
     panelIngredients.classList.toggle('hidden', view !== 'ingredients');
     panelEquipment.classList.toggle('hidden', view !== 'equipment');
     panelRecipes.classList.toggle('hidden', view !== 'recipes');
+    panelProvisions.classList.toggle('hidden', view !== 'provisions');
 
     // Clear global search when switching tabs
     state.globalSearchQuery = '';
@@ -107,6 +112,11 @@
         if (state.allIngredients.length > 0) Symposium.recipes.updateCanMakeAll();
       };
 
+      Symposium.firestore._onShoppingListChanged = function () {
+        Symposium.shopping.renderList();
+        Symposium.shopping.updateBadge();
+      };
+
       // ── Global search ────────────────────────────
       var globalSearchEl = Symposium.getRef('oracle-search-global');
       var globalClearEl = Symposium.getRef('oracle-clear-global');
@@ -127,6 +137,10 @@
         Symposium.getRef('panel-recipes').classList.toggle(
           'hidden',
           hasQuery || state.currentView !== 'recipes'
+        );
+        Symposium.getRef('panel-provisions').classList.toggle(
+          'hidden',
+          hasQuery || state.currentView !== 'provisions'
         );
         if (hasQuery) Symposium.inventory.renderCombinedSearch();
       });
@@ -206,6 +220,8 @@
             Symposium.recipes.closeDetail();
           } else if (altarModalEl && altarModalEl.classList.contains('open')) {
             Symposium.recipes.closeAltar();
+          } else if (provisionsModalEl.classList.contains('open')) {
+            Symposium.shopping.closeModal();
           }
         }
       });
@@ -245,6 +261,9 @@
       });
       Symposium.getRef('tab-recipes').addEventListener('click', function () {
         switchView('recipes');
+      });
+      Symposium.getRef('tab-provisions').addEventListener('click', function () {
+        switchView('provisions');
       });
 
       // ── Equipment sort ──────────────────────────
@@ -412,6 +431,32 @@
       // Register ingredient/equipment search typeahead listeners
       Symposium.recipes.initSearchListeners();
 
+      // ── Provisions modal ─────────────────────────
+      var provisionsModalEl = Symposium.getRef('modal-overlay-provisions');
+
+      Symposium.getRef('btn-add-provision').addEventListener('click', function () {
+        Symposium.shopping.openModal(null);
+      });
+
+      Symposium.getRef('btn-cancel-provisions').addEventListener('click', function () {
+        Symposium.shopping.closeModal();
+      });
+
+      provisionsModalEl.addEventListener('click', function (e) {
+        if (e.target === provisionsModalEl) Symposium.shopping.closeModal();
+      });
+
+      Symposium.getRef('btn-clear-checked').addEventListener('click', function () {
+        Symposium.shopping.clearChecked();
+      });
+
+      Symposium.getRef('provisions-form').addEventListener('submit', function (e) {
+        Symposium.shopping.handleSubmit(e);
+      });
+
+      // Register provisions ingredient typeahead listeners
+      Symposium.shopping.initSearchListeners();
+
       // ── Init data ───────────────────────────────
       Symposium.firestore
         .loadCategories()
@@ -419,6 +464,7 @@
           Symposium.firestore.subscribeToIngredients();
           Symposium.firestore.subscribeToEquipment();
           Symposium.firestore.subscribeToRecipes();
+          Symposium.firestore.subscribeToShoppingList();
         })
         .catch(function (err) {
           console.error('Failed to load categories:', err);
