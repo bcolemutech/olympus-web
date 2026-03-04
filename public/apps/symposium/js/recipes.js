@@ -1470,7 +1470,8 @@
 
     renderCard: function (recipe) {
       var card = document.createElement('div');
-      card.className = 'recipe-card' +
+      card.className =
+        'recipe-card' +
         (recipe.favorite ? ' recipe-card-favorite' : '') +
         (_batchSelected[recipe.id] ? ' recipe-card--selected' : '');
 
@@ -1579,8 +1580,8 @@
       // Batch select toggle button
       var selectBtn = document.createElement('button');
       selectBtn.type = 'button';
-      selectBtn.className = 'recipe-select-btn' +
-        (_batchSelected[recipe.id] ? ' recipe-select-btn--active' : '');
+      selectBtn.className =
+        'recipe-select-btn' + (_batchSelected[recipe.id] ? ' recipe-select-btn--active' : '');
       selectBtn.textContent = _batchSelected[recipe.id] ? 'Selected' : 'Select';
       (function (id, c, b) {
         b.addEventListener('click', function (e) {
@@ -2048,18 +2049,25 @@
         if (item.ingredientId) onList[item.ingredientId] = true;
       });
 
-      var toAdd = missingRefs.filter(function (ri) { return !onList[ri.id]; });
+      var toAdd = missingRefs.filter(function (ri) {
+        return !onList[ri.id];
+      });
       if (!toAdd.length) return Promise.resolve();
 
       var batch = state.db.batch();
       var collection = state.db.collection('symposium_shopping_list');
       toAdd.forEach(function (ri) {
-        var ing = state.allIngredients.find(function (i) { return i.id === ri.id; });
-        var catName = ing && ing.category
-          ? (state.categoryMap[ing.category] ? state.categoryMap[ing.category].name : ing.category)
-          : '';
+        var ing = state.allIngredients.find(function (i) {
+          return i.id === ri.id;
+        });
+        var catName =
+          ing && ing.category
+            ? state.categoryMap[ing.category]
+              ? state.categoryMap[ing.category].name
+              : ing.category
+            : '';
         batch.set(collection.doc(), {
-          name: ing ? ing.name : (ri.name || ri.id),
+          name: ing ? ing.name : ri.name || ri.id,
           quantity: parseFloat(ri.amount) || 1,
           unit: ri.unit || (ing ? ing.unit || '' : ''),
           category: catName,
@@ -2087,7 +2095,9 @@
       var selectedIds = Object.keys(_batchSelected);
       if (!selectedIds.length) return Promise.resolve();
 
-      var selectedRecipes = state.allRecipes.filter(function (r) { return _batchSelected[r.id]; });
+      var selectedRecipes = state.allRecipes.filter(function (r) {
+        return _batchSelected[r.id];
+      });
       if (!selectedRecipes.length) return Promise.resolve();
 
       _rebuildStockMap();
@@ -2105,15 +2115,21 @@
         });
         missing.forEach(function (ri) {
           if (mergeMap[ri.id]) {
-            mergeMap[ri.id].qty += (parseFloat(ri.amount) || 1);
+            mergeMap[ri.id].qty += parseFloat(ri.amount) || 1;
             mergeMap[ri.id].recipeNames.push(recipe.name);
           } else {
-            mergeMap[ri.id] = { ri: ri, qty: parseFloat(ri.amount) || 1, recipeNames: [recipe.name] };
+            mergeMap[ri.id] = {
+              ri: ri,
+              qty: parseFloat(ri.amount) || 1,
+              recipeNames: [recipe.name],
+            };
           }
         });
       });
 
-      var toAdd = Object.keys(mergeMap).filter(function (id) { return !onList[id]; });
+      var toAdd = Object.keys(mergeMap).filter(function (id) {
+        return !onList[id];
+      });
 
       if (!toAdd.length) {
         _batchSelected = {};
@@ -2127,12 +2143,17 @@
       toAdd.forEach(function (ingId) {
         var entry = mergeMap[ingId];
         var ri = entry.ri;
-        var ing = state.allIngredients.find(function (i) { return i.id === ingId; });
-        var catName = ing && ing.category
-          ? (state.categoryMap[ing.category] ? state.categoryMap[ing.category].name : ing.category)
-          : '';
+        var ing = state.allIngredients.find(function (i) {
+          return i.id === ingId;
+        });
+        var catName =
+          ing && ing.category
+            ? state.categoryMap[ing.category]
+              ? state.categoryMap[ing.category].name
+              : ing.category
+            : '';
         batch.set(collection.doc(), {
-          name: ing ? ing.name : (ri.name || ingId),
+          name: ing ? ing.name : ri.name || ingId,
           quantity: entry.qty,
           unit: ri.unit || (ing ? ing.unit || '' : ''),
           category: catName,
@@ -2146,7 +2167,8 @@
         });
       });
 
-      return batch.commit()
+      return batch
+        .commit()
         .then(function () {
           _batchSelected = {};
           _updateBatchBar();

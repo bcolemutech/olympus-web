@@ -464,7 +464,8 @@
         var btn = Symposium.getRef('btn-batch-add-provisions');
         btn.disabled = true;
         btn.textContent = 'Adding\u2026';
-        Symposium.recipes.addMissingFromBatch()
+        Symposium.recipes
+          .addMissingFromBatch()
           .then(function () {
             btn.disabled = false;
             btn.textContent = 'Add Missing to Provisions';
