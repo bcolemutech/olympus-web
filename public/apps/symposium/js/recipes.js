@@ -2098,7 +2098,13 @@
       var selectedRecipes = state.allRecipes.filter(function (r) {
         return _batchSelected[r.id];
       });
-      if (!selectedRecipes.length) return Promise.resolve();
+      if (!selectedRecipes.length) {
+        // All selected IDs refer to recipes that no longer exist; clear stale selection
+        _batchSelected = {};
+        _updateBatchBar();
+        Symposium.recipes.renderList();
+        return Promise.resolve();
+      }
 
       _rebuildStockMap();
 
@@ -2114,13 +2120,19 @@
           return !ri.pending && _stockMap.hasOwnProperty(ri.id) && !_stockMap[ri.id];
         });
         missing.forEach(function (ri) {
+          var amount = parseFloat(ri.amount) || 1;
           if (mergeMap[ri.id]) {
-            mergeMap[ri.id].qty += parseFloat(ri.amount) || 1;
+            var existingUnit = mergeMap[ri.id].ri.unit || '';
+            var incomingUnit = ri.unit || '';
+            if (existingUnit === incomingUnit) {
+              mergeMap[ri.id].qty += amount;
+            }
+            // When units differ, skip summing incompatible quantities
             mergeMap[ri.id].recipeNames.push(recipe.name);
           } else {
             mergeMap[ri.id] = {
               ri: ri,
-              qty: parseFloat(ri.amount) || 1,
+              qty: amount,
               recipeNames: [recipe.name],
             };
           }

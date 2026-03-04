@@ -460,8 +460,8 @@
       Symposium.shopping.initSearchListeners();
 
       // ── Recipe batch selection bar ────────────────────────────────────────
-      Symposium.getRef('btn-batch-add-provisions').addEventListener('click', function () {
-        var btn = Symposium.getRef('btn-batch-add-provisions');
+      Symposium.getRef('btn-batch-add-provisions').addEventListener('click', function (e) {
+        var btn = e.currentTarget;
         btn.disabled = true;
         btn.textContent = 'Adding\u2026';
         Symposium.recipes
