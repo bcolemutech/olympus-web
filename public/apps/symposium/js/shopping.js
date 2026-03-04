@@ -8,6 +8,42 @@
   // ID of the ingredient linked to the current modal item, null for freeform.
   var _linkedIngredientId = null;
 
+  // ── Smart suggestion state ─────────────────────────────────────────────
+  // Dismissed ingredient IDs for the current session (plain object as ES5 Set).
+  var _dismissedIds = {};
+
+  // ── Smart suggestion helpers ───────────────────────────────────────────
+  function _computeSuggestions() {
+    var onList = {};
+    state.allShoppingList.forEach(function (item) {
+      if (item.ingredientId) onList[item.ingredientId] = true;
+    });
+
+    return state.allIngredients.filter(function (ing) {
+      if (onList[ing.id]) return false;
+      if (_dismissedIds[ing.id]) return false;
+      if (ing.trackingType === 'volume') {
+        if (!ing.inStock) return true;
+        if (ing.openBottleLevel) {
+          var level = Symposium.BOTTLE_LEVELS[ing.openBottleLevel];
+          if (level && level.fill <= 0.25) return true;
+        }
+        return false;
+      } else {
+        return ing.quantity === 0 && !!ing.shoppingListDefault;
+      }
+    });
+  }
+
+  function _suggestionReason(ing) {
+    if (!ing.inStock) return 'Out of Stock';
+    if (ing.openBottleLevel) {
+      var level = Symposium.BOTTLE_LEVELS[ing.openBottleLevel];
+      if (level && level.fill <= 0.25) return 'Low Bottle';
+    }
+    return 'Out of Stock';
+  }
+
   // ── Ingredient typeahead helpers ───────────────────────────────────────
   function _filterIngredients(query) {
     if (!query) return [];
@@ -341,6 +377,121 @@
       Promise.all(promises).catch(function (err) {
         console.error('Failed to clear checked provisions:', err);
       });
+    },
+
+    renderSuggestions: function () {
+      var suggestions = _computeSuggestions();
+      var sectionEl = Symposium.getRef('suggestions-section');
+      var listEl = Symposium.getRef('suggestion-list');
+
+      listEl.innerHTML = '';
+
+      if (suggestions.length === 0) {
+        sectionEl.classList.add('hidden');
+        return;
+      }
+
+      sectionEl.classList.remove('hidden');
+
+      suggestions.forEach(function (ing) {
+        var row = document.createElement('div');
+        row.className = 'suggestion-item';
+
+        var info = document.createElement('div');
+        info.className = 'suggestion-item-info';
+
+        var nameEl = document.createElement('span');
+        nameEl.className = 'suggestion-item-name';
+        nameEl.textContent = ing.name;
+        info.appendChild(nameEl);
+
+        var badges = document.createElement('span');
+        badges.className = 'suggestion-item-badges';
+
+        var catName = state.categoryMap[ing.category]
+          ? state.categoryMap[ing.category].name
+          : ing.category || '';
+        if (catName) {
+          var catBadge = document.createElement('span');
+          catBadge.className = 'badge badge-category';
+          catBadge.textContent = catName;
+          badges.appendChild(catBadge);
+        }
+
+        var reasonBadge = document.createElement('span');
+        reasonBadge.className = 'badge badge-reason';
+        reasonBadge.textContent = _suggestionReason(ing);
+        badges.appendChild(reasonBadge);
+
+        info.appendChild(badges);
+        row.appendChild(info);
+
+        var actions = document.createElement('div');
+        actions.className = 'suggestion-item-actions';
+
+        var addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn-add-suggestion';
+        addBtn.textContent = '+ Add';
+        (function (i, btn) {
+          btn.addEventListener('click', function () {
+            Symposium.shopping._addSuggestion(i, btn);
+          });
+        })(ing, addBtn);
+        actions.appendChild(addBtn);
+
+        var dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'btn-dismiss-suggestion';
+        dismissBtn.setAttribute('aria-label', 'Dismiss suggestion for ' + ing.name);
+        dismissBtn.textContent = '\u2715';
+        (function (id) {
+          dismissBtn.addEventListener('click', function () {
+            Symposium.shopping._dismissSuggestion(id);
+          });
+        })(ing.id);
+        actions.appendChild(dismissBtn);
+
+        row.appendChild(actions);
+        listEl.appendChild(row);
+      });
+    },
+
+    _addSuggestion: function (ing, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Adding\u2026';
+
+      var catName = state.categoryMap[ing.category]
+        ? state.categoryMap[ing.category].name
+        : ing.category || '';
+
+      var data = {
+        name: ing.name,
+        quantity: 1,
+        unit: ing.unit || '',
+        category: catName,
+        checked: false,
+        addedFrom: 'auto-suggest',
+        ingredientId: ing.id,
+        sourceRecipeId: null,
+        notes: '',
+        createdAt: state.serverTimestamp(),
+        updatedAt: state.serverTimestamp(),
+      };
+
+      state.db
+        .collection('symposium_shopping_list')
+        .add(data)
+        .catch(function (err) {
+          console.error('Failed to add suggestion:', err);
+          btn.disabled = false;
+          btn.textContent = '+ Add';
+        });
+    },
+
+    _dismissSuggestion: function (ingId) {
+      _dismissedIds[ingId] = true;
+      Symposium.shopping.renderSuggestions();
     },
 
     initSearchListeners: function () {

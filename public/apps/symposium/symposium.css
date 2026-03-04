@@ -1956,3 +1956,114 @@
     padding: 8px 10px;
   }
 }
+
+/* ── Smart suggestions section ─────────────────────── */
+#suggestions-section {
+  margin-bottom: 1.5rem;
+}
+
+.suggestions-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #ffb74d;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 183, 77, 0.2);
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  background: rgba(255, 183, 77, 0.06);
+  border-left: 3px solid rgba(255, 183, 77, 0.5);
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 4px;
+  transition: background 0.15s;
+}
+
+.suggestion-item:hover {
+  background: rgba(255, 183, 77, 0.1);
+}
+
+.suggestion-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.suggestion-item-name {
+  font-size: 0.95rem;
+  color: #e0e0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestion-item-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge-reason {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(255, 183, 77, 0.18);
+  color: #ffb74d;
+  border: 1px solid rgba(255, 183, 77, 0.3);
+}
+
+.suggestion-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-add-suggestion {
+  background: linear-gradient(135deg, #81c784, #388e3c);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+
+.btn-add-suggestion:hover:not(:disabled) {
+  box-shadow: 0 2px 8px rgba(129, 199, 132, 0.35);
+}
+
+.btn-add-suggestion:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-dismiss-suggestion {
+  background: none;
+  border: none;
+  color: #546e7a;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  font-family: inherit;
+  transition: color 0.15s;
+}
+
+.btn-dismiss-suggestion:hover {
+  color: #e0e0e0;
+}

@@ -93,6 +93,7 @@
         Symposium.inventory.renderDashboard();
         if (state.globalSearchQuery) Symposium.inventory.renderCombinedSearch();
         if (state.allRecipes.length > 0) Symposium.recipes.updateCanMakeAll();
+        Symposium.shopping.renderSuggestions();
       };
 
       Symposium.firestore._onEquipmentChanged = function () {
@@ -115,6 +116,7 @@
       Symposium.firestore._onShoppingListChanged = function () {
         Symposium.shopping.renderList();
         Symposium.shopping.updateBadge();
+        Symposium.shopping.renderSuggestions();
       };
 
       // ── Global search ────────────────────────────
