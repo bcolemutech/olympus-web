@@ -459,6 +459,26 @@
       // Register provisions ingredient typeahead listeners
       Symposium.shopping.initSearchListeners();
 
+      // ── Recipe batch selection bar ────────────────────────────────────────
+      Symposium.getRef('btn-batch-add-provisions').addEventListener('click', function () {
+        var btn = Symposium.getRef('btn-batch-add-provisions');
+        btn.disabled = true;
+        btn.textContent = 'Adding\u2026';
+        Symposium.recipes.addMissingFromBatch()
+          .then(function () {
+            btn.disabled = false;
+            btn.textContent = 'Add Missing to Provisions';
+          })
+          .catch(function () {
+            btn.disabled = false;
+            btn.textContent = 'Failed \u2013 try again';
+          });
+      });
+
+      Symposium.getRef('btn-batch-clear').addEventListener('click', function () {
+        Symposium.recipes.clearBatchSelection();
+      });
+
       // ── Init data ───────────────────────────────
       Symposium.firestore
         .loadCategories()

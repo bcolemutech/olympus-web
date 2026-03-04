@@ -22,6 +22,10 @@
   var _altarCursor = 0;
   var _altarDupeTarget = null;
 
+  // ── Batch recipe selection (plain object as ES5 Set) ─────────────────────
+  // Keys are recipe IDs; value is always true when selected.
+  var _batchSelected = {};
+
   // ── Stock lookup map (id → inStock) ────────────────────────────────────
   // Rebuilt once per render via _rebuildStockMap() to avoid O(n²) lookups.
   var _stockMap = null;
@@ -31,6 +35,37 @@
     state.allIngredients.forEach(function (i) {
       _stockMap[i.id] = i.inStock;
     });
+  }
+
+  // ── Batch bar UI helpers ───────────────────────────────────────────────
+
+  function _updateBatchBar() {
+    var bar = Symposium.getRef('recipe-batch-bar');
+    var label = Symposium.getRef('recipe-batch-label');
+    if (!bar || !label) return;
+
+    var count = Object.keys(_batchSelected).length;
+    if (count === 0) {
+      bar.classList.add('hidden');
+    } else {
+      bar.classList.remove('hidden');
+      label.textContent = count + (count === 1 ? ' recipe selected' : ' recipes selected');
+    }
+  }
+
+  function _toggleBatchSelect(recipeId, cardEl, btnEl) {
+    if (_batchSelected[recipeId]) {
+      delete _batchSelected[recipeId];
+      cardEl.classList.remove('recipe-card--selected');
+      btnEl.classList.remove('recipe-select-btn--active');
+      btnEl.textContent = 'Select';
+    } else {
+      _batchSelected[recipeId] = true;
+      cardEl.classList.add('recipe-card--selected');
+      btnEl.classList.add('recipe-select-btn--active');
+      btnEl.textContent = 'Selected';
+    }
+    _updateBatchBar();
   }
 
   // ── canMake computation ────────────────────────────────────────────────
@@ -627,20 +662,21 @@
         ' missing ingredient' +
         (missingRefs.length > 1 ? 's' : '') +
         ' to shopping list';
-      (function (refs, btn) {
+      (function (refs, rec, btn) {
         btn.addEventListener('click', function () {
           btn.disabled = true;
+          btn.textContent = 'Adding\u2026';
           Symposium.recipes
-            .addMissingToShoppingList(refs)
+            .addMissingToShoppingList(refs, rec)
             .then(function () {
-              btn.textContent = 'Added to shopping list';
+              btn.textContent = 'Added to Provisions';
             })
             .catch(function () {
               btn.disabled = false;
               btn.textContent = 'Failed \u2013 tap to retry';
             });
         });
-      })(missingRefs, shoppingBtn);
+      })(missingRefs, recipe, shoppingBtn);
       ingSection.appendChild(shoppingBtn);
     }
 
@@ -1434,7 +1470,9 @@
 
     renderCard: function (recipe) {
       var card = document.createElement('div');
-      card.className = 'recipe-card' + (recipe.favorite ? ' recipe-card-favorite' : '');
+      card.className = 'recipe-card' +
+        (recipe.favorite ? ' recipe-card-favorite' : '') +
+        (_batchSelected[recipe.id] ? ' recipe-card--selected' : '');
 
       var header = document.createElement('div');
       header.className = 'recipe-card-header';
@@ -1537,6 +1575,20 @@
       deleteBtn.addEventListener('click', function () {
         Symposium.recipes.handleDelete(recipe);
       });
+
+      // Batch select toggle button
+      var selectBtn = document.createElement('button');
+      selectBtn.type = 'button';
+      selectBtn.className = 'recipe-select-btn' +
+        (_batchSelected[recipe.id] ? ' recipe-select-btn--active' : '');
+      selectBtn.textContent = _batchSelected[recipe.id] ? 'Selected' : 'Select';
+      (function (id, c, b) {
+        b.addEventListener('click', function (e) {
+          e.stopPropagation();
+          _toggleBatchSelect(id, c, b);
+        });
+      })(recipe.id, card, selectBtn);
+      actions.appendChild(selectBtn);
 
       actions.appendChild(viewBtn);
       actions.appendChild(editBtn);
@@ -1983,27 +2035,134 @@
       });
     },
 
-    // Marks each missing ingredient's shoppingListDefault as true.
-    // Called when user taps "Add missing to shopping list" in recipe detail.
-    // Returns a Promise that resolves when all updates are committed.
-    addMissingToShoppingList: function (missingRefs) {
-      if (!missingRefs || !missingRefs.length) {
+    // Creates actual shopping list documents for each missing ingredient.
+    // Deduplicates against items already on the list by ingredientId.
+    // Returns a Promise.
+    addMissingToShoppingList: function (missingRefs, recipe) {
+      if (!missingRefs || !missingRefs.length || !recipe) {
         return Promise.resolve();
       }
 
+      var onList = {};
+      state.allShoppingList.forEach(function (item) {
+        if (item.ingredientId) onList[item.ingredientId] = true;
+      });
+
+      var toAdd = missingRefs.filter(function (ri) { return !onList[ri.id]; });
+      if (!toAdd.length) return Promise.resolve();
+
       var batch = state.db.batch();
-      missingRefs.forEach(function (ri) {
-        var docRef = state.db.collection('symposium_ingredients').doc(ri.id);
-        batch.update(docRef, {
-          shoppingListDefault: true,
+      var collection = state.db.collection('symposium_shopping_list');
+      toAdd.forEach(function (ri) {
+        var ing = state.allIngredients.find(function (i) { return i.id === ri.id; });
+        var catName = ing && ing.category
+          ? (state.categoryMap[ing.category] ? state.categoryMap[ing.category].name : ing.category)
+          : '';
+        batch.set(collection.doc(), {
+          name: ing ? ing.name : (ri.name || ri.id),
+          quantity: parseFloat(ri.amount) || 1,
+          unit: ri.unit || (ing ? ing.unit || '' : ''),
+          category: catName,
+          checked: false,
+          addedFrom: 'recipe',
+          ingredientId: ri.id,
+          sourceRecipeId: recipe.id,
+          notes: recipe.name,
+          createdAt: state.serverTimestamp(),
           updatedAt: state.serverTimestamp(),
         });
       });
 
       return batch.commit().catch(function (err) {
-        console.error('Failed to add ingredient(s) to shopping list:', err);
+        console.error('Failed to add recipe ingredients to shopping list:', err);
         throw err;
       });
+    },
+
+    // Collects all selected recipes, computes missing ingredients across all of them,
+    // merges duplicate ingredientIds (summing quantities), skips items already on the
+    // shopping list, and writes the result as a single Firestore batch.
+    // Returns a Promise.
+    addMissingFromBatch: function () {
+      var selectedIds = Object.keys(_batchSelected);
+      if (!selectedIds.length) return Promise.resolve();
+
+      var selectedRecipes = state.allRecipes.filter(function (r) { return _batchSelected[r.id]; });
+      if (!selectedRecipes.length) return Promise.resolve();
+
+      _rebuildStockMap();
+
+      var onList = {};
+      state.allShoppingList.forEach(function (item) {
+        if (item.ingredientId) onList[item.ingredientId] = true;
+      });
+
+      // Merge map: ingredientId → { ri, qty, recipeNames[] }
+      var mergeMap = {};
+      selectedRecipes.forEach(function (recipe) {
+        var missing = (recipe.ingredients || []).filter(function (ri) {
+          return !ri.pending && _stockMap.hasOwnProperty(ri.id) && !_stockMap[ri.id];
+        });
+        missing.forEach(function (ri) {
+          if (mergeMap[ri.id]) {
+            mergeMap[ri.id].qty += (parseFloat(ri.amount) || 1);
+            mergeMap[ri.id].recipeNames.push(recipe.name);
+          } else {
+            mergeMap[ri.id] = { ri: ri, qty: parseFloat(ri.amount) || 1, recipeNames: [recipe.name] };
+          }
+        });
+      });
+
+      var toAdd = Object.keys(mergeMap).filter(function (id) { return !onList[id]; });
+
+      if (!toAdd.length) {
+        _batchSelected = {};
+        _updateBatchBar();
+        Symposium.recipes.renderList();
+        return Promise.resolve();
+      }
+
+      var batch = state.db.batch();
+      var collection = state.db.collection('symposium_shopping_list');
+      toAdd.forEach(function (ingId) {
+        var entry = mergeMap[ingId];
+        var ri = entry.ri;
+        var ing = state.allIngredients.find(function (i) { return i.id === ingId; });
+        var catName = ing && ing.category
+          ? (state.categoryMap[ing.category] ? state.categoryMap[ing.category].name : ing.category)
+          : '';
+        batch.set(collection.doc(), {
+          name: ing ? ing.name : (ri.name || ingId),
+          quantity: entry.qty,
+          unit: ri.unit || (ing ? ing.unit || '' : ''),
+          category: catName,
+          checked: false,
+          addedFrom: 'recipe',
+          ingredientId: ingId,
+          sourceRecipeId: selectedRecipes.length === 1 ? selectedRecipes[0].id : null,
+          notes: entry.recipeNames.join(', '),
+          createdAt: state.serverTimestamp(),
+          updatedAt: state.serverTimestamp(),
+        });
+      });
+
+      return batch.commit()
+        .then(function () {
+          _batchSelected = {};
+          _updateBatchBar();
+          Symposium.recipes.renderList();
+        })
+        .catch(function (err) {
+          console.error('Failed to batch-add ingredients to shopping list:', err);
+          throw err;
+        });
+    },
+
+    // Clears the batch selection state and refreshes the recipe list.
+    clearBatchSelection: function () {
+      _batchSelected = {};
+      _updateBatchBar();
+      Symposium.recipes.renderList();
     },
 
     // Register once-only event listeners for the ingredient/equipment search inputs.
