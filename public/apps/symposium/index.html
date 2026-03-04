@@ -348,6 +348,15 @@
           <span class="empty-state-icon" aria-hidden="true">&#127860;</span>
           <p class="empty-state-text">The Libations await their first offering.</p>
         </div>
+
+        <!-- Batch selection action bar (hidden until recipes are selected) -->
+        <div id="recipe-batch-bar" class="recipe-batch-bar hidden">
+          <span id="recipe-batch-label">0 recipes selected</span>
+          <button type="button" id="btn-batch-add-provisions" class="app-btn app-btn-provisions">
+            Add Missing to Provisions
+          </button>
+          <button type="button" id="btn-batch-clear" class="btn-cancel">Clear</button>
+        </div>
       </div>
       <!-- Provisions panel -->
       <div id="panel-provisions" role="tabpanel" aria-labelledby="tab-provisions" class="hidden">
