@@ -364,6 +364,9 @@
           <button class="app-btn app-btn-provisions" id="btn-add-provision" type="button">
             + Add to Provisions
           </button>
+          <button class="btn-offer-all hidden" id="btn-offer-all" type="button">
+            &#x1F3FA; Offer All to the Cellar
+          </button>
           <button class="btn-clear-checked hidden" id="btn-clear-checked" type="button">
             Clear Checked
           </button>
@@ -924,6 +927,44 @@
             </button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Stock Intake modal overlay — "Offering to the Cellar" -->
+    <div class="modal-overlay" id="modal-overlay-intake">
+      <div class="modal-dialog modal-dialog-intake" role="dialog" aria-labelledby="modal-title-intake" aria-modal="true">
+        <h2 class="modal-title" id="modal-title-intake">Offering to the Cellar</h2>
+        <p class="intake-item-name" id="intake-item-name"></p>
+
+        <div class="form-grid">
+          <div class="form-group full-width" id="intake-brand-group">
+            <label class="form-label" for="intake-field-brand">Brand <span class="form-label-optional">(optional)</span></label>
+            <input
+              class="form-input"
+              id="intake-field-brand"
+              type="text"
+              placeholder="e.g. Buffalo Trace, Fever-Tree&hellip;"
+              maxlength="200"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="form-group full-width" id="intake-full-group">
+            <div class="form-checkbox-row">
+              <input class="form-checkbox" id="intake-check-full" type="checkbox" checked />
+              <label class="form-checkbox-label" for="intake-check-full">Set bottle level to Full</label>
+            </div>
+          </div>
+        </div>
+
+        <span class="form-error" id="intake-error"></span>
+
+        <div class="form-actions">
+          <button class="btn-cancel" id="btn-cancel-intake" type="button">Cancel</button>
+          <button class="app-btn app-btn-provisions" id="btn-confirm-intake" type="button">
+            Offer to the Cellar
+          </button>
+        </div>
       </div>
     </div>
 

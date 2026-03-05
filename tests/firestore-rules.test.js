@@ -8,6 +8,7 @@ const {
   doc,
   setDoc,
   getDoc,
+  updateDoc,
   serverTimestamp,
 } = require('firebase/firestore');
 
@@ -753,6 +754,346 @@ describe('symposium_shopping_list — Firestore Security Rules', function () {
         setDoc(
           doc(authedDb, 'symposium_shopping_list', 'item-negative-qty'),
           makeShoppingItem({ quantity: -1 })
+        )
+      );
+    });
+  });
+});
+
+// ── symposium_ingredients — Firestore Security Rules ─────────────────────────
+
+function makeIngredient(overrides) {
+  var base = {
+    name: 'Buffalo Trace',
+    category: TEST_CATEGORY_ID,
+    subcategory: 'bourbon',
+    tags: ['whiskey', 'american'],
+    unit: 'oz',
+    type: 'consumable',
+    inStock: false,
+    quantity: 0,
+    trackingType: 'volume',
+    stock: 0,
+    bottleSize: 750,
+    bottleSizeUnit: 'ml',
+    notes: '',
+    shoppingListDefault: true,
+    lowStockThreshold: 1,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  return Object.assign({}, base, overrides || {});
+}
+
+describe('symposium_ingredients — Firestore Security Rules', function () {
+  var testEnv;
+  var authedDb;
+
+  beforeAll(async function () {
+    var firestoreConfig = {
+      rules: readFileSync(RULES_PATH, 'utf8'),
+    };
+
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      var host = parts[0];
+      var portString = parts[1];
+      if (host) {
+        firestoreConfig.host = host;
+      }
+      if (portString) {
+        var parsedPort = parseInt(portString, 10);
+        if (!isNaN(parsedPort)) {
+          firestoreConfig.port = parsedPort;
+        }
+      }
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: firestoreConfig,
+    });
+
+    // Seed the category document (bypass rules)
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      await setDoc(
+        doc(ctx.firestore(), 'symposium_categories', TEST_CATEGORY_ID),
+        TEST_CATEGORY_DATA
+      );
+    });
+
+    authedDb = testEnv.authenticatedContext('user-001', SYMPOSIUM_TOKEN).firestore();
+  });
+
+  afterAll(async function () {
+    await testEnv.cleanup();
+  });
+
+  afterEach(async function () {
+    await testEnv.clearFirestore();
+    // Re-seed the category after each clearFirestore()
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      await setDoc(
+        doc(ctx.firestore(), 'symposium_categories', TEST_CATEGORY_ID),
+        TEST_CATEGORY_DATA
+      );
+    });
+  });
+
+  // ── 1. Valid creates ──────────────────────────────────────────────────────
+
+  describe('valid creates', function () {
+    it('allows create of a valid volume-tracked ingredient', async function () {
+      await assertSucceeds(
+        setDoc(doc(authedDb, 'symposium_ingredients', 'ing-001'), makeIngredient())
+      );
+    });
+
+    it('allows create of a valid quantity-tracked ingredient', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_ingredients', 'ing-qty'),
+          makeIngredient({ unit: 'each', trackingType: 'quantity', bottleSize: 0 })
+        )
+      );
+    });
+
+    it('allows create with openBottleLevel set to a valid level', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_ingredients', 'ing-with-level'),
+          makeIngredient({ openBottleLevel: 'half', stock: 1, inStock: true })
+        )
+      );
+    });
+  });
+
+  // ── 2. Brand field — intake flow ──────────────────────────────────────────
+
+  describe('brand field (stock intake)', function () {
+    it('allows update with a valid brand string', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_ingredients', 'ing-brand-test'), {
+          name: 'Bourbon',
+          category: TEST_CATEGORY_ID,
+          subcategory: 'bourbon',
+          tags: [],
+          unit: 'oz',
+          type: 'consumable',
+          inStock: false,
+          quantity: 0,
+          trackingType: 'volume',
+          stock: 0,
+          bottleSize: 750,
+          bottleSizeUnit: 'ml',
+          notes: '',
+          shoppingListDefault: false,
+          lowStockThreshold: 1,
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      await assertSucceeds(
+        updateDoc(doc(authedDb, 'symposium_ingredients', 'ing-brand-test'), {
+          stock: 1,
+          inStock: true,
+          openBottleLevel: 'full',
+          brand: 'Buffalo Trace',
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('allows update without brand (backward compatible)', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_ingredients', 'ing-no-brand'), {
+          name: 'Simple Syrup',
+          category: TEST_CATEGORY_ID,
+          subcategory: 'bourbon',
+          tags: [],
+          unit: 'oz',
+          type: 'consumable',
+          inStock: false,
+          quantity: 0,
+          trackingType: 'volume',
+          stock: 0,
+          bottleSize: 750,
+          bottleSizeUnit: 'ml',
+          notes: '',
+          shoppingListDefault: false,
+          lowStockThreshold: 0,
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      await assertSucceeds(
+        updateDoc(doc(authedDb, 'symposium_ingredients', 'ing-no-brand'), {
+          stock: 2,
+          inStock: true,
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('rejects update with brand exceeding 200 characters', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_ingredients', 'ing-brand-long'), {
+          name: 'Whiskey',
+          category: TEST_CATEGORY_ID,
+          subcategory: 'bourbon',
+          tags: [],
+          unit: 'oz',
+          type: 'consumable',
+          inStock: false,
+          quantity: 0,
+          trackingType: 'volume',
+          stock: 0,
+          bottleSize: 750,
+          bottleSizeUnit: 'ml',
+          notes: '',
+          shoppingListDefault: false,
+          lowStockThreshold: 0,
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      await assertFails(
+        updateDoc(doc(authedDb, 'symposium_ingredients', 'ing-brand-long'), {
+          stock: 1,
+          inStock: true,
+          brand: 'B'.repeat(201),
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('rejects update with brand as a non-string value', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_ingredients', 'ing-brand-type'), {
+          name: 'Rye',
+          category: TEST_CATEGORY_ID,
+          subcategory: 'bourbon',
+          tags: [],
+          unit: 'oz',
+          type: 'consumable',
+          inStock: false,
+          quantity: 0,
+          trackingType: 'volume',
+          stock: 0,
+          bottleSize: 750,
+          bottleSizeUnit: 'ml',
+          notes: '',
+          shoppingListDefault: false,
+          lowStockThreshold: 0,
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      await assertFails(
+        updateDoc(doc(authedDb, 'symposium_ingredients', 'ing-brand-type'), {
+          stock: 1,
+          inStock: true,
+          brand: 42,
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+  });
+
+  // ── 3. Intake update pattern ──────────────────────────────────────────────
+
+  describe('intake update pattern', function () {
+    it('allows partial update that increments stock, sets inStock and openBottleLevel', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_ingredients', 'ing-intake'), {
+          name: 'Mezcal',
+          category: TEST_CATEGORY_ID,
+          subcategory: 'bourbon',
+          tags: ['smoky'],
+          unit: 'oz',
+          type: 'consumable',
+          inStock: false,
+          quantity: 0,
+          trackingType: 'volume',
+          stock: 0,
+          bottleSize: 750,
+          bottleSizeUnit: 'ml',
+          notes: '',
+          shoppingListDefault: true,
+          lowStockThreshold: 1,
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      await assertSucceeds(
+        updateDoc(doc(authedDb, 'symposium_ingredients', 'ing-intake'), {
+          stock: 1,
+          inStock: true,
+          openBottleLevel: 'full',
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+
+    it('allows partial update that increments quantity for quantity-tracked ingredient', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(doc(ctx.firestore(), 'symposium_ingredients', 'ing-intake-qty'), {
+          name: 'Maraschino Cherry',
+          category: TEST_CATEGORY_ID,
+          subcategory: 'bourbon',
+          tags: [],
+          unit: 'each',
+          type: 'consumable',
+          inStock: false,
+          quantity: 0,
+          trackingType: 'quantity',
+          stock: 0,
+          bottleSize: 0,
+          bottleSizeUnit: 'ml',
+          notes: '',
+          shoppingListDefault: true,
+          lowStockThreshold: 5,
+          createdAt: new Date('2024-01-01'),
+          updatedAt: new Date('2024-01-01'),
+        });
+      });
+
+      await assertSucceeds(
+        updateDoc(doc(authedDb, 'symposium_ingredients', 'ing-intake-qty'), {
+          quantity: 1,
+          inStock: true,
+          updatedAt: serverTimestamp(),
+        })
+      );
+    });
+  });
+
+  // ── 4. Rejection cases ────────────────────────────────────────────────────
+
+  describe('rejection cases', function () {
+    it('rejects create with unknown extra field', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_ingredients', 'ing-extra-field'),
+          makeIngredient({ unexpectedField: 'surprise' })
+        )
+      );
+    });
+
+    it('rejects create with invalid openBottleLevel', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_ingredients', 'ing-bad-level'),
+          makeIngredient({ openBottleLevel: 'mostly-full' })
         )
       );
     });

@@ -1932,6 +1932,38 @@
   opacity: 0.8;
 }
 
+/* ── Offer to Cellar button (per-item, on checked items) ── */
+.provision-item-offer {
+  flex-shrink: 0;
+  opacity: 0.5;
+  font-size: 1rem;
+  transition: opacity 0.15s;
+}
+
+.provision-item:hover .provision-item-offer {
+  opacity: 1;
+}
+
+/* ── Offer All to the Cellar button ────────────────── */
+.btn-offer-all {
+  background: transparent;
+  border: 1px solid rgba(255, 183, 77, 0.4);
+  color: #ffb74d;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin-right: 8px;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.btn-offer-all:hover {
+  background: rgba(255, 183, 77, 0.1);
+  border-color: rgba(255, 183, 77, 0.7);
+}
+
 /* ── Clear Checked button ──────────────────────────── */
 .btn-clear-checked {
   background: transparent;
@@ -2147,4 +2179,19 @@
   #recipe-batch-label {
     text-align: center;
   }
+}
+
+/* ── Intake modal ("Offering to the Cellar") ─────── */
+.intake-item-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffb74d;
+  margin: 0 0 1.25rem;
+}
+
+.form-label-optional {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-left: 4px;
 }
