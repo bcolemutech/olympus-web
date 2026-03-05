@@ -615,7 +615,9 @@
             .catch(onError);
         } else {
           // Linked ingredient no longer exists — just clear the item
-          console.warn('Intake: ingredient ' + item.ingredientId + ' not found, removing list item only');
+          console.warn(
+            'Intake: ingredient ' + item.ingredientId + ' not found, removing list item only'
+          );
           finish().catch(onError);
         }
       } else {
@@ -640,7 +642,11 @@
           });
 
           if (ingredient) {
-            var updateData = { updatedAt: state.serverTimestamp(), inStock: true, openBottleLevel: 'full' };
+            var updateData = {
+              updatedAt: state.serverTimestamp(),
+              inStock: true,
+              openBottleLevel: 'full',
+            };
 
             if (ingredient.trackingType === 'volume') {
               updateData.stock = ingredient.stock + 1;
