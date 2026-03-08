@@ -8,6 +8,9 @@
   // ID of the ingredient linked to the current modal item, null for freeform.
   var _linkedIngredientId = null;
 
+  // Shopping list item currently being offered to the cellar.
+  var _intakeItem = null;
+
   // ── Smart suggestion state ─────────────────────────────────────────────
   // Dismissed ingredient IDs for the current session (plain object as ES5 Set).
   var _dismissedIds = {};
@@ -112,6 +115,7 @@
         emptyEl.classList.remove('hidden');
         countEl.classList.add('hidden');
         Symposium.getRef('btn-clear-checked').classList.add('hidden');
+        Symposium.getRef('btn-offer-all').classList.add('hidden');
         return;
       }
 
@@ -127,6 +131,7 @@
         return i.checked;
       });
       Symposium.getRef('btn-clear-checked').classList.toggle('hidden', !hasChecked);
+      Symposium.getRef('btn-offer-all').classList.toggle('hidden', !hasChecked);
 
       // Group by category
       var groups = {};
@@ -215,6 +220,21 @@
         });
       })(item);
       row.appendChild(content);
+
+      // Offer to Cellar button — only shown on checked items
+      if (item.checked) {
+        var offerBtn = document.createElement('button');
+        offerBtn.type = 'button';
+        offerBtn.className = 'btn-icon btn-offer provision-item-offer';
+        offerBtn.setAttribute('aria-label', 'Offer ' + item.name + ' to the Cellar');
+        offerBtn.textContent = '\uD83C\uDFFA';
+        (function (i) {
+          offerBtn.addEventListener('click', function () {
+            Symposium.shopping.openIntakeModal(i);
+          });
+        })(item);
+        row.appendChild(offerBtn);
+      }
 
       // Delete button
       var deleteBtn = document.createElement('button');
@@ -503,6 +523,153 @@
     _dismissSuggestion: function (ingId) {
       _dismissedIds[ingId] = true;
       Symposium.shopping.renderSuggestions();
+    },
+
+    openIntakeModal: function (item) {
+      _intakeItem = item;
+
+      Symposium.getRef('intake-item-name').textContent = item.name;
+      Symposium.getRef('intake-field-brand').value = '';
+      Symposium.getRef('intake-check-full').checked = true;
+      Symposium.getRef('intake-error').textContent = '';
+
+      var ingredient = item.ingredientId
+        ? state.allIngredients.find(function (i) {
+            return i.id === item.ingredientId;
+          })
+        : null;
+
+      // Show brand input only when there is a linked ingredient
+      Symposium.getRef('intake-brand-group').classList.toggle('hidden', !ingredient);
+      // Show "Set to Full" checkbox only for volume-tracked linked ingredients
+      var isVolume = ingredient && ingredient.trackingType === 'volume';
+      Symposium.getRef('intake-full-group').classList.toggle('hidden', !isVolume);
+
+      Symposium.getRef('modal-overlay-intake').classList.add('open');
+    },
+
+    closeIntakeModal: function () {
+      Symposium.getRef('modal-overlay-intake').classList.remove('open');
+      _intakeItem = null;
+    },
+
+    confirmIntake: function () {
+      var item = _intakeItem;
+      if (!item) return;
+
+      var confirmBtn = Symposium.getRef('btn-confirm-intake');
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Offering\u2026';
+      Symposium.getRef('intake-error').textContent = '';
+
+      var self = this;
+
+      var finish = function () {
+        return state.db
+          .collection('symposium_shopping_list')
+          .doc(item.id)
+          .delete()
+          .then(function () {
+            self.closeIntakeModal();
+          });
+      };
+
+      var onError = function (err) {
+        console.error('Intake failed:', err);
+        Symposium.getRef('intake-error').textContent = 'Offering failed. Please try again.';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Offer to the Cellar';
+      };
+
+      if (item.ingredientId) {
+        var ingredient = state.allIngredients.find(function (i) {
+          return i.id === item.ingredientId;
+        });
+
+        if (ingredient) {
+          var updateData = { updatedAt: state.serverTimestamp(), inStock: true };
+
+          if (ingredient.trackingType === 'volume') {
+            updateData.stock = ingredient.stock + 1;
+          } else {
+            updateData.quantity = ingredient.quantity + 1;
+          }
+
+          if (
+            ingredient.trackingType === 'volume' &&
+            Symposium.getRef('intake-check-full').checked
+          ) {
+            updateData.openBottleLevel = 'full';
+          }
+
+          var brand = Symposium.getRef('intake-field-brand').value.trim();
+          if (brand) {
+            updateData.brand = brand;
+          }
+
+          state.db
+            .collection('symposium_ingredients')
+            .doc(ingredient.id)
+            .update(updateData)
+            .then(finish)
+            .catch(onError);
+        } else {
+          // Linked ingredient no longer exists — just clear the item
+          console.warn(
+            'Intake: ingredient ' + item.ingredientId + ' not found, removing list item only'
+          );
+          finish().catch(onError);
+        }
+      } else {
+        // Freeform item — no inventory to update
+        finish().catch(onError);
+      }
+    },
+
+    handleBulkIntake: function () {
+      var checked = state.allShoppingList.filter(function (i) {
+        return i.checked;
+      });
+
+      var promises = checked.map(function (item) {
+        var deleteItem = function () {
+          return state.db.collection('symposium_shopping_list').doc(item.id).delete();
+        };
+
+        if (item.ingredientId) {
+          var ingredient = state.allIngredients.find(function (i) {
+            return i.id === item.ingredientId;
+          });
+
+          if (ingredient) {
+            var updateData = {
+              updatedAt: state.serverTimestamp(),
+              inStock: true,
+              openBottleLevel: 'full',
+            };
+
+            if (ingredient.trackingType === 'volume') {
+              updateData.stock = ingredient.stock + 1;
+            } else {
+              updateData.quantity = ingredient.quantity + 1;
+              // openBottleLevel only applies to volume items
+              delete updateData.openBottleLevel;
+            }
+
+            return state.db
+              .collection('symposium_ingredients')
+              .doc(ingredient.id)
+              .update(updateData)
+              .then(deleteItem);
+          }
+        }
+
+        return deleteItem();
+      });
+
+      Promise.all(promises).catch(function (err) {
+        console.error('Bulk intake failed:', err);
+      });
     },
 
     initSearchListeners: function () {

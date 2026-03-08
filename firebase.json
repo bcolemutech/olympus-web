@@ -1,4 +1,12 @@
 {
+  "emulators": {
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    }
+  },
   "firestore": {
     "database": "(default)",
     "location": "us-central1",

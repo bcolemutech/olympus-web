@@ -224,6 +224,8 @@
             Symposium.recipes.closeAltar();
           } else if (provisionsModalEl.classList.contains('open')) {
             Symposium.shopping.closeModal();
+          } else if (intakeModalEl && intakeModalEl.classList.contains('open')) {
+            Symposium.shopping.closeIntakeModal();
           }
         }
       });
@@ -458,6 +460,25 @@
 
       // Register provisions ingredient typeahead listeners
       Symposium.shopping.initSearchListeners();
+
+      // ── Intake modal ("Offering to the Cellar") ──
+      var intakeModalEl = Symposium.getRef('modal-overlay-intake');
+
+      Symposium.getRef('btn-offer-all').addEventListener('click', function () {
+        Symposium.shopping.handleBulkIntake();
+      });
+
+      Symposium.getRef('btn-cancel-intake').addEventListener('click', function () {
+        Symposium.shopping.closeIntakeModal();
+      });
+
+      Symposium.getRef('btn-confirm-intake').addEventListener('click', function () {
+        Symposium.shopping.confirmIntake();
+      });
+
+      intakeModalEl.addEventListener('click', function (e) {
+        if (e.target === intakeModalEl) Symposium.shopping.closeIntakeModal();
+      });
 
       // ── Recipe batch selection bar ────────────────────────────────────────
       Symposium.getRef('btn-batch-add-provisions').addEventListener('click', function (e) {

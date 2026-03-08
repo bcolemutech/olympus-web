@@ -30,7 +30,7 @@ service cloud.firestore {
           'unit', 'type', 'inStock', 'quantity',
           'trackingType', 'stock', 'bottleSize', 'bottleSizeUnit',
           'notes', 'shoppingListDefault', 'lowStockThreshold',
-          'createdAt', 'updatedAt', 'openBottleLevel'
+          'createdAt', 'updatedAt', 'openBottleLevel', 'brand'
         ];
         let validLevels = ['full', 'three-quarter', 'half', 'quarter', 'empty'];
 
@@ -43,7 +43,9 @@ service cloud.firestore {
             && data.bottleSize is number && data.bottleSize >= 0
             && data.bottleSizeUnit in ['ml', 'oz']
             && exists(/databases/$(database)/documents/symposium_categories/$(data.category))
-            && (!data.keys().hasAny(['openBottleLevel']) || data.openBottleLevel in validLevels);
+            && (!data.keys().hasAny(['openBottleLevel']) || data.openBottleLevel in validLevels)
+            && (!data.keys().hasAny(['brand'])
+                || (data.brand is string && data.brand.size() <= 200));
       }
 
       allow read: if hasApp('symposium');
