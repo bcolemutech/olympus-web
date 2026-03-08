@@ -979,6 +979,31 @@
   .condition-toggle-group {
     width: 100%;
   }
+
+  .app-main {
+    padding: 1.25rem 1rem;
+  }
+
+  .app-title {
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .app-subtitle {
+    display: none;
+  }
+
+  .app-divider {
+    display: none;
+  }
+}
+
+/* ── 480px: Extra-narrow tab refinements ──────────── */
+@media (max-width: 480px) {
+  .view-tab {
+    font-size: 1.1rem;
+    padding: 0.45rem 0.2rem;
+  }
 }
 
 /* ── Inventory dashboard card ─────────────────────── */
@@ -2201,11 +2226,6 @@
   }
   #recipe-batch-label {
     text-align: center;
-  }
-
-  .view-tab {
-    font-size: 1.1rem;
-    padding: 0.45rem 0.2rem;
   }
 }
 
