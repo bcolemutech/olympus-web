@@ -84,7 +84,8 @@
         ? state.recipeCategoryMap[recipe.category].name
         : recipe.category || '';
 
-      var row = document.createElement('div');
+      var row = document.createElement('button');
+      row.type = 'button';
       row.className = 'dash-recent-item' + (recipe.canMake ? ' dash-recent-can-make' : '');
       row.dataset.recipeId = recipe.id;
 
