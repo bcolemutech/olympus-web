@@ -2195,3 +2195,169 @@
   color: #6b7280;
   margin-left: 4px;
 }
+
+/* ── Dashboard Overview Panel ─────────────────────────────────────────── */
+
+.dash-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .dash-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.dash-stat-card {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.dash-stat-card:hover {
+  border-color: rgba(255, 183, 77, 0.25);
+}
+
+.dash-stat-card.has-alert .dash-stat-number {
+  color: #ef5350;
+}
+
+.dash-stat-icon {
+  font-size: 1.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.dash-stat-number {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: #ffb74d;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.dash-stat-label {
+  font-size: 0.72rem;
+  color: #546e7a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}
+
+.dash-stat-sub {
+  font-size: 0.78rem;
+  color: #90a4ae;
+}
+
+.dash-sub-alert {
+  color: #ef5350;
+}
+
+.dash-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.dash-actions .app-btn {
+  flex: 1;
+}
+
+@media (max-width: 600px) {
+  .dash-actions {
+    flex-direction: column;
+  }
+}
+
+.app-btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e0e0e0;
+}
+
+.app-btn-ghost:hover {
+  border-color: rgba(255, 183, 77, 0.4);
+  color: #ffb74d;
+  background: rgba(255, 183, 77, 0.05);
+}
+
+.dash-section {
+  margin-bottom: 2rem;
+}
+
+.dash-section-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #546e7a;
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.dash-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.dash-recent-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.dash-recent-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 183, 77, 0.2);
+}
+
+.dash-recent-name {
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.dash-recent-cat {
+  font-size: 0.75rem;
+  color: #546e7a;
+}
+
+.dash-recent-can-make .dash-recent-name::after {
+  content: ' \2713';
+  color: #66bb6a;
+  font-size: 0.72rem;
+}
+
+.dash-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(17, 24, 39, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.7rem 1.25rem;
+  color: #e0e0e0;
+  font-size: 0.875rem;
+  z-index: 200;
+  opacity: 1;
+  transition: opacity 0.3s;
+  white-space: nowrap;
+}
+
+.dash-toast.hidden {
+  opacity: 0;
+  pointer-events: none;
+}

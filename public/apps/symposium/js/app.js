@@ -9,10 +9,12 @@
 
   // ── View tab switching ────────────────────────────
   function switchView(view) {
+    var tabDashboard = Symposium.getRef('tab-dashboard');
     var tabIngredients = Symposium.getRef('tab-ingredients');
     var tabEquipment = Symposium.getRef('tab-equipment');
     var tabRecipes = Symposium.getRef('tab-recipes');
     var tabProvisions = Symposium.getRef('tab-provisions');
+    var panelDashboard = Symposium.getRef('panel-dashboard');
     var panelIngredients = Symposium.getRef('panel-ingredients');
     var panelEquipment = Symposium.getRef('panel-equipment');
     var panelRecipes = Symposium.getRef('panel-recipes');
@@ -24,6 +26,8 @@
     }
     state.currentView = view;
 
+    tabDashboard.classList.toggle('active', view === 'dashboard');
+    tabDashboard.setAttribute('aria-selected', view === 'dashboard' ? 'true' : 'false');
     tabIngredients.classList.toggle('active', view === 'ingredients');
     tabIngredients.setAttribute('aria-selected', view === 'ingredients' ? 'true' : 'false');
     tabEquipment.classList.toggle('active', view === 'equipment');
@@ -35,6 +39,7 @@
 
     // Hide combined panel, show the selected tab panel
     Symposium.getRef('panel-combined').classList.add('hidden');
+    panelDashboard.classList.toggle('hidden', view !== 'dashboard');
     panelIngredients.classList.toggle('hidden', view !== 'ingredients');
     panelEquipment.classList.toggle('hidden', view !== 'equipment');
     panelRecipes.classList.toggle('hidden', view !== 'recipes');
@@ -90,7 +95,7 @@
       Symposium.firestore._onIngredientsChanged = function () {
         Symposium.ingredients.renderCategoryGrid();
         Symposium.ingredients.renderList();
-        Symposium.inventory.renderDashboard();
+        Symposium.inventory.renderDashboardPanel();
         if (state.globalSearchQuery) Symposium.inventory.renderCombinedSearch();
         if (state.allRecipes.length > 0) Symposium.recipes.updateCanMakeAll();
         Symposium.shopping.renderSuggestions();
@@ -99,7 +104,7 @@
       Symposium.firestore._onEquipmentChanged = function () {
         Symposium.equipment.renderCategoryGrid();
         Symposium.equipment.renderList();
-        Symposium.inventory.renderDashboard();
+        Symposium.inventory.renderDashboardPanel();
         if (state.globalSearchQuery) Symposium.inventory.renderCombinedSearch();
       };
 
@@ -107,7 +112,7 @@
         Symposium.recipes.renderCategoryGrid();
         Symposium.recipes.renderList();
         Symposium.recipes.renderPendingBanner();
-        Symposium.inventory.renderDashboard();
+        Symposium.inventory.renderDashboardPanel();
         if (state.globalSearchQuery) Symposium.inventory.renderCombinedSearch();
         // If ingredients already loaded, recompute canMake for newly-arrived recipes
         if (state.allIngredients.length > 0) Symposium.recipes.updateCanMakeAll();
@@ -117,6 +122,7 @@
         Symposium.shopping.renderList();
         Symposium.shopping.updateBadge();
         Symposium.shopping.renderSuggestions();
+        Symposium.inventory.renderDashboardPanel();
       };
 
       // ── Global search ────────────────────────────
@@ -128,6 +134,10 @@
         globalClearEl.classList.toggle('hidden', state.globalSearchQuery === '');
         var hasQuery = state.globalSearchQuery !== '';
         Symposium.getRef('panel-combined').classList.toggle('hidden', !hasQuery);
+        Symposium.getRef('panel-dashboard').classList.toggle(
+          'hidden',
+          hasQuery || state.currentView !== 'dashboard'
+        );
         Symposium.getRef('panel-ingredients').classList.toggle(
           'hidden',
           hasQuery || state.currentView !== 'ingredients'
@@ -257,6 +267,9 @@
       });
 
       // ── View tabs ───────────────────────────────
+      Symposium.getRef('tab-dashboard').addEventListener('click', function () {
+        switchView('dashboard');
+      });
       Symposium.getRef('tab-ingredients').addEventListener('click', function () {
         switchView('ingredients');
       });
@@ -268,6 +281,40 @@
       });
       Symposium.getRef('tab-provisions').addEventListener('click', function () {
         switchView('provisions');
+      });
+
+      // ── Dashboard quick actions ──────────────────
+      Symposium.getRef('btn-what-can-i-make').addEventListener('click', function () {
+        state.recipeCanMakeFilter = true;
+        Symposium.getRef('can-make-btn').classList.add('active');
+        Symposium.recipes.renderList();
+        switchView('recipes');
+      });
+
+      Symposium.getRef('btn-random-libation').addEventListener('click', function () {
+        var makeable = state.allRecipes.filter(function (r) {
+          return r.canMake;
+        });
+        if (makeable.length === 0) {
+          Symposium.inventory.showDashToast("The cellar can't make any recipes right now.");
+          return;
+        }
+        var recipe = makeable[Math.floor(Math.random() * makeable.length)];
+        switchView('recipes');
+        Symposium.recipes.openDetail(recipe);
+      });
+
+      // ── Recently added recipe click delegation ───
+      Symposium.getRef('dash-recent-recipes').addEventListener('click', function (e) {
+        var item = e.target.closest('.dash-recent-item');
+        if (!item) return;
+        var recipe = state.allRecipes.find(function (r) {
+          return r.id === item.dataset.recipeId;
+        });
+        if (recipe) {
+          switchView('recipes');
+          Symposium.recipes.openDetail(recipe);
+        }
       });
 
       // ── Equipment sort ──────────────────────────
@@ -513,6 +560,9 @@
         .catch(function (err) {
           console.error('Failed to load categories:', err);
         });
+
+      // Start on the Overview tab
+      switchView('dashboard');
     },
   };
 })();

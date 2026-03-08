@@ -4,28 +4,102 @@
   var Symposium = window.Symposium;
   var state = Symposium.state;
 
-  // ── Low/empty item count ──────────────────────────
-  function getLowEmptyCount() {
-    var ingLow = state.allIngredients.filter(function (ing) {
+  // ── Dashboard Overview panel ──────────────────────
+  var _toastTimer = null;
+
+  function showDashToast(msg) {
+    var el = Symposium.getRef('dash-toast');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    if (_toastTimer) window.clearTimeout(_toastTimer);
+    _toastTimer = window.setTimeout(function () {
+      el.classList.add('hidden');
+      _toastTimer = null;
+    }, 3000);
+  }
+
+  function renderDashboardPanel() {
+    var ingredients = state.allIngredients;
+    var equipment = state.allEquipment;
+    var recipes = state.allRecipes;
+    var shopping = state.allShoppingList;
+
+    // Ingredient stats
+    var inStock = ingredients.filter(function (ing) {
+      return ing.inStock;
+    }).length;
+    var low = ingredients.filter(function (ing) {
       var threshold = Number(ing.lowStockThreshold) || 0;
       var current =
         ing.trackingType === 'volume' ? Number(ing.stock) || 0 : Number(ing.quantity) || 0;
       return !ing.inStock || (threshold > 0 && current <= threshold);
     }).length;
-    var equipReplace = state.allEquipment.filter(function (eq) {
+
+    // Equipment stats
+    var needsReplace = equipment.filter(function (eq) {
       return eq.condition === 'replace';
     }).length;
-    return ingLow + equipReplace;
-  }
 
-  // ── Dashboard summary card ────────────────────────
-  function renderDashboard() {
-    Symposium.getRef('dash-ingredient-count').textContent = state.allIngredients.length;
-    Symposium.getRef('dash-equipment-count').textContent = state.allEquipment.length;
-    Symposium.getRef('dash-recipe-count').textContent = state.allRecipes.length;
-    var alertCount = getLowEmptyCount();
-    Symposium.getRef('dash-alert-count').textContent = alertCount;
-    Symposium.getRef('dash-alert-stat').classList.toggle('has-alerts', alertCount > 0);
+    // Recipe stats
+    var canMake = recipes.filter(function (r) {
+      return r.canMake;
+    }).length;
+
+    // Update stat cards
+    Symposium.getRef('dash-ing-total').textContent = ingredients.length;
+    Symposium.getRef('dash-ing-in-stock').textContent = inStock;
+    Symposium.getRef('dash-ing-low').textContent = low;
+    Symposium.getRef('dash-rec-total').textContent = recipes.length;
+    Symposium.getRef('dash-rec-can-make').textContent = canMake;
+    Symposium.getRef('dash-eq-total').textContent = equipment.length;
+    Symposium.getRef('dash-eq-replace').textContent = needsReplace;
+    Symposium.getRef('dash-shop-count').textContent = shopping.length;
+
+    // Alert state on equipment card
+    Symposium.getRef('dash-eq-card').classList.toggle('has-alert', needsReplace > 0);
+
+    // Recently added recipes (up to 5, sorted newest first)
+    var recent = recipes
+      .filter(function (r) {
+        return r.createdAt && r.createdAt.seconds;
+      })
+      .sort(function (a, b) {
+        return b.createdAt.seconds - a.createdAt.seconds;
+      })
+      .slice(0, 5);
+
+    var recentEl = Symposium.getRef('dash-recent-recipes');
+    recentEl.innerHTML = '';
+
+    if (recent.length === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'empty-state-text';
+      empty.textContent = 'No recipes yet. Add your first to get started.';
+      recentEl.appendChild(empty);
+      return;
+    }
+
+    recent.forEach(function (recipe) {
+      var catName = state.recipeCategoryMap[recipe.category]
+        ? state.recipeCategoryMap[recipe.category].name
+        : recipe.category || '';
+
+      var row = document.createElement('div');
+      row.className = 'dash-recent-item' + (recipe.canMake ? ' dash-recent-can-make' : '');
+      row.dataset.recipeId = recipe.id;
+
+      var nameEl = document.createElement('span');
+      nameEl.className = 'dash-recent-name';
+      nameEl.textContent = recipe.name;
+
+      var catEl = document.createElement('span');
+      catEl.className = 'dash-recent-cat';
+      catEl.textContent = catName;
+
+      row.appendChild(nameEl);
+      row.appendChild(catEl);
+      recentEl.appendChild(row);
+    });
   }
 
   // ── Combined search results ───────────────────────
@@ -143,7 +217,8 @@
   }
 
   Symposium.inventory = {
-    renderDashboard: renderDashboard,
+    renderDashboardPanel: renderDashboardPanel,
+    showDashToast: showDashToast,
     renderCombinedSearch: renderCombinedSearch,
     _switchToTab: null, // wired up in app.js after init
   };
