@@ -48,7 +48,9 @@
     // Update stat cards
     Symposium.getRef('dash-ing-total').textContent = ingredients.length;
     Symposium.getRef('dash-ing-in-stock').textContent = inStock;
-    Symposium.getRef('dash-ing-low').textContent = low;
+    var dashIngLowEl = Symposium.getRef('dash-ing-low');
+    dashIngLowEl.textContent = low;
+    dashIngLowEl.classList.toggle('dash-sub-alert', low > 0);
     Symposium.getRef('dash-rec-total').textContent = recipes.length;
     Symposium.getRef('dash-rec-can-make').textContent = canMake;
     Symposium.getRef('dash-eq-total').textContent = equipment.length;
