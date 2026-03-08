@@ -33,26 +33,6 @@
       <p class="app-subtitle">Where Dionysus keeps his ledger</p>
       <div class="app-divider"></div>
 
-      <!-- Inventory summary dashboard card -->
-      <div class="inventory-dashboard" id="inventory-dashboard">
-        <div class="dashboard-stat">
-          <span class="dashboard-count" id="dash-ingredient-count">0</span>
-          <span class="dashboard-label">Ingredients</span>
-        </div>
-        <div class="dashboard-stat">
-          <span class="dashboard-count" id="dash-equipment-count">0</span>
-          <span class="dashboard-label">Equipment</span>
-        </div>
-        <div class="dashboard-stat" id="dash-alert-stat">
-          <span class="dashboard-count" id="dash-alert-count">0</span>
-          <span class="dashboard-label">Low / Empty</span>
-        </div>
-        <div class="dashboard-stat">
-          <span class="dashboard-count" id="dash-recipe-count">0</span>
-          <span class="dashboard-label">Recipes</span>
-        </div>
-      </div>
-
       <!-- Global oracle search bar (searches all inventory) -->
       <div class="oracle-search-row">
         <div class="oracle-search-wrapper">
@@ -75,14 +55,25 @@
         </div>
       </div>
 
-      <!-- View tabs: Ingredients / Equipment -->
+      <!-- View tabs -->
       <div class="view-tabs" role="tablist" aria-label="Inventory view">
         <button
           class="view-tab active"
-          id="tab-ingredients"
+          id="tab-dashboard"
           type="button"
           role="tab"
           aria-selected="true"
+          aria-controls="panel-dashboard"
+          data-view="dashboard"
+        >
+          &#9681; Overview
+        </button>
+        <button
+          class="view-tab"
+          id="tab-ingredients"
+          type="button"
+          role="tab"
+          aria-selected="false"
           aria-controls="panel-ingredients"
           data-view="ingredients"
         >
@@ -134,8 +125,62 @@
         </div>
       </div>
 
+      <!-- Overview / Dashboard panel -->
+      <div id="panel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+        <!-- Stats grid -->
+        <div class="dash-stats-grid">
+          <div class="dash-stat-card">
+            <div class="dash-stat-icon" aria-hidden="true">&#127863;</div>
+            <div class="dash-stat-number" id="dash-ing-total">&mdash;</div>
+            <div class="dash-stat-label">Ingredients</div>
+            <div class="dash-stat-sub">
+              <span id="dash-ing-in-stock">&mdash;</span> in stock &middot;
+              <span id="dash-ing-low">&mdash;</span> low
+            </div>
+          </div>
+          <div class="dash-stat-card">
+            <div class="dash-stat-icon" aria-hidden="true">&#127860;</div>
+            <div class="dash-stat-number" id="dash-rec-total">&mdash;</div>
+            <div class="dash-stat-label">Recipes</div>
+            <div class="dash-stat-sub">
+              <span id="dash-rec-can-make">&mdash;</span> you can make
+            </div>
+          </div>
+          <div class="dash-stat-card" id="dash-eq-card">
+            <div class="dash-stat-icon" aria-hidden="true">&#128295;</div>
+            <div class="dash-stat-number" id="dash-eq-total">&mdash;</div>
+            <div class="dash-stat-label">Equipment</div>
+            <div class="dash-stat-sub">
+              <span id="dash-eq-replace">&mdash;</span> need replacement
+            </div>
+          </div>
+          <div class="dash-stat-card">
+            <div class="dash-stat-icon" aria-hidden="true">&#128722;</div>
+            <div class="dash-stat-number" id="dash-shop-count">&mdash;</div>
+            <div class="dash-stat-label">Provisions</div>
+            <div class="dash-stat-sub">on list</div>
+          </div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="dash-actions">
+          <button id="btn-what-can-i-make" type="button" class="app-btn">
+            &#9879; What can I make?
+          </button>
+          <button id="btn-random-libation" type="button" class="app-btn app-btn-ghost">
+            &#127922; Random libation
+          </button>
+        </div>
+
+        <!-- Recently added recipes -->
+        <section class="dash-section">
+          <h2 class="dash-section-title">Recently Added</h2>
+          <div id="dash-recent-recipes" class="dash-recent-list"></div>
+        </section>
+      </div>
+
       <!-- Ingredients panel -->
-      <div id="panel-ingredients" role="tabpanel" aria-labelledby="tab-ingredients">
+      <div id="panel-ingredients" role="tabpanel" aria-labelledby="tab-ingredients" class="hidden">
         <div class="toolbar">
           <button class="app-btn" id="btn-add" type="button">+ Add Ingredient</button>
         </div>
@@ -388,6 +433,9 @@
         </div>
       </div>
     </main>
+
+    <!-- Dashboard toast notification -->
+    <div id="dash-toast" class="dash-toast hidden" role="status" aria-live="polite"></div>
 
     <!-- Modal overlay -->
     <div class="modal-overlay" id="modal-overlay">
