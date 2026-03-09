@@ -24,6 +24,44 @@
     return unit === 'each' ? 'quantity' : 'volume';
   };
 
+  // ── Restock UOM constants and helpers ────────────
+  S.VOLUME_RESTOCK_UNITS = ['bottle', 'can', 'box', 'bag', 'pack'];
+
+  S.getRestockUnit = function (ing) {
+    if (ing.restockUnit) return ing.restockUnit;
+    return ing.trackingType === 'quantity' ? 'each' : 'bottle';
+  };
+
+  var _plurals = { box: 'boxes', each: 'each' };
+  S.pluralizeUnit = function (unit) {
+    return _plurals[unit] || unit + 's';
+  };
+
+  S.populateRestockUnitSelect = function (selectEl, selectedValue) {
+    selectEl.innerHTML = '';
+    S.VOLUME_RESTOCK_UNITS.forEach(function (u) {
+      var opt = document.createElement('option');
+      opt.value = u;
+      opt.textContent = u;
+      if (u === selectedValue) opt.selected = true;
+      selectEl.appendChild(opt);
+    });
+  };
+
+  // ── Recipe UOM constants ──────────────────────────
+  S.VOLUME_RECIPE_UNITS = [
+    'oz',
+    'ml',
+    'dash',
+    'splash',
+    'tsp',
+    'tbsp',
+    'barspoon',
+    'rinse',
+    'float',
+  ];
+  S.QUANTITY_RECIPE_UNITS = ['each'];
+
   // ── Shared mutable state ───────────────────────
   S.state = {
     db: null,

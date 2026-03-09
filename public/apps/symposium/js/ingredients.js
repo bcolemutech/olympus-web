@@ -236,7 +236,8 @@
 
         var stockLabel = document.createElement('span');
         stockLabel.className = 'ingredient-detail-label';
-        stockLabel.textContent = 'Stock:';
+        stockLabel.textContent =
+          'Stock (' + Symposium.pluralizeUnit(Symposium.getRestockUnit(ing)) + '):';
         stockDetail.appendChild(stockLabel);
 
         var minusBtn = document.createElement('button');
@@ -420,11 +421,20 @@
       });
     },
 
+    _updateStockLabel: function () {
+      var labelEl = document.getElementById('label-field-stock');
+      if (!labelEl) return;
+      var restockUnit = Symposium.getRef('field-restock-unit').value || 'bottle';
+      labelEl.textContent = 'Stock (' + Symposium.pluralizeUnit(restockUnit) + ')';
+    },
+
     _toggleTrackingFields: function (unit) {
       var isVolume = Symposium.inferTrackingType(unit) === 'volume';
+      Symposium.getRef('volume-fields-restock-unit').classList.toggle('hidden', !isVolume);
       Symposium.getRef('volume-fields-stock').classList.toggle('hidden', !isVolume);
       Symposium.getRef('volume-fields-size').classList.toggle('hidden', !isVolume);
       Symposium.getRef('quantity-fields').classList.toggle('hidden', isVolume);
+      Symposium.ingredients._updateStockLabel();
     },
 
     openModal: function (ingredient) {
@@ -438,6 +448,7 @@
       var fieldCategory = Symposium.getRef('field-category');
       var fieldSubcategory = Symposium.getRef('field-subcategory');
       var fieldUnit = Symposium.getRef('field-unit');
+      var fieldRestockUnit = Symposium.getRef('field-restock-unit');
       var fieldQuantity = Symposium.getRef('field-quantity');
       var fieldStock = Symposium.getRef('field-stock');
       var fieldBottleSize = Symposium.getRef('field-bottle-size');
@@ -448,6 +459,7 @@
       var fieldThreshold = Symposium.getRef('field-threshold');
 
       Symposium.ingredients._clearErrors();
+      Symposium.populateRestockUnitSelect(fieldRestockUnit, 'bottle');
 
       if (ingredient) {
         fieldName.value = ingredient.name || '';
@@ -455,6 +467,9 @@
         Symposium.populateSubcategoryDropdown(ingredient.category, fieldSubcategory);
         fieldSubcategory.value = ingredient.subcategory || '';
         fieldUnit.value = ingredient.unit || '';
+        if (ingredient.trackingType !== 'quantity' && ingredient.restockUnit) {
+          fieldRestockUnit.value = ingredient.restockUnit;
+        }
         fieldStock.value = ingredient.stock != null ? ingredient.stock : 0;
         fieldBottleSize.value = ingredient.bottleSize != null ? ingredient.bottleSize : 750;
         fieldBottleSizeUnit.value = ingredient.bottleSizeUnit || 'ml';
@@ -563,6 +578,7 @@
       var fieldCategory = Symposium.getRef('field-category');
       var fieldSubcategory = Symposium.getRef('field-subcategory');
       var fieldUnit = Symposium.getRef('field-unit');
+      var fieldRestockUnit = Symposium.getRef('field-restock-unit');
       var fieldQuantity = Symposium.getRef('field-quantity');
       var fieldStock = Symposium.getRef('field-stock');
       var fieldBottleSize = Symposium.getRef('field-bottle-size');
@@ -597,6 +613,7 @@
       var bottleSize = trackingType === 'volume' ? parseFloat(fieldBottleSize.value) || 0 : 0;
       var bottleSizeUnit = trackingType === 'volume' ? fieldBottleSizeUnit.value : 'ml';
       var quantity = trackingType === 'quantity' ? parseInt(fieldQuantity.value, 10) || 0 : 0;
+      var restockUnit = trackingType === 'volume' ? fieldRestockUnit.value || 'bottle' : 'each';
 
       var data = {
         name: name,
@@ -606,6 +623,7 @@
         unit: unit,
         type: 'consumable',
         trackingType: trackingType,
+        restockUnit: restockUnit,
         stock: stock,
         bottleSize: bottleSize,
         bottleSizeUnit: bottleSizeUnit,

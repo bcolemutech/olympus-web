@@ -617,8 +617,14 @@
             </div>
 
             <!-- Volume tracking fields (shown when unit != each) -->
+            <div class="form-group" id="volume-fields-restock-unit">
+              <label class="form-label" for="field-restock-unit">Restock Unit</label>
+              <select class="form-select" id="field-restock-unit"></select>
+              <span class="form-hint">How this item is purchased (used in Provisions)</span>
+            </div>
+
             <div class="form-group" id="volume-fields-stock">
-              <label class="form-label" for="field-stock">Stock (bottles)</label>
+              <label class="form-label" id="label-field-stock" for="field-stock">Stock</label>
               <input class="form-input" id="field-stock" type="number" min="0" step="1" value="0" />
               <span class="form-error" id="error-stock"></span>
             </div>
@@ -1069,12 +1075,16 @@
               <label class="form-label" for="prov-field-unit">Unit</label>
               <select class="form-select" id="prov-field-unit">
                 <option value="">&mdash;</option>
+                <option value="bottle">bottle</option>
+                <option value="can">can</option>
+                <option value="box">box</option>
+                <option value="bag">bag</option>
+                <option value="pack">pack</option>
+                <option value="each">each</option>
                 <option value="oz">oz</option>
                 <option value="ml">ml</option>
                 <option value="dash">dash</option>
-                <option value="each">each</option>
                 <option value="splash">splash</option>
-                <option value="bottle">bottle</option>
               </select>
             </div>
 
