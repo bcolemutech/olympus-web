@@ -262,8 +262,27 @@ service cloud.firestore {
     }
 
     match /symposium_categories/{categoryId} {
+      function validCategory() {
+        let data = request.resource.data;
+        let required = ['name', 'type', 'subcategories', 'sortOrder'];
+        let validTypes = ['ingredient', 'equipment', 'recipe'];
+
+        return data.keys().hasAll(required)
+            && data.keys().hasOnly(required)
+            && data.name is string
+            && data.name.size() > 0
+            && data.name.size() <= 200
+            && data.type in validTypes
+            && data.subcategories is list
+            && data.subcategories.size() <= 100
+            && data.sortOrder is int
+            && data.sortOrder >= 0;
+      }
+
       allow read: if hasApp('symposium');
-      allow write: if false;
+      allow create: if hasApp('symposium') && validCategory();
+      allow update: if hasApp('symposium') && validCategory();
+      allow delete: if hasApp('symposium');
     }
 
     // ── Default deny ───────────────────────────────────────

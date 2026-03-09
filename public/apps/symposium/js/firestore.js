@@ -7,33 +7,95 @@
   Symposium.firestore = {
     // Callbacks wired by app.js after all modules load
     _onCategoriesLoaded: null,
+    _onCategoriesChanged: null,
     _onIngredientsChanged: null,
     _onEquipmentChanged: null,
     _onRecipesChanged: null,
     _onShoppingListChanged: null,
 
     loadCategories: function () {
+      return new Promise(function (resolve, reject) {
+        var firstCall = true;
+        state.db
+          .collection('symposium_categories')
+          .orderBy('sortOrder')
+          .onSnapshot(function (snapshot) {
+            // Rebuild all category maps from scratch
+            state.categoryMap = {};
+            state.ingredientCategoryMap = {};
+            state.equipmentCategoryMap = {};
+            state.recipeCategoryMap = {};
+
+            snapshot.forEach(function (doc) {
+              var data = doc.data();
+              state.categoryMap[doc.id] = data;
+              if (data.type === 'equipment') {
+                state.equipmentCategoryMap[doc.id] = data;
+              } else if (data.type === 'recipe') {
+                state.recipeCategoryMap[doc.id] = data;
+              } else {
+                state.ingredientCategoryMap[doc.id] = data;
+              }
+            });
+
+            if (firstCall) {
+              firstCall = false;
+              if (Symposium.firestore._onCategoriesLoaded) {
+                Symposium.firestore._onCategoriesLoaded();
+              }
+              resolve();
+            } else {
+              if (Symposium.firestore._onCategoriesChanged) {
+                Symposium.firestore._onCategoriesChanged();
+              }
+            }
+          }, reject);
+      });
+    },
+
+    createCategory: function (id, data) {
+      return state.db.collection('symposium_categories').doc(id).set(data);
+    },
+
+    updateCategory: function (id, data) {
+      return state.db.collection('symposium_categories').doc(id).set(data);
+    },
+
+    deleteCategory: function (id) {
+      return state.db.collection('symposium_categories').doc(id).delete();
+    },
+
+    swapCategorySortOrder: function (idA, idB) {
+      var catA = state.categoryMap[idA];
+      var catB = state.categoryMap[idB];
+      if (!catA || !catB) return Promise.reject(new Error('Category not found'));
+
+      var orderA = catA.sortOrder;
+      var orderB = catB.sortOrder;
+
+      var batch = state.db.batch();
+      var refA = state.db.collection('symposium_categories').doc(idA);
+      var refB = state.db.collection('symposium_categories').doc(idB);
+      batch.update(refA, { sortOrder: orderB });
+      batch.update(refB, { sortOrder: orderA });
+      return batch.commit();
+    },
+
+    reassignItems: function (collectionName, fromCategoryId, toCategoryId) {
       return state.db
-        .collection('symposium_categories')
-        .orderBy('sortOrder')
+        .collection(collectionName)
+        .where('category', '==', fromCategoryId)
         .get()
         .then(function (snapshot) {
+          if (snapshot.empty) return;
+          var batch = state.db.batch();
           snapshot.forEach(function (doc) {
-            state.categoryMap[doc.id] = doc.data();
+            batch.update(doc.ref, {
+              category: toCategoryId,
+              updatedAt: state.serverTimestamp(),
+            });
           });
-          // Split categories by type
-          Object.keys(state.categoryMap).forEach(function (id) {
-            if (state.categoryMap[id].type === 'equipment') {
-              state.equipmentCategoryMap[id] = state.categoryMap[id];
-            } else if (state.categoryMap[id].type === 'recipe') {
-              state.recipeCategoryMap[id] = state.categoryMap[id];
-            } else {
-              state.ingredientCategoryMap[id] = state.categoryMap[id];
-            }
-          });
-          if (Symposium.firestore._onCategoriesLoaded) {
-            Symposium.firestore._onCategoriesLoaded();
-          }
+          return batch.commit();
         });
     },
 

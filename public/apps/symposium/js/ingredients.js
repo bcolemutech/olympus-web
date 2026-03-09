@@ -411,6 +411,7 @@
 
     populateCategorySelect: function () {
       var fieldCategory = Symposium.getRef('field-category');
+      fieldCategory.innerHTML = '<option value="">Select\u2026</option>';
       Object.keys(state.ingredientCategoryMap).forEach(function (id) {
         var opt = document.createElement('option');
         opt.value = id;
