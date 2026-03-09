@@ -32,6 +32,22 @@
     return ing.trackingType === 'quantity' ? 'each' : 'bottle';
   };
 
+  var _plurals = { box: 'boxes', each: 'each' };
+  S.pluralizeUnit = function (unit) {
+    return _plurals[unit] || unit + 's';
+  };
+
+  S.populateRestockUnitSelect = function (selectEl, selectedValue) {
+    selectEl.innerHTML = '';
+    S.VOLUME_RESTOCK_UNITS.forEach(function (u) {
+      var opt = document.createElement('option');
+      opt.value = u;
+      opt.textContent = u;
+      if (u === selectedValue) opt.selected = true;
+      selectEl.appendChild(opt);
+    });
+  };
+
   // ── Recipe UOM constants ──────────────────────────
   S.VOLUME_RECIPE_UNITS = [
     'oz',

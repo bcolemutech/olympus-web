@@ -234,6 +234,10 @@
         Symposium.ingredients._toggleTrackingFields(Symposium.getRef('field-unit').value);
       });
 
+      Symposium.getRef('field-restock-unit').addEventListener('change', function () {
+        Symposium.ingredients._updateStockLabel();
+      });
+
       Symposium.getRef('ingredient-form').addEventListener('submit', function (e) {
         Symposium.ingredients.handleSubmit(e);
       });

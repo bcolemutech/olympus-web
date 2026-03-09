@@ -312,6 +312,10 @@
       } else {
         units = Symposium.VOLUME_RECIPE_UNITS;
       }
+      if (units.indexOf(sel.unit) === -1) {
+        _selectedIngredients[index].unit = units[0];
+        sel = _selectedIngredients[index];
+      }
       units.forEach(function (u) {
         var opt = document.createElement('option');
         opt.value = u;
