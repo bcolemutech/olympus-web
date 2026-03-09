@@ -61,6 +61,7 @@
     allShoppingList: [],
     shoppingListLoaded: false,
     shoppingEditingId: null,
+    appellationsEditingId: null,
   };
 
   // ── Lazy-cached DOM ref helpers ────────────────
@@ -130,6 +131,20 @@
     items.forEach(function (item) {
       targetListEl.appendChild(cardFn(item));
     });
+  };
+
+  // ── Category sort helper ───────────────────────
+  S.getCategoriesByType = function (type) {
+    return Object.keys(S.state.categoryMap)
+      .filter(function (id) {
+        return S.state.categoryMap[id].type === type;
+      })
+      .map(function (id) {
+        return Object.assign({ id: id }, S.state.categoryMap[id]);
+      })
+      .sort(function (a, b) {
+        return (a.sortOrder || 0) - (b.sortOrder || 0);
+      });
   };
 
   // ── Shared subcategory cascade helper ─────────

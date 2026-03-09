@@ -2429,3 +2429,159 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* ── Appellations panel ──────────────────────────── */
+.app-btn-appellations {
+  background: linear-gradient(135deg, rgba(103, 58, 183, 0.6), rgba(63, 81, 181, 0.4));
+  border: 1px solid rgba(103, 58, 183, 0.4);
+  color: #e0e0e0;
+}
+
+.app-btn-appellations:hover {
+  background: linear-gradient(135deg, rgba(103, 58, 183, 0.8), rgba(63, 81, 181, 0.6));
+  border-color: rgba(103, 58, 183, 0.6);
+}
+
+.appellation-section {
+  margin-bottom: 2rem;
+}
+
+.appellation-section-heading {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #546e7a;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.appellation-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
+  transition: border-color 0.2s;
+}
+
+.appellation-row:hover {
+  border-color: rgba(103, 58, 183, 0.25);
+}
+
+.appellation-row-name {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  min-width: 0;
+}
+
+.appellation-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.appellation-sub-count {
+  font-size: 0.75rem;
+  color: #546e7a;
+}
+
+.appellation-reorder-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.btn-reorder {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #546e7a;
+  cursor: pointer;
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 0.15rem 0.3rem;
+  font-family: inherit;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.btn-reorder:hover:not(:disabled) {
+  color: #e0e0e0;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-reorder:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+/* ── Subcategory chips ───────────────────────────── */
+.subcategory-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  min-height: 2rem;
+}
+
+.subcategory-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  background: rgba(255, 183, 77, 0.1);
+  border: 1px solid rgba(255, 183, 77, 0.25);
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: #ffb74d;
+}
+
+.subcategory-chip-remove {
+  background: none;
+  border: none;
+  color: #90a4ae;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0;
+  font-family: inherit;
+}
+
+.subcategory-chip-remove:hover {
+  color: #ef5350;
+}
+
+.subcategory-add-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.subcategory-add-row .form-input {
+  flex: 1;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: #546e7a;
+  margin-top: 0.25rem;
+}
+
+/* ── Delete confirm modal ────────────────────────── */
+.btn-delete-confirm {
+  background: rgba(239, 83, 80, 0.2);
+  border: 1px solid rgba(239, 83, 80, 0.4);
+  color: #ef5350;
+}
+
+.btn-delete-confirm:hover {
+  background: rgba(239, 83, 80, 0.35);
+  border-color: rgba(239, 83, 80, 0.6);
+}

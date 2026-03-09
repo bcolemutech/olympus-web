@@ -241,6 +241,7 @@
 
     populateCategorySelect: function () {
       var eqFieldCategory = Symposium.getRef('eq-field-category');
+      eqFieldCategory.innerHTML = '<option value="">Select\u2026</option>';
       Object.keys(state.equipmentCategoryMap).forEach(function (id) {
         var opt = document.createElement('option');
         opt.value = id;

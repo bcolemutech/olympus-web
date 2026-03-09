@@ -14,11 +14,13 @@
     var tabEquipment = Symposium.getRef('tab-equipment');
     var tabRecipes = Symposium.getRef('tab-recipes');
     var tabProvisions = Symposium.getRef('tab-provisions');
+    var tabAppellations = Symposium.getRef('tab-appellations');
     var panelDashboard = Symposium.getRef('panel-dashboard');
     var panelIngredients = Symposium.getRef('panel-ingredients');
     var panelEquipment = Symposium.getRef('panel-equipment');
     var panelRecipes = Symposium.getRef('panel-recipes');
     var panelProvisions = Symposium.getRef('panel-provisions');
+    var panelAppellations = Symposium.getRef('panel-appellations');
 
     // Save current tab's scroll position before switching
     if (state.currentView) {
@@ -36,6 +38,8 @@
     tabRecipes.setAttribute('aria-selected', view === 'recipes' ? 'true' : 'false');
     tabProvisions.classList.toggle('active', view === 'provisions');
     tabProvisions.setAttribute('aria-selected', view === 'provisions' ? 'true' : 'false');
+    tabAppellations.classList.toggle('active', view === 'appellations');
+    tabAppellations.setAttribute('aria-selected', view === 'appellations' ? 'true' : 'false');
 
     // Hide combined panel, show the selected tab panel
     Symposium.getRef('panel-combined').classList.add('hidden');
@@ -44,6 +48,7 @@
     panelEquipment.classList.toggle('hidden', view !== 'equipment');
     panelRecipes.classList.toggle('hidden', view !== 'recipes');
     panelProvisions.classList.toggle('hidden', view !== 'provisions');
+    panelAppellations.classList.toggle('hidden', view !== 'appellations');
 
     // Clear global search when switching tabs
     state.globalSearchQuery = '';
@@ -90,6 +95,21 @@
         Symposium.ingredients.renderCategoryGrid();
         Symposium.equipment.renderCategoryGrid();
         Symposium.recipes.renderCategoryGrid();
+      };
+
+      Symposium.firestore._onCategoriesChanged = function () {
+        Symposium.ingredients.populateCategorySelect();
+        Symposium.equipment.populateCategorySelect();
+        Symposium.recipes.populateCategorySelect();
+        Symposium.ingredients.renderCategoryGrid();
+        Symposium.equipment.renderCategoryGrid();
+        Symposium.recipes.renderCategoryGrid();
+        Symposium.ingredients.renderList();
+        Symposium.equipment.renderList();
+        Symposium.recipes.renderList();
+        if (state.currentView === 'appellations') {
+          Symposium.appellations.renderPanel();
+        }
       };
 
       Symposium.firestore._onIngredientsChanged = function () {
@@ -153,6 +173,10 @@
         Symposium.getRef('panel-provisions').classList.toggle(
           'hidden',
           hasQuery || state.currentView !== 'provisions'
+        );
+        Symposium.getRef('panel-appellations').classList.toggle(
+          'hidden',
+          hasQuery || state.currentView !== 'appellations'
         );
         if (hasQuery) Symposium.inventory.renderCombinedSearch();
       });
@@ -236,6 +260,10 @@
             Symposium.shopping.closeModal();
           } else if (intakeModalEl && intakeModalEl.classList.contains('open')) {
             Symposium.shopping.closeIntakeModal();
+          } else if (appellationsModalEl.classList.contains('open')) {
+            Symposium.appellations.closeModal();
+          } else if (appDeleteModalEl.classList.contains('open')) {
+            Symposium.appellations.closeDeleteModal();
           }
         }
       });
@@ -281,6 +309,10 @@
       });
       Symposium.getRef('tab-provisions').addEventListener('click', function () {
         switchView('provisions');
+      });
+      Symposium.getRef('tab-appellations').addEventListener('click', function () {
+        switchView('appellations');
+        Symposium.appellations.renderPanel();
       });
 
       // ── Dashboard quick actions ──────────────────
@@ -546,6 +578,61 @@
 
       Symposium.getRef('btn-batch-clear').addEventListener('click', function () {
         Symposium.recipes.clearBatchSelection();
+      });
+
+      // ── Appellations modal ───────────────────────
+      var appellationsModalEl = Symposium.getRef('modal-overlay-appellations');
+      var appDeleteModalEl = Symposium.getRef('modal-overlay-app-delete');
+
+      Symposium.getRef('btn-add-appellation').addEventListener('click', function () {
+        Symposium.appellations.openModal(null);
+      });
+
+      Symposium.getRef('app-btn-cancel').addEventListener('click', function () {
+        Symposium.appellations.closeModal();
+      });
+
+      appellationsModalEl.addEventListener('click', function (e) {
+        if (e.target === appellationsModalEl) Symposium.appellations.closeModal();
+      });
+
+      Symposium.getRef('appellation-form').addEventListener('submit', function (e) {
+        Symposium.appellations.handleSubmit(e);
+      });
+
+      Symposium.getRef('app-subcategory-add-btn').addEventListener('click', function () {
+        Symposium.appellations._addSubcategory();
+      });
+
+      Symposium.getRef('app-subcategory-input').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          Symposium.appellations._addSubcategory();
+        }
+      });
+
+      // Auto-fill ID from name (create mode only)
+      Symposium.getRef('app-field-name').addEventListener('input', function () {
+        if (!state.appellationsEditingId) {
+          var slug = Symposium.getRef('app-field-name')
+            .value.trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          Symposium.getRef('app-field-id').value = slug;
+        }
+      });
+
+      Symposium.getRef('app-delete-cancel').addEventListener('click', function () {
+        Symposium.appellations.closeDeleteModal();
+      });
+
+      appDeleteModalEl.addEventListener('click', function (e) {
+        if (e.target === appDeleteModalEl) Symposium.appellations.closeDeleteModal();
+      });
+
+      Symposium.getRef('app-delete-confirm').addEventListener('click', function () {
+        Symposium.appellations.confirmDelete();
       });
 
       // ── Init data ───────────────────────────────

@@ -118,6 +118,18 @@
           <span class="tab-label">Provisions</span>
           <span class="tab-badge hidden" id="tab-provisions-badge">0</span>
         </button>
+        <button
+          class="view-tab"
+          id="tab-appellations"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-appellations"
+          data-view="appellations"
+        >
+          <span aria-hidden="true">&#127989;</span>
+          <span class="tab-label">Appellations</span>
+        </button>
       </div>
 
       <!-- Combined search results panel (shown when global search is active) -->
@@ -408,6 +420,27 @@
           <button type="button" id="btn-batch-clear" class="btn-cancel">Clear</button>
         </div>
       </div>
+      <!-- Appellations panel -->
+      <div
+        id="panel-appellations"
+        role="tabpanel"
+        aria-labelledby="tab-appellations"
+        class="hidden"
+      >
+        <div class="toolbar">
+          <button class="app-btn app-btn-appellations" id="btn-add-appellation" type="button">
+            + Add Appellation
+          </button>
+        </div>
+
+        <div class="empty-state hidden" id="empty-state-appellations">
+          <span class="empty-state-icon" aria-hidden="true">&#127989;</span>
+          <p class="empty-state-text">No appellations defined yet.</p>
+        </div>
+
+        <div id="appellations-list"></div>
+      </div>
+
       <!-- Provisions panel -->
       <div id="panel-provisions" role="tabpanel" aria-labelledby="tab-provisions" class="hidden">
         <div class="toolbar">
@@ -438,6 +471,100 @@
         </div>
       </div>
     </main>
+
+    <!-- Appellation create/edit modal -->
+    <div class="modal-overlay" id="modal-overlay-appellations">
+      <div class="modal-dialog" role="dialog" aria-labelledby="app-modal-title">
+        <h2 class="modal-title" id="app-modal-title">Add Appellation</h2>
+        <form id="appellation-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group full-width" id="app-field-id-group">
+              <label class="form-label" for="app-field-id">
+                ID <span class="form-label-optional">(slug, e.g. &ldquo;craft-beer&rdquo;)</span>
+              </label>
+              <input
+                class="form-input"
+                id="app-field-id"
+                type="text"
+                placeholder="e.g. craft-beer"
+                autocomplete="off"
+              />
+              <span class="form-hint"
+                >Lowercase letters, numbers, hyphens, underscores only. Cannot be changed after
+                creation.</span
+              >
+              <span class="form-error" id="app-error-id"></span>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="app-field-name">Name</label>
+              <input
+                class="form-input"
+                id="app-field-name"
+                type="text"
+                placeholder="e.g. Craft Beer"
+                required
+              />
+              <span class="form-error" id="app-error-name"></span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="app-field-type">Type</label>
+              <select class="form-select" id="app-field-type" required>
+                <option value="ingredient">Ingredient</option>
+                <option value="equipment">Equipment</option>
+                <option value="recipe">Recipe</option>
+              </select>
+              <span class="form-error" id="app-error-type"></span>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label">Subcategories</label>
+              <div class="subcategory-chips" id="app-subcategory-chips"></div>
+              <div class="subcategory-add-row">
+                <input
+                  class="form-input"
+                  id="app-subcategory-input"
+                  type="text"
+                  placeholder="Add subcategory&hellip;"
+                  autocomplete="off"
+                />
+                <button class="app-btn" id="app-subcategory-add-btn" type="button">Add</button>
+              </div>
+              <span class="form-error" id="app-error-subcategories"></span>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn-cancel" id="app-btn-cancel" type="button">Cancel</button>
+            <button class="app-btn app-btn-appellations" id="app-btn-save" type="submit">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Appellation delete / reassign modal -->
+    <div class="modal-overlay" id="modal-overlay-app-delete">
+      <div class="modal-dialog" role="dialog" aria-labelledby="app-delete-title">
+        <h2 class="modal-title" id="app-delete-title">Delete Appellation</h2>
+        <p id="app-delete-warning" class="form-hint"></p>
+        <div class="form-group">
+          <label class="form-label" for="app-delete-reassign-select">Reassign items to</label>
+          <select class="form-select" id="app-delete-reassign-select">
+            <option value="">Select a category&hellip;</option>
+          </select>
+          <span class="form-error" id="app-delete-error"></span>
+        </div>
+        <p class="form-hint hidden" id="app-delete-subcategory-note"></p>
+        <div class="form-actions">
+          <button class="btn-cancel" id="app-delete-cancel" type="button">Cancel</button>
+          <button class="app-btn btn-delete-confirm" id="app-delete-confirm" type="button">
+            Reassign &amp; Delete
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Dashboard toast notification -->
     <div id="dash-toast" class="dash-toast hidden" role="status" aria-live="polite"></div>
@@ -1048,6 +1175,7 @@
     <script src="/apps/symposium/js/inventory.js"></script>
     <script src="/apps/symposium/js/recipes.js"></script>
     <script src="/apps/symposium/js/shopping.js"></script>
+    <script src="/apps/symposium/js/appellations.js"></script>
     <script src="/apps/symposium/js/app.js"></script>
 
     <script>

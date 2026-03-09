@@ -1099,3 +1099,322 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
     });
   });
 });
+
+// ── symposium_categories — Firestore Security Rules ───────────────────────────
+
+function makeCategory(overrides) {
+  var base = {
+    name: 'Craft Beer',
+    type: 'ingredient',
+    subcategories: ['lager', 'ale', 'stout'],
+    sortOrder: 20,
+  };
+  return Object.assign({}, base, overrides || {});
+}
+
+describe('symposium_categories — Firestore Security Rules', function () {
+  var testEnv;
+  var authedDb;
+  var unauthDb;
+  var wrongDb;
+
+  beforeAll(async function () {
+    var firestoreConfig = {
+      rules: readFileSync(RULES_PATH, 'utf8'),
+    };
+
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      var host = parts[0];
+      var portString = parts[1];
+      if (host) {
+        firestoreConfig.host = host;
+      }
+      if (portString) {
+        var parsedPort = parseInt(portString, 10);
+        if (!isNaN(parsedPort)) {
+          firestoreConfig.port = parsedPort;
+        }
+      }
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: firestoreConfig,
+    });
+
+    authedDb = testEnv.authenticatedContext('user-001', SYMPOSIUM_TOKEN).firestore();
+    unauthDb = testEnv.unauthenticatedContext().firestore();
+    wrongDb = testEnv.authenticatedContext('user-002', { apps: ['other-app'] }).firestore();
+  });
+
+  afterAll(async function () {
+    await testEnv.cleanup();
+  });
+
+  afterEach(async function () {
+    await testEnv.clearFirestore();
+  });
+
+  // ── Read access ──────────────────────────────────────────────────────────────
+
+  describe('read access', function () {
+    it('allows read for authenticated symposium user', async function () {
+      await assertSucceeds(getDoc(doc(authedDb, 'symposium_categories', 'cat-test')));
+    });
+
+    it('denies read for unauthenticated user', async function () {
+      await assertFails(getDoc(doc(unauthDb, 'symposium_categories', 'cat-test')));
+    });
+
+    it('denies read for user without symposium claim', async function () {
+      await assertFails(getDoc(doc(wrongDb, 'symposium_categories', 'cat-test')));
+    });
+  });
+
+  // ── Create ───────────────────────────────────────────────────────────────────
+
+  describe('create', function () {
+    it('allows create of a valid ingredient category', async function () {
+      await assertSucceeds(
+        setDoc(doc(authedDb, 'symposium_categories', 'craft-beer'), makeCategory())
+      );
+    });
+
+    it('allows create of a valid recipe category', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'tiki-2'),
+          makeCategory({ type: 'recipe' })
+        )
+      );
+    });
+
+    it('allows create of a valid equipment category', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'copper-tools'),
+          makeCategory({ type: 'equipment' })
+        )
+      );
+    });
+
+    it('allows create of ingredient category with empty subcategories list', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'empty-subs'),
+          makeCategory({ type: 'ingredient', subcategories: [] })
+        )
+      );
+    });
+
+    it('allows create of equipment category with empty subcategories list', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'empty-subs-eq'),
+          makeCategory({ type: 'equipment', subcategories: [] })
+        )
+      );
+    });
+
+    it('allows create with sortOrder of 0', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'zero-order'),
+          makeCategory({ sortOrder: 0 })
+        )
+      );
+    });
+
+    it('rejects create with unknown extra field', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'bad-cat'),
+          makeCategory({ unexpectedField: 'oops' })
+        )
+      );
+    });
+
+    it('rejects create with missing required field (name)', async function () {
+      var data = makeCategory();
+      delete data.name;
+      await assertFails(setDoc(doc(authedDb, 'symposium_categories', 'bad-cat'), data));
+    });
+
+    it('rejects create with empty name', async function () {
+      await assertFails(
+        setDoc(doc(authedDb, 'symposium_categories', 'bad-cat'), makeCategory({ name: '' }))
+      );
+    });
+
+    it('rejects create with name exceeding 200 characters', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'bad-cat'),
+          makeCategory({ name: 'A'.repeat(201) })
+        )
+      );
+    });
+
+    it('rejects create with invalid type', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'bad-type'),
+          makeCategory({ type: 'cocktail' })
+        )
+      );
+    });
+
+    it('rejects create with sortOrder as string', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'bad-order'),
+          makeCategory({ sortOrder: '20' })
+        )
+      );
+    });
+
+    it('rejects create with negative sortOrder', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'bad-order'),
+          makeCategory({ sortOrder: -1 })
+        )
+      );
+    });
+
+    it('rejects create with subcategories as string', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'bad-subs'),
+          makeCategory({ subcategories: 'bourbon' })
+        )
+      );
+    });
+
+    it('rejects create of recipe category with empty subcategories', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'recipe-no-subs'),
+          makeCategory({ type: 'recipe', subcategories: [] })
+        )
+      );
+    });
+
+    it('denies create for unauthenticated user', async function () {
+      await assertFails(
+        setDoc(doc(unauthDb, 'symposium_categories', 'craft-beer'), makeCategory())
+      );
+    });
+
+    it('denies create for user without symposium claim', async function () {
+      await assertFails(
+        setDoc(doc(wrongDb, 'symposium_categories', 'craft-beer'), makeCategory())
+      );
+    });
+  });
+
+  // ── Update ───────────────────────────────────────────────────────────────────
+
+  describe('update', function () {
+    it('allows update of name and subcategories', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(
+          doc(ctx.firestore(), 'symposium_categories', 'cat-update'),
+          makeCategory()
+        );
+      });
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'cat-update'),
+          makeCategory({ name: 'Updated Name', subcategories: ['lager'] })
+        )
+      );
+    });
+
+    it('allows update of sortOrder', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(
+          doc(ctx.firestore(), 'symposium_categories', 'cat-reorder'),
+          makeCategory()
+        );
+      });
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'cat-reorder'),
+          makeCategory({ sortOrder: 5 })
+        )
+      );
+    });
+
+    it('rejects update that changes type', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(
+          doc(ctx.firestore(), 'symposium_categories', 'cat-type-change'),
+          makeCategory({ type: 'ingredient' })
+        );
+      });
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'cat-type-change'),
+          makeCategory({ type: 'recipe' })
+        )
+      );
+    });
+
+    it('denies update for unauthenticated user', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(
+          doc(ctx.firestore(), 'symposium_categories', 'cat-unauth-update'),
+          makeCategory()
+        );
+      });
+      await assertFails(
+        setDoc(
+          doc(unauthDb, 'symposium_categories', 'cat-unauth-update'),
+          makeCategory({ name: 'Hacked' })
+        )
+      );
+    });
+  });
+
+  // ── Delete ───────────────────────────────────────────────────────────────────
+
+  describe('delete', function () {
+    const { deleteDoc } = require('firebase/firestore');
+
+    it('allows delete by authenticated symposium user', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(
+          doc(ctx.firestore(), 'symposium_categories', 'cat-to-delete'),
+          makeCategory()
+        );
+      });
+      await assertSucceeds(deleteDoc(doc(authedDb, 'symposium_categories', 'cat-to-delete')));
+    });
+
+    it('denies delete for unauthenticated user', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(
+          doc(ctx.firestore(), 'symposium_categories', 'cat-unauth'),
+          makeCategory()
+        );
+      });
+      await assertFails(deleteDoc(doc(unauthDb, 'symposium_categories', 'cat-unauth')));
+    });
+
+    it('denies delete for user without symposium claim', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(
+          doc(ctx.firestore(), 'symposium_categories', 'cat-wrong-app'),
+          makeCategory()
+        );
+      });
+      await assertFails(deleteDoc(doc(wrongDb, 'symposium_categories', 'cat-wrong-app')));
+    });
+  });
+});
