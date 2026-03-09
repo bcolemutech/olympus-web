@@ -88,14 +88,31 @@
         .get()
         .then(function (snapshot) {
           if (snapshot.empty) return;
-          var batch = state.db.batch();
+
+          var docs = [];
           snapshot.forEach(function (doc) {
-            batch.update(doc.ref, {
-              category: toCategoryId,
-              updatedAt: state.serverTimestamp(),
-            });
+            docs.push(doc);
           });
-          return batch.commit();
+
+          // Firestore batch limit is 500 ops; chunk to handle large sets
+          var CHUNK = 500;
+          var chunks = [];
+          for (var i = 0; i < docs.length; i += CHUNK) {
+            chunks.push(docs.slice(i, i + CHUNK));
+          }
+
+          return chunks.reduce(function (chain, chunk) {
+            return chain.then(function () {
+              var batch = state.db.batch();
+              chunk.forEach(function (doc) {
+                batch.update(doc.ref, {
+                  category: toCategoryId,
+                  updatedAt: state.serverTimestamp(),
+                });
+              });
+              return batch.commit();
+            });
+          }, Promise.resolve());
         });
     },
 

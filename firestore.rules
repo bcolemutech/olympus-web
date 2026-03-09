@@ -275,13 +275,20 @@ service cloud.firestore {
             && data.type in validTypes
             && data.subcategories is list
             && data.subcategories.size() <= 100
+            && (data.subcategories.size() == 0
+                || (data.subcategories[0] is string
+                    && data.subcategories[0].size() > 0
+                    && data.subcategories[0].size() <= 200))
+            && (data.type != 'recipe' || data.subcategories.size() > 0)
             && data.sortOrder is int
             && data.sortOrder >= 0;
       }
 
       allow read: if hasApp('symposium');
       allow create: if hasApp('symposium') && validCategory();
-      allow update: if hasApp('symposium') && validCategory();
+      allow update: if hasApp('symposium')
+                    && validCategory()
+                    && request.resource.data.type == resource.data.type;
       allow delete: if hasApp('symposium');
     }
 

@@ -70,24 +70,38 @@
       btnUp.type = 'button';
       btnUp.className = 'btn-reorder';
       btnUp.textContent = '\u25B2';
+      btnUp.setAttribute('aria-label', 'Move category up');
+      btnUp.title = 'Move up';
       btnUp.disabled = idx === 0;
       btnUp.addEventListener('click', function () {
         btnUp.disabled = true;
-        Symposium.firestore.swapCategorySortOrder(cat.id, cats[idx - 1].id).catch(function (err) {
-          console.error('Reorder failed:', err);
-        });
+        Symposium.firestore
+          .swapCategorySortOrder(cat.id, cats[idx - 1].id)
+          .catch(function (err) {
+            console.error('Reorder failed:', err);
+          })
+          .finally(function () {
+            btnUp.disabled = idx === 0;
+          });
       });
 
       var btnDown = document.createElement('button');
       btnDown.type = 'button';
       btnDown.className = 'btn-reorder';
       btnDown.textContent = '\u25BC';
+      btnDown.setAttribute('aria-label', 'Move category down');
+      btnDown.title = 'Move down';
       btnDown.disabled = idx === total - 1;
       btnDown.addEventListener('click', function () {
         btnDown.disabled = true;
-        Symposium.firestore.swapCategorySortOrder(cat.id, cats[idx + 1].id).catch(function (err) {
-          console.error('Reorder failed:', err);
-        });
+        Symposium.firestore
+          .swapCategorySortOrder(cat.id, cats[idx + 1].id)
+          .catch(function (err) {
+            console.error('Reorder failed:', err);
+          })
+          .finally(function () {
+            btnDown.disabled = idx === total - 1;
+          });
       });
 
       reorderBtns.appendChild(btnUp);
@@ -231,8 +245,12 @@
         }
       }
 
-      if (_subcategoriesWorking.length === 0) {
-        Symposium.appellations._setError('subcategories', 'At least one subcategory is required.');
+      var selectedType = Symposium.getRef('app-field-type').value;
+      if (selectedType === 'recipe' && _subcategoriesWorking.length === 0) {
+        Symposium.appellations._setError(
+          'subcategories',
+          'Recipe categories require at least one subcategory.'
+        );
         valid = false;
       }
 
@@ -363,8 +381,14 @@
 
       var select = Symposium.getRef('app-delete-reassign-select');
       select.innerHTML = '<option value="">Select a category\u2026</option>';
+      // For recipe categories, only offer targets that have at least one subcategory
+      // (to guarantee a valid subcategory is available after reassignment).
       var sameType = Symposium.getCategoriesByType(cat.type).filter(function (c) {
-        return c.id !== cat.id;
+        if (c.id === cat.id) return false;
+        if (cat.type === 'recipe') {
+          return c.subcategories && c.subcategories.length > 0;
+        }
+        return true;
       });
       sameType.forEach(function (c) {
         var opt = document.createElement('option');
@@ -379,7 +403,7 @@
         noteEl.classList.add('hidden');
       }
 
-      select.addEventListener('change', function () {
+      select.onchange = function () {
         var targetId = select.value;
         if (!targetId || cat.type !== 'recipe') return;
         var targetCat = state.categoryMap[targetId];
@@ -394,7 +418,7 @@
             noteEl.classList.remove('hidden');
           }
         }
-      });
+      };
 
       Symposium.appellations._setDeleteError('');
       Symposium.getRef('modal-overlay-app-delete').classList.add('open');

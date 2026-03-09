@@ -1203,11 +1203,20 @@ describe('symposium_categories — Firestore Security Rules', function () {
       );
     });
 
-    it('allows create with empty subcategories list', async function () {
+    it('allows create of ingredient category with empty subcategories list', async function () {
       await assertSucceeds(
         setDoc(
           doc(authedDb, 'symposium_categories', 'empty-subs'),
-          makeCategory({ subcategories: [] })
+          makeCategory({ type: 'ingredient', subcategories: [] })
+        )
+      );
+    });
+
+    it('allows create of equipment category with empty subcategories list', async function () {
+      await assertSucceeds(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'empty-subs-eq'),
+          makeCategory({ type: 'equipment', subcategories: [] })
         )
       );
     });
@@ -1287,6 +1296,15 @@ describe('symposium_categories — Firestore Security Rules', function () {
       );
     });
 
+    it('rejects create of recipe category with empty subcategories', async function () {
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'recipe-no-subs'),
+          makeCategory({ type: 'recipe', subcategories: [] })
+        )
+      );
+    });
+
     it('denies create for unauthenticated user', async function () {
       await assertFails(
         setDoc(doc(unauthDb, 'symposium_categories', 'craft-beer'), makeCategory())
@@ -1329,6 +1347,21 @@ describe('symposium_categories — Firestore Security Rules', function () {
         setDoc(
           doc(authedDb, 'symposium_categories', 'cat-reorder'),
           makeCategory({ sortOrder: 5 })
+        )
+      );
+    });
+
+    it('rejects update that changes type', async function () {
+      await testEnv.withSecurityRulesDisabled(async function (ctx) {
+        await setDoc(
+          doc(ctx.firestore(), 'symposium_categories', 'cat-type-change'),
+          makeCategory({ type: 'ingredient' })
+        );
+      });
+      await assertFails(
+        setDoc(
+          doc(authedDb, 'symposium_categories', 'cat-type-change'),
+          makeCategory({ type: 'recipe' })
         )
       );
     });
