@@ -24,6 +24,28 @@
     return unit === 'each' ? 'quantity' : 'volume';
   };
 
+  // ── Restock UOM constants and helpers ────────────
+  S.VOLUME_RESTOCK_UNITS = ['bottle', 'can', 'box', 'bag', 'pack'];
+
+  S.getRestockUnit = function (ing) {
+    if (ing.restockUnit) return ing.restockUnit;
+    return ing.trackingType === 'quantity' ? 'each' : 'bottle';
+  };
+
+  // ── Recipe UOM constants ──────────────────────────
+  S.VOLUME_RECIPE_UNITS = [
+    'oz',
+    'ml',
+    'dash',
+    'splash',
+    'tsp',
+    'tbsp',
+    'barspoon',
+    'rinse',
+    'float',
+  ];
+  S.QUANTITY_RECIPE_UNITS = ['each'];
+
   // ── Shared mutable state ───────────────────────
   S.state = {
     db: null,

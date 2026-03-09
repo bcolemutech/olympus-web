@@ -97,7 +97,7 @@
     _linkedIngredientId = ing.id;
     Symposium.getRef('prov-ing-search').value = ing.name;
     Symposium.getRef('prov-ing-dropdown').classList.add('hidden');
-    Symposium.getRef('prov-field-unit').value = ing.unit || '';
+    Symposium.getRef('prov-field-unit').value = Symposium.getRestockUnit(ing);
     Symposium.getRef('prov-field-category').value = catName || '';
   }
 
@@ -499,7 +499,7 @@
       var data = {
         name: ing.name,
         quantity: 1,
-        unit: ing.unit || '',
+        unit: Symposium.getRestockUnit(ing),
         category: catName,
         checked: false,
         addedFrom: 'auto-suggest',

@@ -238,11 +238,12 @@
   }
 
   function _addIngredientToSelection(ing) {
+    var defaultUnit = ing.trackingType === 'quantity' ? 'each' : ing.unit || 'oz';
     _selectedIngredients.push({
       id: ing.id,
       name: ing.name,
       amount: '',
-      unit: ing.unit || 'oz',
+      unit: defaultUnit,
       optional: false,
     });
     _renderSelectedIngredients();
@@ -298,18 +299,19 @@
       var unitSelect = document.createElement('select');
       unitSelect.className = 'form-select selected-item-unit';
       unitSelect.setAttribute('aria-label', 'Unit for ' + sel.name);
-      var units = [
-        'oz',
-        'ml',
-        'dash',
-        'each',
-        'splash',
-        'tsp',
-        'tbsp',
-        'barspoon',
-        'rinse',
-        'float',
-      ];
+      var linkedIng = sel.id
+        ? state.allIngredients.find(function (i) {
+            return i.id === sel.id;
+          })
+        : null;
+      var units;
+      if (!linkedIng || sel.pending) {
+        units = Symposium.VOLUME_RECIPE_UNITS.concat(Symposium.QUANTITY_RECIPE_UNITS);
+      } else if (linkedIng.trackingType === 'quantity') {
+        units = Symposium.QUANTITY_RECIPE_UNITS;
+      } else {
+        units = Symposium.VOLUME_RECIPE_UNITS;
+      }
       units.forEach(function (u) {
         var opt = document.createElement('option');
         opt.value = u;
