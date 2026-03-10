@@ -1418,3 +1418,88 @@ describe('symposium_categories — Firestore Security Rules', function () {
     });
   });
 });
+
+// ── apps collection ───────────────────────────────────────────────────────────
+
+describe('apps — Firestore Security Rules', function () {
+  var testEnv;
+  var adminDb;
+  var appUserDb;
+  var noClaimDb;
+  var unauthDb;
+
+  before(async function () {
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: { rules: readFileSync(RULES_PATH, 'utf8') },
+    });
+  });
+
+  beforeEach(async function () {
+    await testEnv.clearFirestore();
+
+    // Seed an app document bypassing rules
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      await setDoc(doc(ctx.firestore(), 'apps', 'symposium'), {
+        name: 'Symposium',
+        description: 'The cocktail app',
+      });
+    });
+
+    // User with admin: true custom claim
+    adminDb = testEnv.authenticatedContext('admin-user', { admin: true }).firestore();
+
+    // User with the apps: ['symposium'] claim but not admin
+    appUserDb = testEnv
+      .authenticatedContext('app-user', { apps: ['symposium'] })
+      .firestore();
+
+    // Authenticated user with no relevant claims
+    noClaimDb = testEnv.authenticatedContext('no-claim-user', {}).firestore();
+
+    // Unauthenticated
+    unauthDb = testEnv.unauthenticatedContext().firestore();
+  });
+
+  after(async function () {
+    await testEnv.cleanup();
+  });
+
+  describe('read access', function () {
+    it('allows read for a user with the matching app claim', async function () {
+      await assertSucceeds(getDoc(doc(appUserDb, 'apps', 'symposium')));
+    });
+
+    it('allows read for an admin user without the app claim', async function () {
+      await assertSucceeds(getDoc(doc(adminDb, 'apps', 'symposium')));
+    });
+
+    it('denies read for an authenticated user with no claims', async function () {
+      await assertFails(getDoc(doc(noClaimDb, 'apps', 'symposium')));
+    });
+
+    it('denies read for an unauthenticated user', async function () {
+      await assertFails(getDoc(doc(unauthDb, 'apps', 'symposium')));
+    });
+  });
+
+  describe('write access', function () {
+    it('denies write for an admin user', async function () {
+      await assertFails(
+        setDoc(doc(adminDb, 'apps', 'new-app'), { name: 'New App' })
+      );
+    });
+
+    it('denies write for a user with app claim', async function () {
+      await assertFails(
+        setDoc(doc(appUserDb, 'apps', 'new-app'), { name: 'New App' })
+      );
+    });
+
+    it('denies write for an unauthenticated user', async function () {
+      await assertFails(
+        setDoc(doc(unauthDb, 'apps', 'new-app'), { name: 'New App' })
+      );
+    });
+  });
+});

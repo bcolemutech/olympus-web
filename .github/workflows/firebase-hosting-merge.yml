@@ -43,6 +43,6 @@ jobs:
         with:
           gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
       - name: Install functions dependencies
-        run: npm install --prefix functions
+        run: npm ci --prefix functions
       - name: Deploy Cloud Functions
         run: firebase deploy --only functions --project olympus-dfa00

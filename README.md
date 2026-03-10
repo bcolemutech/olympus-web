@@ -133,11 +133,11 @@ await firebase.auth().currentUser.getIdToken(true); // force token refresh
 
 Because no user has `admin: true` initially, the very first admin must be set manually. This is a one-time operation.
 
-**Option A — Firebase Console**
+**Option A — Firebase Console (lookup only)**
 
 1. Go to the [Firebase Console](https://console.firebase.google.com/) > **Authentication** > **Users**
-2. Find the user's UID
-3. Open **Cloud Firestore** or use the Firebase Admin SDK REST API to set the custom claim — the Console UI does not support custom claims directly, so use Option B instead
+2. Find the user's UID (or confirm their email address)
+3. Use this UID/email with an Admin SDK script (see Option B) to set the `admin` custom claim. The Firebase Console UI cannot set custom claims directly.
 
 **Option B — One-time script (recommended)**
 

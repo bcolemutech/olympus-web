@@ -23,6 +23,25 @@ function requireAdminCaller(request, email) {
 }
 
 /**
+ * Looks up a Firebase Auth user by email, mapping known error codes to
+ * appropriate HttpsError types.
+ */
+async function getUserByEmail(email) {
+  try {
+    return await getAuth().getUserByEmail(email);
+  } catch (err) {
+    if (err.code === 'auth/user-not-found') {
+      throw new HttpsError('not-found', `No user found with email: ${email}`);
+    }
+    if (err.code === 'auth/invalid-email') {
+      throw new HttpsError('invalid-argument', 'The email address is not valid.');
+    }
+    console.error('getUserByEmail error:', err);
+    throw new HttpsError('internal', 'Failed to look up user.');
+  }
+}
+
+/**
  * setAdminRole — grants admin: true to the user identified by email.
  *
  * Caller must have admin: true in their custom claims.
@@ -36,21 +55,14 @@ exports.setAdminRole = onCall(async (request) => {
   const email = request.data && request.data.email;
   requireAdminCaller(request, email);
 
-  let user;
-  try {
-    user = await getAuth().getUserByEmail(email.trim());
-  } catch (err) {
-    if (err.code === 'auth/user-not-found') {
-      throw new HttpsError('not-found', `No user found with email: ${email}`);
-    }
-    throw new HttpsError('internal', err.message);
-  }
+  const user = await getUserByEmail(email.trim());
 
   const existingClaims = user.customClaims || {};
   try {
     await getAuth().setCustomUserClaims(user.uid, { ...existingClaims, admin: true });
   } catch (err) {
-    throw new HttpsError('internal', err.message);
+    console.error('setCustomUserClaims error:', err);
+    throw new HttpsError('internal', 'Failed to update user claims.');
   }
 
   return { success: true, email: email.trim() };
@@ -70,22 +82,15 @@ exports.removeAdminRole = onCall(async (request) => {
   const email = request.data && request.data.email;
   requireAdminCaller(request, email);
 
-  let user;
-  try {
-    user = await getAuth().getUserByEmail(email.trim());
-  } catch (err) {
-    if (err.code === 'auth/user-not-found') {
-      throw new HttpsError('not-found', `No user found with email: ${email}`);
-    }
-    throw new HttpsError('internal', err.message);
-  }
+  const user = await getUserByEmail(email.trim());
 
   const existingClaims = { ...(user.customClaims || {}) };
   delete existingClaims.admin;
   try {
     await getAuth().setCustomUserClaims(user.uid, existingClaims);
   } catch (err) {
-    throw new HttpsError('internal', err.message);
+    console.error('setCustomUserClaims error:', err);
+    throw new HttpsError('internal', 'Failed to update user claims.');
   }
 
   return { success: true, email: email.trim() };
