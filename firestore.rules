@@ -8,8 +8,13 @@ service cloud.firestore {
           && appId in request.auth.token.apps;
     }
 
+    function hasAdmin() {
+      return request.auth != null
+          && request.auth.token.admin == true;
+    }
+
     match /apps/{appId} {
-      allow read: if hasApp(appId);
+      allow read: if hasApp(appId) || hasAdmin();
       allow write: if false;
     }
 

@@ -1,11 +1,18 @@
 {
   "emulators": {
+    "functions": {
+      "port": 5001
+    },
     "firestore": {
       "port": 8080
     },
     "ui": {
       "enabled": false
     }
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs22"
   },
   "firestore": {
     "database": "(default)",
