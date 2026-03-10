@@ -1,5 +1,28 @@
 export default [
   {
+    files: ["functions/**/*.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "commonjs",
+      globals: {
+        require: "readonly",
+        module: "readonly",
+        exports: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        console: "readonly",
+        process: "readonly"
+      }
+    },
+    rules: {
+      "no-unused-vars": "warn",
+      "no-undef": "error",
+      "no-console": "off",
+      "semi": ["error", "always"],
+      "quotes": ["error", "single", { "avoidEscape": true }]
+    }
+  },
+  {
     files: ["public/**/*.js"],
     languageOptions: {
       ecmaVersion: "latest",

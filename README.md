@@ -104,10 +104,97 @@ Add the following secret to your GitHub repository:
 2. Create a new secret named `FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00`
 3. Value: JSON contents from Firebase Console > Project Settings > Service Accounts > Generate New Private Key
 
+## Cloud Functions
+
+Firebase Cloud Functions live in `functions/` and use Node.js 22 with the Firebase Functions v2 (Gen 2) API.
+
+### Available Functions
+
+| Function | Description |
+|----------|-------------|
+| `setAdminRole` | Grants `admin: true` to a user by email. Caller must be an admin. |
+| `removeAdminRole` | Revokes the `admin` claim from a user by email. Caller must be an admin. |
+
+Both functions are callable from client code using the Firebase SDK:
+
+```js
+const setAdminRole = firebase.functions().httpsCallable('setAdminRole');
+const result = await setAdminRole({ email: 'user@example.com' });
+// result.data => { success: true, email: 'user@example.com' }
+```
+
+After a claim change, the target user must refresh their ID token before the new claim takes effect:
+
+```js
+await firebase.auth().currentUser.getIdToken(true); // force token refresh
+```
+
+### Bootstrap Admin Process
+
+Because no user has `admin: true` initially, the very first admin must be set manually. This is a one-time operation.
+
+**Option A — Firebase Console**
+
+1. Go to the [Firebase Console](https://console.firebase.google.com/) > **Authentication** > **Users**
+2. Find the user's UID
+3. Open **Cloud Firestore** or use the Firebase Admin SDK REST API to set the custom claim — the Console UI does not support custom claims directly, so use Option B instead
+
+**Option B — One-time script (recommended)**
+
+Create a temporary local script (never commit credentials):
+
+```js
+// bootstrap-admin.js — run once locally, then delete
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import serviceAccount from './service-account-key.json' assert { type: 'json' };
+
+const app = initializeApp({ credential: cert(serviceAccount) });
+const auth = getAuth(app);
+
+const user = await auth.getUserByEmail('your-email@example.com');
+const existing = user.customClaims || {};
+await auth.setCustomUserClaims(user.uid, { ...existing, admin: true });
+console.log('Admin claim set for', user.email);
+process.exit(0);
+```
+
+Run it:
+
+```bash
+node bootstrap-admin.js
+```
+
+Then sign out and back in (or force a token refresh) to see the claim take effect. After this, subsequent admin grants and revocations can be done via the `setAdminRole` / `removeAdminRole` callable functions from any admin-authenticated client session.
+
+> **Security note:** Obtain the service account key from Firebase Console > Project Settings > Service Accounts > Generate New Private Key. Never commit this file to the repository.
+
+### Local Development with Functions
+
+The `npm run emulator` command starts all emulators including Functions:
+
+```
+Firestore emulator → http://localhost:8080
+Functions emulator → http://localhost:5001
+```
+
+> **Note:** The Firebase Functions emulator requires Java to be installed. Install it via your system package manager or from https://adoptium.net/.
+
+### Functions Dependencies
+
+Install the functions dependencies separately:
+
+```bash
+npm install --prefix functions
+```
+
 ## Project Structure
 
 ```
 olympus-web/
+├── functions/           # Firebase Cloud Functions (Node.js 22, CommonJS)
+│   ├── index.js         # setAdminRole, removeAdminRole callable functions
+│   └── package.json     # Functions-specific dependencies
 ├── public/              # Static files served by Firebase Hosting
 │   ├── index.html       # Main entry point (Grand Hall)
 │   ├── styles/          # Shared CSS
