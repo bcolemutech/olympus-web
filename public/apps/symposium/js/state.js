@@ -102,6 +102,17 @@
     appellationsEditingId: null,
   };
 
+  // ── Global error toast ────────────────────────
+  S.showError = function (message) {
+    var toast = document.createElement('div');
+    toast.className = 'error-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    window.setTimeout(function () {
+      toast.remove();
+    }, 4000);
+  };
+
   // ── Lazy-cached DOM ref helpers ────────────────
   var refCache = {};
   S.getRef = function (id) {
@@ -152,6 +163,7 @@
     var cardFn = config.renderCard;
     var getEmptyMessage = config.getEmptyMessage;
     var noun = config.noun || 'item';
+    var pageSize = config.pageSize || 50;
 
     targetListEl.innerHTML = '';
 
@@ -166,9 +178,27 @@
     targetCountEl.classList.remove('hidden');
     targetCountEl.textContent = items.length + (items.length === 1 ? ' ' + noun : ' ' + noun + 's');
 
-    items.forEach(function (item) {
-      targetListEl.appendChild(cardFn(item));
-    });
+    var rendered = 0;
+    function renderPage() {
+      var end = Math.min(rendered + pageSize, items.length);
+      for (var i = rendered; i < end; i++) {
+        targetListEl.appendChild(cardFn(items[i]));
+      }
+      rendered = end;
+
+      var existing = targetListEl.querySelector('.load-more-btn');
+      if (existing) existing.remove();
+
+      if (rendered < items.length) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'load-more-btn';
+        btn.textContent = 'Load more (' + (items.length - rendered) + ' remaining)';
+        btn.addEventListener('click', renderPage);
+        targetListEl.appendChild(btn);
+      }
+    }
+    renderPage();
   };
 
   // ── Category sort helper ───────────────────────

@@ -427,6 +427,7 @@
         .delete()
         .catch(function (err) {
           console.error('Failed to delete equipment:', err);
+          Symposium.showError('Failed to delete equipment. Please try again.');
         });
     },
   };

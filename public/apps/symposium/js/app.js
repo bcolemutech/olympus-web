@@ -84,6 +84,15 @@
       state.db = firebase.firestore();
       state.serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
 
+      // Enable offline persistence (IndexedDB cache, shared across tabs)
+      state.db.enablePersistence({ synchronizeTabs: true }).catch(function (err) {
+        if (err.code === 'failed-precondition') {
+          console.warn('Firestore offline persistence unavailable: multiple tabs open.');
+        } else if (err.code === 'unimplemented') {
+          console.warn('Firestore offline persistence not supported in this browser.');
+        }
+      });
+
       // Wire switchView into inventory module for cross-tab navigation
       Symposium.inventory._switchToTab = switchView;
 

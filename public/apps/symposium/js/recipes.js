@@ -2018,6 +2018,7 @@
         .delete()
         .catch(function (err) {
           console.error('Failed to delete recipe:', err);
+          Symposium.showError('Failed to delete recipe. Please try again.');
         });
     },
 

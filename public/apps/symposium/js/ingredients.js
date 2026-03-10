@@ -683,6 +683,7 @@
         .delete()
         .catch(function (err) {
           console.error('Failed to delete ingredient:', err);
+          Symposium.showError('Failed to delete ingredient. Please try again.');
         });
     },
   };

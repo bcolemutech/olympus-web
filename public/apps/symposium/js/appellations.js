@@ -361,6 +361,7 @@
           if (!window.confirm('Delete "' + cat.name + '"? This cannot be undone.')) return;
           Symposium.firestore.deleteCategory(cat.id).catch(function (err) {
             console.error('Delete failed:', err);
+            Symposium.showError('Failed to delete category. Please try again.');
           });
         } else {
           Symposium.appellations._openDeleteModal(cat, totalCount, relevantCollections);

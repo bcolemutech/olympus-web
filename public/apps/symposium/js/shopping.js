@@ -384,6 +384,7 @@
         .delete()
         .catch(function (err) {
           console.error('Failed to delete provision:', err);
+          Symposium.showError('Failed to remove item. Please try again.');
         });
     },
 
@@ -396,6 +397,7 @@
       });
       Promise.all(promises).catch(function (err) {
         console.error('Failed to clear checked provisions:', err);
+        Symposium.showError('Failed to clear items. Please try again.');
       });
     },
 
@@ -669,6 +671,7 @@
 
       Promise.all(promises).catch(function (err) {
         console.error('Bulk intake failed:', err);
+        Symposium.showError('Some items failed to process. Please try again.');
       });
     },
 
