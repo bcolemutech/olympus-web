@@ -1428,10 +1428,33 @@ describe('apps — Firestore Security Rules', function () {
   var noClaimDb;
   var unauthDb;
 
-  before(async function () {
+  beforeAll(async function () {
+    var firestoreConfig = {
+      rules: readFileSync(RULES_PATH, 'utf8'),
+    };
+
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      var host = parts[0];
+      var portString = parts[1];
+      if (host) {
+        firestoreConfig.host = host;
+      }
+      if (portString) {
+        var parsedPort = parseInt(portString, 10);
+        if (!isNaN(parsedPort)) {
+          firestoreConfig.port = parsedPort;
+        }
+      }
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+
     testEnv = await initializeTestEnvironment({
       projectId: PROJECT_ID,
-      firestore: { rules: readFileSync(RULES_PATH, 'utf8') },
+      firestore: firestoreConfig,
     });
   });
 
@@ -1461,7 +1484,7 @@ describe('apps — Firestore Security Rules', function () {
     unauthDb = testEnv.unauthenticatedContext().firestore();
   });
 
-  after(async function () {
+  afterAll(async function () {
     await testEnv.cleanup();
   });
 
