@@ -4,7 +4,7 @@ Web application hosted on Firebase.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 18.0.0
+- [Node.js](https://nodejs.org/) >= 18.0.0 (Node.js 22 required for Cloud Functions development/deploy)
 - [Firebase CLI](https://firebase.google.com/docs/cli) (`npm install -g firebase-tools`)
 
 ## Setup
