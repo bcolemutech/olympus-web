@@ -42,12 +42,16 @@ jobs:
       - uses: w9jds/setup-firebase@v1.0.0
         with:
           gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          create_credentials_file: true
+          export_environment_variables: true
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: olympus-dfa00
-      - name: Authenticate gcloud with service account
-        run: gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
       - name: Enable required GCP APIs
         run: |
           gcloud services enable \
