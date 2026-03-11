@@ -46,6 +46,8 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          create_credentials_file: true
+          export_environment_variables: true
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
         with:
