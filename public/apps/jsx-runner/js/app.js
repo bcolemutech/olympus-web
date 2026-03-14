@@ -3,6 +3,7 @@
 
   var currentRoot = null;
   var currentAppletId = null;
+  var currentAbort = null;
 
   // ── DOM refs ──
 
@@ -30,10 +31,9 @@
     sidebarList.innerHTML = '';
 
     applets.forEach(function (applet) {
-      var item = document.createElement('div');
+      var item = document.createElement('button');
+      item.type = 'button';
       item.className = 'jsx-sidebar-item';
-      item.setAttribute('tabindex', '0');
-      item.setAttribute('role', 'button');
       item.setAttribute('aria-label', applet.name);
       item.dataset.id = applet.id;
 
@@ -63,12 +63,6 @@
       };
 
       item.addEventListener('click', activate);
-      item.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          activate();
-        }
-      });
 
       sidebarList.appendChild(item);
     });
@@ -87,7 +81,21 @@
 
   function loadApplet(applet) {
     if (currentAppletId === applet.id) return;
+
+    // Validate applet filename to prevent path traversal
+    if (!applet.file || /[/\\]|\.\./.test(applet.file)) {
+      showError(new Error('Invalid applet filename: ' + applet.file));
+      return;
+    }
+
     currentAppletId = applet.id;
+
+    // Abort any in-flight fetch for a previous applet
+    if (currentAbort) {
+      currentAbort.abort();
+    }
+    var abort = new AbortController();
+    currentAbort = abort;
 
     // Update sidebar highlight
     setActiveItem(applet.id);
@@ -114,12 +122,14 @@
     }
 
     // Fetch and run the JSX file
-    fetch('/apps/jsx-runner/applets/' + applet.file)
+    fetch('/apps/jsx-runner/applets/' + applet.file, { signal: abort.signal })
       .then(function (res) {
         if (!res.ok) throw new Error('Failed to load ' + applet.file + ': ' + res.status);
         return res.text();
       })
       .then(function (source) {
+        // Guard against race: if another applet was selected while fetching, bail out
+        if (abort.signal.aborted) return;
         // Clear any previous applet global
         delete window.__JSX_APPLET__;
 
@@ -147,6 +157,7 @@
         currentRoot.render(React.createElement(Component));
       })
       .catch(function (err) {
+        if (err.name === 'AbortError') return;
         showError(err);
       });
   }

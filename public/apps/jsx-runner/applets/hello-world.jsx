@@ -16,6 +16,7 @@ function HelloWorld() {
         Hello, {name}!
       </h2>
       <label
+        htmlFor="hello-name-input"
         style={{
           display: 'block',
           fontSize: '0.75rem',
@@ -28,6 +29,7 @@ function HelloWorld() {
         Your name
       </label>
       <input
+        id="hello-name-input"
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Enter your name"

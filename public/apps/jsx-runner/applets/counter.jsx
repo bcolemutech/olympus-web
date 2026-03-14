@@ -37,13 +37,13 @@ function Counter() {
         {count}
       </div>
       <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-        <button style={buttonStyle} onClick={() => setCount(count - 1)}>
+        <button type="button" style={buttonStyle} onClick={() => setCount(count - 1)}>
           &minus;
         </button>
-        <button style={resetStyle} onClick={() => setCount(0)}>
+        <button type="button" style={resetStyle} onClick={() => setCount(0)}>
           Reset
         </button>
-        <button style={buttonStyle} onClick={() => setCount(count + 1)}>
+        <button type="button" style={buttonStyle} onClick={() => setCount(count + 1)}>
           +
         </button>
       </div>

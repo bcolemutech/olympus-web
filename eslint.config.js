@@ -35,7 +35,8 @@ export default [
         firebase: "readonly",
         fetch: "readonly",
         React: "readonly",
-        ReactDOM: "readonly"
+        ReactDOM: "readonly",
+        AbortController: "readonly"
       }
     },
     rules: {

@@ -18,17 +18,30 @@
     <link rel="stylesheet" href="/apps/jsx-runner/jsx-runner.css" />
 
     <!-- React 18 (UMD) -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script
-      crossorigin
-      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin="anonymous"
+      src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"
+      integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"
+    ></script>
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"
+      integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"
     ></script>
 
     <!-- Babel Standalone (in-browser JSX transpilation) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"
+      integrity="sha384-BcI7nduYchENm39cFMEVJXHEE7fwHONANyn/pY2YTa+BNtrWF2bKBZeI0wqVithi"
+    ></script>
 
     <!-- js-yaml (YAML parsing) -->
-    <script src="https://unpkg.com/js-yaml@4/dist/js-yaml.min.js"></script>
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"
+      integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+    ></script>
   </head>
   <body>
     <!-- Shared header — rendered by app-header.js -->
