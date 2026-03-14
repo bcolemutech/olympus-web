@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JSX Runner — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- App-specific styles -->
+    <link rel="stylesheet" href="/apps/jsx-runner/jsx-runner.css" />
+
+    <!-- React 18 (UMD) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+
+    <!-- Babel Standalone (in-browser JSX transpilation) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- js-yaml (YAML parsing) -->
+    <script src="https://unpkg.com/js-yaml@4/dist/js-yaml.min.js"></script>
+  </head>
+  <body>
+    <!-- Shared header — rendered by app-header.js -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard — shown while checking auth state -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Consulting the Oracle&hellip;</p>
+    </div>
+
+    <!-- Main content — hidden until authenticated -->
+    <main class="app-main hidden" id="app-main">
+      <div class="jsx-runner-layout">
+        <nav class="jsx-sidebar" id="jsx-sidebar">
+          <h2 class="jsx-sidebar-title">Applets</h2>
+          <div class="jsx-sidebar-list" id="jsx-sidebar-list"></div>
+        </nav>
+        <div class="jsx-content">
+          <div class="jsx-welcome hidden" id="jsx-welcome">
+            <span class="jsx-welcome-icon" aria-hidden="true">&#9889;</span>
+            <p class="jsx-welcome-text">Select an applet from the menu to begin.</p>
+          </div>
+          <div id="jsx-root"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <!-- App logic -->
+    <script src="/apps/jsx-runner/js/app.js"></script>
+  </body>
+</html>
