@@ -122,16 +122,12 @@ exports.listUsers = onCall(async (request) => {
   }
 
   const { pageToken, emailPrefix } = request.data || {};
+  const prefix =
+    typeof emailPrefix === 'string' && emailPrefix.trim().length > 0
+      ? emailPrefix.trim().toLowerCase()
+      : null;
 
-  let result;
-  try {
-    result = await getAuth().listUsers(100, pageToken || undefined);
-  } catch (err) {
-    console.error('listUsers error:', err);
-    throw new HttpsError('internal', 'Failed to list users.');
-  }
-
-  let users = result.users.map((u) => ({
+  const mapUser = (u) => ({
     uid: u.uid,
     email: u.email || '',
     emailVerified: u.emailVerified,
@@ -139,12 +135,32 @@ exports.listUsers = onCall(async (request) => {
     customClaims: u.customClaims || {},
     creationTime: u.metadata.creationTime,
     lastSignInTime: u.metadata.lastSignInTime,
-  }));
+  });
 
-  if (typeof emailPrefix === 'string' && emailPrefix.trim().length > 0) {
-    const prefix = emailPrefix.trim().toLowerCase();
-    users = users.filter((u) => u.email.toLowerCase().startsWith(prefix));
-  }
+  // When filtering by prefix, accumulate pages until we have at least one
+  // matching user (or the user list is exhausted), so the client is never
+  // shown an empty page with a dangling "Load more" button.
+  const MAX_PAGES = 10;
+  let users = [];
+  let nextToken = pageToken || undefined;
+  let pages = 0;
 
-  return { users, nextPageToken: result.pageToken || null };
+  do {
+    let result;
+    try {
+      result = await getAuth().listUsers(100, nextToken);
+    } catch (err) {
+      console.error('listUsers error:', err);
+      throw new HttpsError('internal', 'Failed to list users.');
+    }
+
+    const mapped = result.users.map(mapUser);
+    users = users.concat(
+      prefix ? mapped.filter((u) => u.email.toLowerCase().startsWith(prefix)) : mapped
+    );
+    nextToken = result.pageToken || null;
+    pages++;
+  } while (prefix && users.length === 0 && nextToken && pages < MAX_PAGES);
+
+  return { users, nextPageToken: nextToken || null };
 });

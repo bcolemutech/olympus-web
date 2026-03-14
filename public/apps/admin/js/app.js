@@ -76,13 +76,18 @@
         return;
       }
 
-      user.getIdTokenResult(true).then(function (tokenResult) {
-        if (!tokenResult.claims.admin) {
+      user
+        .getIdTokenResult(true)
+        .then(function (tokenResult) {
+          if (!tokenResult.claims.admin) {
+            window.location.href = '/';
+            return;
+          }
+          Pantheon.start(user);
+        })
+        .catch(function () {
           window.location.href = '/';
-          return;
-        }
-        Pantheon.start(user);
-      });
+        });
     });
   });
 })();

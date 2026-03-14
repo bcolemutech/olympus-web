@@ -41,7 +41,7 @@
 
             card.innerHTML =
               '<div class="app-card-icon">' +
-              (app.icon || '&#128313;') +
+              Pantheon.appsTab.escapeHtml(app.icon || '🔹') +
               '</div>' +
               '<div class="app-card-name">' +
               Pantheon.appsTab.escapeHtml(app.name || doc.id) +
