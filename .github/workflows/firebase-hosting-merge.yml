@@ -62,6 +62,4 @@ jobs:
       - name: Install functions dependencies
         run: npm ci --prefix functions
       - name: Deploy Cloud Functions
-        run: firebase deploy --only functions --project olympus-dfa00
-      - name: Set up Artifact Registry cleanup policy
-        run: firebase functions:artifacts:setpolicy --force --project olympus-dfa00
+        run: firebase deploy --only functions --force --project olympus-dfa00
