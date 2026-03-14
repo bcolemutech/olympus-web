@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Pantheon — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-functions-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- App-specific styles -->
+    <link rel="stylesheet" href="/apps/admin/admin.css" />
+  </head>
+  <body>
+    <!-- Shared header — rendered by app-header.js -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard — shown while checking auth state -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Consulting the Oracle&hellip;</p>
+    </div>
+
+    <!-- Main content — hidden until authenticated as admin -->
+    <main class="app-main hidden" id="app-main">
+      <h1 class="app-title">The Pantheon</h1>
+      <p class="app-subtitle">Where the gods keep order</p>
+      <div class="app-divider"></div>
+
+      <!-- Tab navigation -->
+      <div class="view-tabs" role="tablist" aria-label="Admin sections">
+        <button
+          class="view-tab active"
+          id="tab-users"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="panel-users"
+          data-view="users"
+        >
+          <span aria-hidden="true">&#128100;</span>
+          <span class="tab-label">Users</span>
+        </button>
+        <button
+          class="view-tab"
+          id="tab-apps"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-apps"
+          data-view="apps"
+        >
+          <span aria-hidden="true">&#128970;</span>
+          <span class="tab-label">Apps</span>
+        </button>
+      </div>
+
+      <!-- Users Panel -->
+      <div id="panel-users" role="tabpanel" aria-labelledby="tab-users">
+        <div class="panel-toolbar">
+          <div class="search-wrapper">
+            <span class="search-icon" aria-hidden="true">&#128269;</span>
+            <input
+              class="search-input"
+              id="users-search"
+              type="text"
+              placeholder="Filter by email&hellip;"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+
+        <p class="panel-status hidden" id="users-loading">Loading users&hellip;</p>
+        <p class="panel-error hidden" id="users-error"></p>
+
+        <div class="table-wrapper">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Verified</th>
+                <th>App Access</th>
+                <th>Last Sign-In</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="load-more-row">
+          <button class="btn-secondary hidden" id="users-load-more" type="button">
+            Load more&hellip;
+          </button>
+        </div>
+      </div>
+
+      <!-- Apps Panel -->
+      <div id="panel-apps" role="tabpanel" aria-labelledby="tab-apps" class="hidden">
+        <p class="panel-status hidden" id="apps-loading">Loading apps&hellip;</p>
+        <p class="panel-error hidden" id="apps-error"></p>
+        <div class="apps-grid" id="apps-grid"></div>
+      </div>
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <!-- App modules -->
+    <script src="/apps/admin/js/state.js"></script>
+    <script src="/apps/admin/js/users.js"></script>
+    <script src="/apps/admin/js/apps-tab.js"></script>
+    <script src="/apps/admin/js/app.js"></script>
+  </body>
+</html>
