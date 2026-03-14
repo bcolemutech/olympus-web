@@ -1,0 +1,219 @@
+/* ── JSX Runner Layout ── */
+
+.jsx-runner-layout {
+  display: flex;
+  min-height: calc(100vh - 60px);
+}
+
+/* ── Sidebar ── */
+
+.jsx-sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: rgba(17, 24, 39, 0.7);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 1.5rem 0;
+  overflow-y: auto;
+}
+
+.jsx-sidebar-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 0 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.jsx-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jsx-sidebar-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  cursor: pointer;
+  border: none;
+  border-left: 3px solid transparent;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.jsx-sidebar-item:hover {
+  background: rgba(255, 183, 77, 0.06);
+}
+
+.jsx-sidebar-item.active {
+  background: rgba(255, 183, 77, 0.1);
+  border-left-color: #ffb74d;
+}
+
+.jsx-sidebar-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.jsx-sidebar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.jsx-sidebar-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  letter-spacing: 0.03em;
+}
+
+.jsx-sidebar-item.active .jsx-sidebar-name {
+  background: linear-gradient(135deg, #ffd54f, #ffb74d);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.jsx-sidebar-desc {
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Content Area ── */
+
+.jsx-content {
+  flex: 1;
+  padding: 2rem;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* ── Welcome State ── */
+
+.jsx-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.jsx-welcome-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.jsx-welcome-text {
+  font-size: 1rem;
+  color: #546e7a;
+  font-style: italic;
+}
+
+/* ── Error Display ── */
+
+.jsx-error {
+  padding: 1.25rem 1.5rem;
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 10px;
+  color: #fca5a5;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.jsx-error-title {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: #f87171;
+}
+
+.jsx-error pre {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Loading State ── */
+
+.jsx-applet-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem;
+}
+
+.jsx-applet-loading-text {
+  font-size: 0.9rem;
+  color: #90a4ae;
+  font-style: italic;
+}
+
+/* ── Mobile ── */
+
+@media (max-width: 768px) {
+  .jsx-runner-layout {
+    flex-direction: column;
+  }
+
+  .jsx-sidebar {
+    width: 100%;
+    min-width: 100%;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 1rem 0;
+    max-height: 200px;
+  }
+
+  .jsx-sidebar-list {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 0;
+    padding: 0 0.5rem;
+  }
+
+  .jsx-sidebar-item {
+    flex-shrink: 0;
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    padding: 0.65rem 1rem;
+  }
+
+  .jsx-sidebar-item.active {
+    border-left-color: transparent;
+    border-bottom-color: #ffb74d;
+  }
+
+  .jsx-sidebar-desc {
+    display: none;
+  }
+
+  .jsx-content {
+    padding: 1.5rem 1rem;
+  }
+}

@@ -1,0 +1,11 @@
+applets:
+  - id: hello-world
+    name: Hello World
+    description: A simple interactive greeting
+    icon: "\U0001F44B"
+    file: hello-world.jsx
+  - id: counter
+    name: Counter
+    description: A click counter demo
+    icon: "\U0001F522"
+    file: counter.jsx

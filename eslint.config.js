@@ -32,7 +32,11 @@ export default [
         document: "readonly",
         console: "readonly",
         localStorage: "readonly",
-        firebase: "readonly"
+        firebase: "readonly",
+        fetch: "readonly",
+        React: "readonly",
+        ReactDOM: "readonly",
+        AbortController: "readonly"
       }
     },
     rules: {
