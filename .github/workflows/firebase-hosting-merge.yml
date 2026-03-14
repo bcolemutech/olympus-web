@@ -62,4 +62,18 @@ jobs:
       - name: Install functions dependencies
         run: npm ci --prefix functions
       - name: Deploy Cloud Functions
+        id: deploy_functions
+        continue-on-error: true
         run: firebase deploy --only functions --force --project olympus-dfa00
+      - name: Grant Cloud Run invoker to allUsers for new callable functions
+        run: |
+          for svc in listusers; do
+            gcloud run services add-iam-policy-binding "$svc" \
+              --member="allUsers" \
+              --role="roles/run.invoker" \
+              --region=us-central1 \
+              --project=olympus-dfa00
+          done
+      - name: Fail if function deploy failed
+        if: steps.deploy_functions.outcome == 'failure'
+        run: exit 1
