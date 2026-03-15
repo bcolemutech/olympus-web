@@ -13,11 +13,6 @@ service cloud.firestore {
           && request.auth.token.admin == true;
     }
 
-    match /apps/{appId} {
-      allow read: if hasApp(appId) || hasAdmin();
-      allow write: if false;
-    }
-
     // ── The Symposium ──────────────────────────────────────
 
     match /symposium_ingredients/{ingredientId} {

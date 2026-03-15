@@ -271,32 +271,34 @@
 
     loadAppsForAccess: function (container, user) {
       var currentApps = Array.isArray(user.customClaims.apps) ? user.customClaims.apps : [];
-      Pantheon.state.db
-        .collection('apps')
-        .orderBy('order')
-        .get()
-        .then(function (snapshot) {
-          if (snapshot.empty) {
+      Pantheon.appsTab
+        .fetchApps()
+        .then(function (apps) {
+          if (apps.length === 0) {
             container.innerHTML = '<span class="muted">No apps registered.</span>';
             return;
           }
           container.innerHTML = '';
-          snapshot.forEach(function (doc) {
-            var app = doc.data();
-            var label = document.createElement('label');
-            label.className = 'access-app-option';
-            var checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = doc.id;
-            checkbox.className = 'access-app-checkbox';
-            checkbox.checked = currentApps.includes(doc.id);
-            label.appendChild(checkbox);
-            var text = document.createTextNode(
-              ' ' + (app.icon ? app.icon + ' ' : '') + (app.name || doc.id)
-            );
-            label.appendChild(text);
-            container.appendChild(label);
-          });
+          apps
+            .slice()
+            .sort(function (a, b) {
+              return (a.order || 0) - (b.order || 0);
+            })
+            .forEach(function (app) {
+              var label = document.createElement('label');
+              label.className = 'access-app-option';
+              var checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.value = app.id;
+              checkbox.className = 'access-app-checkbox';
+              checkbox.checked = currentApps.includes(app.id);
+              label.appendChild(checkbox);
+              var text = document.createTextNode(
+                ' ' + (app.icon ? app.icon + ' ' : '') + (app.name || app.id)
+              );
+              label.appendChild(text);
+              container.appendChild(label);
+            });
         })
         .catch(function () {
           container.innerHTML = '<span class="muted">Could not load apps.</span>';
@@ -438,33 +440,35 @@
         if (checkboxes) checkboxes.innerHTML = '<span class="muted">Loading apps&hellip;</span>';
         if (form) form.classList.remove('hidden');
 
-        // Load apps from Firestore for checkboxes
-        Pantheon.state.db
-          .collection('apps')
-          .orderBy('order')
-          .get()
-          .then(function (snapshot) {
+        // Load apps from YAML registry for checkboxes
+        Pantheon.appsTab
+          .fetchApps()
+          .then(function (apps) {
             if (!checkboxes) return;
-            if (snapshot.empty) {
+            if (apps.length === 0) {
               checkboxes.innerHTML = '<span class="muted">No apps available.</span>';
               return;
             }
             checkboxes.innerHTML = '';
-            snapshot.forEach(function (doc) {
-              var app = doc.data();
-              var label = document.createElement('label');
-              label.className = 'invite-app-option';
-              var checkbox = document.createElement('input');
-              checkbox.type = 'checkbox';
-              checkbox.value = doc.id;
-              checkbox.className = 'invite-app-checkbox';
-              label.appendChild(checkbox);
-              var text = document.createTextNode(
-                ' ' + (app.icon ? app.icon + ' ' : '') + (app.name || doc.id)
-              );
-              label.appendChild(text);
-              checkboxes.appendChild(label);
-            });
+            apps
+              .slice()
+              .sort(function (a, b) {
+                return (a.order || 0) - (b.order || 0);
+              })
+              .forEach(function (app) {
+                var label = document.createElement('label');
+                label.className = 'invite-app-option';
+                var checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = app.id;
+                checkbox.className = 'invite-app-checkbox';
+                label.appendChild(checkbox);
+                var text = document.createTextNode(
+                  ' ' + (app.icon ? app.icon + ' ' : '') + (app.name || app.id)
+                );
+                label.appendChild(text);
+                checkboxes.appendChild(label);
+              });
           })
           .catch(function () {
             if (checkboxes) {

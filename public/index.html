@@ -23,6 +23,32 @@
     -->
     <script defer src="/__/firebase/init.js?useEmulator=true"></script>
 
+    <!-- React 18 (UMD) — for inline JSX applets -->
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"
+      integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"
+    ></script>
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"
+      integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"
+    ></script>
+
+    <!-- Babel Standalone (in-browser JSX transpilation) -->
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"
+      integrity="sha384-BcI7nduYchENm39cFMEVJXHEE7fwHONANyn/pY2YTa+BNtrWF2bKBZeI0wqVithi"
+    ></script>
+
+    <!-- js-yaml (YAML parsing) -->
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"
+      integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
+    ></script>
+
     <style media="screen">
       *,
       *::before,
@@ -631,6 +657,81 @@
         line-height: 1.5;
       }
 
+      /* JSX applet tiles — blue-tinted to distinguish from gold embedded tiles */
+      .app-tile--jsx {
+        border-color: rgba(130, 170, 255, 0.2);
+        background: linear-gradient(135deg, rgba(60, 80, 140, 0.25), rgba(40, 60, 100, 0.15));
+      }
+      .app-tile--jsx:hover,
+      .app-tile--jsx:focus {
+        border-color: rgba(130, 170, 255, 0.5);
+        box-shadow: 0 4px 24px rgba(130, 170, 255, 0.12);
+      }
+      .app-tile--jsx .app-tile-title {
+        background: linear-gradient(135deg, #90caf9, #64b5f6);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      /* Inline JSX applet rendering area */
+      .jsx-inline {
+        width: 100%;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 1rem 0;
+      }
+      .jsx-inline-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: none;
+        border: 1px solid rgba(130, 170, 255, 0.3);
+        color: #90caf9;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+        transition:
+          border-color 0.2s,
+          color 0.2s;
+      }
+      .jsx-inline-back:hover {
+        border-color: rgba(130, 170, 255, 0.6);
+        color: #bbdefb;
+      }
+      .jsx-inline-root {
+        min-height: 200px;
+      }
+      .jsx-inline-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 3rem 0;
+        color: #6b7280;
+      }
+      .jsx-inline-error {
+        background: rgba(180, 40, 40, 0.15);
+        border: 1px solid rgba(255, 80, 80, 0.3);
+        border-radius: 10px;
+        padding: 1.5rem;
+        color: #ef9a9a;
+      }
+      .jsx-inline-error-title {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: #ef5350;
+      }
+      .jsx-inline-error pre {
+        margin-top: 0.75rem;
+        font-size: 0.8rem;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        color: #e0e0e0;
+      }
+
       .empty-state {
         text-align: center;
         padding: 4rem 2rem;
@@ -919,6 +1020,14 @@
 
         <div class="app-grid hidden" id="app-grid"></div>
 
+        <!-- Inline JSX applet rendering area -->
+        <div class="jsx-inline hidden" id="jsx-inline">
+          <button class="jsx-inline-back" id="jsx-inline-back" type="button">
+            &larr; Back to The Grand Hall
+          </button>
+          <div class="jsx-inline-root" id="jsx-inline-root"></div>
+        </div>
+
         <div class="empty-state hidden" id="empty-state">
           <span class="empty-state-icon" aria-hidden="true">&#128302;</span>
           <p class="empty-state-text">
@@ -1082,6 +1191,133 @@
 
         const db = firebase.firestore();
 
+        // ── YAML-based app registry ──────────────────────────
+        let _appsCache = null;
+
+        const fetchAllApps = async () => {
+          if (_appsCache) return _appsCache;
+          const res = await fetch('/apps.yaml');
+          if (!res.ok) throw new Error('Failed to load apps.yaml: ' + res.status);
+          const text = await res.text();
+          const manifest = jsyaml.load(text);
+          _appsCache = manifest && Array.isArray(manifest.apps) ? manifest.apps : [];
+          return _appsCache;
+        };
+
+        const fetchGrantedApps = async (appIds) => {
+          if (!appIds || appIds.length === 0) return [];
+          const all = await fetchAllApps();
+          return all
+            .filter((a) => a.enabled && appIds.includes(a.id))
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+        };
+
+        const loadAppsForUser = async (user) => {
+          // Force refresh to pick up custom claims set via Admin SDK
+          const tokenResult = await user.getIdTokenResult(true);
+          const appIds = Array.isArray(tokenResult.claims.apps) ? tokenResult.claims.apps : [];
+          return fetchGrantedApps(appIds);
+        };
+
+        // ── Inline JSX applet rendering ──────────────────────
+        const jsxInline = document.getElementById('jsx-inline');
+        const jsxInlineRoot = document.getElementById('jsx-inline-root');
+        const jsxInlineBack = document.getElementById('jsx-inline-back');
+        let _jsxRoot = null;
+
+        const loadJsxApplet = (applet) => {
+          // Validate filename — prevent path traversal
+          if (!applet.file || /[/\\]|\.\./.test(applet.file)) {
+            jsxInlineRoot.innerHTML =
+              '<div class="jsx-inline-error">' +
+              '<div class="jsx-inline-error-title">Applet Error</div>' +
+              '<p>Invalid applet filename.</p></div>';
+            return;
+          }
+
+          // Swap views: hide grid, show inline area
+          appGrid.classList.add('hidden');
+          emptyState.classList.add('hidden');
+          jsxInline.classList.remove('hidden');
+
+          // Show loading
+          jsxInlineRoot.innerHTML =
+            '<div class="jsx-inline-loading">' +
+            '<div class="app-spinner"></div>' +
+            '<span>Loading applet\u2026</span></div>';
+
+          // Unmount previous React root
+          if (_jsxRoot) {
+            try {
+              _jsxRoot.unmount();
+            } catch (e) {
+              console.warn('Failed to unmount previous JSX root:', e);
+            }
+            _jsxRoot = null;
+          }
+
+          fetch('/apps/jsx-runner/applets/' + applet.file)
+            .then((res) => {
+              if (!res.ok) throw new Error('Failed to load ' + applet.file + ': ' + res.status);
+              return res.text();
+            })
+            .then((source) => {
+              delete window.__JSX_APPLET__;
+
+              const result = Babel.transform(source, {
+                presets: ['react'],
+                filename: applet.file,
+              });
+
+              const fn = new Function(result.code);
+              fn();
+
+              const Component = window.__JSX_APPLET__;
+              if (!Component) {
+                throw new Error(
+                  'Applet did not set window.__JSX_APPLET__. ' +
+                    'Each .jsx file must assign a component to window.__JSX_APPLET__.'
+                );
+              }
+
+              jsxInlineRoot.innerHTML = '';
+              _jsxRoot = ReactDOM.createRoot(jsxInlineRoot);
+              _jsxRoot.render(React.createElement(Component));
+            })
+            .catch((err) => {
+              const escapeHtml = (s) => {
+                const d = document.createElement('div');
+                d.textContent = s;
+                return d.innerHTML;
+              };
+              jsxInlineRoot.innerHTML =
+                '<div class="jsx-inline-error">' +
+                '<div class="jsx-inline-error-title">Applet Error</div>' +
+                '<p>' +
+                escapeHtml(err.message) +
+                '</p>' +
+                (err.stack ? '<pre>' + escapeHtml(err.stack) + '</pre>' : '') +
+                '</div>';
+            });
+        };
+
+        const closeJsxApplet = () => {
+          if (_jsxRoot) {
+            try {
+              _jsxRoot.unmount();
+            } catch (e) {
+              console.warn('Failed to unmount JSX root:', e);
+            }
+            _jsxRoot = null;
+          }
+          jsxInlineRoot.innerHTML = '';
+          jsxInline.classList.add('hidden');
+          appGrid.classList.remove('hidden');
+        };
+
+        jsxInlineBack.addEventListener('click', closeJsxApplet);
+
+        // ── Tile rendering ───────────────────────────────────
         const renderAppTiles = (apps, grid, empty) => {
           grid.innerHTML = '';
           if (apps.length === 0) {
@@ -1093,7 +1329,7 @@
           grid.classList.remove('hidden');
           apps.forEach((a) => {
             const tile = document.createElement('div');
-            tile.className = 'app-tile';
+            tile.className = 'app-tile' + (a.type === 'jsx' ? ' app-tile--jsx' : '');
             tile.setAttribute('tabindex', '0');
             tile.setAttribute('role', 'button');
             tile.setAttribute('aria-label', a.name);
@@ -1120,6 +1356,8 @@
                 window.open(a.url, '_blank', 'noopener,noreferrer');
               } else if (a.type === 'embedded' && a.path) {
                 window.location.href = a.path;
+              } else if (a.type === 'jsx' && a.file) {
+                loadJsxApplet(a);
               }
             };
 
@@ -1135,35 +1373,6 @@
           });
         };
 
-        const fetchGrantedApps = async (appIds) => {
-          if (!appIds || appIds.length === 0) return [];
-          // Firestore 'in' queries are limited to 10 items; chunk if needed
-          const chunks = [];
-          for (let i = 0; i < appIds.length; i += 10) {
-            chunks.push(appIds.slice(i, i + 10));
-          }
-          const results = await Promise.all(
-            chunks.map((chunk) =>
-              db
-                .collection('apps')
-                .where(firebase.firestore.FieldPath.documentId(), 'in', chunk)
-                .where('enabled', '==', true)
-                .orderBy('order')
-                .get()
-            )
-          );
-          return results
-            .flatMap((snapshot) => snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
-            .sort((a, b) => (a.order || 0) - (b.order || 0));
-        };
-
-        const loadAppsForUser = async (user) => {
-          // Force refresh to pick up custom claims set via Admin SDK
-          const tokenResult = await user.getIdTokenResult(true);
-          const appIds = Array.isArray(tokenResult.claims.apps) ? tokenResult.claims.apps : [];
-          return fetchGrantedApps(appIds);
-        };
-
         // Show / hide helpers
         const showLanding = () => {
           landing.classList.remove('hidden');
@@ -1176,6 +1385,9 @@
           profileView.classList.add('hidden');
           authView.classList.remove('hidden');
           hallEmail.textContent = user.email;
+
+          // Close any open JSX applet
+          closeJsxApplet();
 
           // Show empty state while loading
           appGrid.classList.add('hidden');
