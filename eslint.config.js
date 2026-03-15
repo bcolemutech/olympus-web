@@ -11,7 +11,8 @@ export default [
         __dirname: "readonly",
         __filename: "readonly",
         console: "readonly",
-        process: "readonly"
+        process: "readonly",
+        fetch: "readonly"
       }
     },
     rules: {

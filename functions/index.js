@@ -3,8 +3,14 @@
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { GoogleAuth } = require('google-auth-library');
 
 initializeApp();
+
+// Reused across invitations to avoid per-call overhead.
+const googleAuth = new GoogleAuth({
+  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+});
 
 /**
  * Validates that the caller has the admin custom claim and that the provided
@@ -15,7 +21,7 @@ function requireAdminCaller(request, email) {
     throw new HttpsError('unauthenticated', 'You must be signed in to call this function.');
   }
   if (!request.auth.token.admin) {
-    throw new HttpsError('permission-denied', 'Only admins can manage admin roles.');
+    throw new HttpsError('permission-denied', 'Only admins can perform this action.');
   }
   if (typeof email !== 'string' || email.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'A valid email address is required.');
@@ -163,4 +169,107 @@ exports.listUsers = onCall(async (request) => {
   } while (prefix && users.length === 0 && nextToken && pages < MAX_PAGES);
 
   return { users, nextPageToken: nextToken || null };
+});
+
+/**
+ * inviteUser — creates a new Firebase Auth user and sends a password-setup
+ * email as the invitation.
+ *
+ * Caller must have admin: true in their custom claims.
+ * Data: { email: string, initialApps?: string[] }
+ * Returns: { uid: string, email: string }
+ *
+ * Replicates the logic in scripts/invite-user.js as a callable function.
+ * Uses Application Default Credentials (available in Cloud Functions runtime)
+ * to obtain an access token for the Identity Toolkit REST API.
+ */
+exports.inviteUser = onCall(async (request) => {
+  const email = request.data && request.data.email;
+  requireAdminCaller(request, email);
+
+  const initialApps = request.data.initialApps;
+  if (initialApps !== undefined && initialApps !== null) {
+    if (!Array.isArray(initialApps) || initialApps.some((a) => typeof a !== 'string')) {
+      throw new HttpsError('invalid-argument', 'initialApps must be an array of strings.');
+    }
+  }
+  const apps = Array.isArray(initialApps)
+    ? [...new Set(initialApps.map((a) => a.trim()).filter((a) => a.length > 0))]
+    : [];
+
+  // Step 1: Create the user (no password — they set it via the email link)
+  let userRecord;
+  try {
+    userRecord = await getAuth().createUser({
+      email: email.trim(),
+      emailVerified: false,
+      disabled: false,
+    });
+  } catch (err) {
+    if (err.code === 'auth/email-already-exists') {
+      throw new HttpsError('already-exists', `A user with email "${email.trim()}" already exists.`);
+    }
+    if (err.code === 'auth/invalid-email') {
+      throw new HttpsError('invalid-argument', 'The email address is not valid.');
+    }
+    console.error('createUser error:', err);
+    throw new HttpsError('internal', 'Failed to create user.');
+  }
+
+  // Step 2: Set initial custom claims if provided
+  if (apps.length > 0) {
+    try {
+      await getAuth().setCustomUserClaims(userRecord.uid, { apps });
+    } catch (err) {
+      console.error('setCustomUserClaims error:', err);
+      // Non-fatal — user is created, claims just not set; clean up and surface error
+      try {
+        await getAuth().deleteUser(userRecord.uid);
+      } catch (deleteErr) {
+        console.error('Failed to clean up user after claims error:', deleteErr);
+      }
+      throw new HttpsError('internal', 'Failed to set initial app access.');
+    }
+  }
+
+  // Step 3: Send password-reset email via Identity Toolkit REST API
+  const continueUrl = process.env.APP_URL || 'https://olympus-dfa00.web.app';
+  try {
+    const accessToken = await googleAuth.getAccessToken();
+    if (!accessToken) {
+      throw new Error('Failed to obtain access token from Application Default Credentials.');
+    }
+
+    const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requestType: 'PASSWORD_RESET',
+        email: email.trim(),
+        continueUrl,
+        returnOobLink: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json();
+      throw new Error(
+        `Identity Toolkit API error (${response.status}): ${body.error?.message || JSON.stringify(body)}`
+      );
+    }
+  } catch (err) {
+    console.error('sendOobCode error:', err);
+    // Clean up orphaned user
+    try {
+      await getAuth().deleteUser(userRecord.uid);
+    } catch (deleteErr) {
+      console.error('Failed to clean up orphaned user:', deleteErr);
+    }
+    throw new HttpsError('internal', 'Failed to send invitation email.');
+  }
+
+  return { uid: userRecord.uid, email: email.trim() };
 });

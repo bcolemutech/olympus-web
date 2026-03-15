@@ -64,6 +64,28 @@
       });
     }
 
+    // Wire up invite user controls
+    var inviteBtn = document.getElementById('invite-user-btn');
+    if (inviteBtn) {
+      inviteBtn.addEventListener('click', function () {
+        Pantheon.users.invite.showForm();
+      });
+    }
+
+    var inviteCancelBtn = document.getElementById('invite-cancel');
+    if (inviteCancelBtn) {
+      inviteCancelBtn.addEventListener('click', function () {
+        Pantheon.users.invite.hideForm();
+      });
+    }
+
+    var inviteSubmitBtn = document.getElementById('invite-submit');
+    if (inviteSubmitBtn) {
+      inviteSubmitBtn.addEventListener('click', function () {
+        Pantheon.users.invite.submit();
+      });
+    }
+
     // Initial load
     Pantheon.switchTab('users');
     Pantheon.users.load('', null);

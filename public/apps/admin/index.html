@@ -75,6 +75,30 @@
               autocomplete="off"
             />
           </div>
+          <button class="btn-secondary" id="invite-user-btn" type="button">+ Invite User</button>
+        </div>
+
+        <div class="invite-form hidden" id="invite-form">
+          <div class="invite-fields">
+            <label class="invite-email-label" for="invite-email">Email address</label>
+            <input
+              class="invite-email-input"
+              id="invite-email"
+              type="email"
+              placeholder="user@example.com"
+              autocomplete="off"
+            />
+            <div class="invite-apps-section">
+              <p class="invite-apps-label">Initial app access (optional):</p>
+              <div class="invite-apps-list" id="invite-apps-checkboxes"></div>
+            </div>
+          </div>
+          <div class="invite-actions">
+            <button class="btn-primary" id="invite-submit" type="button">Send Invitation</button>
+            <button class="btn-secondary" id="invite-cancel" type="button">Cancel</button>
+          </div>
+          <p class="panel-error hidden" id="invite-error"></p>
+          <p class="panel-status hidden" id="invite-success"></p>
         </div>
 
         <p class="panel-status hidden" id="users-loading">Loading users&hellip;</p>
