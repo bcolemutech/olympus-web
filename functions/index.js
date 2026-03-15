@@ -172,6 +172,82 @@ exports.listUsers = onCall(async (request) => {
 });
 
 /**
+ * manageAccess — grants, revokes, or sets app access for a user.
+ *
+ * Caller must have admin: true in their custom claims.
+ * Data: { email: string, action: 'grant'|'revoke'|'set', apps: string[] }
+ * Returns: { apps: string[] } — the updated apps list
+ *
+ * Replicates the logic in scripts/manage-access.js as a callable function.
+ */
+exports.manageAccess = onCall(async (request) => {
+  const email = request.data && request.data.email;
+  requireAdminCaller(request, email);
+
+  const { action, apps: incomingApps } = request.data || {};
+
+  const validActions = ['grant', 'revoke', 'set'];
+  if (!validActions.includes(action)) {
+    throw new HttpsError('invalid-argument', `action must be one of: ${validActions.join(', ')}.`);
+  }
+
+  if (!Array.isArray(incomingApps) || incomingApps.some((a) => typeof a !== 'string')) {
+    throw new HttpsError('invalid-argument', 'apps must be an array of strings.');
+  }
+
+  const newAppIds = [...new Set(incomingApps.map((a) => a.trim()).filter((a) => a.length > 0))];
+
+  const user = await getUserByEmail(email.trim());
+  const currentClaims = user.customClaims || {};
+  let apps = Array.isArray(currentClaims.apps) ? currentClaims.apps : [];
+
+  if (action === 'grant') {
+    apps = [...new Set([...apps, ...newAppIds])];
+  } else if (action === 'revoke') {
+    apps = apps.filter((id) => !newAppIds.includes(id));
+  } else {
+    apps = newAppIds;
+  }
+
+  try {
+    await getAuth().setCustomUserClaims(user.uid, { ...currentClaims, apps });
+  } catch (err) {
+    console.error('setCustomUserClaims error:', err);
+    throw new HttpsError('internal', 'Failed to update user claims.');
+  }
+
+  return { apps };
+});
+
+/**
+ * setUserDisabled — enables or disables a Firebase Auth user account.
+ *
+ * Caller must have admin: true in their custom claims.
+ * Data: { email: string, disabled: boolean }
+ * Returns: { success: true, disabled: boolean }
+ */
+exports.setUserDisabled = onCall(async (request) => {
+  const email = request.data && request.data.email;
+  requireAdminCaller(request, email);
+
+  const { disabled } = request.data || {};
+  if (typeof disabled !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'disabled must be a boolean.');
+  }
+
+  const user = await getUserByEmail(email.trim());
+
+  try {
+    await getAuth().updateUser(user.uid, { disabled });
+  } catch (err) {
+    console.error('updateUser error:', err);
+    throw new HttpsError('internal', 'Failed to update user.');
+  }
+
+  return { success: true, disabled };
+});
+
+/**
  * inviteUser — creates a new Firebase Auth user and sends a password-setup
  * email as the invitation.
  *

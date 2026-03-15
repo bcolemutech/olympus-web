@@ -77,12 +77,20 @@
     appendRows: function (users) {
       var tbody = document.getElementById('users-tbody');
       if (!tbody) return;
-      // Remove empty-state row if present
       var emptyRow = tbody.querySelector('.users-empty');
       if (emptyRow) emptyRow.parentNode.removeChild(emptyRow);
       users.forEach(function (user) {
         tbody.appendChild(Pantheon.users.createRow(user));
       });
+    },
+
+    renderAppPills: function (apps) {
+      if (!apps || apps.length === 0) return '<span class="muted">none</span>';
+      return apps
+        .map(function (a) {
+          return '<span class="claim-pill">' + Pantheon.users.escapeHtml(a) + '</span>';
+        })
+        .join('');
     },
 
     createRow: function (user) {
@@ -91,11 +99,6 @@
       tr.setAttribute('data-uid', user.uid);
 
       var apps = Array.isArray(user.customClaims.apps) ? user.customClaims.apps : [];
-      var appPills = apps
-        .map(function (a) {
-          return '<span class="claim-pill">' + Pantheon.users.escapeHtml(a) + '</span>';
-        })
-        .join('');
 
       var lastSignIn = user.lastSignInTime
         ? new Date(user.lastSignInTime).toLocaleDateString()
@@ -111,7 +114,7 @@
           : '<span class="badge badge-warn">Unverified</span>') +
         '</td>' +
         '<td class="user-apps">' +
-        (appPills || '<span class="muted">none</span>') +
+        Pantheon.users.renderAppPills(apps) +
         '</td>' +
         '<td class="user-signin">' +
         lastSignIn +
@@ -124,6 +127,11 @@
       });
 
       return tr;
+    },
+
+    updateRowAppPills: function (tr, apps) {
+      var appCell = tr.querySelector('.user-apps');
+      if (appCell) appCell.innerHTML = Pantheon.users.renderAppPills(apps);
     },
 
     toggleDetail: function (tr, user) {
@@ -143,13 +151,14 @@
 
       var createdAt = user.creationTime ? new Date(user.creationTime).toLocaleString() : '—';
       var lastSignIn = user.lastSignInTime ? new Date(user.lastSignInTime).toLocaleString() : '—';
+      var safeUid = Pantheon.users.escapeHtml(user.uid);
 
       detailRow.innerHTML =
         '<td colspan="5">' +
         '<div class="user-detail">' +
         '<div class="detail-grid">' +
         '<div class="detail-field"><span class="detail-label">UID</span><span class="detail-value monospace">' +
-        Pantheon.users.escapeHtml(user.uid) +
+        safeUid +
         '</span></div>' +
         '<div class="detail-field"><span class="detail-label">Created</span><span class="detail-value">' +
         Pantheon.users.escapeHtml(createdAt) +
@@ -157,20 +166,233 @@
         '<div class="detail-field"><span class="detail-label">Last Sign-In</span><span class="detail-value">' +
         Pantheon.users.escapeHtml(lastSignIn) +
         '</span></div>' +
-        '<div class="detail-field"><span class="detail-label">Disabled</span><span class="detail-value">' +
+        '<div class="detail-field">' +
+        '<span class="detail-label">Status</span>' +
+        '<span class="detail-value detail-disabled-badge">' +
         (user.disabled
-          ? '<span class="badge badge-error">Yes</span>'
-          : '<span class="badge badge-ok">No</span>') +
-        '</span></div>' +
+          ? '<span class="badge badge-error">Disabled</span>'
+          : '<span class="badge badge-ok">Active</span>') +
+        '</span>' +
+        '<button class="btn-danger detail-disable-btn" type="button">' +
+        (user.disabled ? 'Enable User' : 'Disable User') +
+        '</button>' +
+        '<p class="panel-error hidden detail-disable-error"></p>' +
+        '</div>' +
         '</div>' +
         '<div class="detail-field detail-claims"><span class="detail-label">Custom Claims</span>' +
         '<pre class="claims-json">' +
         Pantheon.users.escapeHtml(JSON.stringify(user.customClaims, null, 2)) +
         '</pre></div>' +
+        '<div class="detail-access-section">' +
+        '<p class="detail-label">App Access</p>' +
+        '<div class="access-checkboxes"><span class="muted">Loading apps&hellip;</span></div>' +
+        '<div class="access-actions">' +
+        '<button class="btn-primary access-save-btn" type="button">Save</button>' +
+        '<p class="access-notice muted">Changes take effect immediately on the backend. ' +
+        'The user may need to sign out and back in to see updated access in their session.</p>' +
+        '</div>' +
+        '<div class="access-diff hidden">' +
+        '<div class="diff-lines"></div>' +
+        '<div class="access-diff-actions">' +
+        '<button class="btn-primary access-confirm-btn" type="button">Confirm</button>' +
+        '<button class="btn-secondary access-cancel-btn" type="button">Cancel</button>' +
+        '</div>' +
+        '</div>' +
+        '<p class="panel-error hidden access-error"></p>' +
+        '<p class="panel-status hidden access-success"></p>' +
+        '</div>' +
         '</div>' +
         '</td>';
 
       tr.parentNode.insertBefore(detailRow, tr.nextSibling);
+
+      // Load apps checkboxes
+      var checkboxesEl = detailRow.querySelector('.access-checkboxes');
+      Pantheon.users.loadAppsForAccess(checkboxesEl, user);
+
+      // Disable/Enable toggle
+      var disableBtn = detailRow.querySelector('.detail-disable-btn');
+      var disableError = detailRow.querySelector('.detail-disable-error');
+      disableBtn.addEventListener('click', function () {
+        Pantheon.users.toggleDisabled(tr, user, detailRow, disableBtn, disableError);
+      });
+
+      // Save → show diff
+      var saveBtn = detailRow.querySelector('.access-save-btn');
+      var diffEl = detailRow.querySelector('.access-diff');
+      var diffLines = detailRow.querySelector('.diff-lines');
+      saveBtn.addEventListener('click', function () {
+        var currentApps = Array.isArray(user.customClaims.apps) ? user.customClaims.apps : [];
+        var selected = [];
+        detailRow.querySelectorAll('.access-app-checkbox:checked').forEach(function (cb) {
+          selected.push(cb.value);
+        });
+        Pantheon.users.showAccessDiff(diffEl, diffLines, currentApps, selected);
+      });
+
+      // Cancel diff
+      var cancelBtn = detailRow.querySelector('.access-cancel-btn');
+      cancelBtn.addEventListener('click', function () {
+        diffEl.classList.add('hidden');
+        saveBtn.classList.remove('hidden');
+      });
+
+      // Confirm → save
+      var confirmBtn = detailRow.querySelector('.access-confirm-btn');
+      var accessError = detailRow.querySelector('.access-error');
+      var accessSuccess = detailRow.querySelector('.access-success');
+      confirmBtn.addEventListener('click', function () {
+        var selected = [];
+        detailRow.querySelectorAll('.access-app-checkbox:checked').forEach(function (cb) {
+          selected.push(cb.value);
+        });
+        Pantheon.users.saveAccess(
+          detailRow,
+          tr,
+          user,
+          selected,
+          saveBtn,
+          diffEl,
+          accessError,
+          accessSuccess
+        );
+      });
+    },
+
+    loadAppsForAccess: function (container, user) {
+      var currentApps = Array.isArray(user.customClaims.apps) ? user.customClaims.apps : [];
+      Pantheon.state.db
+        .collection('apps')
+        .orderBy('order')
+        .get()
+        .then(function (snapshot) {
+          if (snapshot.empty) {
+            container.innerHTML = '<span class="muted">No apps registered.</span>';
+            return;
+          }
+          container.innerHTML = '';
+          snapshot.forEach(function (doc) {
+            var app = doc.data();
+            var label = document.createElement('label');
+            label.className = 'access-app-option';
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = doc.id;
+            checkbox.className = 'access-app-checkbox';
+            checkbox.checked = currentApps.includes(doc.id);
+            label.appendChild(checkbox);
+            var text = document.createTextNode(
+              ' ' + (app.icon ? app.icon + ' ' : '') + (app.name || doc.id)
+            );
+            label.appendChild(text);
+            container.appendChild(label);
+          });
+        })
+        .catch(function () {
+          container.innerHTML = '<span class="muted">Could not load apps.</span>';
+        });
+    },
+
+    showAccessDiff: function (diffEl, diffLines, currentApps, selectedApps) {
+      var added = selectedApps.filter(function (a) {
+        return !currentApps.includes(a);
+      });
+      var removed = currentApps.filter(function (a) {
+        return !selectedApps.includes(a);
+      });
+
+      if (added.length === 0 && removed.length === 0) {
+        diffLines.innerHTML = '<span class="muted">No changes.</span>';
+      } else {
+        var html = '';
+        added.forEach(function (a) {
+          html +=
+            '<div class="diff-added"><span>+ ' + Pantheon.users.escapeHtml(a) + '</span></div>';
+        });
+        removed.forEach(function (a) {
+          html +=
+            '<div class="diff-removed"><span>&minus; ' +
+            Pantheon.users.escapeHtml(a) +
+            '</span></div>';
+        });
+        diffLines.innerHTML = html;
+      }
+
+      diffEl.classList.remove('hidden');
+    },
+
+    saveAccess: function (detailRow, tr, user, selectedApps, saveBtn, diffEl, errorEl, successEl) {
+      errorEl.classList.add('hidden');
+      successEl.classList.add('hidden');
+      var confirmBtn = detailRow.querySelector('.access-confirm-btn');
+      var cancelBtn = detailRow.querySelector('.access-cancel-btn');
+      if (confirmBtn) confirmBtn.disabled = true;
+      if (cancelBtn) cancelBtn.disabled = true;
+
+      var manageAccess = Pantheon.state.functions.httpsCallable('manageAccess');
+      manageAccess({ email: user.email, action: 'set', apps: selectedApps })
+        .then(function (result) {
+          if (confirmBtn) confirmBtn.disabled = false;
+          if (cancelBtn) cancelBtn.disabled = false;
+          diffEl.classList.add('hidden');
+          saveBtn.classList.remove('hidden');
+
+          // Update local user data
+          user.customClaims = user.customClaims || {};
+          user.customClaims.apps = result.data.apps;
+
+          // Update claims JSON display
+          var claimsEl = detailRow.querySelector('.claims-json');
+          if (claimsEl) {
+            claimsEl.textContent = JSON.stringify(user.customClaims, null, 2);
+          }
+
+          // Update app pills in parent row
+          Pantheon.users.updateRowAppPills(tr, result.data.apps);
+
+          // Re-check checkboxes to reflect saved state
+          detailRow.querySelectorAll('.access-app-checkbox').forEach(function (cb) {
+            cb.checked = result.data.apps.includes(cb.value);
+          });
+
+          successEl.textContent = 'App access updated successfully.';
+          successEl.classList.remove('hidden');
+        })
+        .catch(function (err) {
+          if (confirmBtn) confirmBtn.disabled = false;
+          if (cancelBtn) cancelBtn.disabled = false;
+          errorEl.textContent = err.message || 'Failed to update app access.';
+          errorEl.classList.remove('hidden');
+        });
+    },
+
+    toggleDisabled: function (tr, user, detailRow, btn, errorEl) {
+      errorEl.classList.add('hidden');
+      btn.disabled = true;
+
+      var newDisabled = !user.disabled;
+      var setUserDisabled = Pantheon.state.functions.httpsCallable('setUserDisabled');
+      setUserDisabled({ email: user.email, disabled: newDisabled })
+        .then(function (result) {
+          btn.disabled = false;
+          user.disabled = result.data.disabled;
+
+          // Update badge in detail
+          var badgeEl = detailRow.querySelector('.detail-disabled-badge');
+          if (badgeEl) {
+            badgeEl.innerHTML = user.disabled
+              ? '<span class="badge badge-error">Disabled</span>'
+              : '<span class="badge badge-ok">Active</span>';
+          }
+
+          // Update button label
+          btn.textContent = user.disabled ? 'Enable User' : 'Disable User';
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          errorEl.textContent = err.message || 'Failed to update user status.';
+          errorEl.classList.remove('hidden');
+        });
     },
 
     escapeHtml: function (str) {

@@ -485,6 +485,113 @@
   flex-wrap: wrap;
 }
 
+/* ── App Access Management (detail panel) ── */
+
+.detail-access-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.access-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+.access-app-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #90a4ae;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.access-app-option:hover {
+  border-color: rgba(255, 183, 77, 0.3);
+  color: #ffb74d;
+}
+
+.access-app-checkbox {
+  accent-color: #ffb74d;
+  cursor: pointer;
+}
+
+.access-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.access-notice {
+  font-size: 0.78rem;
+  margin: 0;
+  max-width: 38rem;
+}
+
+.access-diff {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+
+.diff-lines {
+  margin-bottom: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.diff-added span {
+  color: #81c784;
+}
+
+.diff-removed span {
+  color: #ef9a9a;
+}
+
+.access-diff-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+/* ── Danger button (disable user) ── */
+
+.btn-danger {
+  display: inline-block;
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  background: rgba(239, 83, 80, 0.12);
+  border: 1px solid rgba(239, 83, 80, 0.3);
+  color: #ef9a9a;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+  margin-left: 0.6rem;
+}
+
+.btn-danger:hover {
+  background: rgba(239, 83, 80, 0.22);
+  border-color: rgba(239, 83, 80, 0.5);
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Utilities ── */
 
 .monospace {
