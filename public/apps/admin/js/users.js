@@ -180,5 +180,123 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
     },
+
+    invite: {
+      showForm: function () {
+        var form = document.getElementById('invite-form');
+        var emailInput = document.getElementById('invite-email');
+        var errorEl = document.getElementById('invite-error');
+        var successEl = document.getElementById('invite-success');
+        var checkboxes = document.getElementById('invite-apps-checkboxes');
+
+        if (emailInput) emailInput.value = '';
+        if (errorEl) {
+          errorEl.textContent = '';
+          errorEl.classList.add('hidden');
+        }
+        if (successEl) {
+          successEl.textContent = '';
+          successEl.classList.add('hidden');
+        }
+        if (checkboxes) checkboxes.innerHTML = '<span class="muted">Loading apps&hellip;</span>';
+        if (form) form.classList.remove('hidden');
+
+        // Load apps from Firestore for checkboxes
+        Pantheon.state.db
+          .collection('apps')
+          .orderBy('order')
+          .get()
+          .then(function (snapshot) {
+            if (!checkboxes) return;
+            if (snapshot.empty) {
+              checkboxes.innerHTML = '<span class="muted">No apps available.</span>';
+              return;
+            }
+            checkboxes.innerHTML = '';
+            snapshot.forEach(function (doc) {
+              var app = doc.data();
+              var label = document.createElement('label');
+              label.className = 'invite-app-option';
+              var checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.value = doc.id;
+              checkbox.className = 'invite-app-checkbox';
+              label.appendChild(checkbox);
+              var text = document.createTextNode(
+                ' ' + (app.icon ? app.icon + ' ' : '') + (app.name || doc.id)
+              );
+              label.appendChild(text);
+              checkboxes.appendChild(label);
+            });
+          })
+          .catch(function () {
+            if (checkboxes) {
+              checkboxes.innerHTML = '<span class="muted">Could not load apps.</span>';
+            }
+          });
+      },
+
+      hideForm: function () {
+        var form = document.getElementById('invite-form');
+        if (form) form.classList.add('hidden');
+      },
+
+      submit: function () {
+        var emailInput = document.getElementById('invite-email');
+        var errorEl = document.getElementById('invite-error');
+        var successEl = document.getElementById('invite-success');
+        var submitBtn = document.getElementById('invite-submit');
+        var checkboxes = document.querySelectorAll('.invite-app-checkbox:checked');
+
+        if (errorEl) {
+          errorEl.textContent = '';
+          errorEl.classList.add('hidden');
+        }
+        if (successEl) {
+          successEl.textContent = '';
+          successEl.classList.add('hidden');
+        }
+
+        var email = emailInput ? emailInput.value.trim() : '';
+        if (!email) {
+          if (errorEl) {
+            errorEl.textContent = 'Email address is required.';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+
+        var selectedApps = [];
+        checkboxes.forEach(function (cb) {
+          selectedApps.push(cb.value);
+        });
+
+        if (submitBtn) submitBtn.disabled = true;
+
+        var inviteUser = Pantheon.state.functions.httpsCallable('inviteUser');
+        inviteUser({ email: email, initialApps: selectedApps })
+          .then(function (result) {
+            if (submitBtn) submitBtn.disabled = false;
+            if (successEl) {
+              successEl.textContent =
+                'Invitation sent to ' +
+                Pantheon.users.escapeHtml(result.data.email) +
+                ' (UID: ' +
+                Pantheon.users.escapeHtml(result.data.uid) +
+                ')';
+              successEl.classList.remove('hidden');
+            }
+            // Reload user list to show the new user
+            Pantheon.users.load('', null);
+          })
+          .catch(function (err) {
+            if (submitBtn) submitBtn.disabled = false;
+            if (errorEl) {
+              errorEl.textContent = err.message || 'Failed to send invitation.';
+              errorEl.classList.remove('hidden');
+            }
+          });
+      },
+    },
   };
 })();
