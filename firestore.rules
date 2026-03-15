@@ -292,6 +292,12 @@ service cloud.firestore {
       allow delete: if hasApp('symposium');
     }
 
+    // ── App registry ──────────────────────────────────────
+
+    match /apps/{appId} {
+      allow read: if hasApp(appId) || hasAdmin();
+    }
+
     // ── Default deny ───────────────────────────────────────
 
     match /{document=**} {
