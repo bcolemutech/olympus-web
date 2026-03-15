@@ -197,6 +197,14 @@ exports.manageAccess = onCall(async (request) => {
 
   const newAppIds = [...new Set(incomingApps.map((a) => a.trim()).filter((a) => a.length > 0))];
 
+  const invalidIds = newAppIds.filter((id) => !/^[A-Za-z0-9_-]+$/.test(id));
+  if (invalidIds.length > 0) {
+    throw new HttpsError(
+      'invalid-argument',
+      `Invalid app ID(s): ${invalidIds.join(', ')}. App IDs must contain only letters, numbers, underscores, or hyphens.`
+    );
+  }
+
   const user = await getUserByEmail(email.trim());
   const currentClaims = user.customClaims || {};
   let apps = Array.isArray(currentClaims.apps) ? currentClaims.apps : [];

@@ -173,9 +173,11 @@
           ? '<span class="badge badge-error">Disabled</span>'
           : '<span class="badge badge-ok">Active</span>') +
         '</span>' +
-        '<button class="btn-danger detail-disable-btn" type="button">' +
-        (user.disabled ? 'Enable User' : 'Disable User') +
-        '</button>' +
+        (user.email
+          ? '<button class="btn-danger detail-disable-btn" type="button">' +
+            (user.disabled ? 'Enable User' : 'Disable User') +
+            '</button>'
+          : '<span class="muted" style="margin-left:0.6rem;font-size:0.8rem;">No email — cannot toggle</span>') +
         '<p class="panel-error hidden detail-disable-error"></p>' +
         '</div>' +
         '</div>' +
@@ -185,78 +187,86 @@
         '</pre></div>' +
         '<div class="detail-access-section">' +
         '<p class="detail-label">App Access</p>' +
-        '<div class="access-checkboxes"><span class="muted">Loading apps&hellip;</span></div>' +
-        '<div class="access-actions">' +
-        '<button class="btn-primary access-save-btn" type="button">Save</button>' +
-        '<p class="access-notice muted">Changes take effect immediately on the backend. ' +
-        'The user may need to sign out and back in to see updated access in their session.</p>' +
-        '</div>' +
-        '<div class="access-diff hidden">' +
-        '<div class="diff-lines"></div>' +
-        '<div class="access-diff-actions">' +
-        '<button class="btn-primary access-confirm-btn" type="button">Confirm</button>' +
-        '<button class="btn-secondary access-cancel-btn" type="button">Cancel</button>' +
-        '</div>' +
-        '</div>' +
-        '<p class="panel-error hidden access-error"></p>' +
-        '<p class="panel-status hidden access-success"></p>' +
+        (user.email
+          ? '<div class="access-checkboxes"><span class="muted">Loading apps&hellip;</span></div>' +
+            '<div class="access-actions">' +
+            '<button class="btn-primary access-save-btn" type="button">Save</button>' +
+            '<p class="access-notice muted">Changes take effect immediately on the backend. ' +
+            'The user may need to sign out and back in to see updated access in their session.</p>' +
+            '</div>' +
+            '<div class="access-diff hidden">' +
+            '<div class="diff-lines"></div>' +
+            '<div class="access-diff-actions">' +
+            '<button class="btn-primary access-confirm-btn" type="button">Confirm</button>' +
+            '<button class="btn-secondary access-cancel-btn" type="button">Cancel</button>' +
+            '</div>' +
+            '</div>' +
+            '<p class="panel-error hidden access-error"></p>' +
+            '<p class="panel-status hidden access-success"></p>'
+          : '<span class="muted">App access cannot be managed for accounts without an email address.</span>') +
         '</div>' +
         '</div>' +
         '</td>';
 
       tr.parentNode.insertBefore(detailRow, tr.nextSibling);
 
-      // Load apps checkboxes
-      var checkboxesEl = detailRow.querySelector('.access-checkboxes');
-      Pantheon.users.loadAppsForAccess(checkboxesEl, user);
+      if (user.email) {
+        // Load apps checkboxes
+        var checkboxesEl = detailRow.querySelector('.access-checkboxes');
+        Pantheon.users.loadAppsForAccess(checkboxesEl, user);
 
-      // Disable/Enable toggle
-      var disableBtn = detailRow.querySelector('.detail-disable-btn');
-      var disableError = detailRow.querySelector('.detail-disable-error');
-      disableBtn.addEventListener('click', function () {
-        Pantheon.users.toggleDisabled(tr, user, detailRow, disableBtn, disableError);
-      });
+        // Disable/Enable toggle
+        var disableBtn = detailRow.querySelector('.detail-disable-btn');
+        var disableError = detailRow.querySelector('.detail-disable-error');
+        if (disableBtn) {
+          disableBtn.addEventListener('click', function () {
+            Pantheon.users.toggleDisabled(tr, user, detailRow, disableBtn, disableError);
+          });
+        }
 
-      // Save → show diff
-      var saveBtn = detailRow.querySelector('.access-save-btn');
-      var diffEl = detailRow.querySelector('.access-diff');
-      var diffLines = detailRow.querySelector('.diff-lines');
-      saveBtn.addEventListener('click', function () {
-        var currentApps = Array.isArray(user.customClaims.apps) ? user.customClaims.apps : [];
-        var selected = [];
-        detailRow.querySelectorAll('.access-app-checkbox:checked').forEach(function (cb) {
-          selected.push(cb.value);
+        // Save → show diff
+        var saveBtn = detailRow.querySelector('.access-save-btn');
+        var diffEl = detailRow.querySelector('.access-diff');
+        var diffLines = detailRow.querySelector('.diff-lines');
+        saveBtn.addEventListener('click', function () {
+          var currentApps = Array.isArray(user.customClaims.apps) ? user.customClaims.apps : [];
+          var selected = [];
+          detailRow.querySelectorAll('.access-app-checkbox:checked').forEach(function (cb) {
+            selected.push(cb.value);
+          });
+          saveBtn.classList.add('hidden');
+          Pantheon.users.showAccessDiff(diffEl, diffLines, currentApps, selected);
         });
-        Pantheon.users.showAccessDiff(diffEl, diffLines, currentApps, selected);
-      });
 
-      // Cancel diff
-      var cancelBtn = detailRow.querySelector('.access-cancel-btn');
-      cancelBtn.addEventListener('click', function () {
-        diffEl.classList.add('hidden');
-        saveBtn.classList.remove('hidden');
-      });
-
-      // Confirm → save
-      var confirmBtn = detailRow.querySelector('.access-confirm-btn');
-      var accessError = detailRow.querySelector('.access-error');
-      var accessSuccess = detailRow.querySelector('.access-success');
-      confirmBtn.addEventListener('click', function () {
-        var selected = [];
-        detailRow.querySelectorAll('.access-app-checkbox:checked').forEach(function (cb) {
-          selected.push(cb.value);
+        // Cancel diff
+        var cancelBtn = detailRow.querySelector('.access-cancel-btn');
+        cancelBtn.addEventListener('click', function () {
+          diffEl.classList.add('hidden');
+          saveBtn.classList.remove('hidden');
         });
-        Pantheon.users.saveAccess(
-          detailRow,
-          tr,
-          user,
-          selected,
-          saveBtn,
-          diffEl,
-          accessError,
-          accessSuccess
-        );
-      });
+
+        // Confirm → save
+        var confirmBtn = detailRow.querySelector('.access-confirm-btn');
+        var accessError = detailRow.querySelector('.access-error');
+        var accessSuccess = detailRow.querySelector('.access-success');
+        confirmBtn.addEventListener('click', function () {
+          if (confirmBtn.disabled) return;
+          var selected = [];
+          detailRow.querySelectorAll('.access-app-checkbox:checked').forEach(function (cb) {
+            selected.push(cb.value);
+          });
+          Pantheon.users.saveAccess(
+            detailRow,
+            tr,
+            user,
+            selected,
+            saveBtn,
+            diffEl,
+            accessError,
+            accessSuccess
+          );
+        });
+      }
     },
 
     loadAppsForAccess: function (container, user) {
@@ -301,8 +311,12 @@
         return !selectedApps.includes(a);
       });
 
-      if (added.length === 0 && removed.length === 0) {
+      var confirmBtn = diffEl.querySelector('.access-confirm-btn');
+      var noChanges = added.length === 0 && removed.length === 0;
+
+      if (noChanges) {
         diffLines.innerHTML = '<span class="muted">No changes.</span>';
+        if (confirmBtn) confirmBtn.disabled = true;
       } else {
         var html = '';
         added.forEach(function (a) {
@@ -316,6 +330,7 @@
             '</span></div>';
         });
         diffLines.innerHTML = html;
+        if (confirmBtn) confirmBtn.disabled = false;
       }
 
       diffEl.classList.remove('hidden');
