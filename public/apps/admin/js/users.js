@@ -286,8 +286,8 @@
                 ')';
               successEl.classList.remove('hidden');
             }
-            // Reload user list to show the new user
-            Pantheon.users.load('', null);
+            // Reload user list to show the new user, preserving the active filter
+            Pantheon.users.load(Pantheon.state.users.emailPrefix, null);
           })
           .catch(function (err) {
             if (submitBtn) submitBtn.disabled = false;

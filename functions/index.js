@@ -7,6 +7,11 @@ const { GoogleAuth } = require('google-auth-library');
 
 initializeApp();
 
+// Reused across invitations to avoid per-call overhead.
+const googleAuth = new GoogleAuth({
+  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+});
+
 /**
  * Validates that the caller has the admin custom claim and that the provided
  * email is a non-empty string. Throws HttpsError on any violation.
@@ -16,7 +21,7 @@ function requireAdminCaller(request, email) {
     throw new HttpsError('unauthenticated', 'You must be signed in to call this function.');
   }
   if (!request.auth.token.admin) {
-    throw new HttpsError('permission-denied', 'Only admins can manage admin roles.');
+    throw new HttpsError('permission-denied', 'Only admins can perform this action.');
   }
   if (typeof email !== 'string' || email.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'A valid email address is required.');
@@ -188,7 +193,9 @@ exports.inviteUser = onCall(async (request) => {
       throw new HttpsError('invalid-argument', 'initialApps must be an array of strings.');
     }
   }
-  const apps = Array.isArray(initialApps) ? initialApps.filter((a) => a.length > 0) : [];
+  const apps = Array.isArray(initialApps)
+    ? [...new Set(initialApps.map((a) => a.trim()).filter((a) => a.length > 0))]
+    : [];
 
   // Step 1: Create the user (no password — they set it via the email link)
   let userRecord;
@@ -226,11 +233,12 @@ exports.inviteUser = onCall(async (request) => {
   }
 
   // Step 3: Send password-reset email via Identity Toolkit REST API
+  const continueUrl = process.env.APP_URL || 'https://olympus-dfa00.web.app';
   try {
-    const googleAuth = new GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    });
     const accessToken = await googleAuth.getAccessToken();
+    if (!accessToken) {
+      throw new Error('Failed to obtain access token from Application Default Credentials.');
+    }
 
     const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode', {
       method: 'POST',
@@ -241,6 +249,7 @@ exports.inviteUser = onCall(async (request) => {
       body: JSON.stringify({
         requestType: 'PASSWORD_RESET',
         email: email.trim(),
+        continueUrl,
         returnOobLink: false,
       }),
     });

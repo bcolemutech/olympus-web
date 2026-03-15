@@ -410,6 +410,14 @@
   margin-bottom: 1rem;
 }
 
+.invite-email-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #546e7a;
+}
+
 .invite-email-input {
   width: 100%;
   max-width: 380px;
