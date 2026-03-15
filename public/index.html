@@ -25,11 +25,13 @@
 
     <!-- React 18 (UMD) — for inline JSX applets -->
     <script
+      defer
       crossorigin="anonymous"
       src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"
       integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"
     ></script>
     <script
+      defer
       crossorigin="anonymous"
       src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"
       integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"
@@ -37,6 +39,7 @@
 
     <!-- Babel Standalone (in-browser JSX transpilation) -->
     <script
+      defer
       crossorigin="anonymous"
       src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"
       integrity="sha384-BcI7nduYchENm39cFMEVJXHEE7fwHONANyn/pY2YTa+BNtrWF2bKBZeI0wqVithi"
@@ -44,6 +47,7 @@
 
     <!-- js-yaml (YAML parsing) -->
     <script
+      defer
       crossorigin="anonymous"
       src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"
       integrity="sha384-+pxiN6T7yvpryuJmE1gM9PX7yQit15auDb+ZwwvJOd/4be2Cie5/IuVXgQb/S9du"
@@ -1189,8 +1193,6 @@
           return;
         }
 
-        const db = firebase.firestore();
-
         // ── YAML-based app registry ──────────────────────────
         let _appsCache = null;
 
@@ -1224,10 +1226,15 @@
         const jsxInlineRoot = document.getElementById('jsx-inline-root');
         const jsxInlineBack = document.getElementById('jsx-inline-back');
         let _jsxRoot = null;
+        let _jsxAbort = null;
+        let _jsxOriginTile = null;
 
         const loadJsxApplet = (applet) => {
-          // Validate filename — prevent path traversal
-          if (!applet.file || /[/\\]|\.\./.test(applet.file)) {
+          // Abort any in-flight fetch
+          if (_jsxAbort) _jsxAbort.abort();
+          _jsxAbort = new AbortController();
+          // Validate filename — strict allowlist
+          if (!applet.file || !/^[a-z0-9-]+\.jsx$/.test(applet.file)) {
             jsxInlineRoot.innerHTML =
               '<div class="jsx-inline-error">' +
               '<div class="jsx-inline-error-title">Applet Error</div>' +
@@ -1235,10 +1242,14 @@
             return;
           }
 
+          // Remember which tile launched this applet for focus restore
+          _jsxOriginTile = document.activeElement;
+
           // Swap views: hide grid, show inline area
           appGrid.classList.add('hidden');
           emptyState.classList.add('hidden');
           jsxInline.classList.remove('hidden');
+          jsxInlineBack.focus();
 
           // Show loading
           jsxInlineRoot.innerHTML =
@@ -1256,7 +1267,9 @@
             _jsxRoot = null;
           }
 
-          fetch('/apps/jsx-runner/applets/' + applet.file)
+          fetch('/apps/jsx-runner/applets/' + applet.file, {
+            signal: _jsxAbort.signal,
+          })
             .then((res) => {
               if (!res.ok) throw new Error('Failed to load ' + applet.file + ': ' + res.status);
               return res.text();
@@ -1302,6 +1315,10 @@
         };
 
         const closeJsxApplet = () => {
+          if (_jsxAbort) {
+            _jsxAbort.abort();
+            _jsxAbort = null;
+          }
           if (_jsxRoot) {
             try {
               _jsxRoot.unmount();
@@ -1313,6 +1330,10 @@
           jsxInlineRoot.innerHTML = '';
           jsxInline.classList.add('hidden');
           appGrid.classList.remove('hidden');
+          if (_jsxOriginTile) {
+            _jsxOriginTile.focus();
+            _jsxOriginTile = null;
+          }
         };
 
         jsxInlineBack.addEventListener('click', closeJsxApplet);
