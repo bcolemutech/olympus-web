@@ -95,6 +95,10 @@ The project includes automated deployments via GitHub Actions:
 |----------|---------|--------|
 | `firebase-hosting-pull-request.yml` | Pull Request | Deploys to a preview channel and comments the URL on the PR |
 | `firebase-hosting-merge.yml` | Push to `main` | Deploys to production |
+| `code-quality.yml` | Push / Pull Request | Runs ESLint and Prettier checks |
+| `firestore-rules.yml` | Push / Pull Request | Runs Firestore security rules tests |
+| `set-admin.yml` | Manual | Grants or revokes the `admin` custom claim (bootstrap use only) |
+| `seed-categories.yml` | Manual | Seeds Symposium reference categories into Firestore (one-time setup) |
 
 #### Required Secret
 
@@ -108,14 +112,22 @@ Add the following secret to your GitHub repository:
 
 Firebase Cloud Functions live in `functions/` and use Node.js 22 with the Firebase Functions v2 (Gen 2) API.
 
+### Admin Portal (The Pantheon)
+
+User management (inviting users, managing app access, disabling accounts) is handled through **The Pantheon** at `/apps/admin/`. All Pantheon operations require the `admin` custom claim and are performed via callable Cloud Functions. The initial admin must be bootstrapped separately — see the [Bootstrap Admin Process](#bootstrap-admin-process) section below.
+
 ### Available Functions
 
 | Function | Description |
 |----------|-------------|
 | `setAdminRole` | Grants `admin: true` to a user by email. Caller must be an admin. |
 | `removeAdminRole` | Revokes the `admin` claim from a user by email. Caller must be an admin. |
+| `listUsers` | Returns a paginated list of all Firebase Auth users. Caller must be an admin. |
+| `inviteUser` | Creates a Firebase Auth user and sends a password-reset email as an invitation. Caller must be an admin. |
+| `manageAccess` | Grants, revokes, or sets the list of app IDs in a user's custom claims. Caller must be an admin. |
+| `setUserDisabled` | Enables or disables a Firebase Auth user account. Caller must be an admin. |
 
-Both functions are callable from client code using the Firebase SDK:
+All functions are callable from client code using the Firebase SDK:
 
 ```js
 const setAdminRole = firebase.functions().httpsCallable('setAdminRole');
@@ -202,6 +214,7 @@ olympus-web/
 │   └── apps/            # Individual apps
 │       ├── _template/   # Starter template for new apps
 │       └── symposium/   # Example multi-file app
+├── scripts/             # One-time utility scripts (set-admin, seed-categories)
 ├── .github/workflows/   # GitHub Actions CI/CD
 ├── firebase.json        # Firebase configuration
 ├── firestore.rules      # Firestore security rules
