@@ -1,14 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "apps",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "enabled", "order": "ASCENDING" },
-        { "fieldPath": "order", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "symposium_ingredients",
       "queryScope": "COLLECTION",
       "fields": [

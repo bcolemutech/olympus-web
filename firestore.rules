@@ -13,11 +13,6 @@ service cloud.firestore {
           && request.auth.token.admin == true;
     }
 
-    match /apps/{appId} {
-      allow read: if hasApp(appId) || hasAdmin();
-      allow write: if false;
-    }
-
     // ── The Symposium ──────────────────────────────────────
 
     match /symposium_ingredients/{ingredientId} {
@@ -295,6 +290,12 @@ service cloud.firestore {
                     && validCategory()
                     && request.resource.data.type == resource.data.type;
       allow delete: if hasApp('symposium');
+    }
+
+    // ── App registry ──────────────────────────────────────
+
+    match /apps/{appId} {
+      allow read: if hasApp(appId) || hasAdmin();
     }
 
     // ── Default deny ───────────────────────────────────────
