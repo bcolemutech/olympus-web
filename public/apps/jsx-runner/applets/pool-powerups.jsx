@@ -40,11 +40,12 @@ function dealCards(count, exclude = []) {
 function Card({ card, used, onUse }) {
   const s = CAT[card.category];
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => !used && onUse(card.id)}
-      onKeyDown={e => { if ((e.key === "Enter" || e.key === " ") && !used) onUse(card.id); }}
+    <button
+      type="button"
+      disabled={used}
+      aria-disabled={used}
+      onClick={() => onUse(card.id)}
+      onKeyDown={e => { if (e.key === " ") e.preventDefault(); }}
       style={{
         background: used ? "#111" : s.bg,
         border: `1.5px solid ${used ? "#222" : s.border}`,
@@ -53,6 +54,8 @@ function Card({ card, used, onUse }) {
         opacity: used ? 0.35 : 1,
         transition: "opacity 0.2s",
         position: "relative",
+        textAlign: "left",
+        width: "100%",
       }}
     >
       <div style={{ fontSize: 20 }}>{card.emoji}</div>
@@ -60,7 +63,7 @@ function Card({ card, used, onUse }) {
       <div style={{ color: s.border, fontSize: 10, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>{s.label}</div>
       <div style={{ color: "#888", fontSize: 10, lineHeight: 1.4 }}>{card.desc}</div>
       {used && <div style={{ position: "absolute", top: 6, right: 8, color: "#444", fontSize: 11, fontWeight: 700 }}>USED</div>}
-    </div>
+    </button>
   );
 }
 
@@ -210,11 +213,11 @@ function App() {
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
         <PlayerSection name="PLAYER 1" color="#3a8fc4" cards={p1Cards} used={p1Used}
           onUse={id => useCard(1, id)}
-          onAdd={() => addCard(1)} onRemove={() => setP1Cards(p => p.slice(0,-1))} onResetUsed={() => setP1Used(new Set())}
+          onAdd={() => addCard(1)} onRemove={() => setP1Cards(p => { const removed = p[p.length - 1]; if (removed) setP1Used(s => { const n = new Set(s); n.delete(removed.id); return n; }); return p.slice(0, -1); })} onResetUsed={() => setP1Used(new Set())}
           manual={manual} />
         <PlayerSection name="PLAYER 2" color="#c43a8f" cards={p2Cards} used={p2Used}
           onUse={id => useCard(2, id)}
-          onAdd={() => addCard(2)} onRemove={() => setP2Cards(p => p.slice(0,-1))} onResetUsed={() => setP2Used(new Set())}
+          onAdd={() => addCard(2)} onRemove={() => setP2Cards(p => { const removed = p[p.length - 1]; if (removed) setP2Used(s => { const n = new Set(s); n.delete(removed.id); return n; }); return p.slice(0, -1); })} onResetUsed={() => setP2Used(new Set())}
           manual={manual} />
       </div>
 
