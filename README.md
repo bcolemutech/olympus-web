@@ -114,7 +114,7 @@ Firebase Cloud Functions live in `functions/` and use Node.js 22 with the Fireba
 
 ### Admin Portal (The Pantheon)
 
-User management (inviting users, managing app access, disabling accounts) is handled through **The Pantheon** at `/apps/admin/`. All admin operations require the `admin` custom claim and are performed via callable Cloud Functions.
+User management (inviting users, managing app access, disabling accounts) is handled through **The Pantheon** at `/apps/admin/`. All Pantheon operations require the `admin` custom claim and are performed via callable Cloud Functions. The initial admin must be bootstrapped separately — see the [Bootstrap Admin Process](#bootstrap-admin-process) section below.
 
 ### Available Functions
 
