@@ -45,3 +45,12 @@ apps:
     file: counter.jsx
     enabled: true
     order: 21
+
+  - id: pool-powerups
+    name: Pool Power-Ups
+    description: Handicap card system for billiards — deal power-up cards based on skill level
+    icon: "\U0001F3B1"
+    type: jsx
+    file: pool-powerups.jsx
+    enabled: true
+    order: 22

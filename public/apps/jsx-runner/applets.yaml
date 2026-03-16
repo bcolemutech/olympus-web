@@ -9,3 +9,8 @@ applets:
     description: A click counter demo
     icon: "\U0001F522"
     file: counter.jsx
+  - id: pool-powerups
+    name: Pool Power-Ups
+    description: Handicap card system for billiards — deal power-up cards based on skill level
+    icon: "\U0001F3B1"
+    file: pool-powerups.jsx
