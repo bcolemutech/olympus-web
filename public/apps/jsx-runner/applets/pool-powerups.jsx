@@ -1,5 +1,3 @@
-import { useState } from “react”;
-
 const POWER_UP_CARDS = [
 { id: “do-over”, name: “Do-Over”, emoji: “🔄”, category: “mulligan”, desc: “Replay your shot, ball returns to original position.” },
 { id: “ball-in-hand”, name: “Ball in Hand”, emoji: “🎱”, category: “mulligan”, desc: “Place the cue ball anywhere on the table.” },
@@ -101,20 +99,20 @@ return (
 );
 }
 
-export default function App() {
-const [p1Cards, setP1Cards] = useState([]);
-const [p2Cards, setP2Cards] = useState([]);
-const [p1Used, setP1Used] = useState(new Set());
-const [p2Used, setP2Used] = useState(new Set());
-const [p1Skill, setP1Skill] = useState(5);
-const [p2Skill, setP2Skill] = useState(5);
-const [showMatch, setShowMatch] = useState(false);
-const [showBall, setShowBall] = useState(false);
-const [manual, setManual] = useState(false);
-const [p1Wins, setP1Wins] = useState(0);
-const [p2Wins, setP2Wins] = useState(0);
-const [p1Balls, setP1Balls] = useState(0);
-const [p2Balls, setP2Balls] = useState(0);
+window.__JSX_APPLET__ = function App() {
+const [p1Cards, setP1Cards] = React.useState([]);
+const [p2Cards, setP2Cards] = React.useState([]);
+const [p1Used, setP1Used] = React.useState(new Set());
+const [p2Used, setP2Used] = React.useState(new Set());
+const [p1Skill, setP1Skill] = React.useState(5);
+const [p2Skill, setP2Skill] = React.useState(5);
+const [showMatch, setShowMatch] = React.useState(false);
+const [showBall, setShowBall] = React.useState(false);
+const [manual, setManual] = React.useState(false);
+const [p1Wins, setP1Wins] = React.useState(0);
+const [p2Wins, setP2Wins] = React.useState(0);
+const [p1Balls, setP1Balls] = React.useState(0);
+const [p2Balls, setP2Balls] = React.useState(0);
 const [lastPlayed, setLastPlayed] = useState(null);
 
 const diff = Math.abs(p1Skill - p2Skill);
