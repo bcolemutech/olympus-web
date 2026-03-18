@@ -72,7 +72,7 @@ return (
 {manual && (
 <div style={{ display: “flex”, gap: 5 }}>
 {[[“−”, “#c43a3a”, onRemove], [”+”, “#3ac45a”, onAdd], [“↺”, “#3a8fc4”, onResetUsed]].map(([lbl, clr, fn]) => (
-<button key={lbl} onClick={fn} style={{ background: “none”, border: `1px solid ${clr}`, color: clr, borderRadius: 6, width: 28, height: 28, cursor: “pointer”, fontSize: 14 }}>{lbl}</button>
+<button type="button" key={lbl} onClick={fn} style={{ background: “none”, border: `1px solid ${clr}`, color: clr, borderRadius: 6, width: 28, height: 28, cursor: “pointer”, fontSize: 14 }}>{lbl}</button>
 ))}
 </div>
 )}
