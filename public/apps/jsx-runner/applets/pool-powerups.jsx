@@ -25,9 +25,18 @@ escape:    { bg: “#2e2a0d”, border: “#c4b03a”, label: “Escape” },
 wild:      { bg: “#20103a”, border: “#9a3ac4”, label: “Wild” },
 };
 
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function dealCards(count, exclude = []) {
 const pool = POWER_UP_CARDS.filter(c => !exclude.includes(c.id));
-return […pool].sort(() => Math.random() - 0.5).slice(0, Math.min(count, pool.length));
+return shuffleArray(pool).slice(0, Math.min(count, pool.length));
 }
 
 function Card({ card, used, onUse }) {
