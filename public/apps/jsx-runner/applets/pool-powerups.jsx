@@ -40,7 +40,7 @@ return shuffleArray(pool).slice(0, Math.min(count, pool.length));
 function Card({ card, used, onUse }) {
 const s = CAT[card.category];
 return (
-<div onClick={() => !used && onUse(card.id)} style={{
+<button type="button" onClick={() => !used && onUse(card.id)} disabled={used} style={{
 background: used ? “#111” : s.bg,
 border: `1.5px solid ${used ? "#222" : s.border}`,
 borderRadius: 10, padding: “10px 12px”,
@@ -54,7 +54,7 @@ position: “relative”,
 <div style={{ color: s.border, fontSize: 10, textTransform: “uppercase”, letterSpacing: 1, marginBottom: 4 }}>{s.label}</div>
 <div style={{ color: “#888”, fontSize: 10, lineHeight: 1.4 }}>{card.desc}</div>
 {used && <div style={{ position: “absolute”, top: 6, right: 8, color: “#444”, fontSize: 11, fontWeight: 700 }}>USED</div>}
-</div>
+</button>
 );
 }
 
