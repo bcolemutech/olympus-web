@@ -1,0 +1,627 @@
+/* ── Void Odyssey — App-specific styles ────────────────────
+   Extends /styles/app.css
+   ────────────────────────────────────────────────────────── */
+
+/* ── App main layout ─────────────────────────────────────── */
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 2rem;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Shared buttons ──────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.4rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition:
+    background 0.18s,
+    opacity 0.18s,
+    transform 0.1s;
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #ffb74d, #ff8a65);
+  color: #0a0e1a;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ffd54f, #ffb74d);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e0e0e0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.btn-sm {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+}
+
+/* ── Games list view ─────────────────────────────────────── */
+
+.view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.view-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffd54f, #ff8a65);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.games-empty {
+  color: #78909c;
+  text-align: center;
+  padding: 3rem 0;
+}
+
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.game-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.game-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.game-card-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffd54f;
+  line-height: 1.3;
+}
+
+.game-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  color: #90a4ae;
+}
+
+.game-card-actions {
+  margin-top: auto;
+}
+
+.status-active {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(129, 199, 132, 0.15);
+  color: #81c784;
+  white-space: nowrap;
+}
+
+.status-ended {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(144, 164, 174, 0.15);
+  color: #90a4ae;
+  white-space: nowrap;
+}
+
+/* ── Wizard ──────────────────────────────────────────────── */
+
+.wizard-container {
+  max-width: 660px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.wizard-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.wizard-step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.wizard-step-dot.done {
+  background: rgba(255, 183, 77, 0.4);
+  border-color: #ffb74d;
+}
+
+.wizard-step-dot.active {
+  background: #ffb74d;
+  border-color: #ffd54f;
+  width: 12px;
+  height: 12px;
+}
+
+.wizard-step-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+  background: linear-gradient(135deg, #ffd54f, #ff8a65);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.wizard-step-desc {
+  color: #90a4ae;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.wizard-nav {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  justify-content: flex-end;
+}
+
+.wizard-nav--center {
+  justify-content: center;
+}
+
+.wizard-generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem 0;
+  gap: 1rem;
+}
+
+.wizard-generating-text {
+  color: #90a4ae;
+  font-size: 0.9rem;
+}
+
+.wizard-error {
+  color: #ef9a9a;
+  background: rgba(239, 154, 154, 0.08);
+  border: 1px solid rgba(239, 154, 154, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.wizard-inline-error {
+  color: #ef9a9a;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.field-error {
+  color: #ef9a9a;
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+}
+
+/* ── Difficulty cards ────────────────────────────────────── */
+
+.difficulty-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.difficulty-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
+  color: #e0e0e0;
+}
+
+.difficulty-card:hover {
+  border-color: rgba(255, 183, 77, 0.35);
+  background: rgba(255, 183, 77, 0.05);
+}
+
+.difficulty-card.selected {
+  border-color: #ffb74d;
+  background: rgba(255, 183, 77, 0.1);
+}
+
+.difficulty-icon {
+  font-size: 1.5rem;
+}
+
+.difficulty-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffd54f;
+}
+
+.difficulty-desc {
+  font-size: 0.8rem;
+  color: #78909c;
+  line-height: 1.4;
+}
+
+/* ── Form elements ───────────────────────────────────────── */
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #b0bec5;
+  margin-bottom: 0.45rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.form-optional {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #546e7a;
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.18s;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  border-color: rgba(255, 183, 77, 0.5);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ── Trait chips ─────────────────────────────────────────── */
+
+.trait-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.trait-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
+  color: #b0bec5;
+  user-select: none;
+}
+
+.trait-chip input[type='checkbox'] {
+  display: none;
+}
+
+.trait-chip:hover {
+  border-color: rgba(255, 183, 77, 0.35);
+  color: #e0e0e0;
+}
+
+.trait-chip.selected {
+  border-color: #ffb74d;
+  background: rgba(255, 183, 77, 0.12);
+  color: #ffd54f;
+}
+
+/* ── Ship cards ──────────────────────────────────────────── */
+
+.ship-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.ship-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.25rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
+  color: #e0e0e0;
+}
+
+.ship-card:hover {
+  border-color: rgba(255, 183, 77, 0.35);
+  background: rgba(255, 183, 77, 0.05);
+}
+
+.ship-card.selected {
+  border-color: #ffb74d;
+  background: rgba(255, 183, 77, 0.1);
+}
+
+.ship-icon {
+  font-size: 1.5rem;
+}
+
+.ship-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffd54f;
+}
+
+.ship-flavor {
+  font-size: 0.8rem;
+  color: #78909c;
+  line-height: 1.4;
+}
+
+.ship-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.ship-stat {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #90a4ae;
+}
+
+/* ── Crew preview ────────────────────────────────────────── */
+
+.crew-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.crew-preview-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+}
+
+.crew-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.crew-preview-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #ffd54f;
+}
+
+.crew-preview-role {
+  font-size: 0.78rem;
+  color: #90a4ae;
+  text-transform: capitalize;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.crew-preview-bio {
+  font-size: 0.85rem;
+  color: #b0bec5;
+  line-height: 1.5;
+}
+
+/* ── Active game view ────────────────────────────────────── */
+
+.game-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  margin-bottom: 1.25rem;
+  font-size: 0.85rem;
+}
+
+.hud-item {
+  color: #90a4ae;
+}
+
+.hud-item span {
+  color: #e0e0e0;
+  font-weight: 600;
+}
+
+/* ── Narrative panel ─────────────────────────────────────── */
+
+.narrative-panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  min-height: 200px;
+}
+
+.narrative-text {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: #d0d8e4;
+  font-style: italic;
+}
+
+.narrative-text + .narrative-text {
+  margin-top: 1rem;
+}
+
+/* ── Action panel ────────────────────────────────────────── */
+
+.action-panel {
+  margin-bottom: 1.5rem;
+}
+
+.action-panel-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #546e7a;
+  margin-bottom: 0.6rem;
+}
+
+.action-panel-note {
+  font-size: 0.78rem;
+  color: #455a64;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.action-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  color: #cfd8dc;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
+  text-align: left;
+}
+
+.action-btn:hover {
+  border-color: rgba(255, 183, 77, 0.4);
+  background: rgba(255, 183, 77, 0.07);
+  color: #ffe0b2;
+}
+
+/* ── Mobile ──────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .app-main {
+    padding: 1rem;
+  }
+
+  .difficulty-grid,
+  .ship-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .games-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-nav {
+    flex-direction: column-reverse;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .game-hud {
+    gap: 0.4rem 1rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .difficulty-grid,
+  .ship-grid {
+    grid-template-columns: 1fr;
+  }
+}

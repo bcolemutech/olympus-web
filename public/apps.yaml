@@ -18,6 +18,15 @@ apps:
     enabled: true
     order: 0
 
+  - id: void-odyssey
+    name: Void Odyssey
+    description: An AI-narrated space exploration adventure
+    icon: "\U0001F680"
+    type: embedded
+    path: /apps/void-odyssey/
+    enabled: true
+    order: 2
+
   - id: admin
     name: The Pantheon
     description: Administration panel
