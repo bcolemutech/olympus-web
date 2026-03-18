@@ -292,6 +292,24 @@ service cloud.firestore {
       allow delete: if hasApp('symposium');
     }
 
+    // ── Void Odyssey ──────────────────────────────────────
+
+    match /void_odyssey_games/{gameId} {
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId
+        && hasApp('void-odyssey');
+
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId
+        && hasApp('void-odyssey');
+
+      match /{subcollection}/{docId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/void_odyssey_games/$(gameId)).data.userId == request.auth.uid
+          && hasApp('void-odyssey');
+      }
+    }
+
     // ── App registry ──────────────────────────────────────
 
     match /apps/{appId} {
