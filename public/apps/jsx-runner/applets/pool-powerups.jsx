@@ -92,11 +92,11 @@ return (
 <div style={{ background: “#111”, border: “1px solid #1e1e1e”, borderRadius: 10, padding: “12px 10px”, textAlign: “center” }}>
 <div style={{ color: “#555”, fontSize: 10, letterSpacing: 2, marginBottom: 6 }}>{label}</div>
 <div style={{ display: “flex”, alignItems: “center”, justifyContent: “center”, gap: 10 }}>
-<button onClick={onDec} style={{ background: “#1a1a1a”, border: “1px solid #2a2a2a”, color: “#aaa”, borderRadius: 6, width: 28, height: 28, cursor: “pointer” }}>−</button>
+<button type="button" onClick={onDec} style={{ background: “#1a1a1a”, border: “1px solid #2a2a2a”, color: “#aaa”, borderRadius: 6, width: 28, height: 28, cursor: “pointer” }}>−</button>
 <span style={{ color, fontSize: 32, fontWeight: 900, minWidth: 40, display: “inline-block” }}>{value}</span>
-<button onClick={onInc} style={{ background: “#1a1a1a”, border: “1px solid #2a2a2a”, color: “#aaa”, borderRadius: 6, width: 28, height: 28, cursor: “pointer” }}>+</button>
+<button type="button" onClick={onInc} style={{ background: “#1a1a1a”, border: “1px solid #2a2a2a”, color: “#aaa”, borderRadius: 6, width: 28, height: 28, cursor: “pointer” }}>+</button>
 </div>
-<button onClick={onReset} style={{ marginTop: 6, background: “none”, border: “none”, color: “#333”, cursor: “pointer”, fontSize: 10 }}>reset</button>
+<button type="button" onClick={onReset} style={{ marginTop: 6, background: “none”, border: “none”, color: “#333”, cursor: “pointer”, fontSize: 10 }}>reset</button>
 </div>
 );
 }
