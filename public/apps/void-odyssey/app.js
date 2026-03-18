@@ -95,7 +95,11 @@
       document.getElementById('hud-ship-name').textContent = game.ship.name || '—';
       document.getElementById('hud-location').textContent = game.currentLocationName || '—';
       document.getElementById('hud-turn').textContent = 'Turn ' + (game.turnCount || 0);
-      document.getElementById('hud-hull').textContent = 'Hull ' + (game.ship.hull || 0) + '%';
+      var hullPct =
+        game.ship.hullMax > 0
+          ? Math.round((game.ship.hull / game.ship.hullMax) * 100)
+          : game.ship.hull || 0;
+      document.getElementById('hud-hull').textContent = 'Hull ' + hullPct + '%';
       document.getElementById('hud-fuel').textContent = 'Fuel ' + (game.ship.fuel || 0) + '%';
     }
 
@@ -120,7 +124,7 @@
   function _renderNarrative(narrative, actions) {
     var panel = document.getElementById('narrative-content');
     if (panel) {
-      panel.innerHTML = '<p>' + _escNarrative(narrative) + '</p>';
+      panel.innerHTML = '<p class="narrative-text">' + _escNarrative(narrative) + '</p>';
     }
 
     var actionsContainer = document.getElementById('action-buttons');
@@ -197,6 +201,24 @@
     if (newBtn) {
       newBtn.addEventListener('click', _startNewGame);
     }
+
+    // "All Campaigns" button (active game view → games list)
+    var backBtn = document.getElementById('btn-back-to-campaigns');
+    if (backBtn) {
+      backBtn.addEventListener('click', function () {
+        VO.state.generatedGame = null;
+        VO.state.currentGame = null;
+        window.location.hash = '';
+        VO.loadUserGames(VO.state.currentUser.uid)
+          .then(function (games) {
+            renderGamesList(games);
+            VO.showView('games-list');
+          })
+          .catch(function () {
+            VO.showView('games-list');
+          });
+      });
+    }
   }
 
   function _startNewGame() {
@@ -265,6 +287,6 @@
         return d.innerHTML;
       })
       .filter(Boolean)
-      .join('</p><p>');
+      .join('</p><p class="narrative-text">');
   }
 })();

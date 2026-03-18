@@ -295,8 +295,13 @@ service cloud.firestore {
     // ── Void Odyssey ──────────────────────────────────────
 
     match /void_odyssey_games/{gameId} {
-      allow read, update, delete: if request.auth != null
+      allow read, delete: if request.auth != null
         && request.auth.uid == resource.data.userId
+        && hasApp('void-odyssey');
+
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.userId
+        && request.resource.data.userId == resource.data.userId
         && hasApp('void-odyssey');
 
       allow create: if request.auth != null

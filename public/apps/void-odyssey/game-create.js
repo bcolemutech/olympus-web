@@ -111,18 +111,17 @@
       '<div class="trait-grid">';
 
     VO.CAPTAIN_TRAITS.forEach(function (trait) {
-      var checked = d.captainTraits.indexOf(trait.id) !== -1;
+      var pressed = d.captainTraits.indexOf(trait.id) !== -1;
       html +=
-        '<label class="trait-chip' +
-        (checked ? ' selected' : '') +
-        '">' +
-        '<input type="checkbox" value="' +
+        '<button type="button" class="trait-chip' +
+        (pressed ? ' selected' : '') +
+        '" data-id="' +
         trait.id +
-        '"' +
-        (checked ? ' checked' : '') +
-        '>' +
+        '" aria-pressed="' +
+        (pressed ? 'true' : 'false') +
+        '">' +
         trait.label +
-        '</label>';
+        '</button>';
     });
 
     html +=
@@ -152,22 +151,23 @@
       d.captainBackstory = backstoryInput.value;
     });
 
-    // Trait checkboxes — enforce 2-3 limit
-    var traitCheckboxes = container.querySelectorAll('.trait-chip input[type=checkbox]');
-    traitCheckboxes.forEach(function (cb) {
-      cb.addEventListener('change', function () {
-        var selected = [];
-        traitCheckboxes.forEach(function (c) {
-          if (c.checked) selected.push(c.value);
-        });
-        if (selected.length > 3 && cb.checked) {
-          cb.checked = false;
-          return;
+    // Trait buttons — enforce 2-3 limit
+    var traitBtns = container.querySelectorAll('.trait-chip');
+    traitBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.id;
+        var idx = d.captainTraits.indexOf(id);
+        if (idx !== -1) {
+          // Deselect
+          d.captainTraits.splice(idx, 1);
+          btn.classList.remove('selected');
+          btn.setAttribute('aria-pressed', 'false');
+        } else {
+          if (d.captainTraits.length >= 3) return; // Enforce max 3
+          d.captainTraits.push(id);
+          btn.classList.add('selected');
+          btn.setAttribute('aria-pressed', 'true');
         }
-        d.captainTraits = selected;
-        traitCheckboxes.forEach(function (c) {
-          c.closest('.trait-chip').classList.toggle('selected', c.checked);
-        });
       });
     });
 

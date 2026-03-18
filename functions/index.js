@@ -4,7 +4,10 @@ const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const { GoogleAuth } = require('google-auth-library');
+
+const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
 initializeApp();
 
@@ -425,7 +428,7 @@ const SHIP_CLASS_DEFAULTS = {
  *   mood: string
  *   ship: { name, class, ... }
  */
-exports.voidOdysseyNewGame = onCall(async (request) => {
+exports.voidOdysseyNewGame = onCall({ secrets: [anthropicApiKey] }, async (request) => {
   // ── Auth + claim check ─────────────────────────────────────
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
@@ -445,11 +448,32 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   if (!difficulty || !validDifficulties.includes(difficulty)) {
     throw new HttpsError('invalid-argument', 'Invalid difficulty selection.');
   }
+  const validTraitIds = [
+    'resourceful',
+    'cautious',
+    'silver_tongued',
+    'reckless',
+    'honorable',
+    'ruthless',
+    'curious',
+    'paranoid',
+    'compassionate',
+    'calculating',
+    'charismatic',
+    'stoic',
+  ];
+
   if (typeof captainName !== 'string' || captainName.trim().length === 0) {
     throw new HttpsError('invalid-argument', "Captain's name is required.");
   }
+  if (captainName.trim().length > 60) {
+    throw new HttpsError('invalid-argument', "Captain's name must be 60 characters or fewer.");
+  }
   if (!Array.isArray(captainTraits) || captainTraits.length < 2 || captainTraits.length > 3) {
     throw new HttpsError('invalid-argument', 'Select 2–3 captain traits.');
+  }
+  if (!captainTraits.every((t) => validTraitIds.includes(t))) {
+    throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
   }
   if (!shipClass || !validShipClasses.includes(shipClass)) {
     throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
@@ -457,10 +481,16 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   if (typeof shipName !== 'string' || shipName.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'Ship name is required.');
   }
+  if (shipName.trim().length > 60) {
+    throw new HttpsError('invalid-argument', 'Ship name must be 60 characters or fewer.');
+  }
+  if (typeof captainBackstory === 'string' && captainBackstory.length > 400) {
+    throw new HttpsError('invalid-argument', 'Backstory must be 400 characters or fewer.');
+  }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = anthropicApiKey.value();
   if (!apiKey) {
-    console.error('ANTHROPIC_API_KEY is not set');
+    console.error('ANTHROPIC_API_KEY secret is empty');
     throw new HttpsError('internal', 'Game service is not configured.');
   }
 
@@ -613,7 +643,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
 
     crewCount: crew.length,
     activeCrew,
-    activeQuestCount: 1,
+    activeQuestCount: 0,
     currentLocationName: claudeResponse.startingLocationName || 'Unknown Location',
     currentLocationTags: [claudeResponse.startingLocationType || 'unknown'],
   };
