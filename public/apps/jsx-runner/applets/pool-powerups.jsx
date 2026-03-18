@@ -148,8 +148,6 @@ else setP2Cards(p => […p, nc]);
 
 return (
 <div style={{ minHeight: “100vh”, background: “#0a0a0a”, color: “#fff”, fontFamily: “system-ui, sans-serif”, padding: “16px 14px”, maxWidth: 700, margin: “0 auto” }}>
-
-```
   <div style={{ textAlign: "center", marginBottom: 20 }}>
     <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 3 }}>🎱 POOL POWER-UPS</div>
     <div style={{ color: "#444", fontSize: 11, letterSpacing: 3, marginTop: 2 }}>HANDICAP CARD SYSTEM</div>
@@ -217,7 +215,6 @@ return (
 
   <div style={{ textAlign: "center", marginTop: 24, color: "#2a2a2a", fontSize: 11, letterSpacing: 2 }}>TAP A CARD TO USE IT</div>
 </div>
-```
 
 );
 }
