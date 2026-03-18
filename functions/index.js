@@ -2,8 +2,12 @@
 
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const { GoogleAuth } = require('google-auth-library');
+
+const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
 initializeApp();
 
@@ -356,4 +360,409 @@ exports.inviteUser = onCall(async (request) => {
   }
 
   return { uid: userRecord.uid, email: email.trim() };
+});
+
+// ── Void Odyssey ──────────────────────────────────────────────────────────────
+
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const VOID_ODYSSEY_MODEL = 'claude-sonnet-4-20250514';
+
+const SHIP_CLASS_DEFAULTS = {
+  light_freighter: {
+    hull: 70,
+    hullMax: 70,
+    shields: 30,
+    shieldsMax: 30,
+    fuel: 100,
+    cargo: 0,
+    cargoMax: 80,
+  },
+  scout_corvette: {
+    hull: 55,
+    hullMax: 55,
+    shields: 45,
+    shieldsMax: 45,
+    fuel: 100,
+    cargo: 0,
+    cargoMax: 30,
+  },
+  gunship: {
+    hull: 90,
+    hullMax: 90,
+    shields: 60,
+    shieldsMax: 60,
+    fuel: 100,
+    cargo: 0,
+    cargoMax: 20,
+  },
+  salvage_rig: {
+    hull: 65,
+    hullMax: 65,
+    shields: 35,
+    shieldsMax: 35,
+    fuel: 100,
+    cargo: 0,
+    cargoMax: 60,
+  },
+};
+
+/**
+ * voidOdysseyNewGame — creates a new Void Odyssey campaign.
+ *
+ * Caller must be authenticated and have the 'void-odyssey' app claim.
+ *
+ * Data:
+ *   difficulty: string         — 'frontier_explorer' | 'smugglers_run' | 'warpath' | 'custom'
+ *   captainName: string        — player character name
+ *   captainTraits: string[]    — 2-3 trait IDs
+ *   captainBackstory: string   — optional backstory (empty string if none)
+ *   shipClass: string          — 'light_freighter' | 'scout_corvette' | 'gunship' | 'salvage_rig'
+ *   shipName: string           — player-chosen ship name
+ *
+ * Returns:
+ *   gameId: string
+ *   narrative: string
+ *   availableActions: { id, label, type }[]
+ *   crew: { name, role, species, backstory, personality }[]
+ *   startingLocation: string
+ *   mood: string
+ *   ship: { name, class, ... }
+ */
+exports.voidOdysseyNewGame = onCall({ secrets: [anthropicApiKey] }, async (request) => {
+  // ── Auth + claim check ─────────────────────────────────────
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('void-odyssey')) {
+    throw new HttpsError('permission-denied', "You don't have access to Void Odyssey.");
+  }
+
+  // ── Input validation ───────────────────────────────────────
+  const { difficulty, captainName, captainTraits, captainBackstory, shipClass, shipName } =
+    request.data || {};
+
+  const validDifficulties = ['frontier_explorer', 'smugglers_run', 'warpath', 'custom'];
+  const validShipClasses = ['light_freighter', 'scout_corvette', 'gunship', 'salvage_rig'];
+
+  if (!difficulty || !validDifficulties.includes(difficulty)) {
+    throw new HttpsError('invalid-argument', 'Invalid difficulty selection.');
+  }
+  const validTraitIds = [
+    'resourceful',
+    'cautious',
+    'silver_tongued',
+    'reckless',
+    'honorable',
+    'ruthless',
+    'curious',
+    'paranoid',
+    'compassionate',
+    'calculating',
+    'charismatic',
+    'stoic',
+  ];
+
+  if (typeof captainName !== 'string' || captainName.trim().length === 0) {
+    throw new HttpsError('invalid-argument', "Captain's name is required.");
+  }
+  if (captainName.trim().length > 60) {
+    throw new HttpsError('invalid-argument', "Captain's name must be 60 characters or fewer.");
+  }
+  if (!Array.isArray(captainTraits) || captainTraits.length < 2 || captainTraits.length > 3) {
+    throw new HttpsError('invalid-argument', 'Select 2–3 captain traits.');
+  }
+  if (!captainTraits.every((t) => validTraitIds.includes(t))) {
+    throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
+  }
+  if (!shipClass || !validShipClasses.includes(shipClass)) {
+    throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
+  }
+  if (typeof shipName !== 'string' || shipName.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'Ship name is required.');
+  }
+  if (shipName.trim().length > 60) {
+    throw new HttpsError('invalid-argument', 'Ship name must be 60 characters or fewer.');
+  }
+  if (typeof captainBackstory === 'string' && captainBackstory.length > 400) {
+    throw new HttpsError('invalid-argument', 'Backstory must be 400 characters or fewer.');
+  }
+
+  const apiKey = anthropicApiKey.value();
+  if (!apiKey) {
+    console.error('ANTHROPIC_API_KEY secret is empty');
+    throw new HttpsError('internal', 'Game service is not configured.');
+  }
+
+  // ── Build Claude prompt ────────────────────────────────────
+  const difficultyLabels = {
+    frontier_explorer: 'Frontier Explorer (discovery-focused, lower danger)',
+    smugglers_run: "Smuggler's Run (trade, intrigue, moral grey areas)",
+    warpath: 'Warpath (combat-heavy, high stakes)',
+    custom: 'Custom (flexible tone)',
+  };
+  const shipClassLabels = {
+    light_freighter: 'Light Freighter (high cargo, moderate speed, light weapons)',
+    scout_corvette: 'Scout Corvette (fast, great sensors, light cargo)',
+    gunship: 'Gunship (heavy weapons, slow, low cargo)',
+    salvage_rig: 'Salvage Rig (versatile, moderate stats, lots of quirks)',
+  };
+
+  const systemPrompt = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi with room for the mysterious — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
+
+You must respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
+{
+  "narrative": string (200-300 words, the opening story beat — sets the scene, introduces a situation or threat, ends on a hook),
+  "crew": [
+    {
+      "name": string,
+      "role": string (one of: pilot, engineer, medic, gunner, science, general),
+      "species": string,
+      "backstory": string (2-3 sentences),
+      "personality": string[] (2-3 adjectives)
+    }
+  ],
+  "startingLocationName": string (name of the starting location),
+  "startingLocationType": string (one of: station, planet, moon, asteroid_field, derelict, anomaly),
+  "startingLocationDescription": string (2-3 sentences),
+  "startingLocationAtmosphere": string (1-3 mood keywords, e.g. "industrial_decay"),
+  "questHook": string (one sentence describing the first quest hook that emerged from the opening scene),
+  "availableActions": [
+    { "id": string, "label": string (max 8 words), "type": string (one of: dialogue, navigation, combat, investigation, freeform) }
+  ],
+  "mood": string (one of: tense, calm, wonder, danger, tense_curiosity, wry, reverent)
+}
+
+Constraints:
+- Generate exactly 2-3 crew members appropriate for the ship class
+- Generate exactly 3-4 available actions (always include one with type "freeform" and label "Do something else...")
+- The narrative must reference the captain by name and at least one crew member
+- Honor the difficulty/tone setting in the narrative style and situation
+- The starting location must feel specific and interesting, not generic`;
+
+  const backstoryNote =
+    captainBackstory && captainBackstory.trim()
+      ? `Captain's backstory: ${captainBackstory.trim()}`
+      : 'No backstory provided — you may invent a brief one consistent with the traits.';
+
+  const userMessage = `Create the opening of a new Void Odyssey campaign with these player choices:
+
+Difficulty/Tone: ${difficultyLabels[difficulty]}
+Captain's Name: ${captainName.trim()}
+Captain's Traits: ${captainTraits.join(', ')}
+${backstoryNote}
+Ship Class: ${shipClassLabels[shipClass]}
+Ship Name: ${shipName.trim()}
+
+Generate the opening scene, starting crew, location, quest hook, and first available actions.`;
+
+  // ── Call Claude API ────────────────────────────────────────
+  let claudeResponse;
+  try {
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: VOID_ODYSSEY_MODEL,
+        max_tokens: 1500,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json();
+      console.error('Anthropic API error:', response.status, body);
+      throw new HttpsError('internal', 'Failed to generate opening scene. Please try again.');
+    }
+
+    const body = await response.json();
+    const rawText = body.content && body.content[0] && body.content[0].text;
+    if (!rawText) {
+      throw new HttpsError('internal', 'Empty response from AI.');
+    }
+
+    claudeResponse = JSON.parse(rawText);
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error('Claude API or parse error:', err);
+    throw new HttpsError('internal', 'Failed to generate opening scene. Please try again.');
+  }
+
+  // ── Build Firestore data ───────────────────────────────────
+  const db = getFirestore();
+  const now = FieldValue.serverTimestamp();
+  const userId = request.auth.uid;
+
+  const gameRef = db.collection('void_odyssey_games').doc();
+  const gameId = gameRef.id;
+
+  const shipStats = SHIP_CLASS_DEFAULTS[shipClass] || SHIP_CLASS_DEFAULTS.light_freighter;
+
+  const crew = claudeResponse.crew || [];
+  const activeCrew = crew.map((m, i) => ({
+    id: `crew_${i}_${gameId.slice(0, 6)}`,
+    name: m.name,
+    role: m.role,
+  }));
+
+  const locationId = `loc_start_${gameId.slice(0, 8)}`;
+
+  const gameDoc = {
+    id: gameId,
+    userId,
+    name: `${shipName.trim()} — Campaign`,
+    createdAt: now,
+    updatedAt: now,
+    turnCount: 0,
+    status: 'active',
+
+    ship: {
+      name: shipName.trim(),
+      class: shipClass,
+      description: shipClassLabels[shipClass],
+      ...shipStats,
+      weapons: [],
+      systems: [],
+      features: [],
+      currentLocationId: locationId,
+      dockedAt: claudeResponse.startingLocationType === 'station' ? locationId : null,
+    },
+
+    player: {
+      name: captainName.trim(),
+      title: 'Captain',
+      backstory: captainBackstory ? captainBackstory.trim() : '',
+      reputation: {},
+      traits: captainTraits,
+    },
+
+    crewCount: crew.length,
+    activeCrew,
+    activeQuestCount: 0,
+    currentLocationName: claudeResponse.startingLocationName || 'Unknown Location',
+    currentLocationTags: [claudeResponse.startingLocationType || 'unknown'],
+  };
+
+  const narrativeLogRef = db
+    .collection('void_odyssey_games')
+    .doc(gameId)
+    .collection('narrative_log')
+    .doc();
+
+  const narrativeEntry = {
+    id: narrativeLogRef.id,
+    turnNumber: 0,
+    timestamp: now,
+    playerAction: { type: 'system', actionId: null, input: 'New game started' },
+    narrative: claudeResponse.narrative || '',
+    mood: claudeResponse.mood || 'calm',
+    stateMutations: [],
+    newEntityIds: [],
+    locationId,
+    summary: `Campaign began at ${claudeResponse.startingLocationName || 'Unknown Location'}`,
+    tags: ['game_start', shipClass, difficulty],
+    availableActions: claudeResponse.availableActions || [],
+  };
+
+  const locationRef = db
+    .collection('void_odyssey_games')
+    .doc(gameId)
+    .collection('locations')
+    .doc(locationId);
+
+  const locationDoc = {
+    id: locationId,
+    name: claudeResponse.startingLocationName || 'Unknown Location',
+    type: claudeResponse.startingLocationType || 'station',
+    description: claudeResponse.startingLocationDescription || '',
+    firstImpressions: claudeResponse.startingLocationDescription || '',
+    atmosphere: claudeResponse.startingLocationAtmosphere || '',
+    environment: {
+      gravity: 'standard',
+      atmosphere: 'breathable',
+      temperature: 'temperate',
+      hazards: [],
+    },
+    dockable:
+      claudeResponse.startingLocationType === 'station' ||
+      claudeResponse.startingLocationType === 'planet',
+    services: [],
+    residentEntityIds: [],
+    pointsOfInterest: [],
+    parentLocationId: null,
+    connectedLocationIds: [],
+    distanceFromCurrent: null,
+    coordinates: { x: 0, y: 0, z: null },
+    visitCount: 1,
+    firstVisitedTurn: 0,
+    lastVisitedTurn: 0,
+    significantEvents: [{ turnNumber: 0, summary: 'Campaign started here' }],
+    tags: [claudeResponse.startingLocationType || 'unknown', 'starting_location'],
+    faction: null,
+    dangerLevel: difficulty === 'warpath' ? 'dangerous' : 'cautious',
+    discovered: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // Batch write: game doc + narrative log + location + crew members
+  const batch = db.batch();
+  batch.set(gameRef, gameDoc);
+  batch.set(narrativeLogRef, narrativeEntry);
+  batch.set(locationRef, locationDoc);
+
+  crew.forEach(function (member, i) {
+    const crewRef = db
+      .collection('void_odyssey_games')
+      .doc(gameId)
+      .collection('crew')
+      .doc(activeCrew[i].id);
+
+    batch.set(crewRef, {
+      id: activeCrew[i].id,
+      name: member.name,
+      role: member.role,
+      species: member.species || 'human',
+      status: 'active',
+      backstory: member.backstory || '',
+      personality: member.personality || [],
+      skills: [],
+      quirks: [],
+      morale: 'content',
+      loyalty: 50,
+      healthStatus: 'healthy',
+      currentAssignment: 'bridge',
+      relationships: {},
+      significantMoments: [],
+      tags: [member.role, 'founding_crew'],
+      joinedTurn: 0,
+      portraitDescription: '',
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
+  await batch.commit();
+
+  // ── Return to client ───────────────────────────────────────
+  return {
+    gameId,
+    narrative: claudeResponse.narrative || '',
+    availableActions: claudeResponse.availableActions || [],
+    crew: crew.map((m, i) => ({
+      id: activeCrew[i].id,
+      name: m.name,
+      role: m.role,
+      species: m.species || 'human',
+      backstory: m.backstory || '',
+    })),
+    startingLocation: claudeResponse.startingLocationName || 'Unknown Location',
+    mood: claudeResponse.mood || 'calm',
+    ship: { name: shipName.trim(), class: shipClass },
+  };
 });

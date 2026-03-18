@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Void Odyssey — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-functions-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- App-specific styles -->
+    <link rel="stylesheet" href="/apps/void-odyssey/styles.css" />
+  </head>
+  <body>
+    <!-- Shared header — rendered by app-header.js -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard — shown while checking auth state -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Consulting the Oracle&hellip;</p>
+    </div>
+
+    <!-- Main content — hidden until authenticated -->
+    <main class="app-main hidden" id="app-main">
+      <!-- ── Games list view ──────────────────────────────── -->
+      <div id="view-games-list" class="hidden">
+        <div class="view-header">
+          <h1 class="view-title">Your Campaigns</h1>
+          <button type="button" class="btn btn-primary" id="btn-new-campaign">
+            + New Campaign
+          </button>
+        </div>
+        <div id="games-list-container"></div>
+      </div>
+
+      <!-- ── New game wizard view ──────────────────────────── -->
+      <div id="view-game-create" class="hidden">
+        <div class="wizard-container">
+          <div class="wizard-progress">
+            <div class="wizard-step-dot" title="Difficulty"></div>
+            <div class="wizard-step-dot" title="Captain"></div>
+            <div class="wizard-step-dot" title="Ship"></div>
+            <div class="wizard-step-dot" title="Crew"></div>
+            <div class="wizard-step-dot" title="Opening Scene"></div>
+          </div>
+          <div id="wizard-body"></div>
+        </div>
+      </div>
+
+      <!-- ── Active game view ───────────────────────────────── -->
+      <div id="view-game-active" class="hidden">
+        <!-- HUD bar -->
+        <div class="game-hud" id="game-hud">
+          <span class="hud-item">Ship: <span id="hud-ship-name">—</span></span>
+          <span class="hud-item">Location: <span id="hud-location">—</span></span>
+          <span class="hud-item"><span id="hud-turn">Turn 0</span></span>
+          <span class="hud-item"><span id="hud-hull">Hull —</span></span>
+          <span class="hud-item"><span id="hud-fuel">Fuel —</span></span>
+        </div>
+
+        <!-- Narrative panel -->
+        <div class="narrative-panel">
+          <div id="narrative-content">
+            <p class="narrative-text">Loading narrative&hellip;</p>
+          </div>
+        </div>
+
+        <!-- Action panel -->
+        <div class="action-panel">
+          <p class="action-panel-label">What do you do?</p>
+          <div class="action-buttons" id="action-buttons"></div>
+          <p class="action-panel-note">Full turn execution coming in Phase 2.</p>
+        </div>
+
+        <!-- Back to campaigns — wired in app.js -->
+        <button
+          type="button"
+          class="btn btn-secondary"
+          id="btn-back-to-campaigns"
+          style="margin-top: 1rem"
+        >
+          ← All Campaigns
+        </button>
+      </div>
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <!-- App modules (load order per §12) -->
+    <script src="/apps/void-odyssey/state.js"></script>
+    <script src="/apps/void-odyssey/firestore.js"></script>
+    <script src="/apps/void-odyssey/game-create.js"></script>
+    <script src="/apps/void-odyssey/app.js"></script>
+  </body>
+</html>
