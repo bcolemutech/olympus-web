@@ -231,7 +231,7 @@ return (
       <button
         key={v}
         style={view === v ? { ...styles.navBtn, ...styles.navBtnActive } : hoveredNav === v ? { ...styles.navBtn, ...styles.navBtnHover } : styles.navBtn}
-        onClick={() => setView(v)}
+        onClick={e => { setView(v); e.currentTarget.blur(); }}
         onMouseEnter={() => setHoveredNav(v)}
         onMouseLeave={() => setHoveredNav(null)}
       >
@@ -298,7 +298,7 @@ return (
               <button
                 key={s.label}
                 style={newSeed === i ? { ...styles.seedBtn, ...styles.seedBtnActive } : hoveredSeed === i ? { ...styles.seedBtn, ...styles.seedBtnHover } : styles.seedBtn}
-                onClick={() => setNewSeed(i)}
+                onClick={e => { setNewSeed(i); e.currentTarget.blur(); }}
                 onMouseEnter={() => setHoveredSeed(i)}
                 onMouseLeave={() => setHoveredSeed(null)}
               >
@@ -385,7 +385,7 @@ return (
                       <button
                         key={id}
                         style={winner === id ? { ...styles.winnerBtn, ...styles.winnerBtnActive } : hoveredWinner === id ? { ...styles.winnerBtn, ...styles.winnerBtnHover } : styles.winnerBtn}
-                        onClick={() => setWinner(id)}
+                        onClick={e => { setWinner(id); e.currentTarget.blur(); }}
                         onMouseEnter={() => setHoveredWinner(id)}
                         onMouseLeave={() => setHoveredWinner(null)}
                       >
