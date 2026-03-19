@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from “react”;
+const { useState, useEffect, useCallback } = React;
 
 const ELO_D = 200;
 const ELO_K = 32;
@@ -6,12 +6,12 @@ const MIN_TARGET = 50;
 const MAX_TARGET = 100;
 
 const SKILL_SEEDS = [
-{ label: “Beginner”, desc: “Rarely runs 5+”, rating: 600 },
-{ label: “Below Avg”, desc: “Occasional short runs”, rating: 750 },
-{ label: “Average”, desc: “Runs of 10-15”, rating: 900 },
-{ label: “Above Avg”, desc: “Runs of 15-25”, rating: 1100 },
-{ label: “Advanced”, desc: “Regular 20+ runs”, rating: 1250 },
-{ label: “Expert”, desc: “Consistent 30+ runs”, rating: 1500 },
+{ label: "Beginner", desc: "Rarely runs 5+", rating: 600 },
+{ label: "Below Avg", desc: "Occasional short runs", rating: 750 },
+{ label: "Average", desc: "Runs of 10-15", rating: 900 },
+{ label: "Above Avg", desc: "Runs of 15-25", rating: 1100 },
+{ label: "Advanced", desc: "Regular 20+ runs", rating: 1250 },
+{ label: "Expert", desc: "Consistent 30+ runs", rating: 1500 },
 ];
 
 function ratingToTarget(r) {
@@ -31,40 +31,37 @@ const delta = Math.round(ELO_K * margin * (1 - E));
 return delta;
 }
 
-const STORAGE_KEY = “pool-handicap-data”;
+const STORAGE_KEY = "pool-handicap-data";
 
 function App() {
 const [players, setPlayers] = useState([]);
 const [matches, setMatches] = useState([]);
 const [loaded, setLoaded] = useState(false);
 
-const [view, setView] = useState(“standings”);
-const [newName, setNewName] = useState(””);
+const [view, setView] = useState("standings");
+const [newName, setNewName] = useState("");
 const [newSeed, setNewSeed] = useState(2);
-const [matchA, setMatchA] = useState(””);
-const [matchB, setMatchB] = useState(””);
-const [winner, setWinner] = useState(””);
-const [loserScore, setLoserScore] = useState(””);
+const [matchA, setMatchA] = useState("");
+const [matchB, setMatchB] = useState("");
+const [winner, setWinner] = useState("");
+const [loserScore, setLoserScore] = useState("");
 const [showInfo, setShowInfo] = useState(false);
 
 useEffect(() => {
-async function load() {
 try {
-const res = await window.storage.get(STORAGE_KEY);
-if (res && res.value) {
-const data = JSON.parse(res.value);
+const raw = localStorage.getItem(STORAGE_KEY);
+if (raw) {
+const data = JSON.parse(raw);
 setPlayers(data.players || []);
 setMatches(data.matches || []);
 }
 } catch (e) {}
 setLoaded(true);
-}
-load();
 }, []);
 
-const persist = useCallback(async (p, m) => {
+const persist = useCallback((p, m) => {
 try {
-await window.storage.set(STORAGE_KEY, JSON.stringify({ players: p, matches: m }));
+localStorage.setItem(STORAGE_KEY, JSON.stringify({ players: p, matches: m }));
 } catch (e) {}
 }, []);
 
@@ -72,7 +69,7 @@ function addPlayer() {
 if (!newName.trim()) return;
 if (players.find(p => p.name.toLowerCase() === newName.trim().toLowerCase())) return;
 const seed = SKILL_SEEDS[newSeed];
-const np = […players, {
+const np = [...players, {
 id: Date.now().toString(),
 name: newName.trim(),
 rating: seed.rating,
@@ -82,7 +79,7 @@ losses: 0,
 seedLabel: seed.label,
 }];
 setPlayers(np);
-setNewName(””);
+setNewName("");
 persist(np, matches);
 }
 
@@ -97,7 +94,6 @@ if (!matchA || !matchB || matchA === matchB || !winner) return;
 const ls = parseInt(loserScore);
 if (isNaN(ls) || ls < 0) return;
 
-```
 const pA = players.find(p => p.id === matchA);
 const pB = players.find(p => p.id === matchB);
 if (!pA || !pB) return;
@@ -141,7 +137,6 @@ setMatchB("");
 setWinner("");
 setLoserScore("");
 persist(np, nm);
-```
 
 }
 
@@ -151,7 +146,7 @@ setMatches([]);
 persist([], []);
 }
 
-const sortedPlayers = […players].sort((a, b) => b.rating - a.rating);
+const sortedPlayers = [...players].sort((a, b) => b.rating - a.rating);
 
 const selectedA = players.find(p => p.id === matchA);
 const selectedB = players.find(p => p.id === matchB);
@@ -160,7 +155,7 @@ const targetB = selectedB ? ratingToTarget(selectedB.rating) : null;
 
 if (!loaded) return (
 <div style={styles.loadWrap}>
-<div style={styles.loadText}>Loading…</div>
+<div style={styles.loadText}>Loading...</div>
 </div>
 );
 
@@ -172,11 +167,10 @@ return (
 <p style={styles.subtitle}>Variable Target System</p>
 </div>
 <button style={styles.infoBtn} onClick={() => setShowInfo(!showInfo)}>
-{showInfo ? “✕” : “?”}
+{showInfo ? "✕" : "?"}
 </button>
 </div>
 
-```
   {showInfo && (
     <div style={styles.infoPanel}>
       <h3 style={styles.infoTitle}>HOW IT WORKS</h3>
@@ -478,299 +472,298 @@ return (
     )}
   </div>
 </div>
-```
 
 );
 }
 
 const styles = {
 root: {
-fontFamily: “‘JetBrains Mono’, ‘SF Mono’, ‘Fira Code’, monospace”,
-background: “#0c0f14”,
-color: “#e4e4e7”,
-minHeight: “100vh”,
+fontFamily: "‘JetBrains Mono’, ‘SF Mono’, ‘Fira Code’, monospace",
+background: "#0c0f14",
+color: "#e4e4e7",
+minHeight: "100vh",
 maxWidth: 600,
-margin: “0 auto”,
-padding: “0 16px 40px”,
+margin: "0 auto",
+padding: "0 16px 40px",
 },
-loadWrap: { display: “flex”, justifyContent: “center”, alignItems: “center”, height: “100vh” },
-loadText: { color: “#71717a”, fontSize: 14 },
+loadWrap: { display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" },
+loadText: { color: "#71717a", fontSize: 14 },
 header: {
-display: “flex”,
-justifyContent: “space-between”,
-alignItems: “flex-start”,
-padding: “32px 0 12px”,
-borderBottom: “1px solid #27272a”,
+display: "flex",
+justifyContent: "space-between",
+alignItems: "flex-start",
+padding: "32px 0 12px",
+borderBottom: "1px solid #27272a",
 },
 headerInner: {},
 title: {
 fontSize: 28,
 fontWeight: 800,
-letterSpacing: “0.08em”,
+letterSpacing: "0.08em",
 margin: 0,
-background: “linear-gradient(135deg, #f0abfc, #818cf8)”,
-WebkitBackgroundClip: “text”,
-WebkitTextFillColor: “transparent”,
+background: "linear-gradient(135deg, #f0abfc, #818cf8)",
+WebkitBackgroundClip: "text",
+WebkitTextFillColor: "transparent",
 },
-subtitle: { fontSize: 11, color: “#71717a”, letterSpacing: “0.15em”, marginTop: 4, textTransform: “uppercase” },
+subtitle: { fontSize: 11, color: "#71717a", letterSpacing: "0.15em", marginTop: 4, textTransform: "uppercase" },
 infoBtn: {
-background: “transparent”,
-border: “1px solid #3f3f46”,
-color: “#a1a1aa”,
-borderRadius: “50%”,
+background: "transparent",
+border: "1px solid #3f3f46",
+color: "#a1a1aa",
+borderRadius: "50%",
 width: 32,
 height: 32,
 fontSize: 14,
-cursor: “pointer”,
+cursor: "pointer",
 marginTop: 4,
 },
 infoPanel: {
-background: “#18181b”,
-border: “1px solid #27272a”,
+background: "#18181b",
+border: "1px solid #27272a",
 borderRadius: 8,
 padding: 20,
 marginTop: 16,
 },
-infoTitle: { fontSize: 12, letterSpacing: “0.12em”, color: “#a1a1aa”, marginTop: 0, marginBottom: 16 },
-infoGrid: { display: “grid”, gridTemplateColumns: “1fr”, gap: 14 },
-infoCard: { display: “flex”, gap: 12, alignItems: “flex-start” },
+infoTitle: { fontSize: 12, letterSpacing: "0.12em", color: "#a1a1aa", marginTop: 0, marginBottom: 16 },
+infoGrid: { display: "grid", gridTemplateColumns: "1fr", gap: 14 },
+infoCard: { display: "flex", gap: 12, alignItems: "flex-start" },
 infoCardNum: {
-background: “#27272a”,
-color: “#a78bfa”,
+background: "#27272a",
+color: "#a78bfa",
 fontWeight: 700,
 width: 24,
 height: 24,
 minWidth: 24,
 borderRadius: 4,
-display: “flex”,
-alignItems: “center”,
-justifyContent: “center”,
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
 fontSize: 12,
 },
-infoStrong: { fontSize: 13, color: “#e4e4e7” },
-infoP: { fontSize: 12, color: “#a1a1aa”, margin: “4px 0 0”, lineHeight: 1.5 },
+infoStrong: { fontSize: 13, color: "#e4e4e7" },
+infoP: { fontSize: 12, color: "#a1a1aa", margin: "4px 0 0", lineHeight: 1.5 },
 code: {
-display: “block”,
+display: "block",
 fontSize: 11,
-color: “#a78bfa”,
-background: “#09090b”,
-padding: “2px 6px”,
+color: "#a78bfa",
+background: "#09090b",
+padding: "2px 6px",
 borderRadius: 3,
 marginTop: 2,
 },
-seedRef: { marginTop: 16, paddingTop: 16, borderTop: “1px solid #27272a” },
-seedGrid: { display: “grid”, gridTemplateColumns: “1fr 1fr”, gap: 6, marginTop: 8 },
-seedItem: { display: “flex”, justifyContent: “space-between”, fontSize: 11, padding: “4px 0” },
-seedLabel: { color: “#a1a1aa” },
-seedRating: { color: “#818cf8”, fontWeight: 600 },
+seedRef: { marginTop: 16, paddingTop: 16, borderTop: "1px solid #27272a" },
+seedGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 8 },
+seedItem: { display: "flex", justifyContent: "space-between", fontSize: 11, padding: "4px 0" },
+seedLabel: { color: "#a1a1aa" },
+seedRating: { color: "#818cf8", fontWeight: 600 },
 nav: {
-display: “flex”,
+display: "flex",
 gap: 0,
 marginTop: 16,
-borderBottom: “1px solid #27272a”,
+borderBottom: "1px solid #27272a",
 },
 navBtn: {
 flex: 1,
-background: “transparent”,
-border: “none”,
-borderBottom: “2px solid transparent”,
-color: “#71717a”,
-padding: “10px 0”,
+background: "transparent",
+border: "none",
+borderBottom: "2px solid transparent",
+color: "#71717a",
+padding: "10px 0",
 fontSize: 11,
-letterSpacing: “0.08em”,
-cursor: “pointer”,
-fontFamily: “inherit”,
-transition: “all 0.15s”,
+letterSpacing: "0.08em",
+cursor: "pointer",
+fontFamily: "inherit",
+transition: "all 0.15s",
 },
 navBtnActive: {
-color: “#e4e4e7”,
-borderBottomColor: “#a78bfa”,
+color: "#e4e4e7",
+borderBottomColor: "#a78bfa",
 },
 body: { marginTop: 20 },
-empty: { textAlign: “center”, padding: “48px 0” },
-emptyText: { fontSize: 14, color: “#71717a” },
-emptyHint: { fontSize: 12, color: “#52525b”, marginTop: 4 },
-table: { borderRadius: 8, overflow: “hidden”, border: “1px solid #27272a” },
+empty: { textAlign: "center", padding: "48px 0" },
+emptyText: { fontSize: 14, color: "#71717a" },
+emptyHint: { fontSize: 12, color: "#52525b", marginTop: 4 },
+table: { borderRadius: 8, overflow: "hidden", border: "1px solid #27272a" },
 tableHeader: {
-display: “flex”,
-padding: “10px 14px”,
-background: “#18181b”,
+display: "flex",
+padding: "10px 14px",
+background: "#18181b",
 fontSize: 10,
-letterSpacing: “0.1em”,
-color: “#71717a”,
+letterSpacing: "0.1em",
+color: "#71717a",
 fontWeight: 600,
 },
 tableRow: {
-display: “flex”,
-padding: “12px 14px”,
-alignItems: “center”,
-borderTop: “1px solid #1e1e22”,
-background: “#0f1117”,
+display: "flex",
+padding: "12px 14px",
+alignItems: "center",
+borderTop: "1px solid #1e1e22",
+background: "#0f1117",
 },
-tableRowAlt: { background: “#12141b” },
+tableRowAlt: { background: "#12141b" },
 thCell: { flex: 1 },
 tdCell: { flex: 1, fontSize: 13 },
-targetCol: { textAlign: “center” },
-rank: { color: “#52525b”, fontWeight: 700 },
+targetCol: { textAlign: "center" },
+rank: { color: "#52525b", fontWeight: 700 },
 playerName: { fontWeight: 600 },
-ratingDelta: { fontSize: 10, marginLeft: 8, color: “#52525b” },
+ratingDelta: { fontSize: 10, marginLeft: 8, color: "#52525b" },
 targetBadge: {
-background: “linear-gradient(135deg, #a78bfa22, #818cf822)”,
-border: “1px solid #a78bfa44”,
-padding: “3px 10px”,
+background: "linear-gradient(135deg, #a78bfa22, #818cf822)",
+border: "1px solid #a78bfa44",
+padding: "3px 10px",
 borderRadius: 4,
 fontSize: 14,
 fontWeight: 700,
-color: “#c4b5fd”,
+color: "#c4b5fd",
 },
 formSection: { marginBottom: 24 },
-formTitle: { fontSize: 12, letterSpacing: “0.12em”, color: “#71717a”, marginBottom: 12 },
-label: { display: “block”, fontSize: 11, color: “#a1a1aa”, marginBottom: 6, marginTop: 16, letterSpacing: “0.05em” },
+formTitle: { fontSize: 12, letterSpacing: "0.12em", color: "#71717a", marginBottom: 12 },
+label: { display: "block", fontSize: 11, color: "#a1a1aa", marginBottom: 6, marginTop: 16, letterSpacing: "0.05em" },
 input: {
-width: “100%”,
-background: “#18181b”,
-border: “1px solid #3f3f46”,
+width: "100%",
+background: "#18181b",
+border: "1px solid #3f3f46",
 borderRadius: 6,
-padding: “10px 12px”,
-color: “#e4e4e7”,
+padding: "10px 12px",
+color: "#e4e4e7",
 fontSize: 14,
-fontFamily: “inherit”,
-boxSizing: “border-box”,
-outline: “none”,
+fontFamily: "inherit",
+boxSizing: "border-box",
+outline: "none",
 },
 select: {
-width: “100%”,
-background: “#18181b”,
-border: “1px solid #3f3f46”,
+width: "100%",
+background: "#18181b",
+border: "1px solid #3f3f46",
 borderRadius: 6,
-padding: “10px 12px”,
-color: “#e4e4e7”,
+padding: "10px 12px",
+color: "#e4e4e7",
 fontSize: 14,
-fontFamily: “inherit”,
-boxSizing: “border-box”,
-outline: “none”,
-appearance: “none”,
+fontFamily: "inherit",
+boxSizing: "border-box",
+outline: "none",
+appearance: "none",
 },
-seedSelect: { display: “grid”, gridTemplateColumns: “1fr 1fr 1fr”, gap: 6, marginTop: 12 },
+seedSelect: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 12 },
 seedBtn: {
-background: “#18181b”,
-border: “1px solid #27272a”,
+background: "#18181b",
+border: "1px solid #27272a",
 borderRadius: 6,
-padding: “10px 8px”,
-cursor: “pointer”,
-textAlign: “center”,
-transition: “all 0.15s”,
+padding: "10px 8px",
+cursor: "pointer",
+textAlign: "center",
+transition: "all 0.15s",
 },
 seedBtnActive: {
-borderColor: “#a78bfa”,
-background: “#1e1b2e”,
+borderColor: "#a78bfa",
+background: "#1e1b2e",
 },
-seedBtnLabel: { display: “block”, fontSize: 11, fontWeight: 700, color: “#e4e4e7” },
-seedBtnDesc: { display: “block”, fontSize: 9, color: “#71717a”, marginTop: 2 },
-seedBtnTarget: { display: “block”, fontSize: 10, color: “#a78bfa”, marginTop: 4, fontWeight: 600 },
+seedBtnLabel: { display: "block", fontSize: 11, fontWeight: 700, color: "#e4e4e7" },
+seedBtnDesc: { display: "block", fontSize: 9, color: "#71717a", marginTop: 2 },
+seedBtnTarget: { display: "block", fontSize: 10, color: "#a78bfa", marginTop: 4, fontWeight: 600 },
 primaryBtn: {
-width: “100%”,
-padding: “12px”,
+width: "100%",
+padding: "12px",
 marginTop: 20,
-background: “linear-gradient(135deg, #7c3aed, #6366f1)”,
-border: “none”,
+background: "linear-gradient(135deg, #7c3aed, #6366f1)",
+border: "none",
 borderRadius: 6,
-color: “#fff”,
+color: "#fff",
 fontSize: 12,
 fontWeight: 700,
-letterSpacing: “0.1em”,
-cursor: “pointer”,
-fontFamily: “inherit”,
+letterSpacing: "0.1em",
+cursor: "pointer",
+fontFamily: "inherit",
 },
 dangerBtn: {
-width: “100%”,
-padding: “10px”,
-background: “transparent”,
-border: “1px solid #7f1d1d”,
+width: "100%",
+padding: "10px",
+background: "transparent",
+border: "1px solid #7f1d1d",
 borderRadius: 6,
-color: “#f87171”,
+color: "#f87171",
 fontSize: 11,
-letterSpacing: “0.08em”,
-cursor: “pointer”,
-fontFamily: “inherit”,
+letterSpacing: "0.08em",
+cursor: "pointer",
+fontFamily: "inherit",
 },
 playerRow: {
-display: “flex”,
-justifyContent: “space-between”,
-alignItems: “center”,
-padding: “10px 12px”,
-background: “#18181b”,
+display: "flex",
+justifyContent: "space-between",
+alignItems: "center",
+padding: "10px 12px",
+background: "#18181b",
 borderRadius: 6,
 marginBottom: 6,
 },
 playerRowName: { fontSize: 13, fontWeight: 600 },
-playerRowSeed: { fontSize: 10, color: “#71717a”, marginLeft: 8 },
+playerRowSeed: { fontSize: 10, color: "#71717a", marginLeft: 8 },
 removeBtn: {
-background: “transparent”,
-border: “none”,
-color: “#52525b”,
-cursor: “pointer”,
+background: "transparent",
+border: "none",
+color: "#52525b",
+cursor: "pointer",
 fontSize: 14,
-padding: “4px 8px”,
+padding: "4px 8px",
 },
 matchPreview: {
-display: “flex”,
-alignItems: “center”,
-justifyContent: “center”,
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
 gap: 16,
-padding: “16px”,
-background: “#18181b”,
+padding: "16px",
+background: "#18181b",
 borderRadius: 8,
 marginTop: 16,
-border: “1px solid #27272a”,
+border: "1px solid #27272a",
 },
-matchPreviewPlayer: { textAlign: “center” },
-matchPreviewName: { display: “block”, fontSize: 15, fontWeight: 700 },
-matchPreviewTarget: { display: “block”, fontSize: 20, fontWeight: 800, color: “#c4b5fd”, marginTop: 4 },
-matchVs: { fontSize: 11, color: “#52525b”, fontWeight: 600 },
-winnerSelect: { display: “flex”, gap: 8, marginTop: 4 },
+matchPreviewPlayer: { textAlign: "center" },
+matchPreviewName: { display: "block", fontSize: 15, fontWeight: 700 },
+matchPreviewTarget: { display: "block", fontSize: 20, fontWeight: 800, color: "#c4b5fd", marginTop: 4 },
+matchVs: { fontSize: 11, color: "#52525b", fontWeight: 600 },
+winnerSelect: { display: "flex", gap: 8, marginTop: 4 },
 winnerBtn: {
 flex: 1,
-padding: “10px”,
-background: “#18181b”,
-border: “1px solid #3f3f46”,
+padding: "10px",
+background: "#18181b",
+border: "1px solid #3f3f46",
 borderRadius: 6,
-color: “#a1a1aa”,
+color: "#a1a1aa",
 fontSize: 13,
-cursor: “pointer”,
-fontFamily: “inherit”,
+cursor: "pointer",
+fontFamily: "inherit",
 fontWeight: 600,
 },
 winnerBtnActive: {
-borderColor: “#4ade80”,
-background: “#052e16”,
-color: “#4ade80”,
+borderColor: "#4ade80",
+background: "#052e16",
+color: "#4ade80",
 },
 previewCalc: {
-background: “#18181b”,
-border: “1px solid #27272a”,
+background: "#18181b",
+border: "1px solid #27272a",
 borderRadius: 8,
 padding: 14,
 marginTop: 16,
 },
-previewRow: { display: “flex”, justifyContent: “space-between”, padding: “4px 0” },
-previewLabel: { fontSize: 11, color: “#71717a” },
-previewVal: { fontSize: 12, fontWeight: 600, color: “#e4e4e7” },
-errorText: { fontSize: 12, color: “#f87171” },
+previewRow: { display: "flex", justifyContent: "space-between", padding: "4px 0" },
+previewLabel: { fontSize: 11, color: "#71717a" },
+previewVal: { fontSize: 12, fontWeight: 600, color: "#e4e4e7" },
+errorText: { fontSize: 12, color: "#f87171" },
 historyCard: {
-background: “#18181b”,
-border: “1px solid #27272a”,
+background: "#18181b",
+border: "1px solid #27272a",
 borderRadius: 8,
 padding: 14,
 marginBottom: 8,
 },
-historyDate: { fontSize: 10, color: “#52525b”, marginBottom: 6 },
-historyResult: { display: “flex”, alignItems: “baseline”, gap: 8, flexWrap: “wrap” },
-historyWinner: { fontSize: 14, fontWeight: 700, color: “#4ade80” },
-historyLoser: { fontSize: 14, fontWeight: 600, color: “#f87171” },
-historyScore: { fontSize: 12, color: “#71717a”, fontWeight: 600 },
-historyVs: { fontSize: 11, color: “#52525b” },
-historyDelta: { fontSize: 10, color: “#52525b”, marginTop: 6 },
+historyDate: { fontSize: 10, color: "#52525b", marginBottom: 6 },
+historyResult: { display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" },
+historyWinner: { fontSize: 14, fontWeight: 700, color: "#4ade80" },
+historyLoser: { fontSize: 14, fontWeight: 600, color: "#f87171" },
+historyScore: { fontSize: 12, color: "#71717a", fontWeight: 600 },
+historyVs: { fontSize: 11, color: "#52525b" },
+historyDelta: { fontSize: 10, color: "#52525b", marginTop: 6 },
 };
 
-export default App;
+window.__JSX_APPLET__ = App;
