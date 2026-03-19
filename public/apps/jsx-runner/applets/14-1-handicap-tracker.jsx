@@ -2,16 +2,18 @@ const { useState, useEffect, useCallback, useRef } = React;
 
 const ELO_D = 200;
 const ELO_K = 32;
-const MIN_TARGET = 50;
+const MIN_TARGET = 20;
 const MAX_TARGET = 100;
+const MIN_RATING = 300;
+const MAX_RATING = 1500;
 
 const SKILL_SEEDS = [
-{ label: "Beginner", desc: "Rarely runs 5+", rating: 600 },
-{ label: "Below Avg", desc: "Occasional short runs", rating: 750 },
+{ label: "Beginner", desc: "Rarely runs 5+", rating: 525 },
+{ label: "Below Avg", desc: "Occasional short runs", rating: 675 },
 { label: "Average", desc: "Runs of 10-15", rating: 900 },
-{ label: "Above Avg", desc: "Runs of 15-25", rating: 1100 },
-{ label: "Advanced", desc: "Regular 20+ runs", rating: 1250 },
-{ label: "Expert", desc: "Consistent 30+ runs", rating: 1500 },
+{ label: "Above Avg", desc: "Runs of 15-25", rating: 1125 },
+{ label: "Advanced", desc: "Regular 20+ runs", rating: 1350 },
+{ label: "Expert", desc: "Consistent 30+ runs", rating: MAX_RATING },
 ];
 
 function ratingToLabel(r) {
@@ -20,7 +22,7 @@ return sorted.reduce((best, s) => (r >= s.rating ? s : best), sorted[0]).label;
 }
 
 function ratingToTarget(r) {
-const raw = Math.round((50 + (r - 500) / 20) / 5) * 5;
+const raw = Math.round((MIN_TARGET + (r - MIN_RATING) / 15) / 5) * 5;
 return Math.max(MIN_TARGET, Math.min(MAX_TARGET, raw));
 }
 
@@ -195,8 +197,8 @@ const newMatch = {
 };
 
 const np = players.map(p => {
-  if (p.id === winnerId) return { ...p, rating: Math.min(1500, p.rating + delta), wins: p.wins + 1 };
-  if (p.id === loserId) return { ...p, rating: Math.max(500, p.rating - delta), losses: p.losses + 1 };
+  if (p.id === winnerId) return { ...p, rating: Math.min(MAX_RATING, p.rating + delta), wins: p.wins + 1 };
+  if (p.id === loserId) return { ...p, rating: Math.max(MIN_RATING, p.rating - delta), losses: p.losses + 1 };
   return p;
 });
 
@@ -272,14 +274,14 @@ return (
           <div style={styles.infoCardNum}>1</div>
           <div>
             <strong style={styles.infoStrong}>Variable Targets</strong>
-            <p style={styles.infoP}>Instead of everyone racing to 100, each player has their own target based on skill rating. Targets range from 50 to 100. A beginner might race to 55 while an expert races to 100 — in the same match.</p>
+            <p style={styles.infoP}>Instead of everyone racing to 100, each player has their own target based on skill rating. Targets range from 20 to 100. A beginner might race to 35 while an expert races to 100 — in the same match. Losing enough can push a target below the starting seed, down to a floor of 20.</p>
           </div>
         </div>
         <div style={styles.infoCard}>
           <div style={styles.infoCardNum}>2</div>
           <div>
             <strong style={styles.infoStrong}>Elo Rating Engine</strong>
-            <p style={styles.infoP}>Each player carries a skill rating (500–1500). Your target = 50 + (rating − 500) ÷ 20, rounded to the nearest 5. After each match, ratings adjust using Elo math: upsets cause big swings, expected wins cause small ones.</p>
+            <p style={styles.infoP}>Each player carries a skill rating (300–1500). Your target = 20 + (rating − 300) ÷ 15, rounded to the nearest 5. After each match, ratings adjust using Elo math: upsets cause big swings, expected wins cause small ones.</p>
           </div>
         </div>
         <div style={styles.infoCard}>
@@ -297,7 +299,7 @@ return (
               <code style={styles.code}>E = 1 / (1 + 10^((Rb−Ra)/200))</code><br/>
               <code style={styles.code}>M = 1 + (1 − loser_score/loser_target)</code><br/>
               <code style={styles.code}>Δ = round(32 × M × (1 − E))</code><br/>
-              Winner gains Δ, loser drops Δ. Ratings clamp to 500–1500.
+              Winner gains Δ, loser drops Δ. Ratings clamp to 300–1500.
             </p>
           </div>
         </div>
@@ -569,11 +571,11 @@ return (
                       </div>
                       <div style={styles.previewRow}>
                         <span style={styles.previewLabel}>{wP.name} new rating</span>
-                        <span style={{ ...styles.previewVal, color: "#4ade80" }}>{Math.min(1500, wP.rating + d)} → target {ratingToTarget(Math.min(1500, wP.rating + d))}</span>
+                        <span style={{ ...styles.previewVal, color: "#4ade80" }}>{Math.min(MAX_RATING, wP.rating + d)} → target {ratingToTarget(Math.min(MAX_RATING, wP.rating + d))}</span>
                       </div>
                       <div style={styles.previewRow}>
                         <span style={styles.previewLabel}>{lP.name} new rating</span>
-                        <span style={{ ...styles.previewVal, color: "#f87171" }}>{Math.max(500, lP.rating - d)} → target {ratingToTarget(Math.max(500, lP.rating - d))}</span>
+                        <span style={{ ...styles.previewVal, color: "#f87171" }}>{Math.max(MIN_RATING, lP.rating - d)} → target {ratingToTarget(Math.max(MIN_RATING, lP.rating - d))}</span>
                       </div>
                     </>
                   );
