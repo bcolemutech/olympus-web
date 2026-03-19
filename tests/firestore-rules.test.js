@@ -840,7 +840,12 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
       await assertSucceeds(
         setDoc(
           doc(authedDb, 'symposium_ingredients', 'ing-qty'),
-          makeIngredient({ unit: 'each', trackingType: 'quantity', bottleSize: 0 })
+          makeIngredient({
+            unit: 'each',
+            trackingType: 'quantity',
+            restockUnit: 'each',
+            bottleSize: 0,
+          })
         )
       );
     });
