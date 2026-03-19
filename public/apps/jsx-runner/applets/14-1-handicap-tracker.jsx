@@ -156,6 +156,24 @@ persist([], []);
 
 const sortedPlayers = [...players].sort((a, b) => b.rating - a.rating);
 
+function navBtnStyle(v) {
+if (view === v) return { ...styles.navBtn, ...styles.navBtnActive };
+if (hoveredNav === v) return { ...styles.navBtn, ...styles.navBtnHover };
+return styles.navBtn;
+}
+
+function seedBtnStyle(i) {
+if (newSeed === i) return { ...styles.seedBtn, ...styles.seedBtnActive };
+if (hoveredSeed === i) return { ...styles.seedBtn, ...styles.seedBtnHover };
+return styles.seedBtn;
+}
+
+function winnerBtnStyle(id) {
+if (winner === id) return { ...styles.winnerBtn, ...styles.winnerBtnActive };
+if (hoveredWinner === id) return { ...styles.winnerBtn, ...styles.winnerBtnHover };
+return styles.winnerBtn;
+}
+
 const selectedA = players.find(p => p.id === matchA);
 const selectedB = players.find(p => p.id === matchB);
 const targetA = selectedA ? ratingToTarget(selectedA.rating) : null;
@@ -235,7 +253,7 @@ return (
     {["standings", "record", "players", "history"].map(v => (
       <button
         key={v}
-        style={view === v ? { ...styles.navBtn, ...styles.navBtnActive } : hoveredNav === v ? { ...styles.navBtn, ...styles.navBtnHover } : styles.navBtn}
+        style={navBtnStyle(v)}
         onClick={() => setView(v)}
         onMouseDown={e => e.preventDefault()}
         onMouseEnter={() => setHoveredNav(v)}
@@ -303,7 +321,7 @@ return (
             {SKILL_SEEDS.map((s, i) => (
               <button
                 key={s.label}
-                style={newSeed === i ? { ...styles.seedBtn, ...styles.seedBtnActive } : hoveredSeed === i ? { ...styles.seedBtn, ...styles.seedBtnHover } : styles.seedBtn}
+                style={seedBtnStyle(i)}
                 onClick={() => setNewSeed(i)}
                 onMouseDown={e => e.preventDefault()}
                 onMouseEnter={() => setHoveredSeed(i)}
@@ -391,7 +409,7 @@ return (
                     return (
                       <button
                         key={id}
-                        style={winner === id ? { ...styles.winnerBtn, ...styles.winnerBtnActive } : hoveredWinner === id ? { ...styles.winnerBtn, ...styles.winnerBtnHover } : styles.winnerBtn}
+                        style={winnerBtnStyle(id)}
                         onClick={() => setWinner(id)}
                         onMouseDown={e => e.preventDefault()}
                         onMouseEnter={() => setHoveredWinner(id)}
@@ -591,7 +609,6 @@ letterSpacing: "0.08em",
 cursor: "pointer",
 fontFamily: "inherit",
 transition: "color 0.15s, border-color 0.15s",
-outline: "none",
 },
 navBtnHover: {
 color: "#a1a1aa",
@@ -674,7 +691,6 @@ padding: "10px 8px",
 cursor: "pointer",
 textAlign: "center",
 transition: "background 0.15s, border-color 0.15s",
-outline: "none",
 },
 seedBtnHover: {
 borderColor: "#3f3f46",
@@ -760,7 +776,6 @@ cursor: "pointer",
 fontFamily: "inherit",
 fontWeight: 600,
 transition: "background 0.15s, border-color 0.15s, color 0.15s",
-outline: "none",
 },
 winnerBtnHover: {
 borderColor: "#52525b",
