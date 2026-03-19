@@ -63,3 +63,12 @@ apps:
     file: pool-powerups.jsx
     enabled: true
     order: 22
+
+  - id: 14-1-handicap-tracker
+    name: 14-1 Handicap Tracker
+    description: ELO-based handicap tracker for 14-1 straight pool — manage players, record matches, and auto-adjust target scores
+    icon: "\U0001F4CA"
+    type: jsx
+    file: 14-1-handicap-tracker.jsx
+    enabled: true
+    order: 23
