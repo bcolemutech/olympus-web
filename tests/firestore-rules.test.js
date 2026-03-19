@@ -1,22 +1,17 @@
 'use strict';
 
-const { initializeTestEnvironment, assertFails, assertSucceeds } =
-  require('@firebase/rules-unit-testing');
+const {
+  initializeTestEnvironment,
+  assertFails,
+  assertSucceeds,
+} = require('@firebase/rules-unit-testing');
 const { readFileSync } = require('fs');
 const { resolve } = require('path');
-const {
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-} = require('firebase/firestore');
+const { doc, setDoc, getDoc, updateDoc, serverTimestamp } = require('firebase/firestore');
 
 const RULES_PATH = resolve(__dirname, '../firestore.rules');
 const PROJECT_ID =
-  process.env.FIREBASE_PROJECT_ID ||
-  process.env.GCLOUD_PROJECT ||
-  'demo-olympus-rules-test';
+  process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || 'demo-olympus-rules-test';
 
 // Seed data: a recipe category that passes validRecipe()'s category checks
 const TEST_CATEGORY_ID = 'cat-classic';
@@ -129,9 +124,7 @@ describe('symposium_recipes — Firestore Security Rules', function () {
     });
 
     it('denies read for user without symposium app claim', async function () {
-      var wrongDb = testEnv
-        .authenticatedContext('user-002', { apps: ['other-app'] })
-        .firestore();
+      var wrongDb = testEnv.authenticatedContext('user-002', { apps: ['other-app'] }).firestore();
       await assertFails(getDoc(doc(wrongDb, 'symposium_recipes', 'r-read-test')));
     });
   });
@@ -190,9 +183,7 @@ describe('symposium_recipes — Firestore Security Rules', function () {
         createdAt: new Date('2024-01-01'),
         updatedAt: serverTimestamp(),
       });
-      await assertSucceeds(
-        setDoc(doc(authedDb, 'symposium_recipes', 'r-update-test'), updateData)
-      );
+      await assertSucceeds(setDoc(doc(authedDb, 'symposium_recipes', 'r-update-test'), updateData));
     });
   });
 
@@ -205,7 +196,13 @@ describe('symposium_recipes — Firestore Security Rules', function () {
           doc(authedDb, 'symposium_recipes', 'r-pending-ing'),
           makeLinkedRecipe({
             ingredients: [
-              { name: 'Obscure Bitters', amount: '2', unit: 'dash', optional: false, pending: true },
+              {
+                name: 'Obscure Bitters',
+                amount: '2',
+                unit: 'dash',
+                optional: false,
+                pending: true,
+              },
             ],
           })
         )
@@ -370,7 +367,7 @@ describe('symposium_recipes — Firestore Security Rules', function () {
           makeLinkedRecipe({
             ingredients: [
               { id: 'ing-001', amount: '2', unit: 'oz', optional: false }, // [0] valid
-              { pending: true },                                             // [1] malformed — NOT checked by rules
+              { pending: true }, // [1] malformed — NOT checked by rules
             ],
           })
         )
@@ -404,10 +401,7 @@ describe('symposium_recipes — Firestore Security Rules', function () {
         setDoc(
           doc(authedDb, 'symposium_recipes', 'r-mixed-equip'),
           makeLinkedRecipe({
-            equipment: [
-              { name: 'New Strainer', pending: true },
-              { id: 'equip-001' },
-            ],
+            equipment: [{ name: 'New Strainer', pending: true }, { id: 'equip-001' }],
           })
         )
       );
@@ -501,25 +495,17 @@ describe('symposium_shopping_list — Firestore Security Rules', function () {
 
   describe('read access', function () {
     it('allows read for authenticated symposium user', async function () {
-      await assertSucceeds(
-        getDoc(doc(authedDb, 'symposium_shopping_list', 'item-read-test'))
-      );
+      await assertSucceeds(getDoc(doc(authedDb, 'symposium_shopping_list', 'item-read-test')));
     });
 
     it('denies read for unauthenticated user', async function () {
       var unauthDb = testEnv.unauthenticatedContext().firestore();
-      await assertFails(
-        getDoc(doc(unauthDb, 'symposium_shopping_list', 'item-read-test'))
-      );
+      await assertFails(getDoc(doc(unauthDb, 'symposium_shopping_list', 'item-read-test')));
     });
 
     it('denies read for user without symposium app claim', async function () {
-      var wrongDb = testEnv
-        .authenticatedContext('user-002', { apps: ['other-app'] })
-        .firestore();
-      await assertFails(
-        getDoc(doc(wrongDb, 'symposium_shopping_list', 'item-read-test'))
-      );
+      var wrongDb = testEnv.authenticatedContext('user-002', { apps: ['other-app'] }).firestore();
+      await assertFails(getDoc(doc(wrongDb, 'symposium_shopping_list', 'item-read-test')));
     });
   });
 
@@ -672,9 +658,7 @@ describe('symposium_shopping_list — Firestore Security Rules', function () {
         });
       });
 
-      await assertSucceeds(
-        deleteDoc(doc(authedDb, 'symposium_shopping_list', 'item-to-delete'))
-      );
+      await assertSucceeds(deleteDoc(doc(authedDb, 'symposium_shopping_list', 'item-to-delete')));
     });
   });
 
@@ -690,9 +674,7 @@ describe('symposium_shopping_list — Firestore Security Rules', function () {
     it('rejects create with missing required field (checked)', async function () {
       var data = makeShoppingItem();
       delete data.checked;
-      await assertFails(
-        setDoc(doc(authedDb, 'symposium_shopping_list', 'item-no-checked'), data)
-      );
+      await assertFails(setDoc(doc(authedDb, 'symposium_shopping_list', 'item-no-checked'), data));
     });
 
     it('rejects create with quantity as string', async function () {
@@ -773,6 +755,7 @@ function makeIngredient(overrides) {
     inStock: false,
     quantity: 0,
     trackingType: 'volume',
+    restockUnit: 'bottle',
     stock: 0,
     bottleSize: 750,
     bottleSizeUnit: 'ml',
@@ -857,7 +840,12 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
       await assertSucceeds(
         setDoc(
           doc(authedDb, 'symposium_ingredients', 'ing-qty'),
-          makeIngredient({ unit: 'each', trackingType: 'quantity', bottleSize: 0 })
+          makeIngredient({
+            unit: 'each',
+            trackingType: 'quantity',
+            restockUnit: 'each',
+            bottleSize: 0,
+          })
         )
       );
     });
@@ -887,6 +875,7 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
           inStock: false,
           quantity: 0,
           trackingType: 'volume',
+          restockUnit: 'bottle',
           stock: 0,
           bottleSize: 750,
           bottleSizeUnit: 'ml',
@@ -921,6 +910,7 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
           inStock: false,
           quantity: 0,
           trackingType: 'volume',
+          restockUnit: 'bottle',
           stock: 0,
           bottleSize: 750,
           bottleSizeUnit: 'ml',
@@ -953,6 +943,7 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
           inStock: false,
           quantity: 0,
           trackingType: 'volume',
+          restockUnit: 'bottle',
           stock: 0,
           bottleSize: 750,
           bottleSizeUnit: 'ml',
@@ -986,6 +977,7 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
           inStock: false,
           quantity: 0,
           trackingType: 'volume',
+          restockUnit: 'bottle',
           stock: 0,
           bottleSize: 750,
           bottleSizeUnit: 'ml',
@@ -1023,6 +1015,7 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
           inStock: false,
           quantity: 0,
           trackingType: 'volume',
+          restockUnit: 'bottle',
           stock: 0,
           bottleSize: 750,
           bottleSizeUnit: 'ml',
@@ -1056,6 +1049,7 @@ describe('symposium_ingredients — Firestore Security Rules', function () {
           inStock: false,
           quantity: 0,
           trackingType: 'quantity',
+          restockUnit: 'each',
           stock: 0,
           bottleSize: 0,
           bottleSizeUnit: 'ml',
@@ -1187,10 +1181,7 @@ describe('symposium_categories — Firestore Security Rules', function () {
 
     it('allows create of a valid recipe category', async function () {
       await assertSucceeds(
-        setDoc(
-          doc(authedDb, 'symposium_categories', 'tiki-2'),
-          makeCategory({ type: 'recipe' })
-        )
+        setDoc(doc(authedDb, 'symposium_categories', 'tiki-2'), makeCategory({ type: 'recipe' }))
       );
     });
 
@@ -1223,10 +1214,7 @@ describe('symposium_categories — Firestore Security Rules', function () {
 
     it('allows create with sortOrder of 0', async function () {
       await assertSucceeds(
-        setDoc(
-          doc(authedDb, 'symposium_categories', 'zero-order'),
-          makeCategory({ sortOrder: 0 })
-        )
+        setDoc(doc(authedDb, 'symposium_categories', 'zero-order'), makeCategory({ sortOrder: 0 }))
       );
     });
 
@@ -1280,10 +1268,7 @@ describe('symposium_categories — Firestore Security Rules', function () {
 
     it('rejects create with negative sortOrder', async function () {
       await assertFails(
-        setDoc(
-          doc(authedDb, 'symposium_categories', 'bad-order'),
-          makeCategory({ sortOrder: -1 })
-        )
+        setDoc(doc(authedDb, 'symposium_categories', 'bad-order'), makeCategory({ sortOrder: -1 }))
       );
     });
 
@@ -1312,9 +1297,7 @@ describe('symposium_categories — Firestore Security Rules', function () {
     });
 
     it('denies create for user without symposium claim', async function () {
-      await assertFails(
-        setDoc(doc(wrongDb, 'symposium_categories', 'craft-beer'), makeCategory())
-      );
+      await assertFails(setDoc(doc(wrongDb, 'symposium_categories', 'craft-beer'), makeCategory()));
     });
   });
 
@@ -1323,10 +1306,7 @@ describe('symposium_categories — Firestore Security Rules', function () {
   describe('update', function () {
     it('allows update of name and subcategories', async function () {
       await testEnv.withSecurityRulesDisabled(async function (ctx) {
-        await setDoc(
-          doc(ctx.firestore(), 'symposium_categories', 'cat-update'),
-          makeCategory()
-        );
+        await setDoc(doc(ctx.firestore(), 'symposium_categories', 'cat-update'), makeCategory());
       });
       await assertSucceeds(
         setDoc(
@@ -1338,16 +1318,10 @@ describe('symposium_categories — Firestore Security Rules', function () {
 
     it('allows update of sortOrder', async function () {
       await testEnv.withSecurityRulesDisabled(async function (ctx) {
-        await setDoc(
-          doc(ctx.firestore(), 'symposium_categories', 'cat-reorder'),
-          makeCategory()
-        );
+        await setDoc(doc(ctx.firestore(), 'symposium_categories', 'cat-reorder'), makeCategory());
       });
       await assertSucceeds(
-        setDoc(
-          doc(authedDb, 'symposium_categories', 'cat-reorder'),
-          makeCategory({ sortOrder: 5 })
-        )
+        setDoc(doc(authedDb, 'symposium_categories', 'cat-reorder'), makeCategory({ sortOrder: 5 }))
       );
     });
 
@@ -1389,30 +1363,21 @@ describe('symposium_categories — Firestore Security Rules', function () {
 
     it('allows delete by authenticated symposium user', async function () {
       await testEnv.withSecurityRulesDisabled(async function (ctx) {
-        await setDoc(
-          doc(ctx.firestore(), 'symposium_categories', 'cat-to-delete'),
-          makeCategory()
-        );
+        await setDoc(doc(ctx.firestore(), 'symposium_categories', 'cat-to-delete'), makeCategory());
       });
       await assertSucceeds(deleteDoc(doc(authedDb, 'symposium_categories', 'cat-to-delete')));
     });
 
     it('denies delete for unauthenticated user', async function () {
       await testEnv.withSecurityRulesDisabled(async function (ctx) {
-        await setDoc(
-          doc(ctx.firestore(), 'symposium_categories', 'cat-unauth'),
-          makeCategory()
-        );
+        await setDoc(doc(ctx.firestore(), 'symposium_categories', 'cat-unauth'), makeCategory());
       });
       await assertFails(deleteDoc(doc(unauthDb, 'symposium_categories', 'cat-unauth')));
     });
 
     it('denies delete for user without symposium claim', async function () {
       await testEnv.withSecurityRulesDisabled(async function (ctx) {
-        await setDoc(
-          doc(ctx.firestore(), 'symposium_categories', 'cat-wrong-app'),
-          makeCategory()
-        );
+        await setDoc(doc(ctx.firestore(), 'symposium_categories', 'cat-wrong-app'), makeCategory());
       });
       await assertFails(deleteDoc(doc(wrongDb, 'symposium_categories', 'cat-wrong-app')));
     });
@@ -1473,9 +1438,7 @@ describe('apps — Firestore Security Rules', function () {
     adminDb = testEnv.authenticatedContext('admin-user', { admin: true }).firestore();
 
     // User with the apps: ['symposium'] claim but not admin
-    appUserDb = testEnv
-      .authenticatedContext('app-user', { apps: ['symposium'] })
-      .firestore();
+    appUserDb = testEnv.authenticatedContext('app-user', { apps: ['symposium'] }).firestore();
 
     // Authenticated user with no relevant claims
     noClaimDb = testEnv.authenticatedContext('no-claim-user', {}).firestore();
@@ -1508,21 +1471,15 @@ describe('apps — Firestore Security Rules', function () {
 
   describe('write access', function () {
     it('denies write for an admin user', async function () {
-      await assertFails(
-        setDoc(doc(adminDb, 'apps', 'new-app'), { name: 'New App' })
-      );
+      await assertFails(setDoc(doc(adminDb, 'apps', 'new-app'), { name: 'New App' }));
     });
 
     it('denies write for a user with app claim', async function () {
-      await assertFails(
-        setDoc(doc(appUserDb, 'apps', 'new-app'), { name: 'New App' })
-      );
+      await assertFails(setDoc(doc(appUserDb, 'apps', 'new-app'), { name: 'New App' }));
     });
 
     it('denies write for an unauthenticated user', async function () {
-      await assertFails(
-        setDoc(doc(unauthDb, 'apps', 'new-app'), { name: 'New App' })
-      );
+      await assertFails(setDoc(doc(unauthDb, 'apps', 'new-app'), { name: 'New App' }));
     });
   });
 });

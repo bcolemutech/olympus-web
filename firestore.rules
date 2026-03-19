@@ -28,7 +28,7 @@ service cloud.firestore {
         let allowed = [
           'name', 'category', 'subcategory', 'tags',
           'unit', 'type', 'inStock', 'quantity',
-          'trackingType', 'stock', 'bottleSize', 'bottleSizeUnit',
+          'trackingType', 'restockUnit', 'stock', 'bottleSize', 'bottleSizeUnit',
           'notes', 'shoppingListDefault', 'lowStockThreshold',
           'createdAt', 'updatedAt', 'openBottleLevel', 'brand'
         ];
@@ -39,6 +39,10 @@ service cloud.firestore {
             && data.type == 'consumable'
             && data.unit in ['oz', 'ml', 'dash', 'each', 'splash']
             && data.trackingType in ['volume', 'quantity']
+            && (!data.keys().hasAny(['restockUnit']) || (
+                 (data.trackingType == 'quantity' && data.restockUnit == 'each') ||
+                 (data.trackingType == 'volume' && data.restockUnit in ['bottle', 'can', 'box', 'bag', 'pack'])
+               ))
             && data.stock is int && data.stock >= 0
             && data.bottleSize is number && data.bottleSize >= 0
             && data.bottleSizeUnit in ['ml', 'oz']
@@ -51,6 +55,7 @@ service cloud.firestore {
       allow read: if hasApp('symposium');
       allow create: if hasApp('symposium')
                     && validIngredient()
+                    && request.resource.data.keys().hasAny(['restockUnit'])
                     && request.resource.data.createdAt == request.time
                     && request.resource.data.updatedAt == request.time;
       allow update: if hasApp('symposium')
