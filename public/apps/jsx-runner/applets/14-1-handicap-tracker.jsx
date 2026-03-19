@@ -1,4 +1,4 @@
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 const ELO_D = 200;
 const ELO_K = 32;
@@ -48,7 +48,9 @@ const [saving, setSaving] = useState(false);
 const [editingPlayerId, setEditingPlayerId] = useState(null);
 const [editName, setEditName] = useState("");
 const [editSeed, setEditSeed] = useState(2);
+const [editOriginalSeed, setEditOriginalSeed] = useState(2);
 const [hoveredEditSeed, setHoveredEditSeed] = useState(null);
+const mountedRef = useRef(true);
 
 const [view, setView] = useState("standings");
 const [newName, setNewName] = useState("");
@@ -63,28 +65,44 @@ const [hoveredSeed, setHoveredSeed] = useState(null);
 const [hoveredWinner, setHoveredWinner] = useState(null);
 
 useEffect(() => {
+mountedRef.current = true;
+let active = true;
 const unsub = firebase.auth().onAuthStateChanged(async user => {
-if (!user) { setLoaded(true); return; }
+if (!user) { if (active) setLoaded(true); return; }
 try {
 const snap = await getDocRef(user.uid).get();
+if (active) {
 if (snap.exists) {
 const d = snap.data();
 setPlayers(d.players || []);
 setMatches(d.matches || []);
+} else {
+try {
+const legacyRaw = localStorage.getItem("pool-handicap-data");
+if (legacyRaw) {
+const legacy = JSON.parse(legacyRaw);
+const lp = Array.isArray(legacy.players) ? legacy.players : [];
+const lm = Array.isArray(legacy.matches) ? legacy.matches : [];
+setPlayers(lp);
+setMatches(lm);
+await getDocRef(user.uid).set({ players: lp, matches: lm.slice(0, 500) });
+}
+} catch (mErr) { console.error("Legacy migration error", mErr); }
+}
 }
 } catch (e) { console.error("Firestore load error", e); }
-setLoaded(true);
+if (active) setLoaded(true);
 });
-return () => unsub();
+return () => { active = false; mountedRef.current = false; unsub(); };
 }, []);
 
 const persist = useCallback((p, m) => {
 const user = firebase.auth().currentUser;
 if (!user) return;
-setSaving(true);
-getDocRef(user.uid).set({ players: p, matches: m })
+if (mountedRef.current) setSaving(true);
+getDocRef(user.uid).set({ players: p, matches: m.slice(0, 500) })
 .catch(e => console.error("Firestore save error", e))
-.finally(() => setSaving(false));
+.finally(() => { if (mountedRef.current) setSaving(false); });
 }, []);
 
 function addPlayer() {
@@ -117,6 +135,7 @@ Math.abs(s.rating - p.rating) < Math.abs(SKILL_SEEDS[best].rating - p.rating) ? 
 setEditingPlayerId(p.id);
 setEditName(p.name);
 setEditSeed(seedIdx);
+setEditOriginalSeed(seedIdx);
 }
 
 function cancelEdit() {
@@ -128,8 +147,12 @@ function saveEdit(id) {
 if (!editName.trim()) return;
 if (players.find(p => p.id !== id && p.name.toLowerCase() === editName.trim().toLowerCase())) return;
 const seed = SKILL_SEEDS[editSeed];
+const seedChanged = editSeed !== editOriginalSeed;
 const np = players.map(p => p.id !== id ? p : {
-...p, name: editName.trim(), rating: seed.rating, initialRating: seed.rating, seedLabel: seed.label,
+...p,
+name: editName.trim(),
+seedLabel: seed.label,
+...(seedChanged ? { rating: seed.rating, initialRating: seed.rating } : {}),
 });
 setPlayers(np);
 setEditingPlayerId(null);
@@ -227,6 +250,7 @@ if (!loaded) return (
 
 return (
 <div style={styles.root}>
+<style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }`}</style>
 <div style={styles.header}>
 <div style={styles.headerInner}>
 <h1 style={styles.title}>14.1 HANDICAP</h1>
@@ -424,8 +448,8 @@ return (
                       <span style={styles.playerRowSeed}>{ratingToLabel(p.rating)} · {p.rating}</span>
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button style={styles.editBtn} onClick={() => startEdit(p)}>✎</button>
-                      <button style={styles.removeBtn} onClick={() => removePlayer(p.id)}>✕</button>
+                      <button style={styles.editBtn} onClick={() => startEdit(p)} aria-label="Edit player" title="Edit player">✎</button>
+                      <button style={styles.removeBtn} onClick={() => removePlayer(p.id)} aria-label="Remove player" title="Remove player">✕</button>
                     </div>
                   </>
                 )}
