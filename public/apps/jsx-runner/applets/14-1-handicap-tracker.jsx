@@ -14,6 +14,11 @@ const SKILL_SEEDS = [
 { label: "Expert", desc: "Consistent 30+ runs", rating: 1500 },
 ];
 
+function ratingToLabel(r) {
+const sorted = [...SKILL_SEEDS].sort((a, b) => a.rating - b.rating);
+return sorted.reduce((best, s) => (r >= s.rating ? s : best), sorted[0]).label;
+}
+
 function ratingToTarget(r) {
 const raw = Math.round((50 + (r - 500) / 20) / 5) * 5;
 return Math.max(MIN_TARGET, Math.min(MAX_TARGET, raw));
@@ -46,6 +51,9 @@ const [matchB, setMatchB] = useState("");
 const [winner, setWinner] = useState("");
 const [loserScore, setLoserScore] = useState("");
 const [showInfo, setShowInfo] = useState(false);
+const [hoveredNav, setHoveredNav] = useState(null);
+const [hoveredSeed, setHoveredSeed] = useState(null);
+const [hoveredWinner, setHoveredWinner] = useState(null);
 
 useEffect(() => {
 try {
@@ -148,6 +156,24 @@ persist([], []);
 
 const sortedPlayers = [...players].sort((a, b) => b.rating - a.rating);
 
+function navBtnStyle(v) {
+if (view === v) return { ...styles.navBtn, ...styles.navBtnActive };
+if (hoveredNav === v) return { ...styles.navBtn, ...styles.navBtnHover };
+return styles.navBtn;
+}
+
+function seedBtnStyle(i) {
+if (newSeed === i) return { ...styles.seedBtn, ...styles.seedBtnActive };
+if (hoveredSeed === i) return { ...styles.seedBtn, ...styles.seedBtnHover };
+return styles.seedBtn;
+}
+
+function winnerBtnStyle(id) {
+if (winner === id) return { ...styles.winnerBtn, ...styles.winnerBtnActive };
+if (hoveredWinner === id) return { ...styles.winnerBtn, ...styles.winnerBtnHover };
+return styles.winnerBtn;
+}
+
 const selectedA = players.find(p => p.id === matchA);
 const selectedB = players.find(p => p.id === matchB);
 const targetA = selectedA ? ratingToTarget(selectedA.rating) : null;
@@ -227,8 +253,11 @@ return (
     {["standings", "record", "players", "history"].map(v => (
       <button
         key={v}
-        style={view === v ? { ...styles.navBtn, ...styles.navBtnActive } : styles.navBtn}
+        style={navBtnStyle(v)}
         onClick={() => setView(v)}
+        onMouseDown={e => e.preventDefault()}
+        onMouseEnter={() => setHoveredNav(v)}
+        onMouseLeave={() => setHoveredNav(null)}
       >
         {v.toUpperCase()}
       </button>
@@ -292,8 +321,11 @@ return (
             {SKILL_SEEDS.map((s, i) => (
               <button
                 key={s.label}
-                style={newSeed === i ? { ...styles.seedBtn, ...styles.seedBtnActive } : styles.seedBtn}
+                style={seedBtnStyle(i)}
                 onClick={() => setNewSeed(i)}
+                onMouseDown={e => e.preventDefault()}
+                onMouseEnter={() => setHoveredSeed(i)}
+                onMouseLeave={() => setHoveredSeed(null)}
               >
                 <span style={styles.seedBtnLabel}>{s.label}</span>
                 <span style={styles.seedBtnDesc}>{s.desc}</span>
@@ -311,7 +343,7 @@ return (
               <div key={p.id} style={styles.playerRow}>
                 <div>
                   <span style={styles.playerRowName}>{p.name}</span>
-                  <span style={styles.playerRowSeed}>{p.seedLabel} seed</span>
+                  <span style={styles.playerRowSeed}>{ratingToLabel(p.rating)} seed</span>
                 </div>
                 <button style={styles.removeBtn} onClick={() => removePlayer(p.id)}>✕</button>
               </div>
@@ -377,8 +409,11 @@ return (
                     return (
                       <button
                         key={id}
-                        style={winner === id ? { ...styles.winnerBtn, ...styles.winnerBtnActive } : styles.winnerBtn}
+                        style={winnerBtnStyle(id)}
                         onClick={() => setWinner(id)}
+                        onMouseDown={e => e.preventDefault()}
+                        onMouseEnter={() => setHoveredWinner(id)}
+                        onMouseLeave={() => setHoveredWinner(null)}
                       >
                         {p?.name}
                       </button>
@@ -573,7 +608,10 @@ fontSize: 11,
 letterSpacing: "0.08em",
 cursor: "pointer",
 fontFamily: "inherit",
-transition: "all 0.15s",
+transition: "color 0.15s, border-color 0.15s",
+},
+navBtnHover: {
+color: "#a1a1aa",
 },
 navBtnActive: {
 color: "#e4e4e7",
@@ -652,7 +690,11 @@ borderRadius: 6,
 padding: "10px 8px",
 cursor: "pointer",
 textAlign: "center",
-transition: "all 0.15s",
+transition: "background 0.15s, border-color 0.15s",
+},
+seedBtnHover: {
+borderColor: "#3f3f46",
+background: "#1c1c1f",
 },
 seedBtnActive: {
 borderColor: "#a78bfa",
@@ -733,6 +775,12 @@ fontSize: 13,
 cursor: "pointer",
 fontFamily: "inherit",
 fontWeight: 600,
+transition: "background 0.15s, border-color 0.15s, color 0.15s",
+},
+winnerBtnHover: {
+borderColor: "#52525b",
+background: "#1c1c1f",
+color: "#d4d4d8",
 },
 winnerBtnActive: {
 borderColor: "#4ade80",
