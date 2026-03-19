@@ -14,6 +14,11 @@ const SKILL_SEEDS = [
 { label: "Expert", desc: "Consistent 30+ runs", rating: 1500 },
 ];
 
+function ratingToLabel(r) {
+const sorted = [...SKILL_SEEDS].sort((a, b) => a.rating - b.rating);
+return sorted.reduce((best, s) => (r >= s.rating ? s : best), sorted[0]).label;
+}
+
 function ratingToTarget(r) {
 const raw = Math.round((50 + (r - 500) / 20) / 5) * 5;
 return Math.max(MIN_TARGET, Math.min(MAX_TARGET, raw));
@@ -320,7 +325,7 @@ return (
               <div key={p.id} style={styles.playerRow}>
                 <div>
                   <span style={styles.playerRowName}>{p.name}</span>
-                  <span style={styles.playerRowSeed}>{p.seedLabel} seed</span>
+                  <span style={styles.playerRowSeed}>{ratingToLabel(p.rating)} seed</span>
                 </div>
                 <button style={styles.removeBtn} onClick={() => removePlayer(p.id)}>✕</button>
               </div>
