@@ -5,6 +5,7 @@ const ELO_K = 32;
 const MIN_TARGET = 20;
 const MAX_TARGET = 100;
 const MIN_RATING = 300;
+const MAX_RATING = 1500;
 
 const SKILL_SEEDS = [
 { label: "Beginner", desc: "Rarely runs 5+", rating: 525 },
@@ -12,7 +13,7 @@ const SKILL_SEEDS = [
 { label: "Average", desc: "Runs of 10-15", rating: 900 },
 { label: "Above Avg", desc: "Runs of 15-25", rating: 1125 },
 { label: "Advanced", desc: "Regular 20+ runs", rating: 1350 },
-{ label: "Expert", desc: "Consistent 30+ runs", rating: 1500 },
+{ label: "Expert", desc: "Consistent 30+ runs", rating: MAX_RATING },
 ];
 
 function ratingToLabel(r) {
@@ -21,7 +22,7 @@ return sorted.reduce((best, s) => (r >= s.rating ? s : best), sorted[0]).label;
 }
 
 function ratingToTarget(r) {
-const raw = Math.round((20 + (r - MIN_RATING) / 15) / 5) * 5;
+const raw = Math.round((MIN_TARGET + (r - MIN_RATING) / 15) / 5) * 5;
 return Math.max(MIN_TARGET, Math.min(MAX_TARGET, raw));
 }
 
@@ -196,7 +197,7 @@ const newMatch = {
 };
 
 const np = players.map(p => {
-  if (p.id === winnerId) return { ...p, rating: Math.min(1500, p.rating + delta), wins: p.wins + 1 };
+  if (p.id === winnerId) return { ...p, rating: Math.min(MAX_RATING, p.rating + delta), wins: p.wins + 1 };
   if (p.id === loserId) return { ...p, rating: Math.max(MIN_RATING, p.rating - delta), losses: p.losses + 1 };
   return p;
 });
@@ -570,7 +571,7 @@ return (
                       </div>
                       <div style={styles.previewRow}>
                         <span style={styles.previewLabel}>{wP.name} new rating</span>
-                        <span style={{ ...styles.previewVal, color: "#4ade80" }}>{Math.min(1500, wP.rating + d)} → target {ratingToTarget(Math.min(1500, wP.rating + d))}</span>
+                        <span style={{ ...styles.previewVal, color: "#4ade80" }}>{Math.min(MAX_RATING, wP.rating + d)} → target {ratingToTarget(Math.min(MAX_RATING, wP.rating + d))}</span>
                       </div>
                       <div style={styles.previewRow}>
                         <span style={styles.previewLabel}>{lP.name} new rating</span>
