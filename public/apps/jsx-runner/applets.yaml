@@ -14,3 +14,8 @@ applets:
     description: Handicap card system for billiards — deal power-up cards based on skill level
     icon: "\U0001F3B1"
     file: pool-powerups.jsx
+  - id: 14-1-handicap-tracker
+    name: 14-1 Handicap Tracker
+    description: ELO-based handicap tracker for 14-1 straight pool — manage players, record matches, and auto-adjust target scores
+    icon: "\U0001F4CA"
+    file: 14-1-handicap-tracker.jsx
