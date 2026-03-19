@@ -21,24 +21,26 @@ service cloud.firestore {
         let required = [
           'name', 'category', 'subcategory', 'tags',
           'unit', 'type', 'inStock', 'quantity',
-          'trackingType', 'stock', 'bottleSize', 'bottleSizeUnit',
+          'trackingType', 'restockUnit', 'stock', 'bottleSize', 'bottleSizeUnit',
           'notes', 'shoppingListDefault', 'lowStockThreshold',
           'createdAt', 'updatedAt'
         ];
         let allowed = [
           'name', 'category', 'subcategory', 'tags',
           'unit', 'type', 'inStock', 'quantity',
-          'trackingType', 'stock', 'bottleSize', 'bottleSizeUnit',
+          'trackingType', 'restockUnit', 'stock', 'bottleSize', 'bottleSizeUnit',
           'notes', 'shoppingListDefault', 'lowStockThreshold',
           'createdAt', 'updatedAt', 'openBottleLevel', 'brand'
         ];
         let validLevels = ['full', 'three-quarter', 'half', 'quarter', 'empty'];
+        let validRestockUnits = ['bottle', 'can', 'box', 'bag', 'pack', 'each'];
 
         return data.keys().hasAll(required)
             && data.keys().hasOnly(allowed)
             && data.type == 'consumable'
             && data.unit in ['oz', 'ml', 'dash', 'each', 'splash']
             && data.trackingType in ['volume', 'quantity']
+            && data.restockUnit in validRestockUnits
             && data.stock is int && data.stock >= 0
             && data.bottleSize is number && data.bottleSize >= 0
             && data.bottleSizeUnit in ['ml', 'oz']
