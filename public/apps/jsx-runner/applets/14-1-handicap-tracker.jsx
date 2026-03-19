@@ -231,7 +231,8 @@ return (
       <button
         key={v}
         style={view === v ? { ...styles.navBtn, ...styles.navBtnActive } : hoveredNav === v ? { ...styles.navBtn, ...styles.navBtnHover } : styles.navBtn}
-        onClick={e => { setView(v); e.currentTarget.blur(); }}
+        onClick={() => setView(v)}
+        onMouseDown={e => e.preventDefault()}
         onMouseEnter={() => setHoveredNav(v)}
         onMouseLeave={() => setHoveredNav(null)}
       >
@@ -298,7 +299,8 @@ return (
               <button
                 key={s.label}
                 style={newSeed === i ? { ...styles.seedBtn, ...styles.seedBtnActive } : hoveredSeed === i ? { ...styles.seedBtn, ...styles.seedBtnHover } : styles.seedBtn}
-                onClick={e => { setNewSeed(i); e.currentTarget.blur(); }}
+                onClick={() => setNewSeed(i)}
+                onMouseDown={e => e.preventDefault()}
                 onMouseEnter={() => setHoveredSeed(i)}
                 onMouseLeave={() => setHoveredSeed(null)}
               >
@@ -385,7 +387,8 @@ return (
                       <button
                         key={id}
                         style={winner === id ? { ...styles.winnerBtn, ...styles.winnerBtnActive } : hoveredWinner === id ? { ...styles.winnerBtn, ...styles.winnerBtnHover } : styles.winnerBtn}
-                        onClick={e => { setWinner(id); e.currentTarget.blur(); }}
+                        onClick={() => setWinner(id)}
+                        onMouseDown={e => e.preventDefault()}
                         onMouseEnter={() => setHoveredWinner(id)}
                         onMouseLeave={() => setHoveredWinner(null)}
                       >
