@@ -1,4 +1,4 @@
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 const ELO_D = 200;
 const ELO_K = 32;
@@ -36,12 +36,21 @@ const delta = Math.round(ELO_K * margin * (1 - E));
 return delta;
 }
 
-const STORAGE_KEY = "pool-handicap-data";
+function getDocRef(uid) {
+return firebase.firestore().collection("pool_handicap").doc(uid);
+}
 
 function App() {
 const [players, setPlayers] = useState([]);
 const [matches, setMatches] = useState([]);
 const [loaded, setLoaded] = useState(false);
+const [saving, setSaving] = useState(false);
+const [editingPlayerId, setEditingPlayerId] = useState(null);
+const [editName, setEditName] = useState("");
+const [editSeed, setEditSeed] = useState(2);
+const [editOriginalSeed, setEditOriginalSeed] = useState(2);
+const [hoveredEditSeed, setHoveredEditSeed] = useState(null);
+const mountedRef = useRef(true);
 
 const [view, setView] = useState("standings");
 const [newName, setNewName] = useState("");
@@ -56,21 +65,44 @@ const [hoveredSeed, setHoveredSeed] = useState(null);
 const [hoveredWinner, setHoveredWinner] = useState(null);
 
 useEffect(() => {
+mountedRef.current = true;
+let active = true;
+const unsub = firebase.auth().onAuthStateChanged(async user => {
+if (!user) { if (active) setLoaded(true); return; }
 try {
-const raw = localStorage.getItem(STORAGE_KEY);
-if (raw) {
-const data = JSON.parse(raw);
-setPlayers(data.players || []);
-setMatches(data.matches || []);
+const snap = await getDocRef(user.uid).get();
+if (active) {
+if (snap.exists) {
+const d = snap.data();
+setPlayers(d.players || []);
+setMatches(d.matches || []);
+} else {
+try {
+const legacyRaw = localStorage.getItem("pool-handicap-data");
+if (legacyRaw) {
+const legacy = JSON.parse(legacyRaw);
+const lp = Array.isArray(legacy.players) ? legacy.players : [];
+const lm = Array.isArray(legacy.matches) ? legacy.matches : [];
+setPlayers(lp);
+setMatches(lm);
+await getDocRef(user.uid).set({ players: lp, matches: lm.slice(0, 500) });
 }
-} catch (e) {}
-setLoaded(true);
+} catch (mErr) { console.error("Legacy migration error", mErr); }
+}
+}
+} catch (e) { console.error("Firestore load error", e); }
+if (active) setLoaded(true);
+});
+return () => { active = false; mountedRef.current = false; unsub(); };
 }, []);
 
 const persist = useCallback((p, m) => {
-try {
-localStorage.setItem(STORAGE_KEY, JSON.stringify({ players: p, matches: m }));
-} catch (e) {}
+const user = firebase.auth().currentUser;
+if (!user) return;
+if (mountedRef.current) setSaving(true);
+getDocRef(user.uid).set({ players: p, matches: m.slice(0, 500) })
+.catch(e => console.error("Firestore save error", e))
+.finally(() => { if (mountedRef.current) setSaving(false); });
 }, []);
 
 function addPlayer() {
@@ -94,6 +126,37 @@ persist(np, matches);
 function removePlayer(id) {
 const np = players.filter(p => p.id !== id);
 setPlayers(np);
+persist(np, matches);
+}
+
+function startEdit(p) {
+const seedIdx = SKILL_SEEDS.reduce((best, s, i) =>
+Math.abs(s.rating - p.rating) < Math.abs(SKILL_SEEDS[best].rating - p.rating) ? i : best, 0);
+setEditingPlayerId(p.id);
+setEditName(p.name);
+setEditSeed(seedIdx);
+setEditOriginalSeed(seedIdx);
+}
+
+function cancelEdit() {
+setEditingPlayerId(null);
+setEditName("");
+}
+
+function saveEdit(id) {
+if (!editName.trim()) return;
+if (players.find(p => p.id !== id && p.name.toLowerCase() === editName.trim().toLowerCase())) return;
+const seed = SKILL_SEEDS[editSeed];
+const seedChanged = editSeed !== editOriginalSeed;
+const np = players.map(p => p.id !== id ? p : {
+...p,
+name: editName.trim(),
+seedLabel: seed.label,
+...(seedChanged ? { rating: seed.rating, initialRating: seed.rating } : {}),
+});
+setPlayers(np);
+setEditingPlayerId(null);
+setEditName("");
 persist(np, matches);
 }
 
@@ -187,14 +250,18 @@ if (!loaded) return (
 
 return (
 <div style={styles.root}>
+<style>{`@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }`}</style>
 <div style={styles.header}>
 <div style={styles.headerInner}>
 <h1 style={styles.title}>14.1 HANDICAP</h1>
 <p style={styles.subtitle}>Variable Target System</p>
 </div>
+<div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+{saving && <span style={styles.savingDot} title="Saving…">●</span>}
 <button style={styles.infoBtn} onClick={() => setShowInfo(!showInfo)}>
 {showInfo ? "✕" : "?"}
 </button>
+</div>
 </div>
 
   {showInfo && (
@@ -341,11 +408,51 @@ return (
             <h3 style={styles.formTitle}>CURRENT PLAYERS</h3>
             {players.map(p => (
               <div key={p.id} style={styles.playerRow}>
-                <div>
-                  <span style={styles.playerRowName}>{p.name}</span>
-                  <span style={styles.playerRowSeed}>{ratingToLabel(p.rating)} seed</span>
-                </div>
-                <button style={styles.removeBtn} onClick={() => removePlayer(p.id)}>✕</button>
+                {editingPlayerId === p.id ? (
+                  <div style={{ flex: 1 }}>
+                    <input
+                      style={{ ...styles.input, marginBottom: 8 }}
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") saveEdit(p.id); if (e.key === "Escape") cancelEdit(); }}
+                      autoFocus
+                    />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, marginBottom: 8 }}>
+                      {SKILL_SEEDS.map((s, i) => (
+                        <button
+                          key={s.label}
+                          style={editSeed === i
+                            ? { ...styles.seedBtn, ...styles.seedBtnActive, padding: "6px 4px" }
+                            : hoveredEditSeed === i
+                            ? { ...styles.seedBtn, ...styles.seedBtnHover, padding: "6px 4px" }
+                            : { ...styles.seedBtn, padding: "6px 4px" }}
+                          onClick={() => setEditSeed(i)}
+                          onMouseDown={e => e.preventDefault()}
+                          onMouseEnter={() => setHoveredEditSeed(i)}
+                          onMouseLeave={() => setHoveredEditSeed(null)}
+                        >
+                          <span style={styles.seedBtnLabel}>{s.label}</span>
+                          <span style={styles.seedBtnTarget}>{ratingToTarget(s.rating)}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button style={{ ...styles.primaryBtn, marginTop: 0, flex: 1 }} onClick={() => saveEdit(p.id)}>SAVE</button>
+                      <button style={{ ...styles.dangerBtn, flex: 0.5 }} onClick={cancelEdit}>CANCEL</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <span style={styles.playerRowName}>{p.name}</span>
+                      <span style={styles.playerRowSeed}>{ratingToLabel(p.rating)} · {p.rating}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button style={styles.editBtn} onClick={() => startEdit(p)} aria-label="Edit player" title="Edit player">✎</button>
+                      <button style={styles.removeBtn} onClick={() => removePlayer(p.id)} aria-label="Remove player" title="Remove player">✕</button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -740,6 +847,14 @@ marginBottom: 6,
 },
 playerRowName: { fontSize: 13, fontWeight: 600 },
 playerRowSeed: { fontSize: 10, color: "#71717a", marginLeft: 8 },
+editBtn: {
+background: "transparent",
+border: "none",
+color: "#a78bfa",
+cursor: "pointer",
+fontSize: 14,
+padding: "4px 8px",
+},
 removeBtn: {
 background: "transparent",
 border: "none",
@@ -747,6 +862,11 @@ color: "#52525b",
 cursor: "pointer",
 fontSize: 14,
 padding: "4px 8px",
+},
+savingDot: {
+fontSize: 8,
+color: "#71717a",
+animation: "pulse 1s infinite",
 },
 matchPreview: {
 display: "flex",
