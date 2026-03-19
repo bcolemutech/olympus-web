@@ -46,6 +46,9 @@ const [matchB, setMatchB] = useState("");
 const [winner, setWinner] = useState("");
 const [loserScore, setLoserScore] = useState("");
 const [showInfo, setShowInfo] = useState(false);
+const [hoveredNav, setHoveredNav] = useState(null);
+const [hoveredSeed, setHoveredSeed] = useState(null);
+const [hoveredWinner, setHoveredWinner] = useState(null);
 
 useEffect(() => {
 try {
@@ -227,8 +230,10 @@ return (
     {["standings", "record", "players", "history"].map(v => (
       <button
         key={v}
-        style={view === v ? { ...styles.navBtn, ...styles.navBtnActive } : styles.navBtn}
+        style={view === v ? { ...styles.navBtn, ...styles.navBtnActive } : hoveredNav === v ? { ...styles.navBtn, ...styles.navBtnHover } : styles.navBtn}
         onClick={() => setView(v)}
+        onMouseEnter={() => setHoveredNav(v)}
+        onMouseLeave={() => setHoveredNav(null)}
       >
         {v.toUpperCase()}
       </button>
@@ -292,8 +297,10 @@ return (
             {SKILL_SEEDS.map((s, i) => (
               <button
                 key={s.label}
-                style={newSeed === i ? { ...styles.seedBtn, ...styles.seedBtnActive } : styles.seedBtn}
+                style={newSeed === i ? { ...styles.seedBtn, ...styles.seedBtnActive } : hoveredSeed === i ? { ...styles.seedBtn, ...styles.seedBtnHover } : styles.seedBtn}
                 onClick={() => setNewSeed(i)}
+                onMouseEnter={() => setHoveredSeed(i)}
+                onMouseLeave={() => setHoveredSeed(null)}
               >
                 <span style={styles.seedBtnLabel}>{s.label}</span>
                 <span style={styles.seedBtnDesc}>{s.desc}</span>
@@ -377,8 +384,10 @@ return (
                     return (
                       <button
                         key={id}
-                        style={winner === id ? { ...styles.winnerBtn, ...styles.winnerBtnActive } : styles.winnerBtn}
+                        style={winner === id ? { ...styles.winnerBtn, ...styles.winnerBtnActive } : hoveredWinner === id ? { ...styles.winnerBtn, ...styles.winnerBtnHover } : styles.winnerBtn}
                         onClick={() => setWinner(id)}
+                        onMouseEnter={() => setHoveredWinner(id)}
+                        onMouseLeave={() => setHoveredWinner(null)}
                       >
                         {p?.name}
                       </button>
@@ -573,7 +582,11 @@ fontSize: 11,
 letterSpacing: "0.08em",
 cursor: "pointer",
 fontFamily: "inherit",
-transition: "all 0.15s",
+transition: "color 0.15s, border-color 0.15s",
+outline: "none",
+},
+navBtnHover: {
+color: "#a1a1aa",
 },
 navBtnActive: {
 color: "#e4e4e7",
@@ -652,7 +665,12 @@ borderRadius: 6,
 padding: "10px 8px",
 cursor: "pointer",
 textAlign: "center",
-transition: "all 0.15s",
+transition: "background 0.15s, border-color 0.15s",
+outline: "none",
+},
+seedBtnHover: {
+borderColor: "#3f3f46",
+background: "#1c1c1f",
 },
 seedBtnActive: {
 borderColor: "#a78bfa",
@@ -733,6 +751,13 @@ fontSize: 13,
 cursor: "pointer",
 fontFamily: "inherit",
 fontWeight: 600,
+transition: "background 0.15s, border-color 0.15s, color 0.15s",
+outline: "none",
+},
+winnerBtnHover: {
+borderColor: "#52525b",
+background: "#1c1c1f",
+color: "#d4d4d8",
 },
 winnerBtnActive: {
 borderColor: "#4ade80",
