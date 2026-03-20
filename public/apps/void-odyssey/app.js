@@ -89,19 +89,8 @@
   }
 
   function _renderActiveGame(game) {
-    // HUD
-    var hud = document.getElementById('game-hud');
-    if (hud && game.ship) {
-      document.getElementById('hud-ship-name').textContent = game.ship.name || '—';
-      document.getElementById('hud-location').textContent = game.currentLocationName || '—';
-      document.getElementById('hud-turn').textContent = 'Turn ' + (game.turnCount || 0);
-      var hullPct =
-        game.ship.hullMax > 0
-          ? Math.round((game.ship.hull / game.ship.hullMax) * 100)
-          : game.ship.hull || 0;
-      document.getElementById('hud-hull').textContent = 'Hull ' + hullPct + '%';
-      document.getElementById('hud-fuel').textContent = 'Fuel ' + (game.ship.fuel || 0) + '%';
-    }
+    // HUD via module
+    VO.renderHud(game);
 
     // Load last narrative entry from Firestore
     VO.state.db
@@ -114,32 +103,17 @@
       .then(function (snapshot) {
         if (snapshot.empty) return;
         var entry = snapshot.docs[0].data();
-        _renderNarrative(entry.narrative, entry.availableActions || []);
+        VO.renderNarrativeEntry(
+          entry.narrative,
+          entry.availableActions || [],
+          entry.mood || 'calm',
+          VO.handleActionClick,
+          VO.handleFreeformSubmit
+        );
       })
       .catch(function (err) {
         console.error('Failed to load narrative:', err);
       });
-  }
-
-  function _renderNarrative(narrative, actions) {
-    var panel = document.getElementById('narrative-content');
-    if (panel) {
-      panel.innerHTML = '<p class="narrative-text">' + _escNarrative(narrative) + '</p>';
-    }
-
-    var actionsContainer = document.getElementById('action-buttons');
-    if (actionsContainer) {
-      actionsContainer.innerHTML = '';
-      (actions || []).forEach(function (action) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'action-btn';
-        btn.textContent = action.label;
-        btn.dataset.id = action.id;
-        btn.title = 'Full turn execution available in Phase 2';
-        actionsContainer.appendChild(btn);
-      });
-    }
   }
 
   // ── Init ───────────────────────────────────────────────────
@@ -244,18 +218,27 @@
       VO.state.currentGame = game;
       _origShowView('game-active');
 
-      // Populate HUD
-      var hud = document.getElementById('game-hud');
-      if (hud && game.ship) {
-        document.getElementById('hud-ship-name').textContent = game.ship.name || '—';
-        document.getElementById('hud-location').textContent = game.startingLocation || '—';
-        document.getElementById('hud-turn').textContent = 'Turn 0';
-        document.getElementById('hud-hull').textContent = 'Hull 100%';
-        document.getElementById('hud-fuel').textContent = 'Fuel 100%';
-      }
+      // Populate HUD — build a game-shaped object for renderHud
+      VO.renderHud({
+        ship: Object.assign(
+          { name: game.ship.name, class: game.ship.class },
+          VO.SHIP_CLASSES.find(function (s) {
+            return s.id === game.ship.class;
+          }).stats
+        ),
+        currentLocationName: game.startingLocation || '—',
+        turnCount: 0,
+        activeCrew: game.crew || [],
+      });
 
       // Render narrative from generated data
-      _renderNarrative(game.narrative, game.availableActions);
+      VO.renderNarrativeEntry(
+        game.narrative,
+        game.availableActions,
+        game.mood || 'calm',
+        VO.handleActionClick,
+        VO.handleFreeformSubmit
+      );
 
       // Refresh games list in background
       if (VO.state.currentUser) {
@@ -275,18 +258,5 @@
     var d = document.createElement('div');
     d.textContent = String(str);
     return d.innerHTML;
-  }
-
-  function _escNarrative(str) {
-    if (!str) return '';
-    return str
-      .split('\n\n')
-      .map(function (para) {
-        var d = document.createElement('div');
-        d.textContent = para.trim();
-        return d.innerHTML;
-      })
-      .filter(Boolean)
-      .join('</p><p class="narrative-text">');
   }
 })();

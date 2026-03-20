@@ -59,11 +59,39 @@
       <div id="view-game-active" class="hidden">
         <!-- HUD bar -->
         <div class="game-hud" id="game-hud">
-          <span class="hud-item">Ship: <span id="hud-ship-name">—</span></span>
-          <span class="hud-item">Location: <span id="hud-location">—</span></span>
-          <span class="hud-item"><span id="hud-turn">Turn 0</span></span>
-          <span class="hud-item"><span id="hud-hull">Hull —</span></span>
-          <span class="hud-item"><span id="hud-fuel">Fuel —</span></span>
+          <div class="hud-group">
+            <span class="hud-label">Ship</span>
+            <span class="hud-value" id="hud-ship-name">—</span>
+          </div>
+          <div class="hud-group">
+            <span class="hud-label">Location</span>
+            <span class="hud-value" id="hud-location">—</span>
+          </div>
+          <div class="hud-group hud-stat">
+            <span class="hud-label">Hull</span>
+            <div class="hud-progress"><div class="hud-progress-fill" id="hud-hull-bar"></div></div>
+            <span class="hud-value-sm" id="hud-hull-pct">—%</span>
+          </div>
+          <div class="hud-group hud-stat">
+            <span class="hud-label">Shields</span>
+            <div class="hud-progress">
+              <div class="hud-progress-fill" id="hud-shields-bar"></div>
+            </div>
+            <span class="hud-value-sm" id="hud-shields-pct">—%</span>
+          </div>
+          <div class="hud-group hud-stat">
+            <span class="hud-label">Fuel</span>
+            <div class="hud-progress"><div class="hud-progress-fill" id="hud-fuel-bar"></div></div>
+            <span class="hud-value-sm" id="hud-fuel-pct">—%</span>
+          </div>
+          <div class="hud-group">
+            <span class="hud-label">Crew</span>
+            <span class="hud-value-sm" id="hud-crew-count">—</span>
+          </div>
+          <div class="hud-group">
+            <span class="hud-label">Turn</span>
+            <span class="hud-value-sm" id="hud-turn-count">0</span>
+          </div>
         </div>
 
         <!-- Narrative panel -->
@@ -77,7 +105,16 @@
         <div class="action-panel">
           <p class="action-panel-label">What do you do?</p>
           <div class="action-buttons" id="action-buttons"></div>
-          <p class="action-panel-note">Full turn execution coming in Phase 2.</p>
+          <div class="freeform-input-row hidden" id="freeform-input-row">
+            <input
+              type="text"
+              class="form-input freeform-input"
+              placeholder="Or type your own action…"
+              maxlength="500"
+              aria-label="Type your own action"
+            />
+            <button type="button" class="btn btn-primary btn-sm freeform-submit">Go</button>
+          </div>
         </div>
 
         <!-- Back to campaigns — wired in app.js -->
@@ -98,6 +135,9 @@
     <!-- App modules (load order per §12) -->
     <script src="/apps/void-odyssey/state.js"></script>
     <script src="/apps/void-odyssey/firestore.js"></script>
+    <script src="/apps/void-odyssey/hud.js"></script>
+    <script src="/apps/void-odyssey/narrative.js"></script>
+    <script src="/apps/void-odyssey/engine.js"></script>
     <script src="/apps/void-odyssey/game-create.js"></script>
     <script src="/apps/void-odyssey/app.js"></script>
   </body>

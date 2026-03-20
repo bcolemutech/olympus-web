@@ -509,6 +509,7 @@
 .game-hud {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem 1.5rem;
   padding: 0.75rem 1rem;
   background: rgba(255, 255, 255, 0.04);
@@ -518,13 +519,56 @@
   font-size: 0.85rem;
 }
 
-.hud-item {
-  color: #90a4ae;
+.hud-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
-.hud-item span {
+.hud-label {
+  color: #90a4ae;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hud-value {
   color: #e0e0e0;
   font-weight: 600;
+}
+
+.hud-value-sm {
+  color: #cfd8dc;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+/* ── HUD progress bars ──────────────────────────────────── */
+
+.hud-progress {
+  width: 60px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.hud-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.hud-bar-green {
+  background: #81c784;
+}
+
+.hud-bar-yellow {
+  background: #ffb74d;
+}
+
+.hud-bar-red {
+  background: #ef5350;
 }
 
 /* ── Narrative panel ─────────────────────────────────────── */
@@ -536,6 +580,37 @@
   padding: 1.5rem;
   margin-bottom: 1.25rem;
   min-height: 200px;
+  max-height: 60vh;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  transition: border-color 0.3s;
+}
+
+/* Mood-based narrative panel variations */
+.narrative-mood-tense {
+  border-color: rgba(255, 183, 77, 0.3);
+}
+
+.narrative-mood-danger {
+  border-color: rgba(239, 83, 80, 0.3);
+  background: rgba(239, 83, 80, 0.03);
+}
+
+.narrative-mood-wonder {
+  border-color: rgba(129, 199, 132, 0.3);
+}
+
+.narrative-mood-tense_curiosity {
+  border-color: rgba(255, 213, 79, 0.25);
+}
+
+.narrative-mood-wry {
+  border-color: rgba(176, 190, 197, 0.3);
+}
+
+.narrative-mood-reverent {
+  border-color: rgba(149, 117, 205, 0.3);
+  background: rgba(149, 117, 205, 0.02);
 }
 
 .narrative-text {
@@ -563,13 +638,6 @@
   margin-bottom: 0.6rem;
 }
 
-.action-panel-note {
-  font-size: 0.78rem;
-  color: #455a64;
-  margin-top: 0.5rem;
-  font-style: italic;
-}
-
 .action-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -590,10 +658,89 @@
   text-align: left;
 }
 
-.action-btn:hover {
+.action-btn:hover:not(:disabled) {
   border-color: rgba(255, 183, 77, 0.4);
   background: rgba(255, 183, 77, 0.07);
   color: #ffe0b2;
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Narrative loading ──────────────────────────────────── */
+
+.narrative-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 0;
+  gap: 1rem;
+}
+
+.narrative-loading-text {
+  color: #78909c;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* ── Narrative error ────────────────────────────────────── */
+
+.narrative-error {
+  text-align: center;
+  padding: 2rem;
+  color: #ef9a9a;
+}
+
+.narrative-error p {
+  margin-bottom: 1rem;
+}
+
+/* ── Freeform input ─────────────────────────────────────── */
+
+.freeform-input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.freeform-input-row .freeform-input {
+  flex: 1;
+}
+
+/* ── Rate limit notice ──────────────────────────────────── */
+
+.rate-limit-notice {
+  background: rgba(255, 183, 77, 0.08);
+  border: 1px solid rgba(255, 183, 77, 0.25);
+  border-radius: 8px;
+  padding: 1rem;
+  color: #ffb74d;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ── Toast notification ─────────────────────────────────── */
+
+.vo-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 183, 77, 0.95);
+  color: #0a0e1a;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 1000;
+  transition: opacity 0.4s;
+}
+
+.vo-toast-fade {
+  opacity: 0;
 }
 
 /* ── Mobile ──────────────────────────────────────────────── */

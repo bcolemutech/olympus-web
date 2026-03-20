@@ -367,6 +367,46 @@ exports.inviteUser = onCall(async (request) => {
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const VOID_ODYSSEY_MODEL = 'claude-sonnet-4-6';
 
+const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
+
+You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
+{
+  "narrative": string (150-250 words, second-person, continues the story based on the player's action),
+  "mood": string (one of: tense, calm, wonder, danger, tense_curiosity, wry, reverent),
+  "stateMutations": [
+    Allowed mutation types:
+    { "type": "ship_stat", "field": "hull"|"shields"|"fuel"|"cargo", "delta": number, "reason": string }
+    { "type": "crew_morale", "crewId": string, "value": "content"|"uneasy"|"fearful"|"inspired"|"defiant", "reason": string }
+    { "type": "add_item", "item": { "id": string, "name": string, "description": string, "tags": string[] } }
+    { "type": "remove_item", "itemId": string }
+    { "type": "location_discover", "location": { "id": string, "name": string, "type": "station"|"planet"|"moon"|"asteroid_field"|"derelict"|"anomaly", "description": string, "atmosphere": string } }
+    { "type": "quest_start", "quest": { "id": string, "title": string, "description": string } }
+    { "type": "quest_update", "questId": string, "status": "in_progress"|"completed"|"failed", "note": string }
+  ],
+  "availableActions": [
+    { "id": string, "label": string (max 8 words), "type": "dialogue"|"navigation"|"combat"|"investigation"|"freeform" }
+  ],
+  "newEntities": [
+    { "id": string, "type": "npc"|"ship"|"object", "name": string, "description": string, "tags": string[] }
+  ],
+  "summary": string (one sentence summary of what happened this turn)
+}
+
+Constraints:
+- Generate exactly 3-4 available actions (always include one with type "freeform" and label "Do something else...")
+- The narrative MUST continue from the current game state — do not contradict established facts
+- Honor the difficulty/tone setting in your narrative style and stat changes
+- Keep stat mutations reasonable: fuel should decrease by 1-5 per turn typically, combat causes 5-20 hull damage
+- Reference crew members and the captain by name when relevant
+- Do NOT generate mutations unless the action warrants them (e.g. dialogue rarely costs fuel)`;
+
+const VOID_ODYSSEY_RATE_LIMITS = {
+  HOURLY_SOFT: 15,
+  HOURLY_HARD: 25,
+  WEEKLY_SOFT: 150,
+  WEEKLY_HARD: 200,
+};
+
 const SHIP_CLASS_DEFAULTS = {
   light_freighter: {
     hull: 70,
@@ -405,6 +445,493 @@ const SHIP_CLASS_DEFAULTS = {
     cargoMax: 60,
   },
 };
+
+/**
+ * Checks rate limits for a game, resetting counters if windows have elapsed.
+ * Returns { allowed, warning, updatedRateLimits }.
+ */
+function checkRateLimits(gameDoc, isAdmin) {
+  const now = Date.now();
+  const rl = gameDoc.rateLimits || {};
+
+  let turnsThisHour = rl.turnsThisHour || 0;
+  let hourStart = rl.hourStartTimestamp || now;
+  let turnsThisWeek = rl.turnsThisWeek || 0;
+  let weekStart = rl.weekStartTimestamp || now;
+
+  // Reset hourly window
+  if (now - hourStart > 60 * 60 * 1000) {
+    turnsThisHour = 0;
+    hourStart = now;
+  }
+  // Reset weekly window
+  if (now - weekStart > 7 * 24 * 60 * 60 * 1000) {
+    turnsThisWeek = 0;
+    weekStart = now;
+  }
+
+  turnsThisHour++;
+  turnsThisWeek++;
+
+  const updatedRateLimits = {
+    turnsThisHour,
+    hourStartTimestamp: hourStart,
+    turnsThisWeek,
+    weekStartTimestamp: weekStart,
+  };
+
+  // Hard limits (admins bypass)
+  if (!isAdmin) {
+    if (turnsThisHour > VOID_ODYSSEY_RATE_LIMITS.HOURLY_HARD) {
+      return {
+        allowed: false,
+        warning: 'Hourly turn limit reached. Take a break and come back soon!',
+        updatedRateLimits,
+      };
+    }
+    if (turnsThisWeek > VOID_ODYSSEY_RATE_LIMITS.WEEKLY_HARD) {
+      return {
+        allowed: false,
+        warning: 'Weekly turn limit reached. Your odyssey continues next week!',
+        updatedRateLimits,
+      };
+    }
+  }
+
+  // Soft warnings
+  let warning = null;
+  if (turnsThisHour > VOID_ODYSSEY_RATE_LIMITS.HOURLY_SOFT) {
+    if (isAdmin) {
+      warning = `You've taken ${turnsThisHour} turns this hour. As an admin, hard limits are not enforced, but consider taking a break.`;
+    } else {
+      warning = `You've taken ${turnsThisHour} turns this hour. The void will close after ${VOID_ODYSSEY_RATE_LIMITS.HOURLY_HARD}.`;
+    }
+  } else if (turnsThisWeek > VOID_ODYSSEY_RATE_LIMITS.WEEKLY_SOFT) {
+    warning = `You've taken ${turnsThisWeek} turns this week. Weekly limit is ${VOID_ODYSSEY_RATE_LIMITS.WEEKLY_HARD}.`;
+  }
+
+  return { allowed: true, warning, updatedRateLimits };
+}
+
+/**
+ * Assembles context from Firestore for a turn prompt.
+ * Reads: last 5 narrative entries, active crew, current location.
+ */
+async function assembleContext(db, gameId, gameDoc) {
+  const gameRef = db.collection('void_odyssey_games').doc(gameId);
+
+  const [narrativeSnap, crewSnap, locationSnap] = await Promise.all([
+    gameRef.collection('narrative_log').orderBy('turnNumber', 'desc').limit(5).get(),
+    gameRef.collection('crew').where('status', '==', 'active').get(),
+    gameDoc.ship && gameDoc.ship.currentLocationId
+      ? gameRef.collection('locations').doc(gameDoc.ship.currentLocationId).get()
+      : Promise.resolve(null),
+  ]);
+
+  const recentHistory = [];
+  narrativeSnap.forEach((doc) => {
+    const d = doc.data();
+    recentHistory.push({
+      turnNumber: d.turnNumber,
+      summary: d.summary || '',
+      mood: d.mood || '',
+      playerAction: d.playerAction || {},
+    });
+  });
+  recentHistory.reverse(); // oldest first
+
+  const crew = [];
+  crewSnap.forEach((doc) => {
+    const d = doc.data();
+    crew.push({
+      id: d.id,
+      name: d.name,
+      role: d.role,
+      species: d.species || 'human',
+      morale: d.morale || 'content',
+      personality: d.personality || [],
+      backstory: (d.backstory || '').slice(0, 200),
+    });
+  });
+
+  const location =
+    locationSnap && locationSnap.exists
+      ? {
+          name: locationSnap.data().name,
+          type: locationSnap.data().type,
+          description: (locationSnap.data().description || '').slice(0, 300),
+          atmosphere: locationSnap.data().atmosphere || '',
+        }
+      : null;
+
+  return {
+    ship: {
+      name: gameDoc.ship.name,
+      class: gameDoc.ship.class,
+      hull: gameDoc.ship.hull,
+      hullMax: gameDoc.ship.hullMax,
+      shields: gameDoc.ship.shields,
+      shieldsMax: gameDoc.ship.shieldsMax,
+      fuel: gameDoc.ship.fuel,
+      cargo: gameDoc.ship.cargo,
+      cargoMax: gameDoc.ship.cargoMax,
+    },
+    player: {
+      name: gameDoc.player.name,
+      traits: gameDoc.player.traits || [],
+    },
+    difficulty: gameDoc.difficulty || 'frontier_explorer',
+    location,
+    crew,
+    recentHistory,
+    activeQuests: gameDoc.activeQuests || [],
+    turnCount: gameDoc.turnCount || 0,
+  };
+}
+
+/**
+ * Clamps a value to [min, max].
+ */
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
+
+/**
+ * voidOdysseyTurn — executes a single turn in a Void Odyssey campaign.
+ *
+ * Data: { gameId: string, playerAction: { type, actionId, input } }
+ * Returns: { narrative, mood, availableActions, shipStatus, turnCount, locationName, crewCount, rateLimitWarning }
+ */
+exports.voidOdysseyTurn = onCall({ secrets: [anthropicApiKey] }, async (request) => {
+  // ── Auth + claim check ─────────────────────────────────────
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('void-odyssey')) {
+    throw new HttpsError('permission-denied', "You don't have access to Void Odyssey.");
+  }
+  const isAdmin = !!request.auth.token.admin;
+
+  // ── Input validation ───────────────────────────────────────
+  const { gameId, playerAction } = request.data || {};
+
+  if (typeof gameId !== 'string' || gameId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'gameId is required.');
+  }
+
+  if (!playerAction || typeof playerAction !== 'object') {
+    throw new HttpsError('invalid-argument', 'playerAction is required.');
+  }
+
+  const validActionTypes = ['dialogue', 'navigation', 'combat', 'investigation', 'freeform'];
+  if (!validActionTypes.includes(playerAction.type)) {
+    throw new HttpsError('invalid-argument', 'Invalid action type.');
+  }
+  if (typeof playerAction.input !== 'string' || playerAction.input.length === 0) {
+    throw new HttpsError('invalid-argument', 'Action input is required.');
+  }
+  if (playerAction.input.length > 500) {
+    throw new HttpsError('invalid-argument', 'Action input must be 500 characters or fewer.');
+  }
+
+  if (playerAction.actionId !== undefined && playerAction.actionId !== null) {
+    if (typeof playerAction.actionId !== 'string') {
+      throw new HttpsError('invalid-argument', 'actionId, if provided, must be a string.');
+    }
+    const trimmedActionId = playerAction.actionId.trim();
+    if (trimmedActionId.length === 0) {
+      throw new HttpsError(
+        'invalid-argument',
+        'actionId, if provided, must be a non-empty string.'
+      );
+    }
+    if (trimmedActionId.length > 100) {
+      throw new HttpsError('invalid-argument', 'actionId must be 100 characters or fewer.');
+    }
+    playerAction.actionId = trimmedActionId;
+  }
+
+  // ── Load game doc ──────────────────────────────────────────
+  const db = getFirestore();
+  const gameRef = db.collection('void_odyssey_games').doc(gameId.trim());
+  const gameSnap = await gameRef.get();
+
+  if (!gameSnap.exists) {
+    throw new HttpsError('not-found', 'Game not found.');
+  }
+
+  const gameDoc = gameSnap.data();
+
+  if (gameDoc.userId !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'This is not your game.');
+  }
+  if (gameDoc.status !== 'active') {
+    throw new HttpsError('failed-precondition', 'This game is no longer active.');
+  }
+
+  // ── Rate limit check ──────────────────────────────────────
+  const rateLimitResult = checkRateLimits(gameDoc, isAdmin);
+  if (!rateLimitResult.allowed) {
+    return { limitReached: true, message: rateLimitResult.warning };
+  }
+
+  // ── Context assembly ───────────────────────────────────────
+  const context = await assembleContext(db, gameId.trim(), gameDoc);
+
+  // ── Build Claude prompt ────────────────────────────────────
+  const userMessage = `Current game state:
+${JSON.stringify(context, null, 2)}
+
+Player action:
+Type: ${playerAction.type}
+Action: ${playerAction.actionId || 'custom'}
+Input: ${playerAction.input}
+
+Generate the next narrative beat, state mutations, and available actions.`;
+
+  // ── Call Claude API ────────────────────────────────────────
+  const apiKey = anthropicApiKey.value();
+  if (!apiKey) {
+    console.error('ANTHROPIC_API_KEY secret is empty');
+    throw new HttpsError('internal', 'Game service is not configured.');
+  }
+
+  let claudeResponse;
+  try {
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: VOID_ODYSSEY_MODEL,
+        max_tokens: 1500,
+        system: VOID_ODYSSEY_TURN_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json();
+      console.error('Anthropic API error:', response.status, body);
+      throw new HttpsError('internal', 'Failed to generate narrative. Please try again.');
+    }
+
+    const body = await response.json();
+    const rawText = body.content && body.content[0] && body.content[0].text;
+    if (!rawText) {
+      throw new HttpsError('internal', 'Empty response from AI.');
+    }
+
+    const cleanedText = rawText
+      .trim()
+      .replace(/^\s*```(?:\s*json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '');
+    claudeResponse = JSON.parse(cleanedText);
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error('Claude API or parse error:', err);
+    throw new HttpsError('internal', 'Failed to generate narrative. Please try again.');
+  }
+
+  // ── Validate response fields ───────────────────────────────
+  if (!claudeResponse.narrative || typeof claudeResponse.narrative !== 'string') {
+    throw new HttpsError('internal', 'Invalid narrative response. Please try again.');
+  }
+  // Cap narrative length
+  if (claudeResponse.narrative.length > 5000) {
+    claudeResponse.narrative = claudeResponse.narrative.slice(0, 5000);
+  }
+
+  // Validate mood against known enum
+  const VALID_MOODS = ['tense', 'calm', 'wonder', 'danger', 'tense_curiosity', 'wry', 'reverent'];
+  claudeResponse.mood =
+    typeof claudeResponse.mood === 'string' && VALID_MOODS.includes(claudeResponse.mood)
+      ? claudeResponse.mood
+      : 'calm';
+
+  // Validate stateMutations
+  claudeResponse.stateMutations = Array.isArray(claudeResponse.stateMutations)
+    ? claudeResponse.stateMutations.slice(0, 20)
+    : [];
+
+  // Validate availableActions — ensure 3-4, always include freeform
+  const VALID_ACTION_TYPES = ['dialogue', 'navigation', 'combat', 'investigation', 'freeform'];
+  claudeResponse.availableActions = Array.isArray(claudeResponse.availableActions)
+    ? claudeResponse.availableActions
+        .filter(
+          (a) =>
+            a &&
+            typeof a.id === 'string' &&
+            a.id.length > 0 &&
+            a.id.length <= 100 &&
+            typeof a.label === 'string' &&
+            a.label.length > 0 &&
+            a.label.length <= 100 &&
+            VALID_ACTION_TYPES.includes(a.type)
+        )
+        .slice(0, 5)
+    : [];
+  // Ensure at least one freeform action exists
+  if (!claudeResponse.availableActions.some((a) => a.type === 'freeform')) {
+    claudeResponse.availableActions.push({
+      id: 'freeform_fallback',
+      label: 'Do something else...',
+      type: 'freeform',
+    });
+  }
+
+  // Validate newEntities
+  claudeResponse.newEntities = Array.isArray(claudeResponse.newEntities)
+    ? claudeResponse.newEntities
+        .filter((e) => e && typeof e.id === 'string' && e.id.length > 0 && e.id.length <= 100)
+        .slice(0, 10)
+    : [];
+
+  // Cap summary length
+  claudeResponse.summary =
+    typeof claudeResponse.summary === 'string' ? claudeResponse.summary.slice(0, 500) : '';
+
+  // ── Apply mutations and persist via transaction ────────────
+  const txResult = await db.runTransaction(async (tx) => {
+    const freshSnap = await tx.get(gameRef);
+    if (!freshSnap.exists) {
+      throw new HttpsError('not-found', 'Game not found.');
+    }
+    const freshGame = freshSnap.data();
+    const ship = { ...freshGame.ship };
+    let currentLocationName = freshGame.currentLocationName || '';
+    const validatedMutations = [];
+
+    for (const mut of claudeResponse.stateMutations) {
+      if (mut.type === 'ship_stat') {
+        const field = mut.field;
+        const delta = Number(mut.delta) || 0;
+        if (field === 'hull') {
+          ship.hull = clamp((ship.hull || 0) + delta, 0, ship.hullMax || 100);
+          validatedMutations.push(mut);
+        } else if (field === 'shields') {
+          ship.shields = clamp((ship.shields || 0) + delta, 0, ship.shieldsMax || 100);
+          validatedMutations.push(mut);
+        } else if (field === 'fuel') {
+          ship.fuel = clamp((ship.fuel || 0) + delta, 0, 100);
+          validatedMutations.push(mut);
+        } else if (field === 'cargo') {
+          ship.cargo = clamp((ship.cargo || 0) + delta, 0, ship.cargoMax || 100);
+          validatedMutations.push(mut);
+        }
+      } else {
+        validatedMutations.push(mut);
+      }
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const newTurnCount = (freshGame.turnCount || 0) + 1;
+
+    // Update game doc
+    const gameUpdate = {
+      turnCount: newTurnCount,
+      updatedAt: now,
+      'ship.hull': ship.hull,
+      'ship.shields': ship.shields,
+      'ship.fuel': ship.fuel,
+      'ship.cargo': ship.cargo,
+      rateLimits: rateLimitResult.updatedRateLimits,
+    };
+
+    // Process location discoveries
+    for (const mut of validatedMutations) {
+      if (mut.type === 'location_discover' && mut.location) {
+        const locRef = gameRef
+          .collection('locations')
+          .doc(mut.location.id || `loc_${newTurnCount}`);
+        tx.set(locRef, {
+          id: locRef.id,
+          name: (mut.location.name || 'Unknown').slice(0, 200),
+          type: mut.location.type || 'unknown',
+          description: (mut.location.description || '').slice(0, 1000),
+          atmosphere: (mut.location.atmosphere || '').slice(0, 200),
+          discovered: true,
+          visitCount: 0,
+          firstVisitedTurn: newTurnCount,
+          tags: [mut.location.type || 'unknown'],
+          createdAt: now,
+          updatedAt: now,
+        });
+      } else if (mut.type === 'crew_morale' && mut.crewId) {
+        const crewRef = gameRef.collection('crew').doc(mut.crewId);
+        tx.update(crewRef, { morale: mut.value || 'content', updatedAt: now });
+      }
+    }
+
+    // Check for navigation — update location
+    const navAction = validatedMutations.find(
+      (m) => m.type === 'location_discover' && m.location && m.location.name
+    );
+    if (playerAction.type === 'navigation' && navAction) {
+      const newLocId = navAction.location.id || `loc_${newTurnCount}`;
+      gameUpdate['ship.currentLocationId'] = newLocId;
+      gameUpdate.currentLocationName = navAction.location.name;
+      currentLocationName = navAction.location.name;
+    }
+
+    tx.update(gameRef, gameUpdate);
+
+    // Narrative log entry — cap field sizes to avoid exceeding Firestore limits
+    const narrativeLogRef = gameRef.collection('narrative_log').doc();
+    const cappedMutations = validatedMutations.slice(0, 20);
+    const cappedEntityIds = claudeResponse.newEntities
+      .map((e) => e.id)
+      .filter((id) => typeof id === 'string' && id.length > 0)
+      .slice(0, 10);
+    const cappedActions = claudeResponse.availableActions.slice(0, 5);
+
+    tx.set(narrativeLogRef, {
+      id: narrativeLogRef.id,
+      turnNumber: newTurnCount,
+      timestamp: now,
+      playerAction: {
+        type: playerAction.type,
+        actionId: playerAction.actionId || null,
+        input: playerAction.input,
+      },
+      narrative: claudeResponse.narrative,
+      mood: claudeResponse.mood,
+      stateMutations: cappedMutations,
+      newEntityIds: cappedEntityIds,
+      locationId: ship.currentLocationId || '',
+      summary: claudeResponse.summary,
+      tags: [playerAction.type, claudeResponse.mood],
+      availableActions: cappedActions,
+    });
+
+    return { ship, currentLocationName, newTurnCount, validatedMutations };
+  });
+
+  // ── Compute crew count ─────────────────────────────────────
+  const crewSnap = await gameRef.collection('crew').where('status', '==', 'active').get();
+
+  // ── Return to client ───────────────────────────────────────
+  return {
+    narrative: claudeResponse.narrative,
+    mood: claudeResponse.mood,
+    availableActions: claudeResponse.availableActions,
+    shipStatus: {
+      hull: txResult.ship.hull,
+      hullMax: txResult.ship.hullMax,
+      shields: txResult.ship.shields,
+      shieldsMax: txResult.ship.shieldsMax,
+      fuel: txResult.ship.fuel,
+    },
+    turnCount: txResult.newTurnCount,
+    locationName: txResult.currentLocationName,
+    crewCount: crewSnap.size,
+    rateLimitWarning: rateLimitResult.warning || null,
+  };
+});
 
 /**
  * voidOdysseyNewGame — creates a new Void Odyssey campaign.
