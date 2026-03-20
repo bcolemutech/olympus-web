@@ -587,9 +587,9 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     }
 
     const cleanedText = rawText
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/\s*```$/, '')
-      .trim();
+      .trim()
+      .replace(/^\s*```(?:\s*json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '');
     claudeResponse = JSON.parse(cleanedText);
   } catch (err) {
     if (err instanceof HttpsError) throw err;
