@@ -39,8 +39,15 @@
     if (turnCount) turnCount.textContent = game.turnCount || 0;
 
     var crewCount = document.getElementById('hud-crew-count');
-    if (crewCount)
-      crewCount.textContent = game.crewCount || game.activeCrew ? game.activeCrew.length : '—';
+    if (crewCount) {
+      var countText = '—';
+      if (game.crewCount != null) {
+        countText = game.crewCount;
+      } else if (Array.isArray(game.activeCrew)) {
+        countText = game.activeCrew.length;
+      }
+      crewCount.textContent = countText;
+    }
 
     _setPct('hud-hull-bar', 'hud-hull-pct', ship.hull || 0, ship.hullMax || 100);
     _setPct('hud-shields-bar', 'hud-shields-pct', ship.shields || 0, ship.shieldsMax || 100);

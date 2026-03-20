@@ -501,7 +501,11 @@ function checkRateLimits(gameDoc, isAdmin) {
   // Soft warnings
   let warning = null;
   if (turnsThisHour > VOID_ODYSSEY_RATE_LIMITS.HOURLY_SOFT) {
-    warning = `You've taken ${turnsThisHour} turns this hour. The void will close after ${VOID_ODYSSEY_RATE_LIMITS.HOURLY_HARD}.`;
+    if (isAdmin) {
+      warning = `You've taken ${turnsThisHour} turns this hour. As an admin, hard limits are not enforced, but consider taking a break.`;
+    } else {
+      warning = `You've taken ${turnsThisHour} turns this hour. The void will close after ${VOID_ODYSSEY_RATE_LIMITS.HOURLY_HARD}.`;
+    }
   } else if (turnsThisWeek > VOID_ODYSSEY_RATE_LIMITS.WEEKLY_SOFT) {
     warning = `You've taken ${turnsThisWeek} turns this week. Weekly limit is ${VOID_ODYSSEY_RATE_LIMITS.WEEKLY_HARD}.`;
   }
@@ -631,6 +635,23 @@ exports.voidOdysseyTurn = onCall({ secrets: [anthropicApiKey] }, async (request)
     throw new HttpsError('invalid-argument', 'Action input must be 500 characters or fewer.');
   }
 
+  if (playerAction.actionId !== undefined && playerAction.actionId !== null) {
+    if (typeof playerAction.actionId !== 'string') {
+      throw new HttpsError('invalid-argument', 'actionId, if provided, must be a string.');
+    }
+    const trimmedActionId = playerAction.actionId.trim();
+    if (trimmedActionId.length === 0) {
+      throw new HttpsError(
+        'invalid-argument',
+        'actionId, if provided, must be a non-empty string.'
+      );
+    }
+    if (trimmedActionId.length > 100) {
+      throw new HttpsError('invalid-argument', 'actionId must be 100 characters or fewer.');
+    }
+    playerAction.actionId = trimmedActionId;
+  }
+
   // ── Load game doc ──────────────────────────────────────────
   const db = getFirestore();
   const gameRef = db.collection('void_odyssey_games').doc(gameId.trim());
@@ -720,119 +741,175 @@ Generate the next narrative beat, state mutations, and available actions.`;
   if (!claudeResponse.narrative || typeof claudeResponse.narrative !== 'string') {
     throw new HttpsError('internal', 'Invalid narrative response. Please try again.');
   }
-  claudeResponse.mood = claudeResponse.mood || 'calm';
+  // Cap narrative length
+  if (claudeResponse.narrative.length > 5000) {
+    claudeResponse.narrative = claudeResponse.narrative.slice(0, 5000);
+  }
+
+  // Validate mood against known enum
+  const VALID_MOODS = ['tense', 'calm', 'wonder', 'danger', 'tense_curiosity', 'wry', 'reverent'];
+  claudeResponse.mood =
+    typeof claudeResponse.mood === 'string' && VALID_MOODS.includes(claudeResponse.mood)
+      ? claudeResponse.mood
+      : 'calm';
+
+  // Validate stateMutations
   claudeResponse.stateMutations = Array.isArray(claudeResponse.stateMutations)
-    ? claudeResponse.stateMutations
+    ? claudeResponse.stateMutations.slice(0, 20)
     : [];
+
+  // Validate availableActions — ensure 3-4, always include freeform
+  const VALID_ACTION_TYPES = ['dialogue', 'navigation', 'combat', 'investigation', 'freeform'];
   claudeResponse.availableActions = Array.isArray(claudeResponse.availableActions)
     ? claudeResponse.availableActions
+        .filter(
+          (a) =>
+            a &&
+            typeof a.id === 'string' &&
+            a.id.length > 0 &&
+            a.id.length <= 100 &&
+            typeof a.label === 'string' &&
+            a.label.length > 0 &&
+            a.label.length <= 100 &&
+            VALID_ACTION_TYPES.includes(a.type)
+        )
+        .slice(0, 5)
     : [];
+  // Ensure at least one freeform action exists
+  if (!claudeResponse.availableActions.some((a) => a.type === 'freeform')) {
+    claudeResponse.availableActions.push({
+      id: 'freeform_fallback',
+      label: 'Do something else...',
+      type: 'freeform',
+    });
+  }
+
+  // Validate newEntities
   claudeResponse.newEntities = Array.isArray(claudeResponse.newEntities)
     ? claudeResponse.newEntities
+        .filter((e) => e && typeof e.id === 'string' && e.id.length > 0 && e.id.length <= 100)
+        .slice(0, 10)
     : [];
-  claudeResponse.summary = claudeResponse.summary || '';
 
-  // ── Sanity-check and apply mutations ───────────────────────
-  const ship = { ...gameDoc.ship };
-  let currentLocationName = gameDoc.currentLocationName || '';
-  const validatedMutations = [];
+  // Cap summary length
+  claudeResponse.summary =
+    typeof claudeResponse.summary === 'string' ? claudeResponse.summary.slice(0, 500) : '';
 
-  for (const mut of claudeResponse.stateMutations) {
-    if (mut.type === 'ship_stat') {
-      const field = mut.field;
-      const delta = Number(mut.delta) || 0;
-      if (field === 'hull') {
-        ship.hull = clamp((ship.hull || 0) + delta, 0, ship.hullMax || 100);
-        validatedMutations.push(mut);
-      } else if (field === 'shields') {
-        ship.shields = clamp((ship.shields || 0) + delta, 0, ship.shieldsMax || 100);
-        validatedMutations.push(mut);
-      } else if (field === 'fuel') {
-        ship.fuel = clamp((ship.fuel || 0) + delta, 0, 100);
-        validatedMutations.push(mut);
-      } else if (field === 'cargo') {
-        ship.cargo = clamp((ship.cargo || 0) + delta, 0, ship.cargoMax || 100);
+  // ── Apply mutations and persist via transaction ────────────
+  const txResult = await db.runTransaction(async (tx) => {
+    const freshSnap = await tx.get(gameRef);
+    if (!freshSnap.exists) {
+      throw new HttpsError('not-found', 'Game not found.');
+    }
+    const freshGame = freshSnap.data();
+    const ship = { ...freshGame.ship };
+    let currentLocationName = freshGame.currentLocationName || '';
+    const validatedMutations = [];
+
+    for (const mut of claudeResponse.stateMutations) {
+      if (mut.type === 'ship_stat') {
+        const field = mut.field;
+        const delta = Number(mut.delta) || 0;
+        if (field === 'hull') {
+          ship.hull = clamp((ship.hull || 0) + delta, 0, ship.hullMax || 100);
+          validatedMutations.push(mut);
+        } else if (field === 'shields') {
+          ship.shields = clamp((ship.shields || 0) + delta, 0, ship.shieldsMax || 100);
+          validatedMutations.push(mut);
+        } else if (field === 'fuel') {
+          ship.fuel = clamp((ship.fuel || 0) + delta, 0, 100);
+          validatedMutations.push(mut);
+        } else if (field === 'cargo') {
+          ship.cargo = clamp((ship.cargo || 0) + delta, 0, ship.cargoMax || 100);
+          validatedMutations.push(mut);
+        }
+      } else {
         validatedMutations.push(mut);
       }
-    } else {
-      validatedMutations.push(mut);
     }
-  }
 
-  // ── Batch-write to Firestore ───────────────────────────────
-  const batch = db.batch();
-  const now = FieldValue.serverTimestamp();
-  const newTurnCount = (gameDoc.turnCount || 0) + 1;
+    const now = FieldValue.serverTimestamp();
+    const newTurnCount = (freshGame.turnCount || 0) + 1;
 
-  // Update game doc
-  const gameUpdate = {
-    turnCount: newTurnCount,
-    updatedAt: now,
-    'ship.hull': ship.hull,
-    'ship.shields': ship.shields,
-    'ship.fuel': ship.fuel,
-    'ship.cargo': ship.cargo,
-    rateLimits: rateLimitResult.updatedRateLimits,
-  };
+    // Update game doc
+    const gameUpdate = {
+      turnCount: newTurnCount,
+      updatedAt: now,
+      'ship.hull': ship.hull,
+      'ship.shields': ship.shields,
+      'ship.fuel': ship.fuel,
+      'ship.cargo': ship.cargo,
+      rateLimits: rateLimitResult.updatedRateLimits,
+    };
 
-  // Process location discoveries
-  for (const mut of validatedMutations) {
-    if (mut.type === 'location_discover' && mut.location) {
-      const locRef = gameRef.collection('locations').doc(mut.location.id || `loc_${newTurnCount}`);
-      batch.set(locRef, {
-        id: locRef.id,
-        name: mut.location.name || 'Unknown',
-        type: mut.location.type || 'unknown',
-        description: mut.location.description || '',
-        atmosphere: mut.location.atmosphere || '',
-        discovered: true,
-        visitCount: 0,
-        firstVisitedTurn: newTurnCount,
-        tags: [mut.location.type || 'unknown'],
-        createdAt: now,
-        updatedAt: now,
-      });
-    } else if (mut.type === 'crew_morale' && mut.crewId) {
-      const crewRef = gameRef.collection('crew').doc(mut.crewId);
-      batch.update(crewRef, { morale: mut.value || 'content', updatedAt: now });
+    // Process location discoveries
+    for (const mut of validatedMutations) {
+      if (mut.type === 'location_discover' && mut.location) {
+        const locRef = gameRef
+          .collection('locations')
+          .doc(mut.location.id || `loc_${newTurnCount}`);
+        tx.set(locRef, {
+          id: locRef.id,
+          name: (mut.location.name || 'Unknown').slice(0, 200),
+          type: mut.location.type || 'unknown',
+          description: (mut.location.description || '').slice(0, 1000),
+          atmosphere: (mut.location.atmosphere || '').slice(0, 200),
+          discovered: true,
+          visitCount: 0,
+          firstVisitedTurn: newTurnCount,
+          tags: [mut.location.type || 'unknown'],
+          createdAt: now,
+          updatedAt: now,
+        });
+      } else if (mut.type === 'crew_morale' && mut.crewId) {
+        const crewRef = gameRef.collection('crew').doc(mut.crewId);
+        tx.update(crewRef, { morale: mut.value || 'content', updatedAt: now });
+      }
     }
-  }
 
-  // Check for navigation — update location
-  const navAction = validatedMutations.find(
-    (m) => m.type === 'location_discover' && m.location && m.location.name
-  );
-  if (playerAction.type === 'navigation' && navAction) {
-    const newLocId = navAction.location.id || `loc_${newTurnCount}`;
-    gameUpdate['ship.currentLocationId'] = newLocId;
-    gameUpdate.currentLocationName = navAction.location.name;
-    currentLocationName = navAction.location.name;
-  }
+    // Check for navigation — update location
+    const navAction = validatedMutations.find(
+      (m) => m.type === 'location_discover' && m.location && m.location.name
+    );
+    if (playerAction.type === 'navigation' && navAction) {
+      const newLocId = navAction.location.id || `loc_${newTurnCount}`;
+      gameUpdate['ship.currentLocationId'] = newLocId;
+      gameUpdate.currentLocationName = navAction.location.name;
+      currentLocationName = navAction.location.name;
+    }
 
-  batch.update(gameRef, gameUpdate);
+    tx.update(gameRef, gameUpdate);
 
-  // Narrative log entry
-  const narrativeLogRef = gameRef.collection('narrative_log').doc();
-  batch.set(narrativeLogRef, {
-    id: narrativeLogRef.id,
-    turnNumber: newTurnCount,
-    timestamp: now,
-    playerAction: {
-      type: playerAction.type,
-      actionId: playerAction.actionId || null,
-      input: playerAction.input,
-    },
-    narrative: claudeResponse.narrative,
-    mood: claudeResponse.mood,
-    stateMutations: validatedMutations,
-    newEntityIds: claudeResponse.newEntities.map((e) => e.id),
-    locationId: ship.currentLocationId || '',
-    summary: claudeResponse.summary,
-    tags: [playerAction.type, claudeResponse.mood],
-    availableActions: claudeResponse.availableActions,
+    // Narrative log entry — cap field sizes to avoid exceeding Firestore limits
+    const narrativeLogRef = gameRef.collection('narrative_log').doc();
+    const cappedMutations = validatedMutations.slice(0, 20);
+    const cappedEntityIds = claudeResponse.newEntities
+      .map((e) => e.id)
+      .filter((id) => typeof id === 'string' && id.length > 0)
+      .slice(0, 10);
+    const cappedActions = claudeResponse.availableActions.slice(0, 5);
+
+    tx.set(narrativeLogRef, {
+      id: narrativeLogRef.id,
+      turnNumber: newTurnCount,
+      timestamp: now,
+      playerAction: {
+        type: playerAction.type,
+        actionId: playerAction.actionId || null,
+        input: playerAction.input,
+      },
+      narrative: claudeResponse.narrative,
+      mood: claudeResponse.mood,
+      stateMutations: cappedMutations,
+      newEntityIds: cappedEntityIds,
+      locationId: ship.currentLocationId || '',
+      summary: claudeResponse.summary,
+      tags: [playerAction.type, claudeResponse.mood],
+      availableActions: cappedActions,
+    });
+
+    return { ship, currentLocationName, newTurnCount, validatedMutations };
   });
-
-  await batch.commit();
 
   // ── Compute crew count ─────────────────────────────────────
   const crewSnap = await gameRef.collection('crew').where('status', '==', 'active').get();
@@ -843,14 +920,14 @@ Generate the next narrative beat, state mutations, and available actions.`;
     mood: claudeResponse.mood,
     availableActions: claudeResponse.availableActions,
     shipStatus: {
-      hull: ship.hull,
-      hullMax: ship.hullMax,
-      shields: ship.shields,
-      shieldsMax: ship.shieldsMax,
-      fuel: ship.fuel,
+      hull: txResult.ship.hull,
+      hullMax: txResult.ship.hullMax,
+      shields: txResult.ship.shields,
+      shieldsMax: txResult.ship.shieldsMax,
+      fuel: txResult.ship.fuel,
     },
-    turnCount: newTurnCount,
-    locationName: currentLocationName,
+    turnCount: txResult.newTurnCount,
+    locationName: txResult.currentLocationName,
     crewCount: crewSnap.size,
     rateLimitWarning: rateLimitResult.warning || null,
   };

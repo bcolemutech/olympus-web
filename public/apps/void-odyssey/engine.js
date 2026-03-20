@@ -29,7 +29,9 @@
 
         // Rate limit hard block
         if (data.limitReached) {
+          VO.showNarrativeError(data.message || 'Turn limit reached.', null);
           VO.showRateLimitNotice(data.message);
+          VO.setActionsEnabled(false);
           VO.state._turnInProgress = false;
           return;
         }
@@ -67,7 +69,12 @@
         if (err.code === 'unauthenticated') {
           message = 'Your session expired. Please refresh and sign in again.';
         } else if (err.code === 'resource-exhausted') {
-          VO.showRateLimitNotice('Turn limit reached. Please wait before trying again.');
+          var rateLimitMessage = 'Turn limit reached. Please wait before trying again.';
+          VO.showRateLimitNotice(rateLimitMessage);
+          VO.showNarrativeError(rateLimitMessage, function () {
+            VO.state._turnInProgress = false;
+          });
+          VO.setActionsEnabled(false);
           VO.state._turnInProgress = false;
           return;
         }

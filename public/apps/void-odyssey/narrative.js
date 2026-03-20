@@ -38,7 +38,13 @@
       // Remove old mood classes
       wrapper.className = wrapper.className.replace(/\bnarrative-mood-\S+/g, '').trim();
       if (mood) {
-        wrapper.classList.add('narrative-mood-' + mood);
+        var safeMood = String(mood)
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+        if (safeMood) {
+          wrapper.classList.add('narrative-mood-' + safeMood);
+        }
       }
       // Scroll to bottom
       wrapper.scrollTop = wrapper.scrollHeight;
