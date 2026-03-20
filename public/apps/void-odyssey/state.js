@@ -241,6 +241,8 @@
     // After Cloud Function returns (steps 4-5)
     generatedCrew: null,
     generatedGame: null,
+    // Turn execution lock
+    _turnInProgress: false,
   };
 
   // ── Lazy-cached DOM ref helper ─────────────────────────────
