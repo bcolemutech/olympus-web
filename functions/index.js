@@ -586,7 +586,11 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       throw new HttpsError('internal', 'Empty response from AI.');
     }
 
-    claudeResponse = JSON.parse(rawText);
+    const cleanedText = rawText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim();
+    claudeResponse = JSON.parse(cleanedText);
   } catch (err) {
     if (err instanceof HttpsError) throw err;
     console.error('Claude API or parse error:', err);
