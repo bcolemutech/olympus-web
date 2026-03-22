@@ -57,7 +57,7 @@
 
       <!-- ── Active game view ───────────────────────────────── -->
       <div id="view-game-active" class="hidden">
-        <!-- HUD bar -->
+        <!-- HUD bar (spans full width) -->
         <div class="game-hud" id="game-hud">
           <div class="hud-group">
             <span class="hud-label">Ship</span>
@@ -94,28 +94,50 @@
           </div>
         </div>
 
-        <!-- Narrative panel -->
-        <div class="narrative-panel">
-          <div id="narrative-content">
-            <p class="narrative-text">Loading narrative&hellip;</p>
+        <!-- Two-column layout: narrative + sidebar -->
+        <div class="game-active-layout">
+          <!-- Left column: narrative + actions -->
+          <div class="game-active-main">
+            <div class="narrative-panel">
+              <div id="narrative-content">
+                <p class="narrative-text">Loading narrative&hellip;</p>
+              </div>
+            </div>
+
+            <div class="action-panel">
+              <p class="action-panel-label">What do you do?</p>
+              <div class="action-buttons" id="action-buttons"></div>
+              <div class="freeform-input-row hidden" id="freeform-input-row">
+                <input
+                  type="text"
+                  class="form-input freeform-input"
+                  placeholder="Or type your own action…"
+                  maxlength="500"
+                  aria-label="Type your own action"
+                />
+                <button type="button" class="btn btn-primary btn-sm freeform-submit">Go</button>
+              </div>
+            </div>
           </div>
+
+          <!-- Right column: sidebar -->
+          <aside class="sidebar-panel" id="sidebar-panel">
+            <div class="sidebar-tabs" id="sidebar-tabs"></div>
+            <div class="sidebar-content" id="sidebar-content">
+              <p class="sidebar-placeholder">Loading&hellip;</p>
+            </div>
+          </aside>
         </div>
 
-        <!-- Action panel -->
-        <div class="action-panel">
-          <p class="action-panel-label">What do you do?</p>
-          <div class="action-buttons" id="action-buttons"></div>
-          <div class="freeform-input-row hidden" id="freeform-input-row">
-            <input
-              type="text"
-              class="form-input freeform-input"
-              placeholder="Or type your own action…"
-              maxlength="500"
-              aria-label="Type your own action"
-            />
-            <button type="button" class="btn btn-primary btn-sm freeform-submit">Go</button>
-          </div>
-        </div>
+        <!-- Mobile sidebar toggle -->
+        <button
+          type="button"
+          class="sidebar-sheet-toggle"
+          id="sidebar-sheet-toggle"
+          aria-label="Toggle sidebar"
+        >
+          &#9776; Game Info
+        </button>
 
         <!-- Back to campaigns — wired in app.js -->
         <button
@@ -124,7 +146,7 @@
           id="btn-back-to-campaigns"
           style="margin-top: 1rem"
         >
-          ← All Campaigns
+          &larr; All Campaigns
         </button>
       </div>
     </main>
@@ -136,6 +158,7 @@
     <script src="/apps/void-odyssey/state.js"></script>
     <script src="/apps/void-odyssey/firestore.js"></script>
     <script src="/apps/void-odyssey/hud.js"></script>
+    <script src="/apps/void-odyssey/sidebar.js"></script>
     <script src="/apps/void-odyssey/narrative.js"></script>
     <script src="/apps/void-odyssey/engine.js"></script>
     <script src="/apps/void-odyssey/game-create.js"></script>
