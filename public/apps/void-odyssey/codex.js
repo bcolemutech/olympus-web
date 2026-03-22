@@ -52,9 +52,15 @@
 
     container.innerHTML = '<p class="sidebar-placeholder">Loading codex&hellip;</p>';
 
-    VO.loadEntities(game.id).then(function (entities) {
-      _renderCodexList(container, entities);
-    });
+    VO.loadEntities(game.id)
+      .then(function (entities) {
+        _renderCodexList(container, entities);
+      })
+      .catch(function (err) {
+        console.error('Failed to load Codex entities:', err);
+        container.innerHTML =
+          '<p class="sidebar-placeholder">Unable to load codex entries. You may be offline or lack permission.</p>';
+      });
   };
 
   function _renderCodexList(container, entities) {
@@ -62,7 +68,7 @@
 
     // Search input
     html +=
-      '<input type="text" class="sidebar-search" id="codex-search" placeholder="Search by name or tag&hellip;" value="' +
+      '<input type="text" class="sidebar-search" id="codex-search" aria-label="Search codex by name or tag" placeholder="Search by name or tag&hellip;" value="' +
       _esc(_codexFilter.search) +
       '" />';
 
@@ -138,7 +144,7 @@
       var typeLabel = _entityTypeLabel(entity.type);
 
       html +=
-        '<div class="sidebar-card codex-entry-card" data-entity-idx="' +
+        '<div class="sidebar-card codex-entry-card" role="button" tabindex="0" data-entity-idx="' +
         i +
         '">' +
         '<div class="sidebar-card-name">' +
@@ -164,13 +170,20 @@
 
     results.innerHTML = html;
 
-    // Bind click handlers
+    // Bind click and keyboard handlers
     results.querySelectorAll('.codex-entry-card').forEach(function (card) {
-      card.addEventListener('click', function () {
+      function activate() {
         var idx = parseInt(card.dataset.entityIdx, 10);
         if (filtered[idx]) {
           var container = document.getElementById('sidebar-content');
           _renderEntityDetail(container, filtered[idx]);
+        }
+      }
+      card.addEventListener('click', activate);
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate();
         }
       });
     });
@@ -283,7 +296,7 @@
         html +=
           '<div class="sidebar-timeline-entry">' +
           '<div class="sidebar-timeline-turn">Turn ' +
-          (moment.turnNumber || '?') +
+          (Number.isFinite(Number(moment.turnNumber)) ? Number(moment.turnNumber) : '?') +
           '</div>' +
           _esc(moment.summary || '') +
           '</div>';
@@ -302,9 +315,10 @@
 
     // Footer
     if (entity.metOnTurn) {
+      var metOnTurn = Number(entity.metOnTurn);
       html +=
         '<div style="margin-top:1rem;font-size:0.75rem;color:#546e7a">First met on Turn ' +
-        entity.metOnTurn +
+        (Number.isFinite(metOnTurn) ? metOnTurn : '?') +
         '</div>';
     }
 

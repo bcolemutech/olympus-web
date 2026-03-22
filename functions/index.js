@@ -578,7 +578,7 @@ async function assembleContext(db, gameId, gameDoc) {
     entitiesSnap.forEach((doc) => {
       const d = doc.data();
       entitiesHere.push({
-        id: d.id,
+        id: doc.id,
         type: d.type,
         name: d.name,
         shortDescription: (d.shortDescription || d.description || '').slice(0, 200),
@@ -591,7 +591,7 @@ async function assembleContext(db, gameId, gameDoc) {
   itemsSnap.forEach((doc) => {
     const d = doc.data();
     cargoItems.push({
-      id: d.id,
+      id: doc.id,
       name: d.name,
       type: d.type || 'trade_goods',
       quantity: d.quantity || 1,
@@ -919,7 +919,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
             summary: mut.significantEvent.slice(0, 500),
           });
         }
-        tx.update(locUpdateRef, locUpdate);
+        tx.set(locUpdateRef, locUpdate, { merge: true });
       } else if (mut.type === 'crew_morale' && mut.crewId) {
         const crewRef = gameRef.collection('crew').doc(mut.crewId);
         tx.update(crewRef, { morale: mut.value || 'content', updatedAt: now });

@@ -41,64 +41,77 @@
 
     container.innerHTML = '<p class="sidebar-placeholder">Loading crew&hellip;</p>';
 
-    VO.loadCrew(game.id).then(function (crew) {
-      if (!crew || crew.length === 0) {
-        container.innerHTML = '<p class="sidebar-empty">No crew members found.</p>';
-        return;
-      }
-
-      var html = '';
-      for (var i = 0; i < crew.length; i++) {
-        var member = crew[i];
-        var moraleStyle = MORALE_STYLES[member.morale] || MORALE_STYLES.content;
-        var healthStyle = HEALTH_STYLES[member.healthStatus] || HEALTH_STYLES.healthy;
-
-        html +=
-          '<div class="sidebar-card crew-roster-card" data-crew-idx="' +
-          i +
-          '">' +
-          '<div class="sidebar-card-name">' +
-          _esc(member.name) +
-          '</div>' +
-          '<div class="sidebar-card-meta">' +
-          '<span class="sidebar-badge">' +
-          _esc(member.role || 'crew') +
-          '</span>' +
-          '<span class="sidebar-badge ' +
-          moraleStyle.badge +
-          '">' +
-          _esc(moraleStyle.label) +
-          '</span>' +
-          '<span class="sidebar-badge ' +
-          healthStyle.badge +
-          '">' +
-          _esc(healthStyle.label) +
-          '</span>';
-
-        if (member.species && member.species !== 'human') {
-          html += '<span class="sidebar-badge">' + _esc(member.species) + '</span>';
+    VO.loadCrew(game.id)
+      .then(function (crew) {
+        if (!crew || crew.length === 0) {
+          container.innerHTML = '<p class="sidebar-empty">No crew members found.</p>';
+          return;
         }
 
-        if (member.currentAssignment) {
+        var html = '';
+        for (var i = 0; i < crew.length; i++) {
+          var member = crew[i];
+          var moraleStyle = MORALE_STYLES[member.morale] || MORALE_STYLES.content;
+          var healthStyle = HEALTH_STYLES[member.healthStatus] || HEALTH_STYLES.healthy;
+
           html +=
-            '<span class="sidebar-badge sidebar-badge-blue">' +
-            _esc(member.currentAssignment) +
+            '<div class="sidebar-card crew-roster-card" role="button" tabindex="0" data-crew-idx="' +
+            i +
+            '">' +
+            '<div class="sidebar-card-name">' +
+            _esc(member.name) +
+            '</div>' +
+            '<div class="sidebar-card-meta">' +
+            '<span class="sidebar-badge">' +
+            _esc(member.role || 'crew') +
+            '</span>' +
+            '<span class="sidebar-badge ' +
+            moraleStyle.badge +
+            '">' +
+            _esc(moraleStyle.label) +
+            '</span>' +
+            '<span class="sidebar-badge ' +
+            healthStyle.badge +
+            '">' +
+            _esc(healthStyle.label) +
             '</span>';
+
+          if (member.species && member.species !== 'human') {
+            html += '<span class="sidebar-badge">' + _esc(member.species) + '</span>';
+          }
+
+          if (member.currentAssignment) {
+            html +=
+              '<span class="sidebar-badge sidebar-badge-blue">' +
+              _esc(member.currentAssignment) +
+              '</span>';
+          }
+
+          html += '</div></div>';
         }
 
-        html += '</div></div>';
-      }
+        container.innerHTML = html;
 
-      container.innerHTML = html;
-
-      // Bind click handlers
-      container.querySelectorAll('.crew-roster-card').forEach(function (card) {
-        card.addEventListener('click', function () {
-          var idx = parseInt(card.dataset.crewIdx, 10);
-          if (crew[idx]) _renderCrewDetail(container, crew[idx], crew);
+        // Bind click and keyboard handlers
+        container.querySelectorAll('.crew-roster-card').forEach(function (card) {
+          function activate() {
+            var idx = parseInt(card.dataset.crewIdx, 10);
+            if (crew[idx]) _renderCrewDetail(container, crew[idx], crew);
+          }
+          card.addEventListener('click', activate);
+          card.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              activate();
+            }
+          });
         });
+      })
+      .catch(function (err) {
+        console.error('Failed to load crew:', err);
+        container.innerHTML =
+          '<p class="sidebar-placeholder">Unable to load crew. Please check your connection.</p>';
       });
-    });
   };
 
   /**
@@ -213,7 +226,7 @@
         html +=
           '<div class="sidebar-timeline-entry">' +
           '<div class="sidebar-timeline-turn">Turn ' +
-          (moment.turnNumber || '?') +
+          (Number.isFinite(Number(moment.turnNumber)) ? Number(moment.turnNumber) : '?') +
           '</div>' +
           _esc(moment.summary || '') +
           '</div>';
@@ -222,9 +235,10 @@
 
     // Footer
     if (member.joinedTurn) {
+      var joinedTurn = Number(member.joinedTurn);
       html +=
         '<div style="margin-top:1rem;font-size:0.75rem;color:#546e7a">Joined on Turn ' +
-        member.joinedTurn +
+        (Number.isFinite(joinedTurn) ? joinedTurn : '?') +
         '</div>';
     }
 

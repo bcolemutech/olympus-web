@@ -35,13 +35,18 @@
     _renderTabs();
     VO.renderSidebarContent();
 
-    // Mobile sheet toggle
+    // Mobile sheet toggle — use onclick to avoid duplicate listeners on re-init
     var toggle = document.getElementById('sidebar-sheet-toggle');
     if (toggle) {
-      toggle.addEventListener('click', function () {
+      toggle.onclick = function () {
         var panel = document.getElementById('sidebar-panel');
-        if (panel) panel.classList.toggle('sidebar-sheet-open');
-      });
+        if (!panel) return;
+        panel.classList.toggle('sidebar-sheet-open');
+        toggle.setAttribute(
+          'aria-expanded',
+          panel.classList.contains('sidebar-sheet-open') ? 'true' : 'false'
+        );
+      };
     }
   };
 
@@ -66,8 +71,8 @@
   };
 
   /**
-   * Render the content pane for the current tab.
-   * Clears the sidebar cache first so data is refreshed.
+   * Render the content pane for the current tab by delegating to the
+   * appropriate tab renderer, or showing a placeholder if unavailable.
    */
   VO.renderSidebarContent = function () {
     var container = document.getElementById('sidebar-content');
@@ -204,14 +209,20 @@
     // Load current location
     var locId = ship.currentLocationId;
     if (locId) {
-      VO.getLocation(game.id, locId).then(function (loc) {
-        var locEl = document.getElementById('sidebar-location-detail');
-        if (!locEl || !loc) {
-          if (locEl) locEl.innerHTML = '<p class="sidebar-empty">Location data unavailable</p>';
-          return;
-        }
-        _renderLocationDetail(locEl, loc);
-      });
+      VO.getLocation(game.id, locId)
+        .then(function (loc) {
+          var locEl = document.getElementById('sidebar-location-detail');
+          if (!locEl || !loc) {
+            if (locEl) locEl.innerHTML = '<p class="sidebar-empty">Location data unavailable</p>';
+            return;
+          }
+          _renderLocationDetail(locEl, loc);
+        })
+        .catch(function (err) {
+          console.error('Failed to load current location:', err);
+          var locEl = document.getElementById('sidebar-location-detail');
+          if (locEl) locEl.innerHTML = '<p class="sidebar-empty">Failed to load location data</p>';
+        });
     } else {
       var locPlaceholder = document.getElementById('sidebar-location-detail');
       if (locPlaceholder) {
@@ -220,58 +231,73 @@
     }
 
     // Load cargo items
-    VO.loadItems(game.id).then(function (items) {
-      var cargoEl = document.getElementById('sidebar-cargo-items');
-      if (!cargoEl) return;
+    VO.loadItems(game.id)
+      .then(function (items) {
+        var cargoEl = document.getElementById('sidebar-cargo-items');
+        if (!cargoEl) return;
 
-      if (!items || items.length === 0) {
-        cargoEl.innerHTML = '<p class="sidebar-empty">Cargo hold is empty</p>';
-        return;
-      }
+        if (!items || items.length === 0) {
+          cargoEl.innerHTML = '<p class="sidebar-empty">Cargo hold is empty</p>';
+          return;
+        }
 
-      var cargoHtml = '';
-      for (var j = 0; j < items.length; j++) {
-        var item = items[j];
-        var condClass = _conditionBadgeClass(item.condition);
-        var rarityClass = _rarityBadgeClass(item.rarity);
-        cargoHtml +=
-          '<div class="sidebar-card" data-item-id="' +
-          _esc(item.id) +
-          '">' +
-          '<div class="sidebar-card-name">' +
-          _esc(item.name) +
-          (item.quantity > 1 ? ' x' + item.quantity : '') +
-          '</div>' +
-          '<div class="sidebar-card-meta">' +
-          '<span class="sidebar-badge">' +
-          _esc(item.type || 'misc') +
-          '</span>' +
-          '<span class="sidebar-badge ' +
-          condClass +
-          '">' +
-          _esc(item.condition || 'good') +
-          '</span>' +
-          '<span class="sidebar-badge ' +
-          rarityClass +
-          '">' +
-          _esc(item.rarity || 'common') +
-          '</span>' +
-          '</div>' +
-          '<div class="sidebar-card-detail hidden" style="margin-top:0.4rem;font-size:0.8rem;color:#90a4ae">' +
-          _esc(item.description || '') +
-          '</div>' +
-          '</div>';
-      }
-      cargoEl.innerHTML = cargoHtml;
+        var cargoHtml = '';
+        for (var j = 0; j < items.length; j++) {
+          var item = items[j];
+          var condClass = _conditionBadgeClass(item.condition);
+          var rarityClass = _rarityBadgeClass(item.rarity);
+          cargoHtml +=
+            '<div class="sidebar-card" role="button" tabindex="0" aria-expanded="false" data-item-id="' +
+            _esc(item.id) +
+            '">' +
+            '<div class="sidebar-card-name">' +
+            _esc(item.name) +
+            (item.quantity > 1 ? ' x' + item.quantity : '') +
+            '</div>' +
+            '<div class="sidebar-card-meta">' +
+            '<span class="sidebar-badge">' +
+            _esc(item.type || 'misc') +
+            '</span>' +
+            '<span class="sidebar-badge ' +
+            condClass +
+            '">' +
+            _esc(item.condition || 'good') +
+            '</span>' +
+            '<span class="sidebar-badge ' +
+            rarityClass +
+            '">' +
+            _esc(item.rarity || 'common') +
+            '</span>' +
+            '</div>' +
+            '<div class="sidebar-card-detail hidden" style="margin-top:0.4rem;font-size:0.8rem;color:#90a4ae">' +
+            _esc(item.description || '') +
+            '</div>' +
+            '</div>';
+        }
+        cargoEl.innerHTML = cargoHtml;
 
-      // Click to expand item details
-      cargoEl.querySelectorAll('.sidebar-card').forEach(function (card) {
-        card.addEventListener('click', function () {
-          var detail = card.querySelector('.sidebar-card-detail');
-          if (detail) detail.classList.toggle('hidden');
+        // Click or keyboard to expand item details
+        cargoEl.querySelectorAll('.sidebar-card').forEach(function (card) {
+          function toggleDetail() {
+            var detail = card.querySelector('.sidebar-card-detail');
+            if (!detail) return;
+            var isHidden = detail.classList.toggle('hidden');
+            card.setAttribute('aria-expanded', (!isHidden).toString());
+          }
+          card.addEventListener('click', toggleDetail);
+          card.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggleDetail();
+            }
+          });
         });
+      })
+      .catch(function (err) {
+        console.error('Failed to load cargo items:', err);
+        var cargoEl = document.getElementById('sidebar-cargo-items');
+        if (cargoEl) cargoEl.innerHTML = '<p class="sidebar-empty">Unable to load cargo items.</p>';
       });
-    });
   };
 
   function _conditionBadgeClass(condition) {
@@ -386,7 +412,7 @@
         html +=
           '<div class="sidebar-timeline-entry">' +
           '<div class="sidebar-timeline-turn">Turn ' +
-          (event.turnNumber || '?') +
+          (Number.isFinite(Number(event.turnNumber)) ? Number(event.turnNumber) : '?') +
           '</div>' +
           _esc(event.summary || '') +
           '</div>';
