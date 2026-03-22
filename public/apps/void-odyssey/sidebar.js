@@ -195,7 +195,29 @@
     html += '<div class="sidebar-section-title">Cargo Hold</div>';
     html += '<div id="sidebar-cargo-items"><p class="sidebar-empty">Loading&hellip;</p></div>';
 
+    // Current location (async load)
+    html += '<div class="sidebar-section-title">Current Location</div>';
+    html += '<div id="sidebar-location-detail"><p class="sidebar-empty">Loading&hellip;</p></div>';
+
     container.innerHTML = html;
+
+    // Load current location
+    var locId = ship.currentLocationId;
+    if (locId) {
+      VO.getLocation(game.id, locId).then(function (loc) {
+        var locEl = document.getElementById('sidebar-location-detail');
+        if (!locEl || !loc) {
+          if (locEl) locEl.innerHTML = '<p class="sidebar-empty">Location data unavailable</p>';
+          return;
+        }
+        _renderLocationDetail(locEl, loc);
+      });
+    } else {
+      var locPlaceholder = document.getElementById('sidebar-location-detail');
+      if (locPlaceholder) {
+        locPlaceholder.innerHTML = '<p class="sidebar-empty">No location data</p>';
+      }
+    }
 
     // Load cargo items
     VO.loadItems(game.id).then(function (items) {
@@ -265,6 +287,113 @@
     if (rarity === 'rare') return 'sidebar-badge-purple';
     if (rarity === 'uncommon') return 'sidebar-badge-blue';
     return '';
+  }
+
+  // ── Location detail ───────────────────────────────────────
+
+  var DANGER_BADGES = {
+    safe: 'sidebar-badge-green',
+    cautious: 'sidebar-badge-yellow',
+    dangerous: 'sidebar-badge-orange',
+    hostile: 'sidebar-badge-red',
+  };
+
+  function _renderLocationDetail(container, loc) {
+    var html = '';
+
+    // Name + type + danger
+    html +=
+      '<div style="margin-bottom:0.5rem">' +
+      '<span style="font-weight:700;color:#e0e0e0">' +
+      _esc(loc.name) +
+      '</span> ' +
+      '<span class="sidebar-badge">' +
+      _esc(loc.type || 'unknown') +
+      '</span>';
+    if (loc.dangerLevel) {
+      var dangerBadge = DANGER_BADGES[loc.dangerLevel] || '';
+      html +=
+        ' <span class="sidebar-badge ' + dangerBadge + '">' + _esc(loc.dangerLevel) + '</span>';
+    }
+    html += '</div>';
+
+    // Description
+    if (loc.description) {
+      html +=
+        '<div style="font-size:0.82rem;color:#90a4ae;line-height:1.5;margin-bottom:0.5rem">' +
+        _esc(loc.description) +
+        '</div>';
+    }
+
+    // Environment
+    if (loc.environment) {
+      var env = loc.environment;
+      var envParts = [];
+      if (env.gravity) envParts.push('Gravity: ' + env.gravity);
+      if (env.atmosphere) envParts.push('Atmo: ' + env.atmosphere);
+      if (env.temperature) envParts.push('Temp: ' + env.temperature);
+      if (envParts.length > 0) {
+        html += '<div style="margin-bottom:0.5rem">';
+        for (var e = 0; e < envParts.length; e++) {
+          html += '<span class="sidebar-tag">' + _esc(envParts[e]) + '</span>';
+        }
+        html += '</div>';
+      }
+      if (env.hazards && env.hazards.length > 0) {
+        html += '<div style="margin-bottom:0.5rem">';
+        for (var h = 0; h < env.hazards.length; h++) {
+          html +=
+            '<span class="sidebar-tag" style="color:#ef5350">' + _esc(env.hazards[h]) + '</span>';
+        }
+        html += '</div>';
+      }
+    }
+
+    // Services
+    if (loc.services && loc.services.length > 0) {
+      html +=
+        '<div style="font-size:0.72rem;font-weight:700;color:#90a4ae;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.3rem">Services</div>';
+      html += '<div style="margin-bottom:0.5rem">';
+      for (var s = 0; s < loc.services.length; s++) {
+        html +=
+          '<span class="sidebar-tag" style="color:#81c784">' + _esc(loc.services[s]) + '</span>';
+      }
+      html += '</div>';
+    }
+
+    // Points of interest
+    if (loc.pointsOfInterest && loc.pointsOfInterest.length > 0) {
+      html +=
+        '<div style="font-size:0.72rem;font-weight:700;color:#90a4ae;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.3rem">Points of Interest</div>';
+      for (var p = 0; p < loc.pointsOfInterest.length; p++) {
+        var poi = loc.pointsOfInterest[p];
+        html +=
+          '<div class="sidebar-list-item">' +
+          '<span>' +
+          _esc(poi.name) +
+          '</span>' +
+          (poi.type ? '<span class="sidebar-badge">' + _esc(poi.type) + '</span>' : '') +
+          '</div>';
+      }
+    }
+
+    // Significant events
+    if (loc.significantEvents && loc.significantEvents.length > 0) {
+      html +=
+        '<div style="font-size:0.72rem;font-weight:700;color:#90a4ae;text-transform:uppercase;letter-spacing:0.06em;margin:0.5rem 0 0.3rem">Events</div>';
+      for (var ev = 0; ev < loc.significantEvents.length; ev++) {
+        var event = loc.significantEvents[ev];
+        html +=
+          '<div class="sidebar-timeline-entry">' +
+          '<div class="sidebar-timeline-turn">Turn ' +
+          (event.turnNumber || '?') +
+          '</div>' +
+          _esc(event.summary || '') +
+          '</div>';
+      }
+    }
+
+    container.innerHTML = html;
   }
 
   /** Escape HTML to prevent XSS. */
