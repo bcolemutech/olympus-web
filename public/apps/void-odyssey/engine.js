@@ -55,6 +55,10 @@
         // Update local state
         VO.state.currentGame.turnCount = data.turnCount;
 
+        // Refresh sidebar with new data
+        if (VO.invalidateSidebarCache) VO.invalidateSidebarCache();
+        if (VO.renderSidebarContent) VO.renderSidebarContent();
+
         // Soft rate limit warning
         if (data.rateLimitWarning) {
           _showToast(data.rateLimitWarning);
