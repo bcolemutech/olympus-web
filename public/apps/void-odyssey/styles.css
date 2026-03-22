@@ -9,7 +9,7 @@
   display: flex;
   flex-direction: column;
   padding: 1.5rem 2rem;
-  max-width: 900px;
+  max-width: 1200px;
   width: 100%;
   margin: 0 auto;
 }
@@ -743,7 +743,391 @@
   opacity: 0;
 }
 
+/* ── Two-column game layout ─────────────────────────────── */
+
+.game-active-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.game-active-main {
+  min-width: 0;
+}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+
+.sidebar-panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+.sidebar-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-tab {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.4rem;
+  background: none;
+  border: none;
+  color: #78909c;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    color 0.18s,
+    background 0.18s;
+  white-space: nowrap;
+}
+
+.sidebar-tab:hover:not(:disabled) {
+  color: #b0bec5;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-tab-active {
+  color: #ffd54f;
+  border-bottom: 2px solid #ffb74d;
+}
+
+.sidebar-tab-disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.sidebar-content {
+  padding: 1rem;
+}
+
+.sidebar-placeholder {
+  color: #546e7a;
+  text-align: center;
+  padding: 2rem 0;
+  font-size: 0.85rem;
+}
+
+/* Sidebar section headings */
+.sidebar-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #90a4ae;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 1rem 0 0.5rem;
+}
+
+.sidebar-section-title:first-child {
+  margin-top: 0;
+}
+
+/* Sidebar stat bars (reusable) */
+.sidebar-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.82rem;
+}
+
+.sidebar-stat-label {
+  color: #90a4ae;
+  min-width: 55px;
+  font-size: 0.78rem;
+}
+
+.sidebar-stat-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sidebar-stat-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.sidebar-stat-value {
+  color: #cfd8dc;
+  font-size: 0.78rem;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* Sidebar list items */
+.sidebar-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.85rem;
+  color: #b0bec5;
+}
+
+.sidebar-list-item:last-child {
+  border-bottom: none;
+}
+
+/* Sidebar badges */
+.sidebar-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.07);
+  color: #90a4ae;
+}
+
+.sidebar-badge-green {
+  background: rgba(129, 199, 132, 0.15);
+  color: #81c784;
+}
+
+.sidebar-badge-yellow {
+  background: rgba(255, 183, 77, 0.15);
+  color: #ffb74d;
+}
+
+.sidebar-badge-red {
+  background: rgba(239, 83, 80, 0.15);
+  color: #ef5350;
+}
+
+.sidebar-badge-blue {
+  background: rgba(100, 181, 246, 0.15);
+  color: #64b5f6;
+}
+
+.sidebar-badge-orange {
+  background: rgba(255, 138, 101, 0.15);
+  color: #ff8a65;
+}
+
+.sidebar-badge-purple {
+  background: rgba(149, 117, 205, 0.15);
+  color: #9575cd;
+}
+
+/* Mobile sidebar toggle (hidden on desktop) */
+.sidebar-sheet-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #b0bec5;
+  font-size: 0.88rem;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+.sidebar-sheet-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Sidebar clickable cards */
+.sidebar-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
+}
+
+.sidebar-card:hover {
+  border-color: rgba(255, 183, 77, 0.3);
+  background: rgba(255, 183, 77, 0.04);
+}
+
+.sidebar-card-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #e0e0e0;
+  margin-bottom: 0.2rem;
+}
+
+.sidebar-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: #78909c;
+}
+
+/* Sidebar detail (back + content) */
+.sidebar-back-btn {
+  background: none;
+  border: none;
+  color: #90a4ae;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.sidebar-back-btn:hover {
+  color: #e0e0e0;
+}
+
+.sidebar-detail-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffd54f;
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-detail-desc {
+  font-size: 0.85rem;
+  color: #b0bec5;
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+}
+
+/* Tag chips (for codex, entities) */
+.sidebar-tag {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #78909c;
+  margin: 0.15rem 0.15rem 0 0;
+}
+
+/* Search input (codex) */
+.sidebar-search {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  color: #e0e0e0;
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+  margin-bottom: 0.6rem;
+}
+
+.sidebar-search:focus {
+  border-color: rgba(255, 183, 77, 0.4);
+}
+
+/* Filter buttons */
+.sidebar-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.sidebar-filter-btn {
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  color: #78909c;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    color 0.18s;
+}
+
+.sidebar-filter-btn:hover {
+  border-color: rgba(255, 183, 77, 0.3);
+  color: #b0bec5;
+}
+
+.sidebar-filter-btn-active {
+  border-color: #ffb74d;
+  color: #ffd54f;
+  background: rgba(255, 183, 77, 0.1);
+}
+
+/* Sidebar empty state */
+.sidebar-empty {
+  color: #546e7a;
+  text-align: center;
+  padding: 1.5rem 0;
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+/* Timeline entries (significant moments) */
+.sidebar-timeline-entry {
+  padding: 0.4rem 0;
+  border-left: 2px solid rgba(255, 255, 255, 0.08);
+  padding-left: 0.75rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.8rem;
+  color: #b0bec5;
+}
+
+.sidebar-timeline-turn {
+  font-size: 0.7rem;
+  color: #546e7a;
+  margin-bottom: 0.1rem;
+}
+
 /* ── Mobile ──────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .game-active-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-panel {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    z-index: 100;
+    max-height: 60vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+  }
+
+  .sidebar-panel.sidebar-sheet-open {
+    display: block;
+  }
+
+  .sidebar-sheet-toggle {
+    display: flex;
+  }
+}
 
 @media (max-width: 600px) {
   .app-main {

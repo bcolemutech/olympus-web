@@ -92,6 +92,9 @@
     // HUD via module
     VO.renderHud(game);
 
+    // Initialize sidebar
+    if (VO.initSidebar) VO.initSidebar();
+
     // Load last narrative entry from Firestore
     VO.state.db
       .collection('void_odyssey_games')
@@ -230,6 +233,9 @@
         turnCount: 0,
         activeCrew: game.crew || [],
       });
+
+      // Initialize sidebar
+      if (VO.initSidebar) VO.initSidebar();
 
       // Render narrative from generated data
       VO.renderNarrativeEntry(

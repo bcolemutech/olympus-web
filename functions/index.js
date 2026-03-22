@@ -377,9 +377,10 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
     Allowed mutation types:
     { "type": "ship_stat", "field": "hull"|"shields"|"fuel"|"cargo", "delta": number, "reason": string }
     { "type": "crew_morale", "crewId": string, "value": "content"|"uneasy"|"fearful"|"inspired"|"defiant", "reason": string }
-    { "type": "add_item", "item": { "id": string, "name": string, "description": string, "tags": string[] } }
+    { "type": "add_item", "item": { "id": string, "name": string, "type": "trade_goods"|"weapon"|"equipment"|"quest_item"|"consumable"|"data"|"artifact", "description": string, "cargoUnits": number, "quantity": number, "condition": "pristine"|"good"|"worn"|"damaged", "rarity": "common"|"uncommon"|"rare"|"unique", "tags": string[] } }
     { "type": "remove_item", "itemId": string }
     { "type": "location_discover", "location": { "id": string, "name": string, "type": "station"|"planet"|"moon"|"asteroid_field"|"derelict"|"anomaly", "description": string, "atmosphere": string } }
+    { "type": "location_update", "locationId": string, "pointOfInterest": { "id": string, "name": string, "description": string, "type": string } | null, "significantEvent": string | null }
     { "type": "quest_start", "quest": { "id": string, "title": string, "description": string } }
     { "type": "quest_update", "questId": string, "status": "in_progress"|"completed"|"failed", "note": string }
   ],
@@ -387,7 +388,7 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
     { "id": string, "label": string (max 8 words), "type": "dialogue"|"navigation"|"combat"|"investigation"|"freeform" }
   ],
   "newEntities": [
-    { "id": string, "type": "npc"|"ship"|"object", "name": string, "description": string, "tags": string[] }
+    { "id": string, "type": "npc"|"ship"|"object", "name": string, "description": string, "species": string | null, "role": string | null, "disposition": "friendly"|"neutral"|"suspicious"|"hostile", "dialogue_style": string | null, "tags": string[] }
   ],
   "summary": string (one sentence summary of what happened this turn)
 }
@@ -520,12 +521,20 @@ function checkRateLimits(gameDoc, isAdmin) {
 async function assembleContext(db, gameId, gameDoc) {
   const gameRef = db.collection('void_odyssey_games').doc(gameId);
 
-  const [narrativeSnap, crewSnap, locationSnap] = await Promise.all([
+  const currentLocId = (gameDoc.ship && gameDoc.ship.currentLocationId) || '';
+
+  const [narrativeSnap, crewSnap, locationSnap, entitiesSnap, itemsSnap] = await Promise.all([
     gameRef.collection('narrative_log').orderBy('turnNumber', 'desc').limit(5).get(),
     gameRef.collection('crew').where('status', '==', 'active').get(),
-    gameDoc.ship && gameDoc.ship.currentLocationId
-      ? gameRef.collection('locations').doc(gameDoc.ship.currentLocationId).get()
+    currentLocId ? gameRef.collection('locations').doc(currentLocId).get() : Promise.resolve(null),
+    currentLocId
+      ? gameRef
+          .collection('entities')
+          .where('currentLocationId', '==', currentLocId)
+          .limit(10)
+          .get()
       : Promise.resolve(null),
+    gameRef.collection('items').where('location', '==', 'cargo').limit(20).get(),
   ]);
 
   const recentHistory = [];
@@ -564,6 +573,32 @@ async function assembleContext(db, gameId, gameDoc) {
         }
       : null;
 
+  const entitiesHere = [];
+  if (entitiesSnap) {
+    entitiesSnap.forEach((doc) => {
+      const d = doc.data();
+      entitiesHere.push({
+        id: doc.id,
+        type: d.type,
+        name: d.name,
+        shortDescription: (d.shortDescription || d.description || '').slice(0, 200),
+        disposition: d.disposition || 'neutral',
+      });
+    });
+  }
+
+  const cargoItems = [];
+  itemsSnap.forEach((doc) => {
+    const d = doc.data();
+    cargoItems.push({
+      id: doc.id,
+      name: d.name,
+      type: d.type || 'trade_goods',
+      quantity: d.quantity || 1,
+      cargoUnits: d.cargoUnits || 1,
+    });
+  });
+
   return {
     ship: {
       name: gameDoc.ship.name,
@@ -582,6 +617,8 @@ async function assembleContext(db, gameId, gameDoc) {
     },
     difficulty: gameDoc.difficulty || 'frontier_explorer',
     location,
+    entitiesAtLocation: entitiesHere,
+    cargoItems,
     crew,
     recentHistory,
     activeQuests: gameDoc.activeQuests || [],
@@ -842,8 +879,10 @@ Generate the next narrative beat, state mutations, and available actions.`;
       rateLimits: rateLimitResult.updatedRateLimits,
     };
 
-    // Process location discoveries
-    for (const mut of validatedMutations) {
+    // Process subcollection mutations
+    for (let i = 0; i < validatedMutations.length; i++) {
+      const mut = validatedMutations[i];
+
       if (mut.type === 'location_discover' && mut.location) {
         const locRef = gameRef
           .collection('locations')
@@ -861,10 +900,98 @@ Generate the next narrative beat, state mutations, and available actions.`;
           createdAt: now,
           updatedAt: now,
         });
+      } else if (mut.type === 'location_update' && mut.locationId) {
+        const locUpdateRef = gameRef.collection('locations').doc(mut.locationId);
+        const locUpdate = { updatedAt: now };
+        if (mut.pointOfInterest && mut.pointOfInterest.name) {
+          locUpdate.pointsOfInterest = FieldValue.arrayUnion({
+            id: mut.pointOfInterest.id || `poi_${newTurnCount}_${i}`,
+            name: (mut.pointOfInterest.name || '').slice(0, 200),
+            description: (mut.pointOfInterest.description || '').slice(0, 500),
+            type: mut.pointOfInterest.type || 'unknown',
+            accessible: true,
+            tags: [],
+          });
+        }
+        if (mut.significantEvent && typeof mut.significantEvent === 'string') {
+          locUpdate.significantEvents = FieldValue.arrayUnion({
+            turnNumber: newTurnCount,
+            summary: mut.significantEvent.slice(0, 500),
+          });
+        }
+        tx.set(locUpdateRef, locUpdate, { merge: true });
       } else if (mut.type === 'crew_morale' && mut.crewId) {
         const crewRef = gameRef.collection('crew').doc(mut.crewId);
         tx.update(crewRef, { morale: mut.value || 'content', updatedAt: now });
+      } else if (mut.type === 'add_item' && mut.item) {
+        const itemRef = gameRef.collection('items').doc(mut.item.id || `item_${newTurnCount}_${i}`);
+        tx.set(itemRef, {
+          id: itemRef.id,
+          name: (mut.item.name || 'Unknown Item').slice(0, 200),
+          type: mut.item.type || 'trade_goods',
+          description: (mut.item.description || '').slice(0, 1000),
+          shortDescription: (mut.item.description || '').slice(0, 200),
+          cargoUnits: Number(mut.item.cargoUnits) || 1,
+          quantity: Number(mut.item.quantity) || 1,
+          condition: mut.item.condition || 'good',
+          baseValue: mut.item.baseValue || null,
+          rarity: mut.item.rarity || 'common',
+          location: 'cargo',
+          acquiredTurn: newTurnCount,
+          acquiredFrom: currentLocationName || 'unknown',
+          questRelated: !!mut.item.questRelated,
+          questId: mut.item.questId || null,
+          tags: Array.isArray(mut.item.tags) ? mut.item.tags.slice(0, 20) : [],
+          notes: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+      } else if (mut.type === 'remove_item' && mut.itemId) {
+        const itemDelRef = gameRef.collection('items').doc(mut.itemId);
+        tx.delete(itemDelRef);
       }
+    }
+
+    // Persist new entities
+    for (let i = 0; i < claudeResponse.newEntities.length; i++) {
+      const entity = claudeResponse.newEntities[i];
+      const entityRef = gameRef
+        .collection('entities')
+        .doc(entity.id || `entity_${newTurnCount}_${i}`);
+      tx.set(entityRef, {
+        id: entityRef.id,
+        type: entity.type || 'npc',
+        name: (entity.name || 'Unknown').slice(0, 200),
+        description: (entity.description || '').slice(0, 1000),
+        shortDescription: (entity.description || '').slice(0, 200),
+        species: entity.species || null,
+        role: entity.role || null,
+        factionId: null,
+        disposition: entity.disposition || 'neutral',
+        personality: [],
+        dialogue_style: entity.dialogue_style || null,
+        motivations: [],
+        secrets: [],
+        territory: [],
+        ideology: null,
+        strength: null,
+        allies: [],
+        enemies: [],
+        threat: null,
+        habitat: null,
+        abilities: [],
+        metOnTurn: newTurnCount,
+        interactionCount: 1,
+        playerReputation: 0,
+        significantMoments: [{ turnNumber: newTurnCount, summary: 'First encountered' }],
+        currentLocationId: ship.currentLocationId || null,
+        locationHistory: ship.currentLocationId ? [ship.currentLocationId] : [],
+        status: 'alive',
+        alive: true,
+        tags: Array.isArray(entity.tags) ? entity.tags.slice(0, 20) : [],
+        createdAt: now,
+        updatedAt: now,
+      });
     }
 
     // Check for navigation — update location

@@ -54,6 +54,18 @@
 
         // Update local state
         VO.state.currentGame.turnCount = data.turnCount;
+        if (data.shipStatus) {
+          VO.state.currentGame.ship = VO.state.currentGame.ship || {};
+          VO.state.currentGame.ship.hull = data.shipStatus.hull;
+          VO.state.currentGame.ship.hullMax = data.shipStatus.hullMax;
+          VO.state.currentGame.ship.shields = data.shipStatus.shields;
+          VO.state.currentGame.ship.shieldsMax = data.shipStatus.shieldsMax;
+          VO.state.currentGame.ship.fuel = data.shipStatus.fuel;
+        }
+
+        // Refresh sidebar with new data
+        if (VO.invalidateSidebarCache) VO.invalidateSidebarCache();
+        if (VO.renderSidebarContent) VO.renderSidebarContent();
 
         // Soft rate limit warning
         if (data.rateLimitWarning) {

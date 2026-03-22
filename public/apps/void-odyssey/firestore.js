@@ -39,4 +39,104 @@
         return Object.assign({ id: doc.id }, doc.data());
       });
   };
+
+  // ── Subcollection helpers ─────────────────────────────────
+
+  /** Helper: resolve a subcollection query snapshot to an array. */
+  function _snapshotToArray(snapshot) {
+    var results = [];
+    snapshot.forEach(function (doc) {
+      results.push(Object.assign({ id: doc.id }, doc.data()));
+    });
+    return results;
+  }
+
+  /** Helper: get a game subcollection reference. */
+  function _subRef(gameId, subcollection) {
+    return VO.state.db.collection('void_odyssey_games').doc(gameId).collection(subcollection);
+  }
+
+  /**
+   * Load all crew members for a game, ordered by name.
+   * @param {string} gameId
+   * @returns {Promise<Array>}
+   */
+  VO.loadCrew = function (gameId) {
+    return _subRef(gameId, 'crew').orderBy('name').get().then(_snapshotToArray);
+  };
+
+  /**
+   * Fetch a single crew member.
+   * @param {string} gameId
+   * @param {string} crewId
+   * @returns {Promise<object|null>}
+   */
+  VO.getCrewMember = function (gameId, crewId) {
+    return _subRef(gameId, 'crew')
+      .doc(crewId)
+      .get()
+      .then(function (doc) {
+        if (!doc.exists) return null;
+        return Object.assign({ id: doc.id }, doc.data());
+      });
+  };
+
+  /**
+   * Load all items for a game.
+   * @param {string} gameId
+   * @returns {Promise<Array>}
+   */
+  VO.loadItems = function (gameId) {
+    return _subRef(gameId, 'items').get().then(_snapshotToArray);
+  };
+
+  /**
+   * Load all entities for a game.
+   * @param {string} gameId
+   * @returns {Promise<Array>}
+   */
+  VO.loadEntities = function (gameId) {
+    return _subRef(gameId, 'entities').get().then(_snapshotToArray);
+  };
+
+  /**
+   * Fetch a single entity.
+   * @param {string} gameId
+   * @param {string} entityId
+   * @returns {Promise<object|null>}
+   */
+  VO.getEntity = function (gameId, entityId) {
+    return _subRef(gameId, 'entities')
+      .doc(entityId)
+      .get()
+      .then(function (doc) {
+        if (!doc.exists) return null;
+        return Object.assign({ id: doc.id }, doc.data());
+      });
+  };
+
+  /**
+   * Load all locations for a game.
+   * @param {string} gameId
+   * @returns {Promise<Array>}
+   */
+  VO.loadLocations = function (gameId) {
+    return _subRef(gameId, 'locations').get().then(_snapshotToArray);
+  };
+
+  /**
+   * Fetch a single location.
+   * @param {string} gameId
+   * @param {string} locationId
+   * @returns {Promise<object|null>}
+   */
+  VO.getLocation = function (gameId, locationId) {
+    return _subRef(gameId, 'locations')
+      .doc(locationId)
+      .get()
+      .then(function (doc) {
+        if (!doc.exists) return null;
+        return Object.assign({ id: doc.id }, doc.data());
+      });
+  };
 })();
