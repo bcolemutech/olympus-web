@@ -851,20 +851,22 @@ async function assembleContext(db, gameId, gameDoc) {
  */
 async function compressNarrativeLog(db, gameId, currentTurn, apiKey) {
   const gameRef = db.collection('void_odyssey_games').doc(gameId);
+  // Query by turnNumber range to also capture pre-Phase-5 entries that lack the compressed field
+  const cutoffTurn = currentTurn - 10;
   const oldEntriesSnap = await gameRef
     .collection('narrative_log')
-    .where('compressed', '==', false)
+    .where('turnNumber', '<=', cutoffTurn)
     .orderBy('turnNumber', 'asc')
-    .limit(20)
+    .limit(30)
     .get();
 
   const entries = [];
   oldEntriesSnap.forEach((doc) => {
     const d = doc.data();
-    // Only compress entries at least 10 turns old
-    if (d.turnNumber <= currentTurn - 10) {
-      entries.push({ ref: doc.ref, summary: d.summary || '', mood: d.mood || '' });
-    }
+    // Skip already-compressed entries (filter in code to handle missing field)
+    if (d.compressed === true) return;
+    if (entries.length >= 20) return;
+    entries.push({ ref: doc.ref, summary: d.summary || '', mood: d.mood || '' });
   });
 
   if (entries.length < 10) return; // Not enough to compress
@@ -885,7 +887,7 @@ async function compressNarrativeLog(db, gameId, currentTurn, apiKey) {
   const batch = db.batch();
   for (let i = 0; i < entries.length; i++) {
     const update = { compressed: true };
-    if (i === 0) update.compressedSummary = compressed.slice(0, 2000);
+    if (i === entries.length - 1) update.compressedSummary = compressed.slice(0, 2000);
     batch.update(entries[i].ref, update);
   }
   await batch.commit();
@@ -1625,11 +1627,18 @@ Generate the next narrative beat, state mutations, and available actions.`;
     };
   });
 
-  // ── Narrative compression (fire-and-forget) ──────────────────
+  // ── Narrative compression (awaited with timeout, non-fatal) ──
   if (txResult.newTurnCount > 0 && txResult.newTurnCount % 20 === 0) {
-    compressNarrativeLog(db, gameId.trim(), txResult.newTurnCount, anthropicApiKey.value()).catch(
-      (err) => console.error('Compression failed (non-fatal):', err)
-    );
+    try {
+      await Promise.race([
+        compressNarrativeLog(db, gameId.trim(), txResult.newTurnCount, anthropicApiKey.value()),
+        new Promise((_, reject) =>
+          global.setTimeout(() => reject(new Error('Compression timed out')), 8000)
+        ),
+      ]);
+    } catch (err) {
+      console.error('Compression failed or timed out (non-fatal):', err);
+    }
   }
 
   // ── Compute crew count ─────────────────────────────────────

@@ -629,6 +629,12 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .narrative-mood-combat {
+    animation: none;
+  }
+}
+
 .narrative-text {
   font-size: 1rem;
   line-height: 1.75;
@@ -1288,8 +1294,10 @@
 
 /* ── Sidebar sheet handle (mobile) ─────────────────────── */
 
-.sidebar-sheet-handle {
-  display: none;
+@media (min-width: 769px) {
+  .sidebar-sheet-handle {
+    display: none;
+  }
 }
 
 .quest-objectives {
