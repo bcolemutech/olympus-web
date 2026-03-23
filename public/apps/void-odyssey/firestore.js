@@ -139,4 +139,54 @@
         return Object.assign({ id: doc.id }, doc.data());
       });
   };
+
+  /**
+   * Load all star map systems for a game.
+   * @param {string} gameId
+   * @returns {Promise<Array>}
+   */
+  VO.loadStarMap = function (gameId) {
+    return _subRef(gameId, 'star_map').get().then(_snapshotToArray);
+  };
+
+  /**
+   * Fetch a single star map system.
+   * @param {string} gameId
+   * @param {string} systemId
+   * @returns {Promise<object|null>}
+   */
+  VO.getStarMapSystem = function (gameId, systemId) {
+    return _subRef(gameId, 'star_map')
+      .doc(systemId)
+      .get()
+      .then(function (doc) {
+        if (!doc.exists) return null;
+        return Object.assign({ id: doc.id }, doc.data());
+      });
+  };
+
+  /**
+   * Load all quests for a game.
+   * @param {string} gameId
+   * @returns {Promise<Array>}
+   */
+  VO.loadQuests = function (gameId) {
+    return _subRef(gameId, 'quests').get().then(_snapshotToArray);
+  };
+
+  /**
+   * Fetch a single quest.
+   * @param {string} gameId
+   * @param {string} questId
+   * @returns {Promise<object|null>}
+   */
+  VO.getQuest = function (gameId, questId) {
+    return _subRef(gameId, 'quests')
+      .doc(questId)
+      .get()
+      .then(function (doc) {
+        if (!doc.exists) return null;
+        return Object.assign({ id: doc.id }, doc.data());
+      });
+  };
 })();
