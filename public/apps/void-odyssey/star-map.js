@@ -15,6 +15,8 @@
 
   var _mapState = { zoom: 1, offsetX: 0, offsetY: 0 };
   var _activeTooltip = null;
+  var _globalMouseMove = null;
+  var _globalMouseUp = null;
 
   /** Escape HTML. */
   function _esc(str) {
@@ -49,21 +51,39 @@
   function _renderMap(container, systems, game) {
     var currentSystemId = (game.ship && game.ship.currentSystemId) || '';
 
-    // Filter to only discovered systems (fog of war)
+    // Build a lookup for all systems
+    var sysById = {};
+    systems.forEach(function (s) {
+      sysById[s.id] = s;
+    });
+
+    // Discovered systems are fully visible; undiscovered systems adjacent
+    // to a discovered system are shown fogged (fog of war)
+    var discoveredIds = {};
+    systems.forEach(function (s) {
+      if (s.discovered) discoveredIds[s.id] = true;
+    });
+
+    var foggedIds = {};
+    systems.forEach(function (s) {
+      if (!s.discovered) return;
+      (s.connections || []).forEach(function (conn) {
+        var target = sysById[conn.targetId];
+        if (target && !target.discovered && !foggedIds[conn.targetId]) {
+          foggedIds[conn.targetId] = true;
+        }
+      });
+    });
+
+    // Visible = discovered + fogged
     var visible = systems.filter(function (s) {
-      return s.discovered;
+      return discoveredIds[s.id] || foggedIds[s.id];
     });
 
     if (visible.length === 0) {
       container.innerHTML = '<p class="sidebar-empty">No star systems charted yet.</p>';
       return;
     }
-
-    // Build a lookup for all systems (including undiscovered, for connection drawing)
-    var sysById = {};
-    systems.forEach(function (s) {
-      sysById[s.id] = s;
-    });
 
     // Calculate bounding box
     var minX = Infinity,
@@ -125,7 +145,7 @@
 
       connections.forEach(function (conn) {
         var target = sysById[conn.targetId];
-        if (!target || !target.discovered) return;
+        if (!target || (!discoveredIds[conn.targetId] && !foggedIds[conn.targetId])) return;
 
         // Only draw each connection once (from lower id to higher)
         if (sys.id > conn.targetId) return;
@@ -172,18 +192,23 @@
       var y = (sys.coordinates && sys.coordinates.y) || 0;
       var isCurrent = sys.id === currentSystemId;
       var isVisited = sys.visited;
+      var isFogged = !!foggedIds[sys.id];
 
       var g = document.createElementNS(SVG_NS, 'g');
       g.setAttribute('class', 'star-node-group');
       g.setAttribute('data-system-id', sys.id);
-      g.style.cursor = 'pointer';
 
       var circle = document.createElementNS(SVG_NS, 'circle');
       circle.setAttribute('cx', x);
       circle.setAttribute('cy', y);
-      circle.setAttribute('r', isCurrent ? NODE_RADIUS_CURRENT : NODE_RADIUS);
+      circle.setAttribute(
+        'r',
+        isFogged ? NODE_RADIUS - 2 : isCurrent ? NODE_RADIUS_CURRENT : NODE_RADIUS
+      );
 
-      if (isCurrent) {
+      if (isFogged) {
+        circle.setAttribute('class', 'star-node star-node-fogged');
+      } else if (isCurrent) {
         circle.setAttribute('class', 'star-node star-node-current');
       } else if (isVisited) {
         circle.setAttribute('class', 'star-node star-node-visited');
@@ -203,19 +228,33 @@
         g.appendChild(pulse);
       }
 
-      // Label
-      var label = document.createElementNS(SVG_NS, 'text');
-      label.setAttribute('x', x);
-      label.setAttribute('y', y + LABEL_OFFSET);
-      label.setAttribute('class', 'star-map-label' + (isCurrent ? ' star-map-label-current' : ''));
-      label.textContent = sys.name || '???';
-      g.appendChild(label);
+      // Label (hidden for fogged systems)
+      if (!isFogged) {
+        var label = document.createElementNS(SVG_NS, 'text');
+        label.setAttribute('x', x);
+        label.setAttribute('y', y + LABEL_OFFSET);
+        label.setAttribute(
+          'class',
+          'star-map-label' + (isCurrent ? ' star-map-label-current' : '')
+        );
+        label.textContent = sys.name || '???';
+        g.appendChild(label);
+        g.style.cursor = 'pointer';
 
-      // Click handler for tooltip
-      g.addEventListener('click', function (e) {
-        e.stopPropagation();
-        _showSystemTooltip(wrap, sys, currentSystemId, sysById, game);
-      });
+        // Click handler for tooltip (only discovered systems)
+        g.addEventListener('click', function (e) {
+          e.stopPropagation();
+          _showSystemTooltip(wrap, sys, currentSystemId, sysById, game);
+        });
+      } else {
+        // Fogged label: show "???"
+        var fogLabel = document.createElementNS(SVG_NS, 'text');
+        fogLabel.setAttribute('x', x);
+        fogLabel.setAttribute('y', y + LABEL_OFFSET);
+        fogLabel.setAttribute('class', 'star-map-label star-map-label-fogged');
+        fogLabel.textContent = '???';
+        g.appendChild(fogLabel);
+      }
 
       svg.appendChild(g);
     });
@@ -267,7 +306,10 @@
       });
     }
 
-    // Pan via drag
+    // Pan via drag — remove previous global listeners to avoid accumulation
+    if (_globalMouseMove) window.removeEventListener('mousemove', _globalMouseMove);
+    if (_globalMouseUp) window.removeEventListener('mouseup', _globalMouseUp);
+
     var _dragging = false;
     var _dragStart = { x: 0, y: 0 };
 
@@ -279,7 +321,7 @@
       svg.style.cursor = 'grabbing';
     });
 
-    window.addEventListener('mousemove', function (e) {
+    _globalMouseMove = function (e) {
       if (!_dragging) return;
       var dx = e.clientX - _dragStart.x;
       var dy = e.clientY - _dragStart.y;
@@ -291,14 +333,17 @@
       _dragStart.x = e.clientX;
       _dragStart.y = e.clientY;
       _updateViewBox();
-    });
+    };
 
-    window.addEventListener('mouseup', function () {
+    _globalMouseUp = function () {
       if (_dragging) {
         _dragging = false;
         svg.style.cursor = '';
       }
-    });
+    };
+
+    window.addEventListener('mousemove', _globalMouseMove);
+    window.addEventListener('mouseup', _globalMouseUp);
 
     // Touch pan support
     svg.addEventListener(
@@ -446,22 +491,26 @@
     // Travel button handler
     var travelBtn = document.getElementById('star-map-travel-btn');
     if (travelBtn && connection) {
-      travelBtn.addEventListener('click', function () {
-        _dismissTooltip();
-        var fuelCost = connection.distance || 10;
-        VO.submitTurn({
-          type: 'navigation',
-          actionId: 'travel_to_' + system.id,
-          input:
-            'Set course for ' +
-            (system.name || 'unknown system') +
-            ' (distance: ' +
-            (connection.distance || '?') +
-            ', estimated fuel: ' +
-            fuelCost +
-            ')',
+      var btnFuelCost = connection.distance || 10;
+      if (fuel < btnFuelCost) {
+        travelBtn.disabled = true;
+      } else {
+        travelBtn.addEventListener('click', function () {
+          _dismissTooltip();
+          VO.submitTurn({
+            type: 'navigation',
+            actionId: 'travel_to_' + system.id,
+            input:
+              'Set course for ' +
+              (system.name || 'unknown system') +
+              ' (distance: ' +
+              (connection.distance || '?') +
+              ', estimated fuel: ' +
+              btnFuelCost +
+              ')',
+          });
         });
-      });
+      }
     }
   }
 

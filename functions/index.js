@@ -647,7 +647,7 @@ async function assembleContext(db, gameId, gameDoc) {
             .get()
         : Promise.resolve(null),
       gameRef.collection('items').where('location', '==', 'cargo').limit(20).get(),
-      gameRef.collection('star_map').get(),
+      gameRef.collection('star_map').limit(200).get(),
       gameRef.collection('quests').where('status', '==', 'active').get(),
     ]);
 
@@ -1151,26 +1151,51 @@ Generate the next narrative beat, state mutations, and available actions.`;
         gameUpdate.activeQuestCount = FieldValue.increment(1);
       } else if (mut.type === 'quest_update' && mut.questId) {
         const questUpdateRef = gameRef.collection('quests').doc(mut.questId);
-        const questUpdate = { updatedAt: now };
-        if (mut.status) {
-          questUpdate.status = mut.status;
-          if (mut.status === 'completed' || mut.status === 'failed') {
-            questUpdate.completedOnTurn = newTurnCount;
-            gameUpdate.activeQuestCount = FieldValue.increment(-1);
+        const questSnap = await tx.get(questUpdateRef);
+        if (questSnap.exists) {
+          const questData = questSnap.data();
+          const questUpdate = { updatedAt: now };
+          const previousStatus = questData.status || 'active';
+
+          if (mut.status) {
+            questUpdate.status = mut.status;
+            if (
+              (mut.status === 'completed' || mut.status === 'failed') &&
+              previousStatus === 'active'
+            ) {
+              questUpdate.completedOnTurn = newTurnCount;
+              gameUpdate.activeQuestCount = FieldValue.increment(-1);
+            }
           }
+
+          // Rewrite objectives array with the updated objective status
+          if (mut.objectiveId && mut.objectiveStatus) {
+            const existingObjectives = Array.isArray(questData.objectives)
+              ? questData.objectives
+              : [];
+            questUpdate.objectives = existingObjectives.map((obj) => {
+              if (obj.id === mut.objectiveId) {
+                return {
+                  ...obj,
+                  status: mut.objectiveStatus,
+                  completedOnTurn:
+                    mut.objectiveStatus === 'completed'
+                      ? newTurnCount
+                      : obj.completedOnTurn || null,
+                };
+              }
+              return obj;
+            });
+            // Advance currentObjectiveId to next active objective
+            const nextActive = questUpdate.objectives.find((o) => o.status === 'active');
+            questUpdate.currentObjectiveId = nextActive ? nextActive.id : null;
+          }
+
+          if (mut.note) {
+            questUpdate.lastNote = (mut.note || '').slice(0, 500);
+          }
+          tx.set(questUpdateRef, questUpdate, { merge: true });
         }
-        if (mut.objectiveId && mut.objectiveStatus) {
-          // We cannot update array elements in Firestore directly,
-          // so we store objective updates as a map for client-side merge
-          questUpdate[`_objectiveUpdates.${mut.objectiveId}`] = {
-            status: mut.objectiveStatus,
-            completedOnTurn: mut.objectiveStatus === 'completed' ? newTurnCount : null,
-          };
-        }
-        if (mut.note) {
-          questUpdate.lastNote = (mut.note || '').slice(0, 500);
-        }
-        tx.set(questUpdateRef, questUpdate, { merge: true });
       } else if (mut.type === 'star_map_discover' && mut.system) {
         const sys = mut.system;
         const sysRef = gameRef.collection('star_map').doc(sys.id || `sys_${newTurnCount}_${i}`);
@@ -1182,44 +1207,55 @@ Generate the next narrative beat, state mutations, and available actions.`;
               known: false,
             }))
           : [];
-        tx.set(sysRef, {
-          id: sysRef.id,
-          name: (sys.name || 'Unknown System').slice(0, 200),
-          type: sys.type || 'system',
-          coordinates: {
-            x: Number(sys.coordinates && sys.coordinates.x) || 0,
-            y: Number(sys.coordinates && sys.coordinates.y) || 0,
-          },
-          connections,
-          discovered: true,
-          visited: false,
-          scanLevel: 'none',
-          locationCount: 0,
-          dangerLevel: sys.dangerLevel || 'cautious',
-          faction: sys.faction || null,
-          hasServices: !!sys.hasServices,
-          rumors: Array.isArray(sys.rumors) ? sys.rumors.slice(0, 5) : [],
-          signalStrength: null,
-          createdAt: now,
-          updatedAt: now,
-        });
-        // Add reverse connection to the source system
-        connections.forEach((conn) => {
-          const reverseRef = gameRef.collection('star_map').doc(conn.targetId);
-          tx.set(
-            reverseRef,
-            {
-              connections: FieldValue.arrayUnion({
-                targetId: sysRef.id,
-                distance: conn.distance,
-                hazards: conn.hazards,
-                known: false,
-              }),
-              updatedAt: now,
+
+        // Check if system already exists — if so, just mark discovered
+        const existingSysSnap = await tx.get(sysRef);
+        if (existingSysSnap.exists) {
+          tx.set(sysRef, { discovered: true, updatedAt: now }, { merge: true });
+        } else {
+          tx.set(sysRef, {
+            id: sysRef.id,
+            name: (sys.name || 'Unknown System').slice(0, 200),
+            type: sys.type || 'system',
+            coordinates: {
+              x: Number(sys.coordinates && sys.coordinates.x) || 0,
+              y: Number(sys.coordinates && sys.coordinates.y) || 0,
             },
-            { merge: true }
-          );
-        });
+            connections,
+            discovered: true,
+            visited: false,
+            scanLevel: 'none',
+            locationCount: 0,
+            dangerLevel: sys.dangerLevel || 'cautious',
+            faction: sys.faction || null,
+            hasServices: !!sys.hasServices,
+            rumors: Array.isArray(sys.rumors) ? sys.rumors.slice(0, 5) : [],
+            signalStrength: null,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+
+        // Add reverse connection only to existing target systems
+        for (const conn of connections) {
+          const reverseRef = gameRef.collection('star_map').doc(conn.targetId);
+          const reverseSnap = await tx.get(reverseRef);
+          if (reverseSnap.exists) {
+            tx.set(
+              reverseRef,
+              {
+                connections: FieldValue.arrayUnion({
+                  targetId: sysRef.id,
+                  distance: conn.distance,
+                  hazards: conn.hazards,
+                  known: false,
+                }),
+                updatedAt: now,
+              },
+              { merge: true }
+            );
+          }
+        }
       } else if (mut.type === 'star_map_update' && mut.systemId) {
         const sysUpdateRef = gameRef.collection('star_map').doc(mut.systemId);
         const sysUpdate = { updatedAt: now };
@@ -1228,24 +1264,72 @@ Generate the next narrative beat, state mutations, and available actions.`;
         tx.set(sysUpdateRef, sysUpdate, { merge: true });
       } else if (mut.type === 'travel' && mut.targetSystemId) {
         const fuelCost = Number(mut.fuelCost) || 10;
+        const sourceSystemId = freshGame.ship.currentSystemId || 'sys_origin';
+
+        // Validate: check target exists and is connected to source
+        const travelSysRef = gameRef.collection('star_map').doc(mut.targetSystemId);
+        const sourceSysRef = gameRef.collection('star_map').doc(sourceSystemId);
+        const [targetSnap, sourceSnap] = await Promise.all([
+          tx.get(travelSysRef),
+          tx.get(sourceSysRef),
+        ]);
+
+        if (!targetSnap.exists) break; // skip invalid target
+
+        // Verify connectivity
+        const sourceData = sourceSnap.exists ? sourceSnap.data() : {};
+        const sourceConns = Array.isArray(sourceData.connections) ? sourceData.connections : [];
+        const isConnected = sourceConns.some((c) => c.targetId === mut.targetSystemId);
+        if (!isConnected) break; // skip if not connected
+
+        // Validate fuel
+        if ((ship.fuel || 0) < fuelCost) break; // skip if insufficient fuel
+
+        // Apply fuel cost
         ship.fuel = clamp((ship.fuel || 0) - fuelCost, 0, 100);
         gameUpdate['ship.fuel'] = ship.fuel;
         ship.currentSystemId = mut.targetSystemId;
         gameUpdate['ship.currentSystemId'] = mut.targetSystemId;
 
+        // Clear current location — new system has no location until Claude discovers one
+        ship.currentLocationId = null;
+        gameUpdate['ship.currentLocationId'] = null;
+
         // Mark target system as visited
-        const travelSysRef = gameRef.collection('star_map').doc(mut.targetSystemId);
         tx.set(
           travelSysRef,
           { visited: true, scanLevel: 'basic', updatedAt: now },
           { merge: true }
         );
 
-        // Mark the route as known on the source system
-        const sourceSystemId = freshGame.ship.currentSystemId || 'sys_origin';
+        // Mark the route as known on both source and target systems
         if (sourceSystemId !== mut.targetSystemId) {
-          const sourceSysRef = gameRef.collection('star_map').doc(sourceSystemId);
-          tx.set(sourceSysRef, { updatedAt: now }, { merge: true });
+          const updatedSourceConns = sourceConns.map((c) => {
+            if (c.targetId === mut.targetSystemId) {
+              return { ...c, known: true };
+            }
+            return c;
+          });
+          tx.set(
+            sourceSysRef,
+            { connections: updatedSourceConns, updatedAt: now },
+            { merge: true }
+          );
+
+          // Also mark reverse connection as known on target
+          const targetData = targetSnap.data() || {};
+          const targetConns = Array.isArray(targetData.connections) ? targetData.connections : [];
+          const updatedTargetConns = targetConns.map((c) => {
+            if (c.targetId === sourceSystemId) {
+              return { ...c, known: true };
+            }
+            return c;
+          });
+          tx.set(
+            travelSysRef,
+            { connections: updatedTargetConns, updatedAt: now },
+            { merge: true }
+          );
         }
       }
     }
@@ -1306,13 +1390,20 @@ Generate the next narrative beat, state mutations, and available actions.`;
     // Check for travel — update location name from target system
     const travelAction = validatedMutations.find((m) => m.type === 'travel' && m.targetSystemId);
     if (travelAction) {
-      // Use the travel reason or a location_discover name if one was also emitted
       if (navAction) {
+        // A location_discover was also emitted — use its name
         currentLocationName = navAction.location.name;
       } else {
-        // Fall back to updating location name from the target system
-        gameUpdate.currentLocationName = travelAction.reason || currentLocationName;
-        currentLocationName = travelAction.reason || currentLocationName;
+        // Look up the target system name from star_map for the location name
+        const targetSysSnap = await tx.get(
+          gameRef.collection('star_map').doc(travelAction.targetSystemId)
+        );
+        const targetSysName =
+          targetSysSnap.exists && targetSysSnap.data().name
+            ? targetSysSnap.data().name.slice(0, 200)
+            : 'Unknown System';
+        gameUpdate.currentLocationName = targetSysName;
+        currentLocationName = targetSysName;
       }
     }
 
