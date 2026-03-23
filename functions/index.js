@@ -448,6 +448,109 @@ const SHIP_CLASS_DEFAULTS = {
 };
 
 /**
+ * Starting star map region seeded into every new game.
+ * Five systems forming a small graph — origin + 2 nearby discovered + 2 far undiscovered.
+ */
+function buildStartingStarMap(originName, difficulty) {
+  var dangerBase = difficulty === 'warpath' ? 'dangerous' : 'cautious';
+  return [
+    {
+      id: 'sys_origin',
+      name: originName || 'Origin System',
+      type: 'system',
+      coordinates: { x: 0, y: 0 },
+      connections: [
+        { targetId: 'sys_near_1', distance: 12, hazards: [], known: true },
+        { targetId: 'sys_near_2', distance: 18, hazards: ['debris_field'], known: true },
+      ],
+      discovered: true,
+      visited: true,
+      scanLevel: 'detailed',
+      locationCount: 1,
+      dangerLevel: dangerBase,
+      faction: null,
+      hasServices: true,
+      rumors: [],
+      signalStrength: null,
+    },
+    {
+      id: 'sys_near_1',
+      name: 'Relay Outpost Kappa',
+      type: 'system',
+      coordinates: { x: 35, y: -20 },
+      connections: [
+        { targetId: 'sys_origin', distance: 12, hazards: [], known: true },
+        { targetId: 'sys_far_1', distance: 22, hazards: ['pirate_corridor'], known: false },
+      ],
+      discovered: true,
+      visited: false,
+      scanLevel: 'basic',
+      locationCount: 0,
+      dangerLevel: 'cautious',
+      faction: null,
+      hasServices: true,
+      rumors: ['Traders mention a salvage yard beyond the relay'],
+      signalStrength: null,
+    },
+    {
+      id: 'sys_near_2',
+      name: 'Drifter\'s Reach',
+      type: 'system',
+      coordinates: { x: -25, y: 30 },
+      connections: [
+        { targetId: 'sys_origin', distance: 18, hazards: ['debris_field'], known: true },
+        { targetId: 'sys_far_2', distance: 28, hazards: [], known: false },
+      ],
+      discovered: true,
+      visited: false,
+      scanLevel: 'basic',
+      locationCount: 0,
+      dangerLevel: 'cautious',
+      faction: null,
+      hasServices: false,
+      rumors: ['An old signal repeats on low frequencies from deeper space'],
+      signalStrength: null,
+    },
+    {
+      id: 'sys_far_1',
+      name: 'Unknown Sector',
+      type: 'system',
+      coordinates: { x: 65, y: -45 },
+      connections: [
+        { targetId: 'sys_near_1', distance: 22, hazards: ['pirate_corridor'], known: false },
+      ],
+      discovered: false,
+      visited: false,
+      scanLevel: 'none',
+      locationCount: 0,
+      dangerLevel: 'dangerous',
+      faction: null,
+      hasServices: false,
+      rumors: [],
+      signalStrength: 'faint',
+    },
+    {
+      id: 'sys_far_2',
+      name: 'Unknown Signal Source',
+      type: 'anomaly',
+      coordinates: { x: -55, y: 60 },
+      connections: [
+        { targetId: 'sys_near_2', distance: 28, hazards: [], known: false },
+      ],
+      discovered: false,
+      visited: false,
+      scanLevel: 'none',
+      locationCount: 0,
+      dangerLevel: 'dangerous',
+      faction: null,
+      hasServices: false,
+      rumors: [],
+      signalStrength: 'intermittent',
+    },
+  ];
+}
+
+/**
  * Checks rate limits for a game, resetting counters if windows have elapsed.
  * Returns { allowed, warning, updatedRateLimits }.
  */
@@ -1288,6 +1391,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       systems: [],
       features: [],
       currentLocationId: locationId,
+      currentSystemId: 'sys_origin',
       dockedAt: claudeResponse.startingLocationType === 'station' ? locationId : null,
     },
 
@@ -1335,6 +1439,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
 
   const locationDoc = {
     id: locationId,
+    systemId: 'sys_origin',
     name: claudeResponse.startingLocationName || 'Unknown Location',
     type: claudeResponse.startingLocationType || 'station',
     description: claudeResponse.startingLocationDescription || '',
@@ -1403,6 +1508,20 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       createdAt: now,
       updatedAt: now,
     });
+  });
+
+  // Seed starting star map
+  const starMapSystems = buildStartingStarMap(
+    claudeResponse.startingLocationName || 'Origin System',
+    difficulty
+  );
+  starMapSystems.forEach(function (system) {
+    const sysRef = db
+      .collection('void_odyssey_games')
+      .doc(gameId)
+      .collection('star_map')
+      .doc(system.id);
+    batch.set(sysRef, Object.assign({}, system, { createdAt: now, updatedAt: now }));
   });
 
   await batch.commit();
