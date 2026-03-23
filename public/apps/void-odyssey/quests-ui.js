@@ -186,14 +186,20 @@
       '<button type="button" class="sidebar-back-btn" id="quest-detail-back">&larr; Quests</button>';
 
     // Name
-    html += '<div class="sidebar-detail-name">' + _esc(quest.name || quest.title || 'Unnamed Quest') + '</div>';
+    html +=
+      '<div class="sidebar-detail-name">' +
+      _esc(quest.name || quest.title || 'Unnamed Quest') +
+      '</div>';
 
     // Badges
     html += '<div style="margin-bottom:0.75rem">';
-    html += '<span class="sidebar-badge ' + typeBadge.cls + '">' + _esc(typeBadge.label) + '</span> ';
-    html += '<span class="sidebar-badge ' + statusBadge.cls + '">' + _esc(statusBadge.label) + '</span>';
+    html +=
+      '<span class="sidebar-badge ' + typeBadge.cls + '">' + _esc(typeBadge.label) + '</span> ';
+    html +=
+      '<span class="sidebar-badge ' + statusBadge.cls + '">' + _esc(statusBadge.label) + '</span>';
     if (quest.givenBy) {
-      html += ' <span style="font-size:0.78rem;color:#78909c">from ' + _esc(quest.givenBy) + '</span>';
+      html +=
+        ' <span style="font-size:0.78rem;color:#78909c">from ' + _esc(quest.givenBy) + '</span>';
     }
     html += '</div>';
 
@@ -220,8 +226,12 @@
           icon = '&#10007;'; // x
         }
         html +=
-          '<div class="quest-objective ' + iconClass + '">' +
-          '<span class="quest-obj-icon">' + icon + '</span> ' +
+          '<div class="quest-objective ' +
+          iconClass +
+          '">' +
+          '<span class="quest-obj-icon">' +
+          icon +
+          '</span> ' +
           _esc(obj.description) +
           '</div>';
       }
@@ -294,8 +304,10 @@
       if (found) return found;
     }
     // Fallback: first active objective
-    return objectives.find(function (o) {
-      return (o.status || 'active') === 'active';
-    }) || null;
+    return (
+      objectives.find(function (o) {
+        return (o.status || 'active') === 'active';
+      }) || null
+    );
   }
 })();

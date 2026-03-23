@@ -502,7 +502,7 @@ function buildStartingStarMap(originName, difficulty) {
     },
     {
       id: 'sys_near_2',
-      name: 'Drifter\'s Reach',
+      name: "Drifter's Reach",
       type: 'system',
       coordinates: { x: -25, y: 30 },
       connections: [
@@ -542,9 +542,7 @@ function buildStartingStarMap(originName, difficulty) {
       name: 'Unknown Signal Source',
       type: 'anomaly',
       coordinates: { x: -55, y: 60 },
-      connections: [
-        { targetId: 'sys_near_2', distance: 28, hazards: [], known: false },
-      ],
+      connections: [{ targetId: 'sys_near_2', distance: 28, hazards: [], known: false }],
       discovered: false,
       visited: false,
       scanLevel: 'none',
@@ -638,7 +636,9 @@ async function assembleContext(db, gameId, gameDoc) {
     await Promise.all([
       gameRef.collection('narrative_log').orderBy('turnNumber', 'desc').limit(5).get(),
       gameRef.collection('crew').where('status', '==', 'active').get(),
-      currentLocId ? gameRef.collection('locations').doc(currentLocId).get() : Promise.resolve(null),
+      currentLocId
+        ? gameRef.collection('locations').doc(currentLocId).get()
+        : Promise.resolve(null),
       currentLocId
         ? gameRef
             .collection('entities')
@@ -1115,9 +1115,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
         tx.delete(itemDelRef);
       } else if (mut.type === 'quest_start' && mut.quest) {
         const q = mut.quest;
-        const questRef = gameRef
-          .collection('quests')
-          .doc(q.id || `quest_${newTurnCount}_${i}`);
+        const questRef = gameRef.collection('quests').doc(q.id || `quest_${newTurnCount}_${i}`);
         const objectives = Array.isArray(q.objectives)
           ? q.objectives.slice(0, 10).map((o) => ({
               id: o.id || `obj_${newTurnCount}_${i}`,
@@ -1175,9 +1173,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
         tx.set(questUpdateRef, questUpdate, { merge: true });
       } else if (mut.type === 'star_map_discover' && mut.system) {
         const sys = mut.system;
-        const sysRef = gameRef
-          .collection('star_map')
-          .doc(sys.id || `sys_${newTurnCount}_${i}`);
+        const sysRef = gameRef.collection('star_map').doc(sys.id || `sys_${newTurnCount}_${i}`);
         const connections = Array.isArray(sys.connections)
           ? sys.connections.slice(0, 10).map((c) => ({
               targetId: c.targetId,
@@ -1239,17 +1235,17 @@ Generate the next narrative beat, state mutations, and available actions.`;
 
         // Mark target system as visited
         const travelSysRef = gameRef.collection('star_map').doc(mut.targetSystemId);
-        tx.set(travelSysRef, { visited: true, scanLevel: 'basic', updatedAt: now }, { merge: true });
+        tx.set(
+          travelSysRef,
+          { visited: true, scanLevel: 'basic', updatedAt: now },
+          { merge: true }
+        );
 
         // Mark the route as known on the source system
         const sourceSystemId = freshGame.ship.currentSystemId || 'sys_origin';
         if (sourceSystemId !== mut.targetSystemId) {
           const sourceSysRef = gameRef.collection('star_map').doc(sourceSystemId);
-          tx.set(
-            sourceSysRef,
-            { updatedAt: now },
-            { merge: true }
-          );
+          tx.set(sourceSysRef, { updatedAt: now }, { merge: true });
         }
       }
     }
@@ -1350,7 +1346,13 @@ Generate the next narrative beat, state mutations, and available actions.`;
       availableActions: cappedActions,
     });
 
-    return { ship, currentLocationName, newTurnCount, validatedMutations, currentSystemId: ship.currentSystemId || null };
+    return {
+      ship,
+      currentLocationName,
+      newTurnCount,
+      validatedMutations,
+      currentSystemId: ship.currentSystemId || null,
+    };
   });
 
   // ── Compute crew count ─────────────────────────────────────

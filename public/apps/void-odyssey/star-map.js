@@ -66,7 +66,10 @@
     });
 
     // Calculate bounding box
-    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    var minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
     visible.forEach(function (s) {
       var x = (s.coordinates && s.coordinates.x) || 0;
       var y = (s.coordinates && s.coordinates.y) || 0;
@@ -100,8 +103,7 @@
 
     // Fuel indicator
     var fuel = (game.ship && game.ship.fuel) || 0;
-    html +=
-      '<div class="star-map-fuel">Fuel: ' + fuel + '%</div>';
+    html += '<div class="star-map-fuel">Fuel: ' + fuel + '%</div>';
 
     html += '</div>';
 
@@ -299,31 +301,43 @@
     });
 
     // Touch pan support
-    svg.addEventListener('touchstart', function (e) {
-      if (e.touches.length === 1 && !e.target.closest('.star-node-group')) {
-        _dragging = true;
+    svg.addEventListener(
+      'touchstart',
+      function (e) {
+        if (e.touches.length === 1 && !e.target.closest('.star-node-group')) {
+          _dragging = true;
+          _dragStart.x = e.touches[0].clientX;
+          _dragStart.y = e.touches[0].clientY;
+        }
+      },
+      { passive: true }
+    );
+
+    svg.addEventListener(
+      'touchmove',
+      function (e) {
+        if (!_dragging || e.touches.length !== 1) return;
+        var dx = e.touches[0].clientX - _dragStart.x;
+        var dy = e.touches[0].clientY - _dragStart.y;
+        var svgRect = svg.getBoundingClientRect();
+        var scaleX = viewWidth / _mapState.zoom / svgRect.width;
+        var scaleY = viewHeight / _mapState.zoom / svgRect.height;
+        _mapState.offsetX -= dx * scaleX;
+        _mapState.offsetY -= dy * scaleY;
         _dragStart.x = e.touches[0].clientX;
         _dragStart.y = e.touches[0].clientY;
-      }
-    }, { passive: true });
+        _updateViewBox();
+      },
+      { passive: true }
+    );
 
-    svg.addEventListener('touchmove', function (e) {
-      if (!_dragging || e.touches.length !== 1) return;
-      var dx = e.touches[0].clientX - _dragStart.x;
-      var dy = e.touches[0].clientY - _dragStart.y;
-      var svgRect = svg.getBoundingClientRect();
-      var scaleX = viewWidth / _mapState.zoom / svgRect.width;
-      var scaleY = viewHeight / _mapState.zoom / svgRect.height;
-      _mapState.offsetX -= dx * scaleX;
-      _mapState.offsetY -= dy * scaleY;
-      _dragStart.x = e.touches[0].clientX;
-      _dragStart.y = e.touches[0].clientY;
-      _updateViewBox();
-    }, { passive: true });
-
-    svg.addEventListener('touchend', function () {
-      _dragging = false;
-    }, { passive: true });
+    svg.addEventListener(
+      'touchend',
+      function () {
+        _dragging = false;
+      },
+      { passive: true }
+    );
   }
 
   function _showSystemTooltip(wrap, system, currentSystemId, sysById, game) {
@@ -336,9 +350,10 @@
     var currentSys = sysById[currentSystemId];
     var connection = null;
     if (currentSys && currentSys.connections) {
-      connection = currentSys.connections.find(function (c) {
-        return c.targetId === system.id;
-      }) || null;
+      connection =
+        currentSys.connections.find(function (c) {
+          return c.targetId === system.id;
+        }) || null;
     }
 
     var html = '';
@@ -356,7 +371,12 @@
       hostile: 'sidebar-badge-red',
     };
     var dangerCls = dangerColors[system.dangerLevel] || 'sidebar-badge';
-    html += '<span class="sidebar-badge ' + dangerCls + '">' + _esc(system.dangerLevel || 'unknown') + '</span>';
+    html +=
+      '<span class="sidebar-badge ' +
+      dangerCls +
+      '">' +
+      _esc(system.dangerLevel || 'unknown') +
+      '</span>';
     html += '</div>';
 
     // Faction
@@ -370,13 +390,15 @@
     }
 
     // Visited status
-    html += '<div class="star-map-tooltip-row">' + (system.visited ? 'Visited' : 'Unvisited') + '</div>';
+    html +=
+      '<div class="star-map-tooltip-row">' + (system.visited ? 'Visited' : 'Unvisited') + '</div>';
 
     // Rumors
     if (system.rumors && system.rumors.length > 0) {
       html += '<div class="star-map-tooltip-rumors">';
       for (var r = 0; r < system.rumors.length; r++) {
-        html += '<div class="star-map-tooltip-rumor">&ldquo;' + _esc(system.rumors[r]) + '&rdquo;</div>';
+        html +=
+          '<div class="star-map-tooltip-rumor">&ldquo;' + _esc(system.rumors[r]) + '&rdquo;</div>';
       }
       html += '</div>';
     }
@@ -385,21 +407,27 @@
     if (!isCurrent && connection) {
       var fuelCost = connection.distance || 10;
       var hasEnoughFuel = fuel >= fuelCost;
-      var hazardWarning = connection.hazards && connection.hazards.length > 0
-        ? ' (Hazards: ' + connection.hazards.join(', ') + ')'
-        : '';
+      var hazardWarning =
+        connection.hazards && connection.hazards.length > 0
+          ? ' (Hazards: ' + connection.hazards.join(', ') + ')'
+          : '';
 
       if (!hasEnoughFuel) {
         html +=
           '<div class="star-map-tooltip-warning">Insufficient fuel — need ' +
-          fuelCost + ', have ' + fuel + '</div>';
+          fuelCost +
+          ', have ' +
+          fuel +
+          '</div>';
       }
 
       html +=
         '<button type="button" class="star-map-travel-btn' +
         (hasEnoughFuel ? '' : ' star-map-travel-btn-warn') +
         '" id="star-map-travel-btn">' +
-        'Travel here (fuel: ~' + fuelCost + ')' +
+        'Travel here (fuel: ~' +
+        fuelCost +
+        ')' +
         '</button>';
 
       if (hazardWarning) {
@@ -424,9 +452,14 @@
         VO.submitTurn({
           type: 'navigation',
           actionId: 'travel_to_' + system.id,
-          input: 'Set course for ' + (system.name || 'unknown system') +
-            ' (distance: ' + (connection.distance || '?') +
-            ', estimated fuel: ' + fuelCost + ')',
+          input:
+            'Set course for ' +
+            (system.name || 'unknown system') +
+            ' (distance: ' +
+            (connection.distance || '?') +
+            ', estimated fuel: ' +
+            fuelCost +
+            ')',
         });
       });
     }
