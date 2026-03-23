@@ -1163,3 +1163,291 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Quest log ──────────────────────────────────────────── */
+
+.quest-card {
+  cursor: pointer;
+}
+
+.quest-current-objective {
+  font-size: 0.78rem;
+  color: #b0bec5;
+  margin-top: 0.3rem;
+  padding-left: 0.2rem;
+}
+
+.quest-objectives {
+  margin-bottom: 0.75rem;
+}
+
+.quest-objective {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: #b0bec5;
+  padding: 0.25rem 0;
+}
+
+.quest-obj-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  text-align: center;
+}
+
+.quest-obj-active .quest-obj-icon {
+  color: #ffb74d;
+}
+
+.quest-obj-done {
+  color: #81c784;
+}
+
+.quest-obj-done .quest-obj-icon {
+  color: #81c784;
+}
+
+.quest-obj-failed {
+  color: #ef5350;
+  text-decoration: line-through;
+}
+
+.quest-obj-failed .quest-obj-icon {
+  color: #ef5350;
+}
+
+/* ── Star map ───────────────────────────────────────────── */
+
+.star-map-container {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+}
+
+.star-map-svg {
+  width: 100%;
+  height: 320px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: block;
+}
+
+.star-map-controls {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+  z-index: 5;
+}
+
+.star-map-zoom-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 20, 35, 0.8);
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.star-map-zoom-btn:hover {
+  background: rgba(255, 183, 77, 0.2);
+}
+
+.star-map-fuel {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  font-size: 0.72rem;
+  color: #90a4ae;
+  background: rgba(15, 20, 35, 0.7);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  z-index: 5;
+}
+
+/* SVG elements */
+
+.star-connection {
+  stroke: #37474f;
+  stroke-width: 1;
+}
+
+.star-connection-hazardous {
+  stroke: #ef5350;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.star-connection-unknown {
+  stroke: #37474f;
+  stroke-width: 0.8;
+  stroke-dasharray: 2 4;
+}
+
+.star-node-current {
+  fill: #ffd54f;
+  stroke: #ffb74d;
+  stroke-width: 2;
+}
+
+.star-node-visited {
+  fill: rgba(224, 224, 224, 0.15);
+  stroke: #e0e0e0;
+  stroke-width: 1.5;
+}
+
+.star-node-discovered {
+  fill: none;
+  stroke: #546e7a;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.star-node-fogged {
+  fill: rgba(84, 110, 122, 0.15);
+  stroke: #37474f;
+  stroke-width: 0.8;
+  stroke-dasharray: 2 3;
+  opacity: 0.5;
+}
+
+.star-map-label-fogged {
+  fill: #37474f;
+  font-size: 4px;
+  text-anchor: middle;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.5;
+}
+
+.star-map-travel-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.star-node-pulse {
+  fill: none;
+  stroke: #ffd54f;
+  stroke-width: 1.5;
+  opacity: 0;
+  animation: star-pulse 2s ease-in-out infinite;
+}
+
+@keyframes star-pulse {
+  0% {
+    r: 12;
+    opacity: 0.6;
+  }
+  100% {
+    r: 22;
+    opacity: 0;
+  }
+}
+
+.star-map-label {
+  fill: #90a4ae;
+  font-size: 5px;
+  text-anchor: middle;
+  pointer-events: none;
+  user-select: none;
+}
+
+.star-map-label-current {
+  fill: #ffd54f;
+  font-weight: bold;
+}
+
+.star-map-cost-label {
+  fill: #546e7a;
+  font-size: 3.5px;
+  text-anchor: middle;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Tooltip */
+
+.star-map-tooltip {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  right: 0.5rem;
+  background: rgba(15, 20, 35, 0.95);
+  border: 1px solid rgba(255, 183, 77, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem;
+  z-index: 10;
+  font-size: 0.82rem;
+  color: #e0e0e0;
+}
+
+.star-map-tooltip-header {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.35rem;
+}
+
+.star-map-tooltip-row {
+  font-size: 0.78rem;
+  color: #90a4ae;
+  margin-bottom: 0.2rem;
+}
+
+.star-map-tooltip-rumors {
+  margin-top: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.star-map-tooltip-rumor {
+  font-size: 0.75rem;
+  color: #78909c;
+  font-style: italic;
+  margin-bottom: 0.2rem;
+}
+
+.star-map-tooltip-warning {
+  font-size: 0.78rem;
+  color: #ef5350;
+  margin-top: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.star-map-tooltip-hazard {
+  font-size: 0.72rem;
+  color: #ffb74d;
+  margin-top: 0.2rem;
+}
+
+.star-map-travel-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #ffb74d, #ff8a65);
+  color: #1a1a2e;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.star-map-travel-btn:hover {
+  opacity: 0.9;
+}
+
+.star-map-travel-btn-warn {
+  background: linear-gradient(135deg, #78909c, #607d8b);
+  color: #e0e0e0;
+}

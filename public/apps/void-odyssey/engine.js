@@ -62,6 +62,12 @@
           VO.state.currentGame.ship.shieldsMax = data.shipStatus.shieldsMax;
           VO.state.currentGame.ship.fuel = data.shipStatus.fuel;
         }
+        if (data.currentSystemId) {
+          VO.state.currentGame.ship.currentSystemId = data.currentSystemId;
+        }
+        if (data.locationName) {
+          VO.state.currentGame.currentLocationName = data.locationName;
+        }
 
         // Refresh sidebar with new data
         if (VO.invalidateSidebarCache) VO.invalidateSidebarCache();
