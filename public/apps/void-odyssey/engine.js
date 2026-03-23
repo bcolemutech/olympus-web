@@ -61,6 +61,10 @@
           VO.state.currentGame.ship.shields = data.shipStatus.shields;
           VO.state.currentGame.ship.shieldsMax = data.shipStatus.shieldsMax;
           VO.state.currentGame.ship.fuel = data.shipStatus.fuel;
+          VO.state.currentGame.ship.credits = data.shipStatus.credits;
+        }
+        if (data.combatActive !== undefined) {
+          VO.state.currentGame.combatActive = data.combatActive;
         }
         if (data.currentSystemId) {
           VO.state.currentGame.ship.currentSystemId = data.currentSystemId;

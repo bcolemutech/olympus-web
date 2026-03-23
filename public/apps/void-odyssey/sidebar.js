@@ -10,7 +10,7 @@
     { id: 'codex', label: 'Codex', enabled: true },
     { id: 'map', label: 'Map', enabled: true },
     { id: 'quests', label: 'Quests', enabled: true },
-    { id: 'log', label: 'Log', enabled: false },
+    { id: 'log', label: 'Log', enabled: true },
   ];
 
   var STORAGE_KEY = 'vo_sidebar_tab';
@@ -90,6 +90,8 @@
       VO.renderMapTab(container);
     } else if (tab === 'quests' && VO.renderQuestsTab) {
       VO.renderQuestsTab(container);
+    } else if (tab === 'log' && VO.renderLogTab) {
+      VO.renderLogTab(container);
     } else {
       container.innerHTML = '<p class="sidebar-placeholder">Coming soon&hellip;</p>';
     }
@@ -178,6 +180,13 @@
     html += _statBar('Shields', ship.shields || 0, ship.shieldsMax || 100);
     html += _statBar('Fuel', ship.fuel || 0, 100);
     html += _statBar('Cargo', ship.cargo || 0, ship.cargoMax || 100);
+    html +=
+      '<div class="sidebar-stat-row">' +
+      '<span class="sidebar-stat-label">Credits</span>' +
+      '<span class="sidebar-stat-value">' +
+      (ship.credits || 0) +
+      '</span>' +
+      '</div>';
 
     // Weapons
     html += '<div class="sidebar-section-title">Weapons</div>';

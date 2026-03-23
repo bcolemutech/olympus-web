@@ -189,4 +189,37 @@
         return Object.assign({ id: doc.id }, doc.data());
       });
   };
+
+  /**
+   * Load narrative log entries, ordered by turnNumber desc.
+   * @param {string} gameId
+   * @param {object} [options]
+   * @param {number} [options.limit] - Max entries to return (default 50)
+   * @param {*} [options.startAfter] - Firestore doc snapshot for pagination
+   * @returns {Promise<Array>}
+   */
+  VO.loadNarrativeLog = function (gameId, options) {
+    var opts = options || {};
+    var query = _subRef(gameId, 'narrative_log').orderBy('turnNumber', 'desc');
+    if (opts.startAfter) {
+      query = query.startAfter(opts.startAfter);
+    }
+    query = query.limit(opts.limit || 50);
+    return query.get().then(_snapshotToArray);
+  };
+
+  /**
+   * Load narrative log entries filtered by mood.
+   * @param {string} gameId
+   * @param {string} mood
+   * @returns {Promise<Array>}
+   */
+  VO.loadNarrativeLogByMood = function (gameId, mood) {
+    return _subRef(gameId, 'narrative_log')
+      .where('mood', '==', mood)
+      .orderBy('turnNumber', 'desc')
+      .limit(50)
+      .get()
+      .then(_snapshotToArray);
+  };
 })();

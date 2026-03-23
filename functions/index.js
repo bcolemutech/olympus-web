@@ -386,6 +386,15 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
     { "type": "star_map_discover", "system": { "id": string, "name": string, "type": "system"|"anomaly"|"hidden", "coordinates": { "x": number, "y": number }, "connections": [{ "targetId": string, "distance": number, "hazards": string[] }], "dangerLevel": "safe"|"cautious"|"dangerous"|"hostile", "faction": string | null, "hasServices": boolean, "rumors": string[] } }
     { "type": "star_map_update", "systemId": string, "scanLevel": "basic"|"detailed" | null, "rumors": string[] | null }
     { "type": "travel", "targetSystemId": string, "fuelCost": number, "reason": string }
+    { "type": "credits", "delta": number, "reason": string }
+    { "type": "crew_health", "crewId": string, "value": "healthy"|"minor_injury"|"serious_injury"|"critical", "reason": string }
+    { "type": "crew_relationship", "crewId": string, "targetCrewId": string, "disposition": "friendly"|"neutral"|"tense"|"hostile"|"romantic"|"rivalry", "notes": string }
+    { "type": "crew_significant_moment", "crewId": string, "summary": string }
+    { "type": "crew_departure", "crewId": string, "reason": string }
+    { "type": "combat_start", "enemyName": string, "enemyType": "ship"|"creature"|"boarding_party", "threatLevel": "minor"|"moderate"|"severe"|"overwhelming" }
+    { "type": "combat_end", "outcome": "victory"|"defeat"|"escape"|"surrender", "summary": string }
+    { "type": "weapon_status", "weaponId": string, "status": "operational"|"damaged"|"destroyed", "reason": string }
+    { "type": "system_status", "systemId": string, "status": "operational"|"damaged"|"destroyed"|"offline", "reason": string }
   ],
   "availableActions": [
     { "id": string, "label": string (max 8 words), "type": "dialogue"|"navigation"|"combat"|"investigation"|"freeform" }
@@ -407,7 +416,10 @@ Constraints:
 - You may discover new adjacent systems using "star_map_discover" when the narrative calls for it — place them at reasonable coordinates relative to existing systems
 - Use "quest_start" to introduce emergent storylines with clear objectives; advance quests via "quest_update" as story progresses
 - If starMapContext is provided, suggest navigation actions when appropriate and reference rumors or signals from adjacent systems
-- When creating quests, include at least one hook or secret that you can use for future narrative development`;
+- When creating quests, include at least one hook or secret that you can use for future narrative development
+- CREW MORALE: Track morale over time; broken or angry crew may depart after multiple turns via "crew_departure". Low morale darkens narrative tone; inspired crew suggest bold actions. Use "crew_personal" quest type for backstory-driven storylines. Evolve relationships via "crew_relationship" mutations during shared experiences. Use "crew_significant_moment" to mark pivotal character beats. Use "crew_health" to track injuries from combat or hazards.
+- TRADE & ECONOMY: Offer trade actions at locations with trade or black_market services. Emit paired "credits" + "add_item"/"remove_item" mutations for transactions. Typical prices: common goods 10-50 credits, rare items 100-500, unique artifacts 500+. Respect cargo capacity — warn players when near cargoMax.
+- COMBAT RULES: When combat begins, set mood to "combat" and emit "combat_start". During combat, provide tactical choices: fire weapons, evasive maneuvers, boost shields, target subsystems, crew actions, or flee. Shields absorb damage first, then hull takes hits. Crew can be injured via "crew_health". Weapons and systems can be damaged via "weapon_status"/"system_status". Combat typically lasts 2-5 turns. End with "combat_end" and return to a non-combat mood. Always offer "Attempt to flee" as an action during combat.`;
 
 const VOID_ODYSSEY_RATE_LIMITS = {
   HOURLY_SOFT: 15,
@@ -632,24 +644,36 @@ async function assembleContext(db, gameId, gameDoc) {
 
   const currentLocId = (gameDoc.ship && gameDoc.ship.currentLocationId) || '';
 
-  const [narrativeSnap, crewSnap, locationSnap, entitiesSnap, itemsSnap, starMapSnap, questsSnap] =
-    await Promise.all([
-      gameRef.collection('narrative_log').orderBy('turnNumber', 'desc').limit(5).get(),
-      gameRef.collection('crew').where('status', '==', 'active').get(),
-      currentLocId
-        ? gameRef.collection('locations').doc(currentLocId).get()
-        : Promise.resolve(null),
-      currentLocId
-        ? gameRef
-            .collection('entities')
-            .where('currentLocationId', '==', currentLocId)
-            .limit(10)
-            .get()
-        : Promise.resolve(null),
-      gameRef.collection('items').where('location', '==', 'cargo').limit(20).get(),
-      gameRef.collection('star_map').limit(200).get(),
-      gameRef.collection('quests').where('status', '==', 'active').get(),
-    ]);
+  const [
+    narrativeSnap,
+    crewSnap,
+    locationSnap,
+    entitiesSnap,
+    itemsSnap,
+    starMapSnap,
+    questsSnap,
+    compressedSnap,
+  ] = await Promise.all([
+    gameRef.collection('narrative_log').orderBy('turnNumber', 'desc').limit(5).get(),
+    gameRef.collection('crew').where('status', '==', 'active').get(),
+    currentLocId ? gameRef.collection('locations').doc(currentLocId).get() : Promise.resolve(null),
+    currentLocId
+      ? gameRef
+          .collection('entities')
+          .where('currentLocationId', '==', currentLocId)
+          .limit(10)
+          .get()
+      : Promise.resolve(null),
+    gameRef.collection('items').where('location', '==', 'cargo').limit(20).get(),
+    gameRef.collection('star_map').limit(200).get(),
+    gameRef.collection('quests').where('status', '==', 'active').get(),
+    gameRef
+      .collection('narrative_log')
+      .where('compressed', '==', true)
+      .orderBy('turnNumber', 'desc')
+      .limit(10)
+      .get(),
+  ]);
 
   const recentHistory = [];
   narrativeSnap.forEach((doc) => {
@@ -666,7 +690,7 @@ async function assembleContext(db, gameId, gameDoc) {
   const crew = [];
   crewSnap.forEach((doc) => {
     const d = doc.data();
-    crew.push({
+    const crewEntry = {
       id: d.id,
       name: d.name,
       role: d.role,
@@ -674,7 +698,22 @@ async function assembleContext(db, gameId, gameDoc) {
       morale: d.morale || 'content',
       personality: d.personality || [],
       backstory: (d.backstory || '').slice(0, 200),
-    });
+      loyalty: d.loyalty != null ? d.loyalty : 0,
+      healthStatus: d.healthStatus || 'healthy',
+    };
+    // Include relationship dispositions (compact, no notes to save tokens)
+    if (d.relationships && typeof d.relationships === 'object') {
+      const relSummary = {};
+      for (const [key, val] of Object.entries(d.relationships)) {
+        relSummary[key] = val.disposition || 'neutral';
+      }
+      crewEntry.relationships = relSummary;
+    }
+    // Include last 3 significant moments
+    if (Array.isArray(d.significantMoments) && d.significantMoments.length > 0) {
+      crewEntry.significantMoments = d.significantMoments.slice(-3);
+    }
+    crew.push(crewEntry);
   });
 
   const location =
@@ -767,6 +806,10 @@ async function assembleContext(db, gameId, gameDoc) {
       fuel: gameDoc.ship.fuel,
       cargo: gameDoc.ship.cargo,
       cargoMax: gameDoc.ship.cargoMax,
+      credits: gameDoc.ship.credits || 0,
+      combatActive: gameDoc.combatActive || false,
+      weapons: gameDoc.ship.weapons || [],
+      systems: gameDoc.ship.systems || [],
     },
     player: {
       name: gameDoc.player.name,
@@ -787,7 +830,65 @@ async function assembleContext(db, gameId, gameDoc) {
       knownSystems: starMapSystems.filter((s) => s.discovered).length,
     },
     turnCount: gameDoc.turnCount || 0,
+    archiveSummaries: (() => {
+      const summaries = [];
+      if (compressedSnap) {
+        compressedSnap.forEach((doc) => {
+          const d = doc.data();
+          if (d.compressedSummary) {
+            summaries.push(d.compressedSummary);
+          }
+        });
+      }
+      return summaries;
+    })(),
   };
+}
+
+/**
+ * Compresses older narrative log entries into summaries for long-term memory.
+ * Fire-and-forget — failures are non-fatal.
+ */
+async function compressNarrativeLog(db, gameId, currentTurn, apiKey) {
+  const gameRef = db.collection('void_odyssey_games').doc(gameId);
+  const oldEntriesSnap = await gameRef
+    .collection('narrative_log')
+    .where('compressed', '==', false)
+    .orderBy('turnNumber', 'asc')
+    .limit(20)
+    .get();
+
+  const entries = [];
+  oldEntriesSnap.forEach((doc) => {
+    const d = doc.data();
+    // Only compress entries at least 10 turns old
+    if (d.turnNumber <= currentTurn - 10) {
+      entries.push({ ref: doc.ref, summary: d.summary || '', mood: d.mood || '' });
+    }
+  });
+
+  if (entries.length < 10) return; // Not enough to compress
+
+  const summaryText = entries.map((e) => `[${e.mood}] ${e.summary}`).join('\n');
+
+  const Anthropic = require('@anthropic-ai/sdk');
+  const client = new Anthropic({ apiKey });
+  const msg = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 500,
+    system:
+      'You are a narrative archivist. Compress the following turn-by-turn summaries into a single cohesive paragraph of about 150 words that preserves key events, character developments, and plot points. Write in past tense, third person.',
+    messages: [{ role: 'user', content: summaryText }],
+  });
+
+  const compressed = msg.content[0].text || '';
+  const batch = db.batch();
+  for (let i = 0; i < entries.length; i++) {
+    const update = { compressed: true };
+    if (i === 0) update.compressedSummary = compressed.slice(0, 2000);
+    batch.update(entries[i].ref, update);
+  }
+  await batch.commit();
 }
 
 /**
@@ -948,7 +1049,16 @@ Generate the next narrative beat, state mutations, and available actions.`;
   }
 
   // Validate mood against known enum
-  const VALID_MOODS = ['tense', 'calm', 'wonder', 'danger', 'tense_curiosity', 'wry', 'reverent'];
+  const VALID_MOODS = [
+    'tense',
+    'calm',
+    'wonder',
+    'danger',
+    'tense_curiosity',
+    'wry',
+    'reverent',
+    'combat',
+  ];
   claudeResponse.mood =
     typeof claudeResponse.mood === 'string' && VALID_MOODS.includes(claudeResponse.mood)
       ? claudeResponse.mood
@@ -1024,6 +1134,10 @@ Generate the next narrative beat, state mutations, and available actions.`;
           ship.cargo = clamp((ship.cargo || 0) + delta, 0, ship.cargoMax || 100);
           validatedMutations.push(mut);
         }
+      } else if (mut.type === 'credits') {
+        const delta = Number(mut.delta) || 0;
+        ship.credits = Math.max(0, (ship.credits || 0) + delta);
+        validatedMutations.push(mut);
       } else {
         validatedMutations.push(mut);
       }
@@ -1040,6 +1154,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
       'ship.shields': ship.shields,
       'ship.fuel': ship.fuel,
       'ship.cargo': ship.cargo,
+      'ship.credits': ship.credits != null ? ship.credits : freshGame.ship.credits || 0,
       rateLimits: rateLimitResult.updatedRateLimits,
     };
 
@@ -1087,6 +1202,67 @@ Generate the next narrative beat, state mutations, and available actions.`;
       } else if (mut.type === 'crew_morale' && mut.crewId) {
         const crewRef = gameRef.collection('crew').doc(mut.crewId);
         tx.update(crewRef, { morale: mut.value || 'content', updatedAt: now });
+      } else if (mut.type === 'crew_health' && mut.crewId) {
+        const crewRef = gameRef.collection('crew').doc(mut.crewId);
+        tx.update(crewRef, { healthStatus: mut.value || 'healthy', updatedAt: now });
+      } else if (mut.type === 'crew_relationship' && mut.crewId && mut.targetCrewId) {
+        const crewRef = gameRef.collection('crew').doc(mut.crewId);
+        const relKey = 'relationships.' + mut.targetCrewId;
+        tx.set(
+          crewRef,
+          {
+            [relKey]: {
+              disposition: mut.disposition || 'neutral',
+              notes: (mut.notes || '').slice(0, 500),
+            },
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      } else if (mut.type === 'crew_significant_moment' && mut.crewId) {
+        const crewRef = gameRef.collection('crew').doc(mut.crewId);
+        tx.update(crewRef, {
+          significantMoments: FieldValue.arrayUnion({
+            turnNumber: newTurnCount,
+            summary: (mut.summary || '').slice(0, 500),
+          }),
+          updatedAt: now,
+        });
+      } else if (mut.type === 'crew_departure' && mut.crewId) {
+        const crewRef = gameRef.collection('crew').doc(mut.crewId);
+        tx.update(crewRef, {
+          status: 'departed',
+          departureReason: (mut.reason || '').slice(0, 500),
+          departedOnTurn: newTurnCount,
+          updatedAt: now,
+        });
+        gameUpdate.crewCount = FieldValue.increment(-1);
+      } else if (mut.type === 'combat_start' && mut.enemyName) {
+        gameUpdate.combatActive = true;
+        gameUpdate.combatEnemy = {
+          name: (mut.enemyName || 'Unknown').slice(0, 200),
+          type: mut.enemyType || 'ship',
+          threatLevel: mut.threatLevel || 'moderate',
+        };
+      } else if (mut.type === 'combat_end') {
+        gameUpdate.combatActive = false;
+        gameUpdate.combatEnemy = FieldValue.delete();
+      } else if (mut.type === 'weapon_status' && mut.weaponId) {
+        const weapons = Array.isArray(ship.weapons) ? [...ship.weapons] : [];
+        const wIdx = weapons.findIndex((w) => w.id === mut.weaponId || w.name === mut.weaponId);
+        if (wIdx !== -1) {
+          weapons[wIdx] = { ...weapons[wIdx], status: mut.status || 'operational' };
+          ship.weapons = weapons;
+          gameUpdate['ship.weapons'] = weapons;
+        }
+      } else if (mut.type === 'system_status' && mut.systemId) {
+        const systems = Array.isArray(ship.systems) ? [...ship.systems] : [];
+        const sIdx = systems.findIndex((s) => s.id === mut.systemId || s.name === mut.systemId);
+        if (sIdx !== -1) {
+          systems[sIdx] = { ...systems[sIdx], status: mut.status || 'operational' };
+          ship.systems = systems;
+          gameUpdate['ship.systems'] = systems;
+        }
       } else if (mut.type === 'add_item' && mut.item) {
         const itemRef = gameRef.collection('items').doc(mut.item.id || `item_${newTurnCount}_${i}`);
         tx.set(itemRef, {
@@ -1435,6 +1611,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
       summary: claudeResponse.summary,
       tags: [playerAction.type, claudeResponse.mood],
       availableActions: cappedActions,
+      compressed: false,
     });
 
     return {
@@ -1443,8 +1620,17 @@ Generate the next narrative beat, state mutations, and available actions.`;
       newTurnCount,
       validatedMutations,
       currentSystemId: ship.currentSystemId || null,
+      combatActive:
+        gameUpdate.combatActive != null ? gameUpdate.combatActive : freshGame.combatActive || false,
     };
   });
+
+  // ── Narrative compression (fire-and-forget) ──────────────────
+  if (txResult.newTurnCount > 0 && txResult.newTurnCount % 20 === 0) {
+    compressNarrativeLog(db, gameId.trim(), txResult.newTurnCount, anthropicApiKey.value()).catch(
+      (err) => console.error('Compression failed (non-fatal):', err)
+    );
+  }
 
   // ── Compute crew count ─────────────────────────────────────
   const crewSnap = await gameRef.collection('crew').where('status', '==', 'active').get();
@@ -1460,7 +1646,9 @@ Generate the next narrative beat, state mutations, and available actions.`;
       shields: txResult.ship.shields,
       shieldsMax: txResult.ship.shieldsMax,
       fuel: txResult.ship.fuel,
+      credits: txResult.ship.credits || 0,
     },
+    combatActive: txResult.combatActive || false,
     turnCount: txResult.newTurnCount,
     locationName: txResult.currentLocationName,
     currentSystemId: txResult.currentSystemId || null,
@@ -1693,6 +1881,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       class: shipClass,
       description: shipClassLabels[shipClass],
       ...shipStats,
+      credits: 500,
       weapons: [],
       systems: [],
       features: [],
@@ -1700,6 +1889,8 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       currentSystemId: 'sys_origin',
       dockedAt: claudeResponse.startingLocationType === 'station' ? locationId : null,
     },
+
+    combatActive: false,
 
     player: {
       name: captainName.trim(),
@@ -1735,6 +1926,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     summary: `Campaign began at ${claudeResponse.startingLocationName || 'Unknown Location'}`,
     tags: ['game_start', shipClass, difficulty],
     availableActions: claudeResponse.availableActions || [],
+    compressed: false,
   };
 
   const locationRef = db
