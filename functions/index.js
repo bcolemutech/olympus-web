@@ -381,8 +381,11 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
     { "type": "remove_item", "itemId": string }
     { "type": "location_discover", "location": { "id": string, "name": string, "type": "station"|"planet"|"moon"|"asteroid_field"|"derelict"|"anomaly", "description": string, "atmosphere": string } }
     { "type": "location_update", "locationId": string, "pointOfInterest": { "id": string, "name": string, "description": string, "type": string } | null, "significantEvent": string | null }
-    { "type": "quest_start", "quest": { "id": string, "title": string, "description": string } }
-    { "type": "quest_update", "questId": string, "status": "in_progress"|"completed"|"failed", "note": string }
+    { "type": "quest_start", "quest": { "id": string, "name": string, "description": string, "type": "main"|"side"|"crew_personal"|"faction"|"discovery", "givenBy": string | null, "objectives": [{ "id": string, "description": string }], "hooks": string[], "secrets": string[] } }
+    { "type": "quest_update", "questId": string, "status": "active"|"completed"|"failed"|"abandoned" | null, "objectiveId": string | null, "objectiveStatus": "active"|"completed"|"failed" | null, "note": string }
+    { "type": "star_map_discover", "system": { "id": string, "name": string, "type": "system"|"anomaly"|"hidden", "coordinates": { "x": number, "y": number }, "connections": [{ "targetId": string, "distance": number, "hazards": string[] }], "dangerLevel": "safe"|"cautious"|"dangerous"|"hostile", "faction": string | null, "hasServices": boolean, "rumors": string[] } }
+    { "type": "star_map_update", "systemId": string, "scanLevel": "basic"|"detailed" | null, "rumors": string[] | null }
+    { "type": "travel", "targetSystemId": string, "fuelCost": number, "reason": string }
   ],
   "availableActions": [
     { "id": string, "label": string (max 8 words), "type": "dialogue"|"navigation"|"combat"|"investigation"|"freeform" }
@@ -399,7 +402,12 @@ Constraints:
 - Honor the difficulty/tone setting in your narrative style and stat changes
 - Keep stat mutations reasonable: fuel should decrease by 1-5 per turn typically, combat causes 5-20 hull damage
 - Reference crew members and the captain by name when relevant
-- Do NOT generate mutations unless the action warrants them (e.g. dialogue rarely costs fuel)`;
+- Do NOT generate mutations unless the action warrants them (e.g. dialogue rarely costs fuel)
+- When the player navigates between systems, emit a "travel" mutation with the target system ID and fuel cost (typically 5-15 based on connection distance)
+- You may discover new adjacent systems using "star_map_discover" when the narrative calls for it — place them at reasonable coordinates relative to existing systems
+- Use "quest_start" to introduce emergent storylines with clear objectives; advance quests via "quest_update" as story progresses
+- If starMapContext is provided, suggest navigation actions when appropriate and reference rumors or signals from adjacent systems
+- When creating quests, include at least one hook or secret that you can use for future narrative development`;
 
 const VOID_ODYSSEY_RATE_LIMITS = {
   HOURLY_SOFT: 15,
@@ -619,26 +627,29 @@ function checkRateLimits(gameDoc, isAdmin) {
 
 /**
  * Assembles context from Firestore for a turn prompt.
- * Reads: last 5 narrative entries, active crew, current location.
+ * Reads: last 5 narrative entries, active crew, current location, star map, active quests.
  */
 async function assembleContext(db, gameId, gameDoc) {
   const gameRef = db.collection('void_odyssey_games').doc(gameId);
 
   const currentLocId = (gameDoc.ship && gameDoc.ship.currentLocationId) || '';
 
-  const [narrativeSnap, crewSnap, locationSnap, entitiesSnap, itemsSnap] = await Promise.all([
-    gameRef.collection('narrative_log').orderBy('turnNumber', 'desc').limit(5).get(),
-    gameRef.collection('crew').where('status', '==', 'active').get(),
-    currentLocId ? gameRef.collection('locations').doc(currentLocId).get() : Promise.resolve(null),
-    currentLocId
-      ? gameRef
-          .collection('entities')
-          .where('currentLocationId', '==', currentLocId)
-          .limit(10)
-          .get()
-      : Promise.resolve(null),
-    gameRef.collection('items').where('location', '==', 'cargo').limit(20).get(),
-  ]);
+  const [narrativeSnap, crewSnap, locationSnap, entitiesSnap, itemsSnap, starMapSnap, questsSnap] =
+    await Promise.all([
+      gameRef.collection('narrative_log').orderBy('turnNumber', 'desc').limit(5).get(),
+      gameRef.collection('crew').where('status', '==', 'active').get(),
+      currentLocId ? gameRef.collection('locations').doc(currentLocId).get() : Promise.resolve(null),
+      currentLocId
+        ? gameRef
+            .collection('entities')
+            .where('currentLocationId', '==', currentLocId)
+            .limit(10)
+            .get()
+        : Promise.resolve(null),
+      gameRef.collection('items').where('location', '==', 'cargo').limit(20).get(),
+      gameRef.collection('star_map').get(),
+      gameRef.collection('quests').where('status', '==', 'active').get(),
+    ]);
 
   const recentHistory = [];
   narrativeSnap.forEach((doc) => {
@@ -702,6 +713,49 @@ async function assembleContext(db, gameId, gameDoc) {
     });
   });
 
+  // Build star map context — adjacent systems and fuel range
+  const currentSystemId = (gameDoc.ship && gameDoc.ship.currentSystemId) || '';
+  const starMapSystems = [];
+  starMapSnap.forEach((doc) => {
+    starMapSystems.push(Object.assign({ id: doc.id }, doc.data()));
+  });
+  const currentSystem = starMapSystems.find((s) => s.id === currentSystemId) || null;
+  const adjacentSystems = [];
+  if (currentSystem && currentSystem.connections) {
+    currentSystem.connections.forEach((conn) => {
+      const target = starMapSystems.find((s) => s.id === conn.targetId);
+      if (target) {
+        adjacentSystems.push({
+          id: target.id,
+          name: target.name,
+          distance: conn.distance,
+          hazards: conn.hazards || [],
+          discovered: target.discovered,
+          visited: target.visited,
+          dangerLevel: target.dangerLevel || 'cautious',
+          faction: target.faction || null,
+          hasServices: target.hasServices || false,
+        });
+      }
+    });
+  }
+
+  // Build active quests from subcollection
+  const activeQuests = [];
+  questsSnap.forEach((doc) => {
+    const d = doc.data();
+    const objectives = d.objectives || [];
+    const currentObj = objectives.find((o) => o.status === 'active');
+    activeQuests.push({
+      id: doc.id,
+      name: d.name || d.title || 'Unnamed Quest',
+      type: d.type || 'side',
+      currentObjective: currentObj ? currentObj.description : null,
+      givenBy: d.givenBy || null,
+      status: d.status || 'active',
+    });
+  });
+
   return {
     ship: {
       name: gameDoc.ship.name,
@@ -724,7 +778,14 @@ async function assembleContext(db, gameId, gameDoc) {
     cargoItems,
     crew,
     recentHistory,
-    activeQuests: gameDoc.activeQuests || [],
+    activeQuests,
+    starMapContext: {
+      currentSystemId,
+      currentSystemName: currentSystem ? currentSystem.name : null,
+      adjacentSystems,
+      fuelRange: gameDoc.ship.fuel || 0,
+      knownSystems: starMapSystems.filter((s) => s.discovered).length,
+    },
     turnCount: gameDoc.turnCount || 0,
   };
 }
@@ -1052,6 +1113,144 @@ Generate the next narrative beat, state mutations, and available actions.`;
       } else if (mut.type === 'remove_item' && mut.itemId) {
         const itemDelRef = gameRef.collection('items').doc(mut.itemId);
         tx.delete(itemDelRef);
+      } else if (mut.type === 'quest_start' && mut.quest) {
+        const q = mut.quest;
+        const questRef = gameRef
+          .collection('quests')
+          .doc(q.id || `quest_${newTurnCount}_${i}`);
+        const objectives = Array.isArray(q.objectives)
+          ? q.objectives.slice(0, 10).map((o) => ({
+              id: o.id || `obj_${newTurnCount}_${i}`,
+              description: (o.description || '').slice(0, 500),
+              status: 'active',
+              completedOnTurn: null,
+            }))
+          : [];
+        tx.set(questRef, {
+          id: questRef.id,
+          name: (q.name || q.title || 'Unnamed Quest').slice(0, 200),
+          description: (q.description || '').slice(0, 1000),
+          type: q.type || 'side',
+          status: 'active',
+          givenBy: q.givenBy || null,
+          givenOnTurn: newTurnCount,
+          locationId: ship.currentLocationId || null,
+          objectives,
+          currentObjectiveId: objectives.length > 0 ? objectives[0].id : null,
+          rewards: null,
+          consequences: null,
+          completedOnTurn: null,
+          relatedEntityIds: [],
+          relatedLocationIds: [],
+          relatedItemIds: [],
+          relatedQuestIds: [],
+          hooks: Array.isArray(q.hooks) ? q.hooks.slice(0, 10) : [],
+          secrets: Array.isArray(q.secrets) ? q.secrets.slice(0, 10) : [],
+          tags: [q.type || 'side'],
+          createdAt: now,
+          updatedAt: now,
+        });
+        gameUpdate.activeQuestCount = FieldValue.increment(1);
+      } else if (mut.type === 'quest_update' && mut.questId) {
+        const questUpdateRef = gameRef.collection('quests').doc(mut.questId);
+        const questUpdate = { updatedAt: now };
+        if (mut.status) {
+          questUpdate.status = mut.status;
+          if (mut.status === 'completed' || mut.status === 'failed') {
+            questUpdate.completedOnTurn = newTurnCount;
+            gameUpdate.activeQuestCount = FieldValue.increment(-1);
+          }
+        }
+        if (mut.objectiveId && mut.objectiveStatus) {
+          // We cannot update array elements in Firestore directly,
+          // so we store objective updates as a map for client-side merge
+          questUpdate[`_objectiveUpdates.${mut.objectiveId}`] = {
+            status: mut.objectiveStatus,
+            completedOnTurn: mut.objectiveStatus === 'completed' ? newTurnCount : null,
+          };
+        }
+        if (mut.note) {
+          questUpdate.lastNote = (mut.note || '').slice(0, 500);
+        }
+        tx.set(questUpdateRef, questUpdate, { merge: true });
+      } else if (mut.type === 'star_map_discover' && mut.system) {
+        const sys = mut.system;
+        const sysRef = gameRef
+          .collection('star_map')
+          .doc(sys.id || `sys_${newTurnCount}_${i}`);
+        const connections = Array.isArray(sys.connections)
+          ? sys.connections.slice(0, 10).map((c) => ({
+              targetId: c.targetId,
+              distance: Number(c.distance) || 10,
+              hazards: Array.isArray(c.hazards) ? c.hazards.slice(0, 5) : [],
+              known: false,
+            }))
+          : [];
+        tx.set(sysRef, {
+          id: sysRef.id,
+          name: (sys.name || 'Unknown System').slice(0, 200),
+          type: sys.type || 'system',
+          coordinates: {
+            x: Number(sys.coordinates && sys.coordinates.x) || 0,
+            y: Number(sys.coordinates && sys.coordinates.y) || 0,
+          },
+          connections,
+          discovered: true,
+          visited: false,
+          scanLevel: 'none',
+          locationCount: 0,
+          dangerLevel: sys.dangerLevel || 'cautious',
+          faction: sys.faction || null,
+          hasServices: !!sys.hasServices,
+          rumors: Array.isArray(sys.rumors) ? sys.rumors.slice(0, 5) : [],
+          signalStrength: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        // Add reverse connection to the source system
+        connections.forEach((conn) => {
+          const reverseRef = gameRef.collection('star_map').doc(conn.targetId);
+          tx.set(
+            reverseRef,
+            {
+              connections: FieldValue.arrayUnion({
+                targetId: sysRef.id,
+                distance: conn.distance,
+                hazards: conn.hazards,
+                known: false,
+              }),
+              updatedAt: now,
+            },
+            { merge: true }
+          );
+        });
+      } else if (mut.type === 'star_map_update' && mut.systemId) {
+        const sysUpdateRef = gameRef.collection('star_map').doc(mut.systemId);
+        const sysUpdate = { updatedAt: now };
+        if (mut.scanLevel) sysUpdate.scanLevel = mut.scanLevel;
+        if (Array.isArray(mut.rumors)) sysUpdate.rumors = mut.rumors.slice(0, 10);
+        tx.set(sysUpdateRef, sysUpdate, { merge: true });
+      } else if (mut.type === 'travel' && mut.targetSystemId) {
+        const fuelCost = Number(mut.fuelCost) || 10;
+        ship.fuel = clamp((ship.fuel || 0) - fuelCost, 0, 100);
+        gameUpdate['ship.fuel'] = ship.fuel;
+        ship.currentSystemId = mut.targetSystemId;
+        gameUpdate['ship.currentSystemId'] = mut.targetSystemId;
+
+        // Mark target system as visited
+        const travelSysRef = gameRef.collection('star_map').doc(mut.targetSystemId);
+        tx.set(travelSysRef, { visited: true, scanLevel: 'basic', updatedAt: now }, { merge: true });
+
+        // Mark the route as known on the source system
+        const sourceSystemId = freshGame.ship.currentSystemId || 'sys_origin';
+        if (sourceSystemId !== mut.targetSystemId) {
+          const sourceSysRef = gameRef.collection('star_map').doc(sourceSystemId);
+          tx.set(
+            sourceSysRef,
+            { updatedAt: now },
+            { merge: true }
+          );
+        }
       }
     }
 
@@ -1108,6 +1307,19 @@ Generate the next narrative beat, state mutations, and available actions.`;
       currentLocationName = navAction.location.name;
     }
 
+    // Check for travel — update location name from target system
+    const travelAction = validatedMutations.find((m) => m.type === 'travel' && m.targetSystemId);
+    if (travelAction) {
+      // Use the travel reason or a location_discover name if one was also emitted
+      if (navAction) {
+        currentLocationName = navAction.location.name;
+      } else {
+        // Fall back to updating location name from the target system
+        gameUpdate.currentLocationName = travelAction.reason || currentLocationName;
+        currentLocationName = travelAction.reason || currentLocationName;
+      }
+    }
+
     tx.update(gameRef, gameUpdate);
 
     // Narrative log entry — cap field sizes to avoid exceeding Firestore limits
@@ -1138,7 +1350,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
       availableActions: cappedActions,
     });
 
-    return { ship, currentLocationName, newTurnCount, validatedMutations };
+    return { ship, currentLocationName, newTurnCount, validatedMutations, currentSystemId: ship.currentSystemId || null };
   });
 
   // ── Compute crew count ─────────────────────────────────────
@@ -1158,6 +1370,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
     },
     turnCount: txResult.newTurnCount,
     locationName: txResult.currentLocationName,
+    currentSystemId: txResult.currentSystemId || null,
     crewCount: crewSnap.size,
     rateLimitWarning: rateLimitResult.warning || null,
   };
