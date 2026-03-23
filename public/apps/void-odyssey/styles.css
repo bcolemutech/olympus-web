@@ -1163,3 +1163,56 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Quest log ──────────────────────────────────────────── */
+
+.quest-card {
+  cursor: pointer;
+}
+
+.quest-current-objective {
+  font-size: 0.78rem;
+  color: #b0bec5;
+  margin-top: 0.3rem;
+  padding-left: 0.2rem;
+}
+
+.quest-objectives {
+  margin-bottom: 0.75rem;
+}
+
+.quest-objective {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: #b0bec5;
+  padding: 0.25rem 0;
+}
+
+.quest-obj-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  text-align: center;
+}
+
+.quest-obj-active .quest-obj-icon {
+  color: #ffb74d;
+}
+
+.quest-obj-done {
+  color: #81c784;
+}
+
+.quest-obj-done .quest-obj-icon {
+  color: #81c784;
+}
+
+.quest-obj-failed {
+  color: #ef5350;
+  text-decoration: line-through;
+}
+
+.quest-obj-failed .quest-obj-icon {
+  color: #ef5350;
+}
