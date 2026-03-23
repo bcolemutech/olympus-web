@@ -8,7 +8,7 @@
     { id: 'ship', label: 'Ship', enabled: true },
     { id: 'crew', label: 'Crew', enabled: true },
     { id: 'codex', label: 'Codex', enabled: true },
-    { id: 'map', label: 'Map', enabled: false },
+    { id: 'map', label: 'Map', enabled: true },
     { id: 'quests', label: 'Quests', enabled: true },
     { id: 'log', label: 'Log', enabled: false },
   ];
@@ -86,6 +86,8 @@
       VO.renderCrewTab(container);
     } else if (tab === 'codex' && VO.renderCodexTab) {
       VO.renderCodexTab(container);
+    } else if (tab === 'map' && VO.renderMapTab) {
+      VO.renderMapTab(container);
     } else if (tab === 'quests' && VO.renderQuestsTab) {
       VO.renderQuestsTab(container);
     } else {
