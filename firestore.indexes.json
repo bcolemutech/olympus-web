@@ -71,6 +71,30 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "narrative_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "compressed", "order": "ASCENDING" },
+        { "fieldPath": "turnNumber", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "narrative_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "compressed", "order": "ASCENDING" },
+        { "fieldPath": "turnNumber", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "narrative_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "mood", "order": "ASCENDING" },
+        { "fieldPath": "turnNumber", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

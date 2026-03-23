@@ -52,6 +52,9 @@
     _setPct('hud-hull-bar', 'hud-hull-pct', ship.hull || 0, ship.hullMax || 100);
     _setPct('hud-shields-bar', 'hud-shields-pct', ship.shields || 0, ship.shieldsMax || 100);
     _setPct('hud-fuel-bar', 'hud-fuel-pct', ship.fuel || 0, 100);
+
+    var credits = document.getElementById('hud-credits');
+    if (credits) credits.textContent = ship.credits || 0;
   };
 
   /**
@@ -77,6 +80,11 @@
     if (data.locationName) {
       var location = document.getElementById('hud-location');
       if (location) location.textContent = data.locationName;
+    }
+
+    if (data.shipStatus && data.shipStatus.credits !== undefined) {
+      var creditsEl = document.getElementById('hud-credits');
+      if (creditsEl) creditsEl.textContent = data.shipStatus.credits;
     }
 
     if (data.crewCount !== undefined) {
