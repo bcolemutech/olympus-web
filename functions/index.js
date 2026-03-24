@@ -2083,3 +2083,38 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     ship: { name: shipName.trim(), class: shipClass, credits: 500, ...shipStats },
   };
 });
+
+// ── Delete a Void Odyssey campaign and all subcollections ──────
+exports.voidOdysseyDeleteGame = onCall(async (request) => {
+  // Auth + claim check
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('void-odyssey')) {
+    throw new HttpsError('permission-denied', "You don't have access to Void Odyssey.");
+  }
+
+  const { gameId } = request.data || {};
+  if (typeof gameId !== 'string' || gameId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'gameId is required.');
+  }
+
+  const db = getFirestore();
+  const gameRef = db.collection('void_odyssey_games').doc(gameId.trim());
+  const gameDoc = await gameRef.get();
+
+  if (!gameDoc.exists) {
+    throw new HttpsError('not-found', 'Campaign not found.');
+  }
+
+  // Verify ownership
+  if (gameDoc.data().userId !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'You can only delete your own campaigns.');
+  }
+
+  // Recursively delete the game document and all subcollections
+  await db.recursiveDelete(gameRef);
+
+  return { success: true };
+});

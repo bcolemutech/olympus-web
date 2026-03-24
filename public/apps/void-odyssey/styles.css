@@ -133,6 +133,59 @@
 
 .game-card-actions {
   margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.game-card-action-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: #90a4ae;
+  font-size: 1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.game-card-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e0e0e0;
+}
+
+.game-card-action-btn:focus-visible {
+  outline: 2px solid rgba(255, 183, 77, 0.7);
+  outline-offset: 2px;
+}
+
+.game-card-delete:hover {
+  background: rgba(239, 83, 80, 0.12);
+  color: #ef5350;
+  border-color: rgba(239, 83, 80, 0.3);
+}
+
+.game-card-rename-input {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffd54f;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 213, 79, 0.4);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  outline: none;
+  width: 100%;
+  max-width: 20rem;
+}
+
+.game-card-rename-input:focus {
+  border-color: rgba(255, 213, 79, 0.7);
 }
 
 .status-active {
@@ -587,36 +640,85 @@
 }
 
 /* Mood-based narrative panel variations */
+
+.narrative-panel {
+  transition:
+    border-color 0.6s ease,
+    background 0.6s ease,
+    box-shadow 0.6s ease;
+}
+
+.narrative-mood-calm {
+  border-color: rgba(100, 181, 246, 0.15);
+}
+
 .narrative-mood-tense {
-  border-color: rgba(255, 183, 77, 0.3);
+  border-color: rgba(255, 183, 77, 0.35);
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 183, 77, 0.04) 0%, transparent 70%);
+  box-shadow: inset 0 0 30px rgba(255, 183, 77, 0.03);
+}
+
+.narrative-mood-tense .narrative-text {
+  color: #d8cbb8;
 }
 
 .narrative-mood-danger {
-  border-color: rgba(239, 83, 80, 0.3);
-  background: rgba(239, 83, 80, 0.03);
+  border-color: rgba(239, 83, 80, 0.4);
+  background: radial-gradient(ellipse at 50% 0%, rgba(239, 83, 80, 0.06) 0%, transparent 70%);
+  box-shadow: inset 0 0 40px rgba(239, 83, 80, 0.04);
+}
+
+.narrative-mood-danger .narrative-text {
+  color: #dcc0b8;
 }
 
 .narrative-mood-wonder {
-  border-color: rgba(129, 199, 132, 0.3);
+  border-color: rgba(129, 199, 132, 0.35);
+  background: radial-gradient(ellipse at 50% 0%, rgba(129, 199, 132, 0.04) 0%, transparent 70%);
+  box-shadow: inset 0 0 30px rgba(129, 199, 132, 0.03);
+}
+
+.narrative-mood-wonder .narrative-text {
+  color: #c0d8c4;
 }
 
 .narrative-mood-tense_curiosity {
-  border-color: rgba(255, 213, 79, 0.25);
+  border-color: rgba(255, 213, 79, 0.3);
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 213, 79, 0.04) 0%, transparent 70%);
+}
+
+.narrative-mood-tense_curiosity .narrative-text {
+  color: #d8d0b0;
 }
 
 .narrative-mood-wry {
   border-color: rgba(176, 190, 197, 0.3);
+  background: none;
+}
+
+.narrative-mood-wry .narrative-text {
+  color: #b8c0c8;
 }
 
 .narrative-mood-reverent {
-  border-color: rgba(149, 117, 205, 0.3);
-  background: rgba(149, 117, 205, 0.02);
+  border-color: rgba(149, 117, 205, 0.35);
+  background: radial-gradient(ellipse at 50% 0%, rgba(149, 117, 205, 0.05) 0%, transparent 70%);
+  box-shadow: inset 0 0 30px rgba(149, 117, 205, 0.03);
+}
+
+.narrative-mood-reverent .narrative-text {
+  color: #c8c0d8;
 }
 
 .narrative-mood-combat {
   border-color: rgba(239, 83, 80, 0.5);
-  background: rgba(239, 83, 80, 0.06);
+  background: radial-gradient(ellipse at 50% 0%, rgba(239, 83, 80, 0.08) 0%, transparent 70%);
+  box-shadow: inset 0 0 50px rgba(239, 83, 80, 0.05);
   animation: combat-pulse 2s ease-in-out infinite;
+}
+
+.narrative-mood-combat .narrative-text {
+  color: #e0c0b0;
 }
 
 @keyframes combat-pulse {
@@ -633,6 +735,41 @@
   .narrative-mood-combat {
     animation: none;
   }
+}
+
+/* Ambient flavor text */
+
+.narrative-ambient {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: #546e7a;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(84, 110, 122, 0.15);
+}
+
+.narrative-mood-danger .narrative-ambient {
+  color: #ef9a9a;
+}
+
+.narrative-mood-combat .narrative-ambient {
+  color: #ef9a9a;
+}
+
+.narrative-mood-wonder .narrative-ambient {
+  color: #a5d6a7;
+}
+
+.narrative-mood-reverent .narrative-ambient {
+  color: #b39ddb;
+}
+
+.narrative-mood-tense .narrative-ambient {
+  color: #ffcc80;
+}
+
+.narrative-mood-tense_curiosity .narrative-ambient {
+  color: #fff176;
 }
 
 .narrative-text {
@@ -1495,6 +1632,105 @@
   text-anchor: middle;
   pointer-events: none;
   user-select: none;
+}
+
+/* Type-based node colors */
+
+.star-node-station {
+  fill: #4dd0e1;
+  stroke: #4dd0e1;
+}
+
+.star-node-planet {
+  fill: #81c784;
+  stroke: #81c784;
+}
+
+.star-node-anomaly {
+  fill: #ce93d8;
+  stroke: #ce93d8;
+}
+
+.star-node-derelict {
+  stroke: #ff8a65;
+}
+
+/* Override fills for visited/discovered states with type colors */
+.star-node-visited.star-node-station {
+  fill: rgba(77, 208, 225, 0.15);
+}
+
+.star-node-visited.star-node-planet {
+  fill: rgba(129, 199, 132, 0.15);
+}
+
+.star-node-visited.star-node-anomaly {
+  fill: rgba(206, 147, 216, 0.15);
+}
+
+.star-node-discovered.star-node-station {
+  stroke: #4dd0e1;
+  fill: none;
+}
+
+.star-node-discovered.star-node-planet {
+  stroke: #81c784;
+  fill: none;
+}
+
+.star-node-discovered.star-node-anomaly {
+  stroke: #ce93d8;
+  fill: none;
+}
+
+.star-node-discovered.star-node-derelict {
+  stroke: #ff8a65;
+  fill: none;
+}
+
+/* Ship icon on current system */
+
+.star-ship-icon {
+  pointer-events: none;
+  animation: ship-bob 3s ease-in-out infinite;
+}
+
+@keyframes ship-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star-ship-icon {
+    animation: none;
+  }
+}
+
+/* Route preview on hover */
+
+.star-connection-preview {
+  stroke: rgba(255, 213, 79, 0.6);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.star-map-preview-cost {
+  fill: #ffd54f;
+  font-size: 4px;
+  text-anchor: middle;
+  pointer-events: none;
+  user-select: none;
+  font-weight: bold;
+}
+
+.star-map-preview-cost-warn {
+  fill: #ef5350;
 }
 
 /* Tooltip */
