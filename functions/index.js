@@ -1119,6 +1119,40 @@ Generate the next narrative beat, state mutations, and available actions.`;
     let currentLocationName = freshGame.currentLocationName || '';
     const validatedMutations = [];
 
+    // ── Pre-fetch all documents needed by mutations (reads before writes) ──
+    const prefetchRefs = new Map();
+    const sourceSystemId = freshGame.ship.currentSystemId || 'sys_origin';
+    for (const mut of claudeResponse.stateMutations) {
+      if (mut.type === 'quest_update' && mut.questId) {
+        const ref = gameRef.collection('quests').doc(mut.questId);
+        prefetchRefs.set(ref.path, ref);
+      } else if (mut.type === 'star_map_discover' && mut.system) {
+        const sys = mut.system;
+        if (sys.id) {
+          const sysRef = gameRef.collection('star_map').doc(sys.id);
+          prefetchRefs.set(sysRef.path, sysRef);
+        }
+        const connections = Array.isArray(sys.connections) ? sys.connections : [];
+        for (const conn of connections) {
+          const reverseRef = gameRef.collection('star_map').doc(conn.targetId);
+          prefetchRefs.set(reverseRef.path, reverseRef);
+        }
+      } else if (mut.type === 'travel' && mut.targetSystemId) {
+        const travelSysRef = gameRef.collection('star_map').doc(mut.targetSystemId);
+        const sourceSysRef = gameRef.collection('star_map').doc(sourceSystemId);
+        prefetchRefs.set(travelSysRef.path, travelSysRef);
+        prefetchRefs.set(sourceSysRef.path, sourceSysRef);
+      }
+    }
+    const prefetchedSnaps = new Map();
+    const refsToFetch = [...prefetchRefs.values()];
+    if (refsToFetch.length > 0) {
+      const snaps = await Promise.all(refsToFetch.map((ref) => tx.get(ref)));
+      for (let i = 0; i < refsToFetch.length; i++) {
+        prefetchedSnaps.set(refsToFetch[i].path, snaps[i]);
+      }
+    }
+
     for (const mut of claudeResponse.stateMutations) {
       if (mut.type === 'ship_stat') {
         const field = mut.field;
@@ -1329,8 +1363,8 @@ Generate the next narrative beat, state mutations, and available actions.`;
         gameUpdate.activeQuestCount = FieldValue.increment(1);
       } else if (mut.type === 'quest_update' && mut.questId) {
         const questUpdateRef = gameRef.collection('quests').doc(mut.questId);
-        const questSnap = await tx.get(questUpdateRef);
-        if (questSnap.exists) {
+        const questSnap = prefetchedSnaps.get(questUpdateRef.path);
+        if (questSnap && questSnap.exists) {
           const questData = questSnap.data();
           const questUpdate = { updatedAt: now };
           const previousStatus = questData.status || 'active';
@@ -1387,8 +1421,8 @@ Generate the next narrative beat, state mutations, and available actions.`;
           : [];
 
         // Check if system already exists — if so, just mark discovered
-        const existingSysSnap = await tx.get(sysRef);
-        if (existingSysSnap.exists) {
+        const existingSysSnap = prefetchedSnaps.get(sysRef.path);
+        if (existingSysSnap && existingSysSnap.exists) {
           tx.set(sysRef, { discovered: true, updatedAt: now }, { merge: true });
         } else {
           tx.set(sysRef, {
@@ -1417,8 +1451,8 @@ Generate the next narrative beat, state mutations, and available actions.`;
         // Add reverse connection only to existing target systems
         for (const conn of connections) {
           const reverseRef = gameRef.collection('star_map').doc(conn.targetId);
-          const reverseSnap = await tx.get(reverseRef);
-          if (reverseSnap.exists) {
+          const reverseSnap = prefetchedSnaps.get(reverseRef.path);
+          if (reverseSnap && reverseSnap.exists) {
             tx.set(
               reverseRef,
               {
@@ -1447,15 +1481,13 @@ Generate the next narrative beat, state mutations, and available actions.`;
         // Validate: check target exists and is connected to source
         const travelSysRef = gameRef.collection('star_map').doc(mut.targetSystemId);
         const sourceSysRef = gameRef.collection('star_map').doc(sourceSystemId);
-        const [targetSnap, sourceSnap] = await Promise.all([
-          tx.get(travelSysRef),
-          tx.get(sourceSysRef),
-        ]);
+        const targetSnap = prefetchedSnaps.get(travelSysRef.path);
+        const sourceSnap = prefetchedSnaps.get(sourceSysRef.path);
 
-        if (!targetSnap.exists) break; // skip invalid target
+        if (!targetSnap || !targetSnap.exists) break; // skip invalid target
 
         // Verify connectivity
-        const sourceData = sourceSnap.exists ? sourceSnap.data() : {};
+        const sourceData = sourceSnap && sourceSnap.exists ? sourceSnap.data() : {};
         const sourceConns = Array.isArray(sourceData.connections) ? sourceData.connections : [];
         const isConnected = sourceConns.some((c) => c.targetId === mut.targetSystemId);
         if (!isConnected) break; // skip if not connected
@@ -1573,11 +1605,10 @@ Generate the next narrative beat, state mutations, and available actions.`;
         currentLocationName = navAction.location.name;
       } else {
         // Look up the target system name from star_map for the location name
-        const targetSysSnap = await tx.get(
-          gameRef.collection('star_map').doc(travelAction.targetSystemId)
-        );
+        const targetSysRef = gameRef.collection('star_map').doc(travelAction.targetSystemId);
+        const targetSysSnap = prefetchedSnaps.get(targetSysRef.path);
         const targetSysName =
-          targetSysSnap.exists && targetSysSnap.data().name
+          targetSysSnap && targetSysSnap.exists && targetSysSnap.data().name
             ? targetSysSnap.data().name.slice(0, 200)
             : 'Unknown System';
         gameUpdate.currentLocationName = targetSysName;
