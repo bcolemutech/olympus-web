@@ -1132,10 +1132,12 @@ Generate the next narrative beat, state mutations, and available actions.`;
           const sysRef = gameRef.collection('star_map').doc(sys.id);
           prefetchRefs.set(sysRef.path, sysRef);
         }
-        const connections = Array.isArray(sys.connections) ? sys.connections : [];
+        const connections = Array.isArray(sys.connections) ? sys.connections.slice(0, 10) : [];
         for (const conn of connections) {
-          const reverseRef = gameRef.collection('star_map').doc(conn.targetId);
-          prefetchRefs.set(reverseRef.path, reverseRef);
+          if (conn.targetId) {
+            const reverseRef = gameRef.collection('star_map').doc(conn.targetId);
+            prefetchRefs.set(reverseRef.path, reverseRef);
+          }
         }
       } else if (mut.type === 'travel' && mut.targetSystemId) {
         const travelSysRef = gameRef.collection('star_map').doc(mut.targetSystemId);
@@ -1484,16 +1486,16 @@ Generate the next narrative beat, state mutations, and available actions.`;
         const targetSnap = prefetchedSnaps.get(travelSysRef.path);
         const sourceSnap = prefetchedSnaps.get(sourceSysRef.path);
 
-        if (!targetSnap || !targetSnap.exists) break; // skip invalid target
+        if (!targetSnap || !targetSnap.exists) continue; // skip invalid target
 
         // Verify connectivity
         const sourceData = sourceSnap && sourceSnap.exists ? sourceSnap.data() : {};
         const sourceConns = Array.isArray(sourceData.connections) ? sourceData.connections : [];
         const isConnected = sourceConns.some((c) => c.targetId === mut.targetSystemId);
-        if (!isConnected) break; // skip if not connected
+        if (!isConnected) continue; // skip if not connected
 
         // Validate fuel
-        if ((ship.fuel || 0) < fuelCost) break; // skip if insufficient fuel
+        if ((ship.fuel || 0) < fuelCost) continue; // skip if insufficient fuel
 
         // Apply fuel cost
         ship.fuel = clamp((ship.fuel || 0) - fuelCost, 0, 100);
@@ -1597,9 +1599,9 @@ Generate the next narrative beat, state mutations, and available actions.`;
       currentLocationName = navAction.location.name;
     }
 
-    // Check for travel — update location name from target system
+    // Check for travel — update location name from target system (only if travel was applied)
     const travelAction = validatedMutations.find((m) => m.type === 'travel' && m.targetSystemId);
-    if (travelAction) {
+    if (travelAction && gameUpdate['ship.currentSystemId']) {
       if (navAction) {
         // A location_discover was also emitted — use its name
         currentLocationName = navAction.location.name;
