@@ -224,7 +224,7 @@
       // Populate HUD — build a game-shaped object for renderHud
       VO.renderHud({
         ship: Object.assign(
-          { name: game.ship.name, class: game.ship.class },
+          { name: game.ship.name, class: game.ship.class, credits: 500 },
           VO.SHIP_CLASSES.find(function (s) {
             return s.id === game.ship.class;
           }).stats
