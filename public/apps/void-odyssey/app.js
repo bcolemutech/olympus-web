@@ -86,19 +86,25 @@
         '</button>' +
         '<button type="button" class="game-card-action-btn game-rename" data-id="' +
         game.id +
-        '" data-name="' +
-        _esc(game.name || '') +
         '" title="Rename campaign" aria-label="Rename campaign">&#9998;</button>' +
         '<button type="button" class="game-card-action-btn game-card-delete game-delete" data-id="' +
         game.id +
-        '" data-name="' +
-        _esc(game.name || 'this campaign') +
         '" title="Delete campaign" aria-label="Delete campaign">&times;</button>' +
         '</div>' +
         '</div>';
     });
     html += '</div>';
     container.innerHTML = html;
+
+    // Set data-name via DOM property to avoid HTML attribute escaping issues
+    games.forEach(function (game) {
+      var card = container.querySelector('.game-card[data-game-id="' + game.id + '"]');
+      if (!card) return;
+      var renameBtn = card.querySelector('.game-rename');
+      var deleteBtn = card.querySelector('.game-delete');
+      if (renameBtn) renameBtn.dataset.name = game.name || '';
+      if (deleteBtn) deleteBtn.dataset.name = game.name || 'this campaign';
+    });
 
     // Continue/view buttons
     container.querySelectorAll('.game-continue').forEach(function (btn) {
@@ -140,37 +146,57 @@
     input.focus();
     input.select();
 
+    var committed = false;
+
+    function cleanupListeners() {
+      input.removeEventListener('keydown', onKeyDown);
+      input.removeEventListener('blur', onBlur);
+    }
+
     function commit() {
+      if (committed) return;
+      committed = true;
+      cleanupListeners();
+
+      if (!input.isConnected || !input.parentNode) return;
+
       var newName = input.value.trim();
       if (!newName || newName === currentName) {
-        // Revert
-        input.parentNode.replaceChild(nameSpan, input);
+        if (input.parentNode) input.parentNode.replaceChild(nameSpan, input);
         return;
       }
       input.disabled = true;
       VO.renameGame(gameId, newName)
         .then(function () {
           nameSpan.textContent = newName;
-          input.parentNode.replaceChild(nameSpan, input);
-          // Update the rename button's data-name
+          if (input.parentNode) input.parentNode.replaceChild(nameSpan, input);
           var renameBtn = container.querySelector('.game-rename[data-id="' + gameId + '"]');
           if (renameBtn) renameBtn.dataset.name = newName;
+          var deleteBtn = container.querySelector('.game-delete[data-id="' + gameId + '"]');
+          if (deleteBtn) deleteBtn.dataset.name = newName;
         })
         .catch(function (err) {
           console.error('Rename failed:', err);
-          input.parentNode.replaceChild(nameSpan, input);
+          if (input.parentNode) input.parentNode.replaceChild(nameSpan, input);
         });
     }
 
-    input.addEventListener('keydown', function (e) {
+    function onKeyDown(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         commit();
       } else if (e.key === 'Escape') {
-        input.parentNode.replaceChild(nameSpan, input);
+        cleanupListeners();
+        if (input.parentNode) input.parentNode.replaceChild(nameSpan, input);
       }
-    });
-    input.addEventListener('blur', commit);
+    }
+
+    function onBlur() {
+      commit();
+    }
+
+    input.addEventListener('keydown', onKeyDown);
+    input.addEventListener('blur', onBlur);
   }
 
   /** Delete campaign with confirmation. */

@@ -31,8 +31,12 @@
    * @returns {Promise<void>}
    */
   VO.renameGame = function (gameId, newName) {
+    var trimmed = (newName || '').trim().slice(0, 80);
+    if (!trimmed) {
+      return Promise.reject(new Error('Campaign name cannot be empty.'));
+    }
     return VO.state.db.collection('void_odyssey_games').doc(gameId).update({
-      name: newName,
+      name: trimmed,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
   };

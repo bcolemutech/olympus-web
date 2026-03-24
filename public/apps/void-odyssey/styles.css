@@ -1655,6 +1655,14 @@
   stroke: #ff8a65;
 }
 
+.star-derelict-circle {
+  fill: #ff8a65;
+}
+
+.star-derelict-cross {
+  stroke: #ff8a65;
+}
+
 /* Override fills for visited/discovered states with type colors */
 .star-node-visited.star-node-station {
   fill: rgba(77, 208, 225, 0.15);
@@ -1683,9 +1691,17 @@
   fill: none;
 }
 
-.star-node-discovered.star-node-derelict {
-  stroke: #ff8a65;
+.star-node-discovered.star-node-derelict .star-derelict-circle {
   fill: none;
+}
+
+.star-node-discovered.star-node-derelict .star-derelict-cross {
+  stroke: #ff8a65;
+  opacity: 0.5;
+}
+
+.star-node-visited.star-node-derelict .star-derelict-circle {
+  fill: rgba(255, 138, 101, 0.15);
 }
 
 /* Ship icon on current system */

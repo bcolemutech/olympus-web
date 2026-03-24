@@ -80,13 +80,13 @@
         el.setAttribute('fill', color);
         break;
       case 'derelict':
-        // Circle with an X through it
+        // Circle with an X through it — classes on children for CSS overrides
         el = document.createElementNS(SVG_NS, 'g');
         var dc = document.createElementNS(SVG_NS, 'circle');
         dc.setAttribute('cx', x);
         dc.setAttribute('cy', y);
         dc.setAttribute('r', r);
-        dc.setAttribute('fill', color);
+        dc.setAttribute('class', 'star-derelict-circle');
         dc.setAttribute('opacity', '0.5');
         el.appendChild(dc);
         var cross1 = document.createElementNS(SVG_NS, 'line');
@@ -94,7 +94,7 @@
         cross1.setAttribute('y1', y - r * 0.55);
         cross1.setAttribute('x2', x + r * 0.55);
         cross1.setAttribute('y2', y + r * 0.55);
-        cross1.setAttribute('stroke', color);
+        cross1.setAttribute('class', 'star-derelict-cross');
         cross1.setAttribute('stroke-width', '1.5');
         el.appendChild(cross1);
         var cross2 = document.createElementNS(SVG_NS, 'line');
@@ -102,7 +102,7 @@
         cross2.setAttribute('y1', y - r * 0.55);
         cross2.setAttribute('x2', x - r * 0.55);
         cross2.setAttribute('y2', y + r * 0.55);
-        cross2.setAttribute('stroke', color);
+        cross2.setAttribute('class', 'star-derelict-cross');
         cross2.setAttribute('stroke-width', '1.5');
         el.appendChild(cross2);
         break;
@@ -327,7 +327,19 @@
       var isCurrent = sys.id === currentSystemId;
       var isVisited = sys.visited;
       var isFogged = !!foggedIds[sys.id];
-      var sysType = (sys.type || '').toLowerCase();
+      // Map backend types to visual categories.
+      // Backend uses: system, anomaly, hidden. Infer station from hasServices.
+      var rawType = (sys.type || '').toLowerCase();
+      var sysType =
+        rawType === 'anomaly'
+          ? 'anomaly'
+          : rawType === 'derelict'
+            ? 'derelict'
+            : sys.hasServices
+              ? 'station'
+              : rawType === 'system' || rawType === ''
+                ? 'planet'
+                : rawType;
 
       var g = document.createElementNS(SVG_NS, 'g');
       g.setAttribute('class', 'star-node-group');
@@ -367,7 +379,8 @@
 
         // Ship icon
         var shipUse = document.createElementNS(SVG_NS, 'use');
-        shipUse.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#ship-icon');
+        shipUse.setAttribute('href', '#ship-icon');
+        shipUse.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '#ship-icon');
         shipUse.setAttribute('x', x - 6);
         shipUse.setAttribute('y', y - 6);
         shipUse.setAttribute('width', 12);
@@ -572,8 +585,13 @@
     svg.appendChild(line);
     _previewLine = line;
 
+    // If distance is unknown, skip fuel cost label to avoid misleading values
+    if (conn.distance == null) {
+      return;
+    }
+
     // Fuel cost label at midpoint
-    var fuelCost = conn.distance || 10;
+    var fuelCost = conn.distance;
     var fuel = (game.ship && game.ship.fuel) || 0;
     var mx = (x1 + x2) / 2;
     var my = (y1 + y2) / 2;
