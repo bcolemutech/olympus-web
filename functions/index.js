@@ -2047,6 +2047,6 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     })),
     startingLocation: claudeResponse.startingLocationName || 'Unknown Location',
     mood: claudeResponse.mood || 'calm',
-    ship: { name: shipName.trim(), class: shipClass },
+    ship: { name: shipName.trim(), class: shipClass, credits: 500, ...shipStats },
   };
 });
