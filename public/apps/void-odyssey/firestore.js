@@ -25,6 +25,35 @@
   };
 
   /**
+   * Rename a campaign.
+   * @param {string} gameId
+   * @param {string} newName
+   * @returns {Promise<void>}
+   */
+  VO.renameGame = function (gameId, newName) {
+    var trimmed = (newName || '').trim().slice(0, 80);
+    if (!trimmed) {
+      return Promise.reject(new Error('Campaign name cannot be empty.'));
+    }
+    return VO.state.db.collection('void_odyssey_games').doc(gameId).update({
+      name: trimmed,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  };
+
+  /**
+   * Delete a campaign and all its subcollections via Cloud Function.
+   * @param {string} gameId
+   * @returns {Promise<object>}
+   */
+  VO.deleteGame = function (gameId) {
+    var fn = VO.state.functions.httpsCallable('voidOdysseyDeleteGame');
+    return fn({ gameId: gameId }).then(function (result) {
+      return result.data;
+    });
+  };
+
+  /**
    * Fetch a single game document.
    * @param {string} gameId
    * @returns {Promise<object|null>}

@@ -4,6 +4,16 @@
   window.VoidOdyssey = window.VoidOdyssey || {};
   var VO = window.VoidOdyssey;
 
+  /** Ambient flavor text per mood — shown on mood transitions. */
+  var MOOD_AMBIENT = {
+    danger: 'The bridge lights cycle to emergency red.',
+    combat: 'Klaxons wail. The deck shudders beneath your boots.',
+    tense: 'The air on the bridge feels electric.',
+    wonder: 'A hush falls over the crew as they stare at the viewscreen.',
+    reverent: 'Something ancient and vast brushes against your consciousness.',
+    tense_curiosity: 'Your sensors chirp with unidentified readings.',
+  };
+
   function _escNarrative(str) {
     if (!str) return '';
     return str
@@ -29,7 +39,14 @@
     // Narrative panel
     var panel = document.getElementById('narrative-content');
     if (panel) {
-      panel.innerHTML = '<p class="narrative-text">' + _escNarrative(narrative) + '</p>';
+      var ambientHtml = '';
+      var ambientText = MOOD_AMBIENT[mood];
+      if (ambientText && mood !== VO.state._lastNarrativeMood) {
+        ambientHtml = '<p class="narrative-ambient">' + ambientText + '</p>';
+      }
+      VO.state._lastNarrativeMood = mood || null;
+      panel.innerHTML =
+        ambientHtml + '<p class="narrative-text">' + _escNarrative(narrative) + '</p>';
     }
 
     // Mood class on the panel wrapper

@@ -17,6 +17,22 @@
 
   // ── Games list view ────────────────────────────────────────
 
+  /** Resolve a difficulty id to its display label. */
+  function _difficultyLabel(id) {
+    var d = (VO.DIFFICULTIES || []).find(function (d) {
+      return d.id === id;
+    });
+    return d ? d.label : id || '—';
+  }
+
+  /** Resolve a ship class id to its display label. */
+  function _shipClassLabel(id) {
+    var s = (VO.SHIP_CLASSES || []).find(function (s) {
+      return s.id === id;
+    });
+    return s ? s.label : id || '—';
+  }
+
   function renderGamesList(games) {
     var container = document.getElementById('games-list-container');
     if (!container) return;
@@ -30,10 +46,16 @@
     games.forEach(function (game) {
       var updated =
         game.updatedAt && game.updatedAt.toDate ? game.updatedAt.toDate().toLocaleDateString() : '';
+      var shipClass = (game.ship && game.ship.class) || '';
+      var difficulty = game.difficulty || '';
       html +=
-        '<div class="game-card">' +
+        '<div class="game-card" data-game-id="' +
+        game.id +
+        '">' +
         '<div class="game-card-header">' +
-        '<span class="game-card-name">' +
+        '<span class="game-card-name" data-id="' +
+        game.id +
+        '">' +
         _esc(game.name || 'Unnamed Campaign') +
         '</span>' +
         '<span class="game-card-status ' +
@@ -48,10 +70,12 @@
         '</span>' +
         '<span>' +
         _esc((game.ship && game.ship.name) || '—') +
+        (shipClass ? ' (' + _esc(_shipClassLabel(shipClass)) + ')' : '') +
         '</span>' +
         '<span>Turn ' +
         (game.turnCount || 0) +
         '</span>' +
+        (difficulty ? '<span>' + _esc(_difficultyLabel(difficulty)) + '</span>' : '') +
         (updated ? '<span>' + updated + '</span>' : '') +
         '</div>' +
         '<div class="game-card-actions">' +
@@ -60,17 +84,156 @@
         '">' +
         (game.status === 'active' ? 'Continue' : 'View') +
         '</button>' +
+        '<button type="button" class="game-card-action-btn game-rename" data-id="' +
+        game.id +
+        '" title="Rename campaign" aria-label="Rename campaign">&#9998;</button>' +
+        '<button type="button" class="game-card-action-btn game-card-delete game-delete" data-id="' +
+        game.id +
+        '" title="Delete campaign" aria-label="Delete campaign">&times;</button>' +
         '</div>' +
         '</div>';
     });
     html += '</div>';
     container.innerHTML = html;
 
+    // Set data-name via DOM property to avoid HTML attribute escaping issues
+    games.forEach(function (game) {
+      var card = container.querySelector('.game-card[data-game-id="' + game.id + '"]');
+      if (!card) return;
+      var renameBtn = card.querySelector('.game-rename');
+      var deleteBtn = card.querySelector('.game-delete');
+      if (renameBtn) renameBtn.dataset.name = game.name || '';
+      if (deleteBtn) deleteBtn.dataset.name = game.name || 'this campaign';
+    });
+
+    // Continue/view buttons
     container.querySelectorAll('.game-continue').forEach(function (btn) {
       btn.addEventListener('click', function () {
         _loadActiveGame(btn.dataset.id);
       });
     });
+
+    // Rename buttons
+    container.querySelectorAll('.game-rename').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _startRename(btn.dataset.id, btn.dataset.name, container);
+      });
+    });
+
+    // Delete buttons
+    container.querySelectorAll('.game-delete').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _confirmDelete(btn.dataset.id, btn.dataset.name);
+      });
+    });
+  }
+
+  /** Inline rename: replace name span with input field. */
+  function _startRename(gameId, currentName, container) {
+    var nameSpan = container.querySelector('.game-card-name[data-id="' + gameId + '"]');
+    if (!nameSpan) return;
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'game-card-rename-input';
+    input.value = currentName || '';
+    input.maxLength = 80;
+    input.setAttribute('aria-label', 'Campaign name');
+
+    nameSpan.parentNode.replaceChild(input, nameSpan);
+    input.focus();
+    input.select();
+
+    var committed = false;
+
+    function cleanupListeners() {
+      input.removeEventListener('keydown', onKeyDown);
+      input.removeEventListener('blur', onBlur);
+    }
+
+    function commit() {
+      if (committed) return;
+      committed = true;
+      cleanupListeners();
+
+      if (!input.isConnected || !input.parentNode) return;
+
+      var newName = input.value.trim();
+      if (!newName || newName === currentName) {
+        if (input.parentNode) input.parentNode.replaceChild(nameSpan, input);
+        return;
+      }
+      input.disabled = true;
+      VO.renameGame(gameId, newName)
+        .then(function () {
+          nameSpan.textContent = newName;
+          if (input.parentNode) input.parentNode.replaceChild(nameSpan, input);
+          var renameBtn = container.querySelector('.game-rename[data-id="' + gameId + '"]');
+          if (renameBtn) renameBtn.dataset.name = newName;
+          var deleteBtn = container.querySelector('.game-delete[data-id="' + gameId + '"]');
+          if (deleteBtn) deleteBtn.dataset.name = newName;
+        })
+        .catch(function (err) {
+          console.error('Rename failed:', err);
+          if (input.parentNode) input.parentNode.replaceChild(nameSpan, input);
+        });
+    }
+
+    function onKeyDown(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commit();
+      } else if (e.key === 'Escape') {
+        cleanupListeners();
+        if (input.parentNode) input.parentNode.replaceChild(nameSpan, input);
+      }
+    }
+
+    function onBlur() {
+      commit();
+    }
+
+    input.addEventListener('keydown', onKeyDown);
+    input.addEventListener('blur', onBlur);
+  }
+
+  /** Delete campaign with confirmation. */
+  function _confirmDelete(gameId, gameName) {
+    if (
+      !window.confirm(
+        'Delete campaign "' + (gameName || 'Unnamed') + '"?\n\nThis cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    // Remove the card immediately for responsiveness, restore on error
+    var card = document.querySelector('.game-card[data-game-id="' + gameId + '"]');
+    var parent = card && card.parentNode;
+    var nextSibling = card && card.nextSibling;
+    if (card) card.remove();
+
+    VO.deleteGame(gameId)
+      .then(function () {
+        // Check if grid is now empty
+        var grid = document.querySelector('.games-grid');
+        if (grid && grid.children.length === 0) {
+          var container = document.getElementById('games-list-container');
+          if (container) {
+            container.innerHTML =
+              '<p class="games-empty">No campaigns yet. Start your first voyage!</p>';
+          }
+        }
+      })
+      .catch(function (err) {
+        console.error('Delete failed:', err);
+        // Restore the card on failure
+        if (card && parent) {
+          parent.insertBefore(card, nextSibling);
+        }
+      });
   }
 
   // ── Active game view ───────────────────────────────────────
