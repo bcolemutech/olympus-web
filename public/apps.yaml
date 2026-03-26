@@ -9,15 +9,6 @@ apps:
     enabled: true
     order: 1
 
-  - id: app2
-    name: Hermes' Scrolls
-    description: Inscribe your thoughts upon the divine parchment.
-    icon: "\U0001F4DC"
-    type: embedded
-    path: /apps/example/
-    enabled: true
-    order: 0
-
   - id: void-odyssey
     name: Void Odyssey
     description: An AI-narrated space exploration adventure
@@ -37,24 +28,6 @@ apps:
     order: 10
 
   # ── JSX applets ─────────────────────────────────────────
-  - id: hello-world
-    name: Hello World
-    description: A simple interactive greeting
-    icon: "\U0001F44B"
-    type: jsx
-    file: hello-world.jsx
-    enabled: true
-    order: 20
-
-  - id: counter
-    name: Counter
-    description: A click counter demo
-    icon: "\U0001F522"
-    type: jsx
-    file: counter.jsx
-    enabled: true
-    order: 21
-
   - id: pool-powerups
     name: Pool Power-Ups
     description: Handicap card system for billiards — deal power-up cards based on skill level
