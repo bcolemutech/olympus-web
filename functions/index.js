@@ -428,6 +428,9 @@ const VOID_ODYSSEY_RATE_LIMITS = {
   WEEKLY_HARD: 200,
 };
 
+// NOTE: These ship class definitions must stay in sync with the frontend source of truth:
+// public/apps/void-odyssey/state.js — VO.SHIP_CLASSES
+// Any changes to stats, weapons, systems, or features should be applied in both places.
 const SHIP_CLASS_DEFAULTS = {
   light_freighter: {
     hull: 70,
@@ -2030,9 +2033,6 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       description: shipClassLabels[shipClass],
       ...shipStats,
       credits: 500,
-      weapons: shipStats.weapons || [],
-      systems: shipStats.systems || [],
-      features: shipStats.features || [],
       currentLocationId: locationId,
       currentSystemId: 'sys_origin',
       dockedAt: claudeResponse.startingLocationType === 'station' ? locationId : null,
