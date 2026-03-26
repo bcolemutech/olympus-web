@@ -1336,6 +1336,8 @@
     border-radius: 2px;
     margin: 0.5rem auto;
     cursor: pointer;
+    border: none;
+    padding: 0;
   }
 
   .sidebar-sheet-toggle {

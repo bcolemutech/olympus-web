@@ -39,7 +39,8 @@
     var toggle = document.getElementById('sidebar-sheet-toggle');
     if (toggle) {
       toggle.onclick = function () {
-        _setSheetOpen(true);
+        var panel = document.getElementById('sidebar-panel');
+        _setSheetOpen(panel ? !panel.classList.contains('sidebar-sheet-open') : true);
       };
     }
 
