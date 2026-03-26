@@ -437,6 +437,29 @@ const SHIP_CLASS_DEFAULTS = {
     fuel: 100,
     cargo: 0,
     cargoMax: 80,
+    weapons: [
+      {
+        id: 'w1',
+        name: 'Point-Defense Turret',
+        type: 'energy',
+        damage: 'light',
+        status: 'operational',
+        notes: 'For emergencies only.',
+      },
+    ],
+    systems: [
+      { id: 's1', name: 'FTL Drive', status: 'operational', notes: '' },
+      { id: 's2', name: 'Life Support', status: 'operational', notes: '' },
+      { id: 's3', name: 'Sensors', status: 'operational', notes: 'Short-range only.' },
+    ],
+    features: [
+      {
+        id: 'f1',
+        name: 'Expanded Cargo Hold',
+        description: 'Extra storage at the cost of crew space.',
+        functional: true,
+      },
+    ],
   },
   scout_corvette: {
     hull: 55,
@@ -446,6 +469,29 @@ const SHIP_CLASS_DEFAULTS = {
     fuel: 100,
     cargo: 0,
     cargoMax: 30,
+    weapons: [
+      {
+        id: 'w1',
+        name: 'Light Plasma Cannon',
+        type: 'energy',
+        damage: 'moderate',
+        status: 'operational',
+        notes: '',
+      },
+    ],
+    systems: [
+      { id: 's1', name: 'FTL Drive', status: 'operational', notes: 'Enhanced range.' },
+      { id: 's2', name: 'Life Support', status: 'operational', notes: '' },
+      { id: 's3', name: 'Long-Range Sensors', status: 'operational', notes: 'Best-in-class.' },
+    ],
+    features: [
+      {
+        id: 'f1',
+        name: 'Stealth Coating',
+        description: 'Reduces sensor signature.',
+        functional: true,
+      },
+    ],
   },
   gunship: {
     hull: 90,
@@ -455,6 +501,37 @@ const SHIP_CLASS_DEFAULTS = {
     fuel: 100,
     cargo: 0,
     cargoMax: 20,
+    weapons: [
+      {
+        id: 'w1',
+        name: 'Twin Plasma Cannons',
+        type: 'energy',
+        damage: 'heavy',
+        status: 'operational',
+        notes: '',
+      },
+      {
+        id: 'w2',
+        name: 'Missile Tubes',
+        type: 'missile',
+        damage: 'heavy',
+        status: 'operational',
+        notes: '12 missiles remaining.',
+      },
+    ],
+    systems: [
+      { id: 's1', name: 'FTL Drive', status: 'operational', notes: 'Military-grade.' },
+      { id: 's2', name: 'Life Support', status: 'operational', notes: '' },
+      { id: 's3', name: 'Combat Sensors', status: 'operational', notes: 'Targeting optimized.' },
+    ],
+    features: [
+      {
+        id: 'f1',
+        name: 'Reinforced Armor Plating',
+        description: 'Additional structural integrity.',
+        functional: true,
+      },
+    ],
   },
   salvage_rig: {
     hull: 65,
@@ -464,6 +541,35 @@ const SHIP_CLASS_DEFAULTS = {
     fuel: 100,
     cargo: 0,
     cargoMax: 60,
+    weapons: [
+      {
+        id: 'w1',
+        name: 'Mining Laser (weaponized)',
+        type: 'energy',
+        damage: 'moderate',
+        status: 'operational',
+        notes: 'Jury-rigged.',
+      },
+    ],
+    systems: [
+      { id: 's1', name: 'FTL Drive', status: 'operational', notes: 'Barely certified.' },
+      { id: 's2', name: 'Life Support', status: 'operational', notes: '' },
+      { id: 's3', name: 'Salvage Arm', status: 'operational', notes: 'Can retrieve debris.' },
+    ],
+    features: [
+      {
+        id: 'f1',
+        name: "Smuggler's Hold",
+        description: 'Hidden compartment beneath the cargo bay.',
+        functional: true,
+      },
+      {
+        id: 'f2',
+        name: 'Workshop',
+        description: 'Basic repair and fabrication tools.',
+        functional: true,
+      },
+    ],
   },
 };
 
@@ -1924,9 +2030,9 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       description: shipClassLabels[shipClass],
       ...shipStats,
       credits: 500,
-      weapons: [],
-      systems: [],
-      features: [],
+      weapons: shipStats.weapons || [],
+      systems: shipStats.systems || [],
+      features: shipStats.features || [],
       currentLocationId: locationId,
       currentSystemId: 'sys_origin',
       dockedAt: claudeResponse.startingLocationType === 'station' ? locationId : null,
