@@ -1086,6 +1086,11 @@
   color: #9575cd;
 }
 
+/* Mobile backdrop (hidden by default, shown behind bottom sheet) */
+.sidebar-backdrop {
+  display: none;
+}
+
 /* Mobile sidebar toggle (hidden on desktop) */
 .sidebar-sheet-toggle {
   display: none;
@@ -1303,9 +1308,23 @@
     max-height: 70vh;
     border-radius: 16px 16px 0 0;
     border-bottom: none;
+    background: #1a1a2e;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   .sidebar-panel.sidebar-sheet-open {
+    display: block;
+  }
+
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 99;
+  }
+
+  .sidebar-backdrop.sidebar-sheet-open {
     display: block;
   }
 
@@ -1316,6 +1335,7 @@
     background: rgba(255, 255, 255, 0.2);
     border-radius: 2px;
     margin: 0.5rem auto;
+    cursor: pointer;
   }
 
   .sidebar-sheet-toggle {
