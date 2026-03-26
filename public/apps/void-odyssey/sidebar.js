@@ -40,12 +40,21 @@
     if (toggle) {
       toggle.onclick = function () {
         var panel = document.getElementById('sidebar-panel');
-        if (!panel) return;
-        panel.classList.toggle('sidebar-sheet-open');
-        toggle.setAttribute(
-          'aria-expanded',
-          panel.classList.contains('sidebar-sheet-open') ? 'true' : 'false'
-        );
+        _setSheetOpen(panel ? !panel.classList.contains('sidebar-sheet-open') : true);
+      };
+    }
+
+    var backdrop = document.getElementById('sidebar-backdrop');
+    if (backdrop) {
+      backdrop.onclick = function () {
+        _setSheetOpen(false);
+      };
+    }
+
+    var handle = document.getElementById('sidebar-sheet-handle');
+    if (handle) {
+      handle.onclick = function () {
+        _setSheetOpen(false);
       };
     }
   };
@@ -443,6 +452,16 @@
   }
 
   // ── Internal helpers ──────────────────────────────────────
+
+  function _setSheetOpen(open) {
+    var panel = document.getElementById('sidebar-panel');
+    var backdrop = document.getElementById('sidebar-backdrop');
+    var toggle = document.getElementById('sidebar-sheet-toggle');
+    if (!panel) return;
+    panel.classList.toggle('sidebar-sheet-open', open);
+    if (backdrop) backdrop.classList.toggle('sidebar-sheet-open', open);
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
 
   function _renderTabs() {
     var tabBar = document.getElementById('sidebar-tabs');
