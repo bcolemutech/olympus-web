@@ -121,6 +121,16 @@
                 />
                 <button type="button" class="btn btn-primary btn-sm freeform-submit">Go</button>
               </div>
+              <!-- Mobile sidebar toggle — lives inside the sticky action panel so it's always reachable -->
+              <button
+                type="button"
+                class="sidebar-sheet-toggle"
+                id="sidebar-sheet-toggle"
+                aria-label="Toggle sidebar"
+                aria-expanded="false"
+              >
+                &#9776; Game Info
+              </button>
             </div>
           </div>
 
@@ -141,16 +151,6 @@
 
         <!-- Mobile sidebar backdrop -->
         <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
-
-        <!-- Mobile sidebar toggle -->
-        <button
-          type="button"
-          class="sidebar-sheet-toggle"
-          id="sidebar-sheet-toggle"
-          aria-label="Toggle sidebar"
-        >
-          &#9776; Game Info
-        </button>
 
         <!-- Back to campaigns — wired in app.js -->
         <button

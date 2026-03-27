@@ -1091,25 +1091,26 @@
   display: none;
 }
 
-/* Mobile sidebar toggle (hidden on desktop) */
+/* Mobile sidebar toggle (hidden on desktop, shown inside action panel on mobile) */
 .sidebar-sheet-toggle {
   display: none;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.6rem;
+  background: rgba(255, 213, 79, 0.1);
+  border: 1px solid rgba(255, 213, 79, 0.3);
   border-radius: 8px;
-  color: #b0bec5;
-  font-size: 0.88rem;
+  color: #ffd54f;
+  font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
-  margin-bottom: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 .sidebar-sheet-toggle:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 213, 79, 0.18);
 }
 
 /* Sidebar clickable cards */
@@ -1310,6 +1311,8 @@
     border-bottom: none;
     background: #1a1a2e;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
   }
 
   .sidebar-panel.sidebar-sheet-open {
