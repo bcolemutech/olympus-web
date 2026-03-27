@@ -828,6 +828,12 @@
   cursor: not-allowed;
 }
 
+.action-btn--selected {
+  border-color: rgba(255, 183, 77, 0.7);
+  background: rgba(255, 183, 77, 0.15);
+  color: #ffe0b2;
+}
+
 /* ── Narrative loading ──────────────────────────────────── */
 
 .narrative-loading {

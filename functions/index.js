@@ -406,7 +406,7 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
 }
 
 Constraints:
-- Generate exactly 3-4 available actions (always include one with type "freeform" and label "Do something else...")
+- Generate exactly 3-4 available actions; do not include any action with type "freeform"
 - The narrative MUST continue from the current game state — do not contradict established facts
 - Honor the difficulty/tone setting in your narrative style and stat changes
 - Keep stat mutations reasonable: fuel should decrease by 1-5 per turn typically, combat causes 5-20 hull damage
@@ -1197,15 +1197,6 @@ Generate the next narrative beat, state mutations, and available actions.`;
         )
         .slice(0, 5)
     : [];
-  // Ensure at least one freeform action exists
-  if (!claudeResponse.availableActions.some((a) => a.type === 'freeform')) {
-    claudeResponse.availableActions.push({
-      id: 'freeform_fallback',
-      label: 'Do something else...',
-      type: 'freeform',
-    });
-  }
-
   // Validate newEntities
   claudeResponse.newEntities = Array.isArray(claudeResponse.newEntities)
     ? claudeResponse.newEntities
@@ -1937,7 +1928,7 @@ You must respond with ONLY a valid JSON object. No prose outside the JSON. The s
 
 Constraints:
 - Generate exactly 2-3 crew members appropriate for the ship class
-- Generate exactly 3-4 available actions (always include one with type "freeform" and label "Do something else...")
+- Generate exactly 3-4 available actions; do not include any action with type "freeform"
 - The narrative must reference the captain by name and at least one crew member
 - Honor the difficulty/tone setting in the narrative style and situation
 - The starting location must feel specific and interesting, not generic`;
