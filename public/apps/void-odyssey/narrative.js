@@ -67,54 +67,100 @@
       wrapper.scrollTop = wrapper.scrollHeight;
     }
 
-    // Action buttons
-    var actionsContainer = document.getElementById('action-buttons');
-    if (actionsContainer) {
-      actionsContainer.innerHTML = '';
-      (actions || []).forEach(function (action) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'action-btn';
-        btn.textContent = action.label;
-        btn.dataset.id = action.id;
-        btn.dataset.type = action.type;
-        if (onActionClick) {
-          btn.addEventListener('click', function () {
-            onActionClick(action);
-          });
-        }
-        actionsContainer.appendChild(btn);
-      });
-    }
+    var selectedAction = null;
+    var newInput = null;
+    var newSubmit = null;
 
-    // Freeform input
+    // Set up freeform row first so action buttons can reference newInput/newSubmit
     var freeformRow = document.getElementById('freeform-input-row');
     if (freeformRow && onFreeformSubmit) {
       var input = freeformRow.querySelector('.freeform-input');
       var submitBtn = freeformRow.querySelector('.freeform-submit');
       freeformRow.classList.remove('hidden');
 
-      // Remove old listeners by cloning
-      var newSubmit = submitBtn.cloneNode(true);
+      // Remove old listeners by cloning; explicitly clear disabled state
+      newSubmit = submitBtn.cloneNode(true);
+      newSubmit.disabled = true; // disabled until user selects or types
       submitBtn.parentNode.replaceChild(newSubmit, submitBtn);
 
-      var newInput = input.cloneNode(true);
+      newInput = input.cloneNode(true);
+      newInput.disabled = false; // always re-enable after clone
+      newInput.value = '';
       input.parentNode.replaceChild(newInput, input);
+    }
 
-      function doSubmit() {
-        var val = newInput.value.trim();
-        if (val.length > 0) {
-          onFreeformSubmit(val);
-          newInput.value = '';
-        }
+    function updateGoButton() {
+      if (!newSubmit) return;
+      var hasText = newInput && newInput.value.trim().length > 0;
+      newSubmit.disabled = !hasText && !selectedAction;
+    }
+
+    function doSubmit() {
+      var val = newInput ? newInput.value.trim() : '';
+      if (val.length > 0 && onFreeformSubmit) {
+        onFreeformSubmit(val);
+        newInput.value = '';
+        selectedAction = null;
+      } else if (selectedAction && onActionClick) {
+        onActionClick(selectedAction);
+        selectedAction = null;
       }
+    }
 
+    // Action buttons — filter out freeform-type actions (handled by the text input)
+    var actionsContainer = document.getElementById('action-buttons');
+    if (actionsContainer) {
+      actionsContainer.innerHTML = '';
+      (actions || [])
+        .filter(function (action) {
+          return action.type !== 'freeform';
+        })
+        .forEach(function (action) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'action-btn';
+          btn.textContent = action.label;
+          btn.dataset.id = action.id;
+          btn.dataset.type = action.type;
+          btn.setAttribute('aria-pressed', 'false');
+          btn.addEventListener('click', function () {
+            // Select this button; deselect others
+            actionsContainer.querySelectorAll('.action-btn').forEach(function (b) {
+              b.classList.remove('action-btn--selected');
+              b.setAttribute('aria-pressed', 'false');
+            });
+            btn.classList.add('action-btn--selected');
+            btn.setAttribute('aria-pressed', 'true');
+            selectedAction = action;
+            // Clear freeform text so it doesn't override the selection
+            if (newInput) newInput.value = '';
+            updateGoButton();
+          });
+          actionsContainer.appendChild(btn);
+        });
+    }
+
+    // Wire Go button and input events
+    if (freeformRow && newSubmit && newInput) {
       newSubmit.addEventListener('click', doSubmit);
+
       newInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
           e.preventDefault();
           doSubmit();
         }
+      });
+
+      newInput.addEventListener('input', function () {
+        // Typing deselects any highlighted action button
+        if (newInput.value.trim().length > 0 && actionsContainer) {
+          actionsContainer.querySelectorAll('.action-btn').forEach(function (b) {
+            b.classList.remove('action-btn--selected');
+            b.setAttribute('aria-pressed', 'false');
+          });
+          selectedAction = null;
+        }
+        updateGoButton();
       });
     }
   };
