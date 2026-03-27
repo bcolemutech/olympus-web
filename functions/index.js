@@ -397,7 +397,7 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
     { "type": "system_status", "systemId": string, "status": "operational"|"damaged"|"destroyed"|"offline", "reason": string }
   ],
   "availableActions": [
-    { "id": string, "label": string (max 8 words), "type": "dialogue"|"navigation"|"combat"|"investigation"|"freeform" }
+    { "id": string, "label": string (max 8 words), "type": "dialogue"|"navigation"|"combat"|"investigation" }
   ],
   "newEntities": [
     { "id": string, "type": "npc"|"ship"|"object", "name": string, "description": string, "species": string | null, "role": string | null, "disposition": "friendly"|"neutral"|"suspicious"|"hostile", "dialogue_style": string | null, "tags": string[] }
@@ -406,7 +406,7 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
 }
 
 Constraints:
-- Generate exactly 3-4 available actions; do not include any action with type "freeform"
+- Generate exactly 3-4 available actions
 - The narrative MUST continue from the current game state — do not contradict established facts
 - Honor the difficulty/tone setting in your narrative style and stat changes
 - Keep stat mutations reasonable: fuel should decrease by 1-5 per turn typically, combat causes 5-20 hull damage
@@ -1180,8 +1180,8 @@ Generate the next narrative beat, state mutations, and available actions.`;
     ? claudeResponse.stateMutations.slice(0, 20)
     : [];
 
-  // Validate availableActions — ensure 3-4, always include freeform
-  const VALID_ACTION_TYPES = ['dialogue', 'navigation', 'combat', 'investigation', 'freeform'];
+  // Validate availableActions — freeform is not a valid type for Claude-generated actions
+  const VALID_ACTION_TYPES = ['dialogue', 'navigation', 'combat', 'investigation'];
   claudeResponse.availableActions = Array.isArray(claudeResponse.availableActions)
     ? claudeResponse.availableActions
         .filter(
@@ -1921,14 +1921,14 @@ You must respond with ONLY a valid JSON object. No prose outside the JSON. The s
   "startingLocationAtmosphere": string (1-3 mood keywords, e.g. "industrial_decay"),
   "questHook": string (one sentence describing the first quest hook that emerged from the opening scene),
   "availableActions": [
-    { "id": string, "label": string (max 8 words), "type": string (one of: dialogue, navigation, combat, investigation, freeform) }
+    { "id": string, "label": string (max 8 words), "type": string (one of: dialogue, navigation, combat, investigation) }
   ],
   "mood": string (one of: tense, calm, wonder, danger, tense_curiosity, wry, reverent)
 }
 
 Constraints:
 - Generate exactly 2-3 crew members appropriate for the ship class
-- Generate exactly 3-4 available actions; do not include any action with type "freeform"
+- Generate exactly 3-4 available actions
 - The narrative must reference the captain by name and at least one crew member
 - Honor the difficulty/tone setting in the narrative style and situation
 - The starting location must feel specific and interesting, not generic`;

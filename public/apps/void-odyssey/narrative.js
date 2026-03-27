@@ -122,12 +122,15 @@
           btn.textContent = action.label;
           btn.dataset.id = action.id;
           btn.dataset.type = action.type;
+          btn.setAttribute('aria-pressed', 'false');
           btn.addEventListener('click', function () {
             // Select this button; deselect others
             actionsContainer.querySelectorAll('.action-btn').forEach(function (b) {
               b.classList.remove('action-btn--selected');
+              b.setAttribute('aria-pressed', 'false');
             });
             btn.classList.add('action-btn--selected');
+            btn.setAttribute('aria-pressed', 'true');
             selectedAction = action;
             // Clear freeform text so it doesn't override the selection
             if (newInput) newInput.value = '';
@@ -153,6 +156,7 @@
         if (newInput.value.trim().length > 0 && actionsContainer) {
           actionsContainer.querySelectorAll('.action-btn').forEach(function (b) {
             b.classList.remove('action-btn--selected');
+            b.setAttribute('aria-pressed', 'false');
           });
           selectedAction = null;
         }
