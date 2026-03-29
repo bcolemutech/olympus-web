@@ -1,4 +1,4 @@
-# DRAFT: Expanded Game Creation — Journeys & Ships
+# Expanded Game Creation — Journeys & Ships
 
 > This replaces Section 8 (Game Creation Flow) in the main design document.
 > It also adds new data structures to Section 4 (Data Architecture).
@@ -230,9 +230,101 @@ Each journey is a campaign template that shapes the entire experience. Journeys 
 
 -----
 
+#### Journey: Ship's Company
+
+**ID:** `ships_company`
+**Tagline:** "One ship. A thousand souls. Your corner of it."
+**Tone:** Intimate and massive simultaneously. You are one crew member among hundreds aboard a capital warship. The mission is fleet-scale; your experience of it is personal, tactical, and immediate. Think Das Boot meets Battlestar Galactica — the drama lives in the space between what command orders and what the crew endures.
+**Danger Level:** High, but scoped. The ship is formidable; the player character is not invincible.
+**Primary Themes:** Chain of command, personal heroism inside a larger institution, departmental loyalty vs. orders from above, expertise under pressure, what war costs at the human level, finding meaning in a role.
+
+**Narrative Direction for Claude:**
+
+- The player has a role — filter events, access, and conversations through that role's perspective
+- The commanding officer is an NPC with personality, agenda, and blind spots
+- Inter-departmental tension is a rich source of drama (pilots vs. engineers, intelligence vs. command)
+- The player can act outside their role, but the institution will react
+- Heroism is personal and local, even when the mission is fleet-scale
+- The ship should feel alive — a community of hundreds with culture, hierarchy, and gossip
+
+**Role Selection (chosen during creation — replaces ship-naming in Step 3, since the ship already has a name):**
+
+| Role | Focus |
+|------|-------|
+| Fighter Pilot | Sortie missions, dogfights, recon runs — the ship is a launching pad, not the battlefield |
+| Weapons Officer | Main battery control, targeting, the weight of who you fire on |
+| Helmsman | Navigation, evasion, FTL execution — the ship obeys your hands |
+| Chief Engineer | Damage control, systems, keeping the impossible running |
+| Ship's Surgeon | Medical bay, triage, measuring every engagement in lives |
+| Intelligence Analyst | Enemy movements, signals intercepts, knowing what command won't say |
+| Marine Sergeant | Boarding actions, internal security, fighting in corridors |
+
+**Creation Note:** In Step 3, the player selects which capital vessel they're assigned to from the available options, then picks their role within it. They do not name the ship — it arrives with a name, a history, and a reputation.
+
+**Starting Region:** The Armada Assembly — a staging fleet in a secure system preparing for a major offensive. The player's vessel is freshly crewed and assigned to the fleet. Everyone is waiting for orders everyone already knows are coming.
+
+**Opening Hook:** The player's posting orders finally came through. Their assignment: a capital warship whose last operation went badly enough that half the senior crew was rotated out. The crew that stayed doesn't talk about what happened. The new commanding officer doesn't ask. The player's job is to show up, prove their worth, and figure out why everyone is so careful not to say certain things aloud.
+
+**Available Ships:** `fleet_carrier`, `line_battleship`, `heavy_cruiser`
+
+**Starting Resources:**
+
+- Fuel: 90% (fleet-maintained — the player doesn't manage this directly)
+- Hull: 95% (recently refit after the crew rotation)
+- Credits: Low (military pay — regular, modest, and resented)
+- Special: Role kit (assigned at posting — sidearm and armor for marines, diagnostic tools for engineers, flight suit for pilots, etc.)
+
+-----
+
 ### 8.3 Ships
 
 Ships are defined as static configuration in code alongside journeys. Each ship has base stats, a starting loadout, and a flavor profile that Claude uses when describing the vessel. Ships are not interchangeable reskins — they meaningfully shape what the player can do.
+
+#### Stat System & Minimum Crew
+
+Stats use absolute values rather than percentages, establishing capability tiers that give Claude consistent narrative guidance for combat and operations without requiring arithmetic.
+
+**Hull Tiers**
+
+| Tier | Range | Character |
+|------|-------|-----------|
+| Light | 40–70 | Fast ships built to evade, not absorb |
+| Standard | 70–100 | Workhorses and generalists |
+| Heavy | 100–140 | Military vessels designed to take punishment |
+| Capital | 140–200+ | Massive ships that end engagements by existing |
+
+**Shield Tiers**
+
+| Tier | Range | Character |
+|------|-------|-----------|
+| Minimal | 30–50 | Civilian-grade, better than nothing |
+| Standard | 50–80 | Military deflectors, reliable under fire |
+| Military | 80–120 | Warship barriers, rapid recharge |
+| Capital | 120–160+ | Fleet-grade layered emitter arrays |
+
+**Weapon Damage Guidance for Claude**
+
+| Damage Class | Relative Impact |
+|--------------|----------------|
+| Light | Noticeable on light hulls, trivial on heavy — attrition and harassment |
+| Moderate | Meaningful against standard hulls, uncomfortable for heavy |
+| Heavy | Dangerous to standard and heavy hulls, annoying to capital |
+| Capital | Designed for capital ships — devastating against anything smaller |
+
+This gives Claude consistent narrative logic: a gunship shrugging off a light weapon hit feels right; the same hit on a scout corvette feels like a crisis.
+
+**Minimum Crew**
+
+Every ship requires a minimum operating crew below which systems degrade. As a guideline:
+
+- **Solo-capable ships** (Scout Corvette, Blockade Runner): Can be operated by a single skilled crew member with meaningful limitations — heroic, not comfortable
+- **Small ships** (2–6 capacity): Functional at 50% crew; below that, non-critical systems go dark
+- **Medium ships** (7–15 capacity): Require roughly 40–50% crew for full operations; skeleton crew is dangerous
+- **Capital ships** (50+ capacity): Below 50% crew, entire departments go offline — the ship becomes a liability
+
+Claude treats minimum crew as a source of tension and narrative, not a hard mechanical cutoff.
+
+-----
 
 #### Ship: Light Freighter
 
@@ -613,20 +705,147 @@ Ships are defined as static configuration in code alongside journeys. Each ship 
 
 -----
 
+#### Ship: Fleet Carrier
+
+**ID:** `fleet_carrier`
+**Class Name:** Ascendant-class Fleet Carrier
+**Description:** A city with engines. The Ascendant carries three full fighter squadrons, a marine complement, and hundreds of crew across dedicated departments. She doesn't win fights by being tough — she wins by projecting power across a battlespace simultaneously. No single crew member understands everything happening aboard her at once.
+
+**Base Stats:**
+
+|Stat         |Value|Notes                                           |
+|-------------|-----|------------------------------------------------|
+|Hull         |160  |Capital-grade construction                      |
+|Shields      |110  |Fleet-grade barrier arrays                      |
+|Fuel         |40   |Enormous engines drink accordingly              |
+|Cargo Max    |250  |Fighter munitions, fuel reserves, crew supplies |
+|Crew Capacity|200  |Multiple departments across a small city's worth|
+
+**Starting Weapons:**
+
+- Point Defense Network (type: energy, damage: light, notes: "Continuous automated coverage — destroys incoming missiles and fighters at close range")
+- Broadside Batteries (type: kinetic, damage: moderate, notes: "Port and starboard mounted — not the ship's primary offensive arm")
+- Fighter Wing (type: special, damage: varies, notes: "Three squadrons of eight fighters — the ship's real teeth. Fighters operate independently but return to her for fuel, repair, and orders.")
+
+**Starting Systems:**
+
+- FTL Drive (status: operational, notes: "Capital-scale — requires 8-minute spool time; planned jumps only")
+- Life Support (status: operational, notes: "City-grade redundant loops — six independent systems")
+- Fleet Command Network (status: operational, notes: "Coordinates with up to 40 allied vessels simultaneously")
+- Flight Operations System (status: operational, notes: "Manages launch cycles, recovery, fighter tracking, and bay assignments for all three squadrons")
+- Tactical Intelligence Suite (status: operational, notes: "Strategic overview, fleet-scale threat assessment")
+- Medical Complex (status: operational, notes: "Full hospital — surgery, trauma, psychiatric services. Not a bay — a complex.")
+- Communications Array (status: operational, notes: "Fleet broadcast, secure command channels, civilian-band intercept")
+
+**Starting Features:**
+
+- Flight Deck (description: "Three active runways and catapult systems. Recovery nets and arrestor cables on the aft end. Organized chaos on launch day, precision mechanics every other hour.")
+- CIC — Combat Information Center (description: "The ship's nerve center: holographic tactical displays, all department heads at stations, the commanding officer at the center of it all.")
+- Hangar Bay (description: "Fighter storage, arming, and maintenance across two decks. The pilots live here between sorties — bunks, lockers, a coffee machine that always burns it.")
+- Marine Barracks (description: "Full armory, training simulators, briefing rooms, and the particular quiet of soldiers waiting for work.")
+
+**Available In:** `ships_company`
+
+-----
+
+#### Ship: Line Battleship
+
+**ID:** `line_battleship`
+**Class Name:** Ironwall-class Line Battleship
+**Description:** The hammer of the fleet. The Ironwall is built to absorb punishment and deliver it at range. Heavy armor, layered shields, and guns that can crack open other capital ships at extreme distance. She's slow, she knows it, and she doesn't care. Everything about the Ironwall says: come to me.
+
+**Base Stats:**
+
+|Stat         |Value|Notes                                             |
+|-------------|-----|--------------------------------------------------|
+|Hull         |200  |Maximum capital armor — the highest of any vessel |
+|Shields      |150  |Multiple layered emitter arrays                   |
+|Fuel         |35   |Enormous reactors drink deeply                    |
+|Cargo Max    |120  |Mostly munitions inventory for the main batteries |
+|Crew Capacity|120  |Gun teams, engineering, command, and support staff|
+
+**Starting Weapons:**
+
+- Main Battery (type: kinetic, damage: capital, notes: "Three twin-mount heavy railguns — designed for capital ship engagements at extreme range. Each gun has a crew of twelve.")
+- Secondary Batteries (type: energy, damage: heavy, notes: "Anti-cruiser batteries port and starboard — each handled by a dedicated weapons team")
+- Point Defense Grid (type: energy, damage: light, notes: "Automated close-range protection against missiles and strike craft")
+
+**Starting Systems:**
+
+- FTL Drive (status: operational, notes: "Capital-scale — slow spool, not designed for emergency jumps")
+- Life Support (status: operational, notes: "Redundant capital-grade — multiple independent zones")
+- Fire Control System (status: operational, notes: "Targeting coordination across all batteries — integrates sensor data for firing solutions at range")
+- Damage Control Network (status: operational, notes: "Ship-wide automated breach response, fire suppression, bulkhead sealing, repair party routing")
+- Tactical Sensors (status: operational, notes: "Long-range detection optimized for fleet engagements")
+- Communications Array (status: operational)
+
+**Starting Features:**
+
+- Main Battery Control (description: "The gun deck — a cathedral of machinery. The railguns run the full length of the ship. Each crew team has been running the same gun for years.")
+- Armored Bridge (description: "Buried behind three meters of reinforced hull in the superstructure's core. The commanding officer fights from here. It never sees natural light.")
+- Damage Control Center (description: "Engineering's headquarters: real-time hull integrity maps, repair party coordination, emergency power routing. The people who keep the ship alive work here.")
+
+**Available In:** `ships_company`
+
+-----
+
+#### Ship: Heavy Cruiser
+
+**ID:** `heavy_cruiser`
+**Class Name:** Resolution-class Heavy Cruiser
+**Description:** The fleet's versatile officer. Large enough to project real power, independent enough to operate without a fleet, and adaptable enough to fill almost any mission role. The Resolution is the ship command sends when they need the job done without committing a battleship — which means she ends up in more interesting situations than either.
+
+**Base Stats:**
+
+|Stat         |Value|Notes                                            |
+|-------------|-----|-------------------------------------------------|
+|Hull         |130  |Heavy frame — substantial without capital plating|
+|Shields      |100  |Military-grade with good regeneration rates      |
+|Fuel         |55   |Efficient for its class — built for independent ops|
+|Cargo Max    |120  |Configurable for the mission                     |
+|Crew Capacity|60   |Full complement across all departments           |
+
+**Starting Weapons:**
+
+- Heavy Gun Batteries (type: energy/kinetic, damage: heavy, notes: "Main offensive armament — effective against cruisers and below, uncomfortable for capital ships")
+- Torpedo Tubes (type: missile, damage: heavy, notes: "Six-tube bow array — the answer when the target is bigger than you")
+- Point Defense Turrets (type: energy, damage: light, notes: "Anti-fighter and anti-missile coverage")
+
+**Starting Systems:**
+
+- FTL Drive (status: operational, notes: "Military-rated, faster spool than capital ships — emergency jumps possible")
+- Life Support (status: operational, notes: "Fully rated for extended independent operations")
+- Combat Sensors (status: operational, notes: "Multi-mode — surface, deep space, and signals intelligence")
+- Electronic Warfare Suite (status: operational, notes: "Jamming, spoofing, and active countermeasures")
+- Communications Array (status: operational, notes: "Fleet integration plus independent encrypted channels for detached operations")
+- Medical Bay (status: operational, notes: "Full surgical suite — independent operations mean you can't limp to a station")
+
+**Starting Features:**
+
+- Operations Center (description: "Decentralized command — dedicated stations for navigation, weapons, intelligence, and comms. Designed for independent operations where there's no fleet to call.")
+- Marine Detachment Quarters (description: "Barracks and armory for a platoon-strength force — boarding actions, security operations, landing missions.")
+
+**Available In:** `ships_company`
+
+-----
+
 ### 8.4 Journey → Ship Mapping (Reference)
 
-|Journey          |Available Ships                                   |
-|-----------------|--------------------------------------------------|
-|Frontier Explorer|Survey Vessel, Scout Corvette, Light Freighter    |
-|Smuggler’s Run   |Light Freighter, Blockade Runner, Salvage Rig     |
-|Warpath          |Gunship, Corvette (War-Fit), Carrier Escort       |
-|Deep Salvage     |Salvage Rig, Light Freighter, Scout Corvette      |
-|First Contact    |Survey Vessel, Diplomatic Cruiser, Scout Corvette |
-|The Long Haul    |Long-Range Cruiser, Light Freighter, Survey Vessel|
+|Journey          |Available Ships                                       |
+|-----------------|------------------------------------------------------|
+|Frontier Explorer|Survey Vessel, Scout Corvette, Light Freighter        |
+|Smuggler’s Run   |Light Freighter, Blockade Runner, Salvage Rig         |
+|Warpath          |Gunship, Corvette (War-Fit), Carrier Escort           |
+|Deep Salvage     |Salvage Rig, Light Freighter, Scout Corvette          |
+|First Contact    |Survey Vessel, Diplomatic Cruiser, Scout Corvette     |
+|The Long Haul    |Long-Range Cruiser, Light Freighter, Survey Vessel    |
+|Ship’s Company   |Fleet Carrier, Line Battleship, Heavy Cruiser         |
 
 Each journey offers exactly three ship choices — enough variety to support different playstyles within the journey’s theme, but not so many that the choice becomes overwhelming.
 
-**Design Principle:** Some ships appear across multiple journeys (Light Freighter in 4, Scout Corvette in 3, Survey Vessel in 3). These are versatile generalist ships. Others are journey-exclusive specialists (Gunship, Blockade Runner, Diplomatic Cruiser, Long-Range Cruiser). This creates a natural tier: the specialist ships are exciting because you only see them in their journey.
+**Design Principle:** Some ships appear across multiple journeys (Light Freighter in 4, Scout Corvette in 3, Survey Vessel in 3). These are versatile generalist ships. Others are journey-exclusive specialists (Gunship, Blockade Runner, Diplomatic Cruiser, Long-Range Cruiser, and all three capital ships). This creates a natural tier: the specialist ships are exciting because you only see them in their journey.
+
+**Ship’s Company Note:** The three capital ships in Ship’s Company are also role-filtered at presentation time — a player choosing Fighter Pilot will find the Fleet Carrier the most relevant assignment; a Helmsman might gravitate toward the Heavy Cruiser. The choice still belongs to the player, but the UI can surface the affinity.
 
 -----
 
@@ -746,6 +965,53 @@ The root game document (Section 4.2 in main doc) gains a `journey` field:
 
 This is denormalized from the code config into the game document at creation time so that the context assembly engine doesn’t need to reference the config — everything Claude needs is in the game state.
 
+#### Player Character (stored on game document)
+
+Unlike the ship — which can be damaged, lost, or replaced — the player character persists as the campaign’s constant. Their stats, condition, and history travel with them regardless of what vessel they’re aboard or whether they still command one.
+
+```javascript
+// Added to root game document under ‘character’
+character: {
+  name: string,                  // Set in Step 2
+
+  // ‘captain’ for most journeys.
+  // For ships_company: ‘fighter_pilot’ | ‘weapons_officer’ | ‘helmsman’ |
+  //   ‘chief_engineer’ | ‘ships_surgeon’ | ‘intel_analyst’ | ‘marine_sergeant’
+  role: string,
+
+  traits: string[],              // 2–3 selected in Step 2 (e.g. ‘stubborn’, ‘loyal’, ‘reckless’)
+  backstory: string,             // Player-written or Claude-generated in Step 2
+
+  // Stats — set at creation from traits/journey, can evolve over the campaign.
+  // Base value is 50; traits adjust up or down. Not roll tables — narrative anchors.
+  stats: {
+    physique: number,            // 0–100: combat capability, manual endurance, injury resistance
+    agility: number,             // 0–100: speed, evasion, piloting, quick reactions
+    intellect: number,           // 0–100: problem-solving, technical tasks, reading situations
+    presence: number,            // 0–100: command authority, persuasion, diplomacy, intimidation
+  },
+
+  // Condition — updated by Claude each turn as events warrant
+  condition: {
+    health: number,              // 0–100; reaching 0 is incapacitation (death if Claude narrates it)
+    healthMax: 100,
+    stress: number,              // 0–100; high stress degrades presence and intellect narratively
+    statusEffects: string[],     // e.g. [‘injured’, ‘exhausted’, ‘grieving’, ‘inspired’, ‘wanted’]
+  },
+
+  // Persistent narrative memory — Claude appends as the campaign develops
+  notes: string,                 // Injuries, relationships, past decisions — Claude’s running record
+},
+```
+
+**Design notes:**
+
+- **Stats are narrative anchors, not roll tables.** Claude references them when describing how the character handles a challenge — high physique handles a brawl differently than high intellect or presence. No dice. No arithmetic.
+- **Traits inform starting stats.** A "reckless" trait might mean higher agility but lower presence; "cautious" might mean lower physique but higher intellect. Claude allocates adjustments from a base of 50 — no rigid formula, just a consistent signal.
+- **Stress is a second condition track.** A character can be physically fine and psychologically fraying. Claude accumulates stress through events and lets it ease through rest, crew interaction, and downtime — not a mechanic, a narrative texture.
+- **`notes` is Claude’s memory for the character.** Injuries that healed but left marks, relationships formed or broken, decisions that followed the character home — this field grounds continuity across a long campaign.
+- **For Ship’s Company**, `role` becomes the primary narrative lens. A marine and an engineer aboard the same ship encounter different problems, have access to different spaces, and carry different kinds of knowledge. Claude should treat the role as a filter on everything the character sees and does.
+
 -----
 
 ### 8.6 Extensibility Notes
@@ -768,19 +1034,17 @@ The structure supports future additions like seasonal or event journeys, communi
 
 -----
 
-## Notes for Review
+## Design Decisions
 
-**Decisions baked into this draft:**
+**Decisions:**
 
-1. **Six journeys, no custom.** Each is a curated experience with distinct tone, ships, and narrative direction. The data structure makes adding more trivial, but the player always picks from a designed set.
-1. **Ten ships total.** Four generalists (Light Freighter, Scout Corvette, Survey Vessel, Salvage Rig) that appear across multiple journeys. Six specialists that are journey-exclusive. Every journey offers exactly 3 choices.
+1. **Seven journeys, no custom.** Each is a curated experience with distinct tone, ships, and narrative direction. The data structure makes adding more trivial, but the player always picks from a designed set.
+1. **Thirteen ships total.** Four generalists (Light Freighter, Scout Corvette, Survey Vessel, Salvage Rig) appear across multiple journeys. Nine specialists are journey-exclusive, including the three capital ships reserved for Ship’s Company. Every journey offers exactly 3 choices.
 1. **Config lives in code, not Firestore.** Journeys and ships are developer-defined constants. The relevant data is denormalized into the game document at creation time. This means no admin UI for journey management and no Firestore reads to load the config — it’s just JavaScript objects.
 1. **Journey data in the game document is immutable after creation.** The tone and narrative directives set at game start persist for the whole campaign. Claude always receives the same genre instructions regardless of where the story goes.
 1. **Starting resources vary by journey.** A war campaign starts with less fuel and a damaged hull. An exploration mission starts pristine. This creates mechanical flavor beyond just the narrative tone.
-
-**Things I’m unsure about — flag for discussion:**
-
-- Should the player see ALL journeys at once, or should some unlock after completing others?
-- Should ships have a “lore blurb” visible during selection that hints at the journey’s flavor? (Currently they have descriptions but they’re ship-focused, not journey-contextual.)
-- The stat values (hull 80, shields 50, etc.) are relative right now. Do we need to define what the scale means mechanically, or is it enough that Claude uses them relatively?
-- Crew capacity varies from 4 to 15. Should there be a minimum viable crew mechanic (ship can’t function below X crew)?
+1. **All journeys visible from the start.** No unlock system — the player sees all seven options when beginning a new campaign. The design makes adding more journeys trivial later, including an unlock system if we want it, but default is full access.
+1. **Ship descriptions are self-contained; no journey-contextual lore blurbs needed.** The ship’s own description and stats are sufficient. The journey’s tone carries the context.
+1. **Stats use a tiered absolute-value system.** Hull and shield values fall into named tiers (Light / Standard / Heavy / Capital) that give Claude consistent narrative guidance. Weapon damage classes map to those tiers. No arithmetic required — Claude uses the tiers as narrative logic, not as math.
+1. **Minimum crew is ~40–50% of capacity; some ships support skeleton or solo operation.** Capital ships lose whole departments below 50%. Claude treats minimum crew as narrative tension, not a hard cutoff.
+1. **The player character persists separately from the ship.** Characters carry four stats (physique, agility, intellect, presence), a dual condition track (health + stress), and a `notes` field for campaign memory. The ship can be lost or changed; the character is the constant. The `role` field enables journey-specific perspectives — particularly for Ship’s Company, where the player is not the commanding officer.
