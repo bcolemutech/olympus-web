@@ -7,9 +7,13 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleAuth } = require('google-auth-library');
 const { VertexAI } = require('@google-cloud/vertexai');
 
-initializeApp();
+const app = initializeApp();
 
-const vertexAI = new VertexAI({ project: 'olympus-dfa00', location: 'us-central1' });
+const projectId =
+  process.env.GCLOUD_PROJECT ||
+  process.env.GCP_PROJECT ||
+  (app && app.options && app.options.projectId);
+const vertexAI = new VertexAI({ project: projectId, location: 'us-central1' });
 
 // Reused across invitations to avoid per-call overhead.
 const googleAuth = new GoogleAuth({
@@ -1003,30 +1007,36 @@ async function compressNarrativeLog(db, gameId, currentTurn) {
  * Throws HttpsError on failure.
  */
 async function callGemini({ systemInstruction, userMessage, maxOutputTokens, jsonMode = true }) {
-  const model = vertexAI.getGenerativeModel({
-    model: VOID_ODYSSEY_MODEL,
-    systemInstruction: { parts: [{ text: systemInstruction }] },
-    generationConfig: {
-      maxOutputTokens,
-      ...(jsonMode && { responseMimeType: 'application/json' }),
-    },
-  });
+  try {
+    const model = vertexAI.getGenerativeModel({
+      model: VOID_ODYSSEY_MODEL,
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      generationConfig: {
+        maxOutputTokens,
+        ...(jsonMode && { responseMimeType: 'application/json' }),
+      },
+    });
 
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-  });
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+    });
 
-  const rawText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!rawText) {
-    throw new HttpsError('internal', 'Empty response from AI.');
+    const rawText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) {
+      throw new HttpsError('internal', 'Empty response from AI.');
+    }
+
+    const cleanedText = rawText
+      .trim()
+      .replace(/^\s*```(?:\s*json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '');
+
+    return jsonMode ? JSON.parse(cleanedText) : cleanedText;
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error('callGemini error:', err);
+    throw new HttpsError('internal', 'Failed to generate AI response.');
   }
-
-  const cleanedText = rawText
-    .trim()
-    .replace(/^\s*```(?:\s*json)?\s*/i, '')
-    .replace(/\s*```\s*$/, '');
-
-  return jsonMode ? JSON.parse(cleanedText) : cleanedText;
 }
 
 /**
