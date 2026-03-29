@@ -4,12 +4,16 @@ const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { defineSecret } = require('firebase-functions/params');
 const { GoogleAuth } = require('google-auth-library');
+const { VertexAI } = require('@google-cloud/vertexai');
 
-const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
+const app = initializeApp();
 
-initializeApp();
+const projectId =
+  process.env.GCLOUD_PROJECT ||
+  process.env.GCP_PROJECT ||
+  (app && app.options && app.options.projectId);
+const vertexAI = new VertexAI({ project: projectId, location: 'us-central1' });
 
 // Reused across invitations to avoid per-call overhead.
 const googleAuth = new GoogleAuth({
@@ -364,8 +368,7 @@ exports.inviteUser = onCall(async (request) => {
 
 // ── Void Odyssey ──────────────────────────────────────────────────────────────
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const VOID_ODYSSEY_MODEL = 'claude-sonnet-4-6';
+const VOID_ODYSSEY_MODEL = 'gemini-2.5-flash';
 
 const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
@@ -958,7 +961,7 @@ async function assembleContext(db, gameId, gameDoc) {
  * Compresses older narrative log entries into summaries for long-term memory.
  * Fire-and-forget — failures are non-fatal.
  */
-async function compressNarrativeLog(db, gameId, currentTurn, apiKey) {
+async function compressNarrativeLog(db, gameId, currentTurn) {
   const gameRef = db.collection('void_odyssey_games').doc(gameId);
   // Query by turnNumber range to also capture pre-Phase-5 entries that lack the compressed field
   const cutoffTurn = currentTurn - 10;
@@ -982,17 +985,13 @@ async function compressNarrativeLog(db, gameId, currentTurn, apiKey) {
 
   const summaryText = entries.map((e) => `[${e.mood}] ${e.summary}`).join('\n');
 
-  const Anthropic = require('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
-  const msg = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 500,
-    system:
+  const compressed = await callGemini({
+    systemInstruction:
       'You are a narrative archivist. Compress the following turn-by-turn summaries into a single cohesive paragraph of about 150 words that preserves key events, character developments, and plot points. Write in past tense, third person.',
-    messages: [{ role: 'user', content: summaryText }],
+    userMessage: summaryText,
+    maxOutputTokens: 500,
+    jsonMode: false,
   });
-
-  const compressed = msg.content[0].text || '';
   const batch = db.batch();
   for (let i = 0; i < entries.length; i++) {
     const update = { compressed: true };
@@ -1000,6 +999,44 @@ async function compressNarrativeLog(db, gameId, currentTurn, apiKey) {
     batch.update(entries[i].ref, update);
   }
   await batch.commit();
+}
+
+/**
+ * Calls Gemini via Vertex AI and returns the parsed JSON response (or raw text if jsonMode is false).
+ * Strips markdown fences and parses the result when in JSON mode.
+ * Throws HttpsError on failure.
+ */
+async function callGemini({ systemInstruction, userMessage, maxOutputTokens, jsonMode = true }) {
+  try {
+    const model = vertexAI.getGenerativeModel({
+      model: VOID_ODYSSEY_MODEL,
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      generationConfig: {
+        maxOutputTokens,
+        ...(jsonMode && { responseMimeType: 'application/json' }),
+      },
+    });
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+    });
+
+    const rawText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) {
+      throw new HttpsError('internal', 'Empty response from AI.');
+    }
+
+    const cleanedText = rawText
+      .trim()
+      .replace(/^\s*```(?:\s*json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '');
+
+    return jsonMode ? JSON.parse(cleanedText) : cleanedText;
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error('callGemini error:', err);
+    throw new HttpsError('internal', 'Failed to generate AI response.');
+  }
 }
 
 /**
@@ -1015,7 +1052,7 @@ function clamp(val, min, max) {
  * Data: { gameId: string, playerAction: { type, actionId, input } }
  * Returns: { narrative, mood, availableActions, shipStatus, turnCount, locationName, crewCount, rateLimitWarning }
  */
-exports.voidOdysseyTurn = onCall({ secrets: [anthropicApiKey] }, async (request) => {
+exports.voidOdysseyTurn = onCall(async (request) => {
   // ── Auth + claim check ─────────────────────────────────────
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
@@ -1092,7 +1129,7 @@ exports.voidOdysseyTurn = onCall({ secrets: [anthropicApiKey] }, async (request)
   // ── Context assembly ───────────────────────────────────────
   const context = await assembleContext(db, gameId.trim(), gameDoc);
 
-  // ── Build Claude prompt ────────────────────────────────────
+  // ── Build AI prompt ────────────────────────────────────────
   const userMessage = `Current game state:
 ${JSON.stringify(context, null, 2)}
 
@@ -1103,60 +1140,27 @@ Input: ${playerAction.input}
 
 Generate the next narrative beat, state mutations, and available actions.`;
 
-  // ── Call Claude API ────────────────────────────────────────
-  const apiKey = anthropicApiKey.value();
-  if (!apiKey) {
-    console.error('ANTHROPIC_API_KEY secret is empty');
-    throw new HttpsError('internal', 'Game service is not configured.');
-  }
-
-  let claudeResponse;
+  // ── Call Gemini API ─────────────────────────────────────────
+  let aiResponse;
   try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: VOID_ODYSSEY_MODEL,
-        max_tokens: 1500,
-        system: VOID_ODYSSEY_TURN_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
+    aiResponse = await callGemini({
+      systemInstruction: VOID_ODYSSEY_TURN_SYSTEM_PROMPT,
+      userMessage,
+      maxOutputTokens: 1500,
     });
-
-    if (!response.ok) {
-      const body = await response.json();
-      console.error('Anthropic API error:', response.status, body);
-      throw new HttpsError('internal', 'Failed to generate narrative. Please try again.');
-    }
-
-    const body = await response.json();
-    const rawText = body.content && body.content[0] && body.content[0].text;
-    if (!rawText) {
-      throw new HttpsError('internal', 'Empty response from AI.');
-    }
-
-    const cleanedText = rawText
-      .trim()
-      .replace(/^\s*```(?:\s*json)?\s*/i, '')
-      .replace(/\s*```\s*$/, '');
-    claudeResponse = JSON.parse(cleanedText);
   } catch (err) {
     if (err instanceof HttpsError) throw err;
-    console.error('Claude API or parse error:', err);
+    console.error('Gemini API or parse error:', err);
     throw new HttpsError('internal', 'Failed to generate narrative. Please try again.');
   }
 
   // ── Validate response fields ───────────────────────────────
-  if (!claudeResponse.narrative || typeof claudeResponse.narrative !== 'string') {
+  if (!aiResponse.narrative || typeof aiResponse.narrative !== 'string') {
     throw new HttpsError('internal', 'Invalid narrative response. Please try again.');
   }
   // Cap narrative length
-  if (claudeResponse.narrative.length > 5000) {
-    claudeResponse.narrative = claudeResponse.narrative.slice(0, 5000);
+  if (aiResponse.narrative.length > 5000) {
+    aiResponse.narrative = aiResponse.narrative.slice(0, 5000);
   }
 
   // Validate mood against known enum
@@ -1170,20 +1174,20 @@ Generate the next narrative beat, state mutations, and available actions.`;
     'reverent',
     'combat',
   ];
-  claudeResponse.mood =
-    typeof claudeResponse.mood === 'string' && VALID_MOODS.includes(claudeResponse.mood)
-      ? claudeResponse.mood
+  aiResponse.mood =
+    typeof aiResponse.mood === 'string' && VALID_MOODS.includes(aiResponse.mood)
+      ? aiResponse.mood
       : 'calm';
 
   // Validate stateMutations
-  claudeResponse.stateMutations = Array.isArray(claudeResponse.stateMutations)
-    ? claudeResponse.stateMutations.slice(0, 20)
+  aiResponse.stateMutations = Array.isArray(aiResponse.stateMutations)
+    ? aiResponse.stateMutations.slice(0, 20)
     : [];
 
-  // Validate availableActions — freeform is not a valid type for Claude-generated actions
+  // Validate availableActions — freeform is not a valid type for AI-generated actions
   const VALID_ACTION_TYPES = ['dialogue', 'navigation', 'combat', 'investigation'];
-  claudeResponse.availableActions = Array.isArray(claudeResponse.availableActions)
-    ? claudeResponse.availableActions
+  aiResponse.availableActions = Array.isArray(aiResponse.availableActions)
+    ? aiResponse.availableActions
         .filter(
           (a) =>
             a &&
@@ -1198,15 +1202,15 @@ Generate the next narrative beat, state mutations, and available actions.`;
         .slice(0, 5)
     : [];
   // Validate newEntities
-  claudeResponse.newEntities = Array.isArray(claudeResponse.newEntities)
-    ? claudeResponse.newEntities
+  aiResponse.newEntities = Array.isArray(aiResponse.newEntities)
+    ? aiResponse.newEntities
         .filter((e) => e && typeof e.id === 'string' && e.id.length > 0 && e.id.length <= 100)
         .slice(0, 10)
     : [];
 
   // Cap summary length
-  claudeResponse.summary =
-    typeof claudeResponse.summary === 'string' ? claudeResponse.summary.slice(0, 500) : '';
+  aiResponse.summary =
+    typeof aiResponse.summary === 'string' ? aiResponse.summary.slice(0, 500) : '';
 
   // ── Apply mutations and persist via transaction ────────────
   const txResult = await db.runTransaction(async (tx) => {
@@ -1222,7 +1226,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
     // ── Pre-fetch all documents needed by mutations (reads before writes) ──
     const prefetchRefs = new Map();
     const sourceSystemId = freshGame.ship.currentSystemId || 'sys_origin';
-    for (const mut of claudeResponse.stateMutations) {
+    for (const mut of aiResponse.stateMutations) {
       if (mut.type === 'quest_update' && mut.questId) {
         const ref = gameRef.collection('quests').doc(mut.questId);
         prefetchRefs.set(ref.path, ref);
@@ -1255,7 +1259,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
       }
     }
 
-    for (const mut of claudeResponse.stateMutations) {
+    for (const mut of aiResponse.stateMutations) {
       if (mut.type === 'ship_stat') {
         const field = mut.field;
         const delta = Number(mut.delta) || 0;
@@ -1603,7 +1607,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
         ship.currentSystemId = mut.targetSystemId;
         gameUpdate['ship.currentSystemId'] = mut.targetSystemId;
 
-        // Clear current location — new system has no location until Claude discovers one
+        // Clear current location — new system has no location until the AI discovers one
         ship.currentLocationId = null;
         gameUpdate['ship.currentLocationId'] = null;
 
@@ -1647,8 +1651,8 @@ Generate the next narrative beat, state mutations, and available actions.`;
     }
 
     // Persist new entities
-    for (let i = 0; i < claudeResponse.newEntities.length; i++) {
-      const entity = claudeResponse.newEntities[i];
+    for (let i = 0; i < aiResponse.newEntities.length; i++) {
+      const entity = aiResponse.newEntities[i];
       const entityRef = gameRef
         .collection('entities')
         .doc(entity.id || `entity_${newTurnCount}_${i}`);
@@ -1723,11 +1727,11 @@ Generate the next narrative beat, state mutations, and available actions.`;
     // Narrative log entry — cap field sizes to avoid exceeding Firestore limits
     const narrativeLogRef = gameRef.collection('narrative_log').doc();
     const cappedMutations = validatedMutations.slice(0, 20);
-    const cappedEntityIds = claudeResponse.newEntities
+    const cappedEntityIds = aiResponse.newEntities
       .map((e) => e.id)
       .filter((id) => typeof id === 'string' && id.length > 0)
       .slice(0, 10);
-    const cappedActions = claudeResponse.availableActions.slice(0, 5);
+    const cappedActions = aiResponse.availableActions.slice(0, 5);
 
     tx.set(narrativeLogRef, {
       id: narrativeLogRef.id,
@@ -1738,13 +1742,13 @@ Generate the next narrative beat, state mutations, and available actions.`;
         actionId: playerAction.actionId || null,
         input: playerAction.input,
       },
-      narrative: claudeResponse.narrative,
-      mood: claudeResponse.mood,
+      narrative: aiResponse.narrative,
+      mood: aiResponse.mood,
       stateMutations: cappedMutations,
       newEntityIds: cappedEntityIds,
       locationId: ship.currentLocationId || '',
-      summary: claudeResponse.summary,
-      tags: [playerAction.type, claudeResponse.mood],
+      summary: aiResponse.summary,
+      tags: [playerAction.type, aiResponse.mood],
       availableActions: cappedActions,
       compressed: false,
     });
@@ -1764,7 +1768,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
   if (txResult.newTurnCount > 0 && txResult.newTurnCount % 20 === 0) {
     try {
       await Promise.race([
-        compressNarrativeLog(db, gameId.trim(), txResult.newTurnCount, anthropicApiKey.value()),
+        compressNarrativeLog(db, gameId.trim(), txResult.newTurnCount),
         new Promise((_, reject) =>
           global.setTimeout(() => reject(new Error('Compression timed out')), 8000)
         ),
@@ -1779,9 +1783,9 @@ Generate the next narrative beat, state mutations, and available actions.`;
 
   // ── Return to client ───────────────────────────────────────
   return {
-    narrative: claudeResponse.narrative,
-    mood: claudeResponse.mood,
-    availableActions: claudeResponse.availableActions,
+    narrative: aiResponse.narrative,
+    mood: aiResponse.mood,
+    availableActions: aiResponse.availableActions,
     shipStatus: {
       hull: txResult.ship.hull,
       hullMax: txResult.ship.hullMax,
@@ -1821,7 +1825,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
  *   mood: string
  *   ship: { name, class, ... }
  */
-exports.voidOdysseyNewGame = onCall({ secrets: [anthropicApiKey] }, async (request) => {
+exports.voidOdysseyNewGame = onCall(async (request) => {
   // ── Auth + claim check ─────────────────────────────────────
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
@@ -1881,13 +1885,7 @@ exports.voidOdysseyNewGame = onCall({ secrets: [anthropicApiKey] }, async (reque
     throw new HttpsError('invalid-argument', 'Backstory must be 400 characters or fewer.');
   }
 
-  const apiKey = anthropicApiKey.value();
-  if (!apiKey) {
-    console.error('ANTHROPIC_API_KEY secret is empty');
-    throw new HttpsError('internal', 'Game service is not configured.');
-  }
-
-  // ── Build Claude prompt ────────────────────────────────────
+  // ── Build AI prompt ────────────────────────────────────────
   const difficultyLabels = {
     frontier_explorer: 'Frontier Explorer (discovery-focused, lower danger)',
     smugglers_run: "Smuggler's Run (trade, intrigue, moral grey areas)",
@@ -1949,44 +1947,17 @@ Ship Name: ${shipName.trim()}
 
 Generate the opening scene, starting crew, location, quest hook, and first available actions.`;
 
-  // ── Call Claude API ────────────────────────────────────────
-  let claudeResponse;
+  // ── Call Gemini API ─────────────────────────────────────────
+  let aiResponse;
   try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: VOID_ODYSSEY_MODEL,
-        max_tokens: 1500,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
+    aiResponse = await callGemini({
+      systemInstruction: systemPrompt,
+      userMessage,
+      maxOutputTokens: 1500,
     });
-
-    if (!response.ok) {
-      const body = await response.json();
-      console.error('Anthropic API error:', response.status, body);
-      throw new HttpsError('internal', 'Failed to generate opening scene. Please try again.');
-    }
-
-    const body = await response.json();
-    const rawText = body.content && body.content[0] && body.content[0].text;
-    if (!rawText) {
-      throw new HttpsError('internal', 'Empty response from AI.');
-    }
-
-    const cleanedText = rawText
-      .trim()
-      .replace(/^\s*```(?:\s*json)?\s*/i, '')
-      .replace(/\s*```\s*$/, '');
-    claudeResponse = JSON.parse(cleanedText);
   } catch (err) {
     if (err instanceof HttpsError) throw err;
-    console.error('Claude API or parse error:', err);
+    console.error('Gemini API or parse error:', err);
     throw new HttpsError('internal', 'Failed to generate opening scene. Please try again.');
   }
 
@@ -2000,7 +1971,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
 
   const shipStats = SHIP_CLASS_DEFAULTS[shipClass] || SHIP_CLASS_DEFAULTS.light_freighter;
 
-  const crew = claudeResponse.crew || [];
+  const crew = aiResponse.crew || [];
   const activeCrew = crew.map((m, i) => ({
     id: `crew_${i}_${gameId.slice(0, 6)}`,
     name: m.name,
@@ -2026,7 +1997,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       credits: 500,
       currentLocationId: locationId,
       currentSystemId: 'sys_origin',
-      dockedAt: claudeResponse.startingLocationType === 'station' ? locationId : null,
+      dockedAt: aiResponse.startingLocationType === 'station' ? locationId : null,
     },
 
     combatActive: false,
@@ -2042,8 +2013,8 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     crewCount: crew.length,
     activeCrew,
     activeQuestCount: 0,
-    currentLocationName: claudeResponse.startingLocationName || 'Unknown Location',
-    currentLocationTags: [claudeResponse.startingLocationType || 'unknown'],
+    currentLocationName: aiResponse.startingLocationName || 'Unknown Location',
+    currentLocationTags: [aiResponse.startingLocationType || 'unknown'],
   };
 
   const narrativeLogRef = db
@@ -2057,14 +2028,14 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     turnNumber: 0,
     timestamp: now,
     playerAction: { type: 'system', actionId: null, input: 'New game started' },
-    narrative: claudeResponse.narrative || '',
-    mood: claudeResponse.mood || 'calm',
+    narrative: aiResponse.narrative || '',
+    mood: aiResponse.mood || 'calm',
     stateMutations: [],
     newEntityIds: [],
     locationId,
-    summary: `Campaign began at ${claudeResponse.startingLocationName || 'Unknown Location'}`,
+    summary: `Campaign began at ${aiResponse.startingLocationName || 'Unknown Location'}`,
     tags: ['game_start', shipClass, difficulty],
-    availableActions: claudeResponse.availableActions || [],
+    availableActions: aiResponse.availableActions || [],
     compressed: false,
   };
 
@@ -2077,11 +2048,11 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
   const locationDoc = {
     id: locationId,
     systemId: 'sys_origin',
-    name: claudeResponse.startingLocationName || 'Unknown Location',
-    type: claudeResponse.startingLocationType || 'station',
-    description: claudeResponse.startingLocationDescription || '',
-    firstImpressions: claudeResponse.startingLocationDescription || '',
-    atmosphere: claudeResponse.startingLocationAtmosphere || '',
+    name: aiResponse.startingLocationName || 'Unknown Location',
+    type: aiResponse.startingLocationType || 'station',
+    description: aiResponse.startingLocationDescription || '',
+    firstImpressions: aiResponse.startingLocationDescription || '',
+    atmosphere: aiResponse.startingLocationAtmosphere || '',
     environment: {
       gravity: 'standard',
       atmosphere: 'breathable',
@@ -2089,8 +2060,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       hazards: [],
     },
     dockable:
-      claudeResponse.startingLocationType === 'station' ||
-      claudeResponse.startingLocationType === 'planet',
+      aiResponse.startingLocationType === 'station' || aiResponse.startingLocationType === 'planet',
     services: [],
     residentEntityIds: [],
     pointsOfInterest: [],
@@ -2102,7 +2072,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     firstVisitedTurn: 0,
     lastVisitedTurn: 0,
     significantEvents: [{ turnNumber: 0, summary: 'Campaign started here' }],
-    tags: [claudeResponse.startingLocationType || 'unknown', 'starting_location'],
+    tags: [aiResponse.startingLocationType || 'unknown', 'starting_location'],
     faction: null,
     dangerLevel: difficulty === 'warpath' ? 'dangerous' : 'cautious',
     discovered: true,
@@ -2149,7 +2119,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
 
   // Seed starting star map
   const starMapSystems = buildStartingStarMap(
-    claudeResponse.startingLocationName || 'Origin System',
+    aiResponse.startingLocationName || 'Origin System',
     difficulty
   );
   starMapSystems.forEach(function (system) {
@@ -2166,8 +2136,8 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
   // ── Return to client ───────────────────────────────────────
   return {
     gameId,
-    narrative: claudeResponse.narrative || '',
-    availableActions: claudeResponse.availableActions || [],
+    narrative: aiResponse.narrative || '',
+    availableActions: aiResponse.availableActions || [],
     crew: crew.map((m, i) => ({
       id: activeCrew[i].id,
       name: m.name,
@@ -2175,8 +2145,8 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
       species: m.species || 'human',
       backstory: m.backstory || '',
     })),
-    startingLocation: claudeResponse.startingLocationName || 'Unknown Location',
-    mood: claudeResponse.mood || 'calm',
+    startingLocation: aiResponse.startingLocationName || 'Unknown Location',
+    mood: aiResponse.mood || 'calm',
     ship: { name: shipName.trim(), class: shipClass, credits: 500, ...shipStats },
   };
 });
