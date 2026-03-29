@@ -1146,7 +1146,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
     aiResponse = await callGemini({
       systemInstruction: VOID_ODYSSEY_TURN_SYSTEM_PROMPT,
       userMessage,
-      maxOutputTokens: 1500,
+      maxOutputTokens: 4096,
     });
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -1953,7 +1953,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     aiResponse = await callGemini({
       systemInstruction: systemPrompt,
       userMessage,
-      maxOutputTokens: 1500,
+      maxOutputTokens: 4096,
     });
   } catch (err) {
     if (err instanceof HttpsError) throw err;
