@@ -300,21 +300,33 @@
 
       // ── View tabs ───────────────────────────────
       Symposium.getRef('tab-dashboard').addEventListener('click', function () {
+        if (window.OlympusAnalytics)
+          OlympusAnalytics.logEvent('symposium_tab_switch', { tab: 'dashboard' });
         switchView('dashboard');
       });
       Symposium.getRef('tab-ingredients').addEventListener('click', function () {
+        if (window.OlympusAnalytics)
+          OlympusAnalytics.logEvent('symposium_tab_switch', { tab: 'ingredients' });
         switchView('ingredients');
       });
       Symposium.getRef('tab-equipment').addEventListener('click', function () {
+        if (window.OlympusAnalytics)
+          OlympusAnalytics.logEvent('symposium_tab_switch', { tab: 'equipment' });
         switchView('equipment');
       });
       Symposium.getRef('tab-recipes').addEventListener('click', function () {
+        if (window.OlympusAnalytics)
+          OlympusAnalytics.logEvent('symposium_tab_switch', { tab: 'recipes' });
         switchView('recipes');
       });
       Symposium.getRef('tab-provisions').addEventListener('click', function () {
+        if (window.OlympusAnalytics)
+          OlympusAnalytics.logEvent('symposium_tab_switch', { tab: 'provisions' });
         switchView('provisions');
       });
       Symposium.getRef('tab-appellations').addEventListener('click', function () {
+        if (window.OlympusAnalytics)
+          OlympusAnalytics.logEvent('symposium_tab_switch', { tab: 'appellations' });
         switchView('appellations');
         Symposium.appellations.renderPanel();
       });

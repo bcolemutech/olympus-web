@@ -37,7 +37,8 @@ export default [
         fetch: "readonly",
         React: "readonly",
         ReactDOM: "readonly",
-        AbortController: "readonly"
+        AbortController: "readonly",
+        OlympusAnalytics: "readonly"
       }
     },
     rules: {
