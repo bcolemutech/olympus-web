@@ -29,6 +29,7 @@
 
   Pantheon.start = function (user) {
     Pantheon.init(user);
+    if (window.OlympusAnalytics) OlympusAnalytics.init();
     window.OlympusHeader.render('The Pantheon');
 
     document.getElementById('app-loading').classList.add('hidden');

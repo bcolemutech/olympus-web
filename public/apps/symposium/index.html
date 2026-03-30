@@ -1198,7 +1198,7 @@
             return;
           }
 
-          OlympusAnalytics.init();
+          if (window.OlympusAnalytics) OlympusAnalytics.init();
 
           // Render the shared header
           window.OlympusHeader.render('The Symposium');

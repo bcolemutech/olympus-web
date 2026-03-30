@@ -296,7 +296,7 @@
       VO.state.functions = firebase.functions();
       VO.state.currentUser = user;
 
-      OlympusAnalytics.init();
+      if (window.OlympusAnalytics) OlympusAnalytics.init();
 
       // Render shared header
       window.OlympusHeader.render('Void Odyssey');
@@ -342,7 +342,8 @@
     var newBtn = document.getElementById('btn-new-campaign');
     if (newBtn) {
       newBtn.addEventListener('click', function () {
-        OlympusAnalytics.logEvent('void_odyssey_campaign_create_start');
+        if (window.OlympusAnalytics)
+          OlympusAnalytics.logEvent('void_odyssey_campaign_create_start');
         _startNewGame();
       });
     }
@@ -351,7 +352,7 @@
     var backBtn = document.getElementById('btn-back-to-campaigns');
     if (backBtn) {
       backBtn.addEventListener('click', function () {
-        OlympusAnalytics.logEvent('void_odyssey_campaign_exit');
+        if (window.OlympusAnalytics) OlympusAnalytics.logEvent('void_odyssey_campaign_exit');
         VO.state.generatedGame = null;
         VO.state.currentGame = null;
         window.location.hash = '';
@@ -385,7 +386,7 @@
   // After game creation (called from step 5 "Enter the Void")
   var _origShowView = VO.showView;
   VO.showView = function (name) {
-    OlympusAnalytics.logEvent('void_odyssey_view', { view: name });
+    if (window.OlympusAnalytics) OlympusAnalytics.logEvent('void_odyssey_view', { view: name });
     if (name === 'game-active' && VO.state.generatedGame) {
       var game = VO.state.generatedGame;
       VO.state.currentGame = game;

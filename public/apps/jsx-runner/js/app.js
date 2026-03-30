@@ -206,6 +206,8 @@
         return;
       }
 
+      if (window.OlympusAnalytics) OlympusAnalytics.init();
+
       // Render the shared header
       window.OlympusHeader.render('JSX Runner');
 
