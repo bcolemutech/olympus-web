@@ -57,6 +57,7 @@
     profileLink.textContent = "The Oracle's Mirror";
     profileLink.addEventListener('click', function (e) {
       e.preventDefault();
+      if (window.OlympusAnalytics) OlympusAnalytics.logEvent('view_profile', { source: appName });
       // Navigate to main SPA which handles profile view
       window.location.href = '/?view=profile';
     });
@@ -66,6 +67,7 @@
     signOutBtn.type = 'button';
     signOutBtn.textContent = 'Leave Olympus';
     signOutBtn.addEventListener('click', function () {
+      if (window.OlympusAnalytics) OlympusAnalytics.logEvent('sign_out', { source: appName });
       firebase
         .auth()
         .signOut()

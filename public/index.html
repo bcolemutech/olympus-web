@@ -22,6 +22,7 @@
       to avoid connecting the SDK to running emulators.
     -->
     <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+    <script defer src="/js/analytics.js"></script>
 
     <!-- React 18 (UMD) — for inline JSX applets -->
     <script
@@ -1193,6 +1194,8 @@
           return;
         }
 
+        OlympusAnalytics.init();
+
         // ── YAML-based app registry ──────────────────────────
         let _appsCache = null;
 
@@ -1296,6 +1299,7 @@
               jsxInlineRoot.innerHTML = '';
               _jsxRoot = ReactDOM.createRoot(jsxInlineRoot);
               _jsxRoot.render(React.createElement(Component));
+              OlympusAnalytics.logEvent('jsx_applet_load', { applet_id: applet.id });
             })
             .catch((err) => {
               const escapeHtml = (s) => {
@@ -1373,6 +1377,7 @@
             tile.appendChild(desc);
 
             const activateTile = () => {
+              OlympusAnalytics.logEvent('app_open', { app_id: a.id, app_type: a.type });
               if (a.type === 'redirect' && a.url) {
                 window.open(a.url, '_blank', 'noopener,noreferrer');
               } else if (a.type === 'embedded' && a.path) {
@@ -1536,7 +1541,11 @@
           firebase
             .auth()
             .signInWithEmailAndPassword(email, password)
+            .then(() => {
+              OlympusAnalytics.logEvent('login', { method: 'email' });
+            })
             .catch((error) => {
+              OlympusAnalytics.logEvent('login_error', { error_code: error.code });
               errorMessage.textContent = getErrorMessage(error.code);
               errorMessage.classList.remove('hidden');
               resetSubmitButton();
@@ -1546,7 +1555,10 @@
         // Profile navigation
         document.getElementById('profile-btn').addEventListener('click', () => {
           const user = firebase.auth().currentUser;
-          if (user) showProfileView(user);
+          if (user) {
+            OlympusAnalytics.logEvent('view_profile');
+            showProfileView(user);
+          }
         });
 
         document.getElementById('back-to-hall').addEventListener('click', () => {
@@ -1556,6 +1568,7 @@
 
         // Sign out
         document.getElementById('signout-btn').addEventListener('click', () => {
+          OlympusAnalytics.logEvent('sign_out', { source: 'grand_hall' });
           firebase
             .auth()
             .signOut()
