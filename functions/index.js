@@ -5,7 +5,7 @@ const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleAuth } = require('google-auth-library');
-const { randomInt } = require('crypto');
+const crypto = require('crypto');
 const { callGemini } = require('./gemini');
 
 initializeApp();
@@ -1025,7 +1025,7 @@ function clamp(val, min, max) {
  * Generates a d20 roll (1-20 inclusive) using crypto for unbiased randomness.
  */
 function generateD20Roll() {
-  return randomInt(1, 21);
+  return crypto.randomInt(1, 21);
 }
 
 /**
