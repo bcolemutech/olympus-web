@@ -1166,7 +1166,9 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
       modelName: VOID_ODYSSEY_MODEL,
       systemInstruction: VOID_ODYSSEY_TURN_SYSTEM_PROMPT,
       userMessage,
-      maxOutputTokens: 4096,
+      // NOTE: 8192 tokens increases average latency and API cost per turn.
+      // VOID_ODYSSEY_COST_PER_TURN is an approximate game-credit metric, not an exact USD figure.
+      maxOutputTokens: 8192,
     });
   } catch (err) {
     if (err instanceof HttpsError) throw err;

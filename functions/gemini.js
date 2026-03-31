@@ -44,7 +44,16 @@ async function callGemini({
       contents: [{ role: 'user', parts: [{ text: userMessage }] }],
     });
 
-    const rawText = result.response?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidate = result.response?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    if (finishReason === 'MAX_TOKENS') {
+      console.error('callGemini: response truncated by MAX_TOKENS');
+      throw new HttpsError('resource-exhausted', 'AI response was truncated. Please try again.', {
+        finishReason,
+      });
+    }
+
+    const rawText = candidate?.content?.parts?.[0]?.text;
     if (!rawText) {
       throw new HttpsError('internal', 'Empty response from AI.');
     }
