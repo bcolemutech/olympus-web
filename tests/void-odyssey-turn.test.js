@@ -59,6 +59,7 @@ const functionsTest = require('firebase-functions-test')(
   null
 );
 const { voidOdysseyTurn } = require('../functions/index');
+const crypto = require('crypto');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1009,6 +1010,208 @@ describe('voidOdysseyTurn', () => {
 
       const userSnap = await db.collection('users').doc(TEST_USER_ID).get();
       expect(userSnap.exists).toBe(false);
+    });
+  });
+
+  describe('dice roll system', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('returns rollInterpretation in the response', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(14);
+      await seedGame();
+      mockAiResponse(makeAiResponse());
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation).toBeDefined();
+      expect(result.rollInterpretation.naturalRoll).toBe(14);
+      expect(typeof result.rollInterpretation.success).toBe('boolean');
+      expect(typeof result.rollInterpretation.finalResult).toBe('number');
+      expect(typeof result.rollInterpretation.difficultyClass).toBe('number');
+    });
+
+    test('critical success (nat 20) forces success regardless of DC', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(20);
+      await seedGame();
+      mockAiResponse(
+        makeAiResponse({
+          rollInterpretation: {
+            actionRoll: 20,
+            modifierFormula: '',
+            totalModifier: 0,
+            finalResult: 20,
+            difficultyClass: 30,
+            difficultyRationale: 'Absurd action',
+            success: false, // AI says failure — server must override
+            isCritical: true,
+            criticalType: 'success',
+            savingThrow: null,
+            narrativeSummary: 'Against all odds...',
+          },
+        })
+      );
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation.naturalRoll).toBe(20);
+      expect(result.rollInterpretation.success).toBe(true);
+      expect(result.rollInterpretation.isCritical).toBe(true);
+      expect(result.rollInterpretation.criticalType).toBe('success');
+    });
+
+    test('critical failure (nat 1) forces failure regardless of modifiers', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(1);
+      await seedGame();
+      mockAiResponse(
+        makeAiResponse({
+          rollInterpretation: {
+            actionRoll: 1,
+            modifierFormula: '+10 (god mode)',
+            totalModifier: 10,
+            finalResult: 11,
+            difficultyClass: 5,
+            difficultyRationale: 'Trivial action',
+            success: true, // AI says success — server must override
+            isCritical: true,
+            criticalType: 'failure',
+            savingThrow: null,
+            narrativeSummary: 'Complete disaster.',
+          },
+        })
+      );
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation.naturalRoll).toBe(1);
+      expect(result.rollInterpretation.success).toBe(false);
+      expect(result.rollInterpretation.isCritical).toBe(true);
+      expect(result.rollInterpretation.criticalType).toBe('failure');
+    });
+
+    test('server recomputes success from DC and modifiers', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(5);
+      await seedGame({ game: { difficulty: 'smugglers_run' } }); // difficultyModifier = 0
+      mockAiResponse(
+        makeAiResponse({
+          rollInterpretation: {
+            actionRoll: 5,
+            modifierFormula: '+1 (pilot)',
+            totalModifier: 1,
+            finalResult: 6,
+            difficultyClass: 15,
+            difficultyRationale: 'Hard maneuver',
+            success: true, // AI lies — 5 + 1 + 0 = 6 < DC 15
+            isCritical: false,
+            criticalType: null,
+            savingThrow: null,
+            narrativeSummary: 'Not quite enough.',
+          },
+        })
+      );
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation.naturalRoll).toBe(5);
+      expect(result.rollInterpretation.finalResult).toBe(6); // 5 + 1 + 0
+      expect(result.rollInterpretation.success).toBe(false); // server overrides AI
+    });
+
+    test('saving throw uses server-generated roll value', async () => {
+      // First call returns action roll, second returns saving throw roll
+      jest.spyOn(crypto, 'randomInt').mockReturnValueOnce(15).mockReturnValueOnce(8);
+      await seedGame();
+      mockAiResponse(
+        makeAiResponse({
+          rollInterpretation: {
+            actionRoll: 15,
+            modifierFormula: '+2 (silver-tongued)',
+            totalModifier: 2,
+            finalResult: 19,
+            difficultyClass: 12,
+            difficultyRationale: 'Standard persuasion',
+            success: true,
+            isCritical: false,
+            criticalType: null,
+            savingThrow: {
+              applicable: true,
+              targetName: 'Station Guard',
+              savingRoll: 99, // AI tries to fake a high roll
+              savingDC: 10,
+              savingModifiers: '+1 (disciplined)',
+              savingResult: true,
+            },
+            narrativeSummary: 'Your words find their mark.',
+          },
+        })
+      );
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation.savingThrow).toBeDefined();
+      expect(result.rollInterpretation.savingThrow.savingRoll).toBe(8); // server value, not 99
+      expect(result.rollInterpretation.savingThrow.savingResult).toBe(false); // 8 < DC 10
+    });
+
+    test('difficulty modifier applied correctly for warpath', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(10);
+      await seedGame({ game: { difficulty: 'warpath' } });
+      mockAiResponse(
+        makeAiResponse({
+          rollInterpretation: {
+            actionRoll: 10,
+            modifierFormula: '',
+            totalModifier: 0,
+            finalResult: 8,
+            difficultyClass: 10,
+            difficultyRationale: 'Standard action',
+            success: false,
+            isCritical: false,
+            criticalType: null,
+            savingThrow: null,
+            narrativeSummary: 'The void is unforgiving.',
+          },
+        })
+      );
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation.difficultyModifier).toBe(-2);
+      expect(result.rollInterpretation.finalResult).toBe(8); // 10 + 0 + (-2)
+      expect(result.rollInterpretation.success).toBe(false); // 8 < DC 10
+    });
+
+    test('rollInterpretation is stored in narrative log', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(14);
+      await seedGame();
+      mockAiResponse(makeAiResponse());
+
+      await callTurn();
+
+      const logSnap = await gameRef()
+        .collection('narrative_log')
+        .orderBy('turnNumber', 'desc')
+        .limit(1)
+        .get();
+      expect(logSnap.empty).toBe(false);
+      const logData = logSnap.docs[0].data();
+      expect(logData.rollInterpretation).toBeDefined();
+      expect(logData.rollInterpretation.naturalRoll).toBe(14);
+    });
+
+    test('fallback rollInterpretation when AI omits it', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(12);
+      await seedGame();
+      const response = makeAiResponse();
+      delete response.rollInterpretation;
+      mockAiResponse(response);
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation).toBeDefined();
+      expect(result.rollInterpretation.naturalRoll).toBe(12);
+      expect(result.rollInterpretation.difficultyClass).toBe(10); // default DC
     });
   });
 });

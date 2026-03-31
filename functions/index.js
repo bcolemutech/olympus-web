@@ -5,6 +5,7 @@ const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleAuth } = require('google-auth-library');
+const { randomInt } = require('crypto');
 const { callGemini } = require('./gemini');
 
 initializeApp();
@@ -400,7 +401,20 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
   "newEntities": [
     { "id": string, "type": "npc"|"ship"|"object", "name": string, "description": string, "species": string | null, "role": string | null, "disposition": "friendly"|"neutral"|"suspicious"|"hostile", "dialogue_style": string | null, "tags": string[] }
   ],
-  "summary": string (one sentence summary of what happened this turn)
+  "summary": string (one sentence summary of what happened this turn),
+  "rollInterpretation": {
+    "actionRoll": number (echo the server-provided d20 value exactly),
+    "modifierFormula": string (e.g. "+2 (pilot skill) +1 (operational sensors) -1 (low morale)"),
+    "totalModifier": number (sum of all modifiers),
+    "finalResult": number (actionRoll + totalModifier + difficultyModifier),
+    "difficultyClass": number (1-30, the DC you set for this action),
+    "difficultyRationale": string (why you chose this DC — max 50 words),
+    "success": boolean,
+    "isCritical": boolean (true if actionRoll was 1 or 20),
+    "criticalType": "success" | "failure" | null,
+    "savingThrow": { "applicable": boolean, "targetName": string | null, "savingRoll": number | null, "savingDC": number | null, "savingModifiers": string | null, "savingResult": boolean | null } | null,
+    "narrativeSummary": string (one sentence summary of roll outcome for the player)
+  }
 }
 
 Constraints:
@@ -417,7 +431,10 @@ Constraints:
 - When creating quests, include at least one hook or secret that you can use for future narrative development
 - CREW MORALE: Track morale over time; broken or angry crew may depart after multiple turns via "crew_departure". Low morale darkens narrative tone; inspired crew suggest bold actions. Use "crew_personal" quest type for backstory-driven storylines. Evolve relationships via "crew_relationship" mutations during shared experiences. Use "crew_significant_moment" to mark pivotal character beats. Use "crew_health" to track injuries from combat or hazards.
 - TRADE & ECONOMY: Offer trade actions at locations with trade or black_market services. Emit paired "credits" + "add_item"/"remove_item" mutations for transactions. Typical prices: common goods 10-50 credits, rare items 100-500, unique artifacts 500+. Respect cargo capacity — warn players when near cargoMax.
-- COMBAT RULES: When combat begins, set mood to "combat" and emit "combat_start". During combat, provide tactical choices: fire weapons, evasive maneuvers, boost shields, target subsystems, crew actions, or flee. Shields absorb damage first, then hull takes hits. Crew can be injured via "crew_health". Weapons and systems can be damaged via "weapon_status"/"system_status". Combat typically lasts 2-5 turns. End with "combat_end" and return to a non-combat mood. Always offer "Attempt to flee" as an action during combat.`;
+- COMBAT RULES: When combat begins, set mood to "combat" and emit "combat_start". During combat, provide tactical choices: fire weapons, evasive maneuvers, boost shields, target subsystems, crew actions, or flee. Shields absorb damage first, then hull takes hits. Crew can be injured via "crew_health". Weapons and systems can be damaged via "weapon_status"/"system_status". Combat typically lasts 2-5 turns. End with "combat_end" and return to a non-combat mood. Always offer "Attempt to flee" as an action during combat.
+- DICE ROLLS: A server-generated d20 roll is provided with each turn. You MUST include a "rollInterpretation" in your response using the provided roll — never generate your own roll value. Build a modifier formula from relevant player traits, crew skills, ship system status, and situational factors. Set a Difficulty Class (DC) appropriate to the action: routine tasks DC 5-8, standard tasks DC 10-12, hard tasks DC 15-17, extreme tasks DC 20-22, absurd or reality-breaking tasks DC 25-30. Apply the game difficulty modifier to the player's total. Critical success (natural 20) always succeeds with an exceptional narrative outcome — bonus loot, dramatic flair, or unexpected advantage. Critical failure (natural 1) always fails with a complication — damage, embarrassment, or escalation. The narrative MUST reflect the roll outcome — do not write a success narrative for a failed roll or vice versa.
+- SAVING THROWS: If the action targets a person, creature, or system that could resist (e.g., persuasion, hacking, combat maneuver), use the provided saving throw d20 to determine if the target resists. Set an appropriate saving DC based on the target's capability. If no saving throw is relevant (e.g., exploring, routine navigation, self-directed actions), set savingThrow to null or savingThrow.applicable to false.
+- MODIFIER SOURCES: Draw modifiers from — captain traits (+1 to +2 each when relevant), crew skills (+1 to +3 for relevant crew role), ship system status (operational +1, damaged -2, destroyed -4), ship weapons (in combat, +1 to +2), current morale (inspired +1, content 0, uneasy -1, fearful -2, broken -3), injuries (minor -1, serious -2, critical -3), relevant cargo items (+1 for useful equipment). Do not stack more than 5 modifiers total.`;
 
 const VOID_ODYSSEY_RATE_LIMITS = {
   HOURLY_SOFT: 15,
@@ -1005,6 +1022,28 @@ function clamp(val, min, max) {
 }
 
 /**
+ * Generates a d20 roll (1-20 inclusive) using crypto for unbiased randomness.
+ */
+function generateD20Roll() {
+  return randomInt(1, 21);
+}
+
+/**
+ * Returns a blanket modifier based on game difficulty setting.
+ * Easier difficulties give a bonus; harder ones a penalty.
+ */
+function getDifficultyModifier(difficulty) {
+  switch (difficulty) {
+    case 'frontier_explorer':
+      return 2;
+    case 'warpath':
+      return -2;
+    default:
+      return 0; // smugglers_run, custom
+  }
+}
+
+/**
  * voidOdysseyTurn — executes a single turn in a Void Odyssey campaign.
  *
  * Data: { gameId: string, playerAction: { type, actionId, input } }
@@ -1087,6 +1126,13 @@ exports.voidOdysseyTurn = onCall(async (request) => {
   // ── Context assembly ───────────────────────────────────────
   const context = await assembleContext(db, gameId.trim(), gameDoc);
 
+  // ── Dice roll (server-generated) ────────────────────────────
+  const actionRoll = generateD20Roll();
+  const savingThrowRoll = generateD20Roll();
+  const difficultyModifier = getDifficultyModifier(gameDoc.difficulty || 'frontier_explorer');
+  const isCriticalSuccess = actionRoll === 20;
+  const isCriticalFailure = actionRoll === 1;
+
   // ── Build AI prompt ────────────────────────────────────────
   const userMessage = `Current game state:
 ${JSON.stringify(context, null, 2)}
@@ -1096,7 +1142,12 @@ Type: ${playerAction.type}
 Action: ${playerAction.actionId || 'custom'}
 Input: ${playerAction.input}
 
-Generate the next narrative beat, state mutations, and available actions.`;
+Dice roll (server-generated, cannot be changed):
+Action d20: ${actionRoll}${isCriticalSuccess ? ' (NATURAL 20 — CRITICAL SUCCESS)' : ''}${isCriticalFailure ? ' (NATURAL 1 — CRITICAL FAILURE)' : ''}
+Saving throw d20 (use only if the action targets someone/something that resists): ${savingThrowRoll}
+Difficulty modifier (from game setting "${gameDoc.difficulty || 'frontier_explorer'}"): ${difficultyModifier >= 0 ? '+' : ''}${difficultyModifier}
+
+Generate the next narrative beat, state mutations, available actions, AND a rollInterpretation object based on the dice roll.`;
 
   // ── Call Gemini API ─────────────────────────────────────────
   let aiResponse;
@@ -1170,6 +1221,69 @@ Generate the next narrative beat, state mutations, and available actions.`;
   // Cap summary length
   aiResponse.summary =
     typeof aiResponse.summary === 'string' ? aiResponse.summary.slice(0, 500) : '';
+
+  // ── Validate and enforce rollInterpretation ────────────────
+  const ri = aiResponse.rollInterpretation;
+  if (ri && typeof ri === 'object') {
+    const totalMod = Number(ri.totalModifier) || 0;
+    const dc = clamp(Number(ri.difficultyClass) || 10, 1, 30);
+    const finalResult = actionRoll + totalMod + difficultyModifier;
+    const success = isCriticalSuccess ? true : isCriticalFailure ? false : finalResult >= dc;
+
+    let savingThrow = null;
+    if (ri.savingThrow && ri.savingThrow.applicable) {
+      const savingDC = clamp(Number(ri.savingThrow.savingDC) || 10, 1, 30);
+      savingThrow = {
+        applicable: true,
+        targetName:
+          typeof ri.savingThrow.targetName === 'string'
+            ? ri.savingThrow.targetName.slice(0, 100)
+            : 'Target',
+        savingRoll: savingThrowRoll,
+        savingDC,
+        savingModifiers:
+          typeof ri.savingThrow.savingModifiers === 'string'
+            ? ri.savingThrow.savingModifiers.slice(0, 200)
+            : '',
+        savingResult: savingThrowRoll >= savingDC,
+      };
+    }
+
+    aiResponse.rollInterpretation = {
+      naturalRoll: actionRoll,
+      modifierFormula:
+        typeof ri.modifierFormula === 'string' ? ri.modifierFormula.slice(0, 300) : '',
+      totalModifier: totalMod,
+      difficultyModifier,
+      finalResult,
+      difficultyClass: dc,
+      difficultyRationale:
+        typeof ri.difficultyRationale === 'string' ? ri.difficultyRationale.slice(0, 200) : '',
+      success,
+      isCritical: isCriticalSuccess || isCriticalFailure,
+      criticalType: isCriticalSuccess ? 'success' : isCriticalFailure ? 'failure' : null,
+      savingThrow,
+      narrativeSummary:
+        typeof ri.narrativeSummary === 'string' ? ri.narrativeSummary.slice(0, 300) : '',
+    };
+  } else {
+    // Fallback if AI omitted rollInterpretation
+    const finalResult = actionRoll + difficultyModifier;
+    aiResponse.rollInterpretation = {
+      naturalRoll: actionRoll,
+      modifierFormula: '',
+      totalModifier: 0,
+      difficultyModifier,
+      finalResult,
+      difficultyClass: 10,
+      difficultyRationale: '',
+      success: isCriticalSuccess ? true : isCriticalFailure ? false : finalResult >= 10,
+      isCritical: isCriticalSuccess || isCriticalFailure,
+      criticalType: isCriticalSuccess ? 'success' : isCriticalFailure ? 'failure' : null,
+      savingThrow: null,
+      narrativeSummary: '',
+    };
+  }
 
   // ── Apply mutations and persist via transaction ────────────
   const txResult = await db.runTransaction(async (tx) => {
@@ -1709,6 +1823,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
       summary: aiResponse.summary,
       tags: [playerAction.type, aiResponse.mood],
       availableActions: cappedActions,
+      rollInterpretation: aiResponse.rollInterpretation,
       compressed: false,
     });
 
@@ -1768,6 +1883,7 @@ Generate the next narrative beat, state mutations, and available actions.`;
     locationName: txResult.currentLocationName,
     currentSystemId: txResult.currentSystemId || null,
     crewCount: crewSnap.size,
+    rollInterpretation: aiResponse.rollInterpretation,
     rateLimitWarning: rateLimitResult.warning || null,
   };
 });

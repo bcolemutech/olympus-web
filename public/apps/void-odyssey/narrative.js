@@ -14,6 +14,76 @@
     tense_curiosity: 'Your sensors chirp with unidentified readings.',
   };
 
+  /**
+   * Renders a dice roll result panel from the server rollInterpretation data.
+   * Returns an HTML string, or empty string if no roll data.
+   */
+  function _renderDiceRoll(ri) {
+    if (!ri) return '';
+
+    var critClass = '';
+    var critLabel = '';
+    if (ri.isCritical && ri.criticalType === 'success') {
+      critClass = ' dice-roll--critical-success';
+      critLabel = '<span class="dice-crit-label">CRITICAL SUCCESS!</span>';
+    } else if (ri.isCritical && ri.criticalType === 'failure') {
+      critClass = ' dice-roll--critical-failure';
+      critLabel = '<span class="dice-crit-label">CRITICAL FAILURE!</span>';
+    }
+
+    var outcomeClass = ri.success ? 'dice-outcome--success' : 'dice-outcome--failure';
+    var outcomeText = ri.success ? 'Success' : 'Failure';
+
+    var html = '<div class="dice-roll-panel' + critClass + '">';
+    html += '<div class="dice-roll-header">';
+    html += '<span class="dice-d20-icon">d20</span>';
+    html += '<span class="dice-d20-value">' + ri.naturalRoll + '</span>';
+    html += critLabel;
+    html += '</div>';
+
+    // Formula: d20(X) +modifiers +difficulty = Y vs DC Z
+    html += '<div class="dice-roll-formula">';
+    html += 'd20(' + ri.naturalRoll + ')';
+    if (ri.modifierFormula) {
+      html += ' ' + ri.modifierFormula;
+    }
+    if (ri.difficultyModifier) {
+      html +=
+        ' ' + (ri.difficultyModifier > 0 ? '+' : '') + ri.difficultyModifier + ' (difficulty)';
+    }
+    html += ' = <strong>' + ri.finalResult + '</strong> vs DC ' + ri.difficultyClass;
+    html += '</div>';
+
+    html += '<div class="dice-roll-outcome ' + outcomeClass + '">' + outcomeText + '</div>';
+
+    // Saving throw (if applicable)
+    if (ri.savingThrow && ri.savingThrow.applicable) {
+      var st = ri.savingThrow;
+      var stOutcome = st.savingResult ? 'Saved' : 'Failed';
+      var stClass = st.savingResult ? 'dice-outcome--success' : 'dice-outcome--failure';
+      html += '<div class="dice-saving-throw">';
+      html +=
+        '<span class="dice-st-label">Saving throw (' + (st.targetName || 'Target') + '):</span> ';
+      html += 'd20(' + st.savingRoll + ')';
+      if (st.savingModifiers) {
+        html += ' ' + st.savingModifiers;
+      }
+      html += ' vs DC ' + st.savingDC;
+      html += ' — <span class="' + stClass + '">' + stOutcome + '</span>';
+      html += '</div>';
+    }
+
+    // Narrative summary
+    if (ri.narrativeSummary) {
+      var summaryDiv = document.createElement('div');
+      summaryDiv.textContent = ri.narrativeSummary;
+      html += '<div class="dice-roll-summary">' + summaryDiv.innerHTML + '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
   function _escNarrative(str) {
     if (!str) return '';
     return str
@@ -35,7 +105,14 @@
    * @param {Function} onActionClick  — called with action object
    * @param {Function} onFreeformSubmit — called with input string
    */
-  VO.renderNarrativeEntry = function (narrative, actions, mood, onActionClick, onFreeformSubmit) {
+  VO.renderNarrativeEntry = function (
+    narrative,
+    actions,
+    mood,
+    onActionClick,
+    onFreeformSubmit,
+    rollInterpretation
+  ) {
     // Narrative panel
     var panel = document.getElementById('narrative-content');
     if (panel) {
@@ -45,8 +122,9 @@
         ambientHtml = '<p class="narrative-ambient">' + ambientText + '</p>';
       }
       VO.state._lastNarrativeMood = mood || null;
+      var diceHtml = _renderDiceRoll(rollInterpretation);
       panel.innerHTML =
-        ambientHtml + '<p class="narrative-text">' + _escNarrative(narrative) + '</p>';
+        ambientHtml + diceHtml + '<p class="narrative-text">' + _escNarrative(narrative) + '</p>';
     }
 
     // Mood class on the panel wrapper
