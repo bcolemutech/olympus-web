@@ -48,7 +48,9 @@ async function callGemini({
     const finishReason = candidate?.finishReason;
     if (finishReason === 'MAX_TOKENS') {
       console.error('callGemini: response truncated by MAX_TOKENS');
-      throw new HttpsError('internal', 'AI response was truncated. Please try again.');
+      throw new HttpsError('resource-exhausted', 'AI response was truncated. Please try again.', {
+        finishReason,
+      });
     }
 
     const rawText = candidate?.content?.parts?.[0]?.text;
