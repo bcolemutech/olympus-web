@@ -309,6 +309,19 @@ function makeAiResponse(overrides = {}) {
     ],
     newEntities: overrides.newEntities || [],
     summary: overrides.summary || 'A routine turn at the station.',
+    rollInterpretation: overrides.rollInterpretation || {
+      actionRoll: 14,
+      modifierFormula: '+2 (resourceful captain)',
+      totalModifier: 2,
+      finalResult: 18,
+      difficultyClass: 10,
+      difficultyRationale: 'Routine station activity',
+      success: true,
+      isCritical: false,
+      criticalType: null,
+      savingThrow: null,
+      narrativeSummary: 'A solid success with your resourceful instincts.',
+    },
   };
 }
 

@@ -274,7 +274,8 @@
           entry.availableActions || [],
           entry.mood || 'calm',
           VO.handleActionClick,
-          VO.handleFreeformSubmit
+          VO.handleFreeformSubmit,
+          entry.rollInterpretation || null
         );
       })
       .catch(function (err) {

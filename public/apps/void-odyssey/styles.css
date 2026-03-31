@@ -1857,3 +1857,165 @@
   background: linear-gradient(135deg, #78909c, #607d8b);
   color: #e0e0e0;
 }
+
+/* ── Dice Roll Panel ─────────────────────────────────────────── */
+
+.dice-roll-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.dice-roll-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.dice-d20-icon {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 600;
+}
+
+.dice-d20-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'Courier New', Courier, monospace;
+  min-width: 2ch;
+  text-align: center;
+}
+
+.dice-crit-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.dice-roll--critical-success .dice-crit-label {
+  color: #ffd54f;
+  background: rgba(255, 213, 79, 0.15);
+  border: 1px solid rgba(255, 213, 79, 0.3);
+}
+
+.dice-roll--critical-failure .dice-crit-label {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.15);
+  border: 1px solid rgba(239, 83, 80, 0.3);
+}
+
+.dice-roll--critical-success {
+  border-color: rgba(255, 213, 79, 0.4);
+  background: rgba(255, 213, 79, 0.06);
+  box-shadow: 0 0 12px rgba(255, 213, 79, 0.08);
+  animation: dice-glow 1.5s ease-in-out;
+}
+
+.dice-roll--critical-failure {
+  border-color: rgba(239, 83, 80, 0.4);
+  background: rgba(239, 83, 80, 0.06);
+  animation: dice-shake 0.4s ease-in-out;
+}
+
+.dice-roll--critical-success .dice-d20-value {
+  color: #ffd54f;
+}
+
+.dice-roll--critical-failure .dice-d20-value {
+  color: #ef5350;
+}
+
+.dice-roll-formula {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 0.35rem;
+}
+
+.dice-roll-formula strong {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.dice-roll-outcome {
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+}
+
+.dice-outcome--success {
+  color: #66bb6a;
+}
+
+.dice-outcome--failure {
+  color: #ef5350;
+}
+
+.dice-saving-throw {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 0.3rem;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.dice-st-label {
+  color: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+}
+
+.dice-roll-summary {
+  font-style: italic;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 0.25rem;
+}
+
+@keyframes dice-glow {
+  0% {
+    box-shadow: 0 0 0 rgba(255, 213, 79, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 213, 79, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 12px rgba(255, 213, 79, 0.08);
+  }
+}
+
+@keyframes dice-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dice-roll--critical-success,
+  .dice-roll--critical-failure {
+    animation: none;
+  }
+}

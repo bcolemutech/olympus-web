@@ -42,7 +42,8 @@
           data.availableActions,
           data.mood,
           VO.handleActionClick,
-          VO.handleFreeformSubmit
+          VO.handleFreeformSubmit,
+          data.rollInterpretation
         );
 
         VO.updateHud({
