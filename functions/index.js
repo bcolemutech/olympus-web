@@ -1166,7 +1166,7 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
       modelName: VOID_ODYSSEY_MODEL,
       systemInstruction: VOID_ODYSSEY_TURN_SYSTEM_PROMPT,
       userMessage,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8192,
     });
   } catch (err) {
     if (err instanceof HttpsError) throw err;
