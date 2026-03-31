@@ -347,7 +347,9 @@ service cloud.firestore {
 
     // ── User profiles ─────────────────────────────────────
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null
+        && request.auth.uid == userId
+        && hasApp('void-odyssey');
       allow read, write: if hasAdmin();
     }
 

@@ -1740,11 +1740,15 @@ Generate the next narrative beat, state mutations, and available actions.`;
   // ── Compute crew count ─────────────────────────────────────
   const crewSnap = await gameRef.collection('crew').where('status', '==', 'active').get();
 
-  // ── Track AI cost ──────────────────────────────────────────
-  await db
-    .collection('users')
-    .doc(request.auth.uid)
-    .set({ voidOdysseyCost: FieldValue.increment(VOID_ODYSSEY_COST_PER_TURN) }, { merge: true });
+  // ── Track AI cost (best-effort; non-fatal on failure) ──────
+  try {
+    await db
+      .collection('users')
+      .doc(request.auth.uid)
+      .set({ voidOdysseyCost: FieldValue.increment(VOID_ODYSSEY_COST_PER_TURN) }, { merge: true });
+  } catch (err) {
+    console.error('Failed to update voidOdysseyCost for user:', request.auth.uid, err);
+  }
 
   // ── Return to client ───────────────────────────────────────
   return {

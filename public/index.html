@@ -1108,7 +1108,7 @@
           <h2 class="profile-section-title">Void Odyssey</h2>
           <div class="profile-card">
             <div class="profile-field">
-              <span class="profile-field-label">AI Turn Cost</span>
+              <span class="profile-field-label">Total AI Cost</span>
               <span class="profile-field-value" id="profile-vo-cost">—</span>
             </div>
           </div>
@@ -1481,7 +1481,7 @@
                   userSnap.exists && userSnap.data().voidOdysseyCost != null
                     ? userSnap.data().voidOdysseyCost
                     : 0;
-                profileVoCost.textContent = '$' + cost.toFixed(2);
+                profileVoCost.textContent = '$' + cost.toFixed(4);
               } catch (_err) {
                 profileVoCost.textContent = '—';
               }

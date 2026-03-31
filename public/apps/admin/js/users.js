@@ -209,7 +209,7 @@
         '<p class="detail-label">Void Odyssey AI Cost</p>' +
         '<div class="vo-cost-row">' +
         '<span class="vo-cost-display detail-value">Loading&hellip;</span>' +
-        '<input class="vo-cost-input hidden" type="number" step="0.01" min="0" style="width:90px" />' +
+        '<input class="vo-cost-input hidden" type="number" step="0.0001" min="0" style="width:100px" />' +
         '<button class="btn-secondary vo-cost-edit-btn" type="button" style="margin-left:0.5rem">Edit</button>' +
         '<button class="btn-primary vo-cost-save-btn hidden" type="button" style="margin-left:0.5rem">Save</button>' +
         '<button class="btn-secondary vo-cost-cancel-btn hidden" type="button" style="margin-left:0.4rem">Cancel</button>' +
@@ -237,8 +237,8 @@
           .then(function (snap) {
             var cost =
               snap.exists && snap.data().voidOdysseyCost != null ? snap.data().voidOdysseyCost : 0;
-            costDisplay.textContent = '$' + cost.toFixed(2);
-            costInput.value = cost.toFixed(2);
+            costDisplay.textContent = '$' + cost.toFixed(4);
+            costInput.value = cost.toFixed(4);
           })
           .catch(function () {
             costDisplay.textContent = '—';
@@ -268,9 +268,9 @@
           costSaveBtn.disabled = true;
           db.collection('users')
             .doc(user.uid)
-            .set({ voidOdysseyCost: parseFloat(val.toFixed(2)) }, { merge: true })
+            .set({ voidOdysseyCost: parseFloat(val.toFixed(4)) }, { merge: true })
             .then(function () {
-              costDisplay.textContent = '$' + val.toFixed(2);
+              costDisplay.textContent = '$' + val.toFixed(4);
               costInput.classList.add('hidden');
               costSaveBtn.classList.add('hidden');
               costCancelBtn.classList.add('hidden');
