@@ -138,6 +138,12 @@ async function clearGame() {
   if (docSnap.exists) {
     await ref.delete();
   }
+  // Clean up user cost doc
+  const userRef = db.collection('users').doc(TEST_USER_ID);
+  const userSnap = await userRef.get();
+  if (userSnap.exists) {
+    await userRef.delete();
+  }
 }
 
 /**
@@ -958,6 +964,51 @@ describe('voidOdysseyTurn', () => {
       mockAiResponse(makeAiResponse());
 
       await expect(callTurn()).rejects.toThrow(/no longer active/i);
+    });
+  });
+
+  describe('AI cost tracking', () => {
+    test('increments voidOdysseyCost for the user after a successful turn', async () => {
+      await seedGame();
+      mockAiResponse(makeAiResponse());
+
+      await callTurn();
+
+      const userSnap = await db.collection('users').doc(TEST_USER_ID).get();
+      expect(userSnap.exists).toBe(true);
+      expect(userSnap.data().voidOdysseyCost).toBeCloseTo(0.01, 4);
+    });
+
+    test('accumulates cost across multiple turns', async () => {
+      await seedGame();
+      mockAiResponse(makeAiResponse());
+      await callTurn();
+      mockAiResponse(makeAiResponse());
+      await callTurn();
+
+      const userSnap = await db.collection('users').doc(TEST_USER_ID).get();
+      expect(userSnap.data().voidOdysseyCost).toBeCloseTo(0.02, 4);
+    });
+
+    test('does not create a cost doc when auth is rejected', async () => {
+      mockAiResponse(makeAiResponse());
+
+      await expect(
+        callTurn({}, { authOverride: null })
+      ).rejects.toThrow();
+
+      const userSnap = await db.collection('users').doc(TEST_USER_ID).get();
+      expect(userSnap.exists).toBe(false);
+    });
+
+    test('does not increment cost when the game is not found', async () => {
+      // No game seeded — turn will fail before reaching the cost write
+      mockAiResponse(makeAiResponse());
+
+      await expect(callTurn()).rejects.toThrow(/not found/i);
+
+      const userSnap = await db.collection('users').doc(TEST_USER_ID).get();
+      expect(userSnap.exists).toBe(false);
     });
   });
 });

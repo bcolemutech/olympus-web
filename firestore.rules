@@ -345,6 +345,14 @@ service cloud.firestore {
           && validPoolHandicap();
     }
 
+    // ── User profiles ─────────────────────────────────────
+    match /users/{userId} {
+      allow read: if request.auth != null
+        && request.auth.uid == userId
+        && hasApp('void-odyssey');
+      allow read, write: if hasAdmin();
+    }
+
     // ── Default deny ───────────────────────────────────────
 
     match /{document=**} {

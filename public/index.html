@@ -1103,6 +1103,17 @@
           </div>
         </section>
 
+        <!-- Void Odyssey usage -->
+        <section class="profile-section hidden" id="profile-vo-section">
+          <h2 class="profile-section-title">Void Odyssey</h2>
+          <div class="profile-card">
+            <div class="profile-field">
+              <span class="profile-field-label">Total AI Cost</span>
+              <span class="profile-field-value" id="profile-vo-cost">—</span>
+            </div>
+          </div>
+        </section>
+
         <!-- Raw Claims (debug) -->
         <section class="profile-section">
           <h2 class="profile-section-title">Raw App Claims</h2>
@@ -1457,6 +1468,24 @@
             const apps = await fetchGrantedApps(appIds);
             profileAppsLoading.classList.add('hidden');
             renderAppTiles(apps, profileAppGrid, profileEmptyState);
+
+            // Show Void Odyssey AI cost if user has access
+            if (appIds.includes('void-odyssey')) {
+              const profileVoSection = document.getElementById('profile-vo-section');
+              const profileVoCost = document.getElementById('profile-vo-cost');
+              profileVoSection.classList.remove('hidden');
+              try {
+                const db = firebase.firestore();
+                const userSnap = await db.collection('users').doc(user.uid).get();
+                const cost =
+                  userSnap.exists && userSnap.data().voidOdysseyCost != null
+                    ? userSnap.data().voidOdysseyCost
+                    : 0;
+                profileVoCost.textContent = '$' + cost.toFixed(4);
+              } catch (_err) {
+                profileVoCost.textContent = '—';
+              }
+            }
           } catch (err) {
             console.error('Failed to load profile apps:', err);
             rawAppClaims.textContent = 'Error: ' + err.message;
