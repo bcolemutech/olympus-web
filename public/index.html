@@ -1492,7 +1492,14 @@
           loadingScreen.classList.add('hidden');
           if (user) {
             closeModal();
-            showAuthView(user);
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('view') === 'profile') {
+              // Clear the query param so a refresh goes back to the hall
+              window.history.replaceState({}, '', '/');
+              showProfileView(user);
+            } else {
+              showAuthView(user);
+            }
           } else {
             showLanding();
           }
