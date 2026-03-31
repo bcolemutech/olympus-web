@@ -38,7 +38,8 @@ export default [
         React: "readonly",
         ReactDOM: "readonly",
         AbortController: "readonly",
-        OlympusAnalytics: "readonly"
+        OlympusAnalytics: "readonly",
+        setTimeout: "readonly"
       }
     },
     rules: {

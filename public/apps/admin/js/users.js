@@ -205,10 +205,91 @@
             '<p class="panel-status hidden access-success"></p>'
           : '<span class="muted">App access cannot be managed for accounts without an email address.</span>') +
         '</div>' +
+        '<div class="detail-vo-cost-section">' +
+        '<p class="detail-label">Void Odyssey AI Cost</p>' +
+        '<div class="vo-cost-row">' +
+        '<span class="vo-cost-display detail-value">Loading&hellip;</span>' +
+        '<input class="vo-cost-input hidden" type="number" step="0.01" min="0" style="width:90px" />' +
+        '<button class="btn-secondary vo-cost-edit-btn" type="button" style="margin-left:0.5rem">Edit</button>' +
+        '<button class="btn-primary vo-cost-save-btn hidden" type="button" style="margin-left:0.5rem">Save</button>' +
+        '<button class="btn-secondary vo-cost-cancel-btn hidden" type="button" style="margin-left:0.4rem">Cancel</button>' +
+        '<span class="muted vo-cost-status hidden" style="margin-left:0.6rem;font-size:0.85rem"></span>' +
+        '</div>' +
+        '</div>' +
         '</div>' +
         '</td>';
 
       tr.parentNode.insertBefore(detailRow, tr.nextSibling);
+
+      // Load and wire Void Odyssey cost
+      (function () {
+        var db = Pantheon.state.db;
+        var costDisplay = detailRow.querySelector('.vo-cost-display');
+        var costInput = detailRow.querySelector('.vo-cost-input');
+        var costEditBtn = detailRow.querySelector('.vo-cost-edit-btn');
+        var costSaveBtn = detailRow.querySelector('.vo-cost-save-btn');
+        var costCancelBtn = detailRow.querySelector('.vo-cost-cancel-btn');
+        var costStatus = detailRow.querySelector('.vo-cost-status');
+
+        db.collection('users')
+          .doc(user.uid)
+          .get()
+          .then(function (snap) {
+            var cost =
+              snap.exists && snap.data().voidOdysseyCost != null ? snap.data().voidOdysseyCost : 0;
+            costDisplay.textContent = '$' + cost.toFixed(2);
+            costInput.value = cost.toFixed(2);
+          })
+          .catch(function () {
+            costDisplay.textContent = '—';
+          });
+
+        costEditBtn.addEventListener('click', function () {
+          costDisplay.classList.add('hidden');
+          costEditBtn.classList.add('hidden');
+          costInput.classList.remove('hidden');
+          costSaveBtn.classList.remove('hidden');
+          costCancelBtn.classList.remove('hidden');
+          costStatus.classList.add('hidden');
+        });
+
+        costCancelBtn.addEventListener('click', function () {
+          costInput.classList.add('hidden');
+          costSaveBtn.classList.add('hidden');
+          costCancelBtn.classList.add('hidden');
+          costDisplay.classList.remove('hidden');
+          costEditBtn.classList.remove('hidden');
+          costStatus.classList.add('hidden');
+        });
+
+        costSaveBtn.addEventListener('click', function () {
+          var val = parseFloat(costInput.value);
+          if (isNaN(val) || val < 0) return;
+          costSaveBtn.disabled = true;
+          db.collection('users')
+            .doc(user.uid)
+            .set({ voidOdysseyCost: parseFloat(val.toFixed(2)) }, { merge: true })
+            .then(function () {
+              costDisplay.textContent = '$' + val.toFixed(2);
+              costInput.classList.add('hidden');
+              costSaveBtn.classList.add('hidden');
+              costCancelBtn.classList.add('hidden');
+              costDisplay.classList.remove('hidden');
+              costEditBtn.classList.remove('hidden');
+              costSaveBtn.disabled = false;
+              costStatus.textContent = 'Saved';
+              costStatus.classList.remove('hidden');
+              setTimeout(function () {
+                costStatus.classList.add('hidden');
+              }, 2000);
+            })
+            .catch(function () {
+              costSaveBtn.disabled = false;
+              costStatus.textContent = 'Error saving';
+              costStatus.classList.remove('hidden');
+            });
+        });
+      })();
 
       if (user.email) {
         // Load apps checkboxes

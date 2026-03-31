@@ -363,6 +363,7 @@ exports.inviteUser = onCall(async (request) => {
 // ── Void Odyssey ──────────────────────────────────────────────────────────────
 
 const VOID_ODYSSEY_MODEL = 'gemini-2.5-flash';
+const VOID_ODYSSEY_COST_PER_TURN = 0.01; // USD per AI turn
 
 const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
@@ -1738,6 +1739,12 @@ Generate the next narrative beat, state mutations, and available actions.`;
 
   // ── Compute crew count ─────────────────────────────────────
   const crewSnap = await gameRef.collection('crew').where('status', '==', 'active').get();
+
+  // ── Track AI cost ──────────────────────────────────────────
+  await db
+    .collection('users')
+    .doc(request.auth.uid)
+    .set({ voidOdysseyCost: FieldValue.increment(VOID_ODYSSEY_COST_PER_TURN) }, { merge: true });
 
   // ── Return to client ───────────────────────────────────────
   return {
