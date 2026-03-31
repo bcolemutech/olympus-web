@@ -14,6 +14,14 @@
     tense_curiosity: 'Your sensors chirp with unidentified readings.',
   };
 
+  /** Escapes a string for safe insertion into innerHTML. */
+  function _escHtml(str) {
+    if (!str) return '';
+    var d = document.createElement('span');
+    d.textContent = String(str);
+    return d.innerHTML;
+  }
+
   /**
    * Renders a dice roll result panel from the server rollInterpretation data.
    * Returns an HTML string, or empty string if no roll data.
@@ -45,7 +53,7 @@
     html += '<div class="dice-roll-formula">';
     html += 'd20(' + ri.naturalRoll + ')';
     if (ri.modifierFormula) {
-      html += ' ' + ri.modifierFormula;
+      html += ' ' + _escHtml(ri.modifierFormula);
     }
     if (ri.difficultyModifier) {
       html +=
@@ -63,10 +71,12 @@
       var stClass = st.savingResult ? 'dice-outcome--success' : 'dice-outcome--failure';
       html += '<div class="dice-saving-throw">';
       html +=
-        '<span class="dice-st-label">Saving throw (' + (st.targetName || 'Target') + '):</span> ';
+        '<span class="dice-st-label">Saving throw (' +
+        _escHtml(st.targetName || 'Target') +
+        '):</span> ';
       html += 'd20(' + st.savingRoll + ')';
       if (st.savingModifiers) {
-        html += ' ' + st.savingModifiers;
+        html += ' ' + _escHtml(st.savingModifiers);
       }
       html += ' vs DC ' + st.savingDC;
       html += ' — <span class="' + stClass + '">' + stOutcome + '</span>';

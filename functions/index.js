@@ -1225,7 +1225,7 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
   // ── Validate and enforce rollInterpretation ────────────────
   const ri = aiResponse.rollInterpretation;
   if (ri && typeof ri === 'object') {
-    const totalMod = Number(ri.totalModifier) || 0;
+    const totalMod = clamp(Math.round(Number(ri.totalModifier) || 0), -20, 20);
     const dc = clamp(Number(ri.difficultyClass) || 10, 1, 30);
     const finalResult = actionRoll + totalMod + difficultyModifier;
     const success = isCriticalSuccess ? true : isCriticalFailure ? false : finalResult >= dc;

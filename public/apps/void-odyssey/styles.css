@@ -2012,3 +2012,10 @@
     transform: translateX(3px);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .dice-roll--critical-success,
+  .dice-roll--critical-failure {
+    animation: none;
+  }
+}
