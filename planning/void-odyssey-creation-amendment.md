@@ -21,19 +21,28 @@ When starting a new campaign, the player moves through a guided wizard. The jour
    Optionally writes a brief backstory (or Claude generates one
    tuned to the selected journey).
 
-3. CHOOSE YOUR SHIP
+3. ASSIGN SKILLS
+   Player distributes 10 skill points across 15 available skills.
+   Each skill costs 1 point to acquire (+1 bonus), then follows
+   a Fibonacci cost scale to level up (+2 costs 2 more, +3 costs
+   3 more). Level 3 (+3) is the hard cap — the UI disables the
+   upgrade button once a skill reaches +3. The UI shows remaining
+   points and previews the total cost for each upgrade. Skills
+   with insufficient remaining points are also grayed out.
+
+4. CHOOSE YOUR SHIP
    Filtered to ships compatible with the selected journey.
    Each ship shows stat bars, a flavor description, and its
    starting loadout (weapons, systems, features).
    Player names the ship.
 
-4. STARTING CREW
+5. STARTING CREW
    Claude generates 2-3 crew members tailored to the journey
    and ship class. A smuggler's freighter gets different crew
    than a science vessel on a deep-space survey.
    Player can rename or adjust before confirming.
 
-5. OPENING SCENE
+6. OPENING SCENE
    Claude generates the first narrative beat using the journey's
    opening prompt template, the player's ship/crew/traits, and
    the starting star map region.
@@ -1006,15 +1015,161 @@ character: {
 
 **Design notes:**
 
-- **Stats are narrative anchors, not roll tables.** Claude references them when describing how the character handles a challenge — high physique handles a brawl differently than high intellect or presence. No dice. No arithmetic.
+- **Stats are narrative anchors, not roll tables.** Claude references them when describing how the character handles a challenge — high physique handles a brawl differently than high intellect or presence. They inform narrative flavor but do not directly modify dice rolls.
 - **Traits inform starting stats.** A "reckless" trait might mean higher agility but lower presence; "cautious" might mean lower physique but higher intellect. Claude allocates adjustments from a base of 50 — no rigid formula, just a consistent signal.
+- **Skills are the mechanical layer.** While stats shape narrative tone, skills provide concrete +1 to +3 modifiers in the AI's scenario formulas. See Section 8.6 for the full skills system.
 - **Stress is a second condition track.** A character can be physically fine and psychologically fraying. Claude accumulates stress through events and lets it ease through rest, crew interaction, and downtime — not a mechanic, a narrative texture.
 - **`notes` is Claude’s memory for the character.** Injuries that healed but left marks, relationships formed or broken, decisions that followed the character home — this field grounds continuity across a long campaign.
 - **For Ship’s Company**, `role` becomes the primary narrative lens. A marine and an engineer aboard the same ship encounter different problems, have access to different spaces, and carry different kinds of knowledge. Claude should treat the role as a filter on everything the character sees and does.
 
 -----
 
-### 8.6 Extensibility Notes
+### 8.6 Captain Skills
+
+Skills are the player's primary mechanical expression during character creation. While stats (physique, agility, intellect, presence) shape how Claude narrates the character, skills provide concrete numerical modifiers that the AI factors into its scenario formulas when resolving dice rolls.
+
+#### Skill Point Economy
+
+The player receives **10 skill points** at creation to distribute across 15 available skills.
+
+**Cost per level (Fibonacci progression):**
+
+| Level | Bonus | Upgrade Cost | Total Investment |
+|-------|-------|-------------|-----------------|
+| 0 | +0 | — | 0 points |
+| 1 | +1 | 1 point | 1 point |
+| 2 | +2 | 2 points | 3 points |
+| 3 | +3 | 3 points | 6 points |
+
+Each level grants exactly +1 more to the roll modifier, but the cost to reach the next level increases. **Level 3 (+3) is the maximum** — no skill can exceed +3 regardless of available points. The UI enforces this by disabling the upgrade control at +3 and graying out upgrades the player can't afford. A +3 skill costs 6 total points — more than half the budget — forcing hard choices about depth vs. breadth.
+
+**Example builds with 10 points:**
+
+| Build Style | Allocation | Character |
+|-------------|-----------|-----------|
+| Specialist | One skill at +3 (6), one at +2 (3), one at +1 (1) | Master of one domain, competent in a second |
+| Generalist | Ten skills at +1 (10) | Broad but shallow — a little of everything |
+| Dual Focus | Two skills at +2 (6), four at +1 (4) | Two strong suits with supporting breadth |
+| Focused Expert | One skill at +3 (6), four at +1 (4) | Deep specialist with basic coverage |
+
+No build can cover everything. A player who maxes Piloting and Gunnery has nothing left for Diplomacy or Medicine. This is the point — the captain's skill profile shapes which problems they solve personally and which ones they rely on crew for.
+
+#### Skill List
+
+Skills are deliberately general enough to apply across many scenarios but specific enough that the AI can identify when each one is relevant. Each skill includes example formula applications.
+
+| # | Skill | Description | Example Formula Applications |
+|---|-------|-------------|------------------------------|
+| 1 | **Piloting** | Ship maneuvering, evasive action, precision flying, docking in hazardous conditions | Navigating debris fields, evasive combat maneuvers, emergency landings, threading asteroid belts |
+| 2 | **Gunnery** | Weapon targeting, fire control, turret operation, shot timing | Ship-to-ship combat, disabling specific systems, suppressive fire, shooting under pressure |
+| 3 | **Engineering** | Ship repair, system maintenance, jury-rigging, power management | Fixing damaged systems mid-combat, rerouting power, improvising repairs with limited parts |
+| 4 | **Medicine** | Treating injuries, surgery, disease identification, pharmaceutical knowledge | Stabilizing wounded crew, performing surgery, identifying alien pathogens, triage under fire |
+| 5 | **Diplomacy** | Negotiation, persuasion, de-escalation, reading social dynamics | Bartering prices, convincing NPCs, de-escalating hostilities, forging alliances |
+| 6 | **Intimidation** | Coercion, threatening, projecting authority through force of will | Forcing surrender, establishing dominance, interrogation, deterring aggression |
+| 7 | **Deception** | Lying, bluffing, disguise, falsifying records, misdirection | Bluffing past checkpoints, running cons, forging documents, feigning surrender |
+| 8 | **Investigation** | Searching, analyzing clues, forensic analysis, connecting disparate information | Examining derelicts, analyzing wreckage, decoding messages, finding hidden compartments |
+| 9 | **Survival** | EVA operations, harsh environments, rationing, endurance under deprivation | Spacewalks, surviving hull breaches, rationing supplies, enduring extreme conditions |
+| 10 | **Hacking** | Cybersecurity, cracking encrypted systems, data extraction, electronic warfare | Breaking into terminals, disabling security systems, intercepting comms, cracking encryption |
+| 11 | **Stealth** | Moving undetected, silent operations, ambush setup, reducing sensor signature | Sneaking through stations, silent boarding, evading patrols, hiding cargo |
+| 12 | **Leadership** | Commanding crews under pressure, tactical coordination, inspiring action | Rallying panicked crew, coordinating multi-team operations, maintaining discipline in crisis |
+| 13 | **Xenology** | Alien languages, customs, biology, first-contact protocols | Communicating with alien species, understanding alien tech, cultural negotiations, identifying alien life |
+| 14 | **Commerce** | Market knowledge, appraising goods, supply chain awareness, deal-making | Evaluating salvage, spotting counterfeits, finding buyers for rare goods, reading market conditions |
+| 15 | **Perception** | Spotting threats, reading people, situational awareness, noticing details others miss | Detecting ambushes, reading NPC intentions, noticing environmental hazards, spotting hidden objects |
+
+**Design rationale for 15 skills:**
+
+- **15 skills with 10 points means you can't even get +1 in everything.** The player must leave gaps. Those gaps matter — a captain with no Medicine relies entirely on their ship's surgeon; one with no Stealth can't sneak past anything.
+- **Skills overlap with crew roles intentionally.** A captain with Engineering +3 and an engineer crew member stack their bonuses. A captain with no Engineering depends entirely on crew. This creates a push-pull between personal capability and crew dependency.
+- **Some skills are journey-weighted but none are journey-locked.** Diplomacy is more valuable in First Contact, Gunnery in Warpath — but any skill can matter in any journey. The player's build shapes *how* they approach problems within the journey's framework.
+- **Social skills are split three ways** (Diplomacy, Intimidation, Deception) to prevent a single "charisma" dump stat from covering all social encounters. Talking down a pirate (Intimidation) is mechanically different from negotiating a trade deal (Diplomacy) or bluffing past a checkpoint (Deception).
+
+#### How Skills Integrate with Dice Rolls
+
+Skills plug directly into the existing modifier formula system. When the AI constructs a `rollInterpretation` for a turn, it draws skill modifiers from the captain's skill levels alongside other modifier sources.
+
+**Current modifier sources (from MODIFIER SOURCES in the system prompt):**
+- Captain traits: +1 to +2 each when relevant
+- Crew skills: +1 to +3 for relevant crew role
+- Ship system status: operational +1, damaged -2, destroyed -4
+- Ship weapons: +1 to +2 in combat
+- Current morale: inspired +1, content 0, uneasy -1, fearful -2, broken -3
+- Injuries: minor -1, serious -2, critical -3
+- Relevant cargo items: +1 for useful equipment
+
+**New modifier source — Captain skills: +1 to +3 based on skill level.**
+
+The AI includes the relevant captain skill in the `modifierFormula` string. Example formulas:
+
+```
+"+2 (piloting skill) +1 (operational sensors) -1 (low morale)"
+"+3 (engineering skill) +1 (chief engineer crew) -2 (damaged system)"
+"+1 (diplomacy skill) +2 (silver-tongued trait) +1 (inspired morale)"
+"+0 (no relevant skill) +1 (operational sensors)"
+```
+
+The AI determines which skill applies based on the player's action. Most actions map to a single obvious skill; ambiguous cases are the AI's judgment call. If no skill is relevant, no skill modifier is added.
+
+**The 5-modifier cap still applies.** Captain skill is one of up to 5 total modifiers. This keeps formulas readable and prevents modifier stacking from overwhelming the d20 roll.
+
+#### Data Structure
+
+```javascript
+// Added to the character object on the root game document
+character: {
+  // ... existing fields (name, role, traits, backstory, stats, condition, notes) ...
+
+  // Skills — set at creation in Step 3, immutable after game start.
+  // Only skills the player has chosen are present (omitted = level 0).
+  // Each value is the skill level: 1, 2, or 3.
+  // Example: { piloting: 2, engineering: 3, diplomacy: 1 }
+  skills: {
+    // Possible keys (only include those the player selected):
+    // piloting, gunnery, engineering, medicine, diplomacy,
+    // intimidation, deception, investigation, survival, hacking,
+    // stealth, leadership, xenology, commerce, perception
+  },
+}
+```
+
+**Validation at creation (enforced by both UI and server):**
+- Total points spent must equal exactly 10 (no saving points)
+- Each skill level must be 1, 2, or 3 (no level exceeds the +3 cap)
+- Cost verification: sum of (level 1 = 1pt, level 2 = 3pt, level 3 = 6pt) across all skills = 10
+- The UI prevents invalid states proactively: upgrade buttons are disabled when the skill is at +3 or when remaining points are insufficient for the next level's cost
+
+#### Context Assembly
+
+The captain's skills are included in the context sent to the AI each turn, as part of the player/character block:
+
+```javascript
+// In assembleContext, add to the player object:
+player: {
+  name: gameDoc.character.name,
+  traits: gameDoc.character.traits || [],
+  skills: gameDoc.character.skills || {},  // { piloting: 2, engineering: 3, diplomacy: 1 }
+}
+```
+
+The system prompt's MODIFIER SOURCES instruction is updated to include:
+
+```
+- Captain skills: +1 to +3 based on skill level (piloting, gunnery, engineering, medicine,
+  diplomacy, intimidation, deception, investigation, survival, hacking, stealth, leadership,
+  xenology, commerce, perception). Apply the most relevant skill to the action. If no skill
+  applies, do not add a skill modifier.
+```
+
+#### Skills Are Immutable After Creation
+
+Unlike stats (which evolve narratively) and condition (which changes every turn), skills are locked at creation. This is a deliberate design choice:
+
+- **Skills represent trained expertise**, not moment-to-moment condition. The captain brought these capabilities to the voyage.
+- **Immutability preserves the weight of creation choices.** If skills could be gained mid-campaign, the initial allocation would feel less meaningful.
+- **Crew recruitment is the mid-game answer.** A captain who skipped Medicine can recruit a surgeon. A captain who skipped Hacking can find a slicer. The crew system already handles capability growth — skills define what the *captain personally* brings to the table.
+
+-----
+
+### 8.7 Extensibility Notes
 
 Adding a new journey requires:
 
@@ -1048,3 +1203,6 @@ The structure supports future additions like seasonal or event journeys, communi
 1. **Stats use a tiered absolute-value system.** Hull and shield values fall into named tiers (Light / Standard / Heavy / Capital) that give Claude consistent narrative guidance. Weapon damage classes map to those tiers. No arithmetic required — Claude uses the tiers as narrative logic, not as math.
 1. **Minimum crew is ~40–50% of capacity; some ships support skeleton or solo operation.** Capital ships lose whole departments below 50%. Claude treats minimum crew as narrative tension, not a hard cutoff.
 1. **The player character persists separately from the ship.** Characters carry four stats (physique, agility, intellect, presence), a dual condition track (health + stress), and a `notes` field for campaign memory. The ship can be lost or changed; the character is the constant. The `role` field enables journey-specific perspectives — particularly for Ship’s Company, where the player is not the commanding officer.
+1. **15 skills, 10 points, Fibonacci cost curve.** Skills are the captain’s mechanical identity — they provide +1 to +3 modifiers in dice roll formulas. The Fibonacci cost (1 / 3 / 6 total for +1 / +2 / +3) forces real trade-offs: depth in a few areas or breadth across many. 10 points with 15 options means every build has meaningful gaps. Skills are immutable after creation — crew recruitment handles mid-campaign capability growth.
+1. **Skills complement crew, not replace them.** Captain skills and crew skills can stack in the modifier formula but share the 5-modifier cap. A captain with Engineering +3 and an engineer crew member is exceptionally capable at repairs; a captain with no Engineering relies entirely on crew. This creates distinct play experiences from the same journey.
+1. **Social skills split three ways.** Diplomacy, Intimidation, and Deception are separate skills to prevent a single social stat from dominating all NPC interactions. Each maps to different kinds of social encounters with different narrative flavors.
