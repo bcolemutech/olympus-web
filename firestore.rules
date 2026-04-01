@@ -350,6 +350,19 @@ service cloud.firestore {
       allow read: if request.auth != null
         && request.auth.uid == userId
         && hasApp('void-odyssey');
+
+      // Users can set their own Void Odyssey difficulty preference
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && hasApp('void-odyssey')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voidOdysseyDifficulty'])
+        && request.resource.data.voidOdysseyDifficulty in ['easiest', 'easy', 'normal', 'hard', 'hardest'];
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && hasApp('void-odyssey')
+        && request.resource.data.keys().hasOnly(['voidOdysseyDifficulty'])
+        && request.resource.data.voidOdysseyDifficulty in ['easiest', 'easy', 'normal', 'hard', 'hardest'];
+
       allow read, write: if hasAdmin();
     }
 

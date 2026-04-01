@@ -829,6 +829,32 @@
         font-style: italic;
       }
 
+      .profile-select {
+        background: rgba(17, 24, 39, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        color: #e0e0e0;
+        font-size: 0.9rem;
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        outline: none;
+      }
+
+      .profile-select:focus {
+        border-color: #ffd54f;
+      }
+
+      .profile-select option {
+        background: #111827;
+        color: #e0e0e0;
+      }
+
+      .profile-field-hint {
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+      }
+
       .raw-claims {
         font-family: 'Courier New', Courier, monospace;
         font-size: 0.8rem;
@@ -1107,6 +1133,19 @@
         <section class="profile-section hidden" id="profile-vo-section">
           <h2 class="profile-section-title">Void Odyssey</h2>
           <div class="profile-card">
+            <div class="profile-field">
+              <label class="profile-field-label" for="profile-vo-difficulty">Difficulty</label>
+              <div>
+                <select class="profile-select" id="profile-vo-difficulty">
+                  <option value="easiest">Easiest (+5)</option>
+                  <option value="easy">Easy (+3)</option>
+                  <option value="normal" selected>Normal (+2)</option>
+                  <option value="hard">Hard (+0)</option>
+                  <option value="hardest">Hardest (-2)</option>
+                </select>
+                <p class="profile-field-hint">Applies a modifier to your action rolls</p>
+              </div>
+            </div>
             <div class="profile-field">
               <span class="profile-field-label">Total AI Cost</span>
               <span class="profile-field-value" id="profile-vo-cost">—</span>
@@ -1469,22 +1508,38 @@
             profileAppsLoading.classList.add('hidden');
             renderAppTiles(apps, profileAppGrid, profileEmptyState);
 
-            // Show Void Odyssey AI cost if user has access
+            // Show Void Odyssey section if user has access
             if (appIds.includes('void-odyssey')) {
               const profileVoSection = document.getElementById('profile-vo-section');
               const profileVoCost = document.getElementById('profile-vo-cost');
+              const profileVoDifficulty = document.getElementById('profile-vo-difficulty');
               profileVoSection.classList.remove('hidden');
               try {
                 const db = firebase.firestore();
                 const userSnap = await db.collection('users').doc(user.uid).get();
-                const cost =
-                  userSnap.exists && userSnap.data().voidOdysseyCost != null
-                    ? userSnap.data().voidOdysseyCost
-                    : 0;
+                const userData = userSnap.exists ? userSnap.data() : {};
+                const cost = userData.voidOdysseyCost != null ? userData.voidOdysseyCost : 0;
                 profileVoCost.textContent = '$' + cost.toFixed(4);
+
+                // Set difficulty selector to current preference
+                const currentDifficulty = userData.voidOdysseyDifficulty || 'normal';
+                profileVoDifficulty.value = currentDifficulty;
               } catch (_err) {
                 profileVoCost.textContent = '—';
               }
+
+              // Save difficulty preference on change (use onchange to avoid stacking listeners)
+              profileVoDifficulty.onchange = async () => {
+                const db = firebase.firestore();
+                try {
+                  await db
+                    .collection('users')
+                    .doc(user.uid)
+                    .set({ voidOdysseyDifficulty: profileVoDifficulty.value }, { merge: true });
+                } catch (err) {
+                  console.error('Failed to save difficulty:', err);
+                }
+              };
             }
           } catch (err) {
             console.error('Failed to load profile apps:', err);

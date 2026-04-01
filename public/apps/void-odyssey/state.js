@@ -4,8 +4,8 @@
   window.VoidOdyssey = window.VoidOdyssey || {};
   var VO = window.VoidOdyssey;
 
-  // ── Difficulty / tone options ──────────────────────────────
-  VO.DIFFICULTIES = [
+  // ── Narrative tone options (affects story style, not dice) ──
+  VO.TONES = [
     {
       id: 'frontier_explorer',
       label: 'Frontier Explorer',
@@ -231,7 +231,7 @@
     currentView: 'loading',
     wizardStep: 1,
     wizardData: {
-      difficulty: null,
+      tone: null,
       captainName: '',
       captainTraits: [],
       captainBackstory: '',

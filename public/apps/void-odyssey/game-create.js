@@ -37,7 +37,7 @@
     }
   };
 
-  // Step 1: Choose difficulty / tone
+  // Step 1: Choose narrative tone
   function _renderStep1(container) {
     var d = VO.state.wizardData;
     var html =
@@ -45,22 +45,22 @@
       '<p class="wizard-step-desc">What kind of story do you want to tell?</p>' +
       '<div class="difficulty-grid">';
 
-    VO.DIFFICULTIES.forEach(function (diff) {
-      var selected = d.difficulty === diff.id;
+    VO.TONES.forEach(function (tone) {
+      var selected = d.tone === tone.id;
       html +=
         '<button type="button" class="difficulty-card' +
         (selected ? ' selected' : '') +
         '" data-id="' +
-        diff.id +
+        tone.id +
         '">' +
         '<span class="difficulty-icon">' +
-        diff.icon +
+        tone.icon +
         '</span>' +
         '<span class="difficulty-label">' +
-        diff.label +
+        tone.label +
         '</span>' +
         '<span class="difficulty-desc">' +
-        diff.description +
+        tone.description +
         '</span>' +
         '</button>';
     });
@@ -68,7 +68,7 @@
     html += '</div><div class="wizard-nav">';
     html +=
       '<button type="button" class="btn btn-primary wizard-next" id="step1-next" ' +
-      (d.difficulty ? '' : 'disabled') +
+      (d.tone ? '' : 'disabled') +
       '>Next →</button>';
     html += '</div>';
 
@@ -76,9 +76,9 @@
 
     container.querySelectorAll('.difficulty-card').forEach(function (card) {
       card.addEventListener('click', function () {
-        d.difficulty = card.dataset.id;
+        d.tone = card.dataset.id;
         container.querySelectorAll('.difficulty-card').forEach(function (c) {
-          c.classList.toggle('selected', c.dataset.id === d.difficulty);
+          c.classList.toggle('selected', c.dataset.id === d.tone);
         });
         document.getElementById('step1-next').disabled = false;
       });
@@ -87,7 +87,7 @@
     var nextBtn = document.getElementById('step1-next');
     if (nextBtn) {
       nextBtn.addEventListener('click', function () {
-        if (!d.difficulty) return;
+        if (!d.tone) return;
         VO.renderWizardStep(2);
       });
     }
@@ -300,7 +300,8 @@
     // Call the Cloud Function (generates crew + opening scene in one shot)
     var fn = VO.state.functions.httpsCallable('voidOdysseyNewGame');
     fn({
-      difficulty: d.difficulty,
+      // Legacy field name kept for backend compatibility; carries narrative tone
+      difficulty: d.tone,
       captainName: d.captainName,
       captainTraits: d.captainTraits,
       captainBackstory: d.captainBackstory,
