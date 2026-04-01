@@ -77,9 +77,15 @@ async function seedGame({
   items = [],
   quests = [],
   narrativeLog = [],
+  userDifficulty = null,
 } = {}) {
   const ref = gameRef();
   await ref.set(makeGame(game));
+
+  // Seed user difficulty preference if specified
+  if (userDifficulty) {
+    await db.collection('users').doc(TEST_USER_ID).set({ voidOdysseyDifficulty: userDifficulty });
+  }
 
   // Default crew if none specified
   const crewDocs =
@@ -1092,7 +1098,7 @@ describe('voidOdysseyTurn', () => {
 
     test('server recomputes success from DC and modifiers', async () => {
       jest.spyOn(crypto, 'randomInt').mockReturnValue(5);
-      await seedGame({ game: { difficulty: 'smugglers_run' } }); // difficultyModifier = 0
+      await seedGame({ userDifficulty: 'hard' }); // difficultyModifier = 0
       mockAiResponse(
         makeAiResponse({
           rollInterpretation: {
@@ -1154,9 +1160,9 @@ describe('voidOdysseyTurn', () => {
       expect(result.rollInterpretation.savingThrow.savingResult).toBe(false); // 8 < DC 10
     });
 
-    test('difficulty modifier applied correctly for warpath', async () => {
+    test('difficulty modifier applied correctly for hardest', async () => {
       jest.spyOn(crypto, 'randomInt').mockReturnValue(10);
-      await seedGame({ game: { difficulty: 'warpath' } });
+      await seedGame({ userDifficulty: 'hardest' });
       mockAiResponse(
         makeAiResponse({
           rollInterpretation: {
