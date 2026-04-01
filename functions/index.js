@@ -1039,17 +1039,23 @@ function generateD20Roll() {
 }
 
 /**
- * Returns a blanket modifier based on game difficulty setting.
- * Easier difficulties give a bonus; harder ones a penalty.
+ * Returns a blanket modifier based on the user's difficulty preference.
+ * Uses a modified Fibonacci scale: +5, +3, +2, 0, -2.
  */
 function getDifficultyModifier(difficulty) {
   switch (difficulty) {
-    case 'frontier_explorer':
+    case 'easiest':
+      return 5;
+    case 'easy':
+      return 3;
+    case 'normal':
       return 2;
-    case 'warpath':
+    case 'hard':
+      return 0;
+    case 'hardest':
       return -2;
     default:
-      return 0; // smugglers_run, custom
+      return 2; // default to normal
   }
 }
 
@@ -1139,7 +1145,16 @@ exports.voidOdysseyTurn = onCall(async (request) => {
   // ── Dice roll (server-generated) ────────────────────────────
   const actionRoll = generateD20Roll();
   const savingThrowRoll = generateD20Roll();
-  const difficultyModifier = getDifficultyModifier(gameDoc.difficulty || 'frontier_explorer');
+
+  // Read user's difficulty preference from their profile
+  const userRef = db.collection('users').doc(request.auth.uid);
+  const userSnap = await userRef.get();
+  const userDifficulty =
+    userSnap.exists && userSnap.data().voidOdysseyDifficulty
+      ? userSnap.data().voidOdysseyDifficulty
+      : 'normal';
+  const difficultyModifier = getDifficultyModifier(userDifficulty);
+
   const isCriticalSuccess = actionRoll === 20;
   const isCriticalFailure = actionRoll === 1;
 
@@ -1155,7 +1170,7 @@ Input: ${playerAction.input}
 Dice roll (server-generated, cannot be changed):
 Action d20: ${actionRoll}${isCriticalSuccess ? ' (NATURAL 20 — CRITICAL SUCCESS)' : ''}${isCriticalFailure ? ' (NATURAL 1 — CRITICAL FAILURE)' : ''}
 Saving throw d20 (use only if the action targets someone/something that resists): ${savingThrowRoll}
-Difficulty modifier (from game setting "${gameDoc.difficulty || 'frontier_explorer'}"): ${difficultyModifier >= 0 ? '+' : ''}${difficultyModifier}
+Difficulty modifier (player difficulty "${userDifficulty}"): ${difficultyModifier >= 0 ? '+' : ''}${difficultyModifier}
 
 Generate the next narrative beat, state mutations, available actions, AND a rollInterpretation object based on the dice roll.`;
 

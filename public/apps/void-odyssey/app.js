@@ -17,12 +17,12 @@
 
   // ── Games list view ────────────────────────────────────────
 
-  /** Resolve a difficulty id to its display label. */
-  function _difficultyLabel(id) {
-    var d = (VO.DIFFICULTIES || []).find(function (d) {
-      return d.id === id;
+  /** Resolve a tone id to its display label. */
+  function _toneLabel(id) {
+    var t = (VO.TONES || []).find(function (t) {
+      return t.id === id;
     });
-    return d ? d.label : id || '—';
+    return t ? t.label : id || '—';
   }
 
   /** Resolve a ship class id to its display label. */
@@ -75,7 +75,7 @@
         '<span>Turn ' +
         (game.turnCount || 0) +
         '</span>' +
-        (difficulty ? '<span>' + _esc(_difficultyLabel(difficulty)) + '</span>' : '') +
+        (difficulty ? '<span>' + _esc(_toneLabel(difficulty)) + '</span>' : '') +
         (updated ? '<span>' + updated + '</span>' : '') +
         '</div>' +
         '<div class="game-card-actions">' +
