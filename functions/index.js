@@ -1146,13 +1146,17 @@ exports.voidOdysseyTurn = onCall(async (request) => {
   const actionRoll = generateD20Roll();
   const savingThrowRoll = generateD20Roll();
 
-  // Read user's difficulty preference from their profile
+  // Read user's difficulty preference from their profile (best-effort)
   const userRef = db.collection('users').doc(request.auth.uid);
-  const userSnap = await userRef.get();
-  const userDifficulty =
-    userSnap.exists && userSnap.data().voidOdysseyDifficulty
-      ? userSnap.data().voidOdysseyDifficulty
-      : 'normal';
+  let userDifficulty = 'normal';
+  try {
+    const userSnap = await userRef.get();
+    if (userSnap.exists && userSnap.data().voidOdysseyDifficulty) {
+      userDifficulty = userSnap.data().voidOdysseyDifficulty;
+    }
+  } catch (err) {
+    console.error('Failed to read user difficulty preference, defaulting to normal.', err);
+  }
   const difficultyModifier = getDifficultyModifier(userDifficulty);
 
   const isCriticalSuccess = actionRoll === 20;

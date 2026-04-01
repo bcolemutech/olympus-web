@@ -300,6 +300,7 @@
     // Call the Cloud Function (generates crew + opening scene in one shot)
     var fn = VO.state.functions.httpsCallable('voidOdysseyNewGame');
     fn({
+      // Legacy field name kept for backend compatibility; carries narrative tone
       difficulty: d.tone,
       captainName: d.captainName,
       captainTraits: d.captainTraits,

@@ -47,7 +47,7 @@
       var updated =
         game.updatedAt && game.updatedAt.toDate ? game.updatedAt.toDate().toLocaleDateString() : '';
       var shipClass = (game.ship && game.ship.class) || '';
-      var difficulty = game.difficulty || '';
+      var tone = game.difficulty || '';
       html +=
         '<div class="game-card" data-game-id="' +
         game.id +
@@ -75,7 +75,7 @@
         '<span>Turn ' +
         (game.turnCount || 0) +
         '</span>' +
-        (difficulty ? '<span>' + _esc(_toneLabel(difficulty)) + '</span>' : '') +
+        (tone ? '<span>' + _esc(_toneLabel(tone)) + '</span>' : '') +
         (updated ? '<span>' + updated + '</span>' : '') +
         '</div>' +
         '<div class="game-card-actions">' +

@@ -1134,7 +1134,7 @@
           <h2 class="profile-section-title">Void Odyssey</h2>
           <div class="profile-card">
             <div class="profile-field">
-              <span class="profile-field-label">Difficulty</span>
+              <label class="profile-field-label" for="profile-vo-difficulty">Difficulty</label>
               <div>
                 <select class="profile-select" id="profile-vo-difficulty">
                   <option value="easiest">Easiest (+5)</option>
@@ -1143,7 +1143,7 @@
                   <option value="hard">Hard (+0)</option>
                   <option value="hardest">Hardest (-2)</option>
                 </select>
-                <p class="profile-field-hint">Applies a modifier to all dice rolls</p>
+                <p class="profile-field-hint">Applies a modifier to your action rolls</p>
               </div>
             </div>
             <div class="profile-field">
@@ -1528,8 +1528,8 @@
                 profileVoCost.textContent = '—';
               }
 
-              // Save difficulty preference on change
-              profileVoDifficulty.addEventListener('change', async () => {
+              // Save difficulty preference on change (use onchange to avoid stacking listeners)
+              profileVoDifficulty.onchange = async () => {
                 const db = firebase.firestore();
                 try {
                   await db
@@ -1539,7 +1539,7 @@
                 } catch (err) {
                   console.error('Failed to save difficulty:', err);
                 }
-              });
+              };
             }
           } catch (err) {
             console.error('Failed to load profile apps:', err);
