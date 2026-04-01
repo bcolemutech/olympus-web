@@ -1016,7 +1016,7 @@ character: {
 
 - **Stats are narrative anchors, not roll tables.** Claude references them when describing how the character handles a challenge — high physique handles a brawl differently than high intellect or presence. They inform narrative flavor but do not directly modify dice rolls.
 - **Traits inform starting stats.** A "reckless" trait might mean higher agility but lower presence; "cautious" might mean lower physique but higher intellect. Claude allocates adjustments from a base of 50 — no rigid formula, just a consistent signal.
-- **Skills are the mechanical layer.** While stats shape narrative tone, skills provide concrete +1 to +3 modifiers in the AI's scenario formulas. See Section 8.7 for the full skills system.
+- **Skills are the mechanical layer.** While stats shape narrative tone, skills provide concrete +1 to +3 modifiers in the AI's scenario formulas. See Section 8.6 for the full skills system.
 - **Stress is a second condition track.** A character can be physically fine and psychologically fraying. Claude accumulates stress through events and lets it ease through rest, crew interaction, and downtime — not a mechanic, a narrative texture.
 - **`notes` is Claude’s memory for the character.** Injuries that healed but left marks, relationships formed or broken, decisions that followed the character home — this field grounds continuity across a long campaign.
 - **For Ship’s Company**, `role` becomes the primary narrative lens. A marine and an engineer aboard the same ship encounter different problems, have access to different spaces, and carry different kinds of knowledge. Claude should treat the role as a filter on everything the character sees and does.
@@ -1118,24 +1118,14 @@ character: {
   // ... existing fields (name, role, traits, backstory, stats, condition, notes) ...
 
   // Skills — set at creation in Step 3, immutable after game start.
-  // Each key is a skill ID; value is the level (1, 2, or 3).
-  // Skills not chosen are omitted (not stored as 0).
+  // Only skills the player has chosen are present (omitted = level 0).
+  // Each value is the skill level: 1, 2, or 3.
+  // Example: { piloting: 2, engineering: 3, diplomacy: 1 }
   skills: {
-    piloting: number | undefined,      // 1–3
-    gunnery: number | undefined,       // 1–3
-    engineering: number | undefined,   // 1–3
-    medicine: number | undefined,      // 1–3
-    diplomacy: number | undefined,     // 1–3
-    intimidation: number | undefined,  // 1–3
-    deception: number | undefined,     // 1–3
-    investigation: number | undefined, // 1–3
-    survival: number | undefined,      // 1–3
-    hacking: number | undefined,       // 1–3
-    stealth: number | undefined,       // 1–3
-    leadership: number | undefined,    // 1–3
-    xenology: number | undefined,      // 1–3
-    commerce: number | undefined,      // 1–3
-    perception: number | undefined,    // 1–3
+    // Possible keys (only include those the player selected):
+    // piloting, gunnery, engineering, medicine, diplomacy,
+    // intimidation, deception, investigation, survival, hacking,
+    // stealth, leadership, xenology, commerce, perception
   },
 }
 ```
