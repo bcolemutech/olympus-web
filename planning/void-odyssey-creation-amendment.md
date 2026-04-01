@@ -25,9 +25,10 @@ When starting a new campaign, the player moves through a guided wizard. The jour
    Player distributes 10 skill points across 15 available skills.
    Each skill costs 1 point to acquire (+1 bonus), then follows
    a Fibonacci cost scale to level up (+2 costs 2 more, +3 costs
-   3 more). Skills provide concrete modifiers in the AI's scenario
-   formulas during dice rolls. The UI shows remaining points and
-   previews the total cost for each upgrade.
+   3 more). Level 3 (+3) is the hard cap — the UI disables the
+   upgrade button once a skill reaches +3. The UI shows remaining
+   points and previews the total cost for each upgrade. Skills
+   with insufficient remaining points are also grayed out.
 
 4. CHOOSE YOUR SHIP
    Filtered to ships compatible with the selected journey.
@@ -1040,7 +1041,7 @@ The player receives **10 skill points** at creation to distribute across 15 avai
 | 2 | +2 | 2 points | 3 points |
 | 3 | +3 | 3 points | 6 points |
 
-Each level grants exactly +1 more to the roll modifier, but the cost to reach the next level increases. A +3 skill costs 6 total points — more than half the budget — forcing hard choices about depth vs. breadth.
+Each level grants exactly +1 more to the roll modifier, but the cost to reach the next level increases. **Level 3 (+3) is the maximum** — no skill can exceed +3 regardless of available points. The UI enforces this by disabling the upgrade control at +3 and graying out upgrades the player can't afford. A +3 skill costs 6 total points — more than half the budget — forcing hard choices about depth vs. breadth.
 
 **Example builds with 10 points:**
 
@@ -1130,10 +1131,11 @@ character: {
 }
 ```
 
-**Validation at creation:**
+**Validation at creation (enforced by both UI and server):**
 - Total points spent must equal exactly 10 (no saving points)
-- Each skill level must be 1, 2, or 3
+- Each skill level must be 1, 2, or 3 (no level exceeds the +3 cap)
 - Cost verification: sum of (level 1 = 1pt, level 2 = 3pt, level 3 = 6pt) across all skills = 10
+- The UI prevents invalid states proactively: upgrade buttons are disabled when the skill is at +3 or when remaining points are insufficient for the next level's cost
 
 #### Context Assembly
 
