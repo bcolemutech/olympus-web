@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var VO = window.VoidOdyssey;
+  var VO = (window.VoidOdyssey = window.VoidOdyssey || {});
 
   // ── Journey archetype definitions (static config, not Firestore) ──────────
   VO.JOURNEYS = {
