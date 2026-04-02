@@ -177,23 +177,6 @@
         max-width: 600px;
       }
 
-      .icon {
-        font-size: 72px;
-        margin-bottom: 1rem;
-        animation: float 3s ease-in-out infinite;
-        display: inline-block;
-      }
-
-      @keyframes float {
-        0%,
-        100% {
-          transform: translateY(0);
-        }
-        50% {
-          transform: translateY(-12px);
-        }
-      }
-
       h1 {
         font-size: 3.5rem;
         font-weight: 700;
@@ -221,71 +204,117 @@
         margin: 0 auto 2.5rem;
       }
 
-      .message {
-        font-size: 1.05rem;
-        line-height: 1.7;
-        color: #b0bec5;
+      /* ── Gate Frame ── */
+
+      .container::before,
+      .container::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: linear-gradient(
+          to bottom,
+          transparent,
+          rgba(255, 183, 77, 0.35) 20%,
+          rgba(255, 183, 77, 0.35) 80%,
+          transparent
+        );
+      }
+
+      .container::before {
+        left: 0;
+      }
+
+      .container::after {
+        right: 0;
+      }
+
+      .gate-bar {
+        width: 100%;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 183, 77, 0.5) 20%,
+          rgba(255, 183, 77, 0.8) 50%,
+          rgba(255, 183, 77, 0.5) 80%,
+          transparent
+        );
         margin-bottom: 2.5rem;
+        position: relative;
       }
 
-      .columns {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1.5rem;
+      .gate-bar::before {
+        content: '◈';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        color: rgba(255, 183, 77, 0.6);
+        font-size: 0.75rem;
+        background: #0a0e1a;
+        padding: 0 0.5rem;
+        letter-spacing: 0.2em;
+      }
+
+      /* ── Sigil ── */
+
+      .sigil {
+        position: relative;
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .sigil::before,
+      .sigil::after {
+        content: '';
+        position: absolute;
+        border-radius: 50%;
+      }
+
+      .sigil::before {
+        width: 80px;
+        height: 80px;
+        border: 1px solid rgba(255, 183, 77, 0.18);
+      }
+
+      .sigil::after {
+        width: 56px;
+        height: 56px;
+        border: 1px solid rgba(255, 183, 77, 0.32);
+      }
+
+      .sigil-inner {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 183, 77, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        color: rgba(255, 183, 77, 0.7);
+        position: relative;
+        z-index: 1;
+      }
+
+      /* ── Notice ── */
+
+      .notice {
+        font-size: 0.9rem;
+        line-height: 1.75;
+        color: #6b7280;
+        letter-spacing: 0.04em;
         margin-bottom: 2.5rem;
-      }
-
-      .column-item {
-        padding: 1.25rem 0.75rem;
-        border: 1px solid rgba(255, 183, 77, 0.15);
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.03);
-        transition:
-          background 0.3s,
-          border-color 0.3s;
-      }
-
-      .column-item:hover {
-        background: rgba(255, 183, 77, 0.06);
-        border-color: rgba(255, 183, 77, 0.35);
-      }
-
-      .column-icon {
-        font-size: 2rem;
-        margin-bottom: 0.5rem;
-        display: block;
-      }
-
-      .column-label {
-        font-size: 0.85rem;
-        color: #90a4ae;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-      }
-
-      .bolt {
-        display: inline-block;
-        font-size: 1.5rem;
-        animation: zap 2s ease-in-out infinite;
-        margin: 0 0.25rem;
-      }
-
-      @keyframes zap {
-        0%,
-        100% {
-          opacity: 1;
-          transform: scale(1);
-        }
-        50% {
-          opacity: 0.5;
-          transform: scale(1.15);
-        }
-      }
-
-      .footer-note {
-        font-size: 0.8rem;
-        color: #546e7a;
-        margin-top: 1rem;
+        font-style: italic;
+        max-width: 420px;
+        margin-left: auto;
+        margin-right: auto;
       }
 
       /* ── Login Button ── */
@@ -876,21 +905,14 @@
           font-size: 1rem;
         }
 
-        .columns {
-          grid-template-columns: 1fr;
-          gap: 1rem;
-          max-width: 260px;
-          margin-left: auto;
-          margin-right: auto;
+        .container {
+          padding-left: 1.5rem;
+          padding-right: 1.5rem;
         }
 
         .glow-ring {
           width: 280px;
           height: 280px;
-        }
-
-        .icon {
-          font-size: 56px;
         }
 
         .login-btn {
@@ -953,39 +975,24 @@
 
     <!-- Landing page (shown when logged out) -->
     <div class="container hidden" id="landing">
-      <div class="icon" aria-hidden="true">&#127963;</div>
-      <h1>Olympus</h1>
-      <p class="tagline">The gods are forging something legendary</p>
-      <div class="divider"></div>
+      <div class="gate-bar" aria-hidden="true"></div>
 
-      <p class="message">
-        We're building a platform worthy of the pantheon.<br />
-        Great things are taking shape beyond the clouds.<br />
-        Stay tuned &mdash; the gates will open soon.
-      </p>
-
-      <div class="columns">
-        <div class="column-item">
-          <span class="column-icon" aria-hidden="true">&#9889;</span>
-          <span class="column-label">Power</span>
-        </div>
-        <div class="column-item">
-          <span class="column-icon" aria-hidden="true">&#128737;</span>
-          <span class="column-label">Protection</span>
-        </div>
-        <div class="column-item">
-          <span class="column-icon" aria-hidden="true">&#127775;</span>
-          <span class="column-label">Glory</span>
-        </div>
+      <div class="sigil" aria-hidden="true">
+        <div class="sigil-inner">&#8853;</div>
       </div>
 
-      <p class="footer-note">
-        <span class="bolt" aria-hidden="true">&#9889;</span>
-        Coming Soon
-        <span class="bolt" aria-hidden="true">&#9889;</span>
+      <h1>Olympus</h1>
+
+      <p class="tagline">This realm is not open to all.</p>
+
+      <div class="divider"></div>
+
+      <p class="notice">
+        What lies beyond these gates is not yours to know.<br />
+        Only those who have been granted passage may enter.
       </p>
 
-      <button class="login-btn" id="open-login" type="button">Enter Olympus</button>
+      <button class="login-btn" id="open-login" type="button">Identify Yourself</button>
     </div>
 
     <!-- Login modal -->
