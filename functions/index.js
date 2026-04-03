@@ -1952,8 +1952,15 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   }
 
   // ── Input validation ───────────────────────────────────────
-  const { difficulty, captainName, captainTraits, captainBackstory, shipClass, shipName } =
-    request.data || {};
+  const {
+    difficulty,
+    captainName,
+    captainTraits,
+    captainBackstory,
+    captainSkills,
+    shipClass,
+    shipName,
+  } = request.data || {};
 
   const validDifficulties = ['frontier_explorer', 'smugglers_run', 'warpath', 'custom'];
   const validShipClasses = ['light_freighter', 'scout_corvette', 'gunship', 'salvage_rig'];
@@ -1999,6 +2006,53 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   }
   if (typeof captainBackstory === 'string' && captainBackstory.length > 400) {
     throw new HttpsError('invalid-argument', 'Backstory must be 400 characters or fewer.');
+  }
+
+  // ── Validate skills (optional for legacy callers; required when provided) ──
+  const VALID_SKILL_IDS = [
+    'piloting',
+    'gunnery',
+    'engineering',
+    'medicine',
+    'diplomacy',
+    'intimidation',
+    'deception',
+    'investigation',
+    'survival',
+    'hacking',
+    'stealth',
+    'leadership',
+    'xenology',
+    'commerce',
+    'perception',
+  ];
+  const SKILL_POINT_COSTS = { 1: 1, 2: 3, 3: 6 };
+  const SKILL_POINT_BUDGET = 10;
+
+  const normalizedSkills =
+    captainSkills && typeof captainSkills === 'object' && !Array.isArray(captainSkills)
+      ? captainSkills
+      : null;
+
+  if (normalizedSkills !== null) {
+    for (const [id, level] of Object.entries(normalizedSkills)) {
+      if (!VALID_SKILL_IDS.includes(id)) {
+        throw new HttpsError('invalid-argument', `Unknown skill: ${id}`);
+      }
+      if (![1, 2, 3].includes(level)) {
+        throw new HttpsError('invalid-argument', `Skill level must be 1, 2, or 3: ${id}`);
+      }
+    }
+    const totalPoints = Object.values(normalizedSkills).reduce(
+      (sum, lvl) => sum + (SKILL_POINT_COSTS[lvl] || 0),
+      0
+    );
+    if (totalPoints !== SKILL_POINT_BUDGET) {
+      throw new HttpsError(
+        'invalid-argument',
+        `Skills must total exactly ${SKILL_POINT_BUDGET} points (got ${totalPoints}).`
+      );
+    }
   }
 
   // ── Build AI prompt ────────────────────────────────────────
@@ -2078,6 +2132,85 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     throw new HttpsError('internal', 'Failed to generate opening scene. Please try again.');
   }
 
+  // ── Journey config (server-side copy for denormalization) ──
+  const JOURNEY_CONFIGS = {
+    frontier_explorer: {
+      id: 'frontier_explorer',
+      name: 'Frontier Explorer',
+      tone: 'wonder_discovery',
+      dangerLevel: 'low_moderate',
+      themes: ['exploration', 'science', 'first_contact', 'moral_dilemmas'],
+      narrativeDirectives: [
+        'Emphasize awe, scale, and the uncanny',
+        'Alien life should feel genuinely alien, not humanoid defaults',
+        'Favor environmental puzzles and first-contact diplomacy over combat',
+        'Let the player name discoveries (planets, species, anomalies)',
+        'Crew conversations lean philosophical — what does it mean to be the first?',
+      ],
+    },
+    smugglers_run: {
+      id: 'smugglers_run',
+      name: "Smuggler's Run",
+      tone: 'gritty_morally_gray',
+      dangerLevel: 'moderate',
+      themes: ['trade', 'deception', 'reputation', 'rival_crews', 'authority_evasion', 'loyalty'],
+      narrativeDirectives: [
+        'Every deal should have hidden costs or complications',
+        'Reputation and relationships matter more than raw firepower',
+        'Authority figures are corrupt, incompetent, or both',
+        'Moral choices rarely have clean answers',
+        'Humor and wit balance out the grime',
+      ],
+    },
+    warpath: {
+      id: 'warpath',
+      name: 'Warpath',
+      tone: 'intense_tactical',
+      dangerLevel: 'high',
+      themes: ['military_campaigns', 'tactical_decisions', 'crew_survival', 'sacrifice'],
+      narrativeDirectives: [
+        'Combat should feel dangerous and consequential',
+        'Tactical decisions matter — reward clever play',
+        'Crew bonds are forged and tested under fire',
+        'The cost of victory is always real',
+        'Honor and duty conflict with survival',
+      ],
+    },
+    custom: {
+      id: 'custom',
+      name: 'Custom Journey',
+      tone: 'flexible',
+      dangerLevel: 'variable',
+      themes: [],
+      narrativeDirectives: ['Adapt tone and danger level to match the story as it develops'],
+    },
+  };
+
+  // ── Trait → stat bonus mapping (base stat: 50; cap: 100) ───
+  const TRAIT_STAT_BONUSES = {
+    resourceful: { intellect: 10 },
+    cautious: { agility: 10 },
+    silver_tongued: { presence: 10 },
+    reckless: { agility: 10 },
+    honorable: { presence: 10 },
+    ruthless: { physique: 10 },
+    curious: { intellect: 10 },
+    paranoid: { agility: 10 },
+    compassionate: { presence: 10 },
+    calculating: { intellect: 10 },
+    charismatic: { presence: 10 },
+    stoic: { physique: 10 },
+  };
+
+  // Compute character stats from selected traits
+  const characterStats = { physique: 50, agility: 50, intellect: 50, presence: 50 };
+  captainTraits.forEach((trait) => {
+    const bonuses = TRAIT_STAT_BONUSES[trait] || {};
+    for (const [stat, val] of Object.entries(bonuses)) {
+      characterStats[stat] = Math.min(100, characterStats[stat] + val);
+    }
+  });
+
   // ── Build Firestore data ───────────────────────────────────
   const db = getFirestore();
   const now = FieldValue.serverTimestamp();
@@ -2118,6 +2251,25 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     },
 
     combatActive: false,
+    difficulty,
+
+    journey: JOURNEY_CONFIGS[difficulty],
+
+    character: {
+      name: captainName.trim(),
+      role: 'captain',
+      traits: captainTraits,
+      backstory: captainBackstory ? captainBackstory.trim() : '',
+      stats: characterStats,
+      condition: {
+        health: 100,
+        healthMax: 100,
+        stress: 0,
+        statusEffects: [],
+      },
+      notes: '',
+      skills: normalizedSkills || {},
+    },
 
     player: {
       name: captainName.trim(),

@@ -33,20 +33,44 @@
   ];
 
   // ── Captain trait options ──────────────────────────────────
+  // statBonuses: applied to character.stats at creation (base 50 + sum of selected trait bonuses)
   VO.CAPTAIN_TRAITS = [
-    { id: 'resourceful', label: 'Resourceful' },
-    { id: 'cautious', label: 'Cautious' },
-    { id: 'silver_tongued', label: 'Silver-Tongued' },
-    { id: 'reckless', label: 'Reckless' },
-    { id: 'honorable', label: 'Honorable' },
-    { id: 'ruthless', label: 'Ruthless' },
-    { id: 'curious', label: 'Curious' },
-    { id: 'paranoid', label: 'Paranoid' },
-    { id: 'compassionate', label: 'Compassionate' },
-    { id: 'calculating', label: 'Calculating' },
-    { id: 'charismatic', label: 'Charismatic' },
-    { id: 'stoic', label: 'Stoic' },
+    { id: 'resourceful', label: 'Resourceful', statBonuses: { intellect: 10 } },
+    { id: 'cautious', label: 'Cautious', statBonuses: { agility: 10 } },
+    { id: 'silver_tongued', label: 'Silver-Tongued', statBonuses: { presence: 10 } },
+    { id: 'reckless', label: 'Reckless', statBonuses: { agility: 10 } },
+    { id: 'honorable', label: 'Honorable', statBonuses: { presence: 10 } },
+    { id: 'ruthless', label: 'Ruthless', statBonuses: { physique: 10 } },
+    { id: 'curious', label: 'Curious', statBonuses: { intellect: 10 } },
+    { id: 'paranoid', label: 'Paranoid', statBonuses: { agility: 10 } },
+    { id: 'compassionate', label: 'Compassionate', statBonuses: { presence: 10 } },
+    { id: 'calculating', label: 'Calculating', statBonuses: { intellect: 10 } },
+    { id: 'charismatic', label: 'Charismatic', statBonuses: { presence: 10 } },
+    { id: 'stoic', label: 'Stoic', statBonuses: { physique: 10 } },
   ];
+
+  // ── Skill definitions (used in character creation Step 3) ──
+  // Cost per level: 1→1pt, 2→3pt, 3→6pt. Total budget: 10 pts.
+  VO.SKILLS = [
+    { id: 'piloting', label: 'Piloting' },
+    { id: 'gunnery', label: 'Gunnery' },
+    { id: 'engineering', label: 'Engineering' },
+    { id: 'medicine', label: 'Medicine' },
+    { id: 'diplomacy', label: 'Diplomacy' },
+    { id: 'intimidation', label: 'Intimidation' },
+    { id: 'deception', label: 'Deception' },
+    { id: 'investigation', label: 'Investigation' },
+    { id: 'survival', label: 'Survival' },
+    { id: 'hacking', label: 'Hacking' },
+    { id: 'stealth', label: 'Stealth' },
+    { id: 'leadership', label: 'Leadership' },
+    { id: 'xenology', label: 'Xenology' },
+    { id: 'commerce', label: 'Commerce' },
+    { id: 'perception', label: 'Perception' },
+  ];
+  VO.SKILL_POINT_BUDGET = 10;
+  // Index = level (0 = not taken)
+  VO.SKILL_POINT_COSTS = [0, 1, 3, 6];
 
   // ── Ship class definitions ─────────────────────────────────
   VO.SHIP_CLASSES = [
@@ -234,11 +258,12 @@
       tone: null,
       captainName: '',
       captainTraits: [],
+      captainSkills: {},
       captainBackstory: '',
       shipClass: null,
       shipName: '',
     },
-    // After Cloud Function returns (steps 4-5)
+    // After Cloud Function returns (steps 6-7)
     generatedCrew: null,
     generatedGame: null,
     // Sidebar

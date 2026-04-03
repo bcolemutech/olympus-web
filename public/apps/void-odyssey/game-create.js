@@ -34,10 +34,16 @@
       case 5:
         _renderStep5(container);
         break;
+      case 6:
+        _renderStep6(container);
+        break;
+      case 7:
+        _renderStep7(container);
+        break;
     }
   };
 
-  // Step 1: Choose narrative tone
+  // Step 1: Choose journey
   function _renderStep1(container) {
     var d = VO.state.wizardData;
     var html =
@@ -93,7 +99,7 @@
     }
   }
 
-  // Step 2: Name your captain
+  // Step 2: Name your captain and choose traits
   function _renderStep2(container) {
     var d = VO.state.wizardData;
 
@@ -126,12 +132,6 @@
 
     html +=
       '</div></div>' +
-      '<div class="form-group">' +
-      '<label class="form-label" for="captain-backstory">Backstory <span class="form-optional">(optional — or let Claude invent one)</span></label>' +
-      '<textarea id="captain-backstory" class="form-textarea" placeholder="A few sentences about your past..." maxlength="400">' +
-      _esc(d.captainBackstory) +
-      '</textarea>' +
-      '</div>' +
       '<div class="wizard-nav">' +
       '<button type="button" class="btn btn-secondary wizard-back" id="step2-back">← Back</button>' +
       '<button type="button" class="btn btn-primary wizard-next" id="step2-next">Next →</button>' +
@@ -143,12 +143,6 @@
     var nameInput = document.getElementById('captain-name');
     nameInput.addEventListener('input', function () {
       d.captainName = nameInput.value;
-    });
-
-    // Sync backstory
-    var backstoryInput = document.getElementById('captain-backstory');
-    backstoryInput.addEventListener('input', function () {
-      d.captainBackstory = backstoryInput.value;
     });
 
     // Trait buttons — enforce 2-3 limit
@@ -190,8 +184,185 @@
     });
   }
 
-  // Step 3: Choose your ship
+  // Step 3: Allocate skills
   function _renderStep3(container) {
+    var d = VO.state.wizardData;
+    var COSTS = VO.SKILL_POINT_COSTS; // [0, 1, 3, 6]
+    var BUDGET = VO.SKILL_POINT_BUDGET; // 10
+
+    function pointsSpent() {
+      return Object.keys(d.captainSkills).reduce(function (sum, id) {
+        return sum + (COSTS[d.captainSkills[id]] || 0);
+      }, 0);
+    }
+
+    function renderSkillRows() {
+      var spent = pointsSpent();
+      var remaining = BUDGET - spent;
+      var rows = '';
+
+      VO.SKILLS.forEach(function (skill) {
+        var level = d.captainSkills[skill.id] || 0;
+        var canIncrease = level < 3 && COSTS[level + 1] - COSTS[level] <= remaining;
+        var canDecrease = level > 0;
+
+        rows +=
+          '<div class="skill-row" data-skill="' +
+          skill.id +
+          '">' +
+          '<span class="skill-label">' +
+          _esc(skill.label) +
+          '</span>' +
+          '<div class="skill-controls">' +
+          '<button type="button" class="skill-btn skill-dec"' +
+          (canDecrease ? '' : ' disabled') +
+          ' data-skill="' +
+          skill.id +
+          '">−</button>' +
+          '<span class="skill-level">' +
+          level +
+          '</span>' +
+          '<button type="button" class="skill-btn skill-inc"' +
+          (canIncrease ? '' : ' disabled') +
+          ' data-skill="' +
+          skill.id +
+          '">+</button>' +
+          '</div>' +
+          '</div>';
+      });
+
+      return rows;
+    }
+
+    function buildHtml() {
+      var spent = pointsSpent();
+      var remaining = BUDGET - spent;
+      return (
+        '<h2 class="wizard-step-title">Allocate Your Skills</h2>' +
+        '<p class="wizard-step-desc">Spend exactly ' +
+        BUDGET +
+        ' points. Each level costs more: Lv 1 = 1pt, Lv 2 = 3pt, Lv 3 = 6pt.</p>' +
+        '<div class="skill-budget">' +
+        '<span class="skill-budget-label">Points remaining:</span> ' +
+        '<span class="skill-budget-count' +
+        (remaining === 0 ? ' skill-budget-done' : '') +
+        '" id="skill-remaining">' +
+        remaining +
+        '</span>' +
+        '</div>' +
+        '<div class="skill-list" id="skill-list">' +
+        renderSkillRows() +
+        '</div>' +
+        '<div class="wizard-nav">' +
+        '<button type="button" class="btn btn-secondary" id="step3-back">← Back</button>' +
+        '<button type="button" class="btn btn-primary" id="step3-next"' +
+        (remaining === 0 ? '' : ' disabled') +
+        '>Next →</button>' +
+        '</div>'
+      );
+    }
+
+    container.innerHTML = buildHtml();
+
+    function refresh() {
+      var spent = pointsSpent();
+      var remaining = BUDGET - spent;
+
+      // Update remaining counter
+      var counter = document.getElementById('skill-remaining');
+      if (counter) {
+        counter.textContent = remaining;
+        counter.classList.toggle('skill-budget-done', remaining === 0);
+      }
+
+      // Enable/disable next button
+      var nextBtn = document.getElementById('step3-next');
+      if (nextBtn) nextBtn.disabled = remaining !== 0;
+
+      // Re-render skill rows in place
+      var skillList = document.getElementById('skill-list');
+      if (skillList) {
+        skillList.innerHTML = renderSkillRows();
+        attachSkillHandlers();
+      }
+    }
+
+    function attachSkillHandlers() {
+      container.querySelectorAll('.skill-dec').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.dataset.skill;
+          var level = d.captainSkills[id] || 0;
+          if (level <= 0) return;
+          if (level === 1) {
+            delete d.captainSkills[id];
+          } else {
+            d.captainSkills[id] = level - 1;
+          }
+          refresh();
+        });
+      });
+
+      container.querySelectorAll('.skill-inc').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.dataset.skill;
+          var level = d.captainSkills[id] || 0;
+          if (level >= 3) return;
+          var costIncrease = COSTS[level + 1] - COSTS[level];
+          if (costIncrease > BUDGET - pointsSpent()) return;
+          d.captainSkills[id] = level + 1;
+          refresh();
+        });
+      });
+    }
+
+    attachSkillHandlers();
+
+    document.getElementById('step3-back').addEventListener('click', function () {
+      VO.renderWizardStep(2);
+    });
+
+    document.getElementById('step3-next').addEventListener('click', function () {
+      if (pointsSpent() !== BUDGET) return;
+      VO.renderWizardStep(4);
+    });
+  }
+
+  // Step 4: Backstory
+  function _renderStep4(container) {
+    var d = VO.state.wizardData;
+
+    var html =
+      '<h2 class="wizard-step-title">Your Backstory</h2>' +
+      '<p class="wizard-step-desc">A few words about your past — or let the Oracle invent one.</p>' +
+      '<div class="form-group">' +
+      '<label class="form-label" for="captain-backstory">Backstory <span class="form-optional">(optional — or let Claude invent one)</span></label>' +
+      '<textarea id="captain-backstory" class="form-textarea" placeholder="A few sentences about your past..." maxlength="400">' +
+      _esc(d.captainBackstory) +
+      '</textarea>' +
+      '</div>' +
+      '<div class="wizard-nav">' +
+      '<button type="button" class="btn btn-secondary" id="step4-back">← Back</button>' +
+      '<button type="button" class="btn btn-primary" id="step4-next">Next →</button>' +
+      '</div>';
+
+    container.innerHTML = html;
+
+    var backstoryInput = document.getElementById('captain-backstory');
+    backstoryInput.addEventListener('input', function () {
+      d.captainBackstory = backstoryInput.value;
+    });
+
+    document.getElementById('step4-back').addEventListener('click', function () {
+      VO.renderWizardStep(3);
+    });
+
+    document.getElementById('step4-next').addEventListener('click', function () {
+      VO.renderWizardStep(5);
+    });
+  }
+
+  // Step 5: Choose your ship
+  function _renderStep5(container) {
     var d = VO.state.wizardData;
 
     var html =
@@ -241,8 +412,8 @@
       '">' +
       '</div>' +
       '<div class="wizard-nav">' +
-      '<button type="button" class="btn btn-secondary" id="step3-back">← Back</button>' +
-      '<button type="button" class="btn btn-primary" id="step3-next"' +
+      '<button type="button" class="btn btn-secondary" id="step5-back">← Back</button>' +
+      '<button type="button" class="btn btn-primary" id="step5-next"' +
       (d.shipClass ? '' : ' disabled') +
       '>Next →</button>' +
       '</div>';
@@ -256,7 +427,7 @@
           c.classList.toggle('selected', c.dataset.id === d.shipClass);
         });
         document.getElementById('ship-name-group').style.display = '';
-        document.getElementById('step3-next').disabled = false;
+        document.getElementById('step5-next').disabled = false;
       });
     });
 
@@ -267,11 +438,11 @@
       });
     }
 
-    document.getElementById('step3-back').addEventListener('click', function () {
-      VO.renderWizardStep(2);
+    document.getElementById('step5-back').addEventListener('click', function () {
+      VO.renderWizardStep(4);
     });
 
-    document.getElementById('step3-next').addEventListener('click', function () {
+    document.getElementById('step5-next').addEventListener('click', function () {
       if (!d.shipClass) return;
       var name =
         document.getElementById('ship-name') && document.getElementById('ship-name').value.trim();
@@ -280,12 +451,12 @@
         return;
       }
       d.shipName = name;
-      VO.renderWizardStep(4);
+      VO.renderWizardStep(6);
     });
   }
 
-  // Step 4: Generate and review starting crew
-  function _renderStep4(container) {
+  // Step 6: Generate and review starting crew (Cloud Function call + Firestore write)
+  function _renderStep6(container) {
     var d = VO.state.wizardData;
 
     // Show spinner while we call the Cloud Function
@@ -297,13 +468,14 @@
       '<p class="wizard-generating-text">Generating crew manifest&hellip;</p>' +
       '</div>';
 
-    // Call the Cloud Function (generates crew + opening scene in one shot)
+    // Call the Cloud Function (generates crew + opening scene in one shot, writes game to Firestore)
     var fn = VO.state.functions.httpsCallable('voidOdysseyNewGame');
     fn({
-      // Legacy field name kept for backend compatibility; carries narrative tone
+      // Legacy field name; carries narrative tone / journey ID
       difficulty: d.tone,
       captainName: d.captainName,
       captainTraits: d.captainTraits,
+      captainSkills: d.captainSkills,
       captainBackstory: d.captainBackstory,
       shipClass: d.shipClass,
       shipName: d.shipName,
@@ -320,10 +492,10 @@
           _esc(err.message || 'Failed to generate game. Please try again.') +
           '</p>' +
           '<div class="wizard-nav">' +
-          '<button type="button" class="btn btn-secondary" id="step4-retry">← Try Again</button>' +
+          '<button type="button" class="btn btn-secondary" id="step6-retry">← Try Again</button>' +
           '</div>';
-        document.getElementById('step4-retry').addEventListener('click', function () {
-          VO.renderWizardStep(4);
+        document.getElementById('step6-retry').addEventListener('click', function () {
+          VO.renderWizardStep(6);
         });
       });
   }
@@ -354,27 +526,27 @@
     html +=
       '</div>' +
       '<div class="wizard-nav">' +
-      '<button type="button" class="btn btn-secondary" id="step4-back">← Reroll</button>' +
-      '<button type="button" class="btn btn-primary" id="step4-next">Launch Campaign →</button>' +
+      '<button type="button" class="btn btn-secondary" id="step6-back">← Reroll</button>' +
+      '<button type="button" class="btn btn-primary" id="step6-next">Launch Campaign →</button>' +
       '</div>';
 
     container.innerHTML = html;
 
-    document.getElementById('step4-back').addEventListener('click', function () {
+    document.getElementById('step6-back').addEventListener('click', function () {
       VO.state.generatedGame = null;
-      VO.renderWizardStep(4);
+      VO.renderWizardStep(6);
     });
 
-    document.getElementById('step4-next').addEventListener('click', function () {
-      VO.renderWizardStep(5);
+    document.getElementById('step6-next').addEventListener('click', function () {
+      VO.renderWizardStep(7);
     });
   }
 
-  // Step 5: Display opening scene
-  function _renderStep5(container) {
+  // Step 7: Display opening scene
+  function _renderStep7(container) {
     var game = VO.state.generatedGame;
     if (!game) {
-      VO.renderWizardStep(4);
+      VO.renderWizardStep(6);
       return;
     }
 
@@ -406,10 +578,10 @@
       '<p class="action-panel-note">(Full turn actions available in Phase 2)</p>' +
       '</div>' +
       '<div class="wizard-nav wizard-nav--center">' +
-      '<button type="button" class="btn btn-primary" id="step5-enter">Enter the Void →</button>' +
+      '<button type="button" class="btn btn-primary" id="step7-enter">Enter the Void →</button>' +
       '</div>';
 
-    document.getElementById('step5-enter').addEventListener('click', function () {
+    document.getElementById('step7-enter').addEventListener('click', function () {
       VO.showView('game-active');
     });
   }

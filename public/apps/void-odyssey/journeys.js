@@ -322,5 +322,19 @@
       ],
       order: 7,
     },
+
+    custom: {
+      id: 'custom',
+      name: 'Custom Journey',
+      tagline: 'Your story, your rules.',
+      icon: '✨',
+      description:
+        'A flexible campaign with no fixed tone or danger level. The narrator adapts to your choices as the story develops.',
+      tone: 'flexible',
+      dangerLevel: 'variable',
+      themes: [],
+      narrativeDirectives: ['Adapt tone and danger level to match the story as it develops'],
+      order: 8,
+    },
   };
 })();
