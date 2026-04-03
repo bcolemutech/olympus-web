@@ -372,9 +372,10 @@
   function _startNewGame() {
     // Reset wizard state
     VO.state.wizardData = {
-      difficulty: null,
+      tone: null,
       captainName: '',
       captainTraits: [],
+      captainSkills: {},
       captainBackstory: '',
       shipClass: null,
       shipName: '',

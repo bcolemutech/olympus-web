@@ -57,6 +57,25 @@ function makeGame(overrides = {}) {
         },
       ],
     },
+    journey: {
+      id: 'frontier_explorer',
+      name: 'Frontier Explorer',
+      tone: 'wonder_discovery',
+      dangerLevel: 'low_moderate',
+      themes: ['exploration', 'science', 'first_contact', 'moral_dilemmas'],
+      narrativeDirectives: ['Emphasize awe, scale, and the uncanny'],
+    },
+    character: {
+      name: 'Captain Test',
+      role: 'captain',
+      traits: ['resourceful', 'cautious'],
+      backstory: 'A test pilot.',
+      stats: { physique: 50, agility: 60, intellect: 60, presence: 50 },
+      condition: { health: 100, healthMax: 100, stress: 0, statusEffects: [] },
+      notes: '',
+      // piloting:2 (3pts) + engineering:3 (6pts) + medicine:1 (1pt) = 10pts
+      skills: { piloting: 2, engineering: 3, medicine: 1 },
+    },
     player: {
       name: 'Captain Test',
       title: 'Captain',
