@@ -962,11 +962,11 @@
         {
           id: 'wpn_heavy_guns',
           name: 'Heavy Gun Batteries',
-          type: 'energy/kinetic',
+          type: 'kinetic',
           damage: 'heavy',
           status: 'operational',
           notes:
-            'Main offensive armament — effective against cruisers and below, uncomfortable for capital ships',
+            'Mixed energy and kinetic batteries — effective against cruisers and below, uncomfortable for capital ships',
         },
         {
           id: 'wpn_torpedo_tubes',
