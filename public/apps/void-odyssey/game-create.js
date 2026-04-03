@@ -471,9 +471,8 @@
     // Call the Cloud Function (generates crew + opening scene in one shot, writes game to Firestore)
     var fn = VO.state.functions.httpsCallable('voidOdysseyNewGame');
     fn({
-      // Legacy field name kept for backend compatibility; carries narrative tone / journey ID
+      // Legacy field name; carries narrative tone / journey ID
       difficulty: d.tone,
-      journeyId: d.tone,
       captainName: d.captainName,
       captainTraits: d.captainTraits,
       captainSkills: d.captainSkills,

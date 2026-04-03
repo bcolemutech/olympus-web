@@ -2251,6 +2251,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     },
 
     combatActive: false,
+    difficulty,
 
     journey: JOURNEY_CONFIGS[difficulty],
 
