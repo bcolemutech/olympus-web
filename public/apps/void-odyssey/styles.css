@@ -2110,9 +2110,11 @@
   overflow: hidden;
   max-height: 0;
   opacity: 0;
+  visibility: hidden;
   transition:
     max-height 0.25s ease,
-    opacity 0.2s ease;
+    opacity 0.2s ease,
+    visibility 0s ease 0.2s;
   margin-top: 0.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   padding-top: 0;
@@ -2123,7 +2125,12 @@
 .difficulty-card:focus-within .journey-detail {
   max-height: 12rem;
   opacity: 1;
+  visibility: visible;
   padding-top: 0.5rem;
+  transition:
+    max-height 0.25s ease,
+    opacity 0.2s ease,
+    visibility 0s ease 0s;
 }
 
 .journey-detail-desc {

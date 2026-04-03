@@ -105,7 +105,7 @@
         _esc(journey.description) +
         '</p>' +
         (shipNames
-          ? '<p class="journey-ships"><span class="journey-ships-label">Ships: </span>' +
+          ? '<p class="journey-ships"><span class="journey-ships-label">Available ships: </span>' +
             _esc(shipNames) +
             '</p>'
           : '') +
