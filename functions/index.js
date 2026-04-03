@@ -1962,8 +1962,31 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     shipName,
   } = request.data || {};
 
-  const validDifficulties = ['frontier_explorer', 'smugglers_run', 'warpath', 'custom'];
-  const validShipClasses = ['light_freighter', 'scout_corvette', 'gunship', 'salvage_rig'];
+  const validDifficulties = [
+    'frontier_explorer',
+    'smugglers_run',
+    'warpath',
+    'deep_salvage',
+    'first_contact',
+    'the_long_haul',
+    'ships_company',
+    'custom',
+  ];
+  const validShipClasses = [
+    'light_freighter',
+    'scout_corvette',
+    'gunship',
+    'salvage_rig',
+    'survey_vessel',
+    'blockade_runner',
+    'corvette_warfit',
+    'carrier_escort',
+    'diplomatic_cruiser',
+    'long_range_cruiser',
+    'fleet_carrier',
+    'line_battleship',
+    'heavy_cruiser',
+  ];
 
   if (!difficulty || !validDifficulties.includes(difficulty)) {
     throw new HttpsError('invalid-argument', 'Invalid difficulty selection.');
@@ -2060,6 +2083,10 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     frontier_explorer: 'Frontier Explorer (discovery-focused, lower danger)',
     smugglers_run: "Smuggler's Run (trade, intrigue, moral grey areas)",
     warpath: 'Warpath (combat-heavy, high stakes)',
+    deep_salvage: 'Deep Salvage (atmospheric horror, salvage operations, resource scarcity)',
+    first_contact: 'First Contact (cerebral, diplomatic, high-stakes communication)',
+    the_long_haul: 'The Long Haul (intimate character-driven voyage, crew dynamics)',
+    ships_company: "Ship's Company (capital warship crew role, institutional drama)",
     custom: 'Custom (flexible tone)',
   };
   const shipClassLabels = {
@@ -2067,6 +2094,15 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     scout_corvette: 'Scout Corvette (fast, great sensors, light cargo)',
     gunship: 'Gunship (heavy weapons, slow, low cargo)',
     salvage_rig: 'Salvage Rig (versatile, moderate stats, lots of quirks)',
+    survey_vessel: 'Survey Vessel (scientific instruments, moderate cargo, non-combat)',
+    blockade_runner: 'Blockade Runner (very fast, low profile, small cargo)',
+    corvette_warfit: 'Corvette (warfit) (fast warship, balanced weapons and speed)',
+    carrier_escort: 'Carrier Escort (heavy armor, point-defense, fleet support role)',
+    diplomatic_cruiser: 'Diplomatic Cruiser (spacious, high presence, non-combat systems)',
+    long_range_cruiser: 'Long-Range Cruiser (extended fuel, large crew quarters, self-sufficient)',
+    fleet_carrier: 'Fleet Carrier (massive, fighter bays, command facilities)',
+    line_battleship: 'Line Battleship (heaviest armor and weapons, slow)',
+    heavy_cruiser: 'Heavy Cruiser (balanced capital ship, versatile weapons)',
   };
 
   const systemPrompt = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi with room for the mysterious — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
@@ -2174,6 +2210,62 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
         'Crew bonds are forged and tested under fire',
         'The cost of victory is always real',
         'Honor and duty conflict with survival',
+      ],
+    },
+    deep_salvage: {
+      id: 'deep_salvage',
+      name: 'Deep Salvage',
+      tone: 'atmospheric_horror',
+      dangerLevel: 'moderate_high',
+      themes: ['salvage_operations', 'mystery', 'resource_scarcity', 'crew_psychology'],
+      narrativeDirectives: [
+        'Atmosphere is everything — silence, darkness, the creak of dead hulls',
+        'Derelicts should feel like crime scenes or archaeological digs, not empty loot boxes',
+        'Each wreck has a story: crew logs, damage patterns, cargo manifests that do not add up',
+        'Resource management is tight — every EVA costs air, every repair costs parts',
+        'Horror is slow-burn and psychological, not jump-scare gore',
+      ],
+    },
+    first_contact: {
+      id: 'first_contact',
+      name: 'First Contact',
+      tone: 'cerebral_diplomatic',
+      dangerLevel: 'low_combat_high_stakes',
+      themes: ['diplomacy', 'xenolinguistics', 'cultural_exchange', 'ethical_dilemmas'],
+      narrativeDirectives: [
+        'Alien civilizations should be deeply thought out — biology shapes culture shapes communication',
+        'Misunderstandings are the primary source of tension, not malice',
+        "The player's crew includes specialists whose expertise matters",
+        'Political pressure from home adds a second layer of conflict',
+        'Let the player develop actual protocols and approaches; reward creative diplomacy',
+      ],
+    },
+    the_long_haul: {
+      id: 'the_long_haul',
+      name: 'The Long Haul',
+      tone: 'intimate_character_driven',
+      dangerLevel: 'variable',
+      themes: ['crew_relationships', 'resource_management', 'isolation', 'adaptation'],
+      narrativeDirectives: [
+        'Crew development is the core — relationships deepen, conflict simmers, bonds form',
+        'Downtime scenes are as important as crisis scenes',
+        'The ship itself becomes a character — modifications, wear, personality',
+        'Each region of space the ship passes through should feel distinct',
+        'The overarching question: will you make it, and who will you be when you arrive?',
+      ],
+    },
+    ships_company: {
+      id: 'ships_company',
+      name: "Ship's Company",
+      tone: 'intimate_and_massive',
+      dangerLevel: 'high_scoped',
+      themes: ['chain_of_command', 'personal_heroism', 'departmental_loyalty', 'cost_of_war'],
+      narrativeDirectives: [
+        "The player has a role — filter events, access, and conversations through that role's perspective",
+        'The commanding officer is an NPC with personality, agenda, and blind spots',
+        'Inter-departmental tension is a rich source of drama',
+        'The player can act outside their role, but the institution will react',
+        'The ship should feel alive — a community of hundreds with culture, hierarchy, and gossip',
       ],
     },
     custom: {
