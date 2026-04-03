@@ -46,28 +46,70 @@
   // Step 1: Choose journey
   function _renderStep1(container) {
     var d = VO.state.wizardData;
+
+    // Sort journey entries by order, exclude custom (order 8)
+    var journeys = Object.keys(VO.JOURNEYS)
+      .map(function (key) {
+        return VO.JOURNEYS[key];
+      })
+      .filter(function (j) {
+        return j.order !== 8;
+      })
+      .sort(function (a, b) {
+        return a.order - b.order;
+      });
+
     var html =
       '<h2 class="wizard-step-title">Choose Your Journey</h2>' +
       '<p class="wizard-step-desc">What kind of story do you want to tell?</p>' +
       '<div class="difficulty-grid">';
 
-    VO.TONES.forEach(function (tone) {
-      var selected = d.tone === tone.id;
+    journeys.forEach(function (journey) {
+      var selected = d.tone === journey.id;
+      var danger = _formatDanger(journey.dangerLevel);
+      var shipNames = _formatShipNames(journey.availableShips || []);
+
+      var themeTags = journey.themes
+        .map(function (t) {
+          return '<span class="journey-theme-tag">' + _esc(t.replace(/_/g, ' ')) + '</span>';
+        })
+        .join('');
+
       html +=
         '<button type="button" class="difficulty-card' +
         (selected ? ' selected' : '') +
         '" data-id="' +
-        tone.id +
+        journey.id +
         '">' +
+        '<div class="journey-card-header">' +
         '<span class="difficulty-icon">' +
-        tone.icon +
+        journey.icon +
         '</span>' +
-        '<span class="difficulty-label">' +
-        tone.label +
+        '<span class="journey-danger ' +
+        danger.cssClass +
+        '">' +
+        danger.text +
         '</span>' +
-        '<span class="difficulty-desc">' +
-        tone.description +
+        '</div>' +
+        '<span class="journey-card-name">' +
+        _esc(journey.name) +
         '</span>' +
+        '<span class="journey-tagline">' +
+        _esc(journey.tagline) +
+        '</span>' +
+        '<div class="journey-themes">' +
+        themeTags +
+        '</div>' +
+        '<div class="journey-detail">' +
+        '<p class="journey-detail-desc">' +
+        _esc(journey.description) +
+        '</p>' +
+        (shipNames
+          ? '<p class="journey-ships"><span class="journey-ships-label">Ships: </span>' +
+            _esc(shipNames) +
+            '</p>'
+          : '') +
+        '</div>' +
         '</button>';
     });
 
@@ -75,7 +117,7 @@
     html +=
       '<button type="button" class="btn btn-primary wizard-next" id="step1-next" ' +
       (d.tone ? '' : 'disabled') +
-      '>Next →</button>';
+      '>Next \u2192</button>';
     html += '</div>';
 
     container.innerHTML = html;
@@ -630,5 +672,36 @@
     err.textContent = msg;
     field.parentNode.appendChild(err);
     field.focus();
+  }
+
+  // Maps a dangerLevel string to display text and a CSS modifier class
+  function _formatDanger(dangerLevel) {
+    var map = {
+      low_moderate: { text: 'Low\u2013Moderate', cssClass: 'journey-danger--low-moderate' },
+      moderate: { text: 'Moderate', cssClass: 'journey-danger--moderate' },
+      high: { text: 'High', cssClass: 'journey-danger--high' },
+      moderate_high: { text: 'Moderate\u2013High', cssClass: 'journey-danger--moderate-high' },
+      low_combat_high_stakes: {
+        text: 'Low Combat / High Stakes',
+        cssClass: 'journey-danger--low-combat-high-stakes',
+      },
+      variable: { text: 'Variable', cssClass: 'journey-danger--variable' },
+      high_scoped: { text: 'High (Scoped)', cssClass: 'journey-danger--high-scoped' },
+    };
+    return map[dangerLevel] || { text: dangerLevel, cssClass: 'journey-danger--variable' };
+  }
+
+  // Converts an array of snake_case ship IDs to Title Case and joins with ", "
+  function _formatShipNames(ships) {
+    return ships
+      .map(function (id) {
+        return id
+          .split('_')
+          .map(function (word) {
+            return word.charAt(0).toUpperCase() + word.slice(1);
+          })
+          .join(' ');
+      })
+      .join(', ');
   }
 })();
