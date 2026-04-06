@@ -112,18 +112,17 @@
             </div>
 
             <div class="action-panel">
-              <p class="action-panel-label">What do you do?</p>
-              <div class="action-buttons" id="action-buttons"></div>
-              <div class="freeform-input-row hidden" id="freeform-input-row">
+              <div class="freeform-input-row" id="freeform-input-row">
                 <input
                   type="text"
                   class="form-input freeform-input"
-                  placeholder="Or type your own action…"
+                  placeholder="What will you do?"
                   maxlength="500"
-                  aria-label="Type your own action"
+                  aria-label="Type your action"
                 />
                 <button type="button" class="btn btn-primary btn-sm freeform-submit">Go</button>
               </div>
+              <div class="action-suggestions" id="action-buttons"></div>
               <!-- Mobile sidebar toggle — lives inside the sticky action panel so it's always reachable -->
               <button
                 type="button"

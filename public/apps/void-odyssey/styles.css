@@ -789,49 +789,50 @@
   margin-bottom: 1.5rem;
 }
 
-.action-panel-label {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #546e7a;
+/* ── Freeform input (primary, always visible at top) ─────── */
+
+.freeform-input-row {
+  display: flex;
+  gap: 0.5rem;
   margin-bottom: 0.6rem;
 }
 
-.action-buttons {
+.freeform-input-row .freeform-input {
+  flex: 1;
+}
+
+/* ── Suggestion chips ────────────────────────────────────── */
+
+.action-suggestions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: 0.4rem;
 }
 
 .action-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 0.6rem 1rem;
-  color: #cfd8dc;
-  font-size: 0.88rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 0.3rem 0.75rem;
+  color: #90a4ae;
+  font-size: 0.8rem;
   cursor: pointer;
   transition:
     border-color 0.18s,
-    background 0.18s;
-  text-align: left;
+    background 0.18s,
+    color 0.18s;
+  white-space: nowrap;
 }
 
 .action-btn:hover:not(:disabled) {
-  border-color: rgba(255, 183, 77, 0.4);
-  background: rgba(255, 183, 77, 0.07);
+  border-color: rgba(255, 183, 77, 0.5);
+  background: rgba(255, 183, 77, 0.1);
   color: #ffe0b2;
 }
 
 .action-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.action-btn--selected {
-  border-color: rgba(255, 183, 77, 0.7);
-  background: rgba(255, 183, 77, 0.15);
-  color: #ffe0b2;
 }
 
 /* ── Narrative loading ──────────────────────────────────── */
@@ -861,18 +862,6 @@
 
 .narrative-error p {
   margin-bottom: 1rem;
-}
-
-/* ── Freeform input ─────────────────────────────────────── */
-
-.freeform-input-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.freeform-input-row .freeform-input {
-  flex: 1;
 }
 
 /* ── Rate limit notice ──────────────────────────────────── */
@@ -1298,10 +1287,11 @@
     overflow-y: auto;
   }
 
-  .action-btn {
-    min-height: 48px;
-    font-size: 0.95rem;
-    padding: 0.75rem 1rem;
+  .action-suggestions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
   }
 
   .sidebar-panel {
@@ -1394,11 +1384,15 @@
     z-index: 50;
     background: #1a1a2e;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 0.5rem;
+    padding: 0.5rem 0.5rem 0.75rem;
   }
 
   .freeform-input {
-    font-size: 16px;
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  }
+
+  .freeform-input-row {
+    margin-bottom: 0.4rem;
   }
 }
 
