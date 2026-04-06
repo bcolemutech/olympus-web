@@ -657,12 +657,18 @@ describe('voidOdysseyTurn', () => {
         })
       );
 
-      await callTurn();
+      const result = await callTurn();
 
       const snap = await gameRef().get();
       const weapons = snap.data().ship.weapons;
       const w1 = weapons.find((w) => w.id === 'w1');
       expect(w1.status).toBe('damaged');
+
+      // result.shipStatus.weapons must reflect the updated status so the UI
+      // can update labels without a page reload
+      const resultW1 = result.shipStatus.weapons.find((w) => w.id === 'w1');
+      expect(resultW1).toBeDefined();
+      expect(resultW1.status).toBe('damaged');
     });
 
     test('system_status updates a system in the ship systems array', async () => {
@@ -675,12 +681,18 @@ describe('voidOdysseyTurn', () => {
         })
       );
 
-      await callTurn();
+      const result = await callTurn();
 
       const snap = await gameRef().get();
       const systems = snap.data().ship.systems;
       const s1 = systems.find((s) => s.id === 's1');
       expect(s1.status).toBe('damaged');
+
+      // result.shipStatus.systems must reflect the updated status so the UI
+      // can update labels without a page reload
+      const resultS1 = result.shipStatus.systems.find((s) => s.id === 's1');
+      expect(resultS1).toBeDefined();
+      expect(resultS1.status).toBe('damaged');
     });
   });
 

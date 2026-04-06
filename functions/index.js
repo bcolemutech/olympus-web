@@ -1934,6 +1934,8 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
       shieldsMax: txResult.ship.shieldsMax,
       fuel: txResult.ship.fuel,
       credits: txResult.ship.credits || 0,
+      systems: txResult.ship.systems || [],
+      weapons: txResult.ship.weapons || [],
     },
     combatActive: txResult.combatActive || false,
     turnCount: txResult.newTurnCount,
