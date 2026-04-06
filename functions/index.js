@@ -403,6 +403,7 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
   ],
   "summary": string (one sentence summary of what happened this turn),
   "rollInterpretation": {
+    "skipRoll": boolean (true ONLY for automatic/trivial actions that cannot meaningfully fail — see AUTOMATIC ACTIONS below),
     "actionRoll": number (echo the server-provided d20 value exactly),
     "modifierFormula": string (e.g. "+2 (pilot skill) +1 (operational sensors) -1 (low morale)"),
     "totalModifier": number (sum of all modifiers),
@@ -443,6 +444,10 @@ Constraints:
   DC 21-25 (Extreme): Persuading a sworn enemy to become an ally, single-handedly defeating an overwhelming force, navigating through a black hole's accretion disk.
   DC 26-30 (Absurd/Impossible): Rewriting the laws of physics, destroying a planet, teleporting without technology, resurrecting the dead, anything that breaks the established universe rules.
   IMPORTANT: Dialogue with friendly/neutral NPCs should almost always be DC 5-8. Exploring and investigating should be DC 5-10. Only combat, deception, and genuinely risky actions warrant DC 12+. If the player is doing something their character would reasonably be able to do, keep the DC low.
+- AUTOMATIC ACTIONS (skipRoll): Some actions are so routine they should NEVER require a dice roll. Set "skipRoll": true in your rollInterpretation for these actions. When skipRoll is true, the action automatically succeeds — ignore the d20 value entirely and write a success narrative. Set difficultyClass to 1, difficultyRationale to "Automatic — no roll needed", and modifierFormula to "". This DC is a placeholder only; the action succeeds automatically when skipRoll is true. Still provide a narrativeSummary.
+  ALWAYS skip rolls for: looking around or observing surroundings, reading logs/manifests/public data, talking to friendly/neutral NPCs (no persuasion or deception intent), walking through safe/known areas, checking inventory or cargo, docking at a station with permission, routine ship operations (checking sensors, running diagnostics, setting course on a known route), buying common goods at listed price, opening unlocked doors, eating/drinking, checking the star map, asking crew members routine questions.
+  NEVER skip rolls for: combat actions, persuasion/deception/intimidation, navigation through hazards, hacking or bypassing security, repairs under pressure or with damaged parts, stealth or sneaking, any action with meaningful opposition or risk of harm, anything creative/ambitious/unusual the player attempts, bartering or negotiating prices, investigating hidden or concealed things.
+  When in doubt, do NOT skip — let the dice decide.
 - SAVING THROWS: If the action targets a person, creature, or system that could resist (e.g., persuasion, hacking, combat maneuver), use the provided saving throw d20 to determine if the target resists. Set an appropriate saving DC based on the target's capability. If no saving throw is relevant (e.g., exploring, routine navigation, self-directed actions), set savingThrow to null or savingThrow.applicable to false.
 - MODIFIER SOURCES: Draw modifiers from — captain traits (+1 to +2 each when relevant), crew skills (+1 to +3 for relevant crew role), ship system status (operational +1, damaged -2, destroyed -4), ship weapons (in combat, +1 to +2), current morale (inspired +1, content 0, uneasy -1, fearful -2, broken -3), injuries (minor -1, serious -2, critical -3), relevant cargo items (+1 for useful equipment). Do not stack more than 5 modifiers total.`;
 
@@ -1176,6 +1181,8 @@ Action d20: ${actionRoll}${isCriticalSuccess ? ' (NATURAL 20 — CRITICAL SUCCES
 Saving throw d20 (use only if the action targets someone/something that resists): ${savingThrowRoll}
 Difficulty modifier (player difficulty "${userDifficulty}"): ${difficultyModifier >= 0 ? '+' : ''}${difficultyModifier}
 
+If this action is trivial/automatic (looking around, talking to a friendly NPC, routine ship ops, etc.), set skipRoll: true in rollInterpretation and ignore the dice values.
+
 Generate the next narrative beat, state mutations, available actions, AND a rollInterpretation object based on the dice roll.`;
 
   // ── Call Gemini API ─────────────────────────────────────────
@@ -1258,11 +1265,22 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
   if (ri && typeof ri === 'object') {
     const totalMod = clamp(Math.round(Number(ri.totalModifier) || 0), -20, 20);
     const dc = clamp(Number(ri.difficultyClass) || 10, 1, 30);
-    const finalResult = actionRoll + totalMod + difficultyModifier;
-    const success = isCriticalSuccess ? true : isCriticalFailure ? false : finalResult >= dc;
+
+    // skipRoll: AI signals a trivial action; server only honors it when DC <= 5
+    const skipRoll = ri.skipRoll === true && dc <= 5;
+
+    // Keep persisted rollInterpretation internally consistent for auto-success.
+    const finalResult = skipRoll ? dc : actionRoll + totalMod + difficultyModifier;
+    const success = skipRoll
+      ? true
+      : isCriticalSuccess
+        ? true
+        : isCriticalFailure
+          ? false
+          : finalResult >= dc;
 
     let savingThrow = null;
-    if (ri.savingThrow && ri.savingThrow.applicable) {
+    if (!skipRoll && ri.savingThrow && ri.savingThrow.applicable) {
       const savingDC = clamp(Number(ri.savingThrow.savingDC) || 10, 1, 30);
       savingThrow = {
         applicable: true,
@@ -1281,18 +1299,25 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
     }
 
     aiResponse.rollInterpretation = {
-      naturalRoll: actionRoll,
+      skipRoll,
+      naturalRoll: skipRoll ? null : actionRoll,
       modifierFormula:
         typeof ri.modifierFormula === 'string' ? ri.modifierFormula.slice(0, 300) : '',
-      totalModifier: totalMod,
-      difficultyModifier,
+      totalModifier: skipRoll ? 0 : totalMod,
+      difficultyModifier: skipRoll ? 0 : difficultyModifier,
       finalResult,
       difficultyClass: dc,
       difficultyRationale:
         typeof ri.difficultyRationale === 'string' ? ri.difficultyRationale.slice(0, 200) : '',
       success,
-      isCritical: isCriticalSuccess || isCriticalFailure,
-      criticalType: isCriticalSuccess ? 'success' : isCriticalFailure ? 'failure' : null,
+      isCritical: skipRoll ? false : isCriticalSuccess || isCriticalFailure,
+      criticalType: skipRoll
+        ? null
+        : isCriticalSuccess
+          ? 'success'
+          : isCriticalFailure
+            ? 'failure'
+            : null,
       savingThrow,
       narrativeSummary:
         typeof ri.narrativeSummary === 'string' ? ri.narrativeSummary.slice(0, 300) : '',
@@ -1301,6 +1326,7 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
     // Fallback if AI omitted rollInterpretation
     const finalResult = actionRoll + difficultyModifier;
     aiResponse.rollInterpretation = {
+      skipRoll: false,
       naturalRoll: actionRoll,
       modifierFormula: '',
       totalModifier: 0,

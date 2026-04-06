@@ -329,6 +329,7 @@ function makeAiResponse(overrides = {}) {
     newEntities: overrides.newEntities || [],
     summary: overrides.summary || 'A routine turn at the station.',
     rollInterpretation: overrides.rollInterpretation || {
+      skipRoll: false,
       actionRoll: 14,
       modifierFormula: '+2 (resourceful captain)',
       totalModifier: 2,
