@@ -156,11 +156,10 @@
       wrapper.scrollTop = wrapper.scrollHeight;
     }
 
-    var selectedAction = null;
     var newInput = null;
     var newSubmit = null;
 
-    // Set up freeform row first so action buttons can reference newInput/newSubmit
+    // Set up freeform row — always visible, re-enable after any rate-limit hide
     var freeformRow = document.getElementById('freeform-input-row');
     if (freeformRow && onFreeformSubmit) {
       var input = freeformRow.querySelector('.freeform-input');
@@ -169,7 +168,7 @@
 
       // Remove old listeners by cloning; explicitly clear disabled state
       newSubmit = submitBtn.cloneNode(true);
-      newSubmit.disabled = true; // disabled until user selects or types
+      newSubmit.disabled = true; // disabled until user types
       submitBtn.parentNode.replaceChild(newSubmit, submitBtn);
 
       newInput = input.cloneNode(true);
@@ -180,8 +179,7 @@
 
     function updateGoButton() {
       if (!newSubmit) return;
-      var hasText = newInput && newInput.value.trim().length > 0;
-      newSubmit.disabled = !hasText && !selectedAction;
+      newSubmit.disabled = !newInput || newInput.value.trim().length === 0;
     }
 
     function doSubmit() {
@@ -189,14 +187,11 @@
       if (val.length > 0 && onFreeformSubmit) {
         onFreeformSubmit(val);
         newInput.value = '';
-        selectedAction = null;
-      } else if (selectedAction && onActionClick) {
-        onActionClick(selectedAction);
-        selectedAction = null;
+        updateGoButton();
       }
     }
 
-    // Action buttons — filter out freeform-type actions (handled by the text input)
+    // Suggestion chips — clicking autofills the text input so the player can edit before submitting
     var actionsContainer = document.getElementById('action-buttons');
     if (actionsContainer) {
       actionsContainer.innerHTML = '';
@@ -211,19 +206,12 @@
           btn.textContent = action.label;
           btn.dataset.id = action.id;
           btn.dataset.type = action.type;
-          btn.setAttribute('aria-pressed', 'false');
           btn.addEventListener('click', function () {
-            // Select this button; deselect others
-            actionsContainer.querySelectorAll('.action-btn').forEach(function (b) {
-              b.classList.remove('action-btn--selected');
-              b.setAttribute('aria-pressed', 'false');
-            });
-            btn.classList.add('action-btn--selected');
-            btn.setAttribute('aria-pressed', 'true');
-            selectedAction = action;
-            // Clear freeform text so it doesn't override the selection
-            if (newInput) newInput.value = '';
-            updateGoButton();
+            if (newInput) {
+              newInput.value = action.label;
+              newInput.focus();
+              updateGoButton();
+            }
           });
           actionsContainer.appendChild(btn);
         });
@@ -241,14 +229,6 @@
       });
 
       newInput.addEventListener('input', function () {
-        // Typing deselects any highlighted action button
-        if (newInput.value.trim().length > 0 && actionsContainer) {
-          actionsContainer.querySelectorAll('.action-btn').forEach(function (b) {
-            b.classList.remove('action-btn--selected');
-            b.setAttribute('aria-pressed', 'false');
-          });
-          selectedAction = null;
-        }
         updateGoButton();
       });
     }
