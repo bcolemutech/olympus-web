@@ -1219,5 +1219,114 @@ describe('voidOdysseyTurn', () => {
       expect(result.rollInterpretation.naturalRoll).toBe(12);
       expect(result.rollInterpretation.difficultyClass).toBe(10); // default DC
     });
+
+    test('skipRoll with DC <= 5 forces success even on natural 1', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(1);
+      await seedGame();
+      mockAiResponse(
+        makeAiResponse({
+          rollInterpretation: {
+            skipRoll: true,
+            actionRoll: 1,
+            modifierFormula: '',
+            totalModifier: 0,
+            finalResult: 1,
+            difficultyClass: 3,
+            difficultyRationale: 'Automatic — no roll needed',
+            success: true,
+            isCritical: false,
+            criticalType: null,
+            savingThrow: null,
+            narrativeSummary: 'You look around the room.',
+          },
+        })
+      );
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation.skipRoll).toBe(true);
+      expect(result.rollInterpretation.success).toBe(true);
+      expect(result.rollInterpretation.naturalRoll).toBeNull();
+      expect(result.rollInterpretation.isCritical).toBe(false);
+      expect(result.rollInterpretation.criticalType).toBeNull();
+    });
+
+    test('skipRoll is ignored when DC > 5 (safety rail)', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(1);
+      await seedGame();
+      mockAiResponse(
+        makeAiResponse({
+          rollInterpretation: {
+            skipRoll: true,
+            actionRoll: 1,
+            modifierFormula: '+1 (hacking tools)',
+            totalModifier: 1,
+            finalResult: 2,
+            difficultyClass: 12,
+            difficultyRationale: 'Hacking a terminal',
+            success: true,
+            isCritical: true,
+            criticalType: 'failure',
+            savingThrow: null,
+            narrativeSummary: 'The hack fails spectacularly.',
+          },
+        })
+      );
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation.skipRoll).toBe(false);
+      expect(result.rollInterpretation.success).toBe(false); // nat 1 = critical failure
+      expect(result.rollInterpretation.naturalRoll).toBe(1);
+      expect(result.rollInterpretation.isCritical).toBe(true);
+      expect(result.rollInterpretation.criticalType).toBe('failure');
+    });
+
+    test('skipRoll flag is stored in narrative log', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(15);
+      await seedGame();
+      mockAiResponse(
+        makeAiResponse({
+          rollInterpretation: {
+            skipRoll: true,
+            actionRoll: 15,
+            modifierFormula: '',
+            totalModifier: 0,
+            finalResult: 15,
+            difficultyClass: 3,
+            difficultyRationale: 'Automatic — no roll needed',
+            success: true,
+            isCritical: false,
+            criticalType: null,
+            savingThrow: null,
+            narrativeSummary: 'You check your cargo hold.',
+          },
+        })
+      );
+
+      await callTurn();
+
+      const logSnap = await gameRef()
+        .collection('narrative_log')
+        .orderBy('turnNumber', 'desc')
+        .limit(1)
+        .get();
+      const logData = logSnap.docs[0].data();
+      expect(logData.rollInterpretation.skipRoll).toBe(true);
+      expect(logData.rollInterpretation.success).toBe(true);
+      expect(logData.rollInterpretation.naturalRoll).toBeNull();
+    });
+
+    test('non-skipRoll turns remain unaffected', async () => {
+      jest.spyOn(crypto, 'randomInt').mockReturnValue(14);
+      await seedGame();
+      mockAiResponse(makeAiResponse());
+
+      const result = await callTurn();
+
+      expect(result.rollInterpretation.skipRoll).toBe(false);
+      expect(result.rollInterpretation.naturalRoll).toBe(14);
+      expect(typeof result.rollInterpretation.success).toBe('boolean');
+    });
   });
 });

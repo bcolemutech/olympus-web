@@ -28,6 +28,7 @@
    */
   function _renderDiceRoll(ri) {
     if (!ri) return '';
+    if (ri.skipRoll) return '';
 
     var critClass = '';
     var critLabel = '';
