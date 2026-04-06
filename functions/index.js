@@ -444,7 +444,7 @@ Constraints:
   DC 21-25 (Extreme): Persuading a sworn enemy to become an ally, single-handedly defeating an overwhelming force, navigating through a black hole's accretion disk.
   DC 26-30 (Absurd/Impossible): Rewriting the laws of physics, destroying a planet, teleporting without technology, resurrecting the dead, anything that breaks the established universe rules.
   IMPORTANT: Dialogue with friendly/neutral NPCs should almost always be DC 5-8. Exploring and investigating should be DC 5-10. Only combat, deception, and genuinely risky actions warrant DC 12+. If the player is doing something their character would reasonably be able to do, keep the DC low.
-- AUTOMATIC ACTIONS (skipRoll): Some actions are so routine they should NEVER require a dice roll. Set "skipRoll": true in your rollInterpretation for these actions. When skipRoll is true, the action automatically succeeds — ignore the d20 value entirely and write a success narrative. Set difficultyClass to 0, difficultyRationale to "Automatic — no roll needed", and modifierFormula to "". Still provide a narrativeSummary.
+- AUTOMATIC ACTIONS (skipRoll): Some actions are so routine they should NEVER require a dice roll. Set "skipRoll": true in your rollInterpretation for these actions. When skipRoll is true, the action automatically succeeds — ignore the d20 value entirely and write a success narrative. Set difficultyClass to 1, difficultyRationale to "Automatic — no roll needed", and modifierFormula to "". This DC is a placeholder only; the action succeeds automatically when skipRoll is true. Still provide a narrativeSummary.
   ALWAYS skip rolls for: looking around or observing surroundings, reading logs/manifests/public data, talking to friendly/neutral NPCs (no persuasion or deception intent), walking through safe/known areas, checking inventory or cargo, docking at a station with permission, routine ship operations (checking sensors, running diagnostics, setting course on a known route), buying common goods at listed price, opening unlocked doors, eating/drinking, checking the star map, asking crew members routine questions.
   NEVER skip rolls for: combat actions, persuasion/deception/intimidation, navigation through hazards, hacking or bypassing security, repairs under pressure or with damaged parts, stealth or sneaking, any action with meaningful opposition or risk of harm, anything creative/ambitious/unusual the player attempts, bartering or negotiating prices, investigating hidden or concealed things.
   When in doubt, do NOT skip — let the dice decide.
@@ -1269,7 +1269,8 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
     // skipRoll: AI signals a trivial action; server only honors it when DC <= 5
     const skipRoll = ri.skipRoll === true && dc <= 5;
 
-    const finalResult = skipRoll ? 0 : actionRoll + totalMod + difficultyModifier;
+    // Keep persisted rollInterpretation internally consistent for auto-success.
+    const finalResult = skipRoll ? dc : actionRoll + totalMod + difficultyModifier;
     const success = skipRoll
       ? true
       : isCriticalSuccess
