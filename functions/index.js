@@ -404,7 +404,7 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
   "summary": string (one sentence summary of what happened this turn),
   "rollInterpretation": {
     "skipRoll": boolean (true ONLY for automatic/trivial actions that cannot meaningfully fail — see AUTOMATIC ACTIONS below),
-    "actionRoll": number (echo the server-provided d20 value exactly),
+    "naturalRoll": number (echo the server-provided d20 value exactly — note: the server ignores this field and uses its own authoritative roll value, but include it for readability),
     "modifierFormula": string (e.g. "+2 (pilot skill) +1 (operational sensors) -1 (low morale)" — do NOT include the difficulty modifier here; the server adds it separately),
     "totalModifier": number (sum of character/crew/ship/situation modifiers only — do NOT include the difficulty modifier; the server adds it separately),
     "finalResult": number (actionRoll + totalModifier + difficultyModifier),
