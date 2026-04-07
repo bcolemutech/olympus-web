@@ -1341,4 +1341,130 @@ describe('voidOdysseyTurn', () => {
       expect(typeof result.rollInterpretation.success).toBe('boolean');
     });
   });
+
+  describe('system prompt assembly', () => {
+    // These tests rely on inspecting the mocked callGemini call args.
+    const skipIfLive = useLiveAI ? test.skip : test;
+
+    skipIfLive('appends journey directives to the system prompt', async () => {
+      await seedGame({
+        game: {
+          journey: {
+            id: 'warpath',
+            name: 'Warpath',
+            tone: 'grim_military',
+            dangerLevel: 'high',
+            themes: ['war'],
+            narrativeDirectives: [
+              'Combat has consequences — every shot matters',
+              'Honor the chain of command',
+            ],
+          },
+        },
+      });
+      mockAiResponse(makeAiResponse());
+
+      await callTurn();
+
+      const args = callGemini.mock.calls[0][0];
+      expect(args.systemInstruction).toContain('## Campaign Journey: Warpath');
+      expect(args.systemInstruction).toContain('Tone: grim_military');
+      expect(args.systemInstruction).toContain('Danger Level: high');
+      expect(args.systemInstruction).toContain('- Combat has consequences — every shot matters');
+      expect(args.systemInstruction).toContain('- Honor the chain of command');
+    });
+
+    skipIfLive('legacy game without journey gets unchanged base prompt', async () => {
+      await seedGame({ game: { journey: null } });
+      mockAiResponse(makeAiResponse());
+
+      await callTurn();
+
+      const args = callGemini.mock.calls[0][0];
+      expect(args.systemInstruction).not.toContain('## Campaign Journey');
+      expect(args.systemInstruction).not.toContain('Player role:');
+    });
+
+    skipIfLive("ship's company games inject player role into the system prompt", async () => {
+      await seedGame({
+        game: {
+          difficulty: 'ships_company',
+          journey: {
+            id: 'ships_company',
+            name: "Ship's Company",
+            tone: 'intimate_and_massive',
+            dangerLevel: 'high_scoped',
+            themes: ['chain_of_command'],
+            narrativeDirectives: ['Filter events through the role lens'],
+          },
+          character: {
+            name: 'Lt. Test',
+            role: 'fighter_pilot',
+            traits: ['resourceful'],
+            stats: { physique: 50, agility: 60, intellect: 60, presence: 50 },
+            condition: { health: 100, healthMax: 100, stress: 0, statusEffects: [] },
+            notes: '',
+            skills: { piloting: 3, gunnery: 2 },
+          },
+        },
+      });
+      mockAiResponse(makeAiResponse());
+
+      await callTurn();
+
+      const args = callGemini.mock.calls[0][0];
+      expect(args.systemInstruction).toContain('Player role: fighter_pilot');
+      expect(args.systemInstruction).toContain(
+        'Filter all events, conversations, and access through the lens of this role.'
+      );
+    });
+
+    skipIfLive('captain skills are included in the player context', async () => {
+      await seedGame({
+        game: {
+          character: {
+            name: 'Captain Test',
+            role: 'captain',
+            traits: ['resourceful'],
+            stats: { physique: 50, agility: 60, intellect: 60, presence: 50 },
+            condition: { health: 100, healthMax: 100, stress: 0, statusEffects: [] },
+            notes: '',
+            skills: { piloting: 3, diplomacy: 2 },
+          },
+        },
+      });
+      mockAiResponse(makeAiResponse());
+
+      await callTurn();
+
+      const args = callGemini.mock.calls[0][0];
+      expect(args.userMessage).toContain('"skills"');
+      expect(args.userMessage).toMatch(/"piloting":\s*3/);
+      expect(args.userMessage).toMatch(/"diplomacy":\s*2/);
+      expect(args.systemInstruction).toContain('captain skills');
+    });
+
+    skipIfLive('legacy game without character.skills falls back to empty object', async () => {
+      await seedGame({
+        game: {
+          character: {
+            name: 'Captain Legacy',
+            role: 'captain',
+            traits: ['resourceful'],
+            stats: { physique: 50, agility: 60, intellect: 60, presence: 50 },
+            condition: { health: 100, healthMax: 100, stress: 0, statusEffects: [] },
+            notes: '',
+            // No skills field
+          },
+        },
+      });
+      mockAiResponse(makeAiResponse());
+
+      const result = await callTurn();
+
+      expect(result).toBeDefined();
+      const args = callGemini.mock.calls[0][0];
+      expect(args.userMessage).toContain('"skills": {}');
+    });
+  });
 });

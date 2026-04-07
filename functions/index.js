@@ -449,7 +449,35 @@ Constraints:
   NEVER skip rolls for: combat actions, persuasion/deception/intimidation, navigation through hazards, hacking or bypassing security, repairs under pressure or with damaged parts, stealth or sneaking, any action with meaningful opposition or risk of harm, anything creative/ambitious/unusual the player attempts, bartering or negotiating prices, investigating hidden or concealed things.
   When in doubt, do NOT skip — let the dice decide.
 - SAVING THROWS: If the action targets a person, creature, or system that could resist (e.g., persuasion, hacking, combat maneuver), use the provided saving throw d20 to determine if the target resists. Set an appropriate saving DC based on the target's capability. If no saving throw is relevant (e.g., exploring, routine navigation, self-directed actions), set savingThrow to null or savingThrow.applicable to false.
-- MODIFIER SOURCES: Draw modifiers from — captain traits (+1 to +2 each when relevant), crew skills (+1 to +3 for relevant crew role), ship system status (operational +1, damaged -2, destroyed -4), ship weapons (in combat, +1 to +2), current morale (inspired +1, content 0, uneasy -1, fearful -2, broken -3), injuries (minor -1, serious -2, critical -3), relevant cargo items (+1 for useful equipment). Do not stack more than 5 modifiers total.`;
+- MODIFIER SOURCES: Draw modifiers from — captain traits (+1 to +2 each when relevant), captain skills (+1 to +3 based on skill level — piloting, gunnery, engineering, medicine, diplomacy, intimidation, deception, investigation, survival, hacking, stealth, leadership, xenology, commerce, perception; apply the most relevant skill to the action, and if no skill applies do not add a skill modifier), crew skills (+1 to +3 for relevant crew role), ship system status (operational +1, damaged -2, destroyed -4), ship weapons (in combat, +1 to +2), current morale (inspired +1, content 0, uneasy -1, fearful -2, broken -3), injuries (minor -1, serious -2, critical -3), relevant cargo items (+1 for useful equipment). Do not stack more than 5 modifiers total.`;
+
+/**
+ * Builds the per-turn system prompt for Void Odyssey, augmenting the base
+ * prompt with journey-specific narrative directives and (for Ship's Company
+ * games) the player's role. Games created before the journey feature do not
+ * have `gameDoc.journey` and receive the unchanged base prompt.
+ */
+function buildVoidOdysseyTurnSystemPrompt(gameDoc) {
+  let prompt = VOID_ODYSSEY_TURN_SYSTEM_PROMPT;
+
+  const journey = gameDoc && gameDoc.journey;
+  if (journey) {
+    const directiveList =
+      Array.isArray(journey.narrativeDirectives) && journey.narrativeDirectives.length
+        ? journey.narrativeDirectives.map((d) => `- ${d}`).join('\n')
+        : '- None provided.';
+    prompt += `\n\n## Campaign Journey: ${journey.name}\nTone: ${journey.tone}\nDanger Level: ${journey.dangerLevel}\n\nNarrative directives for this campaign:\n${directiveList}`;
+  }
+
+  const character = (gameDoc && gameDoc.character) || null;
+  const player = (gameDoc && gameDoc.player) || null;
+  const role = (character && character.role) || (player && player.role) || null;
+  if (gameDoc && gameDoc.difficulty === 'ships_company' && role) {
+    prompt += `\n\nPlayer role: ${role}\nFilter all events, conversations, and access through the lens of this role.`;
+  }
+
+  return prompt;
+}
 
 const VOID_ODYSSEY_RATE_LIMITS = {
   HOURLY_SOFT: 15,
@@ -950,10 +978,17 @@ async function assembleContext(db, gameId, gameDoc) {
       weapons: gameDoc.ship.weapons || [],
       systems: gameDoc.ship.systems || [],
     },
-    player: {
-      name: gameDoc.player.name,
-      traits: gameDoc.player.traits || [],
-    },
+    player: (() => {
+      const character = gameDoc.character || null;
+      const player = gameDoc.player || null;
+      const playerRole = (character && character.role) || (player && player.role) || null;
+      return {
+        name: (character && character.name) || (player && player.name) || '',
+        traits: (character && character.traits) || (player && player.traits) || [],
+        skills: (character && character.skills) || (player && player.skills) || {},
+        ...(gameDoc.difficulty === 'ships_company' && playerRole ? { role: playerRole } : {}),
+      };
+    })(),
     difficulty: gameDoc.difficulty || 'frontier_explorer',
     location,
     entitiesAtLocation: entitiesHere,
@@ -1190,7 +1225,7 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
   try {
     aiResponse = await callGemini({
       modelName: VOID_ODYSSEY_MODEL,
-      systemInstruction: VOID_ODYSSEY_TURN_SYSTEM_PROMPT,
+      systemInstruction: buildVoidOdysseyTurnSystemPrompt(gameDoc),
       userMessage,
       // NOTE: 8192 tokens increases average latency and API cost per turn.
       // VOID_ODYSSEY_COST_PER_TURN is an approximate game-credit metric, not an exact USD figure.
