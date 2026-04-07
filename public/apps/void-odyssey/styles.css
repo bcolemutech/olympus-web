@@ -799,6 +799,14 @@
 
 .freeform-input-row .freeform-input {
   flex: 1;
+  min-width: 0; /* prevents flex children from overflowing */
+}
+
+/* Go button must never stretch to full width inside the input row,
+   even when .btn { width: 100% } fires on mobile */
+.freeform-input-row .freeform-submit {
+  width: auto;
+  flex-shrink: 0;
 }
 
 /* ── Suggestion chips ────────────────────────────────────── */
@@ -1283,7 +1291,7 @@
     border-radius: 0;
     border-left: none;
     border-right: none;
-    max-height: 50vh;
+    max-height: 55vh;
     overflow-y: auto;
   }
 
@@ -1291,7 +1299,14 @@
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    /* hide scrollbar visually while keeping scroll functionality */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     padding-bottom: 2px;
+  }
+
+  .action-suggestions::-webkit-scrollbar {
+    display: none;
   }
 
   .sidebar-panel {
