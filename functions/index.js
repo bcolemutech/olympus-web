@@ -461,18 +461,19 @@ function buildVoidOdysseyTurnSystemPrompt(gameDoc) {
   let prompt = VOID_ODYSSEY_TURN_SYSTEM_PROMPT;
 
   const journey = gameDoc && gameDoc.journey;
-  if (journey && Array.isArray(journey.narrativeDirectives) && journey.narrativeDirectives.length) {
-    const directives = journey.narrativeDirectives.map((d) => `- ${d}`).join('\n');
-    prompt += `\n\n## Campaign Journey: ${journey.name}\nTone: ${journey.tone}\nDanger Level: ${journey.dangerLevel}\n\nNarrative directives for this campaign:\n${directives}`;
+  if (journey) {
+    const directiveList =
+      Array.isArray(journey.narrativeDirectives) && journey.narrativeDirectives.length
+        ? journey.narrativeDirectives.map((d) => `- ${d}`).join('\n')
+        : '- None provided.';
+    prompt += `\n\n## Campaign Journey: ${journey.name}\nTone: ${journey.tone}\nDanger Level: ${journey.dangerLevel}\n\nNarrative directives for this campaign:\n${directiveList}`;
   }
 
-  if (
-    gameDoc &&
-    gameDoc.difficulty === 'ships_company' &&
-    gameDoc.character &&
-    gameDoc.character.role
-  ) {
-    prompt += `\n\nPlayer role: ${gameDoc.character.role}\nFilter all events, conversations, and access through the lens of this role.`;
+  const character = (gameDoc && gameDoc.character) || null;
+  const player = (gameDoc && gameDoc.player) || null;
+  const role = (character && character.role) || (player && player.role) || null;
+  if (gameDoc && gameDoc.difficulty === 'ships_company' && role) {
+    prompt += `\n\nPlayer role: ${role}\nFilter all events, conversations, and access through the lens of this role.`;
   }
 
   return prompt;
@@ -977,14 +978,17 @@ async function assembleContext(db, gameId, gameDoc) {
       weapons: gameDoc.ship.weapons || [],
       systems: gameDoc.ship.systems || [],
     },
-    player: {
-      name: gameDoc.player.name,
-      traits: gameDoc.player.traits || [],
-      skills: (gameDoc.character && gameDoc.character.skills) || {},
-      ...(gameDoc.difficulty === 'ships_company' && gameDoc.character && gameDoc.character.role
-        ? { role: gameDoc.character.role }
-        : {}),
-    },
+    player: (() => {
+      const character = gameDoc.character || null;
+      const player = gameDoc.player || null;
+      const playerRole = (character && character.role) || (player && player.role) || null;
+      return {
+        name: (character && character.name) || (player && player.name) || '',
+        traits: (character && character.traits) || (player && player.traits) || [],
+        skills: (character && character.skills) || (player && player.skills) || {},
+        ...(gameDoc.difficulty === 'ships_company' && playerRole ? { role: playerRole } : {}),
+      };
+    })(),
     difficulty: gameDoc.difficulty || 'frontier_explorer',
     location,
     entitiesAtLocation: entitiesHere,
