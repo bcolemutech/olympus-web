@@ -366,6 +366,35 @@ exports.inviteUser = onCall(async (request) => {
 const VOID_ODYSSEY_MODEL = 'gemini-2.5-flash';
 const VOID_ODYSSEY_COST_PER_TURN = 0.01; // USD per AI turn
 
+// Shared allowlists used by multiple Void Odyssey callables (voidOdysseyNewGame,
+// voidOdysseyGenerateBackstory, …). Keep these in one place so a new journey or
+// trait added here is automatically honored across every entry point.
+const VOID_ODYSSEY_JOURNEY_IDS = [
+  'frontier_explorer',
+  'smugglers_run',
+  'warpath',
+  'deep_salvage',
+  'first_contact',
+  'the_long_haul',
+  'ships_company',
+  'custom',
+];
+
+const VOID_ODYSSEY_TRAIT_IDS = [
+  'resourceful',
+  'cautious',
+  'silver_tongued',
+  'reckless',
+  'honorable',
+  'ruthless',
+  'curious',
+  'paranoid',
+  'compassionate',
+  'calculating',
+  'charismatic',
+  'stoic',
+];
+
 const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
 You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
@@ -2011,38 +2040,13 @@ exports.voidOdysseyGenerateBackstory = onCall(async (request) => {
   // ── Input validation ───────────────────────────────────────
   const { journey, captainName, captainTraits } = request.data || {};
 
-  const validJourneys = [
-    'frontier_explorer',
-    'smugglers_run',
-    'warpath',
-    'deep_salvage',
-    'first_contact',
-    'the_long_haul',
-    'ships_company',
-    'custom',
-  ];
-  const validTraitIds = [
-    'resourceful',
-    'cautious',
-    'silver_tongued',
-    'reckless',
-    'honorable',
-    'ruthless',
-    'curious',
-    'paranoid',
-    'compassionate',
-    'calculating',
-    'charismatic',
-    'stoic',
-  ];
-
-  if (!journey || !validJourneys.includes(journey)) {
+  if (!journey || !VOID_ODYSSEY_JOURNEY_IDS.includes(journey)) {
     throw new HttpsError('invalid-argument', 'Invalid journey selection.');
   }
   if (!Array.isArray(captainTraits) || captainTraits.length < 2 || captainTraits.length > 3) {
     throw new HttpsError('invalid-argument', 'Select 2–3 captain traits.');
   }
-  if (!captainTraits.every((t) => validTraitIds.includes(t))) {
+  if (!captainTraits.every((t) => VOID_ODYSSEY_TRAIT_IDS.includes(t))) {
     throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
   }
 
@@ -2067,7 +2071,7 @@ exports.voidOdysseyGenerateBackstory = onCall(async (request) => {
 
 You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
 {
-  "backstory": string (2-4 sentences, second person, 280 characters or fewer, tuned to the journey tone and chosen traits; should imply a reason this captain is heading into the void now)
+  "backstory": string (2-4 sentences, second person, 400 characters or fewer, tuned to the journey tone and chosen traits; should imply a reason this captain is heading into the void now)
 }
 
 Constraints:
@@ -2075,7 +2079,7 @@ Constraints:
 - Keep it grounded: a specific place, a specific incident, a hint of what's driving them.
 - Reference the traits implicitly through behavior or history, not as a list.
 - Do NOT name the ship, the crew, or the destination — those come later in creation.
-- Stay within 280 characters total. Do not exceed 400 under any circumstances.`;
+- Stay within 400 characters total. Do not exceed this limit.`;
 
   const userMessage = `Generate a captain backstory for a new Void Odyssey campaign.
 
@@ -2153,16 +2157,6 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     shipName,
   } = request.data || {};
 
-  const validDifficulties = [
-    'frontier_explorer',
-    'smugglers_run',
-    'warpath',
-    'deep_salvage',
-    'first_contact',
-    'the_long_haul',
-    'ships_company',
-    'custom',
-  ];
   const validShipClasses = [
     'light_freighter',
     'scout_corvette',
@@ -2179,23 +2173,9 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     'heavy_cruiser',
   ];
 
-  if (!difficulty || !validDifficulties.includes(difficulty)) {
+  if (!difficulty || !VOID_ODYSSEY_JOURNEY_IDS.includes(difficulty)) {
     throw new HttpsError('invalid-argument', 'Invalid difficulty selection.');
   }
-  const validTraitIds = [
-    'resourceful',
-    'cautious',
-    'silver_tongued',
-    'reckless',
-    'honorable',
-    'ruthless',
-    'curious',
-    'paranoid',
-    'compassionate',
-    'calculating',
-    'charismatic',
-    'stoic',
-  ];
 
   if (typeof captainName !== 'string' || captainName.trim().length === 0) {
     throw new HttpsError('invalid-argument', "Captain's name is required.");
@@ -2206,7 +2186,7 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   if (!Array.isArray(captainTraits) || captainTraits.length < 2 || captainTraits.length > 3) {
     throw new HttpsError('invalid-argument', 'Select 2–3 captain traits.');
   }
-  if (!captainTraits.every((t) => validTraitIds.includes(t))) {
+  if (!captainTraits.every((t) => VOID_ODYSSEY_TRAIT_IDS.includes(t))) {
     throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
   }
   if (!shipClass || !validShipClasses.includes(shipClass)) {

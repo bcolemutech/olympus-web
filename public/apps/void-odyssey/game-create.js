@@ -141,6 +141,7 @@
   // Step 2: Name your captain, pick traits, write or generate a backstory
   function _renderStep2(container) {
     var d = VO.state.wizardData;
+    var busy = VO.state._backstoryGenerating === true;
 
     var html =
       '<h2 class="wizard-step-title">Name Your Captain</h2>' +
@@ -169,13 +170,19 @@
         '</button>';
     });
 
+    var generateLabelHtml = busy
+      ? '<span class="backstory-spinner" aria-hidden="true"></span>Generating…'
+      : '✨ Generate Backstory';
+
     html +=
       '</div></div>' +
       '<div class="form-group">' +
       '<div class="backstory-label-row">' +
       '<label class="form-label" for="captain-backstory">Backstory <span class="form-optional">(optional)</span></label>' +
       '<button type="button" class="btn btn-ghost btn-sm backstory-generate-btn" id="backstory-generate" disabled>' +
-      '<span class="backstory-generate-label">✨ Generate Backstory</span>' +
+      '<span class="backstory-generate-label">' +
+      generateLabelHtml +
+      '</span>' +
       '</button>' +
       '</div>' +
       '<textarea id="captain-backstory" class="form-textarea" placeholder="A few sentences about your past — or select 2–3 traits and let the Oracle write one for you." maxlength="400">' +
@@ -194,8 +201,13 @@
     var backstoryInput = document.getElementById('captain-backstory');
     var nextBtn = document.getElementById('step2-next');
     var generateBtn = document.getElementById('backstory-generate');
-    var generateLabel = generateBtn.querySelector('.backstory-generate-label');
     var hint = document.getElementById('backstory-hint');
+
+    // If a previous generation finished with an error, surface it once and clear.
+    if (VO.state._backstoryError) {
+      _showError('wizard-body', VO.state._backstoryError);
+      VO.state._backstoryError = null;
+    }
 
     function updateNextEnabled() {
       var nameOk = nameInput.value.trim().length > 0;
@@ -205,9 +217,9 @@
 
     function updateGenerateEnabled() {
       var traitsOk = d.captainTraits.length >= 2 && d.captainTraits.length <= 3;
-      var busy = VO.state._backstoryGenerating === true;
-      generateBtn.disabled = !traitsOk || busy;
-      if (busy) {
+      var isBusy = VO.state._backstoryGenerating === true;
+      generateBtn.disabled = !traitsOk || isBusy;
+      if (isBusy) {
         hint.textContent = 'The Oracle is dreaming up your past…';
       } else if (traitsOk) {
         hint.textContent = 'Let the Oracle draft one — you can edit it after.';
@@ -254,11 +266,17 @@
       // Clear any previous inline error
       var existing = container.querySelector('.wizard-inline-error');
       if (existing) existing.remove();
+      VO.state._backstoryError = null;
 
       VO.state._backstoryGenerating = true;
-      generateLabel.innerHTML =
-        '<span class="backstory-spinner" aria-hidden="true"></span>Generating…';
       updateGenerateEnabled();
+      // Swap the button label to a spinner for immediate feedback; if a
+      // re-render happens later it will reconstruct the same state from
+      // VO.state._backstoryGenerating.
+      var labelEl = generateBtn.querySelector('.backstory-generate-label');
+      if (labelEl) {
+        labelEl.innerHTML = '<span class="backstory-spinner" aria-hidden="true"></span>Generating…';
+      }
 
       var fn = VO.state.functions.httpsCallable('voidOdysseyGenerateBackstory');
       fn({
@@ -269,18 +287,24 @@
         .then(function (result) {
           var text = (result && result.data && result.data.backstory) || '';
           if (text) {
-            backstoryInput.value = text;
+            // Write through state so a re-render (or revisit) picks it up.
             d.captainBackstory = text;
           }
         })
         .catch(function (err) {
           console.error('voidOdysseyGenerateBackstory error:', err);
-          _showError('wizard-body', err.message || 'Failed to generate backstory. Try again.');
+          VO.state._backstoryError = err.message || 'Failed to generate backstory. Try again.';
         })
         .then(function () {
           VO.state._backstoryGenerating = false;
-          generateLabel.textContent = '✨ Generate Backstory';
-          updateGenerateEnabled();
+          // If the user is still on Step 2, re-render so the textarea shows
+          // the generated text (or the error is surfaced) and the button
+          // returns to its resting state. If they navigated away mid-request,
+          // state is already updated and the fresh render on revisit picks
+          // it up — do not force navigation back.
+          if (VO.state.wizardStep === 2) {
+            VO.renderWizardStep(2);
+          }
         });
     });
 
