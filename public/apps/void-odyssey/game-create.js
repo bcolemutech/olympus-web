@@ -37,9 +37,6 @@
       case 6:
         _renderStep6(container);
         break;
-      case 7:
-        _renderStep7(container);
-        break;
     }
   };
 
@@ -141,7 +138,7 @@
     }
   }
 
-  // Step 2: Name your captain and choose traits
+  // Step 2: Name your captain, pick traits, write or generate a backstory
   function _renderStep2(container) {
     var d = VO.state.wizardData;
 
@@ -174,17 +171,60 @@
 
     html +=
       '</div></div>' +
+      '<div class="form-group">' +
+      '<div class="backstory-label-row">' +
+      '<label class="form-label" for="captain-backstory">Backstory <span class="form-optional">(optional)</span></label>' +
+      '<button type="button" class="btn btn-ghost btn-sm backstory-generate-btn" id="backstory-generate" disabled>' +
+      '<span class="backstory-generate-label">✨ Generate Backstory</span>' +
+      '</button>' +
+      '</div>' +
+      '<textarea id="captain-backstory" class="form-textarea" placeholder="A few sentences about your past — or select 2–3 traits and let the Oracle write one for you." maxlength="400">' +
+      _esc(d.captainBackstory) +
+      '</textarea>' +
+      '<p class="backstory-hint" id="backstory-hint">Pick 2–3 traits to unlock the Oracle.</p>' +
+      '</div>' +
       '<div class="wizard-nav">' +
       '<button type="button" class="btn btn-secondary wizard-back" id="step2-back">← Back</button>' +
-      '<button type="button" class="btn btn-primary wizard-next" id="step2-next">Next →</button>' +
+      '<button type="button" class="btn btn-primary wizard-next" id="step2-next" disabled>Next →</button>' +
       '</div>';
 
     container.innerHTML = html;
 
-    // Sync name input
     var nameInput = document.getElementById('captain-name');
+    var backstoryInput = document.getElementById('captain-backstory');
+    var nextBtn = document.getElementById('step2-next');
+    var generateBtn = document.getElementById('backstory-generate');
+    var generateLabel = generateBtn.querySelector('.backstory-generate-label');
+    var hint = document.getElementById('backstory-hint');
+
+    function updateNextEnabled() {
+      var nameOk = nameInput.value.trim().length > 0;
+      var traitsOk = d.captainTraits.length >= 2 && d.captainTraits.length <= 3;
+      nextBtn.disabled = !(nameOk && traitsOk);
+    }
+
+    function updateGenerateEnabled() {
+      var traitsOk = d.captainTraits.length >= 2 && d.captainTraits.length <= 3;
+      var busy = VO.state._backstoryGenerating === true;
+      generateBtn.disabled = !traitsOk || busy;
+      if (busy) {
+        hint.textContent = 'The Oracle is dreaming up your past…';
+      } else if (traitsOk) {
+        hint.textContent = 'Let the Oracle draft one — you can edit it after.';
+      } else {
+        hint.textContent = 'Pick 2–3 traits to unlock the Oracle.';
+      }
+    }
+
+    // Sync name input
     nameInput.addEventListener('input', function () {
       d.captainName = nameInput.value;
+      updateNextEnabled();
+    });
+
+    // Sync backstory textarea
+    backstoryInput.addEventListener('input', function () {
+      d.captainBackstory = backstoryInput.value;
     });
 
     // Trait buttons — enforce 2-3 limit
@@ -204,26 +244,68 @@
           btn.classList.add('selected');
           btn.setAttribute('aria-pressed', 'true');
         }
+        updateNextEnabled();
+        updateGenerateEnabled();
       });
+    });
+
+    generateBtn.addEventListener('click', function () {
+      if (generateBtn.disabled) return;
+      // Clear any previous inline error
+      var existing = container.querySelector('.wizard-inline-error');
+      if (existing) existing.remove();
+
+      VO.state._backstoryGenerating = true;
+      generateLabel.innerHTML =
+        '<span class="backstory-spinner" aria-hidden="true"></span>Generating…';
+      updateGenerateEnabled();
+
+      var fn = VO.state.functions.httpsCallable('voidOdysseyGenerateBackstory');
+      fn({
+        journey: d.tone,
+        captainName: nameInput.value.trim(),
+        captainTraits: d.captainTraits.slice(),
+      })
+        .then(function (result) {
+          var text = (result && result.data && result.data.backstory) || '';
+          if (text) {
+            backstoryInput.value = text;
+            d.captainBackstory = text;
+          }
+        })
+        .catch(function (err) {
+          console.error('voidOdysseyGenerateBackstory error:', err);
+          _showError('wizard-body', err.message || 'Failed to generate backstory. Try again.');
+        })
+        .then(function () {
+          VO.state._backstoryGenerating = false;
+          generateLabel.textContent = '✨ Generate Backstory';
+          updateGenerateEnabled();
+        });
     });
 
     document.getElementById('step2-back').addEventListener('click', function () {
       VO.renderWizardStep(1);
     });
 
-    document.getElementById('step2-next').addEventListener('click', function () {
-      var name = document.getElementById('captain-name').value.trim();
+    nextBtn.addEventListener('click', function () {
+      if (nextBtn.disabled) return;
+      var name = nameInput.value.trim();
       if (!name) {
         _showFieldError('captain-name', "Please enter your captain's name.");
         return;
       }
-      if (d.captainTraits.length < 2) {
-        _showError('wizard-body', 'Please select at least 2 traits.');
+      if (d.captainTraits.length < 2 || d.captainTraits.length > 3) {
+        _showError('wizard-body', 'Please select 2 or 3 traits.');
         return;
       }
       d.captainName = name;
+      d.captainBackstory = backstoryInput.value;
       VO.renderWizardStep(3);
     });
+
+    updateNextEnabled();
+    updateGenerateEnabled();
   }
 
   // Step 3: Allocate skills
@@ -369,42 +451,8 @@
     });
   }
 
-  // Step 4: Backstory
+  // Step 4: Choose your ship
   function _renderStep4(container) {
-    var d = VO.state.wizardData;
-
-    var html =
-      '<h2 class="wizard-step-title">Your Backstory</h2>' +
-      '<p class="wizard-step-desc">A few words about your past — or let the Oracle invent one.</p>' +
-      '<div class="form-group">' +
-      '<label class="form-label" for="captain-backstory">Backstory <span class="form-optional">(optional — or let Claude invent one)</span></label>' +
-      '<textarea id="captain-backstory" class="form-textarea" placeholder="A few sentences about your past..." maxlength="400">' +
-      _esc(d.captainBackstory) +
-      '</textarea>' +
-      '</div>' +
-      '<div class="wizard-nav">' +
-      '<button type="button" class="btn btn-secondary" id="step4-back">← Back</button>' +
-      '<button type="button" class="btn btn-primary" id="step4-next">Next →</button>' +
-      '</div>';
-
-    container.innerHTML = html;
-
-    var backstoryInput = document.getElementById('captain-backstory');
-    backstoryInput.addEventListener('input', function () {
-      d.captainBackstory = backstoryInput.value;
-    });
-
-    document.getElementById('step4-back').addEventListener('click', function () {
-      VO.renderWizardStep(3);
-    });
-
-    document.getElementById('step4-next').addEventListener('click', function () {
-      VO.renderWizardStep(5);
-    });
-  }
-
-  // Step 5: Choose your ship
-  function _renderStep5(container) {
     var d = VO.state.wizardData;
 
     var html =
@@ -454,8 +502,8 @@
       '">' +
       '</div>' +
       '<div class="wizard-nav">' +
-      '<button type="button" class="btn btn-secondary" id="step5-back">← Back</button>' +
-      '<button type="button" class="btn btn-primary" id="step5-next"' +
+      '<button type="button" class="btn btn-secondary" id="step4-back">← Back</button>' +
+      '<button type="button" class="btn btn-primary" id="step4-next"' +
       (d.shipClass ? '' : ' disabled') +
       '>Next →</button>' +
       '</div>';
@@ -469,7 +517,7 @@
           c.classList.toggle('selected', c.dataset.id === d.shipClass);
         });
         document.getElementById('ship-name-group').style.display = '';
-        document.getElementById('step5-next').disabled = false;
+        document.getElementById('step4-next').disabled = false;
       });
     });
 
@@ -480,11 +528,11 @@
       });
     }
 
-    document.getElementById('step5-back').addEventListener('click', function () {
-      VO.renderWizardStep(4);
+    document.getElementById('step4-back').addEventListener('click', function () {
+      VO.renderWizardStep(3);
     });
 
-    document.getElementById('step5-next').addEventListener('click', function () {
+    document.getElementById('step4-next').addEventListener('click', function () {
       if (!d.shipClass) return;
       var name =
         document.getElementById('ship-name') && document.getElementById('ship-name').value.trim();
@@ -493,12 +541,12 @@
         return;
       }
       d.shipName = name;
-      VO.renderWizardStep(6);
+      VO.renderWizardStep(5);
     });
   }
 
-  // Step 6: Generate and review starting crew (Cloud Function call + Firestore write)
-  function _renderStep6(container) {
+  // Step 5: Generate and review starting crew (Cloud Function call + Firestore write)
+  function _renderStep5(container) {
     var d = VO.state.wizardData;
 
     // Show spinner while we call the Cloud Function
@@ -534,10 +582,10 @@
           _esc(err.message || 'Failed to generate game. Please try again.') +
           '</p>' +
           '<div class="wizard-nav">' +
-          '<button type="button" class="btn btn-secondary" id="step6-retry">← Try Again</button>' +
+          '<button type="button" class="btn btn-secondary" id="step5-retry">← Try Again</button>' +
           '</div>';
-        document.getElementById('step6-retry').addEventListener('click', function () {
-          VO.renderWizardStep(6);
+        document.getElementById('step5-retry').addEventListener('click', function () {
+          VO.renderWizardStep(5);
         });
       });
   }
@@ -568,27 +616,27 @@
     html +=
       '</div>' +
       '<div class="wizard-nav">' +
-      '<button type="button" class="btn btn-secondary" id="step6-back">← Reroll</button>' +
-      '<button type="button" class="btn btn-primary" id="step6-next">Launch Campaign →</button>' +
+      '<button type="button" class="btn btn-secondary" id="step5-back">← Reroll</button>' +
+      '<button type="button" class="btn btn-primary" id="step5-next">Launch Campaign →</button>' +
       '</div>';
 
     container.innerHTML = html;
 
-    document.getElementById('step6-back').addEventListener('click', function () {
+    document.getElementById('step5-back').addEventListener('click', function () {
       VO.state.generatedGame = null;
-      VO.renderWizardStep(6);
+      VO.renderWizardStep(5);
     });
 
-    document.getElementById('step6-next').addEventListener('click', function () {
-      VO.renderWizardStep(7);
+    document.getElementById('step5-next').addEventListener('click', function () {
+      VO.renderWizardStep(6);
     });
   }
 
-  // Step 7: Display opening scene
-  function _renderStep7(container) {
+  // Step 6: Display opening scene
+  function _renderStep6(container) {
     var game = VO.state.generatedGame;
     if (!game) {
-      VO.renderWizardStep(6);
+      VO.renderWizardStep(5);
       return;
     }
 
@@ -620,10 +668,10 @@
       '<p class="action-panel-note">(Full turn actions available in Phase 2)</p>' +
       '</div>' +
       '<div class="wizard-nav wizard-nav--center">' +
-      '<button type="button" class="btn btn-primary" id="step7-enter">Enter the Void →</button>' +
+      '<button type="button" class="btn btn-primary" id="step6-enter">Enter the Void →</button>' +
       '</div>';
 
-    document.getElementById('step7-enter').addEventListener('click', function () {
+    document.getElementById('step6-enter').addEventListener('click', function () {
       VO.showView('game-active');
     });
   }

@@ -1983,6 +1983,134 @@ Generate the next narrative beat, state mutations, available actions, AND a roll
 });
 
 /**
+ * voidOdysseyGenerateBackstory — generates a captain backstory tuned to the
+ * selected journey and traits. Used by the creation wizard's Step 2 "Generate
+ * Backstory" button so the player can seed the textarea with an AI-written
+ * draft and then edit it before continuing.
+ *
+ * Caller must be authenticated and have the 'void-odyssey' app claim.
+ *
+ * Data:
+ *   journey: string            — journey / tone ID (same set as voidOdysseyNewGame)
+ *   captainName: string        — optional; used for flavor if provided
+ *   captainTraits: string[]    — 2-3 trait IDs
+ *
+ * Returns:
+ *   backstory: string          — 2-4 sentence backstory (<= 400 chars)
+ */
+exports.voidOdysseyGenerateBackstory = onCall(async (request) => {
+  // ── Auth + claim check ─────────────────────────────────────
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('void-odyssey')) {
+    throw new HttpsError('permission-denied', "You don't have access to Void Odyssey.");
+  }
+
+  // ── Input validation ───────────────────────────────────────
+  const { journey, captainName, captainTraits } = request.data || {};
+
+  const validJourneys = [
+    'frontier_explorer',
+    'smugglers_run',
+    'warpath',
+    'deep_salvage',
+    'first_contact',
+    'the_long_haul',
+    'ships_company',
+    'custom',
+  ];
+  const validTraitIds = [
+    'resourceful',
+    'cautious',
+    'silver_tongued',
+    'reckless',
+    'honorable',
+    'ruthless',
+    'curious',
+    'paranoid',
+    'compassionate',
+    'calculating',
+    'charismatic',
+    'stoic',
+  ];
+
+  if (!journey || !validJourneys.includes(journey)) {
+    throw new HttpsError('invalid-argument', 'Invalid journey selection.');
+  }
+  if (!Array.isArray(captainTraits) || captainTraits.length < 2 || captainTraits.length > 3) {
+    throw new HttpsError('invalid-argument', 'Select 2–3 captain traits.');
+  }
+  if (!captainTraits.every((t) => validTraitIds.includes(t))) {
+    throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
+  }
+
+  const journeyToneLabels = {
+    frontier_explorer: 'Frontier Explorer — discovery-focused, wonder, first contact',
+    smugglers_run: "Smuggler's Run — gritty trade, intrigue, moral grey areas",
+    warpath: 'Warpath — military campaigns, tactical combat, high stakes',
+    deep_salvage: 'Deep Salvage — atmospheric horror, derelict wrecks, resource scarcity',
+    first_contact: 'First Contact — cerebral, diplomatic, xenolinguistic stakes',
+    the_long_haul: 'The Long Haul — intimate character-driven voyage, isolation, crew bonds',
+    ships_company:
+      "Ship's Company — capital warship crew role, chain of command, institutional drama",
+    custom: 'Custom — flexible tone, adapt to whatever story emerges',
+  };
+
+  const nameLine =
+    typeof captainName === 'string' && captainName.trim()
+      ? `Captain's name: ${captainName.trim().slice(0, 60)}`
+      : "Captain's name: (unnamed — you may reference them as 'the captain')";
+
+  const systemPrompt = `You write short character backstories for Void Odyssey, an AI-driven space exploration game set in a hard-ish sci-fi universe (Firefly meets Mass Effect — grounded crews, alien encounters, political tensions, moments of wonder).
+
+You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
+{
+  "backstory": string (2-4 sentences, second person, 280 characters or fewer, tuned to the journey tone and chosen traits; should imply a reason this captain is heading into the void now)
+}
+
+Constraints:
+- Write in second person ("You grew up…").
+- Keep it grounded: a specific place, a specific incident, a hint of what's driving them.
+- Reference the traits implicitly through behavior or history, not as a list.
+- Do NOT name the ship, the crew, or the destination — those come later in creation.
+- Stay within 280 characters total. Do not exceed 400 under any circumstances.`;
+
+  const userMessage = `Generate a captain backstory for a new Void Odyssey campaign.
+
+Journey / Tone: ${journeyToneLabels[journey]}
+${nameLine}
+Traits: ${captainTraits.join(', ')}`;
+
+  let aiResponse;
+  try {
+    aiResponse = await callGemini({
+      modelName: VOID_ODYSSEY_MODEL,
+      systemInstruction: systemPrompt,
+      userMessage,
+      maxOutputTokens: 512,
+    });
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error('voidOdysseyGenerateBackstory Gemini error:', err);
+    throw new HttpsError('internal', 'Failed to generate backstory. Please try again.');
+  }
+
+  let backstory = typeof aiResponse?.backstory === 'string' ? aiResponse.backstory.trim() : '';
+  if (!backstory) {
+    throw new HttpsError('internal', 'AI did not return a backstory.');
+  }
+  // Hard cap to match voidOdysseyNewGame's 400-char limit so the generated
+  // text can be sent straight back without rejection.
+  if (backstory.length > 400) {
+    backstory = backstory.slice(0, 400).trimEnd();
+  }
+
+  return { backstory };
+});
+
+/**
  * voidOdysseyNewGame — creates a new Void Odyssey campaign.
  *
  * Caller must be authenticated and have the 'void-odyssey' app claim.
