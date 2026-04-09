@@ -3,30 +3,30 @@
 /**
  * Unit tests for functions/gemini.js
  *
- * Mocks @google-cloud/vertexai to test callGemini in isolation.
+ * Mocks @google/genai to test callGemini in isolation.
  * Does not require the Firestore emulator.
  *
  * Run: cd tests && npx jest gemini --verbose
  */
 
-// Set project env var BEFORE any require so getVertexAI() uses it directly
-// and skips the firebase-admin/app lookup.
+// Set project env var BEFORE any require so getClient() reads the projectId
+// from the environment instead of from the Firebase admin app options.
 process.env.GCLOUD_PROJECT = 'test-project';
 
-// Mock VertexAI before requiring gemini.js.
+// Mock GoogleGenAI before requiring gemini.js.
 const mockGenerateContent = jest.fn();
-const mockGetGenerativeModel = jest.fn(() => ({ generateContent: mockGenerateContent }));
-jest.mock('@google-cloud/vertexai', () => ({
-  VertexAI: jest.fn(() => ({ getGenerativeModel: mockGetGenerativeModel })),
+jest.mock('@google/genai', () => ({
+  GoogleGenAI: jest.fn(() => ({
+    models: { generateContent: mockGenerateContent },
+  })),
 }));
 
 const { callGemini } = require('../functions/gemini');
 
-function makeVertexResponse({ text, finishReason = 'STOP' }) {
+function makeGenAiResponse({ text, finishReason = 'STOP' }) {
   return {
-    response: {
-      candidates: [{ finishReason, content: { parts: [{ text }] } }],
-    },
+    text,
+    candidates: [{ finishReason, content: { parts: [{ text }] } }],
   };
 }
 
@@ -37,7 +37,7 @@ beforeEach(() => {
 describe('callGemini', () => {
   test('returns parsed JSON for a normal response', async () => {
     const payload = { narrative: 'You dock at the station.', mood: 'calm' };
-    mockGenerateContent.mockResolvedValue(makeVertexResponse({ text: JSON.stringify(payload) }));
+    mockGenerateContent.mockResolvedValue(makeGenAiResponse({ text: JSON.stringify(payload) }));
 
     const result = await callGemini({
       modelName: 'gemini-2.5-flash',
@@ -47,12 +47,23 @@ describe('callGemini', () => {
     });
 
     expect(result).toEqual(payload);
+    // Verify the new flat SDK call shape — guards against reverting to the
+    // old nested @google-cloud/vertexai API.
+    expect(mockGenerateContent).toHaveBeenCalledWith({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: 'Do something.' }] }],
+      config: {
+        systemInstruction: 'You are a narrator.',
+        maxOutputTokens: 1024,
+        responseMimeType: 'application/json',
+      },
+    });
   });
 
   test('strips markdown fences before parsing JSON', async () => {
     const payload = { narrative: 'Engines fire.' };
     const fenced = '```json\n' + JSON.stringify(payload) + '\n```';
-    mockGenerateContent.mockResolvedValue(makeVertexResponse({ text: fenced }));
+    mockGenerateContent.mockResolvedValue(makeGenAiResponse({ text: fenced }));
 
     const result = await callGemini({
       modelName: 'gemini-2.5-flash',
@@ -65,7 +76,7 @@ describe('callGemini', () => {
   });
 
   test('returns raw text when jsonMode is false', async () => {
-    mockGenerateContent.mockResolvedValue(makeVertexResponse({ text: 'plain text response' }));
+    mockGenerateContent.mockResolvedValue(makeGenAiResponse({ text: 'plain text response' }));
 
     const result = await callGemini({
       modelName: 'gemini-2.5-flash',
@@ -76,11 +87,16 @@ describe('callGemini', () => {
     });
 
     expect(result).toBe('plain text response');
+    // responseMimeType must be omitted when jsonMode is false.
+    expect(mockGenerateContent.mock.calls[0][0].config).toEqual({
+      systemInstruction: 'sys',
+      maxOutputTokens: 256,
+    });
   });
 
   test('throws resource-exhausted HttpsError when finishReason is MAX_TOKENS', async () => {
     mockGenerateContent.mockResolvedValue(
-      makeVertexResponse({ text: '{"narrative": "truncated', finishReason: 'MAX_TOKENS' })
+      makeGenAiResponse({ text: '{"narrative": "truncated', finishReason: 'MAX_TOKENS' })
     );
 
     await expect(
@@ -97,7 +113,7 @@ describe('callGemini', () => {
   });
 
   test('throws internal HttpsError when response text is empty', async () => {
-    mockGenerateContent.mockResolvedValue({ response: { candidates: [] } });
+    mockGenerateContent.mockResolvedValue({ candidates: [] });
 
     await expect(
       callGemini({

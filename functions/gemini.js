@@ -1,21 +1,26 @@
 'use strict';
 
-const { VertexAI } = require('@google-cloud/vertexai');
+const { GoogleGenAI } = require('@google/genai');
 const { HttpsError } = require('firebase-functions/v2/https');
 
-let vertexAI;
+let genAIClient;
 
-function getVertexAI() {
-  if (!vertexAI) {
+function getClient() {
+  if (!genAIClient) {
     const { getApps } = require('firebase-admin/app');
-    const app = getApps().length > 0 ? getApps()[0] : null;
+    const apps = getApps();
+    const app = apps.length > 0 ? apps[0] : null;
     const projectId =
       process.env.GCLOUD_PROJECT ||
       process.env.GCP_PROJECT ||
       (app && app.options && app.options.projectId);
-    vertexAI = new VertexAI({ project: projectId, location: 'us-central1' });
+    genAIClient = new GoogleGenAI({
+      vertexai: true,
+      project: projectId,
+      location: 'us-central1',
+    });
   }
-  return vertexAI;
+  return genAIClient;
 }
 
 /**
@@ -31,20 +36,17 @@ async function callGemini({
   jsonMode = true,
 }) {
   try {
-    const model = getVertexAI().getGenerativeModel({
+    const response = await getClient().models.generateContent({
       model: modelName,
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: {
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+      config: {
+        systemInstruction,
         maxOutputTokens,
         ...(jsonMode && { responseMimeType: 'application/json' }),
       },
     });
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-    });
-
-    const candidate = result.response?.candidates?.[0];
+    const candidate = response.candidates?.[0];
     const finishReason = candidate?.finishReason;
     if (finishReason === 'MAX_TOKENS') {
       console.error('callGemini: response truncated by MAX_TOKENS');
@@ -53,7 +55,7 @@ async function callGemini({
       });
     }
 
-    const rawText = candidate?.content?.parts?.[0]?.text;
+    const rawText = response.text;
     if (!rawText) {
       throw new HttpsError('internal', 'Empty response from AI.');
     }
