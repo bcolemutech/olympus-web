@@ -529,79 +529,272 @@
   }
 
   // Step 4: Choose your ship
+  // Stat bar normalization — computed once from VO.SHIPS at module init so the
+  // bars stay in sync with ship data automatically. VO.SHIPS is an object keyed
+  // by ship id, with numeric stats under ship.stats.
+  function _computeStatBarMax() {
+    var maxes = { hull: 0, shields: 0, fuel: 0, cargo: 0, crew: 0 };
+    var ships = (VO && VO.SHIPS) || {};
+    Object.keys(ships).forEach(function (id) {
+      var stats = (ships[id] && ships[id].stats) || {};
+      if (stats.hullMax > maxes.hull) maxes.hull = stats.hullMax;
+      if (stats.shieldsMax > maxes.shields) maxes.shields = stats.shieldsMax;
+      if (stats.fuel > maxes.fuel) maxes.fuel = stats.fuel;
+      if (stats.cargoMax > maxes.cargo) maxes.cargo = stats.cargoMax;
+      if (stats.crewCapacity > maxes.crew) maxes.crew = stats.crewCapacity;
+    });
+    // Floors guard against an empty VO.SHIPS during unit testing or dev reload,
+    // preventing division-by-zero in the stat-bar percentage calc.
+    if (!maxes.hull) maxes.hull = 200;
+    if (!maxes.shields) maxes.shields = 150;
+    if (!maxes.fuel) maxes.fuel = 100;
+    if (!maxes.cargo) maxes.cargo = 250;
+    if (!maxes.crew) maxes.crew = 200;
+    return maxes;
+  }
+
+  var _STAT_BAR_MAX = _computeStatBarMax();
+
+  // Tier labels per planning/void-odyssey-creation-amendment.md §8.3
+  function _hullTier(v) {
+    if (v < 70) return 'Light';
+    if (v < 100) return 'Standard';
+    if (v < 140) return 'Heavy';
+    return 'Capital';
+  }
+  function _shieldTier(v) {
+    if (v < 50) return 'Minimal';
+    if (v < 80) return 'Standard';
+    if (v < 120) return 'Military';
+    return 'Capital';
+  }
+
+  function _statRow(label, value, max, tier) {
+    var pct = Math.max(0, Math.min(100, Math.round((value / max) * 100)));
+    return (
+      '<div class="ship-stat-row">' +
+      '<span class="ship-stat-label">' +
+      _esc(label) +
+      '</span>' +
+      (tier
+        ? '<span class="ship-stat-tier">' + _esc(tier) + '</span>'
+        : '<span class="ship-stat-tier ship-stat-tier--empty"></span>') +
+      '<span class="ship-stat-value">' +
+      value +
+      '</span>' +
+      '<span class="ship-stat-bar"><span class="ship-stat-bar-fill" style="width:' +
+      pct +
+      '%"></span></span>' +
+      '</div>'
+    );
+  }
+
+  function _loadoutSection(heading, items, formatter) {
+    if (!items || items.length === 0) return '';
+    var itemsHtml = items
+      .map(function (item) {
+        return '<li class="ship-loadout-item">' + formatter(item) + '</li>';
+      })
+      .join('');
+    return (
+      '<div class="ship-loadout-section">' +
+      '<div class="ship-loadout-heading">' +
+      _esc(heading) +
+      '</div>' +
+      '<ul class="ship-loadout-list">' +
+      itemsHtml +
+      '</ul>' +
+      '</div>'
+    );
+  }
+
   function _renderStep4(container) {
     var d = VO.state.wizardData;
 
+    // Guard: a journey must already be selected from Step 1
+    var journey = d.tone ? VO.JOURNEYS[d.tone] : null;
+    if (!journey) {
+      VO.renderWizardStep(1);
+      return;
+    }
+
+    var isShipsCompany = journey.id === 'ships_company';
+
+    // Resolve the 3 ships for this journey from VO.SHIPS, sorted by order
+    var ships = (journey.availableShips || [])
+      .map(function (id) {
+        return VO.SHIPS[id];
+      })
+      .filter(function (s) {
+        return !!s;
+      })
+      .sort(function (a, b) {
+        return (a.order || 0) - (b.order || 0);
+      });
+
     var html =
       '<h2 class="wizard-step-title">Choose Your Ship</h2>' +
-      '<p class="wizard-step-desc">Every captain needs a vessel. What\'s yours?</p>' +
+      '<p class="wizard-step-desc">' +
+      (isShipsCompany
+        ? 'Your assignment: pick a capital vessel, then choose your role aboard her.'
+        : "Every captain needs a vessel. What's yours?") +
+      '</p>' +
       '<div class="ship-grid">';
 
-    VO.SHIP_CLASSES.forEach(function (ship) {
+    ships.forEach(function (ship) {
       var selected = d.shipClass === ship.id;
+      var stats = ship.stats || {};
+
+      var statsHtml =
+        '<div class="ship-stat-block">' +
+        _statRow('Hull', stats.hullMax, _STAT_BAR_MAX.hull, _hullTier(stats.hullMax)) +
+        _statRow(
+          'Shields',
+          stats.shieldsMax,
+          _STAT_BAR_MAX.shields,
+          _shieldTier(stats.shieldsMax)
+        ) +
+        _statRow('Fuel', stats.fuel, _STAT_BAR_MAX.fuel, null) +
+        _statRow('Cargo Max', stats.cargoMax, _STAT_BAR_MAX.cargo, null) +
+        _statRow('Crew Capacity', stats.crewCapacity, _STAT_BAR_MAX.crew, null) +
+        '</div>';
+
+      var loadoutHtml =
+        '<div class="ship-loadout">' +
+        _loadoutSection('Weapons', ship.startingWeapons, function (w) {
+          var meta = [];
+          if (w.type) meta.push(w.type);
+          if (w.damage) meta.push(w.damage);
+          var metaHtml = meta.length
+            ? ' <span class="ship-loadout-meta">(' + _esc(meta.join(' · ')) + ')</span>'
+            : '';
+          return _esc(w.name || 'Unknown weapon') + metaHtml;
+        }) +
+        _loadoutSection('Systems', ship.startingSystems, function (s) {
+          return _esc(s.name || 'Unknown system');
+        }) +
+        _loadoutSection('Features', ship.startingFeatures, function (f) {
+          return _esc(f.name || 'Unknown feature');
+        }) +
+        '</div>';
+
       html +=
         '<button type="button" class="ship-card' +
         (selected ? ' selected' : '') +
         '" data-id="' +
-        ship.id +
+        _esc(ship.id) +
+        '" aria-pressed="' +
+        (selected ? 'true' : 'false') +
         '">' +
+        '<div class="ship-card-header">' +
         '<span class="ship-icon">' +
-        ship.icon +
+        _esc(ship.icon || '') +
         '</span>' +
         '<span class="ship-label">' +
-        ship.label +
-        '</span>' +
-        '<span class="ship-flavor">' +
-        ship.flavor +
-        '</span>' +
-        '<div class="ship-stats">' +
-        '<span class="ship-stat">Hull ' +
-        ship.stats.hullMax +
-        '</span>' +
-        '<span class="ship-stat">Cargo ' +
-        ship.stats.cargoMax +
-        '</span>' +
-        '<span class="ship-stat">Shields ' +
-        ship.stats.shieldsMax +
+        _esc(ship.className || '') +
         '</span>' +
         '</div>' +
+        '<p class="ship-flavor">' +
+        _esc(ship.description || '') +
+        '</p>' +
+        statsHtml +
+        loadoutHtml +
         '</button>';
     });
 
+    html += '</div>';
+
+    // Details region — ship name input OR role selector, depending on journey
+    if (isShipsCompany) {
+      var roles = journey.roleOptions || [];
+      var roleCardsHtml = roles
+        .map(function (role) {
+          var roleSelected = d.captainRole === role.id;
+          return (
+            '<button type="button" class="role-card' +
+            (roleSelected ? ' selected' : '') +
+            '" data-role-id="' +
+            _esc(role.id) +
+            '" aria-pressed="' +
+            (roleSelected ? 'true' : 'false') +
+            '">' +
+            '<span class="role-name">' +
+            _esc(role.name || '') +
+            '</span>' +
+            '<span class="role-focus">' +
+            _esc(role.focus || '') +
+            '</span>' +
+            '</button>'
+          );
+        })
+        .join('');
+
+      html +=
+        '<div class="form-group" id="role-selector-group" style="' +
+        (d.shipClass ? '' : 'display:none') +
+        '">' +
+        '<label class="form-label">Choose Your Role</label>' +
+        '<p class="form-hint">The ship already has a name and a history. You bring expertise and a chain of command.</p>' +
+        '<div class="role-selector">' +
+        roleCardsHtml +
+        '</div>' +
+        '</div>';
+    } else {
+      html +=
+        '<div class="form-group" id="ship-name-group" style="' +
+        (d.shipClass ? '' : 'display:none') +
+        '">' +
+        '<label class="form-label" for="ship-name">Name Your Ship</label>' +
+        '<input type="text" id="ship-name" class="form-input" placeholder="e.g. The Daedalus" maxlength="60" value="' +
+        _esc(d.shipName) +
+        '">' +
+        '</div>';
+    }
+
+    // Nav buttons
+    var nextDisabled;
+    if (!d.shipClass) {
+      nextDisabled = true;
+    } else if (isShipsCompany) {
+      nextDisabled = !d.captainRole;
+    } else {
+      nextDisabled = !(d.shipName && d.shipName.trim());
+    }
+
     html +=
-      '</div>' +
-      '<div class="form-group" id="ship-name-group" style="' +
-      (d.shipClass ? '' : 'display:none') +
-      '">' +
-      '<label class="form-label" for="ship-name">Name Your Ship</label>' +
-      '<input type="text" id="ship-name" class="form-input" placeholder="e.g. The Daedalus" maxlength="60" value="' +
-      _esc(d.shipName) +
-      '">' +
-      '</div>' +
       '<div class="wizard-nav">' +
       '<button type="button" class="btn btn-secondary" id="step4-back">← Back</button>' +
       '<button type="button" class="btn btn-primary" id="step4-next"' +
-      (d.shipClass ? '' : ' disabled') +
+      (nextDisabled ? ' disabled' : '') +
       '>Next →</button>' +
       '</div>';
 
     container.innerHTML = html;
 
+    // Wire ship card clicks — re-render so the details region and Next button
+    // always reflect the latest wizardData (matches the Step 3 pattern).
     container.querySelectorAll('.ship-card').forEach(function (card) {
       card.addEventListener('click', function () {
         d.shipClass = card.dataset.id;
-        container.querySelectorAll('.ship-card').forEach(function (c) {
-          c.classList.toggle('selected', c.dataset.id === d.shipClass);
-        });
-        document.getElementById('ship-name-group').style.display = '';
-        document.getElementById('step4-next').disabled = false;
+        _renderStep4(container);
       });
     });
 
+    // Wire role card clicks (ships_company only)
+    container.querySelectorAll('.role-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        d.captainRole = card.dataset.roleId;
+        _renderStep4(container);
+      });
+    });
+
+    // Wire ship-name input (non-ships_company only)
     var shipNameInput = document.getElementById('ship-name');
     if (shipNameInput) {
       shipNameInput.addEventListener('input', function () {
         d.shipName = shipNameInput.value;
+        var nextBtn = document.getElementById('step4-next');
+        if (nextBtn) nextBtn.disabled = !(d.shipClass && d.shipName.trim());
       });
     }
 
@@ -611,13 +804,26 @@
 
     document.getElementById('step4-next').addEventListener('click', function () {
       if (!d.shipClass) return;
-      var name =
-        document.getElementById('ship-name') && document.getElementById('ship-name').value.trim();
-      if (!name) {
-        _showFieldError('ship-name', 'Please name your ship.');
-        return;
+
+      if (isShipsCompany) {
+        if (!d.captainRole) return;
+        // Auto-populate shipName with the canonical class name so the existing
+        // backend shipName required-field validation is satisfied. For ships_company,
+        // the vessel already has a name and history — the player does not name it.
+        var selectedShip = VO.SHIPS[d.shipClass];
+        if (selectedShip && selectedShip.className) {
+          d.shipName = selectedShip.className;
+        }
+      } else {
+        var input = document.getElementById('ship-name');
+        var name = input && input.value.trim();
+        if (!name) {
+          _showFieldError('ship-name', 'Please name your ship.');
+          return;
+        }
+        d.shipName = name;
       }
-      d.shipName = name;
+
       VO.renderWizardStep(5);
     });
   }
@@ -646,6 +852,7 @@
       captainBackstory: d.captainBackstory,
       shipClass: d.shipClass,
       shipName: d.shipName,
+      captainRole: d.captainRole,
     })
       .then(function (result) {
         VO.state.generatedGame = result.data;
