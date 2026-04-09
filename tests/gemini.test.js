@@ -9,8 +9,8 @@
  * Run: cd tests && npx jest gemini --verbose
  */
 
-// Set project env var BEFORE any require so getClient() uses it directly
-// and skips the firebase-admin/app lookup.
+// Set project env var BEFORE any require so getClient() reads the projectId
+// from the environment instead of from the Firebase admin app options.
 process.env.GCLOUD_PROJECT = 'test-project';
 
 // Mock GoogleGenAI before requiring gemini.js.

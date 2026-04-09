@@ -8,7 +8,8 @@ let genAIClient;
 function getClient() {
   if (!genAIClient) {
     const { getApps } = require('firebase-admin/app');
-    const app = getApps().length > 0 ? getApps()[0] : null;
+    const apps = getApps();
+    const app = apps.length > 0 ? apps[0] : null;
     const projectId =
       process.env.GCLOUD_PROJECT ||
       process.env.GCP_PROJECT ||
