@@ -354,6 +354,7 @@
         var nextDelta = level < 3 ? COSTS[level + 1] - COSTS[level] : 0;
         var canIncrease = level < 3 && nextDelta <= remaining;
         var canDecrease = level > 0;
+        var nextPts = nextDelta === 1 ? ' pt' : ' pts';
 
         var rowClass = 'skill-row';
         if (level >= 3) {
@@ -366,12 +367,26 @@
         if (level >= 3) {
           nextLabel = 'Maxed';
         } else if (!canIncrease) {
-          nextLabel = "Can't afford (" + nextDelta + ' pts)';
+          nextLabel = "Can't afford (" + nextDelta + nextPts + ')';
         } else {
-          nextLabel = 'Next: ' + nextDelta + (nextDelta === 1 ? ' pt' : ' pts');
+          nextLabel = 'Next: ' + nextDelta + nextPts;
         }
 
-        var incTitle = level < 3 ? 'Next level: ' + nextDelta + ' points' : 'Level 3 is the cap';
+        var incTitle =
+          level < 3
+            ? 'Next level: ' + nextDelta + (nextDelta === 1 ? ' point' : ' points')
+            : 'Level 3 is the cap';
+
+        var incAriaLabel;
+        if (level >= 3) {
+          incAriaLabel = skill.label + ' is at level 3 (maximum)';
+        } else {
+          incAriaLabel = 'Increase ' + skill.label + ' to level ' + (level + 1);
+        }
+        var decAriaLabel =
+          level > 0
+            ? 'Decrease ' + skill.label + ' to level ' + (level - 1)
+            : skill.label + ' is at level 0';
 
         rows +=
           '<div class="' +
@@ -393,16 +408,22 @@
           '<div class="skill-controls">' +
           '<button type="button" class="skill-btn skill-dec"' +
           (canDecrease ? '' : ' disabled') +
+          ' aria-label="' +
+          _esc(decAriaLabel) +
+          '"' +
           ' data-skill="' +
           skill.id +
           '">−</button>' +
-          '<span class="skill-level">' +
+          '<span class="skill-level" aria-hidden="true">' +
           level +
           '</span>' +
           '<button type="button" class="skill-btn skill-inc"' +
           (canIncrease ? '' : ' disabled') +
           ' title="' +
           _esc(incTitle) +
+          '"' +
+          ' aria-label="' +
+          _esc(incAriaLabel) +
           '"' +
           ' data-skill="' +
           skill.id +
