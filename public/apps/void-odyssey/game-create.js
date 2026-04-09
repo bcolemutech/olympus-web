@@ -529,15 +529,31 @@
   }
 
   // Step 4: Choose your ship
-  // Stat bar normalization — derived from the max values across all 13 ships in
-  // public/apps/void-odyssey/ships.js. Hardcoded so we don't scan VO.SHIPS on every render.
-  var _STAT_BAR_MAX = {
-    hull: 200,
-    shields: 150,
-    fuel: 100,
-    cargo: 250,
-    crew: 200,
-  };
+  // Stat bar normalization — computed once from VO.SHIPS at module init so the
+  // bars stay in sync with ship data automatically. VO.SHIPS is an object keyed
+  // by ship id, with numeric stats under ship.stats.
+  function _computeStatBarMax() {
+    var maxes = { hull: 0, shields: 0, fuel: 0, cargo: 0, crew: 0 };
+    var ships = (VO && VO.SHIPS) || {};
+    Object.keys(ships).forEach(function (id) {
+      var stats = (ships[id] && ships[id].stats) || {};
+      if (stats.hullMax > maxes.hull) maxes.hull = stats.hullMax;
+      if (stats.shieldsMax > maxes.shields) maxes.shields = stats.shieldsMax;
+      if (stats.fuel > maxes.fuel) maxes.fuel = stats.fuel;
+      if (stats.cargoMax > maxes.cargo) maxes.cargo = stats.cargoMax;
+      if (stats.crewCapacity > maxes.crew) maxes.crew = stats.crewCapacity;
+    });
+    // Floors guard against an empty VO.SHIPS during unit testing or dev reload,
+    // preventing division-by-zero in the stat-bar percentage calc.
+    if (!maxes.hull) maxes.hull = 200;
+    if (!maxes.shields) maxes.shields = 150;
+    if (!maxes.fuel) maxes.fuel = 100;
+    if (!maxes.cargo) maxes.cargo = 250;
+    if (!maxes.crew) maxes.crew = 200;
+    return maxes;
+  }
+
+  var _STAT_BAR_MAX = _computeStatBarMax();
 
   // Tier labels per planning/void-odyssey-creation-amendment.md §8.3
   function _hullTier(v) {

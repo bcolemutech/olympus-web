@@ -396,7 +396,9 @@ const VOID_ODYSSEY_TRAIT_IDS = [
 ];
 
 // Roles selectable during game creation when difficulty === 'ships_company'.
-// Mirrors the roleOptions array in public/apps/void-odyssey/journeys.js.
+// Mirrors the roleOptions array in public/apps/void-odyssey/journeys.js. A
+// drift test in tests/void-odyssey-constants.test.js asserts the two stay
+// in sync.
 const VOID_ODYSSEY_SHIPS_COMPANY_ROLE_IDS = [
   'fighter_pilot',
   'weapons_officer',
@@ -406,6 +408,22 @@ const VOID_ODYSSEY_SHIPS_COMPANY_ROLE_IDS = [
   'intelligence_analyst',
   'marine_sergeant',
 ];
+
+// Per-journey ship allowlist. Mirrors VO.JOURNEYS[id].availableShips in
+// public/apps/void-odyssey/journeys.js. Used for server-side validation so
+// modified clients cannot pair a ship with a journey it does not belong to.
+// The same drift test above asserts this stays in sync with the frontend.
+// `custom` is intentionally omitted — the custom journey is not yet selectable
+// in the wizard (order 8, filtered out of Step 1), so no ship allowlist applies.
+const VOID_ODYSSEY_JOURNEY_SHIPS = {
+  frontier_explorer: ['survey_vessel', 'scout_corvette', 'light_freighter'],
+  smugglers_run: ['light_freighter', 'blockade_runner', 'salvage_rig'],
+  warpath: ['gunship', 'corvette_warfit', 'carrier_escort'],
+  deep_salvage: ['salvage_rig', 'light_freighter', 'scout_corvette'],
+  first_contact: ['survey_vessel', 'diplomatic_cruiser', 'scout_corvette'],
+  the_long_haul: ['long_range_cruiser', 'light_freighter', 'survey_vessel'],
+  ships_company: ['fleet_carrier', 'line_battleship', 'heavy_cruiser'],
+};
 
 const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
@@ -2204,6 +2222,13 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   }
   if (!shipClass || !validShipClasses.includes(shipClass)) {
     throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
+  }
+  // Enforce journey/ship pairing server-side so a modified client cannot pick
+  // any ship for any journey. Only journeys listed in VOID_ODYSSEY_JOURNEY_SHIPS
+  // are restricted; others (e.g. `custom`) pass through.
+  const allowedShipsForJourney = VOID_ODYSSEY_JOURNEY_SHIPS[difficulty];
+  if (allowedShipsForJourney && !allowedShipsForJourney.includes(shipClass)) {
+    throw new HttpsError('invalid-argument', 'Selected ship is not available for this journey.');
   }
   if (typeof shipName !== 'string' || shipName.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'Ship name is required.');
