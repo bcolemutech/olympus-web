@@ -52,21 +52,81 @@
   // ── Skill definitions (used in character creation Step 3) ──
   // Cost per level: 1→1pt, 2→3pt, 3→6pt. Total budget: 10 pts.
   VO.SKILLS = [
-    { id: 'piloting', label: 'Piloting' },
-    { id: 'gunnery', label: 'Gunnery' },
-    { id: 'engineering', label: 'Engineering' },
-    { id: 'medicine', label: 'Medicine' },
-    { id: 'diplomacy', label: 'Diplomacy' },
-    { id: 'intimidation', label: 'Intimidation' },
-    { id: 'deception', label: 'Deception' },
-    { id: 'investigation', label: 'Investigation' },
-    { id: 'survival', label: 'Survival' },
-    { id: 'hacking', label: 'Hacking' },
-    { id: 'stealth', label: 'Stealth' },
-    { id: 'leadership', label: 'Leadership' },
-    { id: 'xenology', label: 'Xenology' },
-    { id: 'commerce', label: 'Commerce' },
-    { id: 'perception', label: 'Perception' },
+    {
+      id: 'piloting',
+      label: 'Piloting',
+      description: 'Ship maneuvering, evasive action, precision flying',
+    },
+    {
+      id: 'gunnery',
+      label: 'Gunnery',
+      description: 'Weapon targeting, fire control, turret operation',
+    },
+    {
+      id: 'engineering',
+      label: 'Engineering',
+      description: 'Ship repair, system maintenance, jury-rigging',
+    },
+    {
+      id: 'medicine',
+      label: 'Medicine',
+      description: 'Treating injuries, surgery, disease identification',
+    },
+    {
+      id: 'diplomacy',
+      label: 'Diplomacy',
+      description: 'Negotiation, persuasion, de-escalation',
+    },
+    {
+      id: 'intimidation',
+      label: 'Intimidation',
+      description: 'Coercion, threatening, projecting authority',
+    },
+    {
+      id: 'deception',
+      label: 'Deception',
+      description: 'Lying, bluffing, disguise, misdirection',
+    },
+    {
+      id: 'investigation',
+      label: 'Investigation',
+      description: 'Searching, analyzing clues, forensic analysis',
+    },
+    {
+      id: 'survival',
+      label: 'Survival',
+      description: 'EVA operations, harsh environments, rationing',
+    },
+    {
+      id: 'hacking',
+      label: 'Hacking',
+      description: 'Cybersecurity, cracking systems, electronic warfare',
+    },
+    {
+      id: 'stealth',
+      label: 'Stealth',
+      description: 'Moving undetected, silent operations, ambush setup',
+    },
+    {
+      id: 'leadership',
+      label: 'Leadership',
+      description: 'Commanding under pressure, tactical coordination',
+    },
+    {
+      id: 'xenology',
+      label: 'Xenology',
+      description: 'Alien languages, customs, biology, first-contact protocols',
+    },
+    {
+      id: 'commerce',
+      label: 'Commerce',
+      description: 'Market knowledge, appraising goods, deal-making',
+    },
+    {
+      id: 'perception',
+      label: 'Perception',
+      description: 'Spotting threats, reading people, situational awareness',
+    },
   ];
   VO.SKILL_POINT_BUDGET = 10;
   // Index = level (0 = not taken)

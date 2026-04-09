@@ -351,16 +351,45 @@
 
       VO.SKILLS.forEach(function (skill) {
         var level = d.captainSkills[skill.id] || 0;
-        var canIncrease = level < 3 && COSTS[level + 1] - COSTS[level] <= remaining;
+        var nextDelta = level < 3 ? COSTS[level + 1] - COSTS[level] : 0;
+        var canIncrease = level < 3 && nextDelta <= remaining;
         var canDecrease = level > 0;
 
+        var rowClass = 'skill-row';
+        if (level >= 3) {
+          rowClass += ' is-maxed';
+        } else if (!canIncrease) {
+          rowClass += ' is-unaffordable';
+        }
+
+        var nextLabel;
+        if (level >= 3) {
+          nextLabel = 'Maxed';
+        } else if (!canIncrease) {
+          nextLabel = "Can't afford (" + nextDelta + ' pts)';
+        } else {
+          nextLabel = 'Next: ' + nextDelta + (nextDelta === 1 ? ' pt' : ' pts');
+        }
+
+        var incTitle = level < 3 ? 'Next level: ' + nextDelta + ' points' : 'Level 3 is the cap';
+
         rows +=
-          '<div class="skill-row" data-skill="' +
+          '<div class="' +
+          rowClass +
+          '" data-skill="' +
           skill.id +
           '">' +
+          '<div class="skill-info">' +
           '<span class="skill-label">' +
           _esc(skill.label) +
           '</span>' +
+          '<span class="skill-desc">' +
+          _esc(skill.description || '') +
+          '</span>' +
+          '<span class="skill-next-cost">' +
+          _esc(nextLabel) +
+          '</span>' +
+          '</div>' +
           '<div class="skill-controls">' +
           '<button type="button" class="skill-btn skill-dec"' +
           (canDecrease ? '' : ' disabled') +
@@ -372,6 +401,9 @@
           '</span>' +
           '<button type="button" class="skill-btn skill-inc"' +
           (canIncrease ? '' : ' disabled') +
+          ' title="' +
+          _esc(incTitle) +
+          '"' +
           ' data-skill="' +
           skill.id +
           '">+</button>' +
