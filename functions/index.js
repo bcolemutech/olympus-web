@@ -395,6 +395,18 @@ const VOID_ODYSSEY_TRAIT_IDS = [
   'stoic',
 ];
 
+// Roles selectable during game creation when difficulty === 'ships_company'.
+// Mirrors the roleOptions array in public/apps/void-odyssey/journeys.js.
+const VOID_ODYSSEY_SHIPS_COMPANY_ROLE_IDS = [
+  'fighter_pilot',
+  'weapons_officer',
+  'helmsman',
+  'chief_engineer',
+  'ships_surgeon',
+  'intelligence_analyst',
+  'marine_sergeant',
+];
+
 const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
 You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
@@ -2155,6 +2167,7 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     captainSkills,
     shipClass,
     shipName,
+    captainRole,
   } = request.data || {};
 
   const validShipClasses = [
@@ -2200,6 +2213,19 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   }
   if (typeof captainBackstory === 'string' && captainBackstory.length > 400) {
     throw new HttpsError('invalid-argument', 'Backstory must be 400 characters or fewer.');
+  }
+
+  // Ship's Company: the player chooses a role aboard a capital vessel instead
+  // of naming the ship. Required when difficulty === 'ships_company', ignored otherwise.
+  let resolvedCharacterRole = 'captain';
+  if (difficulty === 'ships_company') {
+    if (!captainRole || !VOID_ODYSSEY_SHIPS_COMPANY_ROLE_IDS.includes(captainRole)) {
+      throw new HttpsError(
+        'invalid-argument',
+        "A valid role is required for the Ship's Company journey."
+      );
+    }
+    resolvedCharacterRole = captainRole;
   }
 
   // ── Validate skills (optional for legacy callers; required when provided) ──
@@ -2520,7 +2546,7 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
 
     character: {
       name: captainName.trim(),
-      role: 'captain',
+      role: resolvedCharacterRole,
       traits: captainTraits,
       backstory: captainBackstory ? captainBackstory.trim() : '',
       stats: characterStats,

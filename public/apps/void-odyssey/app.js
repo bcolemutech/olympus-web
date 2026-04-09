@@ -379,6 +379,7 @@
       captainBackstory: '',
       shipClass: null,
       shipName: '',
+      captainRole: null,
     };
     VO.state.generatedGame = null;
     VO.showView('game-create');

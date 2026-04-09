@@ -706,6 +706,162 @@
   color: #90a4ae;
 }
 
+.ship-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ship-stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.ship-stat-row {
+  display: grid;
+  grid-template-columns: 5.5rem 4.5rem 2.25rem 1fr;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: #b0bec5;
+}
+
+.ship-stat-label {
+  color: #90a4ae;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.ship-stat-tier {
+  color: #ffd54f;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.ship-stat-tier--empty {
+  color: transparent;
+}
+
+.ship-stat-value {
+  color: #e0e0e0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ship-stat-bar {
+  display: block;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 40px;
+}
+
+.ship-stat-bar-fill {
+  display: block;
+  height: 100%;
+  background: #ffb74d;
+  border-radius: 3px;
+}
+
+.ship-loadout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ship-loadout-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.ship-loadout-heading {
+  font-size: 0.68rem;
+  color: #90a4ae;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ship-loadout-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.ship-loadout-item {
+  font-size: 0.75rem;
+  color: #cfd8dc;
+  line-height: 1.35;
+}
+
+.ship-loadout-meta {
+  color: #78909c;
+  font-size: 0.7rem;
+}
+
+/* ── Role selector (Ship's Company) ──────────────────────── */
+
+.form-hint {
+  margin: 0.2rem 0 0.6rem;
+  font-size: 0.78rem;
+  color: #78909c;
+}
+
+.role-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.6rem;
+}
+
+.role-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: #e0e0e0;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
+}
+
+.role-card:hover {
+  border-color: rgba(255, 183, 77, 0.35);
+  background: rgba(255, 183, 77, 0.05);
+}
+
+.role-card.selected {
+  border-color: #ffb74d;
+  background: rgba(255, 183, 77, 0.1);
+}
+
+.role-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffd54f;
+}
+
+.role-focus {
+  font-size: 0.78rem;
+  color: #90a4ae;
+  line-height: 1.4;
+}
+
 /* ── Crew preview ────────────────────────────────────────── */
 
 .crew-preview-list {

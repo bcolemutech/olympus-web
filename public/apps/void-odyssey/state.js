@@ -322,6 +322,7 @@
       captainBackstory: '',
       shipClass: null,
       shipName: '',
+      captainRole: null,
     },
     // After Cloud Function returns (steps 6-7)
     generatedCrew: null,
