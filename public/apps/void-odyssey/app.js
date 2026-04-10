@@ -383,6 +383,7 @@
     };
     VO.state.generatedGame = null;
     VO.state.generatedCrew = null;
+    VO.state.pendingOpening = null;
     VO.showView('game-create');
     VO.renderWizardStep(1);
   }

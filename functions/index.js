@@ -443,6 +443,176 @@ const VOID_ODYSSEY_SHIP_CLASS_IDS = [
   'heavy_cruiser',
 ];
 
+// Journey configs (server-side copy for denormalization and prompt enrichment).
+// Shared by voidOdysseyGenerateOpening, voidOdysseyCommitGame, and voidOdysseyNewGame.
+const JOURNEY_CONFIGS = {
+  frontier_explorer: {
+    id: 'frontier_explorer',
+    name: 'Frontier Explorer',
+    tone: 'wonder_discovery',
+    dangerLevel: 'low_moderate',
+    themes: ['exploration', 'science', 'first_contact', 'moral_dilemmas'],
+    narrativeDirectives: [
+      'Emphasize awe, scale, and the uncanny',
+      'Alien life should feel genuinely alien, not humanoid defaults',
+      'Favor environmental puzzles and first-contact diplomacy over combat',
+      'Let the player name discoveries (planets, species, anomalies)',
+      'Crew conversations lean philosophical — what does it mean to be the first?',
+    ],
+    openingHookTemplate:
+      "The player's ship detects an anomalous signal from an uncharted system. Their survey commission says investigate. Simple enough — except the signal appears to be artificial, and there are no known civilizations in this sector.",
+    startingRegion: {
+      name: 'The Outer Threshold',
+      description:
+        'A sparsely charted frontier beyond the last trade routes. A handful of relay stations, vast unexplored systems, and strange signal sources.',
+      tags: ['frontier', 'unexplored', 'anomalous_signals', 'sparse_traffic'],
+    },
+  },
+  smugglers_run: {
+    id: 'smugglers_run',
+    name: "Smuggler's Run",
+    tone: 'gritty_morally_gray',
+    dangerLevel: 'moderate',
+    themes: ['trade', 'deception', 'reputation', 'rival_crews', 'authority_evasion', 'loyalty'],
+    narrativeDirectives: [
+      'Dialogue-heavy — NPCs should be colorful, scheming, and quotable',
+      'Every deal has a catch; every ally has an angle',
+      'Reputation matters more than firepower — burned bridges close routes',
+      'Law enforcement is an active threat, not background decoration',
+      'The crew is a found family held together by mutual self-interest (at first)',
+    ],
+    openingHookTemplate:
+      'The player owes a debt to a powerful broker. The first job is straightforward: transport a sealed container across a faction border. No questions. Easy money. The container hums faintly when no one is watching.',
+    startingRegion: {
+      name: 'The Lattice',
+      description:
+        'A dense network of stations, trade hubs, and contested border zones between three rival factions. Lots of places to hide, lots of people to cross.',
+      tags: ['contested', 'trade_hubs', 'faction_borders', 'high_traffic'],
+    },
+  },
+  warpath: {
+    id: 'warpath',
+    name: 'Warpath',
+    tone: 'intense_tactical',
+    dangerLevel: 'high',
+    themes: ['military_campaigns', 'tactical_decisions', 'crew_survival', 'sacrifice'],
+    narrativeDirectives: [
+      'Combat should be visceral and consequential — no throwaway encounters',
+      'Tactical choices matter (flanking, retreating, boarding vs. bombardment)',
+      'Crew injuries and deaths are permanent; morale is fragile',
+      'The enemy should have coherent motivations, not be faceless evil',
+      'Quiet moments between battles carry emotional weight',
+    ],
+    openingHookTemplate:
+      'The player is a newly assigned captain on a warship that just lost half its crew in an ambush. Command says hold the sector. The enemy is regrouping. The surviving crew is shaken and looking to the new captain for a reason to keep fighting.',
+    startingRegion: {
+      name: 'The Shatter',
+      description:
+        "A contested war zone where two major factions have been grinding each other down for years. Debris fields, fortified stations, and no-man's-space between the lines.",
+      tags: ['war_zone', 'debris_fields', 'contested', 'fortified_stations'],
+    },
+  },
+  deep_salvage: {
+    id: 'deep_salvage',
+    name: 'Deep Salvage',
+    tone: 'atmospheric_horror',
+    dangerLevel: 'moderate_high',
+    themes: ['salvage_operations', 'mystery', 'resource_scarcity', 'crew_psychology'],
+    narrativeDirectives: [
+      'Atmosphere is everything — silence, darkness, the creak of dead hulls',
+      'Derelicts should feel like crime scenes or archaeological digs, not empty loot boxes',
+      'Each wreck has a story: crew logs, damage patterns, cargo manifests that do not add up',
+      'Resource management is tight — every EVA costs air, every repair costs parts',
+      'Horror is slow-burn and psychological, not jump-scare gore',
+    ],
+    openingHookTemplate:
+      "The player's salvage crew picks up a faint automated distress signal from deep inside the Drift — deeper than anyone profitably goes. The signal is old. Very old. But the ship it's coming from shouldn't exist according to any known registry.",
+    startingRegion: {
+      name: 'The Graveyard Drift',
+      description:
+        'A region where an ancient battle or catastrophe left hundreds of derelict ships and stations scattered across a nebula. Salvage crews pick through the edges. Nobody goes to the center.',
+      tags: ['nebula', 'derelicts', 'salvage_zone', 'dangerous_interior'],
+    },
+  },
+  first_contact: {
+    id: 'first_contact',
+    name: 'First Contact',
+    tone: 'cerebral_diplomatic',
+    dangerLevel: 'low_combat_high_stakes',
+    themes: ['diplomacy', 'xenolinguistics', 'cultural_exchange', 'ethical_dilemmas'],
+    narrativeDirectives: [
+      'Alien civilizations should be deeply thought out — biology shapes culture shapes communication',
+      'Misunderstandings are the primary source of tension, not malice',
+      "The player's crew includes specialists (linguists, anthropologists, biologists) whose expertise matters",
+      'Political pressure from home adds a second layer of conflict — not everyone wants peace',
+      'Let the player develop actual protocols and approaches; reward creative diplomacy',
+    ],
+    openingHookTemplate:
+      "An alien vessel has appeared at the boundary of the system. It's not approaching, not retreating — just waiting. All attempts at communication have received responses, but no one can decode them yet. The player's ship has been assigned as the contact vessel. Approach carefully.",
+    startingRegion: {
+      name: 'The Threshold Array',
+      description:
+        'A diplomatic station at the edge of known space, positioned near where the alien signals originate. A mix of military, scientific, and political personnel, all with competing agendas.',
+      tags: ['diplomatic_station', 'edge_of_known_space', 'alien_signals', 'political_tension'],
+    },
+  },
+  the_long_haul: {
+    id: 'the_long_haul',
+    name: 'The Long Haul',
+    tone: 'intimate_character_driven',
+    dangerLevel: 'variable',
+    themes: ['crew_relationships', 'resource_management', 'isolation', 'adaptation'],
+    narrativeDirectives: [
+      'Crew development is the core — relationships deepen, conflict simmers, bonds form',
+      'Downtime scenes are as important as crisis scenes',
+      'The ship itself becomes a character — modifications, wear, personality',
+      'Each region of space the ship passes through should feel distinct',
+      'The overarching question: will you make it, and who will you be when you arrive?',
+    ],
+    openingHookTemplate:
+      'The player has accepted a contract to captain a long-range vessel on a one-way journey to establish contact with a distant colony that went silent decades ago. The trip will take years. The crew knows this. Departure is tomorrow.',
+    startingRegion: {
+      name: 'The Departure Point',
+      description:
+        'A well-known system. The destination is on the other side of the galaxy. The path between is uncharted.',
+      tags: ['known_space', 'departure', 'long_voyage', 'one_way'],
+    },
+  },
+  ships_company: {
+    id: 'ships_company',
+    name: "Ship's Company",
+    tone: 'intimate_and_massive',
+    dangerLevel: 'high_scoped',
+    themes: ['chain_of_command', 'personal_heroism', 'departmental_loyalty', 'cost_of_war'],
+    narrativeDirectives: [
+      "The player has a role — filter events, access, and conversations through that role's perspective",
+      'The commanding officer is an NPC with personality, agenda, and blind spots',
+      'Inter-departmental tension is a rich source of drama (pilots vs. engineers, intelligence vs. command)',
+      'The player can act outside their role, but the institution will react',
+      'Heroism is personal and local, even when the mission is fleet-scale',
+      'The ship should feel alive — a community of hundreds with culture, hierarchy, and gossip',
+    ],
+    openingHookTemplate:
+      "The player's posting orders finally came through. Their assignment: a capital warship whose last operation went badly enough that half the senior crew was rotated out. The crew that stayed doesn't talk about what happened. The new commanding officer doesn't ask. The player's job is to show up, prove their worth, and figure out why everyone is so careful not to say certain things aloud.",
+    startingRegion: {
+      name: 'The Armada Assembly',
+      description:
+        "A staging fleet in a secure system preparing for a major offensive. The player's vessel is freshly crewed and assigned to the fleet. Everyone is waiting for orders everyone already knows are coming.",
+      tags: ['fleet_staging', 'military', 'pre_offensive', 'capital_ships'],
+    },
+  },
+  custom: {
+    id: 'custom',
+    name: 'Custom Journey',
+    tone: 'flexible',
+    dangerLevel: 'variable',
+    themes: [],
+    narrativeDirectives: ['Adapt tone and danger level to match the story as it develops'],
+    openingHookTemplate: '',
+    startingRegion: null,
+  },
+};
+
 const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
 You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
@@ -2395,7 +2565,307 @@ Produce crew that fit this ship's operational needs and this journey's tone. A $
 });
 
 /**
+ * voidOdysseyGenerateOpening — generates the opening scene narrative for a new campaign (AI only).
+ *
+ * Phase A of game creation. No Firestore writes. The client caches the result and calls
+ * voidOdysseyCommitGame (Phase B) to persist everything atomically.
+ *
+ * Caller must be authenticated and have the 'void-odyssey' app claim.
+ *
+ * Data:
+ *   difficulty: string         — journey ID
+ *   captainName: string        — player character name
+ *   captainTraits: string[]    — 2-3 trait IDs
+ *   captainBackstory: string   — optional backstory
+ *   captainSkills: object      — skill ID → level (optional)
+ *   shipClass: string          — ship class ID
+ *   shipName: string           — player-chosen ship name
+ *   captainRole: string        — role ID (ships_company only)
+ *   crew: { name, role, description }[]  — pre-generated crew from voidOdysseyGenerateCrew
+ *
+ * Returns:
+ *   narrative: string
+ *   startingLocationName: string
+ *   startingLocationType: string
+ *   startingLocationDescription: string
+ *   startingLocationAtmosphere: string
+ *   questHook: string
+ *   availableActions: { id, label, type }[]
+ *   mood: string
+ */
+exports.voidOdysseyGenerateOpening = onCall(async (request) => {
+  // ── Auth + claim check ─────────────────────────────────────
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('void-odyssey')) {
+    throw new HttpsError('permission-denied', "You don't have access to Void Odyssey.");
+  }
+
+  // ── Input validation ───────────────────────────────────────
+  const {
+    difficulty,
+    captainName,
+    captainTraits,
+    captainBackstory,
+    captainSkills,
+    shipClass,
+    shipName,
+    captainRole,
+    crew: preGeneratedCrew,
+  } = request.data || {};
+
+  if (!difficulty || !VOID_ODYSSEY_JOURNEY_IDS.includes(difficulty)) {
+    throw new HttpsError('invalid-argument', 'Invalid difficulty selection.');
+  }
+  if (typeof captainName !== 'string' || captainName.trim().length === 0) {
+    throw new HttpsError('invalid-argument', "Captain's name is required.");
+  }
+  if (captainName.trim().length > 60) {
+    throw new HttpsError('invalid-argument', "Captain's name must be 60 characters or fewer.");
+  }
+  if (!Array.isArray(captainTraits) || captainTraits.length < 2 || captainTraits.length > 3) {
+    throw new HttpsError('invalid-argument', 'Select 2–3 captain traits.');
+  }
+  if (!captainTraits.every((t) => VOID_ODYSSEY_TRAIT_IDS.includes(t))) {
+    throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
+  }
+  if (!shipClass || !VOID_ODYSSEY_SHIP_CLASS_IDS.includes(shipClass)) {
+    throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
+  }
+  const allowedShipsForJourney = VOID_ODYSSEY_JOURNEY_SHIPS[difficulty];
+  if (allowedShipsForJourney && !allowedShipsForJourney.includes(shipClass)) {
+    throw new HttpsError('invalid-argument', 'Selected ship is not available for this journey.');
+  }
+  if (typeof shipName !== 'string' || shipName.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'Ship name is required.');
+  }
+  if (shipName.trim().length > 60) {
+    throw new HttpsError('invalid-argument', 'Ship name must be 60 characters or fewer.');
+  }
+  if (typeof captainBackstory === 'string' && captainBackstory.length > 400) {
+    throw new HttpsError('invalid-argument', 'Backstory must be 400 characters or fewer.');
+  }
+
+  let resolvedCharacterRole = 'captain';
+  if (difficulty === 'ships_company') {
+    if (!captainRole || !VOID_ODYSSEY_SHIPS_COMPANY_ROLE_IDS.includes(captainRole)) {
+      throw new HttpsError(
+        'invalid-argument',
+        "A valid role is required for the Ship's Company journey."
+      );
+    }
+    resolvedCharacterRole = captainRole;
+  }
+
+  const VALID_SKILL_IDS = [
+    'piloting',
+    'gunnery',
+    'engineering',
+    'medicine',
+    'diplomacy',
+    'intimidation',
+    'deception',
+    'investigation',
+    'survival',
+    'hacking',
+    'stealth',
+    'leadership',
+    'xenology',
+    'commerce',
+    'perception',
+  ];
+  const SKILL_POINT_COSTS = { 1: 1, 2: 3, 3: 6 };
+  const SKILL_POINT_BUDGET = 10;
+
+  const normalizedSkills =
+    captainSkills && typeof captainSkills === 'object' && !Array.isArray(captainSkills)
+      ? captainSkills
+      : null;
+
+  if (normalizedSkills !== null) {
+    for (const [id, level] of Object.entries(normalizedSkills)) {
+      if (!VALID_SKILL_IDS.includes(id)) {
+        throw new HttpsError('invalid-argument', `Unknown skill: ${id}`);
+      }
+      if (![1, 2, 3].includes(level)) {
+        throw new HttpsError('invalid-argument', `Skill level must be 1, 2, or 3: ${id}`);
+      }
+    }
+    const totalPoints = Object.values(normalizedSkills).reduce(
+      (sum, lvl) => sum + (SKILL_POINT_COSTS[lvl] || 0),
+      0
+    );
+    if (totalPoints !== SKILL_POINT_BUDGET) {
+      throw new HttpsError(
+        'invalid-argument',
+        `Skills must total exactly ${SKILL_POINT_BUDGET} points (got ${totalPoints}).`
+      );
+    }
+  }
+
+  const validCrewRoles = ['pilot', 'engineer', 'medic', 'gunner', 'science', 'general'];
+  let resolvedCrew = null;
+  if (preGeneratedCrew !== undefined && preGeneratedCrew !== null) {
+    if (
+      !Array.isArray(preGeneratedCrew) ||
+      preGeneratedCrew.length < 2 ||
+      preGeneratedCrew.length > 3
+    ) {
+      throw new HttpsError('invalid-argument', 'crew must be an array of 2–3 members.');
+    }
+    resolvedCrew = preGeneratedCrew.map((m) => {
+      if (!m || typeof m !== 'object') {
+        throw new HttpsError('invalid-argument', 'Each crew member must be an object.');
+      }
+      if (typeof m.name !== 'string' || !m.name.trim()) {
+        throw new HttpsError('invalid-argument', 'Each crew member must have a name.');
+      }
+      return {
+        name: m.name.trim().slice(0, 60),
+        role: validCrewRoles.includes(m.role) ? m.role : 'general',
+        description: typeof m.description === 'string' ? m.description.trim().slice(0, 500) : '',
+      };
+    });
+  }
+
+  // ── Build journey-enriched AI prompt ──────────────────────
+  const journeyConfig = JOURNEY_CONFIGS[difficulty];
+  const shipClassLabels = {
+    light_freighter: 'Light Freighter',
+    scout_corvette: 'Scout Corvette',
+    gunship: 'Gunship',
+    salvage_rig: 'Salvage Rig',
+    survey_vessel: 'Survey Vessel',
+    blockade_runner: 'Blockade Runner',
+    corvette_warfit: 'Corvette (warfit)',
+    carrier_escort: 'Carrier Escort',
+    diplomatic_cruiser: 'Diplomatic Cruiser',
+    long_range_cruiser: 'Long-Range Cruiser',
+    fleet_carrier: 'Fleet Carrier',
+    line_battleship: 'Line Battleship',
+    heavy_cruiser: 'Heavy Cruiser',
+  };
+
+  const backstoryNote =
+    captainBackstory && captainBackstory.trim()
+      ? `Captain's backstory: ${captainBackstory.trim()}`
+      : 'No backstory provided.';
+
+  // Summarise non-zero skills for the prompt
+  const skillsSummary =
+    normalizedSkills && Object.keys(normalizedSkills).length > 0
+      ? Object.entries(normalizedSkills)
+          .filter(([, lvl]) => lvl > 0)
+          .map(([id, lvl]) => `${id.replace(/_/g, ' ')} (lv${lvl})`)
+          .join(', ')
+      : 'none specified';
+
+  const regionNote = journeyConfig.startingRegion
+    ? `Starting Region: ${journeyConfig.startingRegion.name} — ${journeyConfig.startingRegion.description}`
+    : '';
+
+  const hookNote = journeyConfig.openingHookTemplate
+    ? `Opening Hook (use as the starting situation for the scene):\n${journeyConfig.openingHookTemplate}`
+    : '';
+
+  const crewContext = resolvedCrew
+    ? resolvedCrew
+        .map((m) => `- ${m.name} (${m.role})${m.description ? ': ' + m.description : ''}`)
+        .join('\n')
+    : '';
+
+  const directivesNote =
+    journeyConfig.narrativeDirectives && journeyConfig.narrativeDirectives.length > 0
+      ? 'Narrative Directives:\n' +
+        journeyConfig.narrativeDirectives.map((d) => `• ${d}`).join('\n')
+      : '';
+
+  const shipDisplay =
+    difficulty === 'ships_company'
+      ? `${shipClassLabels[shipClass] || shipClass} — player's role aboard: ${resolvedCharacterRole.replace(/_/g, ' ')}`
+      : `${shipClassLabels[shipClass] || shipClass} named "${shipName.trim()}"`;
+
+  const systemPrompt = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi with room for the mysterious — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
+
+You must respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
+{
+  "narrative": string (200-300 words, the opening story beat — sets the scene using the opening hook, introduces a situation or threat, ends on a hook),
+  "startingLocationName": string (name of the starting location),
+  "startingLocationType": string (one of: station, planet, moon, asteroid_field, derelict, anomaly),
+  "startingLocationDescription": string (2-3 sentences),
+  "startingLocationAtmosphere": string (1-3 mood keywords, e.g. "industrial_decay"),
+  "questHook": string (one sentence describing the first quest hook that emerged from the opening scene),
+  "availableActions": [
+    { "id": string, "label": string (max 8 words), "type": string (one of: dialogue, navigation, combat, investigation) }
+  ],
+  "mood": string (one of: tense, calm, wonder, danger, tense_curiosity, wry, reverent)
+}
+
+Constraints:
+- Generate exactly 3-4 available actions
+- The narrative must reference the captain by name and at least one crew member by name
+- Write in the journey's established tone
+- The starting location must feel specific and interesting, not generic
+- Do NOT generate crew — they are provided; reference them naturally in the narrative`;
+
+  const userMessage = [
+    'Create the opening scene for a new Void Odyssey campaign.',
+    '',
+    `Journey: ${journeyConfig.name} (tone: ${journeyConfig.tone})`,
+    regionNote,
+    hookNote,
+    '',
+    `Captain: ${captainName.trim()}`,
+    `Traits: ${captainTraits.join(', ')}`,
+    backstoryNote,
+    `Notable Skills: ${skillsSummary}`,
+    '',
+    `Ship: ${shipDisplay}`,
+    '',
+    crewContext
+      ? `Starting Crew (pre-assigned — reference them by name in the narrative):\n${crewContext}`
+      : '',
+    '',
+    directivesNote,
+  ]
+    .filter((line) => line !== undefined && line !== null)
+    .join('\n')
+    .trim();
+
+  // ── Call Gemini API ─────────────────────────────────────────
+  let aiResponse;
+  try {
+    aiResponse = await callGemini({
+      modelName: VOID_ODYSSEY_MODEL,
+      systemInstruction: systemPrompt,
+      userMessage,
+      maxOutputTokens: 4096,
+    });
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error('Gemini API or parse error in voidOdysseyGenerateOpening:', err);
+    throw new HttpsError('internal', 'Failed to generate opening scene. Please try again.');
+  }
+
+  return {
+    narrative: aiResponse.narrative || '',
+    startingLocationName: aiResponse.startingLocationName || 'Unknown Location',
+    startingLocationType: aiResponse.startingLocationType || 'station',
+    startingLocationDescription: aiResponse.startingLocationDescription || '',
+    startingLocationAtmosphere: aiResponse.startingLocationAtmosphere || '',
+    questHook: aiResponse.questHook || '',
+    availableActions: aiResponse.availableActions || [],
+    mood: aiResponse.mood || 'calm',
+  };
+});
+
+/**
  * voidOdysseyNewGame — creates a new Void Odyssey campaign.
+ *
+ * @deprecated Use voidOdysseyGenerateOpening (Phase A) + voidOdysseyCommitGame (Phase B) instead.
+ * Kept for backward compatibility.
  *
  * Caller must be authenticated and have the 'void-odyssey' app claim.
  *
@@ -2705,116 +3175,6 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     throw new HttpsError('internal', 'Failed to generate opening scene. Please try again.');
   }
 
-  // ── Journey config (server-side copy for denormalization) ──
-  const JOURNEY_CONFIGS = {
-    frontier_explorer: {
-      id: 'frontier_explorer',
-      name: 'Frontier Explorer',
-      tone: 'wonder_discovery',
-      dangerLevel: 'low_moderate',
-      themes: ['exploration', 'science', 'first_contact', 'moral_dilemmas'],
-      narrativeDirectives: [
-        'Emphasize awe, scale, and the uncanny',
-        'Alien life should feel genuinely alien, not humanoid defaults',
-        'Favor environmental puzzles and first-contact diplomacy over combat',
-        'Let the player name discoveries (planets, species, anomalies)',
-        'Crew conversations lean philosophical — what does it mean to be the first?',
-      ],
-    },
-    smugglers_run: {
-      id: 'smugglers_run',
-      name: "Smuggler's Run",
-      tone: 'gritty_morally_gray',
-      dangerLevel: 'moderate',
-      themes: ['trade', 'deception', 'reputation', 'rival_crews', 'authority_evasion', 'loyalty'],
-      narrativeDirectives: [
-        'Every deal should have hidden costs or complications',
-        'Reputation and relationships matter more than raw firepower',
-        'Authority figures are corrupt, incompetent, or both',
-        'Moral choices rarely have clean answers',
-        'Humor and wit balance out the grime',
-      ],
-    },
-    warpath: {
-      id: 'warpath',
-      name: 'Warpath',
-      tone: 'intense_tactical',
-      dangerLevel: 'high',
-      themes: ['military_campaigns', 'tactical_decisions', 'crew_survival', 'sacrifice'],
-      narrativeDirectives: [
-        'Combat should feel dangerous and consequential',
-        'Tactical decisions matter — reward clever play',
-        'Crew bonds are forged and tested under fire',
-        'The cost of victory is always real',
-        'Honor and duty conflict with survival',
-      ],
-    },
-    deep_salvage: {
-      id: 'deep_salvage',
-      name: 'Deep Salvage',
-      tone: 'atmospheric_horror',
-      dangerLevel: 'moderate_high',
-      themes: ['salvage_operations', 'mystery', 'resource_scarcity', 'crew_psychology'],
-      narrativeDirectives: [
-        'Atmosphere is everything — silence, darkness, the creak of dead hulls',
-        'Derelicts should feel like crime scenes or archaeological digs, not empty loot boxes',
-        'Each wreck has a story: crew logs, damage patterns, cargo manifests that do not add up',
-        'Resource management is tight — every EVA costs air, every repair costs parts',
-        'Horror is slow-burn and psychological, not jump-scare gore',
-      ],
-    },
-    first_contact: {
-      id: 'first_contact',
-      name: 'First Contact',
-      tone: 'cerebral_diplomatic',
-      dangerLevel: 'low_combat_high_stakes',
-      themes: ['diplomacy', 'xenolinguistics', 'cultural_exchange', 'ethical_dilemmas'],
-      narrativeDirectives: [
-        'Alien civilizations should be deeply thought out — biology shapes culture shapes communication',
-        'Misunderstandings are the primary source of tension, not malice',
-        "The player's crew includes specialists whose expertise matters",
-        'Political pressure from home adds a second layer of conflict',
-        'Let the player develop actual protocols and approaches; reward creative diplomacy',
-      ],
-    },
-    the_long_haul: {
-      id: 'the_long_haul',
-      name: 'The Long Haul',
-      tone: 'intimate_character_driven',
-      dangerLevel: 'variable',
-      themes: ['crew_relationships', 'resource_management', 'isolation', 'adaptation'],
-      narrativeDirectives: [
-        'Crew development is the core — relationships deepen, conflict simmers, bonds form',
-        'Downtime scenes are as important as crisis scenes',
-        'The ship itself becomes a character — modifications, wear, personality',
-        'Each region of space the ship passes through should feel distinct',
-        'The overarching question: will you make it, and who will you be when you arrive?',
-      ],
-    },
-    ships_company: {
-      id: 'ships_company',
-      name: "Ship's Company",
-      tone: 'intimate_and_massive',
-      dangerLevel: 'high_scoped',
-      themes: ['chain_of_command', 'personal_heroism', 'departmental_loyalty', 'cost_of_war'],
-      narrativeDirectives: [
-        "The player has a role — filter events, access, and conversations through that role's perspective",
-        'The commanding officer is an NPC with personality, agenda, and blind spots',
-        'Inter-departmental tension is a rich source of drama',
-        'The player can act outside their role, but the institution will react',
-        'The ship should feel alive — a community of hundreds with culture, hierarchy, and gossip',
-      ],
-    },
-    custom: {
-      id: 'custom',
-      name: 'Custom Journey',
-      tone: 'flexible',
-      dangerLevel: 'variable',
-      themes: [],
-      narrativeDirectives: ['Adapt tone and danger level to match the story as it develops'],
-    },
-  };
-
   // ── Trait → stat bonus mapping (base stat: 50; cap: 100) ───
   const TRAIT_STAT_BONUSES = {
     resourceful: { intellect: 10 },
@@ -3055,6 +3415,408 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
     })),
     startingLocation: aiResponse.startingLocationName || 'Unknown Location',
     mood: aiResponse.mood || 'calm',
+    ship: { name: shipName.trim(), class: shipClass, credits: 500, ...shipStats },
+  };
+});
+
+/**
+ * voidOdysseyCommitGame — atomic Firestore write for new campaign creation (Phase B).
+ *
+ * Called after voidOdysseyGenerateOpening succeeds. Writes the game document, narrative
+ * log, starting location, crew, and star map in a single batch. Idempotent-safe: if the
+ * client retries due to a network error, it will create a duplicate game (acceptable
+ * edge case; the prior attempt may not have committed).
+ *
+ * Caller must be authenticated and have the 'void-odyssey' app claim.
+ *
+ * Data:
+ *   difficulty, captainName, captainTraits, captainBackstory, captainSkills,
+ *   shipClass, shipName, captainRole, crew
+ *   opening: { narrative, startingLocationName, startingLocationType,
+ *              startingLocationDescription, startingLocationAtmosphere,
+ *              questHook, availableActions, mood }
+ *
+ * Returns:
+ *   gameId, narrative, availableActions, crew, startingLocation, mood, ship
+ */
+exports.voidOdysseyCommitGame = onCall(async (request) => {
+  // ── Auth + claim check ─────────────────────────────────────
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('void-odyssey')) {
+    throw new HttpsError('permission-denied', "You don't have access to Void Odyssey.");
+  }
+
+  // ── Input validation ───────────────────────────────────────
+  const {
+    difficulty,
+    captainName,
+    captainTraits,
+    captainBackstory,
+    captainSkills,
+    shipClass,
+    shipName,
+    captainRole,
+    crew: preGeneratedCrew,
+    opening,
+  } = request.data || {};
+
+  if (!difficulty || !VOID_ODYSSEY_JOURNEY_IDS.includes(difficulty)) {
+    throw new HttpsError('invalid-argument', 'Invalid difficulty selection.');
+  }
+  if (typeof captainName !== 'string' || captainName.trim().length === 0) {
+    throw new HttpsError('invalid-argument', "Captain's name is required.");
+  }
+  if (captainName.trim().length > 60) {
+    throw new HttpsError('invalid-argument', "Captain's name must be 60 characters or fewer.");
+  }
+  if (!Array.isArray(captainTraits) || captainTraits.length < 2 || captainTraits.length > 3) {
+    throw new HttpsError('invalid-argument', 'Select 2–3 captain traits.');
+  }
+  if (!captainTraits.every((t) => VOID_ODYSSEY_TRAIT_IDS.includes(t))) {
+    throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
+  }
+  if (!shipClass || !VOID_ODYSSEY_SHIP_CLASS_IDS.includes(shipClass)) {
+    throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
+  }
+  const allowedShipsForJourney = VOID_ODYSSEY_JOURNEY_SHIPS[difficulty];
+  if (allowedShipsForJourney && !allowedShipsForJourney.includes(shipClass)) {
+    throw new HttpsError('invalid-argument', 'Selected ship is not available for this journey.');
+  }
+  if (typeof shipName !== 'string' || shipName.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'Ship name is required.');
+  }
+  if (shipName.trim().length > 60) {
+    throw new HttpsError('invalid-argument', 'Ship name must be 60 characters or fewer.');
+  }
+  if (typeof captainBackstory === 'string' && captainBackstory.length > 400) {
+    throw new HttpsError('invalid-argument', 'Backstory must be 400 characters or fewer.');
+  }
+
+  let resolvedCharacterRole = 'captain';
+  if (difficulty === 'ships_company') {
+    if (!captainRole || !VOID_ODYSSEY_SHIPS_COMPANY_ROLE_IDS.includes(captainRole)) {
+      throw new HttpsError(
+        'invalid-argument',
+        "A valid role is required for the Ship's Company journey."
+      );
+    }
+    resolvedCharacterRole = captainRole;
+  }
+
+  const VALID_SKILL_IDS = [
+    'piloting',
+    'gunnery',
+    'engineering',
+    'medicine',
+    'diplomacy',
+    'intimidation',
+    'deception',
+    'investigation',
+    'survival',
+    'hacking',
+    'stealth',
+    'leadership',
+    'xenology',
+    'commerce',
+    'perception',
+  ];
+  const SKILL_POINT_COSTS = { 1: 1, 2: 3, 3: 6 };
+  const SKILL_POINT_BUDGET = 10;
+
+  const normalizedSkills =
+    captainSkills && typeof captainSkills === 'object' && !Array.isArray(captainSkills)
+      ? captainSkills
+      : null;
+
+  if (normalizedSkills !== null) {
+    for (const [id, level] of Object.entries(normalizedSkills)) {
+      if (!VALID_SKILL_IDS.includes(id)) {
+        throw new HttpsError('invalid-argument', `Unknown skill: ${id}`);
+      }
+      if (![1, 2, 3].includes(level)) {
+        throw new HttpsError('invalid-argument', `Skill level must be 1, 2, or 3: ${id}`);
+      }
+    }
+    const totalPoints = Object.values(normalizedSkills).reduce(
+      (sum, lvl) => sum + (SKILL_POINT_COSTS[lvl] || 0),
+      0
+    );
+    if (totalPoints !== SKILL_POINT_BUDGET) {
+      throw new HttpsError(
+        'invalid-argument',
+        `Skills must total exactly ${SKILL_POINT_BUDGET} points (got ${totalPoints}).`
+      );
+    }
+  }
+
+  // Validate pre-generated crew (required for this function)
+  if (
+    !Array.isArray(preGeneratedCrew) ||
+    preGeneratedCrew.length < 2 ||
+    preGeneratedCrew.length > 3
+  ) {
+    throw new HttpsError('invalid-argument', 'crew must be an array of 2–3 members.');
+  }
+  const validCrewRoles = ['pilot', 'engineer', 'medic', 'gunner', 'science', 'general'];
+  const resolvedCrew = preGeneratedCrew.map((m) => {
+    if (!m || typeof m !== 'object') {
+      throw new HttpsError('invalid-argument', 'Each crew member must be an object.');
+    }
+    if (typeof m.name !== 'string' || !m.name.trim()) {
+      throw new HttpsError('invalid-argument', 'Each crew member must have a name.');
+    }
+    return {
+      name: m.name.trim().slice(0, 60),
+      role: validCrewRoles.includes(m.role) ? m.role : 'general',
+      description: typeof m.description === 'string' ? m.description.trim().slice(0, 500) : '',
+    };
+  });
+
+  // Validate opening scene data (from Phase A)
+  if (!opening || typeof opening !== 'object') {
+    throw new HttpsError('invalid-argument', 'opening scene data is required.');
+  }
+  const openingNarrative = typeof opening.narrative === 'string' ? opening.narrative : '';
+  const openingLocationName = opening.startingLocationName || 'Unknown Location';
+  const openingLocationType = opening.startingLocationType || 'station';
+  const openingLocationDesc = opening.startingLocationDescription || '';
+  const openingLocationAtmo = opening.startingLocationAtmosphere || '';
+  const openingActions = Array.isArray(opening.availableActions) ? opening.availableActions : [];
+  const openingMood = opening.mood || 'calm';
+
+  // ── Build Firestore data ───────────────────────────────────
+  // Trait → stat bonus mapping
+  const TRAIT_STAT_BONUSES = {
+    resourceful: { intellect: 10 },
+    cautious: { agility: 10 },
+    silver_tongued: { presence: 10 },
+    reckless: { agility: 10 },
+    honorable: { presence: 10 },
+    ruthless: { physique: 10 },
+    curious: { intellect: 10 },
+    paranoid: { agility: 10 },
+    compassionate: { presence: 10 },
+    calculating: { intellect: 10 },
+    charismatic: { presence: 10 },
+    stoic: { physique: 10 },
+  };
+
+  const characterStats = { physique: 50, agility: 50, intellect: 50, presence: 50 };
+  captainTraits.forEach((trait) => {
+    const bonuses = TRAIT_STAT_BONUSES[trait] || {};
+    for (const [stat, val] of Object.entries(bonuses)) {
+      characterStats[stat] = Math.min(100, characterStats[stat] + val);
+    }
+  });
+
+  const db = getFirestore();
+  const now = FieldValue.serverTimestamp();
+  const userId = request.auth.uid;
+
+  const gameRef = db.collection('void_odyssey_games').doc();
+  const gameId = gameRef.id;
+
+  const shipStats = SHIP_CLASS_DEFAULTS[shipClass] || SHIP_CLASS_DEFAULTS.light_freighter;
+
+  const crew = resolvedCrew.map((m) => ({
+    name: m.name,
+    role: m.role,
+    backstory: m.description || '',
+    species: 'human',
+    personality: [],
+  }));
+  const activeCrew = crew.map((m, i) => ({
+    id: `crew_${i}_${gameId.slice(0, 6)}`,
+    name: m.name,
+    role: m.role,
+  }));
+
+  const locationId = `loc_start_${gameId.slice(0, 8)}`;
+
+  const gameDoc = {
+    id: gameId,
+    userId,
+    name: `${shipName.trim()} — Campaign`,
+    createdAt: now,
+    updatedAt: now,
+    turnCount: 0,
+    status: 'active',
+
+    ship: {
+      name: shipName.trim(),
+      class: shipClass,
+      description: shipClass,
+      ...shipStats,
+      credits: 500,
+      currentLocationId: locationId,
+      currentSystemId: 'sys_origin',
+      dockedAt: openingLocationType === 'station' ? locationId : null,
+    },
+
+    combatActive: false,
+    difficulty,
+
+    journey: JOURNEY_CONFIGS[difficulty],
+
+    character: {
+      name: captainName.trim(),
+      role: resolvedCharacterRole,
+      traits: captainTraits,
+      backstory: captainBackstory ? captainBackstory.trim() : '',
+      stats: characterStats,
+      condition: {
+        health: 100,
+        healthMax: 100,
+        stress: 0,
+        statusEffects: [],
+      },
+      notes: '',
+      skills: normalizedSkills || {},
+    },
+
+    player: {
+      name: captainName.trim(),
+      title: 'Captain',
+      backstory: captainBackstory ? captainBackstory.trim() : '',
+      reputation: {},
+      traits: captainTraits,
+    },
+
+    crewCount: crew.length,
+    activeCrew,
+    activeQuestCount: 0,
+    currentLocationName: openingLocationName,
+    currentLocationTags: [openingLocationType],
+  };
+
+  const narrativeLogRef = db
+    .collection('void_odyssey_games')
+    .doc(gameId)
+    .collection('narrative_log')
+    .doc();
+
+  const narrativeEntry = {
+    id: narrativeLogRef.id,
+    turnNumber: 0,
+    timestamp: now,
+    playerAction: { type: 'system', actionId: null, input: 'New game started' },
+    narrative: openingNarrative,
+    mood: openingMood,
+    stateMutations: [],
+    newEntityIds: [],
+    locationId,
+    summary: `Campaign began at ${openingLocationName}`,
+    tags: ['game_start', shipClass, difficulty],
+    availableActions: openingActions,
+    compressed: false,
+  };
+
+  const locationRef = db
+    .collection('void_odyssey_games')
+    .doc(gameId)
+    .collection('locations')
+    .doc(locationId);
+
+  const locationDoc = {
+    id: locationId,
+    systemId: 'sys_origin',
+    name: openingLocationName,
+    type: openingLocationType,
+    description: openingLocationDesc,
+    firstImpressions: openingLocationDesc,
+    atmosphere: openingLocationAtmo,
+    environment: {
+      gravity: 'standard',
+      atmosphere: 'breathable',
+      temperature: 'temperate',
+      hazards: [],
+    },
+    dockable: openingLocationType === 'station' || openingLocationType === 'planet',
+    services: [],
+    residentEntityIds: [],
+    pointsOfInterest: [],
+    parentLocationId: null,
+    connectedLocationIds: [],
+    distanceFromCurrent: null,
+    coordinates: { x: 0, y: 0, z: null },
+    visitCount: 1,
+    firstVisitedTurn: 0,
+    lastVisitedTurn: 0,
+    significantEvents: [{ turnNumber: 0, summary: 'Campaign started here' }],
+    tags: [openingLocationType, 'starting_location'],
+    faction: null,
+    dangerLevel: difficulty === 'warpath' ? 'dangerous' : 'cautious',
+    discovered: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // Batch write: game doc + narrative log + location + crew members + star map
+  const batch = db.batch();
+  batch.set(gameRef, gameDoc);
+  batch.set(narrativeLogRef, narrativeEntry);
+  batch.set(locationRef, locationDoc);
+
+  crew.forEach(function (member, i) {
+    const crewRef = db
+      .collection('void_odyssey_games')
+      .doc(gameId)
+      .collection('crew')
+      .doc(activeCrew[i].id);
+
+    batch.set(crewRef, {
+      id: activeCrew[i].id,
+      name: member.name,
+      role: member.role,
+      species: member.species || 'human',
+      status: 'active',
+      backstory: member.backstory || '',
+      personality: member.personality || [],
+      skills: [],
+      quirks: [],
+      morale: 'content',
+      loyalty: 50,
+      healthStatus: 'healthy',
+      currentAssignment: 'bridge',
+      relationships: {},
+      significantMoments: [],
+      tags: [member.role, 'founding_crew'],
+      joinedTurn: 0,
+      portraitDescription: '',
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
+  const starMapSystems = buildStartingStarMap(openingLocationName, difficulty);
+  starMapSystems.forEach(function (system) {
+    const sysRef = db
+      .collection('void_odyssey_games')
+      .doc(gameId)
+      .collection('star_map')
+      .doc(system.id);
+    batch.set(sysRef, Object.assign({}, system, { createdAt: now, updatedAt: now }));
+  });
+
+  await batch.commit();
+
+  // ── Return to client ───────────────────────────────────────
+  return {
+    gameId,
+    narrative: openingNarrative,
+    availableActions: openingActions,
+    crew: crew.map((m, i) => ({
+      id: activeCrew[i].id,
+      name: m.name,
+      role: m.role,
+      species: m.species || 'human',
+      backstory: m.backstory || '',
+    })),
+    startingLocation: openingLocationName,
+    mood: openingMood,
     ship: { name: shipName.trim(), class: shipClass, credits: 500, ...shipStats },
   };
 });
