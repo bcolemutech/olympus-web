@@ -425,6 +425,24 @@ const VOID_ODYSSEY_JOURNEY_SHIPS = {
   ships_company: ['fleet_carrier', 'line_battleship', 'heavy_cruiser'],
 };
 
+// All valid ship class IDs. Used for input validation in voidOdysseyGenerateCrew
+// and voidOdysseyNewGame — kept in one place so additions stay in sync.
+const VOID_ODYSSEY_SHIP_CLASS_IDS = [
+  'light_freighter',
+  'scout_corvette',
+  'gunship',
+  'salvage_rig',
+  'survey_vessel',
+  'blockade_runner',
+  'corvette_warfit',
+  'carrier_escort',
+  'diplomatic_cruiser',
+  'long_range_cruiser',
+  'fleet_carrier',
+  'line_battleship',
+  'heavy_cruiser',
+];
+
 const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
 You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
@@ -2145,6 +2163,238 @@ Traits: ${captainTraits.join(', ')}`;
 });
 
 /**
+ * voidOdysseyGenerateCrew — generates 2–3 starting crew members for the wizard.
+ *
+ * Lightweight: no Firestore writes. Called at Step 5; the crew is passed to
+ * voidOdysseyNewGame at Step 6 so the player can edit names/bios first.
+ *
+ * Caller must be authenticated and have the 'void-odyssey' app claim.
+ *
+ * Data:
+ *   journey: string            — journey / tone ID
+ *   captainName: string        — captain name (for prompt context)
+ *   captainTraits: string[]    — 2-3 trait IDs
+ *   captainSkills: object?     — {skillId: level} skill allocations (for prompt context)
+ *   captainBackstory: string?  — optional backstory (for prompt context)
+ *   shipClass: string          — ship class ID
+ *   captainRole: string?       — role ID, required for ships_company journey
+ *
+ * Returns:
+ *   crew: { name, role, description }[]  — 2–3 crew members
+ */
+exports.voidOdysseyGenerateCrew = onCall(async (request) => {
+  // ── Auth + claim check ─────────────────────────────────────
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to play Void Odyssey.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('void-odyssey')) {
+    throw new HttpsError('permission-denied', "You don't have access to Void Odyssey.");
+  }
+
+  // ── Input validation ───────────────────────────────────────
+  const {
+    journey,
+    captainName,
+    captainTraits,
+    captainSkills,
+    captainBackstory,
+    shipClass,
+    captainRole,
+  } = request.data || {};
+
+  if (!journey || !VOID_ODYSSEY_JOURNEY_IDS.includes(journey)) {
+    throw new HttpsError('invalid-argument', 'Invalid journey selection.');
+  }
+  if (!Array.isArray(captainTraits) || captainTraits.length < 2 || captainTraits.length > 3) {
+    throw new HttpsError('invalid-argument', 'Select 2–3 captain traits.');
+  }
+  if (!captainTraits.every((t) => VOID_ODYSSEY_TRAIT_IDS.includes(t))) {
+    throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
+  }
+  if (!shipClass || !VOID_ODYSSEY_SHIP_CLASS_IDS.includes(shipClass)) {
+    throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
+  }
+
+  if (journey === 'ships_company') {
+    if (!captainRole || !VOID_ODYSSEY_SHIPS_COMPANY_ROLE_IDS.includes(captainRole)) {
+      throw new HttpsError(
+        'invalid-argument',
+        "A valid role is required for the Ship's Company journey."
+      );
+    }
+  }
+
+  // ── Build AI prompt ────────────────────────────────────────
+  const journeyDetails = {
+    frontier_explorer: {
+      name: 'Frontier Explorer',
+      tone: 'discovery-focused, wonder, first contact',
+      themes: ['exploration', 'science', 'first contact', 'moral dilemmas'],
+    },
+    smugglers_run: {
+      name: "Smuggler's Run",
+      tone: 'gritty trade, intrigue, moral grey areas',
+      themes: ['trade', 'deception', 'reputation', 'rival crews', 'authority evasion'],
+    },
+    warpath: {
+      name: 'Warpath',
+      tone: 'military campaigns, tactical combat, high stakes',
+      themes: ['military campaigns', 'tactical decisions', 'crew survival', 'sacrifice'],
+    },
+    deep_salvage: {
+      name: 'Deep Salvage',
+      tone: 'atmospheric horror, derelict wrecks, resource scarcity',
+      themes: ['salvage operations', 'mystery', 'resource scarcity', 'crew psychology'],
+    },
+    first_contact: {
+      name: 'First Contact',
+      tone: 'cerebral, diplomatic, xenolinguistic stakes',
+      themes: ['diplomacy', 'xenolinguistics', 'cultural exchange', 'ethical dilemmas'],
+    },
+    the_long_haul: {
+      name: 'The Long Haul',
+      tone: 'intimate character-driven voyage, isolation, crew bonds',
+      themes: ['crew relationships', 'resource management', 'isolation', 'adaptation'],
+    },
+    ships_company: {
+      name: "Ship's Company",
+      tone: 'capital warship crew role, chain of command, institutional drama',
+      themes: ['chain of command', 'personal heroism', 'departmental loyalty', 'cost of war'],
+    },
+    custom: {
+      name: 'Custom Journey',
+      tone: 'flexible — adapt to whatever story emerges',
+      themes: [],
+    },
+  };
+
+  const shipClassLabels = {
+    light_freighter: 'Light Freighter — high cargo, moderate speed, light weapons',
+    scout_corvette: 'Scout Corvette — fast, great sensors, light cargo',
+    gunship: 'Gunship — heavy weapons, slow, low cargo',
+    salvage_rig: 'Salvage Rig — versatile, moderate stats, lots of quirks',
+    survey_vessel: 'Survey Vessel — scientific instruments, moderate cargo, non-combat',
+    blockade_runner: 'Blockade Runner — very fast, low profile, small cargo',
+    corvette_warfit: 'Corvette (warfit) — fast warship, balanced weapons and speed',
+    carrier_escort: 'Carrier Escort — heavy armor, point-defense, fleet support role',
+    diplomatic_cruiser: 'Diplomatic Cruiser — spacious, high presence, non-combat systems',
+    long_range_cruiser: 'Long-Range Cruiser — extended fuel, large crew quarters, self-sufficient',
+    fleet_carrier: 'Fleet Carrier — massive, fighter bays, command facilities',
+    line_battleship: 'Line Battleship — heaviest armor and weapons, slow',
+    heavy_cruiser: 'Heavy Cruiser — balanced capital ship, versatile weapons',
+  };
+
+  const jd = journeyDetails[journey] || journeyDetails.custom;
+  const themesLine = jd.themes.length > 0 ? `Themes: ${jd.themes.join(', ')}` : '';
+
+  const captainLine =
+    typeof captainName === 'string' && captainName.trim()
+      ? `Captain's name: ${captainName.trim().slice(0, 60)}`
+      : "Captain's name: (unnamed)";
+
+  const roleLine =
+    journey === 'ships_company' && captainRole
+      ? `Captain's role aboard the ship: ${captainRole}`
+      : '';
+
+  // Summarise non-zero skills so the AI can tailor crew to complement the captain.
+  const skillsLine = (() => {
+    if (!captainSkills || typeof captainSkills !== 'object' || Array.isArray(captainSkills)) {
+      return '';
+    }
+    const notable = Object.entries(captainSkills)
+      .filter(([, lvl]) => typeof lvl === 'number' && lvl > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, lvl]) => `${id} (lv${lvl})`)
+      .join(', ');
+    return notable ? `Captain's skills: ${notable}` : '';
+  })();
+
+  const backstoryLine =
+    typeof captainBackstory === 'string' && captainBackstory.trim()
+      ? `Captain's backstory: ${captainBackstory.trim().slice(0, 400)}`
+      : '';
+
+  const systemPrompt = `You generate starting crew members for Void Odyssey, an AI-driven space exploration game set in a hard-ish sci-fi universe (Firefly meets Mass Effect — grounded crews, alien encounters, political tensions, moments of wonder).
+
+You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
+{
+  "crew": [
+    {
+      "name": string,
+      "role": string (one of: pilot, engineer, medic, gunner, science, general),
+      "description": string (1-2 sentences, flavor bio; grounded and specific, fits the journey tone)
+    }
+  ]
+}
+
+Constraints:
+- Generate exactly 2-3 crew members appropriate for the ship class and journey tone
+- Each crew member should fill a distinct operational need for the ship
+- Consider the captain's skills when choosing crew roles — crew should complement, not duplicate, the captain's strengths
+- Match crew personalities and backgrounds to the journey's themes
+- Names should feel plausible for a near-future sci-fi setting (human or alien-inspired)
+- Bios should be specific and evocative — a hint of history, a quirk, a reason they're on this ship
+- Do NOT mention the captain by name; crew bios are about themselves`;
+
+  const userMessage = `Generate starting crew for a new Void Odyssey campaign.
+
+Journey: ${jd.name}
+Tone: ${jd.tone}
+${themesLine}
+
+Ship: ${shipClassLabels[shipClass]}
+
+${captainLine}
+Captain's traits: ${captainTraits.join(', ')}
+${skillsLine}
+${backstoryLine}
+${roleLine}
+
+Produce crew that fit this ship's operational needs and this journey's tone. A ${jd.name.toLowerCase()} crew should feel distinct from a warpath crew.`;
+
+  let aiResponse;
+  try {
+    aiResponse = await callGemini({
+      modelName: VOID_ODYSSEY_MODEL,
+      systemInstruction: systemPrompt,
+      userMessage,
+      maxOutputTokens: 1024,
+    });
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error('voidOdysseyGenerateCrew Gemini error:', err);
+    throw new HttpsError('internal', 'Failed to generate crew. Please try again.');
+  }
+
+  // ── Validate AI response ───────────────────────────────────
+  const crewRaw = Array.isArray(aiResponse?.crew) ? aiResponse.crew : [];
+  if (crewRaw.length < 2 || crewRaw.length > 3) {
+    throw new HttpsError('internal', 'AI returned an unexpected number of crew members.');
+  }
+
+  const validRoles = ['pilot', 'engineer', 'medic', 'gunner', 'science', 'general'];
+  const crew = crewRaw.map((m) => {
+    if (!m || typeof m !== 'object') {
+      throw new HttpsError('internal', 'AI returned an invalid crew member.');
+    }
+    return {
+      name:
+        typeof m.name === 'string' && m.name.trim() ? m.name.trim().slice(0, 60) : 'Crew Member',
+      role: validRoles.includes(m.role) ? m.role : 'general',
+      description:
+        typeof m.description === 'string' && m.description.trim()
+          ? m.description.trim().slice(0, 500)
+          : '',
+    };
+  });
+
+  return { crew };
+});
+
+/**
  * voidOdysseyNewGame — creates a new Void Odyssey campaign.
  *
  * Caller must be authenticated and have the 'void-odyssey' app claim.
@@ -2156,6 +2406,9 @@ Traits: ${captainTraits.join(', ')}`;
  *   captainBackstory: string   — optional backstory (empty string if none)
  *   shipClass: string          — 'light_freighter' | 'scout_corvette' | 'gunship' | 'salvage_rig'
  *   shipName: string           — player-chosen ship name
+ *   crew: { name, role, description }[]  — optional; pre-generated crew from voidOdysseyGenerateCrew
+ *                                           (player may have edited names/bios). When provided,
+ *                                           AI generates only the opening scene, not crew.
  *
  * Returns:
  *   gameId: string
@@ -2186,23 +2439,8 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     shipClass,
     shipName,
     captainRole,
+    crew: preGeneratedCrew,
   } = request.data || {};
-
-  const validShipClasses = [
-    'light_freighter',
-    'scout_corvette',
-    'gunship',
-    'salvage_rig',
-    'survey_vessel',
-    'blockade_runner',
-    'corvette_warfit',
-    'carrier_escort',
-    'diplomatic_cruiser',
-    'long_range_cruiser',
-    'fleet_carrier',
-    'line_battleship',
-    'heavy_cruiser',
-  ];
 
   if (!difficulty || !VOID_ODYSSEY_JOURNEY_IDS.includes(difficulty)) {
     throw new HttpsError('invalid-argument', 'Invalid difficulty selection.');
@@ -2220,7 +2458,7 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   if (!captainTraits.every((t) => VOID_ODYSSEY_TRAIT_IDS.includes(t))) {
     throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
   }
-  if (!shipClass || !validShipClasses.includes(shipClass)) {
+  if (!shipClass || !VOID_ODYSSEY_SHIP_CLASS_IDS.includes(shipClass)) {
     throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
   }
   // Enforce journey/ship pairing server-side so a modified client cannot pick
@@ -2300,6 +2538,35 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     }
   }
 
+  // ── Validate pre-generated crew (optional) ────────────────
+  // When the wizard's Step 5 pre-generated crew is passed in, validate and
+  // normalise it. If absent, the AI will generate crew as part of the opening scene.
+  const validCrewRoles = ['pilot', 'engineer', 'medic', 'gunner', 'science', 'general'];
+  let resolvedPreGeneratedCrew = null;
+
+  if (preGeneratedCrew !== undefined && preGeneratedCrew !== null) {
+    if (
+      !Array.isArray(preGeneratedCrew) ||
+      preGeneratedCrew.length < 2 ||
+      preGeneratedCrew.length > 3
+    ) {
+      throw new HttpsError('invalid-argument', 'crew must be an array of 2–3 members.');
+    }
+    resolvedPreGeneratedCrew = preGeneratedCrew.map((m) => {
+      if (!m || typeof m !== 'object') {
+        throw new HttpsError('invalid-argument', 'Each crew member must be an object.');
+      }
+      if (typeof m.name !== 'string' || !m.name.trim()) {
+        throw new HttpsError('invalid-argument', 'Each crew member must have a name.');
+      }
+      return {
+        name: m.name.trim().slice(0, 60),
+        role: validCrewRoles.includes(m.role) ? m.role : 'general',
+        description: typeof m.description === 'string' ? m.description.trim().slice(0, 500) : '',
+      };
+    });
+  }
+
   // ── Build AI prompt ────────────────────────────────────────
   const difficultyLabels = {
     frontier_explorer: 'Frontier Explorer (discovery-focused, lower danger)',
@@ -2327,7 +2594,59 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     heavy_cruiser: 'Heavy Cruiser (balanced capital ship, versatile weapons)',
   };
 
-  const systemPrompt = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi with room for the mysterious — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
+  const backstoryNote =
+    captainBackstory && captainBackstory.trim()
+      ? `Captain's backstory: ${captainBackstory.trim()}`
+      : 'No backstory provided — you may invent a brief one consistent with the traits.';
+
+  // When crew is pre-generated, omit the crew array from the AI schema so the
+  // model focuses only on the opening scene and references the provided crew by name.
+  let systemPrompt;
+  let userMessage;
+
+  if (resolvedPreGeneratedCrew) {
+    const crewContext = resolvedPreGeneratedCrew
+      .map((m) => `- ${m.name} (${m.role})${m.description ? ': ' + m.description : ''}`)
+      .join('\n');
+
+    systemPrompt = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi with room for the mysterious — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
+
+You must respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
+{
+  "narrative": string (200-300 words, the opening story beat — sets the scene, introduces a situation or threat, ends on a hook),
+  "startingLocationName": string (name of the starting location),
+  "startingLocationType": string (one of: station, planet, moon, asteroid_field, derelict, anomaly),
+  "startingLocationDescription": string (2-3 sentences),
+  "startingLocationAtmosphere": string (1-3 mood keywords, e.g. "industrial_decay"),
+  "questHook": string (one sentence describing the first quest hook that emerged from the opening scene),
+  "availableActions": [
+    { "id": string, "label": string (max 8 words), "type": string (one of: dialogue, navigation, combat, investigation) }
+  ],
+  "mood": string (one of: tense, calm, wonder, danger, tense_curiosity, wry, reverent)
+}
+
+Constraints:
+- Generate exactly 3-4 available actions
+- The narrative must reference the captain by name and at least one crew member by name
+- Honor the difficulty/tone setting in the narrative style and situation
+- The starting location must feel specific and interesting, not generic
+- Do NOT generate crew — they are provided below; reference them naturally in the narrative`;
+
+    userMessage = `Create the opening of a new Void Odyssey campaign with these player choices:
+
+Difficulty/Tone: ${difficultyLabels[difficulty]}
+Captain's Name: ${captainName.trim()}
+Captain's Traits: ${captainTraits.join(', ')}
+${backstoryNote}
+Ship Class: ${shipClassLabels[shipClass]}
+Ship Name: ${shipName.trim()}
+
+Your Crew (already assigned — reference them by name in the narrative):
+${crewContext}
+
+Generate the opening scene, location, quest hook, and first available actions.`;
+  } else {
+    systemPrompt = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi with room for the mysterious — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
 You must respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
 {
@@ -2359,12 +2678,7 @@ Constraints:
 - Honor the difficulty/tone setting in the narrative style and situation
 - The starting location must feel specific and interesting, not generic`;
 
-  const backstoryNote =
-    captainBackstory && captainBackstory.trim()
-      ? `Captain's backstory: ${captainBackstory.trim()}`
-      : 'No backstory provided — you may invent a brief one consistent with the traits.';
-
-  const userMessage = `Create the opening of a new Void Odyssey campaign with these player choices:
+    userMessage = `Create the opening of a new Void Odyssey campaign with these player choices:
 
 Difficulty/Tone: ${difficultyLabels[difficulty]}
 Captain's Name: ${captainName.trim()}
@@ -2374,6 +2688,7 @@ Ship Class: ${shipClassLabels[shipClass]}
 Ship Name: ${shipName.trim()}
 
 Generate the opening scene, starting crew, location, quest hook, and first available actions.`;
+  }
 
   // ── Call Gemini API ─────────────────────────────────────────
   let aiResponse;
@@ -2535,7 +2850,17 @@ Generate the opening scene, starting crew, location, quest hook, and first avail
 
   const shipStats = SHIP_CLASS_DEFAULTS[shipClass] || SHIP_CLASS_DEFAULTS.light_freighter;
 
-  const crew = aiResponse.crew || [];
+  // Use pre-generated (and player-edited) crew when provided; fall back to AI crew.
+  const crew = resolvedPreGeneratedCrew
+    ? resolvedPreGeneratedCrew.map((m) => ({
+        name: m.name,
+        role: m.role,
+        // description → backstory; species/personality filled with defaults
+        backstory: m.description || '',
+        species: 'human',
+        personality: [],
+      }))
+    : aiResponse.crew || [];
   const activeCrew = crew.map((m, i) => ({
     id: `crew_${i}_${gameId.slice(0, 6)}`,
     name: m.name,

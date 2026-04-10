@@ -828,11 +828,19 @@
     });
   }
 
-  // Step 5: Generate and review starting crew (Cloud Function call + Firestore write)
+  // Step 5: Generate and review starting crew (voidOdysseyGenerateCrew — no Firestore write).
+  // The game is created in Step 6 using the (possibly edited) crew.
   function _renderStep5(container) {
     var d = VO.state.wizardData;
 
-    // Show spinner while we call the Cloud Function
+    // If crew was already generated (e.g. user pressed Back from Step 6),
+    // skip the API call and show the existing editable cards directly.
+    if (VO.state.generatedCrew) {
+      _renderCrewCards(container, VO.state.generatedCrew);
+      return;
+    }
+
+    // Show spinner while the Cloud Function runs
     container.innerHTML =
       '<h2 class="wizard-step-title">Assembling Your Crew</h2>' +
       '<p class="wizard-step-desc">The Oracle is conjuring your starting crew&hellip;</p>' +
@@ -841,73 +849,112 @@
       '<p class="wizard-generating-text">Generating crew manifest&hellip;</p>' +
       '</div>';
 
-    // Call the Cloud Function (generates crew + opening scene in one shot, writes game to Firestore)
-    var fn = VO.state.functions.httpsCallable('voidOdysseyNewGame');
+    var fn = VO.state.functions.httpsCallable('voidOdysseyGenerateCrew');
     fn({
-      // Legacy field name; carries narrative tone / journey ID
-      difficulty: d.tone,
+      journey: d.tone,
       captainName: d.captainName,
       captainTraits: d.captainTraits,
       captainSkills: d.captainSkills,
       captainBackstory: d.captainBackstory,
       shipClass: d.shipClass,
-      shipName: d.shipName,
       captainRole: d.captainRole,
     })
       .then(function (result) {
-        VO.state.generatedGame = result.data;
-        _renderCrewReview(container, result.data.crew);
+        VO.state.generatedCrew = result.data.crew;
+        _renderCrewCards(container, VO.state.generatedCrew);
       })
       .catch(function (err) {
-        console.error('voidOdysseyNewGame error:', err);
+        console.error('voidOdysseyGenerateCrew error:', err);
         container.innerHTML =
           '<h2 class="wizard-step-title">Something Went Wrong</h2>' +
           '<p class="wizard-error">' +
-          _esc(err.message || 'Failed to generate game. Please try again.') +
+          _esc(err.message || 'Failed to generate crew. Please try again.') +
           '</p>' +
           '<div class="wizard-nav">' +
-          '<button type="button" class="btn btn-secondary" id="step5-retry">← Try Again</button>' +
+          '<button type="button" class="btn btn-secondary" id="step5-retry">&#8592; Try Again</button>' +
           '</div>';
         document.getElementById('step5-retry').addEventListener('click', function () {
+          VO.state.generatedCrew = null;
           VO.renderWizardStep(5);
         });
       });
   }
 
-  function _renderCrewReview(container, crew) {
+  function _renderCrewCards(container, crew) {
     var html =
       '<h2 class="wizard-step-title">Meet Your Crew</h2>' +
-      '<p class="wizard-step-desc">The Oracle has assembled your starting crew. Review them before launch.</p>' +
+      '<p class="wizard-step-desc">' +
+      'The Oracle has assembled your starting crew. Edit names or bios before continuing.' +
+      '</p>' +
       '<div class="crew-preview-list">';
 
-    (crew || []).forEach(function (member) {
+    (crew || []).forEach(function (member, i) {
       html +=
-        '<div class="crew-preview-card">' +
+        '<div class="crew-preview-card" data-crew-index="' +
+        i +
+        '">' +
         '<div class="crew-preview-header">' +
-        '<span class="crew-preview-name">' +
+        '<input' +
+        ' type="text"' +
+        ' class="crew-preview-name-input"' +
+        ' data-crew-index="' +
+        i +
+        '"' +
+        ' maxlength="60"' +
+        ' value="' +
         _esc(member.name) +
-        '</span>' +
+        '"' +
+        ' aria-label="Crew member name"' +
+        ' />' +
         '<span class="crew-preview-role">' +
         _esc(member.role) +
         '</span>' +
         '</div>' +
-        '<p class="crew-preview-bio">' +
-        _esc(member.backstory) +
-        '</p>' +
+        '<textarea' +
+        ' class="crew-preview-bio-input"' +
+        ' data-crew-index="' +
+        i +
+        '"' +
+        ' maxlength="500"' +
+        ' rows="3"' +
+        ' aria-label="Crew member bio"' +
+        '>' +
+        _esc(member.description) +
+        '</textarea>' +
         '</div>';
     });
 
     html +=
       '</div>' +
       '<div class="wizard-nav">' +
-      '<button type="button" class="btn btn-secondary" id="step5-back">← Reroll</button>' +
-      '<button type="button" class="btn btn-primary" id="step5-next">Launch Campaign →</button>' +
+      '<button type="button" class="btn btn-secondary" id="step5-regenerate">Regenerate</button>' +
+      '<button type="button" class="btn btn-primary" id="step5-next">Continue &rarr;</button>' +
       '</div>';
 
     container.innerHTML = html;
 
-    document.getElementById('step5-back').addEventListener('click', function () {
-      VO.state.generatedGame = null;
+    // Sync name edits back into VO.state.generatedCrew
+    container.querySelectorAll('.crew-preview-name-input').forEach(function (input) {
+      input.addEventListener('input', function () {
+        var idx = parseInt(input.dataset.crewIndex, 10);
+        if (VO.state.generatedCrew && VO.state.generatedCrew[idx] !== undefined) {
+          VO.state.generatedCrew[idx].name = input.value;
+        }
+      });
+    });
+
+    // Sync bio edits back into VO.state.generatedCrew
+    container.querySelectorAll('.crew-preview-bio-input').forEach(function (textarea) {
+      textarea.addEventListener('input', function () {
+        var idx = parseInt(textarea.dataset.crewIndex, 10);
+        if (VO.state.generatedCrew && VO.state.generatedCrew[idx] !== undefined) {
+          VO.state.generatedCrew[idx].description = textarea.value;
+        }
+      });
+    });
+
+    document.getElementById('step5-regenerate').addEventListener('click', function () {
+      VO.state.generatedCrew = null;
       VO.renderWizardStep(5);
     });
 
@@ -916,14 +963,64 @@
     });
   }
 
-  // Step 6: Display opening scene
+  // Step 6: Create the game (calls voidOdysseyNewGame with edited crew), then display opening scene.
   function _renderStep6(container) {
-    var game = VO.state.generatedGame;
-    if (!game) {
+    var d = VO.state.wizardData;
+
+    // If no crew was generated, go back to Step 5
+    if (!VO.state.generatedCrew) {
       VO.renderWizardStep(5);
       return;
     }
 
+    // Phase B: game already created — display the opening scene
+    if (VO.state.generatedGame) {
+      _renderOpeningScene(container, VO.state.generatedGame);
+      return;
+    }
+
+    // Phase A: call voidOdysseyNewGame with the (edited) crew to create the game
+    container.innerHTML =
+      '<h2 class="wizard-step-title">Creating Your Campaign</h2>' +
+      '<p class="wizard-step-desc">The Oracle is weaving your opening scene&hellip;</p>' +
+      '<div class="wizard-generating">' +
+      '<div class="app-spinner"></div>' +
+      '<p class="wizard-generating-text">Writing your story&hellip;</p>' +
+      '</div>';
+
+    var fn = VO.state.functions.httpsCallable('voidOdysseyNewGame');
+    fn({
+      difficulty: d.tone,
+      captainName: d.captainName,
+      captainTraits: d.captainTraits,
+      captainSkills: d.captainSkills,
+      captainBackstory: d.captainBackstory,
+      shipClass: d.shipClass,
+      shipName: d.shipName,
+      captainRole: d.captainRole,
+      crew: VO.state.generatedCrew,
+    })
+      .then(function (result) {
+        VO.state.generatedGame = result.data;
+        _renderOpeningScene(container, result.data);
+      })
+      .catch(function (err) {
+        console.error('voidOdysseyNewGame error:', err);
+        container.innerHTML =
+          '<h2 class="wizard-step-title">Something Went Wrong</h2>' +
+          '<p class="wizard-error">' +
+          _esc(err.message || 'Failed to create campaign. Please try again.') +
+          '</p>' +
+          '<div class="wizard-nav">' +
+          '<button type="button" class="btn btn-secondary" id="step6-back">&#8592; Back to Crew</button>' +
+          '</div>';
+        document.getElementById('step6-back').addEventListener('click', function () {
+          VO.renderWizardStep(5);
+        });
+      });
+  }
+
+  function _renderOpeningScene(container, game) {
     var actions = game.availableActions || [];
     var actionsHtml = actions
       .map(function (a) {
@@ -952,7 +1049,7 @@
       '<p class="action-panel-note">(Full turn actions available in Phase 2)</p>' +
       '</div>' +
       '<div class="wizard-nav wizard-nav--center">' +
-      '<button type="button" class="btn btn-primary" id="step6-enter">Enter the Void →</button>' +
+      '<button type="button" class="btn btn-primary" id="step6-enter">Enter the Void &rarr;</button>' +
       '</div>';
 
     document.getElementById('step6-enter').addEventListener('click', function () {

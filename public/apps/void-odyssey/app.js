@@ -382,6 +382,7 @@
       captainRole: null,
     };
     VO.state.generatedGame = null;
+    VO.state.generatedCrew = null;
     VO.showView('game-create');
     VO.renderWizardStep(1);
   }
