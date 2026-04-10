@@ -963,32 +963,40 @@
     });
   }
 
-  // Step 6: Create the game (calls voidOdysseyNewGame with edited crew), then display opening scene.
+  // Step 6: Two-phase game creation.
+  //   Phase A: calls voidOdysseyGenerateOpening (AI only) → caches result in VO.state.pendingOpening
+  //   Phase B: "Begin Your Journey" calls voidOdysseyCommitGame (Firestore write) → transitions to game
   function _renderStep6(container) {
     var d = VO.state.wizardData;
 
-    // If no crew was generated, go back to Step 5
+    // Guard: need generated crew from Step 5
     if (!VO.state.generatedCrew) {
       VO.renderWizardStep(5);
       return;
     }
 
-    // Phase B: game already created — display the opening scene
+    // Already committed — show scene with transition button only
     if (VO.state.generatedGame) {
-      _renderOpeningScene(container, VO.state.generatedGame);
+      _renderOpeningScene(container, VO.state.pendingOpening || VO.state.generatedGame);
       return;
     }
 
-    // Phase A: call voidOdysseyNewGame with the (edited) crew to create the game
+    // Phase A already done — show cached scene again (e.g. user stepped back/forward)
+    if (VO.state.pendingOpening) {
+      _renderOpeningScene(container, VO.state.pendingOpening);
+      return;
+    }
+
+    // Phase A: generate opening scene via AI (no Firestore write)
     container.innerHTML =
       '<h2 class="wizard-step-title">Creating Your Campaign</h2>' +
-      '<p class="wizard-step-desc">The Oracle is weaving your opening scene&hellip;</p>' +
+      '<p class="wizard-step-desc">Generating your opening scene&hellip;</p>' +
       '<div class="wizard-generating">' +
       '<div class="app-spinner"></div>' +
-      '<p class="wizard-generating-text">Writing your story&hellip;</p>' +
+      '<p class="wizard-generating-text">The Oracle is weaving your story&hellip;</p>' +
       '</div>';
 
-    var fn = VO.state.functions.httpsCallable('voidOdysseyNewGame');
+    var fn = VO.state.functions.httpsCallable('voidOdysseyGenerateOpening');
     fn({
       difficulty: d.tone,
       captainName: d.captainName,
@@ -1001,15 +1009,16 @@
       crew: VO.state.generatedCrew,
     })
       .then(function (result) {
-        VO.state.generatedGame = result.data;
+        VO.state.pendingOpening = result.data;
         _renderOpeningScene(container, result.data);
       })
       .catch(function (err) {
-        console.error('voidOdysseyNewGame error:', err);
+        console.error('voidOdysseyGenerateOpening error:', err);
         container.innerHTML =
           '<h2 class="wizard-step-title">Something Went Wrong</h2>' +
+          '<p class="wizard-step-desc">The Oracle couldn\'t generate your opening scene.</p>' +
           '<p class="wizard-error">' +
-          _esc(err.message || 'Failed to create campaign. Please try again.') +
+          _esc(err.message || 'Failed to generate opening scene. Please try again.') +
           '</p>' +
           '<div class="wizard-nav">' +
           '<button type="button" class="btn btn-secondary" id="step6-back">&#8592; Back to Crew</button>' +
@@ -1020,8 +1029,8 @@
       });
   }
 
-  function _renderOpeningScene(container, game) {
-    var actions = game.availableActions || [];
+  function _renderOpeningScene(container, opening) {
+    var actions = opening.availableActions || [];
     var actionsHtml = actions
       .map(function (a) {
         return (
@@ -1038,7 +1047,7 @@
       '<h2 class="wizard-step-title">Your Story Begins</h2>' +
       '<div class="narrative-panel">' +
       '<p class="narrative-text">' +
-      _escNarrative(game.narrative) +
+      _escNarrative(opening.narrative) +
       '</p>' +
       '</div>' +
       '<div class="action-panel">' +
@@ -1046,14 +1055,64 @@
       '<div class="action-buttons">' +
       actionsHtml +
       '</div>' +
-      '<p class="action-panel-note">(Full turn actions available in Phase 2)</p>' +
+      '<p class="action-panel-note">(Full turn actions available in the game)</p>' +
       '</div>' +
+      '<div id="step6-commit-error"></div>' +
       '<div class="wizard-nav wizard-nav--center">' +
-      '<button type="button" class="btn btn-primary" id="step6-enter">Enter the Void &rarr;</button>' +
+      '<button type="button" class="btn btn-primary" id="step6-enter">Begin Your Journey &rarr;</button>' +
       '</div>';
 
-    document.getElementById('step6-enter').addEventListener('click', function () {
-      VO.showView('game-active');
+    // If already committed, the button just transitions to the active game view
+    if (VO.state.generatedGame) {
+      document.getElementById('step6-enter').addEventListener('click', function () {
+        VO.showView('game-active');
+      });
+      return;
+    }
+
+    // Phase B: commit all game data to Firestore
+    document.getElementById('step6-enter').addEventListener('click', function _commitGame() {
+      var btn = document.getElementById('step6-enter');
+      var errEl = document.getElementById('step6-commit-error');
+      if (!btn) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Saving your campaign\u2026';
+      errEl.innerHTML = '';
+
+      var d = VO.state.wizardData;
+      var commitFn = VO.state.functions.httpsCallable('voidOdysseyCommitGame');
+      commitFn({
+        difficulty: d.tone,
+        captainName: d.captainName,
+        captainTraits: d.captainTraits,
+        captainSkills: d.captainSkills,
+        captainBackstory: d.captainBackstory,
+        shipClass: d.shipClass,
+        shipName: d.shipName,
+        captainRole: d.captainRole,
+        crew: VO.state.generatedCrew,
+        opening: opening,
+      })
+        .then(function (result) {
+          VO.state.generatedGame = result.data;
+          VO.showView('game-active');
+        })
+        .catch(function (err) {
+          console.error('voidOdysseyCommitGame error:', err);
+          btn.disabled = false;
+          btn.textContent = 'Begin Your Journey \u2192';
+          errEl.innerHTML =
+            '<p class="wizard-error">' +
+            _esc(err.message || 'Failed to save your campaign. Please try again.') +
+            '</p>' +
+            '<div class="wizard-nav wizard-nav--center">' +
+            '<button type="button" class="btn btn-secondary" id="step6-retry">Try Again</button>' +
+            '</div>';
+          document.getElementById('step6-retry').addEventListener('click', function () {
+            document.getElementById('step6-enter').click();
+          });
+        });
     });
   }
 

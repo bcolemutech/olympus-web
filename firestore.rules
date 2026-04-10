@@ -307,6 +307,7 @@ service cloud.firestore {
       allow update: if request.auth != null
         && request.auth.uid == resource.data.userId
         && request.resource.data.userId == resource.data.userId
+        && request.resource.data.journey == resource.data.journey
         && hasApp('void-odyssey');
 
       allow create: if request.auth != null
