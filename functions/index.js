@@ -2311,7 +2311,8 @@ Traits: ${captainTraits.join(', ')}`;
       modelName: VOID_ODYSSEY_MODEL,
       systemInstruction: systemPrompt,
       userMessage,
-      maxOutputTokens: 512,
+      maxOutputTokens: 1024,
+      thinkingBudget: 0,
     });
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -2531,7 +2532,8 @@ Produce crew that fit this ship's operational needs and this journey's tone. A $
       modelName: VOID_ODYSSEY_MODEL,
       systemInstruction: systemPrompt,
       userMessage,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
+      thinkingBudget: 0,
     });
   } catch (err) {
     if (err instanceof HttpsError) throw err;

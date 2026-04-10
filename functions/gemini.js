@@ -27,6 +27,16 @@ function getClient() {
  * Calls Gemini via Vertex AI and returns the parsed JSON response (or raw text if jsonMode is false).
  * Strips markdown fences and parses the result when in JSON mode.
  * Throws HttpsError on failure.
+ *
+ * @param {object} options
+ * @param {string} options.modelName - Vertex AI model name (e.g. 'gemini-2.5-flash').
+ * @param {string} options.systemInstruction - System prompt sent to the model.
+ * @param {string} options.userMessage - User turn content.
+ * @param {number} options.maxOutputTokens - Maximum tokens in the model response.
+ * @param {boolean} [options.jsonMode=true] - When true, sets responseMimeType to application/json
+ *   and JSON-parses the result. Set to false to receive raw text.
+ * @param {number} [options.thinkingBudget] - Optional thinking token budget. Set to 0 to disable
+ *   thinking for simple tasks where reasoning is unnecessary. Omit to use the model default.
  */
 async function callGemini({
   modelName,
@@ -34,6 +44,7 @@ async function callGemini({
   userMessage,
   maxOutputTokens,
   jsonMode = true,
+  thinkingBudget,
 }) {
   try {
     const response = await getClient().models.generateContent({
@@ -43,6 +54,9 @@ async function callGemini({
         systemInstruction,
         maxOutputTokens,
         ...(jsonMode && { responseMimeType: 'application/json' }),
+        ...(thinkingBudget !== undefined && {
+          thinkingConfig: { thinkingBudget },
+        }),
       },
     });
 

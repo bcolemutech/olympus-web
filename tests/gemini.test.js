@@ -112,6 +112,42 @@ describe('callGemini', () => {
     });
   });
 
+  test('passes thinkingConfig when thinkingBudget is provided', async () => {
+    const payload = { backstory: 'You grew up on a mining rig.' };
+    mockGenerateContent.mockResolvedValue(makeGenAiResponse({ text: JSON.stringify(payload) }));
+
+    await callGemini({
+      modelName: 'gemini-2.5-flash',
+      systemInstruction: 'sys',
+      userMessage: 'user',
+      maxOutputTokens: 1024,
+      thinkingBudget: 0,
+    });
+
+    expect(mockGenerateContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          thinkingConfig: { thinkingBudget: 0 },
+        }),
+      })
+    );
+  });
+
+  test('omits thinkingConfig when thinkingBudget is not provided', async () => {
+    const payload = { narrative: 'You dock at the station.' };
+    mockGenerateContent.mockResolvedValue(makeGenAiResponse({ text: JSON.stringify(payload) }));
+
+    await callGemini({
+      modelName: 'gemini-2.5-flash',
+      systemInstruction: 'sys',
+      userMessage: 'user',
+      maxOutputTokens: 1024,
+    });
+
+    const config = mockGenerateContent.mock.calls[0][0].config;
+    expect(config).not.toHaveProperty('thinkingConfig');
+  });
+
   test('throws internal HttpsError when response text is empty', async () => {
     mockGenerateContent.mockResolvedValue({ candidates: [] });
 
