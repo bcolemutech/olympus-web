@@ -425,6 +425,24 @@ const VOID_ODYSSEY_JOURNEY_SHIPS = {
   ships_company: ['fleet_carrier', 'line_battleship', 'heavy_cruiser'],
 };
 
+// All valid ship class IDs. Used for input validation in voidOdysseyGenerateCrew
+// and voidOdysseyNewGame — kept in one place so additions stay in sync.
+const VOID_ODYSSEY_SHIP_CLASS_IDS = [
+  'light_freighter',
+  'scout_corvette',
+  'gunship',
+  'salvage_rig',
+  'survey_vessel',
+  'blockade_runner',
+  'corvette_warfit',
+  'carrier_escort',
+  'diplomatic_cruiser',
+  'long_range_cruiser',
+  'fleet_carrier',
+  'line_battleship',
+  'heavy_cruiser',
+];
+
 const VOID_ODYSSEY_TURN_SYSTEM_PROMPT = `You are the narrator for Void Odyssey, an AI-driven space exploration game. You write in second person ("You step onto the bridge..."). The genre is hard-ish sci-fi — think Firefly meets Mass Effect: grounded crews, alien encounters, political tensions, moments of wonder.
 
 You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
@@ -2156,6 +2174,8 @@ Traits: ${captainTraits.join(', ')}`;
  *   journey: string            — journey / tone ID
  *   captainName: string        — captain name (for prompt context)
  *   captainTraits: string[]    — 2-3 trait IDs
+ *   captainSkills: object?     — {skillId: level} skill allocations (for prompt context)
+ *   captainBackstory: string?  — optional backstory (for prompt context)
  *   shipClass: string          — ship class ID
  *   captainRole: string?       — role ID, required for ships_company journey
  *
@@ -2173,7 +2193,15 @@ exports.voidOdysseyGenerateCrew = onCall(async (request) => {
   }
 
   // ── Input validation ───────────────────────────────────────
-  const { journey, captainName, captainTraits, shipClass, captainRole } = request.data || {};
+  const {
+    journey,
+    captainName,
+    captainTraits,
+    captainSkills,
+    captainBackstory,
+    shipClass,
+    captainRole,
+  } = request.data || {};
 
   if (!journey || !VOID_ODYSSEY_JOURNEY_IDS.includes(journey)) {
     throw new HttpsError('invalid-argument', 'Invalid journey selection.');
@@ -2184,23 +2212,7 @@ exports.voidOdysseyGenerateCrew = onCall(async (request) => {
   if (!captainTraits.every((t) => VOID_ODYSSEY_TRAIT_IDS.includes(t))) {
     throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
   }
-
-  const validShipClasses = [
-    'light_freighter',
-    'scout_corvette',
-    'gunship',
-    'salvage_rig',
-    'survey_vessel',
-    'blockade_runner',
-    'corvette_warfit',
-    'carrier_escort',
-    'diplomatic_cruiser',
-    'long_range_cruiser',
-    'fleet_carrier',
-    'line_battleship',
-    'heavy_cruiser',
-  ];
-  if (!shipClass || !validShipClasses.includes(shipClass)) {
+  if (!shipClass || !VOID_ODYSSEY_SHIP_CLASS_IDS.includes(shipClass)) {
     throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
   }
 
@@ -2286,6 +2298,25 @@ exports.voidOdysseyGenerateCrew = onCall(async (request) => {
       ? `Captain's role aboard the ship: ${captainRole}`
       : '';
 
+  // Summarise non-zero skills so the AI can tailor crew to complement the captain.
+  const skillsLine = (() => {
+    if (!captainSkills || typeof captainSkills !== 'object' || Array.isArray(captainSkills)) {
+      return '';
+    }
+    const notable = Object.entries(captainSkills)
+      .filter(([, lvl]) => typeof lvl === 'number' && lvl > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, lvl]) => `${id} (lv${lvl})`)
+      .join(', ');
+    return notable ? `Captain's skills: ${notable}` : '';
+  })();
+
+  const backstoryLine =
+    typeof captainBackstory === 'string' && captainBackstory.trim()
+      ? `Captain's backstory: ${captainBackstory.trim().slice(0, 400)}`
+      : '';
+
   const systemPrompt = `You generate starting crew members for Void Odyssey, an AI-driven space exploration game set in a hard-ish sci-fi universe (Firefly meets Mass Effect — grounded crews, alien encounters, political tensions, moments of wonder).
 
 You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The schema is:
@@ -2302,6 +2333,7 @@ You MUST respond with ONLY a valid JSON object. No prose outside the JSON. The s
 Constraints:
 - Generate exactly 2-3 crew members appropriate for the ship class and journey tone
 - Each crew member should fill a distinct operational need for the ship
+- Consider the captain's skills when choosing crew roles — crew should complement, not duplicate, the captain's strengths
 - Match crew personalities and backgrounds to the journey's themes
 - Names should feel plausible for a near-future sci-fi setting (human or alien-inspired)
 - Bios should be specific and evocative — a hint of history, a quirk, a reason they're on this ship
@@ -2317,6 +2349,8 @@ Ship: ${shipClassLabels[shipClass]}
 
 ${captainLine}
 Captain's traits: ${captainTraits.join(', ')}
+${skillsLine}
+${backstoryLine}
 ${roleLine}
 
 Produce crew that fit this ship's operational needs and this journey's tone. A ${jd.name.toLowerCase()} crew should feel distinct from a warpath crew.`;
@@ -2342,14 +2376,20 @@ Produce crew that fit this ship's operational needs and this journey's tone. A $
   }
 
   const validRoles = ['pilot', 'engineer', 'medic', 'gunner', 'science', 'general'];
-  const crew = crewRaw.map((m) => ({
-    name: typeof m.name === 'string' && m.name.trim() ? m.name.trim().slice(0, 60) : 'Crew Member',
-    role: validRoles.includes(m.role) ? m.role : 'general',
-    description:
-      typeof m.description === 'string' && m.description.trim()
-        ? m.description.trim().slice(0, 500)
-        : '',
-  }));
+  const crew = crewRaw.map((m) => {
+    if (!m || typeof m !== 'object') {
+      throw new HttpsError('internal', 'AI returned an invalid crew member.');
+    }
+    return {
+      name:
+        typeof m.name === 'string' && m.name.trim() ? m.name.trim().slice(0, 60) : 'Crew Member',
+      role: validRoles.includes(m.role) ? m.role : 'general',
+      description:
+        typeof m.description === 'string' && m.description.trim()
+          ? m.description.trim().slice(0, 500)
+          : '',
+    };
+  });
 
   return { crew };
 });
@@ -2402,22 +2442,6 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
     crew: preGeneratedCrew,
   } = request.data || {};
 
-  const validShipClasses = [
-    'light_freighter',
-    'scout_corvette',
-    'gunship',
-    'salvage_rig',
-    'survey_vessel',
-    'blockade_runner',
-    'corvette_warfit',
-    'carrier_escort',
-    'diplomatic_cruiser',
-    'long_range_cruiser',
-    'fleet_carrier',
-    'line_battleship',
-    'heavy_cruiser',
-  ];
-
   if (!difficulty || !VOID_ODYSSEY_JOURNEY_IDS.includes(difficulty)) {
     throw new HttpsError('invalid-argument', 'Invalid difficulty selection.');
   }
@@ -2434,7 +2458,7 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
   if (!captainTraits.every((t) => VOID_ODYSSEY_TRAIT_IDS.includes(t))) {
     throw new HttpsError('invalid-argument', 'Invalid captain trait selection.');
   }
-  if (!shipClass || !validShipClasses.includes(shipClass)) {
+  if (!shipClass || !VOID_ODYSSEY_SHIP_CLASS_IDS.includes(shipClass)) {
     throw new HttpsError('invalid-argument', 'Invalid ship class selection.');
   }
   // Enforce journey/ship pairing server-side so a modified client cannot pick
@@ -2529,6 +2553,9 @@ exports.voidOdysseyNewGame = onCall(async (request) => {
       throw new HttpsError('invalid-argument', 'crew must be an array of 2–3 members.');
     }
     resolvedPreGeneratedCrew = preGeneratedCrew.map((m) => {
+      if (!m || typeof m !== 'object') {
+        throw new HttpsError('invalid-argument', 'Each crew member must be an object.');
+      }
       if (typeof m.name !== 'string' || !m.name.trim()) {
         throw new HttpsError('invalid-argument', 'Each crew member must have a name.');
       }

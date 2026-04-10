@@ -854,6 +854,8 @@
       journey: d.tone,
       captainName: d.captainName,
       captainTraits: d.captainTraits,
+      captainSkills: d.captainSkills,
+      captainBackstory: d.captainBackstory,
       shipClass: d.shipClass,
       captainRole: d.captainRole,
     })
