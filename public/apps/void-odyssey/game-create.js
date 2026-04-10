@@ -875,6 +875,7 @@
           '</div>';
         document.getElementById('step5-retry').addEventListener('click', function () {
           VO.state.generatedCrew = null;
+          VO.state.pendingOpening = null;
           VO.renderWizardStep(5);
         });
       });
@@ -955,6 +956,7 @@
 
     document.getElementById('step5-regenerate').addEventListener('click', function () {
       VO.state.generatedCrew = null;
+      VO.state.pendingOpening = null;
       VO.renderWizardStep(5);
     });
 
