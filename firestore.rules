@@ -367,6 +367,32 @@ service cloud.firestore {
       allow read, write: if hasAdmin();
     }
 
+    // ── Tortuga ──────────────────────────────────────────
+
+    match /tortuga_worlds/{worldId} {
+      allow read: if hasApp('tortuga')
+        && (resource.data.shared == true || resource.data.createdBy == request.auth.uid);
+      allow create: if hasApp('tortuga')
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if hasApp('tortuga')
+        && resource.data.createdBy == request.auth.uid;
+    }
+
+    match /tortuga_games/{gameId} {
+      allow read, delete: if hasApp('tortuga')
+        && resource.data.owner == request.auth.uid;
+      allow create: if hasApp('tortuga')
+        && request.resource.data.owner == request.auth.uid;
+      allow update: if hasApp('tortuga')
+        && resource.data.owner == request.auth.uid
+        && request.resource.data.owner == resource.data.owner;
+
+      match /{subcoll}/{docId} {
+        allow read, write: if hasApp('tortuga')
+          && get(/databases/$(database)/documents/tortuga_games/$(gameId)).data.owner == request.auth.uid;
+      }
+    }
+
     // ── Default deny ───────────────────────────────────────
 
     match /{document=**} {
