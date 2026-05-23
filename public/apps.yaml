@@ -18,6 +18,15 @@ apps:
     enabled: true
     order: 2
 
+  - id: tortuga
+    name: Tortuga
+    description: A sea-faring pirate empire builder
+    icon: "🏴‍☠️"
+    type: embedded
+    path: /apps/tortuga/
+    enabled: true
+    order: 3
+
   - id: admin
     name: The Pantheon
     description: Administration panel
