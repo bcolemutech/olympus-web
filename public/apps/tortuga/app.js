@@ -19,12 +19,21 @@
     T.state.currentMode = mode;
   };
 
-  T._openWorldEditor = function () {
+  T._openWorldEditor = function (_worldId, _worldData) {
+    // TODO (T-110): load worldData from Firestore and render it.
     var mapEl = document.getElementById('map-world');
     if (mapEl) {
       mapEl.classList.remove('hidden');
       T.mapRenderer.init(mapEl, T.mapRenderer.PLACEHOLDER_WORLD);
     }
+  };
+
+  T._previewImportedWorld = function (previewWorld) {
+    var mapEl = document.getElementById('map-world');
+    if (!mapEl) return;
+    mapEl.classList.remove('hidden');
+    T.mapRenderer.destroy();
+    T.mapRenderer.init(mapEl, previewWorld);
   };
 
   T._startNewGame = function () {
@@ -40,6 +49,17 @@
     T.state.db = firebase.firestore();
     var mode = getMode();
     T.showMode(mode);
+
+    if (mode === T.MODES.WORLD) {
+      var importEl = document.getElementById('cartographer-import');
+      if (importEl) {
+        T.importer.render(importEl, {
+          onParsed: function (_parsed, previewWorld) {
+            T._previewImportedWorld(previewWorld);
+          },
+        });
+      }
+    }
 
     var listId = mode === T.MODES.PLAY ? 'world-list-play' : 'world-list-world';
     var listEl = document.getElementById(listId);

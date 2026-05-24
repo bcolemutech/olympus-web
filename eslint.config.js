@@ -41,7 +41,8 @@ export default [
         AbortController: "readonly",
         OlympusAnalytics: "readonly",
         setTimeout: "readonly",
-        URLSearchParams: "readonly"
+        URLSearchParams: "readonly",
+        FileReader: "readonly"
       }
     },
     rules: {
