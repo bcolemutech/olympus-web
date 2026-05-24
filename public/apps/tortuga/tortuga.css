@@ -129,6 +129,75 @@
   padding: 2rem 0;
 }
 
+/* ── Cartographer import panel ─────────────────────────────── */
+
+.import-panel {
+  margin: 1rem 0;
+}
+
+.import-panel-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text, #e0e0e0);
+  margin: 0 0 0.25rem;
+}
+
+.import-panel-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #888);
+  margin: 0 0 0.75rem;
+}
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1.5rem 1rem;
+  border: 2px dashed var(--color-border, #333);
+  border-radius: 8px;
+  background: var(--color-bg, #12121a);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+  text-align: center;
+}
+
+.drop-zone:hover,
+.drop-zone--active {
+  border-color: var(--color-accent, #7c6aff);
+  background: var(--color-accent-dim, rgba(124, 106, 255, 0.08));
+}
+
+.drop-zone--loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.drop-zone-label {
+  font-size: 0.88rem;
+  color: var(--color-text-muted, #888);
+}
+
+.drop-zone-pick {
+  font-size: 0.82rem;
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+}
+
+.drop-zone-pick-link {
+  color: var(--color-accent, #7c6aff);
+  text-decoration: underline;
+}
+
+.import-error {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #e05555;
+}
+
 /* ── Map container ─────────────────────────────────────────── */
 
 .tortuga-map {
