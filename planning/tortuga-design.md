@@ -86,13 +86,14 @@ Script load order in `index.html` follows the existing pattern: `state.js` → m
 
 ### Input formats
 
-- **Azgaar `.map`** (custom text format) — primary target, since it carries the most data including burgs, states, climate, and routes
-- **Azgaar GeoJSON** — secondary, simpler to parse, smaller feature set
-- Both are parsed client-side; no upload to Cloud Functions needed for ingest
+- **Azgaar JSON** (the full "Menu → Save → Save as JSON" export) — primary target. Single file carrying `info`, `pack.{burgs, states, features, vertices, cells, rivers, routes}`, and `biomesData`. Has everything we need.
+- **Azgaar `.map`** (custom text format) — secondary, may be added later for users who only have a `.map` save.
+- **Azgaar GeoJSON exports are NOT supported.** Azgaar partitions GeoJSON output into separate files (cells, routes, rivers, markers, zones); none of those carry burgs/states on their own, so they can't produce a playable world. The importer rejects them with a message pointing the user at "Save as JSON".
+- All formats are parsed client-side; no upload to Cloud Functions needed for ingest.
 
 ### Pipeline
 
-1. **Upload** — User drops a `.map` or `.geojson` into the importer.
+1. **Upload** — User drops an Azgaar `.json` (full "Save as JSON" export) into the importer. `.map` parsing is a future addition.
 2. **Parse** — Extract: coastline polygons, water cells, biomes, burgs (potential ports), state borders, rivers (deep-water inland reach), climate (storm bands).
 3. **Recommend** — Inspect water-to-land ratio. If land > ~60%, surface a soft warning: _"This map is land-heavy. Tortuga plays best on oceanic maps. Continue anyway?"_
 4. **Overlay generation** — Apply pirate flair:
