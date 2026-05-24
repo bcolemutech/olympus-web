@@ -11,15 +11,26 @@
     <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
     <script defer src="/__/firebase/init.js?useEmulator=true"></script>
 
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    />
+
     <!-- Shared Olympus styles -->
     <link rel="stylesheet" href="/styles/app.css" />
 
-    <!-- App-specific styles -->
-    <!-- For small apps, inline styles here work fine.
-         When styles exceed ~100 lines, extract to an external file:
-         <link rel="stylesheet" href="/apps/tortuga/tortuga.css" /> -->
     <style>
-      /* Add custom styles for this app here */
+      .tortuga-map {
+        height: 600px;
+        width: 100%;
+        border-radius: 6px;
+      }
     </style>
   </head>
   <body>
@@ -39,7 +50,7 @@
         <h1 class="app-title">Cartographer</h1>
         <p class="app-subtitle">Build and explore worlds.</p>
         <div class="app-divider"></div>
-        <p class="placeholder-text">World management coming in a future phase.</p>
+        <div id="map-world" class="tortuga-map"></div>
       </section>
 
       <!-- The Account (campaign play) mode shell -->
@@ -47,15 +58,20 @@
         <h1 class="app-title">The Account</h1>
         <p class="app-subtitle">On the account, Captain.</p>
         <div class="app-divider"></div>
-        <p class="placeholder-text">Campaign play coming in a future phase.</p>
+        <div id="map-play" class="tortuga-map"></div>
       </section>
     </main>
 
     <!-- Shared header component -->
     <script src="/js/components/app-header.js"></script>
 
+    <!-- Leaflet -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
     <!-- App modules: state first, then helpers, app last -->
     <script src="/apps/tortuga/state.js"></script>
+    <script src="/apps/tortuga/map-renderer.js"></script>
     <script src="/apps/tortuga/firestore.js"></script>
     <script src="/apps/tortuga/app.js"></script>
 
