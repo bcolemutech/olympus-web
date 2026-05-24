@@ -35,6 +35,7 @@ export default [
         localStorage: "readonly",
         firebase: "readonly",
         fetch: "readonly",
+        L: "readonly",
         React: "readonly",
         ReactDOM: "readonly",
         AbortController: "readonly",

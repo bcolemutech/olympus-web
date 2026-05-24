@@ -22,6 +22,13 @@
   T.init = function (user) {
     T.state.currentUser = user;
     T.state.db = firebase.firestore();
-    T.showMode(getMode());
+    var mode = getMode();
+    T.showMode(mode);
+
+    var containerId = mode === T.MODES.PLAY ? 'map-play' : 'map-world';
+    var containerEl = document.getElementById(containerId);
+    if (containerEl) {
+      T.mapRenderer.init(containerEl, T.mapRenderer.PLACEHOLDER_WORLD);
+    }
   };
 })();
