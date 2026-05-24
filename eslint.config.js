@@ -39,7 +39,8 @@ export default [
         ReactDOM: "readonly",
         AbortController: "readonly",
         OlympusAnalytics: "readonly",
-        setTimeout: "readonly"
+        setTimeout: "readonly",
+        URLSearchParams: "readonly"
       }
     },
     rules: {
