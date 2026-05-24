@@ -24,14 +24,7 @@
 
     <!-- Shared Olympus styles -->
     <link rel="stylesheet" href="/styles/app.css" />
-
-    <style>
-      .tortuga-map {
-        height: 600px;
-        width: 100%;
-        border-radius: 6px;
-      }
-    </style>
+    <link rel="stylesheet" href="/apps/tortuga/tortuga.css" />
   </head>
   <body>
     <!-- Shared header — rendered by app-header.js -->
@@ -50,7 +43,8 @@
         <h1 class="app-title">Cartographer</h1>
         <p class="app-subtitle">Build and explore worlds.</p>
         <div class="app-divider"></div>
-        <div id="map-world" class="tortuga-map"></div>
+        <div id="world-list-world" class="world-list"></div>
+        <div id="map-world" class="tortuga-map hidden"></div>
       </section>
 
       <!-- The Account (campaign play) mode shell -->
@@ -58,7 +52,8 @@
         <h1 class="app-title">The Account</h1>
         <p class="app-subtitle">On the account, Captain.</p>
         <div class="app-divider"></div>
-        <div id="map-play" class="tortuga-map"></div>
+        <div id="world-list-play" class="world-list"></div>
+        <div id="map-play" class="tortuga-map hidden"></div>
       </section>
     </main>
 
@@ -73,6 +68,7 @@
     <script src="/apps/tortuga/state.js"></script>
     <script src="/apps/tortuga/map-renderer.js"></script>
     <script src="/apps/tortuga/firestore.js"></script>
+    <script src="/apps/tortuga/world-list.js"></script>
     <script src="/apps/tortuga/app.js"></script>
 
     <script>

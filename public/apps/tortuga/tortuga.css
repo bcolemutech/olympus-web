@@ -1,0 +1,138 @@
+/* ── World List ────────────────────────────────────────────── */
+
+.world-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.world-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface, #1e1e2e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.1s;
+}
+
+.world-card:hover {
+  border-color: var(--color-accent, #7c6aff);
+  transform: translateY(-2px);
+}
+
+.world-card-thumb {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  background: var(--color-bg, #12121a);
+}
+
+.world-card-thumb--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  background: var(--color-bg, #12121a);
+}
+
+.world-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+}
+
+.world-card-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text, #e0e0e0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.world-card-meta {
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #888);
+}
+
+.world-card-badge {
+  display: inline-block;
+  margin-top: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  background: var(--color-accent-dim, rgba(124, 106, 255, 0.2));
+  color: var(--color-accent, #7c6aff);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  align-self: flex-start;
+}
+
+/* ── Skeleton ──────────────────────────────────────────────── */
+
+@keyframes world-card-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.world-card--skeleton {
+  cursor: default;
+  pointer-events: none;
+}
+
+.world-card--skeleton:hover {
+  border-color: var(--color-border, #333);
+  transform: none;
+}
+
+.skeleton-block {
+  width: 100%;
+  height: 120px;
+  background: var(--color-border, #333);
+  animation: world-card-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 0.75rem;
+  border-radius: 4px;
+  background: var(--color-border, #333);
+  animation: world-card-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-line--title {
+  width: 70%;
+}
+
+.skeleton-line--sub {
+  width: 50%;
+  margin-top: 0.25rem;
+}
+
+/* ── Empty state ───────────────────────────────────────────── */
+
+.world-list-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--color-text-muted, #888);
+  font-style: italic;
+  padding: 2rem 0;
+}
+
+/* ── Map container ─────────────────────────────────────────── */
+
+.tortuga-map {
+  height: 600px;
+  width: 100%;
+  border-radius: 6px;
+}
