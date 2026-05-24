@@ -44,6 +44,24 @@
         .update(Object.assign({}, data, { updatedAt: ts }));
     },
 
+    onOwnedWorlds: function (callback) {
+      var uid = T.state.currentUser.uid;
+      return T.state.db
+        .collection('tortuga_worlds')
+        .where('createdBy', '==', uid)
+        .onSnapshot(
+          function (snap) {
+            var docs = snap.docs.map(function (d) {
+              return Object.assign({ id: d.id }, d.data());
+            });
+            callback(docs, null);
+          },
+          function (err) {
+            callback(null, err);
+          }
+        );
+    },
+
     deleteWorld: function (id) {
       return T.state.db.collection('tortuga_worlds').doc(id).delete();
     },
