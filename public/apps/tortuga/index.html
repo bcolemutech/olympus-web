@@ -34,28 +34,30 @@
 
     <!-- Main content — hidden until authenticated -->
     <main class="app-main hidden" id="app-main">
-      <h1 class="app-title">Tortuga</h1>
-      <p class="app-subtitle">On the account, Captain.</p>
-      <div class="app-divider"></div>
+      <!-- Cartographer (world builder) mode shell -->
+      <section id="shell-world" class="hidden">
+        <h1 class="app-title">Cartographer</h1>
+        <p class="app-subtitle">Build and explore worlds.</p>
+        <div class="app-divider"></div>
+        <p class="placeholder-text">World management coming in a future phase.</p>
+      </section>
 
-      <!-- Your app content goes here -->
+      <!-- The Account (campaign play) mode shell -->
+      <section id="shell-play" class="hidden">
+        <h1 class="app-title">The Account</h1>
+        <p class="app-subtitle">On the account, Captain.</p>
+        <div class="app-divider"></div>
+        <p class="placeholder-text">Campaign play coming in a future phase.</p>
+      </section>
     </main>
 
     <!-- Shared header component -->
     <script src="/js/components/app-header.js"></script>
 
-    <!-- App modules — when your app grows beyond ~300 lines of JS, split into
-         external files using the namespace pattern (see symposium for a full example):
-
-         <script src="/apps/tortuga/state.js"></script>
-         <script src="/apps/tortuga/app.js"></script>
-
-         Each file should be an IIFE that reads/extends window.Tortuga:
-           (function () {
-             var Tortuga = window.Tortuga = window.Tortuga || {};
-             Tortuga.state = { ... };
-           })();
-    -->
+    <!-- App modules: state first, then helpers, app last -->
+    <script src="/apps/tortuga/state.js"></script>
+    <script src="/apps/tortuga/firestore.js"></script>
+    <script src="/apps/tortuga/app.js"></script>
 
     <script>
       document.addEventListener('DOMContentLoaded', function () {
@@ -65,22 +67,14 @@
             return;
           }
 
-          // Render the shared header
           window.OlympusHeader.render('Tortuga');
 
-          // Hide loading, show main content
           document.getElementById('app-loading').classList.add('hidden');
           document.getElementById('app-main').classList.remove('hidden');
 
-          // Initialize your app here
-          initializeApp(user);
+          window.Tortuga.init(user);
         });
       });
-
-      function initializeApp(user) {
-        // Your app logic goes here
-        // user.uid, user.email, etc. are available
-      }
     </script>
   </body>
 </html>
