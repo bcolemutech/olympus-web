@@ -75,8 +75,13 @@
 
     var coastlines = [];
     var lakes = [];
+    var landCells = 0;
+    var oceanCells = 0;
     pack.features.forEach(function (f) {
-      if (!f || !Array.isArray(f.vertices) || f.vertices.length === 0) return;
+      if (!f) return;
+      if (f.type === 'island') landCells += f.cells || 0;
+      else if (f.type === 'ocean') oceanCells += f.cells || 0;
+      if (!Array.isArray(f.vertices) || f.vertices.length === 0) return;
       var ring = _dereferenceVertices(f.vertices, pack.vertices);
       if (ring.length < 3) return;
       if (f.type === 'island') {
@@ -85,6 +90,8 @@
         lakes.push({ name: f.name || 'Lake', polygon: ring });
       }
     });
+    var landPercentage =
+      landCells + oceanCells > 0 ? Math.round((landCells / (landCells + oceanCells)) * 100) : 0;
 
     var burgs = [];
     pack.burgs.forEach(function (b) {
@@ -151,6 +158,7 @@
       biomes: biomes,
       burgs: burgs,
       stateBorders: stateBorders,
+      landPercentage: landPercentage,
     };
   }
 

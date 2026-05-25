@@ -118,6 +118,32 @@ describe('Tortuga importer — parseAzgaarJson', () => {
   });
 });
 
+describe('Tortuga importer — land/water ratio', () => {
+  test('ocean-dominant map has low landPercentage', () => {
+    // Fixture: ocean=100 cells, islands=10+2=12 cells → ~10%
+    const result = importer.parseAzgaarJson(azgaarJsonSample());
+    expect(result.landPercentage).toBeLessThan(20);
+  });
+
+  test('land-heavy map has landPercentage above 60', () => {
+    const sample = azgaarJsonSample();
+    // Shrink ocean, grow continent island
+    sample.pack.features[1].cells = 10; // ocean
+    sample.pack.features[2].cells = 200; // continent island
+    const result = importer.parseAzgaarJson(sample);
+    expect(result.landPercentage).toBeGreaterThan(60);
+  });
+
+  test('landPercentage is 0 when no cells on any feature', () => {
+    const sample = azgaarJsonSample();
+    sample.pack.features.forEach((f) => {
+      if (f && typeof f.cells !== 'undefined') f.cells = 0;
+    });
+    const result = importer.parseAzgaarJson(sample);
+    expect(result.landPercentage).toBe(0);
+  });
+});
+
 // Opt-in: parse a real Azgaar export when present locally (gitignored, 5MB+).
 // Drop any *.json file under tests/fixtures/ to enable this branch.
 describe('Tortuga importer — real Azgaar fixtures (opt-in)', () => {

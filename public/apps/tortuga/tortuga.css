@@ -198,6 +198,63 @@
   color: #e05555;
 }
 
+/* ── Buttons ───────────────────────────────────────────────── */
+
+.btn-cancel {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  color: #90a4ae;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
+}
+
+.btn-cancel:hover {
+  color: #e0e0e0;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.app-btn--sm {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+}
+
+/* ── Land-heavy warning banner ─────────────────────────────── */
+
+.land-heavy-warning {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  background: rgba(255, 167, 38, 0.08);
+  border: 1px solid rgba(255, 167, 38, 0.25);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #ffa726;
+}
+
+.land-heavy-warning-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.land-heavy-warning-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.land-heavy-warning-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 /* ── Map container ─────────────────────────────────────────── */
 
 .tortuga-map {
