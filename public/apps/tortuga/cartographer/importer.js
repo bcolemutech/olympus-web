@@ -1,179 +1,153 @@
 (function () {
   'use strict';
 
-  window.Tortuga = window.Tortuga || {};
-  var T = window.Tortuga;
-
   /*
-   * Intermediate world-data shape produced by parseGeoJSON:
-   * {
-   *   sourceFormat: 'azgaar-geojson',
-   *   bounds:       [[minY, minX], [maxY, maxX]],  // Leaflet CRS.Simple [lat, lng] = [y, x]
-   *   dimensions:   { width: number, height: number },
-   *   coastlines:   [ [[y, x], ...], ... ],         // one ring per land polygon
-   *   waterCells:   [ { polygon: [[y, x], ...] } ], // ocean/sea/lake areas
-   *   biomes:       [ { name: string, polygon: [[y, x], ...] } ],
-   *   burgs:        [ { id, name, pos: [y, x], population, stateId, isPort } ],
-   *   stateBorders: [ { id, name, color, polygon: [[y, x], ...] } ],
-   * }
+   * Azgaar Fantasy Map Generator "Save as JSON" full export.
    *
-   * Azgaar GeoJSON coordinates are [x, y] (GeoJSON convention); we swap to
-   * Leaflet [lat, lng] = [y, x] throughout so the shape is renderer-ready.
+   * Top-level keys: info, settings, mapCoordinates, pack, grid, biomesData, notes, nameBases.
+   * Tortuga's importer only reads what it needs from `info`, `pack`, and `biomesData`.
+   *
+   * pack.burgs[]    — settlements. burgs[0] is a blank slot, real entries have i > 0.
+   * pack.states[]   — political states (faction source). states[0] is "Neutrals", skip it.
+   * pack.features[] — land/water masses, each carries vertex indices into pack.vertices[].
+   * pack.vertices[] — { i, p:[x,y], v:[...], c:[...] }
+   * pack.cells[]    — terrain cells; `.f` points at a feature; `.v` are vertex indices; `.p` is centroid.
+   *
+   * Coordinates in Azgaar are pixel-space [x, y] (y increases downward).
+   * We swap to Leaflet [lat, lng] = [y, x] for L.CRS.Simple. We do NOT flip y;
+   * the renderer treats the map as a raster canvas where y-down is fine.
+   *
+   * Intermediate world-data shape produced by parseAzgaarJson:
+   * {
+   *   sourceFormat: 'azgaar-json',
+   *   info:         { name, seed, version, width, height },
+   *   bounds:       [[minY, minX], [maxY, maxX]],
+   *   dimensions:   { width, height },
+   *   coastlines:   [ [[y, x], ...], ... ],          // one ring per island/continent
+   *   lakes:        [ { name, polygon: [[y, x], ...] } ],
+   *   biomes:       [ { id, name, color } ],          // catalog only; per-cell lookup via cells[].biome
+   *   burgs:        [ { id, name, pos: [y, x], population, stateId, isPort, isCapital, group } ],
+   *   stateBorders: [ { id, name, color, fullName, capitalBurgId } ],
+   * }
    */
 
-  var OCEAN_BIOMES = ['ocean', 'sea ice'];
-
-  function _isOceanBiome(name) {
-    return OCEAN_BIOMES.indexOf((name || '').toLowerCase()) !== -1;
-  }
-
-  // GeoJSON [x, y] → Leaflet [y, x]
   function _toLeaflet(coord) {
     return [coord[1], coord[0]];
   }
 
-  function _ringToLeaflet(ring) {
-    return ring.map(_toLeaflet);
+  function _dereferenceVertices(vertexIdxs, vertices) {
+    var ring = [];
+    for (var i = 0; i < vertexIdxs.length; i++) {
+      var v = vertices[vertexIdxs[i]];
+      if (v && v.p) ring.push(_toLeaflet(v.p));
+    }
+    return ring;
   }
 
-  // Returns the first exterior ring of a Polygon or MultiPolygon as [[y,x],...].
-  // For MultiPolygon we flatten all exterior rings.
-  function _extractExteriorRings(geom) {
-    if (geom.type === 'Polygon') {
-      return [_ringToLeaflet(geom.coordinates[0])];
-    }
-    if (geom.type === 'MultiPolygon') {
-      return geom.coordinates.map(function (poly) {
-        return _ringToLeaflet(poly[0]);
-      });
-    }
-    return [];
+  function _isAzgaarJson(json) {
+    return (
+      json &&
+      typeof json === 'object' &&
+      json.info &&
+      json.pack &&
+      Array.isArray(json.pack.burgs) &&
+      Array.isArray(json.pack.features) &&
+      Array.isArray(json.pack.vertices)
+    );
   }
 
-  function _computeBounds(features) {
-    var minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-
-    function scanCoord(c) {
-      if (c[0] < minX) minX = c[0];
-      if (c[0] > maxX) maxX = c[0];
-      if (c[1] < minY) minY = c[1];
-      if (c[1] > maxY) maxY = c[1];
+  function parseAzgaarJson(json) {
+    if (!_isAzgaarJson(json)) {
+      throw new Error(
+        'Not an Azgaar JSON export. Use Azgaar\'s "Save → Save as JSON" option (not the partitioned GeoJSON exports).'
+      );
     }
 
-    function scanGeom(geom) {
-      if (!geom) return;
-      if (geom.type === 'Point') {
-        scanCoord(geom.coordinates);
-      } else if (geom.type === 'LineString') {
-        geom.coordinates.forEach(scanCoord);
-      } else if (geom.type === 'Polygon') {
-        geom.coordinates.forEach(function (ring) {
-          ring.forEach(scanCoord);
-        });
-      } else if (geom.type === 'MultiPolygon') {
-        geom.coordinates.forEach(function (poly) {
-          poly.forEach(function (ring) {
-            ring.forEach(scanCoord);
-          });
-        });
-      }
-    }
+    var info = json.info || {};
+    var pack = json.pack;
+    var biomesData = json.biomesData || {};
 
-    features.forEach(function (f) {
-      scanGeom(f.geometry);
-    });
-
-    if (!isFinite(minX))
-      return [
-        [0, 0],
-        [1000, 1000],
-      ];
-    // Leaflet [lat, lng] = [y, x]
-    return [
-      [minY, minX],
-      [maxY, maxX],
-    ];
-  }
-
-  function parseGeoJSON(geojson) {
-    if (!geojson || geojson.type !== 'FeatureCollection' || !Array.isArray(geojson.features)) {
-      throw new Error('Not a valid GeoJSON FeatureCollection.');
-    }
-    if (geojson.features.length === 0) {
-      throw new Error('GeoJSON contains no features.');
+    var width = info.width || 0;
+    var height = info.height || 0;
+    if (!width || !height) {
+      throw new Error('Azgaar JSON is missing map dimensions in `info`.');
     }
 
     var coastlines = [];
-    var waterCells = [];
-    var biomes = [];
-    var burgs = [];
-    var stateBorders = [];
-
-    geojson.features.forEach(function (feature, idx) {
-      var props = feature.properties || {};
-      var geom = feature.geometry;
-      if (!geom) return;
-
-      var type = (props.type || '').toLowerCase();
-
-      if (type === 'burg' && geom.type === 'Point') {
-        burgs.push({
-          id: 'burg_' + (props.i != null ? props.i : idx),
-          name: props.name || 'Unknown',
-          pos: _toLeaflet(geom.coordinates),
-          population: props.population || 0,
-          stateId: props.state != null ? props.state : null,
-          isPort: !!props.port,
-        });
-      } else if (type === 'state' && (geom.type === 'Polygon' || geom.type === 'MultiPolygon')) {
-        var stateRings = _extractExteriorRings(geom);
-        stateRings.forEach(function (ring, ri) {
-          stateBorders.push({
-            id: 'state_' + (props.i != null ? props.i : idx) + '_' + ri,
-            name: props.name || 'Unknown State',
-            color: props.color || '#888888',
-            polygon: ring,
-          });
-        });
-      } else if (type === 'biome' && (geom.type === 'Polygon' || geom.type === 'MultiPolygon')) {
-        var biomeName = props.name || 'Unknown';
-        var biomeRings = _extractExteriorRings(geom);
-        biomeRings.forEach(function (ring) {
-          biomes.push({ name: biomeName, polygon: ring });
-          if (_isOceanBiome(biomeName)) {
-            waterCells.push({ polygon: ring });
-          } else {
-            coastlines.push(ring);
-          }
-        });
-      } else if (type === 'lake' && (geom.type === 'Polygon' || geom.type === 'MultiPolygon')) {
-        _extractExteriorRings(geom).forEach(function (ring) {
-          waterCells.push({ polygon: ring });
-        });
+    var lakes = [];
+    pack.features.forEach(function (f) {
+      if (!f || !Array.isArray(f.vertices) || f.vertices.length === 0) return;
+      var ring = _dereferenceVertices(f.vertices, pack.vertices);
+      if (ring.length < 3) return;
+      if (f.type === 'island') {
+        coastlines.push(ring);
+      } else if (f.type === 'lake') {
+        lakes.push({ name: f.name || 'Lake', polygon: ring });
       }
     });
 
+    var burgs = [];
+    pack.burgs.forEach(function (b) {
+      if (!b || !b.i) return;
+      burgs.push({
+        id: 'burg_' + b.i,
+        name: b.name || 'Unknown',
+        pos: [b.y, b.x],
+        population: typeof b.population === 'number' ? b.population : 0,
+        stateId: b.state || 0,
+        isPort: !!b.port,
+        isCapital: !!b.capital,
+        group: b.group || null,
+        culture: b.culture || 0,
+        type: b.type || null,
+      });
+    });
+
     if (burgs.length === 0) {
-      throw new Error('No burg features found — is this an Azgaar GeoJSON export?');
-    }
-    if (coastlines.length === 0 && waterCells.length === 0) {
-      throw new Error('Could not identify land or water features.');
+      throw new Error('Azgaar JSON contained no burgs (settlements).');
     }
 
-    var bounds = _computeBounds(geojson.features);
+    var stateBorders = [];
+    pack.states.forEach(function (s) {
+      if (!s || !s.i) return;
+      stateBorders.push({
+        id: 'state_' + s.i,
+        name: s.name || 'Unknown State',
+        fullName: s.fullName || s.name || 'Unknown State',
+        color: s.color || '#888888',
+        capitalBurgId: s.capital ? 'burg_' + s.capital : null,
+      });
+    });
+
+    var biomes = [];
+    var biomeNames = biomesData.name || [];
+    var biomeColors = biomesData.color || [];
+    for (var bi = 0; bi < biomeNames.length; bi++) {
+      biomes.push({
+        id: bi,
+        name: biomeNames[bi],
+        color: biomeColors[bi] || '#888888',
+      });
+    }
+
+    var bounds = [
+      [0, 0],
+      [height, width],
+    ];
 
     return {
-      sourceFormat: 'azgaar-geojson',
-      bounds: bounds,
-      dimensions: {
-        width: bounds[1][1] - bounds[0][1],
-        height: bounds[1][0] - bounds[0][0],
+      sourceFormat: 'azgaar-json',
+      info: {
+        name: info.mapName || 'Unnamed Map',
+        seed: info.seed || null,
+        version: info.version || null,
+        width: width,
+        height: height,
       },
+      bounds: bounds,
+      dimensions: { width: width, height: height },
       coastlines: coastlines,
-      waterCells: waterCells,
+      lakes: lakes,
       biomes: biomes,
       burgs: burgs,
       stateBorders: stateBorders,
@@ -183,32 +157,35 @@
   // Build the renderer-compatible preview world from the parsed intermediate shape.
   // Overlay generation (T-104–T-107) will replace this with richer data later.
   function _toPreviewWorld(parsed) {
+    var stateColorById = {};
+    parsed.stateBorders.forEach(function (s) {
+      stateColorById[s.id] = s.color;
+    });
+
     return {
       bounds: parsed.bounds,
       coastlines: parsed.coastlines,
       settlements: parsed.burgs.map(function (b) {
+        var stateId = 'state_' + b.stateId;
         return {
           id: b.id,
           name: b.name,
           pos: b.pos,
-          type: b.isPort ? 'port' : 'burg',
-          faction: null,
+          type: b.isPort ? 'port' : b.isCapital ? 'capital' : 'burg',
+          faction: b.stateId ? stateId : null,
+          factionColor: stateColorById[stateId] || null,
         };
       }),
-      hazards: [],
+      hazards: parsed.lakes.map(function (l, i) {
+        return { id: 'lake_' + i, name: l.name, type: 'lake', polygon: l.polygon };
+      }),
       tradeRoutes: [],
-      factionTerritory: parsed.stateBorders.map(function (s) {
-        return {
-          id: s.id,
-          name: s.name,
-          faction: s.name,
-          color: s.color,
-          polygon: s.polygon,
-        };
-      }),
+      factionTerritory: [],
       windCurrentZones: [],
     };
   }
+
+  // ---- Browser UI bindings (skipped in Node test environments) ----
 
   function _showError(dropZoneEl, errorEl, msg) {
     errorEl.textContent = msg;
@@ -225,8 +202,8 @@
     if (!file) return;
 
     var lower = file.name.toLowerCase();
-    if (!lower.endsWith('.geojson') && !lower.endsWith('.json')) {
-      _showError(dropZoneEl, errorEl, 'Please drop a .geojson or .json file.');
+    if (!lower.endsWith('.json')) {
+      _showError(dropZoneEl, errorEl, 'Please drop an Azgaar .json export.');
       return;
     }
 
@@ -236,9 +213,9 @@
     var reader = new FileReader();
     reader.onload = function (e) {
       dropZoneEl.classList.remove('drop-zone--loading');
-      var geojson;
+      var json;
       try {
-        geojson = JSON.parse(e.target.result);
+        json = JSON.parse(e.target.result);
       } catch (parseErr) {
         var msg = 'File is not valid JSON: ' + parseErr.message;
         _showError(dropZoneEl, errorEl, msg);
@@ -248,7 +225,7 @@
 
       var parsed;
       try {
-        parsed = parseGeoJSON(geojson);
+        parsed = parseAzgaarJson(json);
       } catch (err) {
         _showError(dropZoneEl, errorEl, err.message);
         if (callbacks.onError) callbacks.onError(err.message);
@@ -267,54 +244,69 @@
     reader.readAsText(file);
   }
 
-  T.importer = {
-    render: function (containerEl, callbacks) {
-      containerEl.innerHTML =
-        '<div class="import-panel">' +
-        '<h2 class="import-panel-title">Import World</h2>' +
-        '<p class="import-panel-hint">Drop an Azgaar Fantasy Map Generator <code>.geojson</code> export below.</p>' +
-        '<div class="drop-zone" id="cartographer-drop-zone">' +
-        '<span class="drop-zone-label">Drop .geojson here</span>' +
-        '<label class="drop-zone-pick">or <span class="drop-zone-pick-link">choose a file</span>' +
-        '<input type="file" accept=".geojson,.json" id="cartographer-file-input" style="display:none">' +
-        '</label>' +
-        '</div>' +
-        '<div class="import-error hidden" id="cartographer-import-error"></div>' +
-        '</div>';
+  function render(containerEl, callbacks) {
+    containerEl.innerHTML =
+      '<div class="import-panel">' +
+      '<h2 class="import-panel-title">Import World</h2>' +
+      '<p class="import-panel-hint">In Azgaar Fantasy Map Generator, use ' +
+      '<strong>Menu → Save → Save as JSON</strong> to export the full map, ' +
+      'then drop the <code>.json</code> file here. ' +
+      '(The partitioned GeoJSON exports — cells, routes, rivers, markers, zones — are not supported.)</p>' +
+      '<div class="drop-zone" id="cartographer-drop-zone">' +
+      '<span class="drop-zone-label">Drop Azgaar .json here</span>' +
+      '<label class="drop-zone-pick">or <span class="drop-zone-pick-link">choose a file</span>' +
+      '<input type="file" accept=".json,application/json" id="cartographer-file-input" style="display:none">' +
+      '</label>' +
+      '</div>' +
+      '<div class="import-error hidden" id="cartographer-import-error"></div>' +
+      '</div>';
 
-      var dropZoneEl = containerEl.querySelector('#cartographer-drop-zone');
-      var fileInputEl = containerEl.querySelector('#cartographer-file-input');
-      var errorEl = containerEl.querySelector('#cartographer-import-error');
+    var dropZoneEl = containerEl.querySelector('#cartographer-drop-zone');
+    var fileInputEl = containerEl.querySelector('#cartographer-file-input');
+    var errorEl = containerEl.querySelector('#cartographer-import-error');
 
-      dropZoneEl.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        dropZoneEl.classList.add('drop-zone--active');
-      });
+    dropZoneEl.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      dropZoneEl.classList.add('drop-zone--active');
+    });
 
-      dropZoneEl.addEventListener('dragleave', function () {
-        dropZoneEl.classList.remove('drop-zone--active');
-      });
+    dropZoneEl.addEventListener('dragleave', function () {
+      dropZoneEl.classList.remove('drop-zone--active');
+    });
 
-      dropZoneEl.addEventListener('drop', function (e) {
-        e.preventDefault();
-        dropZoneEl.classList.remove('drop-zone--active');
-        var file = e.dataTransfer.files && e.dataTransfer.files[0];
-        _processFile(file, dropZoneEl, errorEl, callbacks);
-      });
+    dropZoneEl.addEventListener('drop', function (e) {
+      e.preventDefault();
+      dropZoneEl.classList.remove('drop-zone--active');
+      var file = e.dataTransfer.files && e.dataTransfer.files[0];
+      _processFile(file, dropZoneEl, errorEl, callbacks);
+    });
 
-      dropZoneEl.addEventListener('click', function (e) {
-        // Only trigger file picker when clicking the label area, not the whole zone accidentally.
-        if (e.target !== fileInputEl) fileInputEl.click();
-      });
+    dropZoneEl.addEventListener('click', function (e) {
+      if (e.target !== fileInputEl) fileInputEl.click();
+    });
 
-      fileInputEl.addEventListener('change', function () {
-        var file = fileInputEl.files && fileInputEl.files[0];
-        _processFile(file, dropZoneEl, errorEl, callbacks);
-        // Reset so the same file can be re-selected after an error.
-        fileInputEl.value = '';
-      });
-    },
+    fileInputEl.addEventListener('change', function () {
+      var file = fileInputEl.files && fileInputEl.files[0];
+      _processFile(file, dropZoneEl, errorEl, callbacks);
+      fileInputEl.value = '';
+    });
+  }
 
-    parseGeoJSON: parseGeoJSON,
+  var api = {
+    parseAzgaarJson: parseAzgaarJson,
+    toPreviewWorld: _toPreviewWorld,
+    render: render,
   };
+
+  if (typeof window !== 'undefined') {
+    window.Tortuga = window.Tortuga || {};
+    window.Tortuga.importer = api;
+  }
+
+  // CommonJS export for Jest tests (Node-only path, ignored in the browser).
+  // eslint-disable-next-line no-undef
+  if (typeof module !== 'undefined' && module.exports) {
+    // eslint-disable-next-line no-undef
+    module.exports = api;
+  }
 })();
