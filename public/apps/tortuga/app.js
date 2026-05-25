@@ -54,8 +54,20 @@
       var importEl = document.getElementById('cartographer-import');
       if (importEl) {
         T.importer.render(importEl, {
-          onParsed: function (_parsed, previewWorld) {
-            T._previewImportedWorld(previewWorld);
+          onParsed: function (parsed, previewWorld) {
+            var warningEl = document.getElementById('land-heavy-warning');
+            if (parsed.landPercentage > T.LAND_HEAVY_THRESHOLD && warningEl) {
+              warningEl.classList.remove('hidden');
+              document.getElementById('land-heavy-continue').onclick = function () {
+                warningEl.classList.add('hidden');
+                T._previewImportedWorld(previewWorld);
+              };
+              document.getElementById('land-heavy-cancel').onclick = function () {
+                warningEl.classList.add('hidden');
+              };
+            } else {
+              T._previewImportedWorld(previewWorld);
+            }
           },
         });
       }

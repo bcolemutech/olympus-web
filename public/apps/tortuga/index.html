@@ -44,6 +44,20 @@
         <p class="app-subtitle">Build and explore worlds.</p>
         <div class="app-divider"></div>
         <div id="cartographer-import"></div>
+        <div id="land-heavy-warning" class="land-heavy-warning hidden">
+          <span class="land-heavy-warning-icon" aria-hidden="true">&#9888;</span>
+          <span class="land-heavy-warning-text"
+            >This map is land-heavy. Tortuga plays best on oceanic maps.</span
+          >
+          <div class="land-heavy-warning-actions">
+            <button class="btn-cancel" id="land-heavy-cancel" type="button">
+              Choose Another Map
+            </button>
+            <button class="app-btn app-btn--sm" id="land-heavy-continue" type="button">
+              Continue Anyway
+            </button>
+          </div>
+        </div>
         <div id="world-list-world" class="world-list"></div>
         <div id="map-world" class="tortuga-map hidden"></div>
       </section>

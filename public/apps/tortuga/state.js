@@ -6,6 +6,7 @@
 
   T.MODES = { WORLD: 'world', PLAY: 'play' };
   T.DEFAULT_MODE = 'world';
+  T.LAND_HEAVY_THRESHOLD = 60;
 
   T.state = {
     db: null,
