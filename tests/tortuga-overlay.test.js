@@ -280,6 +280,50 @@ describe('Tortuga overlay — applyOverlay', () => {
     expect(lake.name).toBe('Mirror Lake');
   });
 
+  test('lakes carry severity: low', () => {
+    const world = overlay.applyOverlay(parsed, {});
+    const lake = world.hazards.find((h) => h.type === 'lake');
+    expect(lake.severity).toBe('low');
+  });
+
+  test('hazards include reefs when coastlines are present', () => {
+    const world = overlay.applyOverlay(parsed, {});
+    const reefs = world.hazards.filter((h) => h.type === 'reef');
+    expect(reefs.length).toBeGreaterThan(0);
+  });
+
+  test('hazards include storm bands', () => {
+    const world = overlay.applyOverlay(parsed, {});
+    const bands = world.hazards.filter((h) => h.type === 'storm_band');
+    expect(bands.length).toBeGreaterThan(0);
+  });
+
+  test('hazards include kraken zones by default', () => {
+    const world = overlay.applyOverlay(parsed, {});
+    const krakens = world.hazards.filter((h) => h.type === 'kraken_zone');
+    expect(krakens.length).toBeGreaterThan(0);
+  });
+
+  test('mythic: false suppresses kraken zones', () => {
+    const world = overlay.applyOverlay(parsed, { mythic: false });
+    const krakens = world.hazards.filter((h) => h.type === 'kraken_zone');
+    expect(krakens).toHaveLength(0);
+  });
+
+  test('mythic: true includes kraken zones', () => {
+    const world = overlay.applyOverlay(parsed, { mythic: true });
+    const krakens = world.hazards.filter((h) => h.type === 'kraken_zone');
+    expect(krakens.length).toBeGreaterThan(0);
+  });
+
+  test('density: sparse yields fewer reefs than density: dense', () => {
+    const sparse = overlay.applyOverlay(parsed, { density: 'sparse' });
+    const dense = overlay.applyOverlay(parsed, { density: 'dense' });
+    const sparseReefs = sparse.hazards.filter((h) => h.type === 'reef').length;
+    const denseReefs = dense.hazards.filter((h) => h.type === 'reef').length;
+    expect(sparseReefs).toBeLessThan(denseReefs);
+  });
+
   test('tradeRoutes, factionTerritory, and windCurrentZones are empty arrays', () => {
     const world = overlay.applyOverlay(parsed, {});
     expect(world.tradeRoutes).toEqual([]);
@@ -291,5 +335,236 @@ describe('Tortuga overlay — applyOverlay', () => {
     const world = overlay.applyOverlay(parsed, {});
     expect(world.bounds).toEqual(parsed.bounds);
     expect(world.coastlines).toBe(parsed.coastlines);
+  });
+});
+
+describe('Tortuga overlay — generateReefs', () => {
+  let parsed;
+
+  beforeEach(() => {
+    parsed = importer.parseAzgaarJson(azgaarJsonSample());
+  });
+
+  test('returns 3 reefs for sparse density', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, parsed.coastlines, { density: 'sparse' });
+    expect(reefs).toHaveLength(3);
+  });
+
+  test('returns 6 reefs for standard density', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, parsed.coastlines, { density: 'standard' });
+    expect(reefs).toHaveLength(6);
+  });
+
+  test('returns 12 reefs for dense density', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, parsed.coastlines, { density: 'dense' });
+    expect(reefs).toHaveLength(12);
+  });
+
+  test('defaults to standard count when no density provided', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, parsed.coastlines, {});
+    expect(reefs).toHaveLength(6);
+  });
+
+  test('all reefs have type: reef', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, parsed.coastlines, {});
+    reefs.forEach((r) => expect(r.type).toBe('reef'));
+  });
+
+  test('all reefs have severity: medium', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, parsed.coastlines, {});
+    reefs.forEach((r) => expect(r.severity).toBe('medium'));
+  });
+
+  test('all reefs have required schema fields', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, parsed.coastlines, {});
+    reefs.forEach((r) => {
+      expect(r).toHaveProperty('id');
+      expect(r).toHaveProperty('type');
+      expect(r).toHaveProperty('polygon');
+      expect(r).toHaveProperty('severity');
+    });
+  });
+
+  test('polygon is an array of [y, x] pairs', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, parsed.coastlines, {});
+    reefs.forEach((r) => {
+      expect(Array.isArray(r.polygon)).toBe(true);
+      expect(r.polygon.length).toBeGreaterThanOrEqual(3);
+      r.polygon.forEach((pt) => {
+        expect(Array.isArray(pt)).toBe(true);
+        expect(pt).toHaveLength(2);
+        expect(typeof pt[0]).toBe('number');
+        expect(typeof pt[1]).toBe('number');
+      });
+    });
+  });
+
+  test('returns empty array when coastlines is empty', () => {
+    const reefs = overlay.generateReefs(parsed.bounds, [], {});
+    expect(reefs).toHaveLength(0);
+  });
+
+  test('is deterministic — same input produces same output', () => {
+    const a = overlay.generateReefs(parsed.bounds, parsed.coastlines, { density: 'standard' });
+    const b = overlay.generateReefs(parsed.bounds, parsed.coastlines, { density: 'standard' });
+    expect(a).toEqual(b);
+  });
+});
+
+describe('Tortuga overlay — generateStormBands', () => {
+  let parsed;
+
+  beforeEach(() => {
+    parsed = importer.parseAzgaarJson(azgaarJsonSample());
+  });
+
+  test('returns 1 band for sparse density', () => {
+    const bands = overlay.generateStormBands(parsed.bounds, { density: 'sparse' });
+    expect(bands).toHaveLength(1);
+  });
+
+  test('returns 2 bands for standard density', () => {
+    const bands = overlay.generateStormBands(parsed.bounds, { density: 'standard' });
+    expect(bands).toHaveLength(2);
+  });
+
+  test('returns 3 bands for dense density', () => {
+    const bands = overlay.generateStormBands(parsed.bounds, { density: 'dense' });
+    expect(bands).toHaveLength(3);
+  });
+
+  test('defaults to standard count when no density provided', () => {
+    const bands = overlay.generateStormBands(parsed.bounds, {});
+    expect(bands).toHaveLength(2);
+  });
+
+  test('all bands have type: storm_band', () => {
+    const bands = overlay.generateStormBands(parsed.bounds, {});
+    bands.forEach((b) => expect(b.type).toBe('storm_band'));
+  });
+
+  test('all bands have severity: high', () => {
+    const bands = overlay.generateStormBands(parsed.bounds, {});
+    bands.forEach((b) => expect(b.severity).toBe('high'));
+  });
+
+  test('all bands have required schema fields', () => {
+    const bands = overlay.generateStormBands(parsed.bounds, {});
+    bands.forEach((b) => {
+      expect(b).toHaveProperty('id');
+      expect(b).toHaveProperty('type');
+      expect(b).toHaveProperty('polygon');
+      expect(b).toHaveProperty('severity');
+    });
+  });
+
+  test('band polygon spans the full map width', () => {
+    const bands = overlay.generateStormBands(parsed.bounds, { density: 'standard' });
+    const minX = parsed.bounds[0][1];
+    const maxX = parsed.bounds[1][1];
+    bands.forEach((b) => {
+      const xs = b.polygon.map((pt) => pt[1]);
+      expect(Math.min(...xs)).toBe(minX);
+      expect(Math.max(...xs)).toBe(maxX);
+    });
+  });
+
+  test('is deterministic — same input produces same output', () => {
+    const a = overlay.generateStormBands(parsed.bounds, { density: 'standard' });
+    const b = overlay.generateStormBands(parsed.bounds, { density: 'standard' });
+    expect(a).toEqual(b);
+  });
+});
+
+describe('Tortuga overlay — generateKrakenZones', () => {
+  let parsed;
+
+  beforeEach(() => {
+    parsed = importer.parseAzgaarJson(azgaarJsonSample());
+  });
+
+  test('returns 0 zones when mythic: false', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {
+      mythic: false,
+    });
+    expect(zones).toHaveLength(0);
+  });
+
+  test('returns 1 zone for sparse density (mythic unset)', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {
+      density: 'sparse',
+    });
+    expect(zones).toHaveLength(1);
+  });
+
+  test('returns 2 zones for standard density (mythic unset)', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {
+      density: 'standard',
+    });
+    expect(zones).toHaveLength(2);
+  });
+
+  test('returns 3 zones for dense density (mythic unset)', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {
+      density: 'dense',
+    });
+    expect(zones).toHaveLength(3);
+  });
+
+  test('returns zones by default when no options provided', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {});
+    expect(zones.length).toBeGreaterThan(0);
+  });
+
+  test('mythic: true includes kraken zones', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {
+      mythic: true,
+      density: 'standard',
+    });
+    expect(zones).toHaveLength(2);
+  });
+
+  test('all zones have type: kraken_zone', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {});
+    zones.forEach((z) => expect(z.type).toBe('kraken_zone'));
+  });
+
+  test('all zones have severity: high', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {});
+    zones.forEach((z) => expect(z.severity).toBe('high'));
+  });
+
+  test('all zones have required schema fields', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {});
+    zones.forEach((z) => {
+      expect(z).toHaveProperty('id');
+      expect(z).toHaveProperty('type');
+      expect(z).toHaveProperty('polygon');
+      expect(z).toHaveProperty('severity');
+    });
+  });
+
+  test('polygon is an array of [y, x] pairs', () => {
+    const zones = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {});
+    zones.forEach((z) => {
+      expect(Array.isArray(z.polygon)).toBe(true);
+      expect(z.polygon.length).toBeGreaterThanOrEqual(3);
+      z.polygon.forEach((pt) => {
+        expect(Array.isArray(pt)).toBe(true);
+        expect(pt).toHaveLength(2);
+        expect(typeof pt[0]).toBe('number');
+        expect(typeof pt[1]).toBe('number');
+      });
+    });
+  });
+
+  test('is deterministic — same input produces same output', () => {
+    const a = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {
+      density: 'standard',
+    });
+    const b = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {
+      density: 'standard',
+    });
+    expect(a).toEqual(b);
   });
 });
