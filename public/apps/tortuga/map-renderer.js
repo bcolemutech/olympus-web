@@ -38,13 +38,14 @@
   function _renderSettlements(world) {
     if (!world || !world.settlements) return;
     world.settlements.forEach(function (s) {
-      L.marker(s.pos, { title: s.name })
+      var factionLabel = s.parentFaction || s.faction || null;
+      L.marker(s.position || s.pos, { title: s.name })
         .bindPopup(
           '<strong>' +
             s.name +
             '</strong><br>' +
             (s.type || '') +
-            (s.faction ? '<br>' + s.faction : '')
+            (factionLabel ? '<br>' + factionLabel : '')
         )
         .addTo(_layers[LAYERS.SETTLEMENTS]);
     });
