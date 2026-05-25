@@ -47,7 +47,7 @@ Splitting into two apps later is cheap if it ever becomes worthwhile.
 ├── map-renderer.js           # Leaflet-based renderer (shared by both modes)
 ├── world-list.js             # Shared world browser
 ├── cartographer/
-│   ├── importer.js           # Azgaar .map / GeoJSON parser
+│   ├── importer.js           # Azgaar JSON parser
 │   ├── overlay.js            # Pirate-flair generator
 │   └── editor.js             # UI for tweaking generated worlds
 ├── play/
@@ -86,14 +86,13 @@ Script load order in `index.html` follows the existing pattern: `state.js` → m
 
 ### Input formats
 
-- **Azgaar JSON** (the full "Menu → Save → Save as JSON" export) — primary target. Single file carrying `info`, `pack.{burgs, states, features, vertices, cells, rivers, routes}`, and `biomesData`. Has everything we need.
-- **Azgaar `.map`** (custom text format) — secondary, may be added later for users who only have a `.map` save.
-- **Azgaar GeoJSON exports are NOT supported.** Azgaar partitions GeoJSON output into separate files (cells, routes, rivers, markers, zones); none of those carry burgs/states on their own, so they can't produce a playable world. The importer rejects them with a message pointing the user at "Save as JSON".
-- All formats are parsed client-side; no upload to Cloud Functions needed for ingest.
+- **Azgaar JSON** (the full "Menu → Save → Save as JSON" export) — **the only supported import format.** Single file carrying `info`, `pack.{burgs, states, features, vertices, cells, rivers, routes}`, and `biomesData`. Has everything we need.
+- **Azgaar `.map` and partitioned GeoJSON exports are not supported.** `.map` is the editor's native save format and parsing it isn't worth the complexity when "Save as JSON" is one click away. GeoJSON exports are partitioned by data type (cells / routes / rivers / markers / zones) and none carry burgs/states on their own. The importer rejects both with a message pointing the user at "Save as JSON".
+- JSON is parsed client-side; no upload to Cloud Functions needed for ingest.
 
 ### Pipeline
 
-1. **Upload** — User drops an Azgaar `.json` (full "Save as JSON" export) into the importer. `.map` parsing is a future addition.
+1. **Upload** — User drops an Azgaar `.json` (full "Save as JSON" export) into the importer.
 2. **Parse** — Extract: coastline polygons, water cells, biomes, burgs (potential ports), state borders, rivers (deep-water inland reach), climate (storm bands).
 3. **Recommend** — Inspect water-to-land ratio. If land > ~60%, surface a soft warning: _"This map is land-heavy. Tortuga plays best on oceanic maps. Continue anyway?"_
 4. **Overlay generation** — Apply pirate flair:
@@ -412,8 +411,7 @@ Each phase decomposes into story-card-sized deliverables matching the project's 
 
 | Story | Description                                                            |
 | ----- | ---------------------------------------------------------------------- |
-| T-101 | Azgaar GeoJSON parser (simpler format first)                           |
-| T-102 | Azgaar `.map` parser                                                   |
+| T-101 | Azgaar JSON parser (full "Save as JSON" export)                        |
 | T-103 | Land/water ratio check + soft "ocean-dominant recommended" nudge       |
 | T-104 | Overlay generator: classify coastal burgs into settlement types        |
 | T-105 | Overlay generator: hidden coves, hazards (reefs, storms, kraken zones) |
@@ -488,7 +486,7 @@ name, description,
 createdBy (uid),
 createdAt, updatedAt,
 shared (bool, default true),
-sourceFormat ('azgaar-map' | 'azgaar-geojson'),
+sourceFormat ('azgaar-json'),
 era ('caribbean_golden_age' | ...),
 dimensions { width, height },
 geography {
