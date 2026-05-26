@@ -2,22 +2,26 @@
   'use strict';
 
   /*
-   * Tortuga overlay generator — T-104 / T-105 (hidden coves).
+   * Tortuga overlay generator — T-104 / T-105 (hidden coves) / T-106 (faction mapping).
    *
    * Transforms the intermediate shape produced by importer.parseAzgaarJson into
    * a pirate-themed world whose settlements match the tortuga_worlds.settlements[]
    * schema from §9 of the design doc:
    *   { id, name, type, position, parentFaction, baseSize, hidden }
    *
+   * Factions match the tortuga_worlds.factions[] schema from §9:
+   *   { id, name, archetype, color, homeSettlementId }
+   *
    * Settlement types: colonial_port, free_port, fort, hidden_cove, native_village, ruins
    *
-   * Classification is deterministic: same parsed input + same options → same output.
-   * Branching decisions use a lightweight hash of the burg ID rather than Math.random().
+   * Classification and faction mapping are deterministic: same parsed input + same options
+   * → same output. Branching decisions use a lightweight hash of the burg ID rather than
+   * Math.random().
    *
    * applyOverlay(parsed, options) is the top-level entry point. It returns a
    * renderer-compatible world shape (same keys as importer._toPreviewWorld) but
-   * with fully classified settlements. Callers should prefer applyOverlay over
-   * importer.toPreviewWorld once this module is loaded.
+   * with fully classified settlements and faction list. Callers should prefer applyOverlay
+   * over importer.toPreviewWorld once this module is loaded.
    */
 
   var SETTLEMENT_TYPES = {
@@ -51,6 +55,43 @@
     sparse: 1,
     standard: 2,
     dense: 3,
+  };
+
+  var ERA_FACTION_CATALOG = {
+    caribbean_golden_age: [
+      { archetype: 'spanish_crown', name: 'Spanish Crown', color: '#c8a000' },
+      { archetype: 'british_crown', name: 'British Crown', color: '#8b0000' },
+      { archetype: 'french_crown', name: 'French Crown', color: '#00408b' },
+      { archetype: 'dutch_trading_co', name: 'Dutch Trading Co.', color: '#005e00' },
+      { archetype: 'indigenous_confederacy', name: 'Indigenous Confederacy', color: '#7a5200' },
+      { archetype: 'free_city', name: 'Free City', color: '#555555' },
+    ],
+    mediterranean_corsair: [
+      { archetype: 'ottoman_regency', name: 'Ottoman Regency', color: '#8b0000' },
+      { archetype: 'venetian_republic', name: 'Venetian Republic', color: '#9b6000' },
+      { archetype: 'papal_states', name: 'Papal States', color: '#c8c800' },
+      { archetype: 'corsair_republic', name: 'Corsair Republic', color: '#003060' },
+      { archetype: 'free_city', name: 'Free City', color: '#555555' },
+    ],
+    indian_ocean: [
+      { archetype: 'mughal_empire', name: 'Mughal Empire', color: '#8b3a00' },
+      { archetype: 'portuguese_estado', name: 'Portuguese Estado', color: '#005e00' },
+      { archetype: 'arab_sultanate', name: 'Arab Sultanate', color: '#c8a000' },
+      { archetype: 'east_india_company', name: 'East India Company', color: '#8b0000' },
+      { archetype: 'free_city', name: 'Free City', color: '#555555' },
+    ],
+    freeform: [
+      { archetype: 'realm', name: 'Realm', color: '#556070' },
+      { archetype: 'confederacy', name: 'Confederacy', color: '#705560' },
+      { archetype: 'guild', name: 'Guild', color: '#607055' },
+      { archetype: 'free_city', name: 'Free City', color: '#555555' },
+    ],
+  };
+
+  var PIRATE_BRETHREN_ENTRY = {
+    archetype: 'pirate_brethren',
+    name: 'Pirate Brethren',
+    color: '#222222',
   };
 
   var COVE_NAMES = [
@@ -159,6 +200,47 @@
       if (s !== null) settlements.push(s);
     }
     return settlements;
+  }
+
+  /*
+   * Map source states to faction archetypes for the era preset.
+   * Pirate Brethren is always appended as a synthetic faction (no Azgaar state).
+   *
+   * @param {Array} stateBorders - from parseAzgaarJson result: [{ id, name, color, capitalBurgId }]
+   * @param {Object} options     - { era: string, factionCount: number (2–8) }
+   * @returns {Array}            - faction objects matching §9 schema: { id, name, archetype, color, homeSettlementId }
+   */
+  function generateFactions(stateBorders, options) {
+    var opts = options || {};
+    var era = opts.era || 'caribbean_golden_age';
+    var rawCount = typeof opts.factionCount === 'number' ? opts.factionCount : 8;
+    var factionCount = Math.max(2, Math.min(8, rawCount));
+
+    var catalog = ERA_FACTION_CATALOG[era] || ERA_FACTION_CATALOG['caribbean_golden_age'];
+    var stateSlots = Math.min(stateBorders.length, factionCount - 1);
+
+    var factions = [];
+    for (var i = 0; i < stateSlots; i++) {
+      var state = stateBorders[i];
+      var entry = catalog[i % catalog.length];
+      factions.push({
+        id: state.id,
+        name: entry.name,
+        archetype: entry.archetype,
+        color: state.color || entry.color,
+        homeSettlementId: state.capitalBurgId || null,
+      });
+    }
+
+    factions.push({
+      id: 'faction_pirate',
+      name: PIRATE_BRETHREN_ENTRY.name,
+      archetype: PIRATE_BRETHREN_ENTRY.archetype,
+      color: PIRATE_BRETHREN_ENTRY.color,
+      homeSettlementId: null,
+    });
+
+    return factions;
   }
 
   /*
@@ -338,6 +420,7 @@
   function applyOverlay(parsed, options) {
     var opts = options || {};
     var classified = classifySettlements(parsed.burgs, parsed.stateBorders, opts);
+    var factions = generateFactions(parsed.stateBorders, opts);
     var coves = generateHiddenCoves(parsed.bounds, parsed.coastlines, opts);
     var reefs = generateReefs(parsed.bounds, parsed.coastlines, opts);
     var storms = generateStormBands(parsed.bounds, opts);
@@ -351,6 +434,7 @@
       coastlines: parsed.coastlines,
       settlements: classified.concat(coves),
       hazards: lakeHazards.concat(reefs, storms, krakens),
+      factions: factions,
       tradeRoutes: [],
       factionTerritory: [],
       windCurrentZones: [],
@@ -359,6 +443,7 @@
 
   var api = {
     classifySettlements: classifySettlements,
+    generateFactions: generateFactions,
     generateHiddenCoves: generateHiddenCoves,
     generateReefs: generateReefs,
     generateStormBands: generateStormBands,
