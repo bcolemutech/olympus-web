@@ -35,6 +35,24 @@
     dense: 20,
   };
 
+  var DENSITY_REEF_COUNT = {
+    sparse: 3,
+    standard: 6,
+    dense: 12,
+  };
+
+  var DENSITY_STORM_COUNT = {
+    sparse: 1,
+    standard: 2,
+    dense: 3,
+  };
+
+  var DENSITY_KRAKEN_COUNT = {
+    sparse: 1,
+    standard: 2,
+    dense: 3,
+  };
+
   var COVE_NAMES = [
     "The Devil's Notch",
     "Wraith's Anchorage",
@@ -49,6 +67,16 @@
     'Serpent Cove',
     'The Dark Passage',
   ];
+
+  // 4-point rectangle polygon centred at (cy, cx).
+  function _makeRect(cy, cx, halfH, halfW) {
+    return [
+      [cy - halfH, cx - halfW],
+      [cy - halfH, cx + halfW],
+      [cy + halfH, cx + halfW],
+      [cy + halfH, cx - halfW],
+    ];
+  }
 
   // Deterministic djb2-style hash of a string → float in [0, 1).
   function _hash(str) {
@@ -177,6 +205,126 @@
   }
 
   /*
+   * Generate reef hazard patches near coastline vertices.
+   *
+   * @param {Array} bounds     - [[minY, minX], [maxY, maxX]]
+   * @param {Array} coastlines - array of rings, each ring is [[y, x], ...]
+   * @param {Object} options   - { density: 'sparse'|'standard'|'dense' }
+   * @returns {Array}          - hazard objects { id, type, polygon, severity }
+   */
+  function generateReefs(bounds, coastlines, options) {
+    var density = (options && options.density) || 'standard';
+    var count = DENSITY_REEF_COUNT[density] || DENSITY_REEF_COUNT.standard;
+
+    if (!coastlines || coastlines.length === 0) return [];
+
+    var mapH = bounds[1][0] - bounds[0][0];
+    var mapW = bounds[1][1] - bounds[0][1];
+    var halfH = mapH * 0.025;
+    var halfW = mapW * 0.025;
+
+    var reefs = [];
+    for (var i = 0; i < count; i++) {
+      var ringIdx = i % coastlines.length;
+      var ring = coastlines[ringIdx];
+      var h = _hash('reef_' + i);
+      var vertIdx = Math.floor(h * ring.length);
+      var basePos = ring[vertIdx] || ring[0];
+
+      var nudgeY = mapH * 0.01 * (_hash('reef_nudge_y_' + i) - 0.5);
+      var nudgeX = mapW * 0.01 * (_hash('reef_nudge_x_' + i) - 0.5);
+
+      reefs.push({
+        id: 'reef_' + i,
+        type: 'reef',
+        polygon: _makeRect(basePos[0] + nudgeY, basePos[1] + nudgeX, halfH, halfW),
+        severity: 'medium',
+      });
+    }
+    return reefs;
+  }
+
+  /*
+   * Generate storm band hazards as wide horizontal strips across the map,
+   * evenly spaced by latitude.
+   *
+   * @param {Array} bounds   - [[minY, minX], [maxY, maxX]]
+   * @param {Object} options - { density: 'sparse'|'standard'|'dense' }
+   * @returns {Array}        - hazard objects { id, type, polygon, severity }
+   */
+  function generateStormBands(bounds, options) {
+    var density = (options && options.density) || 'standard';
+    var count = DENSITY_STORM_COUNT[density] || DENSITY_STORM_COUNT.standard;
+
+    var minY = bounds[0][0];
+    var maxY = bounds[1][0];
+    var minX = bounds[0][1];
+    var maxX = bounds[1][1];
+    var mapH = maxY - minY;
+    var bandH = mapH * 0.08;
+
+    var bands = [];
+    for (var i = 0; i < count; i++) {
+      var cy = minY + mapH * ((i + 1) / (count + 1));
+      var y1 = cy - bandH / 2;
+      var y2 = cy + bandH / 2;
+      bands.push({
+        id: 'storm_' + i,
+        type: 'storm_band',
+        polygon: [
+          [y1, minX],
+          [y1, maxX],
+          [y2, maxX],
+          [y2, minX],
+        ],
+        severity: 'high',
+      });
+    }
+    return bands;
+  }
+
+  /*
+   * Generate kraken zone hazards in open sea (map centre + deterministic offset).
+   * Returns an empty array when options.mythic === false.
+   *
+   * @param {Array} bounds     - [[minY, minX], [maxY, maxX]]
+   * @param {Array} coastlines - unused; reserved for future deep-water heuristic
+   * @param {Object} options   - { density: 'sparse'|'standard'|'dense', mythic: bool }
+   * @returns {Array}          - hazard objects { id, type, polygon, severity }
+   */
+  function generateKrakenZones(bounds, coastlines, options) {
+    void coastlines;
+    if (options && options.mythic === false) return [];
+
+    var density = (options && options.density) || 'standard';
+    var count = DENSITY_KRAKEN_COUNT[density] || DENSITY_KRAKEN_COUNT.standard;
+
+    var minY = bounds[0][0];
+    var maxY = bounds[1][0];
+    var minX = bounds[0][1];
+    var maxX = bounds[1][1];
+    var mapH = maxY - minY;
+    var mapW = maxX - minX;
+    var centerY = (minY + maxY) / 2;
+    var centerX = (minX + maxX) / 2;
+    var halfH = mapH * 0.05;
+    var halfW = mapW * 0.05;
+
+    var zones = [];
+    for (var i = 0; i < count; i++) {
+      var cy = centerY + mapH * 0.3 * (_hash('kzone_y_' + i) - 0.5);
+      var cx = centerX + mapW * 0.3 * (_hash('kzone_x_' + i) - 0.5);
+      zones.push({
+        id: 'kraken_' + i,
+        type: 'kraken_zone',
+        polygon: _makeRect(cy, cx, halfH, halfW),
+        severity: 'high',
+      });
+    }
+    return zones;
+  }
+
+  /*
    * Apply the full overlay pipeline to a parsed world, returning a renderer-
    * compatible world shape with enriched settlements.
    *
@@ -191,14 +339,18 @@
     var opts = options || {};
     var classified = classifySettlements(parsed.burgs, parsed.stateBorders, opts);
     var coves = generateHiddenCoves(parsed.bounds, parsed.coastlines, opts);
+    var reefs = generateReefs(parsed.bounds, parsed.coastlines, opts);
+    var storms = generateStormBands(parsed.bounds, opts);
+    var krakens = generateKrakenZones(parsed.bounds, parsed.coastlines, opts);
+    var lakeHazards = parsed.lakes.map(function (l, i) {
+      return { id: 'lake_' + i, name: l.name, type: 'lake', polygon: l.polygon, severity: 'low' };
+    });
 
     return {
       bounds: parsed.bounds,
       coastlines: parsed.coastlines,
       settlements: classified.concat(coves),
-      hazards: parsed.lakes.map(function (l, i) {
-        return { id: 'lake_' + i, name: l.name, type: 'lake', polygon: l.polygon };
-      }),
+      hazards: lakeHazards.concat(reefs, storms, krakens),
       tradeRoutes: [],
       factionTerritory: [],
       windCurrentZones: [],
@@ -208,6 +360,9 @@
   var api = {
     classifySettlements: classifySettlements,
     generateHiddenCoves: generateHiddenCoves,
+    generateReefs: generateReefs,
+    generateStormBands: generateStormBands,
+    generateKrakenZones: generateKrakenZones,
     applyOverlay: applyOverlay,
   };
 
