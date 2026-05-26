@@ -12,11 +12,14 @@
    * Factions match the tortuga_worlds.factions[] schema from §9:
    *   { id, name, archetype, color, homeSettlementId }
    *
+   * Trade routes match the tortuga_worlds.tradeRoutes[] schema from §9:
+   *   { id, fromId, toId, faction }
+   *
    * Settlement types: colonial_port, free_port, fort, hidden_cove, native_village, ruins
    *
-   * Classification and faction mapping are deterministic: same parsed input + same options
-   * → same output. Branching decisions use a lightweight hash of the burg ID rather than
-   * Math.random().
+   * Classification, faction mapping, and trade route generation are deterministic:
+   * same parsed input + same options → same output. Branching decisions use a
+   * lightweight hash of the burg ID rather than Math.random().
    *
    * applyOverlay(parsed, options) is the top-level entry point. It returns a
    * renderer-compatible world shape (same keys as importer._toPreviewWorld) but
@@ -407,6 +410,54 @@
   }
 
   /*
+   * Generate trade routes between large colonial_ports of the same faction.
+   * Routes are a chain (not all-to-all): ports sorted by X position are connected
+   * adjacently, producing at most N-1 routes for N ports per faction.
+   *
+   * @param {Array} settlements - classified settlement objects (output of classifySettlements)
+   * @param {Object} options    - reserved for future use
+   * @returns {Array}           - trade route objects matching §9 schema: { id, fromId, toId, faction }
+   */
+  function generateTradeRoutes(settlements, options) {
+    void options;
+
+    var byFaction = {};
+    for (var i = 0; i < settlements.length; i++) {
+      var s = settlements[i];
+      if (s.type !== SETTLEMENT_TYPES.COLONIAL_PORT) continue;
+      if (s.baseSize !== 'large') continue;
+      if (!s.parentFaction) continue;
+      if (!byFaction[s.parentFaction]) byFaction[s.parentFaction] = [];
+      byFaction[s.parentFaction].push(s);
+    }
+
+    var routes = [];
+    var routeIdx = 0;
+    var factionIds = Object.keys(byFaction).sort();
+
+    for (var fi = 0; fi < factionIds.length; fi++) {
+      var factionId = factionIds[fi];
+      var ports = byFaction[factionId];
+      ports.sort(function (a, b) {
+        if (a.position[1] !== b.position[1]) return a.position[1] - b.position[1];
+        if (a.position[0] !== b.position[0]) return a.position[0] - b.position[0];
+        return a.id < b.id ? -1 : 1;
+      });
+      for (var pi = 0; pi < ports.length - 1; pi++) {
+        routes.push({
+          id: 'route_' + routeIdx,
+          fromId: ports[pi].id,
+          toId: ports[pi + 1].id,
+          faction: factionId,
+        });
+        routeIdx++;
+      }
+    }
+
+    return routes;
+  }
+
+  /*
    * Apply the full overlay pipeline to a parsed world, returning a renderer-
    * compatible world shape with enriched settlements.
    *
@@ -428,6 +479,7 @@
     var lakeHazards = parsed.lakes.map(function (l, i) {
       return { id: 'lake_' + i, name: l.name, type: 'lake', polygon: l.polygon, severity: 'low' };
     });
+    var routes = generateTradeRoutes(classified, opts);
 
     return {
       bounds: parsed.bounds,
@@ -435,7 +487,7 @@
       settlements: classified.concat(coves),
       hazards: lakeHazards.concat(reefs, storms, krakens),
       factions: factions,
-      tradeRoutes: [],
+      tradeRoutes: routes,
       factionTerritory: [],
       windCurrentZones: [],
     };
@@ -448,6 +500,7 @@
     generateReefs: generateReefs,
     generateStormBands: generateStormBands,
     generateKrakenZones: generateKrakenZones,
+    generateTradeRoutes: generateTradeRoutes,
     applyOverlay: applyOverlay,
   };
 
