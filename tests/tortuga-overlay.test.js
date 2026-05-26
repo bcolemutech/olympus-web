@@ -343,6 +343,29 @@ describe('Tortuga overlay — applyOverlay', () => {
     expect(world.bounds).toEqual(parsed.bounds);
     expect(world.coastlines).toBe(parsed.coastlines);
   });
+
+  test('tradeRoutes populated when multiple large colonial_ports share a faction', () => {
+    // Construct a minimal parsed object with two large state-1 port burgs.
+    const parsedWithPorts = {
+      bounds: [[0, 0], [800, 1000]],
+      coastlines: [[[0, 0], [100, 0], [100, 100], [0, 100]]],
+      lakes: [],
+      burgs: [
+        { id: 'burg_10', name: 'Haven A', pos: [200, 100], population: 10, stateId: 1, isPort: true, isCapital: true },
+        { id: 'burg_11', name: 'Haven B', pos: [200, 500], population: 10, stateId: 1, isPort: true, isCapital: false },
+      ],
+      stateBorders: [{ id: 'state_1', name: 'Albion', color: '#cc4400', capitalBurgId: 'burg_10' }],
+    };
+    const world = overlay.applyOverlay(parsedWithPorts, {});
+    expect(world.tradeRoutes.length).toBeGreaterThan(0);
+    world.tradeRoutes.forEach((r) => {
+      expect(r).toHaveProperty('id');
+      expect(r).toHaveProperty('fromId');
+      expect(r).toHaveProperty('toId');
+      expect(r).toHaveProperty('faction');
+      expect(r.faction).toBe('state_1');
+    });
+  });
 });
 
 describe('Tortuga overlay — generateReefs', () => {
@@ -572,6 +595,157 @@ describe('Tortuga overlay — generateKrakenZones', () => {
     const b = overlay.generateKrakenZones(parsed.bounds, parsed.coastlines, {
       density: 'standard',
     });
+    expect(a).toEqual(b);
+  });
+});
+
+describe('Tortuga overlay — generateTradeRoutes', () => {
+  function makePort(id, faction, x, y) {
+    return {
+      id,
+      name: id,
+      type: 'colonial_port',
+      position: [y !== undefined ? y : 100, x],
+      parentFaction: faction,
+      baseSize: 'large',
+      hidden: false,
+    };
+  }
+
+  test('returns empty array for empty settlements', () => {
+    expect(overlay.generateTradeRoutes([], {})).toEqual([]);
+  });
+
+  test('returns empty array when no colonial_ports exist', () => {
+    const settlements = [
+      { id: 'a', type: 'free_port', position: [100, 100], parentFaction: 'state_1', baseSize: 'large', hidden: false },
+      { id: 'b', type: 'fort', position: [100, 200], parentFaction: 'state_1', baseSize: 'large', hidden: false },
+    ];
+    expect(overlay.generateTradeRoutes(settlements, {})).toEqual([]);
+  });
+
+  test('returns empty array when large colonial_ports have no parentFaction', () => {
+    const settlements = [makePort('a', null, 100), makePort('b', null, 200)];
+    // override parentFaction to null
+    settlements[0].parentFaction = null;
+    settlements[1].parentFaction = null;
+    expect(overlay.generateTradeRoutes(settlements, {})).toEqual([]);
+  });
+
+  test('returns empty array when only one large colonial_port per faction', () => {
+    expect(overlay.generateTradeRoutes([makePort('a', 'state_1', 100)], {})).toEqual([]);
+  });
+
+  test('two large colonial_ports of same faction produce 1 route', () => {
+    const routes = overlay.generateTradeRoutes(
+      [makePort('a', 'state_1', 100), makePort('b', 'state_1', 200)],
+      {}
+    );
+    expect(routes).toHaveLength(1);
+  });
+
+  test('three large colonial_ports of same faction produce 2 routes (not 3)', () => {
+    const routes = overlay.generateTradeRoutes(
+      [makePort('a', 'state_1', 100), makePort('b', 'state_1', 200), makePort('c', 'state_1', 300)],
+      {}
+    );
+    expect(routes).toHaveLength(2);
+  });
+
+  test('two factions with 2 ports each produce 2 routes total', () => {
+    const settlements = [
+      makePort('a', 'state_1', 100),
+      makePort('b', 'state_1', 200),
+      makePort('c', 'state_2', 300),
+      makePort('d', 'state_2', 400),
+    ];
+    expect(overlay.generateTradeRoutes(settlements, {})).toHaveLength(2);
+  });
+
+  test('routes never connect ports of different factions', () => {
+    const settlements = [
+      makePort('a', 'state_1', 100),
+      makePort('b', 'state_1', 200),
+      makePort('c', 'state_2', 150),
+      makePort('d', 'state_2', 350),
+    ];
+    const routes = overlay.generateTradeRoutes(settlements, {});
+    routes.forEach((r) => {
+      const from = settlements.find((s) => s.id === r.fromId);
+      const to = settlements.find((s) => s.id === r.toId);
+      expect(from.parentFaction).toBe(to.parentFaction);
+      expect(r.faction).toBe(from.parentFaction);
+    });
+  });
+
+  test('route schema has all §9 required fields: id, fromId, toId, faction', () => {
+    const routes = overlay.generateTradeRoutes(
+      [makePort('a', 'state_1', 100), makePort('b', 'state_1', 200)],
+      {}
+    );
+    routes.forEach((r) => {
+      expect(r).toHaveProperty('id');
+      expect(r).toHaveProperty('fromId');
+      expect(r).toHaveProperty('toId');
+      expect(r).toHaveProperty('faction');
+    });
+  });
+
+  test('route id starts with "route_"', () => {
+    const routes = overlay.generateTradeRoutes(
+      [makePort('a', 'state_1', 100), makePort('b', 'state_1', 200)],
+      {}
+    );
+    routes.forEach((r) => expect(r.id).toMatch(/^route_\d+$/));
+  });
+
+  test('fromId and toId reference valid settlement ids', () => {
+    const settlements = [
+      makePort('a', 'state_1', 100),
+      makePort('b', 'state_1', 200),
+      makePort('c', 'state_1', 300),
+    ];
+    const ids = settlements.map((s) => s.id);
+    const routes = overlay.generateTradeRoutes(settlements, {});
+    routes.forEach((r) => {
+      expect(ids).toContain(r.fromId);
+      expect(ids).toContain(r.toId);
+    });
+  });
+
+  test('medium colonial_ports are excluded from routes', () => {
+    const settlements = [
+      makePort('large_a', 'state_1', 100),
+      makePort('large_b', 'state_1', 200),
+      { id: 'medium_c', name: 'medium_c', type: 'colonial_port', position: [100, 150], parentFaction: 'state_1', baseSize: 'medium', hidden: false },
+    ];
+    const routes = overlay.generateTradeRoutes(settlements, {});
+    // Only 2 large ports → 1 route; medium is not in any route endpoint
+    expect(routes).toHaveLength(1);
+    routes.forEach((r) => {
+      expect(r.fromId).not.toBe('medium_c');
+      expect(r.toId).not.toBe('medium_c');
+    });
+  });
+
+  test('non-colonial_port settlement types are excluded', () => {
+    const settlements = [
+      { id: 'fp1', type: 'free_port', position: [100, 100], parentFaction: 'state_1', baseSize: 'large', hidden: false },
+      { id: 'ft1', type: 'fort', position: [100, 200], parentFaction: 'state_1', baseSize: 'large', hidden: false },
+      { id: 'hc1', type: 'hidden_cove', position: [100, 300], parentFaction: 'state_1', baseSize: 'large', hidden: true },
+    ];
+    expect(overlay.generateTradeRoutes(settlements, {})).toHaveLength(0);
+  });
+
+  test('is deterministic — same input produces same output', () => {
+    const settlements = [
+      makePort('a', 'state_1', 100),
+      makePort('b', 'state_1', 200),
+      makePort('c', 'state_2', 300),
+      makePort('d', 'state_2', 400),
+    ];
+    const a = overlay.generateTradeRoutes(settlements, {});
+    const b = overlay.generateTradeRoutes(settlements, {});
     expect(a).toEqual(b);
   });
 });
