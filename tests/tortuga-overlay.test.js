@@ -245,9 +245,16 @@ describe('Tortuga overlay — applyOverlay', () => {
     expect(world).toHaveProperty('coastlines');
     expect(world).toHaveProperty('settlements');
     expect(world).toHaveProperty('hazards');
+    expect(world).toHaveProperty('factions');
     expect(world).toHaveProperty('tradeRoutes');
     expect(world).toHaveProperty('factionTerritory');
     expect(world).toHaveProperty('windCurrentZones');
+  });
+
+  test('factions is a non-empty array', () => {
+    const world = overlay.applyOverlay(parsed, {});
+    expect(Array.isArray(world.factions)).toBe(true);
+    expect(world.factions.length).toBeGreaterThan(0);
   });
 
   test('settlements combines classified burgs and hidden coves', () => {
@@ -566,5 +573,102 @@ describe('Tortuga overlay — generateKrakenZones', () => {
       density: 'standard',
     });
     expect(a).toEqual(b);
+  });
+});
+
+describe('Tortuga overlay — generateFactions', () => {
+  // Fixture states from azgaarJsonSample:
+  //   state_1 — Albion:  color '#cc4400', capitalBurgId 'burg_1'
+  //   state_2 — Castile: color '#ddaa00', capitalBurgId null
+  let parsed;
+
+  beforeEach(() => {
+    parsed = importer.parseAzgaarJson(azgaarJsonSample());
+  });
+
+  test('every faction has all required §9 schema fields', () => {
+    const factions = overlay.generateFactions(parsed.stateBorders, {});
+    factions.forEach((f) => {
+      expect(f).toHaveProperty('id');
+      expect(f).toHaveProperty('name');
+      expect(f).toHaveProperty('archetype');
+      expect(f).toHaveProperty('color');
+      expect(f).toHaveProperty('homeSettlementId');
+    });
+  });
+
+  test('archetype is a non-empty string on every faction', () => {
+    const factions = overlay.generateFactions(parsed.stateBorders, {});
+    factions.forEach((f) => {
+      expect(typeof f.archetype).toBe('string');
+      expect(f.archetype.length).toBeGreaterThan(0);
+    });
+  });
+
+  test('era preset influences faction archetypes — caribbean_golden_age vs mediterranean_corsair', () => {
+    const caribbean = overlay.generateFactions(parsed.stateBorders, {
+      era: 'caribbean_golden_age',
+    });
+    const mediterranean = overlay.generateFactions(parsed.stateBorders, {
+      era: 'mediterranean_corsair',
+    });
+    const firstCaribbean = caribbean.find((f) => f.id === 'state_1');
+    const firstMediterranean = mediterranean.find((f) => f.id === 'state_1');
+    expect(firstCaribbean.archetype).not.toBe(firstMediterranean.archetype);
+  });
+
+  test('factionCount: 2 limits output to at most 2 factions', () => {
+    const factions = overlay.generateFactions(parsed.stateBorders, { factionCount: 2 });
+    expect(factions.length).toBeLessThanOrEqual(2);
+  });
+
+  test('output never exceeds factionCount', () => {
+    [2, 3, 8].forEach((count) => {
+      const factions = overlay.generateFactions(parsed.stateBorders, { factionCount: count });
+      expect(factions.length).toBeLessThanOrEqual(count);
+    });
+  });
+
+  test('Pirate Brethren faction is always present', () => {
+    const factions = overlay.generateFactions(parsed.stateBorders, {});
+    const pirate = factions.find((f) => f.archetype === 'pirate_brethren');
+    expect(pirate).toBeDefined();
+  });
+
+  test('homeSettlementId for state_1 is burg_1 (capitalBurgId from fixture)', () => {
+    const factions = overlay.generateFactions(parsed.stateBorders, {});
+    const state1 = factions.find((f) => f.id === 'state_1');
+    expect(state1.homeSettlementId).toBe('burg_1');
+  });
+
+  test('homeSettlementId for state_2 is null (no capital in fixture)', () => {
+    const factions = overlay.generateFactions(parsed.stateBorders, {});
+    const state2 = factions.find((f) => f.id === 'state_2');
+    expect(state2.homeSettlementId).toBeNull();
+  });
+
+  test('state faction id matches parentFaction on classified settlements', () => {
+    const factions = overlay.generateFactions(parsed.stateBorders, {});
+    const settlements = overlay.classifySettlements(parsed.burgs, parsed.stateBorders, {});
+    const factionIds = factions.map((f) => f.id);
+    settlements
+      .filter((s) => s.parentFaction !== null)
+      .forEach((s) => {
+        expect(factionIds).toContain(s.parentFaction);
+      });
+  });
+
+  test('is deterministic — same input produces same output', () => {
+    const a = overlay.generateFactions(parsed.stateBorders, { era: 'caribbean_golden_age' });
+    const b = overlay.generateFactions(parsed.stateBorders, { era: 'caribbean_golden_age' });
+    expect(a).toEqual(b);
+  });
+
+  test('unknown era slug falls back gracefully — no throw, pirate brethren present', () => {
+    let factions;
+    expect(() => {
+      factions = overlay.generateFactions(parsed.stateBorders, { era: 'totally_unknown_era' });
+    }).not.toThrow();
+    expect(factions.find((f) => f.archetype === 'pirate_brethren')).toBeDefined();
   });
 });
