@@ -465,17 +465,25 @@
    * the cartographer UI, callers should use applyOverlay instead of toPreviewWorld.
    *
    * @param {Object} parsed  - result of importer.parseAzgaarJson
-   * @param {Object} options - { density: 'sparse'|'standard'|'dense', era: string }
+   * @param {Object} options - { era, settlementDensity, hazardDensity, mythic, factionCount, density (fallback) }
    * @returns {Object}       - renderer-compatible world
    */
   function applyOverlay(parsed, options) {
     var opts = options || {};
+    // settlementDensity drives hidden coves; hazardDensity drives reefs/storms/krakens.
+    // Both fall back to opts.density for backward compatibility with single-density callers.
+    var settlementOpts = Object.assign({}, opts, {
+      density: opts.settlementDensity || opts.density || 'standard',
+    });
+    var hazardOpts = Object.assign({}, opts, {
+      density: opts.hazardDensity || opts.density || 'standard',
+    });
     var classified = classifySettlements(parsed.burgs, parsed.stateBorders, opts);
     var factions = generateFactions(parsed.stateBorders, opts);
-    var coves = generateHiddenCoves(parsed.bounds, parsed.coastlines, opts);
-    var reefs = generateReefs(parsed.bounds, parsed.coastlines, opts);
-    var storms = generateStormBands(parsed.bounds, opts);
-    var krakens = generateKrakenZones(parsed.bounds, parsed.coastlines, opts);
+    var coves = generateHiddenCoves(parsed.bounds, parsed.coastlines, settlementOpts);
+    var reefs = generateReefs(parsed.bounds, parsed.coastlines, hazardOpts);
+    var storms = generateStormBands(parsed.bounds, hazardOpts);
+    var krakens = generateKrakenZones(parsed.bounds, parsed.coastlines, hazardOpts);
     var lakeHazards = parsed.lakes.map(function (l, i) {
       return { id: 'lake_' + i, name: l.name, type: 'lake', polygon: l.polygon, severity: 'low' };
     });
