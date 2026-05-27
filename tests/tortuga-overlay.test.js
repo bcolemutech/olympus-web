@@ -846,3 +846,42 @@ describe('Tortuga overlay — generateFactions', () => {
     expect(factions.find((f) => f.archetype === 'pirate_brethren')).toBeDefined();
   });
 });
+
+describe('applyOverlay — split density keys', () => {
+  let parsed;
+
+  beforeEach(() => {
+    parsed = importer.parseAzgaarJson(azgaarJsonSample());
+  });
+
+  test('settlementDensity controls hidden cove count independently of hazardDensity', () => {
+    const sparse = overlay.applyOverlay(parsed, { settlementDensity: 'sparse', hazardDensity: 'dense' });
+    const dense = overlay.applyOverlay(parsed, { settlementDensity: 'dense', hazardDensity: 'dense' });
+    const sparseCoves = sparse.settlements.filter((s) => s.type === 'hidden_cove').length;
+    const denseCoves = dense.settlements.filter((s) => s.type === 'hidden_cove').length;
+    expect(sparseCoves).toBeLessThan(denseCoves);
+  });
+
+  test('hazardDensity controls reef count independently of settlementDensity', () => {
+    const sparse = overlay.applyOverlay(parsed, { settlementDensity: 'dense', hazardDensity: 'sparse' });
+    const dense = overlay.applyOverlay(parsed, { settlementDensity: 'dense', hazardDensity: 'dense' });
+    const sparseReefs = sparse.hazards.filter((h) => h.type === 'reef').length;
+    const denseReefs = dense.hazards.filter((h) => h.type === 'reef').length;
+    expect(sparseReefs).toBeLessThan(denseReefs);
+  });
+
+  test('dense settlementDensity + sparse hazardDensity gives more coves than reefs', () => {
+    const world = overlay.applyOverlay(parsed, { settlementDensity: 'dense', hazardDensity: 'sparse' });
+    const coves = world.settlements.filter((s) => s.type === 'hidden_cove').length;
+    const reefs = world.hazards.filter((h) => h.type === 'reef').length;
+    expect(coves).toBeGreaterThan(reefs);
+  });
+
+  test('falls back to opts.density when split keys are absent', () => {
+    const sparse = overlay.applyOverlay(parsed, { density: 'sparse' });
+    const dense = overlay.applyOverlay(parsed, { density: 'dense' });
+    const sparseCoves = sparse.settlements.filter((s) => s.type === 'hidden_cove').length;
+    const denseCoves = dense.settlements.filter((s) => s.type === 'hidden_cove').length;
+    expect(sparseCoves).toBeLessThan(denseCoves);
+  });
+});
