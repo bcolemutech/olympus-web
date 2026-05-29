@@ -51,24 +51,69 @@
     });
   }
 
+  var HAZARD_STYLES = {
+    reef: { color: '#7a4a1c', fillColor: '#b07a3a', fillOpacity: 0.55, weight: 1 },
+    storm_band: {
+      color: '#506878',
+      fillColor: '#8aa8b8',
+      fillOpacity: 0.22,
+      weight: 1,
+      dashArray: '4 6',
+    },
+    kraken_zone: { color: '#2a1a3a', fillColor: '#4a2a5a', fillOpacity: 0.4, weight: 1 },
+    lake: { color: '#2a6a8a', fillColor: '#4a8aaa', fillOpacity: 0.55, weight: 1 },
+  };
+
+  var DEFAULT_HAZARD_STYLE = {
+    color: '#cc4444',
+    fillColor: '#ff0000',
+    fillOpacity: 0.25,
+    weight: 1,
+  };
+
+  var HAZARD_LABELS = {
+    reef: 'Reef',
+    storm_band: 'Storm Band',
+    kraken_zone: 'Kraken Waters',
+    lake: 'Lake',
+  };
+
   function _renderHazards(world) {
     if (!world || !world.hazards) return;
     world.hazards.forEach(function (h) {
-      L.polygon(h.polygon, {
-        color: '#cc4444',
-        fillColor: '#ff0000',
-        fillOpacity: 0.25,
-        weight: 1,
-      })
-        .bindPopup('<strong>' + (h.name || 'Hazard') + '</strong><br>' + (h.type || ''))
-        .addTo(_layers[LAYERS.HAZARDS]);
+      var style = HAZARD_STYLES[h.type] || DEFAULT_HAZARD_STYLE;
+      var label = h.name || HAZARD_LABELS[h.type] || 'Hazard';
+      var popup =
+        '<strong>' + label + '</strong>' + (h.severity ? '<br>Severity: ' + h.severity : '');
+      var polygon = L.polygon(h.polygon, style).bindPopup(popup);
+      if (h.type === 'kraken_zone') {
+        polygon.bindTooltip('Kraken Waters', {
+          permanent: true,
+          direction: 'center',
+          className: 'tortuga-hazard-label',
+        });
+      }
+      polygon.addTo(_layers[LAYERS.HAZARDS]);
     });
   }
 
   function _renderTradeRoutes(world) {
     if (!world || !world.tradeRoutes) return;
+    var posById = {};
+    if (world.settlements) {
+      world.settlements.forEach(function (s) {
+        posById[s.id] = s.position || s.pos;
+      });
+    }
     world.tradeRoutes.forEach(function (r) {
-      L.polyline(r.points, {
+      var points = r.points;
+      if (!points && r.fromId && r.toId) {
+        var from = posById[r.fromId];
+        var to = posById[r.toId];
+        if (from && to) points = [from, to];
+      }
+      if (!points || points.length < 2) return;
+      L.polyline(points, {
         color: '#c8a84b',
         weight: 2,
         dashArray: '6 4',
