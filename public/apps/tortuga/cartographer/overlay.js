@@ -112,14 +112,17 @@
     'The Dark Passage',
   ];
 
-  // 4-point rectangle polygon centred at (cy, cx).
-  function _makeRect(cy, cx, halfH, halfW) {
-    return [
-      [cy - halfH, cx - halfW],
-      [cy - halfH, cx + halfW],
-      [cy + halfH, cx + halfW],
-      [cy + halfH, cx - halfW],
-    ];
+  // Irregular closed polygon with `sides` vertices around (cy, cx).
+  // Each vertex's radius is perturbed deterministically via `seed` so reefs
+  // and kraken zones read as organic shapes rather than blocks.
+  function _jaggedBlob(cy, cx, baseRadius, sides, seed) {
+    var pts = [];
+    for (var i = 0; i < sides; i++) {
+      var angle = (i / sides) * Math.PI * 2;
+      var r = baseRadius * (0.6 + 0.7 * _hash(seed + '_' + i));
+      pts.push([cy + Math.sin(angle) * r, cx + Math.cos(angle) * r]);
+    }
+    return pts;
   }
 
   // Deterministic djb2-style hash of a string → float in [0, 1).
@@ -305,8 +308,7 @@
 
     var mapH = bounds[1][0] - bounds[0][0];
     var mapW = bounds[1][1] - bounds[0][1];
-    var halfH = mapH * 0.025;
-    var halfW = mapW * 0.025;
+    var baseRadius = Math.min(mapH, mapW) * 0.018;
 
     var reefs = [];
     for (var i = 0; i < count; i++) {
@@ -322,7 +324,13 @@
       reefs.push({
         id: 'reef_' + i,
         type: 'reef',
-        polygon: _makeRect(basePos[0] + nudgeY, basePos[1] + nudgeX, halfH, halfW),
+        polygon: _jaggedBlob(
+          basePos[0] + nudgeY,
+          basePos[1] + nudgeX,
+          baseRadius,
+          7,
+          'reef_shape_' + i
+        ),
         severity: 'medium',
       });
     }
@@ -392,8 +400,7 @@
     var mapW = maxX - minX;
     var centerY = (minY + maxY) / 2;
     var centerX = (minX + maxX) / 2;
-    var halfH = mapH * 0.05;
-    var halfW = mapW * 0.05;
+    var baseRadius = Math.min(mapH, mapW) * 0.055;
 
     var zones = [];
     for (var i = 0; i < count; i++) {
@@ -402,7 +409,7 @@
       zones.push({
         id: 'kraken_' + i,
         type: 'kraken_zone',
-        polygon: _makeRect(cy, cx, halfH, halfW),
+        polygon: _jaggedBlob(cy, cx, baseRadius, 14, 'kzone_shape_' + i),
         severity: 'high',
       });
     }
@@ -488,6 +495,26 @@
       return { id: 'lake_' + i, name: l.name, type: 'lake', polygon: l.polygon, severity: 'low' };
     });
     var routes = generateTradeRoutes(classified, opts);
+
+    // Route waypoints around landmasses if a pathfinder is registered.
+    // Browser-only — Node tests don't load pathfinder, routes keep fromId/toId
+    // and the renderer falls back to a straight line.
+    var pathfinder = typeof window !== 'undefined' && window.Tortuga && window.Tortuga.pathfinder;
+    if (pathfinder && routes.length > 0) {
+      var posById = {};
+      for (var pi = 0; pi < classified.length; pi++) {
+        posById[classified[pi].id] = classified[pi].position;
+      }
+      var mask = pathfinder.buildLandMask(parsed.bounds, parsed.coastlines);
+      for (var ri = 0; ri < routes.length; ri++) {
+        var r = routes[ri];
+        var from = posById[r.fromId];
+        var to = posById[r.toId];
+        if (!from || !to) continue;
+        var pts = pathfinder.findPath(mask, from, to);
+        if (pts && pts.length >= 2) r.points = pts;
+      }
+    }
 
     return {
       bounds: parsed.bounds,
