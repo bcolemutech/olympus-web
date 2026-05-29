@@ -24,6 +24,17 @@
         );
     },
 
+    getWorld: function (id) {
+      return T.state.db
+        .collection('tortuga_worlds')
+        .doc(id)
+        .get()
+        .then(function (snap) {
+          if (!snap.exists) throw new Error('World not found.');
+          return Object.assign({ id: snap.id }, snap.data());
+        });
+    },
+
     createWorld: function (data) {
       var uid = T.state.currentUser.uid;
       var ts = firebase.firestore.FieldValue.serverTimestamp();

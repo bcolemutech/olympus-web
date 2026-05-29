@@ -688,3 +688,73 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Save dialog ───────────────────────────────────────────── */
+
+.save-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.save-dialog {
+  background: #131929;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.save-dialog-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffb74d;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 1.25rem;
+}
+
+.save-dialog-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #90a4ae);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.save-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.save-dialog-textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.save-dialog-shared-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.save-dialog-error {
+  font-size: 0.8rem;
+  color: #e05555;
+  margin: 0 0 0.75rem;
+}
+
+.save-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}

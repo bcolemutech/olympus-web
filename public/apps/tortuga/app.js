@@ -274,50 +274,169 @@
 
   function _onSaveClick() {
     if (!_generatedWorld) return;
+    _showSaveDialog();
+  }
 
-    var saveBtn = document.getElementById('knobs-save-btn');
-    var statusEl = document.getElementById('knobs-save-status');
-    var nameInput = document.getElementById('knob-name');
-    var eraEl = document.getElementById('knob-era');
-    var worldName = (nameInput && nameInput.value.trim()) || 'Unnamed World';
+  function _showSaveDialog() {
+    var currentName =
+      (document.getElementById('knob-name') || {}).value ||
+      (_generatedWorld && _generatedWorld.name) ||
+      'Unnamed World';
+    var currentEra = (document.getElementById('knob-era') || {}).value || 'caribbean_golden_age';
 
-    if (saveBtn) {
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving…';
-    }
-    if (statusEl) {
-      statusEl.textContent = '';
-      statusEl.className = 'save-status';
-    }
+    var overlay = document.createElement('div');
+    overlay.className = 'save-dialog-overlay';
+    overlay.id = 'save-dialog-overlay';
 
-    var payload = Object.assign({}, _generatedWorld, {
-      name: worldName,
-      era: (eraEl && eraEl.value) || 'caribbean_golden_age',
-      shared: false,
+    overlay.innerHTML =
+      '<div class="save-dialog" role="dialog" aria-modal="true" aria-labelledby="save-dialog-heading">' +
+      '<h2 class="save-dialog-title" id="save-dialog-heading">Save World</h2>' +
+      '<div class="save-dialog-field">' +
+      '<label class="save-dialog-label" for="save-dialog-name">World Name</label>' +
+      '<input class="knobs-input" id="save-dialog-name" type="text" value="' +
+      _escapeAttr(currentName) +
+      '" placeholder="Unnamed World">' +
+      '</div>' +
+      '<div class="save-dialog-field">' +
+      '<label class="save-dialog-label" for="save-dialog-description">Description</label>' +
+      '<textarea class="knobs-input save-dialog-textarea" id="save-dialog-description"' +
+      ' rows="3" placeholder="Describe this world…"></textarea>' +
+      '</div>' +
+      '<div class="save-dialog-field">' +
+      '<label class="save-dialog-label" for="save-dialog-era">Era</label>' +
+      '<select class="knobs-select" id="save-dialog-era">' +
+      '<option value="caribbean_golden_age"' +
+      (currentEra === 'caribbean_golden_age' ? ' selected' : '') +
+      '>Caribbean Golden Age</option>' +
+      '<option value="mediterranean_corsair"' +
+      (currentEra === 'mediterranean_corsair' ? ' selected' : '') +
+      '>Mediterranean Corsair</option>' +
+      '<option value="indian_ocean"' +
+      (currentEra === 'indian_ocean' ? ' selected' : '') +
+      '>Indian Ocean</option>' +
+      '<option value="freeform"' +
+      (currentEra === 'freeform' ? ' selected' : '') +
+      '>Freeform</option>' +
+      '</select>' +
+      '</div>' +
+      '<div class="save-dialog-field">' +
+      '<div class="save-dialog-shared-row">' +
+      '<input class="knobs-checkbox" id="save-dialog-shared" type="checkbox" checked>' +
+      '<label class="knobs-checkbox-label" for="save-dialog-shared">' +
+      'Share — other players can use this world for campaigns' +
+      '</label>' +
+      '</div>' +
+      '</div>' +
+      '<p class="save-dialog-error hidden" id="save-dialog-error"></p>' +
+      '<div class="save-dialog-actions">' +
+      '<button class="btn-cancel" id="save-dialog-cancel" type="button">Cancel</button>' +
+      '<button class="app-btn app-btn--sm" id="save-dialog-confirm" type="button">Save</button>' +
+      '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) _closeSaveDialog();
     });
+
+    overlay.querySelector('#save-dialog-cancel').addEventListener('click', _closeSaveDialog);
+
+    overlay.querySelector('#save-dialog-confirm').addEventListener('click', function () {
+      var name = overlay.querySelector('#save-dialog-name').value.trim() || 'Unnamed World';
+      var description = overlay.querySelector('#save-dialog-description').value.trim();
+      var era = overlay.querySelector('#save-dialog-era').value;
+      var shared = overlay.querySelector('#save-dialog-shared').checked;
+      _doSave(name, description, era, shared, overlay);
+    });
+  }
+
+  function _closeSaveDialog() {
+    var overlay = document.getElementById('save-dialog-overlay');
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+
+  function _doSave(name, description, era, shared, dialogEl) {
+    var confirmBtn = dialogEl.querySelector('#save-dialog-confirm');
+    var cancelBtn = dialogEl.querySelector('#save-dialog-cancel');
+    var errorEl = dialogEl.querySelector('#save-dialog-error');
+
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (cancelBtn) cancelBtn.disabled = true;
+    if (errorEl) errorEl.classList.add('hidden');
+
+    var payload = _buildWorldPayload(name, description, era, shared);
 
     T.firestore
       .createWorld(payload)
       .then(function () {
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.textContent = 'Save World';
-        }
+        _closeSaveDialog();
+        var statusEl = document.getElementById('knobs-save-status');
         if (statusEl) {
           statusEl.textContent = 'World saved!';
           statusEl.className = 'save-status save-status--success';
         }
       })
       .catch(function (err) {
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.textContent = 'Save World';
-        }
-        if (statusEl) {
-          statusEl.textContent = 'Save failed: ' + err.message;
-          statusEl.className = 'save-status save-status--error';
+        if (confirmBtn) confirmBtn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+        if (errorEl) {
+          errorEl.textContent = 'Save failed: ' + err.message;
+          errorEl.classList.remove('hidden');
         }
       });
+  }
+
+  // §9 size caveat: Firestore docs are capped at 1 MB.
+  // For typical Azgaar maps (1000×600, ~50 coastline polygons, ~200 pts each),
+  // coastlines are ~50 KB; full payload is usually well under 200 KB.
+  // If Phase 2 maps grow larger, move coastlines to a subcollection.
+  function _buildWorldPayload(name, description, era, shared) {
+    var w = _generatedWorld;
+    return {
+      name: name,
+      description: description || '',
+      era: era,
+      shared: !!shared,
+      sourceFormat: w.sourceFormat || 'azgaar-json',
+      dimensions: w.dimensions || {},
+      bounds: w.bounds || [],
+      coastlines: w.coastlines || [],
+      settlements: (w.settlements || []).map(function (s) {
+        return {
+          id: s.id,
+          name: s.name,
+          type: s.type || null,
+          position: s.position || s.pos || null,
+          parentFaction: s.parentFaction || s.faction || null,
+          baseSize: s.baseSize || null,
+          hidden: !!s.hidden,
+        };
+      }),
+      hazards: (w.hazards || []).map(function (h) {
+        return {
+          id: h.id,
+          type: h.type,
+          polygon: h.polygon,
+          severity: h.severity || null,
+          name: h.name || null,
+        };
+      }),
+      factions: (w.factions || []).map(function (f) {
+        return {
+          id: f.id,
+          name: f.name,
+          archetype: f.archetype || null,
+          color: f.color || null,
+          homeSettlementId: f.homeSettlementId || null,
+        };
+      }),
+      tradeRoutes: (w.tradeRoutes || []).map(function (r) {
+        return { id: r.id, fromId: r.fromId, toId: r.toId, faction: r.faction || null };
+      }),
+      windCurrentZones: w.windCurrentZones || [],
+      factionTerritory: w.factionTerritory || [],
+    };
   }
 
   // ── Init ─────────────────────────────────────────────────────
