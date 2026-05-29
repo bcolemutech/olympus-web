@@ -67,8 +67,21 @@
 
   function _renderTradeRoutes(world) {
     if (!world || !world.tradeRoutes) return;
+    var posById = {};
+    if (world.settlements) {
+      world.settlements.forEach(function (s) {
+        posById[s.id] = s.position || s.pos;
+      });
+    }
     world.tradeRoutes.forEach(function (r) {
-      L.polyline(r.points, {
+      var points = r.points;
+      if (!points && r.fromId && r.toId) {
+        var from = posById[r.fromId];
+        var to = posById[r.toId];
+        if (from && to) points = [from, to];
+      }
+      if (!points || points.length < 2) return;
+      L.polyline(points, {
         color: '#c8a84b',
         weight: 2,
         dashArray: '6 4',
