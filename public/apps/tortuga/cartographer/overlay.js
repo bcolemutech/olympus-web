@@ -537,6 +537,7 @@
     generateKrakenZones: generateKrakenZones,
     generateTradeRoutes: generateTradeRoutes,
     applyOverlay: applyOverlay,
+    jaggedBlob: _jaggedBlob,
   };
 
   if (typeof window !== 'undefined') {
