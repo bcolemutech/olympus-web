@@ -206,8 +206,11 @@
     errorEl.classList.add('hidden');
   }
 
-  function _processFile(file, dropZoneEl, errorEl, callbacks) {
+  function _processFile(file, containerEl, callbacks) {
     if (!file) return;
+
+    var dropZoneEl = containerEl.querySelector('#cartographer-drop-zone');
+    var errorEl = containerEl.querySelector('#cartographer-import-error');
 
     var lower = file.name.toLowerCase();
     if (!lower.endsWith('.json')) {
@@ -220,11 +223,11 @@
 
     var reader = new FileReader();
     reader.onload = function (e) {
-      dropZoneEl.classList.remove('drop-zone--loading');
       var json;
       try {
         json = JSON.parse(e.target.result);
       } catch (parseErr) {
+        dropZoneEl.classList.remove('drop-zone--loading');
         var msg = 'File is not valid JSON: ' + parseErr.message;
         _showError(dropZoneEl, errorEl, msg);
         if (callbacks.onError) callbacks.onError(msg);
@@ -235,12 +238,16 @@
       try {
         parsed = parseAzgaarJson(json);
       } catch (err) {
+        dropZoneEl.classList.remove('drop-zone--loading');
         _showError(dropZoneEl, errorEl, err.message);
         if (callbacks.onError) callbacks.onError(err.message);
         return;
       }
 
-      _clearError(errorEl);
+      // Replace drop zone with a locked "loaded" state so the user can't
+      // accidentally re-upload while the overlay/pathfinder pipeline runs.
+      _showLoadedState(containerEl, file.name, callbacks);
+
       if (callbacks.onParsed) callbacks.onParsed(parsed, _toPreviewWorld(parsed));
     };
     reader.onerror = function () {
@@ -252,6 +259,38 @@
     reader.readAsText(file);
   }
 
+  // Replace the drop zone with a success banner. A "Choose different file" link
+  // resets the panel back to the drop zone so a fresh import can be made.
+  function _showLoadedState(containerEl, filename, callbacks) {
+    var dropZoneEl = containerEl.querySelector('#cartographer-drop-zone');
+    if (!dropZoneEl) return;
+
+    dropZoneEl.outerHTML =
+      '<div class="drop-zone-loaded" id="cartographer-drop-zone-loaded">' +
+      '<span class="drop-zone-loaded-icon" aria-hidden="true">&#10003;</span>' +
+      '<span class="drop-zone-loaded-name">' +
+      _escText(filename) +
+      '</span>' +
+      '<button class="drop-zone-reload-btn" id="cartographer-reload-btn" type="button">' +
+      'Choose different file' +
+      '</button>' +
+      '</div>';
+
+    var reloadBtn = containerEl.querySelector('#cartographer-reload-btn');
+    if (reloadBtn) {
+      reloadBtn.addEventListener('click', function () {
+        render(containerEl, callbacks);
+      });
+    }
+  }
+
+  function _escText(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   function render(containerEl, callbacks) {
     containerEl.innerHTML =
       '<div class="import-panel">' +
@@ -261,10 +300,10 @@
       'then drop the <code>.json</code> file here. ' +
       '(The partitioned GeoJSON exports — cells, routes, rivers, markers, zones — are not supported.)</p>' +
       '<div class="drop-zone" id="cartographer-drop-zone">' +
-      '<span class="drop-zone-label">Drop Azgaar .json here</span>' +
-      '<label class="drop-zone-pick">or <span class="drop-zone-pick-link">choose a file</span>' +
-      '<input type="file" accept=".json,application/json" id="cartographer-file-input" style="display:none">' +
-      '</label>' +
+      '<span class="drop-zone-label">Drop Azgaar .json here, or tap to browse</span>' +
+      '<input type="file" accept=".json,application/json" ' +
+      'id="cartographer-file-input" class="drop-zone-file-input" ' +
+      'aria-label="Choose Azgaar JSON file">' +
       '</div>' +
       '<div class="import-error hidden" id="cartographer-import-error"></div>' +
       '</div>';
@@ -286,18 +325,16 @@
       e.preventDefault();
       dropZoneEl.classList.remove('drop-zone--active');
       var file = e.dataTransfer.files && e.dataTransfer.files[0];
-      _processFile(file, dropZoneEl, errorEl, callbacks);
-    });
-
-    dropZoneEl.addEventListener('click', function (e) {
-      if (e.target !== fileInputEl) fileInputEl.click();
+      _processFile(file, containerEl, callbacks);
     });
 
     fileInputEl.addEventListener('change', function () {
       var file = fileInputEl.files && fileInputEl.files[0];
-      _processFile(file, dropZoneEl, errorEl, callbacks);
       fileInputEl.value = '';
+      _processFile(file, containerEl, callbacks);
     });
+
+    void errorEl; // referenced via containerEl.querySelector in _processFile
   }
 
   var api = {

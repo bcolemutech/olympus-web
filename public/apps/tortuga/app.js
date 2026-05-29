@@ -10,6 +10,7 @@
   var _generatedWorld = null; // last result of T.overlay.applyOverlay
   var _generating = false; // guard against concurrent regenerations
   var _mapInitialised = false; // track first T.mapRenderer.init call
+  var _keydownHandler = null; // Ctrl+Z / Ctrl+Y listener
 
   // ── Mode routing ────────────────────────────────────────────
 
@@ -209,7 +210,64 @@
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save World';
       }
+
+      _initEditor();
     }, 0);
+  }
+
+  // ── Editor integration ───────────────────────────────────────
+
+  function _mapEditCallbacks() {
+    return {
+      onSettlementClick: function (id) {
+        if (T.editor) T.editor.selectSettlement(id);
+      },
+      onSettlementDrag: function (id, pos) {
+        if (T.editor) T.editor.updateSettlementPos(id, pos);
+      },
+    };
+  }
+
+  function _onWorldEdited(world) {
+    _generatedWorld = world;
+    T.mapRenderer.setWorld(world);
+    T.mapRenderer.setEditMode(world, _mapEditCallbacks());
+    var sel = T.editor && T.editor._selectedId;
+    if (sel) {
+      for (var i = 0; i < world.settlements.length; i++) {
+        if (world.settlements[i].id === sel) {
+          T.mapRenderer.highlightSettlement(
+            world.settlements[i].position || world.settlements[i].pos
+          );
+          break;
+        }
+      }
+    }
+  }
+
+  function _initEditor() {
+    var editorEl = document.getElementById('cartographer-editor');
+    if (!editorEl) return;
+    if (T.editor && T.editor._rendered) T.editor.destroy();
+    T.editor.render(editorEl, _generatedWorld, { onChanged: _onWorldEdited });
+    editorEl.classList.remove('hidden');
+    T.mapRenderer.setEditMode(_generatedWorld, _mapEditCallbacks());
+
+    if (!_keydownHandler) {
+      _keydownHandler = function (e) {
+        if (!T.editor || !T.editor._rendered) return;
+        if (e.ctrlKey || e.metaKey) {
+          if (!e.shiftKey && e.key === 'z') {
+            e.preventDefault();
+            T.editor.undo();
+          } else if (e.key === 'y' || (e.shiftKey && e.key === 'z')) {
+            e.preventDefault();
+            T.editor.redo();
+          }
+        }
+      };
+      document.addEventListener('keydown', _keydownHandler);
+    }
   }
 
   // ── Save handler ─────────────────────────────────────────────
@@ -278,6 +336,7 @@
             _parsedData = parsed;
             _generatedWorld = null;
             _mapInitialised = false;
+            if (T.editor && T.editor._rendered) T.editor.destroy();
 
             var warningEl = document.getElementById('land-heavy-warning');
             if (parsed.landPercentage > T.LAND_HEAVY_THRESHOLD && warningEl) {

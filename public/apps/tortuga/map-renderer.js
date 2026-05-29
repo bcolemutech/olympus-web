@@ -11,11 +11,14 @@
     TRADE_ROUTES: 'tradeRoutes',
     FACTION_TERRITORY: 'factionTerritory',
     WIND_CURRENTS: 'windCurrents',
+    SELECTION: 'selection',
   };
 
   var _map = null;
   var _layers = {};
   var _visibility = {};
+  var _editMode = false;
+  var _pendingMapClick = null;
 
   function _clearLayers() {
     Object.keys(_layers).forEach(function (k) {
@@ -335,6 +338,7 @@
       _layers[LAYERS.TRADE_ROUTES] = L.layerGroup();
       _layers[LAYERS.FACTION_TERRITORY] = L.layerGroup();
       _layers[LAYERS.WIND_CURRENTS] = L.layerGroup();
+      _layers[LAYERS.SELECTION] = L.layerGroup();
 
       Object.keys(_layers).forEach(function (k) {
         _layers[k].addTo(_map);
@@ -355,6 +359,7 @@
 
     setWorld: function (world) {
       if (!_map) return;
+      this.clearEditMode();
       _clearLayers();
       _renderBase(world);
       _renderSettlements(world);
@@ -397,6 +402,81 @@
       _layers[name] = leafletLayer;
       _visibility[name] = true;
       leafletLayer.addTo(_map);
+    },
+
+    // ── Edit mode ───────────────────────────────────────────────
+
+    setEditMode: function (world, callbacks) {
+      if (!_map) return;
+      _editMode = true;
+      var cb = callbacks || {};
+      var settlementsLayer = _layers[LAYERS.SETTLEMENTS];
+      if (!settlementsLayer) return;
+      settlementsLayer.clearLayers();
+      if (!world || !world.settlements) return;
+      world.settlements.forEach(function (s) {
+        var pos = s.position || s.pos;
+        var factionLabel = s.parentFaction || s.faction || null;
+        var marker = L.marker(pos, { title: s.name, draggable: true });
+        marker.bindPopup(
+          '<strong>' +
+            s.name +
+            '</strong><br>' +
+            (s.type || '') +
+            (factionLabel ? '<br>' + factionLabel : '')
+        );
+        marker.on('click', function (e) {
+          L.DomEvent.stopPropagation(e);
+          if (cb.onSettlementClick) cb.onSettlementClick(s.id);
+        });
+        marker.on('dragend', function () {
+          var ll = marker.getLatLng();
+          if (cb.onSettlementDrag) cb.onSettlementDrag(s.id, [ll.lat, ll.lng]);
+        });
+        marker.addTo(settlementsLayer);
+      });
+    },
+
+    clearEditMode: function () {
+      _editMode = false;
+      this.cancelMapClick();
+    },
+
+    highlightSettlement: function (pos) {
+      if (!_map || !_layers[LAYERS.SELECTION]) return;
+      _layers[LAYERS.SELECTION].clearLayers();
+      if (!pos) return;
+      L.circleMarker(pos, {
+        radius: 14,
+        color: '#ffb74d',
+        fillOpacity: 0,
+        weight: 2,
+      }).addTo(_layers[LAYERS.SELECTION]);
+    },
+
+    clearHighlight: function () {
+      if (_layers[LAYERS.SELECTION]) _layers[LAYERS.SELECTION].clearLayers();
+    },
+
+    awaitMapClick: function (callback) {
+      if (!_map) return;
+      this.cancelMapClick();
+      _pendingMapClick = function (e) {
+        _pendingMapClick = null;
+        callback([e.latlng.lat, e.latlng.lng]);
+      };
+      _map.once('click', _pendingMapClick);
+    },
+
+    cancelMapClick: function () {
+      if (_map && _pendingMapClick) {
+        _map.off('click', _pendingMapClick);
+      }
+      _pendingMapClick = null;
+    },
+
+    isEditMode: function () {
+      return _editMode;
     },
   };
 })();
