@@ -391,8 +391,19 @@
   // For typical Azgaar maps (1000×600, ~50 coastline polygons, ~200 pts each),
   // coastlines are ~50 KB; full payload is usually well under 200 KB.
   // If Phase 2 maps grow larger, move coastlines to a subcollection.
+  //
+  // Firestore forbids nested arrays (array-in-array). All [y, x] coordinate
+  // pairs are stored as {y, x} objects. Coastlines (array of rings) are stored
+  // as [{pts: [{y,x},...]}]. Decode with _decodeWorldPayload when loading.
+  function _ptsToObjs(ring) {
+    return (ring || []).map(function (pt) {
+      return { y: pt[0], x: pt[1] };
+    });
+  }
+
   function _buildWorldPayload(name, description, era, shared) {
     var w = _generatedWorld;
+    var b = w.bounds || [];
     return {
       name: name,
       description: description || '',
@@ -400,14 +411,22 @@
       shared: !!shared,
       sourceFormat: w.sourceFormat || 'azgaar-json',
       dimensions: w.dimensions || {},
-      bounds: w.bounds || [],
-      coastlines: w.coastlines || [],
+      bounds: {
+        minY: (b[0] && b[0][0]) || 0,
+        minX: (b[0] && b[0][1]) || 0,
+        maxY: (b[1] && b[1][0]) || 0,
+        maxX: (b[1] && b[1][1]) || 0,
+      },
+      coastlines: (w.coastlines || []).map(function (ring) {
+        return { pts: _ptsToObjs(ring) };
+      }),
       settlements: (w.settlements || []).map(function (s) {
+        var pos = s.position || s.pos;
         return {
           id: s.id,
           name: s.name,
           type: s.type || null,
-          position: s.position || s.pos || null,
+          position: pos ? { y: pos[0], x: pos[1] } : null,
           parentFaction: s.parentFaction || s.faction || null,
           baseSize: s.baseSize || null,
           hidden: !!s.hidden,
@@ -417,7 +436,7 @@
         return {
           id: h.id,
           type: h.type,
-          polygon: h.polygon,
+          polygon: _ptsToObjs(h.polygon),
           severity: h.severity || null,
           name: h.name || null,
         };
@@ -434,8 +453,24 @@
       tradeRoutes: (w.tradeRoutes || []).map(function (r) {
         return { id: r.id, fromId: r.fromId, toId: r.toId, faction: r.faction || null };
       }),
-      windCurrentZones: w.windCurrentZones || [],
-      factionTerritory: w.factionTerritory || [],
+      windCurrentZones: (w.windCurrentZones || []).map(function (wz) {
+        return {
+          id: wz.id,
+          name: wz.name || null,
+          direction: wz.direction || null,
+          strength: wz.strength || null,
+          bounds: _ptsToObjs(wz.bounds),
+        };
+      }),
+      factionTerritory: (w.factionTerritory || []).map(function (ft) {
+        return {
+          id: ft.id,
+          name: ft.name || null,
+          faction: ft.faction || null,
+          color: ft.color || null,
+          polygon: _ptsToObjs(ft.polygon),
+        };
+      }),
     };
   }
 
