@@ -393,6 +393,10 @@ service cloud.firestore {
       }
     }
 
+    match /tortuga_user_prefs/{userId} {
+      allow read, write: if hasApp('tortuga') && request.auth.uid == userId;
+    }
+
     // ── Default deny ───────────────────────────────────────
 
     match /{document=**} {
