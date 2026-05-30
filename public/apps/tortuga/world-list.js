@@ -213,15 +213,65 @@
     (decoded.coastlines || []).forEach(function (ring) {
       if (ring && ring.length > 2) {
         L.polygon(ring, {
-          color: '#4a8c4a',
-          fillColor: '#3a7c3a',
-          fillOpacity: 0.55,
+          color: '#4a7c59',
+          fillColor: '#2d5a3d',
+          fillOpacity: 0.6,
           weight: 1,
         }).addTo(previewMap);
       }
     });
 
-    // Settlements
+    // Faction territory (below settlements)
+    (decoded.factionTerritory || []).forEach(function (ft) {
+      if (ft.polygon && ft.polygon.length > 2) {
+        L.polygon(ft.polygon, {
+          color: ft.color || '#888',
+          fillColor: ft.color || '#888',
+          fillOpacity: 0.18,
+          weight: 1,
+        }).addTo(previewMap);
+      }
+    });
+
+    // Hazards
+    var HAZARD_COLORS = {
+      reef: '#b07a3a',
+      storm_band: '#8aa8b8',
+      kraken_zone: '#4a2a5a',
+      lake: '#4a8aaa',
+    };
+    (decoded.hazards || []).forEach(function (h) {
+      if (h.polygon && h.polygon.length > 2) {
+        var col = HAZARD_COLORS[h.type] || '#cc4444';
+        L.polygon(h.polygon, {
+          color: col,
+          fillColor: col,
+          fillOpacity: 0.4,
+          weight: 1,
+        }).addTo(previewMap);
+      }
+    });
+
+    // Trade routes
+    var posById = {};
+    (decoded.settlements || []).forEach(function (s) {
+      if (s.id && s.position) posById[s.id] = s.position;
+    });
+    (decoded.tradeRoutes || []).forEach(function (r) {
+      var pts = r.points;
+      if (!pts && r.fromId && r.toId) {
+        var from = posById[r.fromId];
+        var to = posById[r.toId];
+        if (from && to) pts = [from, to];
+      }
+      if (pts && pts.length >= 2) {
+        L.polyline(pts, { color: '#c8a84b', weight: 1, dashArray: '4 3', opacity: 0.7 }).addTo(
+          previewMap
+        );
+      }
+    });
+
+    // Settlements (on top)
     (decoded.settlements || []).forEach(function (s) {
       if (s.position && !s.hidden) {
         L.circleMarker(s.position, {
