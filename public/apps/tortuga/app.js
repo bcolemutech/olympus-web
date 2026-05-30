@@ -471,6 +471,7 @@
           polygon: _ptsToObjs(ft.polygon),
         };
       }),
+      createdByName: T.state.currentUser.displayName || T.state.currentUser.email || '',
     };
   }
 
@@ -523,10 +524,12 @@
       }
     }
 
-    var listId = mode === T.MODES.PLAY ? 'world-list-play' : 'world-list-world';
-    var listEl = document.getElementById(listId);
+    var suffix = mode === T.MODES.PLAY ? 'play' : 'world';
+    var listEl = document.getElementById('world-list-' + suffix);
     if (listEl) {
       T.worldList.render(listEl, {
+        toolbarEl: document.getElementById('world-list-toolbar-' + suffix),
+        previewEl: document.getElementById('world-preview-' + suffix),
         onSelect: function (worldId, worldData) {
           if (mode === T.MODES.PLAY) {
             T._startNewGame(worldId, worldData);

@@ -112,5 +112,71 @@
     deleteGame: function (id) {
       return T.state.db.collection('tortuga_games').doc(id).delete();
     },
+
+    // ── User prefs / favorites ────────────────────────────
+
+    getFavorites: function (callback) {
+      var uid = T.state.currentUser.uid;
+      return T.state.db
+        .collection('tortuga_user_prefs')
+        .doc(uid)
+        .onSnapshot(
+          function (snap) {
+            var favorites = (snap.exists && snap.data().favorites) || [];
+            callback(favorites, null);
+          },
+          function (err) {
+            callback([], err);
+          }
+        );
+    },
+
+    toggleFavorite: function (worldId) {
+      var uid = T.state.currentUser.uid;
+      var ref = T.state.db.collection('tortuga_user_prefs').doc(uid);
+      return ref.get().then(function (snap) {
+        var favorites = (snap.exists && snap.data().favorites) || [];
+        var isFav = favorites.indexOf(worldId) !== -1;
+        var op = isFav
+          ? firebase.firestore.FieldValue.arrayRemove(worldId)
+          : firebase.firestore.FieldValue.arrayUnion(worldId);
+        return ref.set({ favorites: op }, { merge: true });
+      });
+    },
+
+    // ── Decode ────────────────────────────────────────────
+
+    decodeWorld: function (data) {
+      function objsToPts(arr) {
+        return (arr || []).map(function (o) {
+          return [o.y, o.x];
+        });
+      }
+      return Object.assign({}, data, {
+        coastlines: (data.coastlines || []).map(function (ring) {
+          return objsToPts(ring.pts || ring);
+        }),
+        settlements: (data.settlements || []).map(function (s) {
+          return Object.assign({}, s, {
+            position: s.position ? [s.position.y, s.position.x] : null,
+          });
+        }),
+        hazards: (data.hazards || []).map(function (h) {
+          return Object.assign({}, h, { polygon: objsToPts(h.polygon) });
+        }),
+        windCurrentZones: (data.windCurrentZones || []).map(function (wz) {
+          return Object.assign({}, wz, { bounds: objsToPts(wz.bounds) });
+        }),
+        factionTerritory: (data.factionTerritory || []).map(function (ft) {
+          return Object.assign({}, ft, { polygon: objsToPts(ft.polygon) });
+        }),
+        bounds: data.bounds
+          ? [
+              [data.bounds.minY, data.bounds.minX],
+              [data.bounds.maxY, data.bounds.maxX],
+            ]
+          : null,
+      });
+    },
   };
 })();

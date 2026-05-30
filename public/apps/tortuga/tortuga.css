@@ -1,10 +1,76 @@
+/* ── World List section layout ─────────────────────────────── */
+
+.world-list-section {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin: 1rem 0;
+}
+
+.world-list-panel {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.world-preview {
+  flex: 0 0 320px;
+  height: 260px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #333);
+  background: var(--color-bg, #12121a);
+  position: sticky;
+  top: 1rem;
+  overflow: hidden;
+}
+
+.world-preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  margin: 0;
+  color: var(--color-text-muted, #888);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .world-list-section {
+    flex-direction: column;
+  }
+
+  .world-preview {
+    flex: none;
+    width: 100%;
+    height: 200px;
+    position: static;
+  }
+}
+
+/* ── World list toolbar ────────────────────────────────────── */
+
+.world-list-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.world-search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.world-sort-select {
+  flex: 0 0 auto;
+}
+
 /* ── World List ────────────────────────────────────────────── */
 
 .world-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1rem;
-  margin: 1rem 0;
+  margin: 0;
 }
 
 .world-card {
@@ -23,6 +89,14 @@
 .world-card:hover {
   border-color: var(--color-accent, #7c6aff);
   transform: translateY(-2px);
+}
+
+.world-card--selected {
+  border-color: #ffb74d;
+}
+
+.world-card--selected:hover {
+  border-color: #ffb74d;
 }
 
 .world-card-thumb {
@@ -72,6 +146,27 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   align-self: flex-start;
+}
+
+.world-card-fav {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  margin-top: 0.35rem;
+  color: var(--color-text-muted, #888);
+  align-self: flex-start;
+  transition: color 0.15s;
+}
+
+.world-card-fav:hover {
+  color: #ffb74d;
+}
+
+.world-card-fav--active {
+  color: #ffb74d;
 }
 
 /* ── Skeleton ──────────────────────────────────────────────── */
