@@ -29,13 +29,19 @@
     T.state.currentMode = mode;
   };
 
-  T._openWorldEditor = function (_worldId, _worldData) {
-    // TODO (T-110): load worldData from Firestore and render it.
+  T._openWorldEditor = function (_worldId, worldData) {
     var mapEl = document.getElementById('map-world');
-    if (mapEl) {
-      mapEl.classList.remove('hidden');
-      T.mapRenderer.init(mapEl, T.mapRenderer.PLACEHOLDER_WORLD);
-    }
+    if (!mapEl) return;
+
+    var decoded = T.firestore.decodeWorld(worldData);
+    _generatedWorld = decoded;
+    _mapInitialised = false;
+
+    mapEl.classList.remove('hidden');
+    T.mapRenderer.init(mapEl, decoded);
+    _mapInitialised = true;
+
+    _initEditor();
   };
 
   T._startNewGame = function () {
