@@ -11,6 +11,7 @@
   var _generating = false; // guard against concurrent regenerations
   var _mapInitialised = false; // track first T.mapRenderer.init call
   var _keydownHandler = null; // Ctrl+Z / Ctrl+Y listener
+  var _loadedWorldId = null; // Firestore id when editing a saved world; null for new generations
 
   // ── Mode routing ────────────────────────────────────────────
 
@@ -29,18 +30,20 @@
     T.state.currentMode = mode;
   };
 
-  T._openWorldEditor = function (_worldId, worldData) {
+  T._openWorldEditor = function (worldId, worldData) {
     var mapEl = document.getElementById('map-world');
     if (!mapEl) return;
 
     var decoded = T.firestore.decodeWorld(worldData);
     _generatedWorld = decoded;
     _mapInitialised = false;
+    _loadedWorldId = worldData.createdBy === T.state.currentUser.uid ? worldId : null;
 
     mapEl.classList.remove('hidden');
     T.mapRenderer.init(mapEl, decoded);
     _mapInitialised = true;
 
+    _showSaveRow(worldData);
     _initEditor();
   };
 
@@ -166,6 +169,7 @@
   function _generateAndPreview() {
     if (!_parsedData || _generating) return;
     _generating = true;
+    _loadedWorldId = null;
 
     var saveBtn = document.getElementById('knobs-save-btn');
     var statusEl = document.getElementById('knobs-save-status');
@@ -278,6 +282,21 @@
 
   // ── Save handler ─────────────────────────────────────────────
 
+  function _showSaveRow(worldData) {
+    var knobsEl = document.getElementById('cartographer-knobs');
+    if (!knobsEl) return;
+    var isOwner = worldData.createdBy === T.state.currentUser.uid;
+    knobsEl.innerHTML =
+      '<div class="knobs-panel">' +
+      '<div class="knobs-save-row">' +
+      '<button class="app-btn app-btn--sm" id="knobs-save-btn" type="button">' +
+      (isOwner ? 'Save Changes' : 'Save as New World') +
+      '</button>' +
+      '<span class="save-status" id="knobs-save-status"></span>' +
+      '</div></div>';
+    knobsEl.classList.remove('hidden');
+  }
+
   function _onSaveClick() {
     if (!_generatedWorld) return;
     _showSaveDialog();
@@ -288,7 +307,13 @@
       (document.getElementById('knob-name') || {}).value ||
       (_generatedWorld && _generatedWorld.name) ||
       'Unnamed World';
-    var currentEra = (document.getElementById('knob-era') || {}).value || 'caribbean_golden_age';
+    var currentEra =
+      (document.getElementById('knob-era') || {}).value ||
+      (_generatedWorld && _generatedWorld.era) ||
+      'caribbean_golden_age';
+    var currentDescription = (_generatedWorld && _generatedWorld.description) || '';
+    var currentShared = _generatedWorld ? _generatedWorld.shared !== false : true;
+    var dialogTitle = _loadedWorldId ? 'Save Changes' : 'Save World';
 
     var overlay = document.createElement('div');
     overlay.className = 'save-dialog-overlay';
@@ -296,7 +321,9 @@
 
     overlay.innerHTML =
       '<div class="save-dialog" role="dialog" aria-modal="true" aria-labelledby="save-dialog-heading">' +
-      '<h2 class="save-dialog-title" id="save-dialog-heading">Save World</h2>' +
+      '<h2 class="save-dialog-title" id="save-dialog-heading">' +
+      dialogTitle +
+      '</h2>' +
       '<div class="save-dialog-field">' +
       '<label class="save-dialog-label" for="save-dialog-name">World Name</label>' +
       '<input class="knobs-input" id="save-dialog-name" type="text" value="' +
@@ -327,7 +354,7 @@
       '</div>' +
       '<div class="save-dialog-field">' +
       '<div class="save-dialog-shared-row">' +
-      '<input class="knobs-checkbox" id="save-dialog-shared" type="checkbox" checked>' +
+      '<input class="knobs-checkbox" id="save-dialog-shared" type="checkbox">' +
       '<label class="knobs-checkbox-label" for="save-dialog-shared">' +
       'Share — other players can use this world for campaigns' +
       '</label>' +
@@ -341,6 +368,10 @@
       '</div>';
 
     document.body.appendChild(overlay);
+
+    // Set values that can't be set via HTML attribute
+    overlay.querySelector('#save-dialog-description').value = currentDescription;
+    overlay.querySelector('#save-dialog-shared').checked = currentShared;
 
     overlay.addEventListener('click', function (e) {
       if (e.target === overlay) _closeSaveDialog();
@@ -372,14 +403,16 @@
     if (errorEl) errorEl.classList.add('hidden');
 
     var payload = _buildWorldPayload(name, description, era, shared);
+    var saveOp = _loadedWorldId
+      ? T.firestore.updateWorld(_loadedWorldId, payload)
+      : T.firestore.createWorld(payload);
 
-    T.firestore
-      .createWorld(payload)
+    saveOp
       .then(function () {
         _closeSaveDialog();
         var statusEl = document.getElementById('knobs-save-status');
         if (statusEl) {
-          statusEl.textContent = 'World saved!';
+          statusEl.textContent = _loadedWorldId ? 'Changes saved!' : 'World saved!';
           statusEl.className = 'save-status save-status--success';
         }
       })
