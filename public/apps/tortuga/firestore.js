@@ -113,6 +113,23 @@
       return T.state.db.collection('tortuga_games').doc(id).delete();
     },
 
+    createFlagship: function (gameId, data) {
+      var ts = firebase.firestore.FieldValue.serverTimestamp();
+      return T.state.db
+        .collection('tortuga_games')
+        .doc(gameId)
+        .collection('ships')
+        .add(Object.assign({}, data, { createdAt: ts }));
+    },
+
+    updateGame: function (gameId, data) {
+      var ts = firebase.firestore.FieldValue.serverTimestamp();
+      return T.state.db
+        .collection('tortuga_games')
+        .doc(gameId)
+        .update(Object.assign({}, data, { updatedAt: ts }));
+    },
+
     // ── User prefs / favorites ────────────────────────────
 
     getFavorites: function (callback) {
