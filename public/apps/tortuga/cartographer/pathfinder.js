@@ -260,9 +260,36 @@
     return _simplify(worldPath);
   }
 
+  // Full path result used by sea-graph.js for gameplay navigation.
+  // Returns { displayPath, gridPath, steps } or null.
+  //   displayPath — simplified polyline (collinear points dropped) for the map overlay
+  //   gridPath    — full unsimplified path in world coords, one entry per grid cell,
+  //                 used for step-by-step ship animation
+  //   steps       — gridPath.length - 1 (AP cost; each grid hop = 1 AP)
+  function findPathFull(meta, fromWorld, toWorld) {
+    var s = _worldToGrid(meta, fromWorld[0], fromWorld[1]);
+    var t = _worldToGrid(meta, toWorld[0], toWorld[1]);
+    var sw = _nearestWater(meta, s[0], s[1], 5);
+    var tw = _nearestWater(meta, t[0], t[1], 5);
+    if (!sw || !tw) return null;
+    var gridPath = _astar(meta, sw[0], sw[1], tw[0], tw[1]);
+    if (!gridPath || gridPath.length < 2) return null;
+    var worldPath = gridPath.map(function (g) {
+      return _gridToWorld(meta, g[0], g[1]);
+    });
+    worldPath[0] = fromWorld;
+    worldPath[worldPath.length - 1] = toWorld;
+    return {
+      displayPath: _simplify(worldPath),
+      gridPath: worldPath,
+      steps: gridPath.length - 1,
+    };
+  }
+
   var api = {
     buildLandMask: buildLandMask,
     findPath: findPath,
+    findPathFull: findPathFull,
     DEFAULT_GRID_SIZE: DEFAULT_GRID_SIZE,
   };
 

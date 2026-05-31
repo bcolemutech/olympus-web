@@ -130,6 +130,16 @@
         .update(Object.assign({}, data, { updatedAt: ts }));
     },
 
+    updateFlagship: function (gameId, flagshipId, data) {
+      var ts = firebase.firestore.FieldValue.serverTimestamp();
+      return T.state.db
+        .collection('tortuga_games')
+        .doc(gameId)
+        .collection('ships')
+        .doc(flagshipId)
+        .update(Object.assign({}, data, { updatedAt: ts }));
+    },
+
     // ── User prefs / favorites ────────────────────────────
 
     getFavorites: function (callback) {

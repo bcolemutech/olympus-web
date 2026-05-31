@@ -1233,6 +1233,97 @@
   font-weight: 700;
 }
 
+.game-hud-ap {
+  color: #66bb6a;
+  font-weight: 700;
+}
+
+.game-hud-ap--low {
+  color: #ef5350;
+}
+
+.game-hud-move-info {
+  flex-basis: 100%;
+  order: 99;
+}
+
+.game-hud-move-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  background: rgba(255, 183, 77, 0.08);
+  border: 1px solid rgba(255, 183, 77, 0.25);
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+
+.game-hud-move-prompt--blocked {
+  background: rgba(239, 83, 80, 0.08);
+  border-color: rgba(239, 83, 80, 0.3);
+}
+
+.game-hud-move-cost {
+  flex: 1;
+  color: var(--color-text, #e0e0e0);
+}
+
+.game-hud-move-cost--over {
+  color: #ef5350;
+}
+
+.game-hud-move-confirm {
+  padding: 0.2rem 0.6rem;
+  background: #2e7d32;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.game-hud-move-confirm:hover {
+  background: #388e3c;
+}
+
+.game-hud-move-cancel {
+  padding: 0.2rem 0.6rem;
+  background: transparent;
+  color: var(--color-text-muted, #888);
+  border: 1px solid rgba(136, 136, 136, 0.4);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.game-hud-move-cancel:hover {
+  color: var(--color-text, #e0e0e0);
+  border-color: rgba(224, 224, 224, 0.4);
+}
+
+.game-hud-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.game-hud-end-turn {
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 183, 77, 0.12);
+  color: #ffb74d;
+  border: 1px solid rgba(255, 183, 77, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.game-hud-end-turn:hover {
+  background: rgba(255, 183, 77, 0.22);
+}
+
 #game-map-panel .tortuga-map {
   border-radius: 0 0 6px 6px;
 }

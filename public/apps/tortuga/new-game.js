@@ -481,6 +481,9 @@
       var selectedShipClass = this._selectedShipClass;
       var shipType = T.SHIP_TYPES[selectedShipClass];
       var startingPortId = this._selectedPortId;
+      var startingPort = (this._worldData.settlements || []).find(function (s) {
+        return s.id === startingPortId;
+      });
 
       var gameDoc = {
         worldId: this._worldId,
@@ -520,6 +523,11 @@
         draft: shipType.baseStats.draft,
         damage: { hull: 0, sails: 0, guns: 0, hold: 0 },
         location: startingPortId,
+        position:
+          startingPort && startingPort.position
+            ? { y: startingPort.position[0], x: startingPort.position[1] }
+            : null,
+        apRemaining: T.seaGraph.speedToAP(shipType.baseStats.speed),
         squadId: null,
       };
 
