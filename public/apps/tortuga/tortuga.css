@@ -1080,3 +1080,99 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Port picker (new-game step 2) ──────────────────────────── */
+
+.new-game-panel--wide {
+  max-width: none;
+}
+
+.port-picker-layout {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin: 0.75rem 0;
+}
+
+.port-picker-map {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 400px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #333);
+}
+
+.port-picker-list {
+  flex: 0 0 220px;
+  max-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.port-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  background: var(--color-bg, #12121a);
+  border: 2px solid var(--color-border, #333);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--color-text, #e8e8f0);
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.port-card:hover {
+  border-color: #ffb74d;
+}
+
+.port-card--selected {
+  border-color: #ffb74d;
+  background: rgba(255, 183, 77, 0.12);
+}
+
+.port-card-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.port-card-type {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  background: rgba(255, 183, 77, 0.15);
+  color: #ffb74d;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  align-self: flex-start;
+}
+
+.port-card-faction,
+.port-card-size {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #888);
+}
+
+@media (max-width: 600px) {
+  .port-picker-layout {
+    flex-direction: column;
+  }
+
+  .port-picker-list {
+    flex: none;
+    width: 100%;
+    max-height: 200px;
+  }
+}

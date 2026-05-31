@@ -13,6 +13,19 @@
     { id: 'map', symbol: '🗺️', label: 'Map' },
   ];
 
+  var PORT_TYPE_LABELS = {
+    colonial_port: 'Colonial Port',
+    free_port: 'Free Port',
+  };
+
+  var SIZE_LABELS = {
+    small: 'Small',
+    medium: 'Medium',
+    large: 'Large',
+  };
+
+  var FRIENDLY_PORT_TYPES = ['colonial_port', 'free_port'];
+
   function _buildWorldSnapshot(worldData) {
     return {
       geography: {
@@ -103,30 +116,77 @@
       .join('');
   }
 
+  function _buildPortCards(ports, factions) {
+    var factionMap = {};
+    (factions || []).forEach(function (f) {
+      factionMap[f.id] = f.name;
+    });
+    return ports
+      .map(function (s) {
+        var typeLabel = PORT_TYPE_LABELS[s.type] || s.type;
+        var factionName = (s.parentFaction && factionMap[s.parentFaction]) || 'Independent';
+        var sizeLabel = SIZE_LABELS[s.baseSize] || s.baseSize || '';
+        return (
+          '<button class="port-card" type="button" aria-pressed="false" data-port-id="' +
+          _escapeAttr(s.id) +
+          '">' +
+          '<span class="port-card-name">' +
+          _escapeHtml(s.name) +
+          '</span>' +
+          '<span class="port-card-type">' +
+          _escapeHtml(typeLabel) +
+          '</span>' +
+          '<span class="port-card-faction">' +
+          _escapeHtml(factionName) +
+          '</span>' +
+          '<span class="port-card-size">' +
+          _escapeHtml(sizeLabel) +
+          '</span>' +
+          '</button>'
+        );
+      })
+      .join('');
+  }
+
   T.newGame = {
     _panelEl: null,
     _selectedPortrait: PORTRAITS[0].id,
     _selectedShipClass: null,
+    _selectedPortId: null,
+    _portMap: null,
+    _portMarkers: null,
     _worldId: null,
     _worldData: null,
+    _captainName: '',
+    _captainBio: '',
 
     show: function (worldId, worldData) {
       this._worldId = worldId;
       this._worldData = worldData;
       this._selectedPortrait = PORTRAITS[0].id;
       this._selectedShipClass = Object.keys(T.SHIP_TYPES)[0];
+      this._selectedPortId = null;
+      this._captainName = '';
+      this._captainBio = '';
 
       var panelEl = document.getElementById('new-game-panel');
       if (!panelEl) return;
       this._panelEl = panelEl;
+      panelEl.classList.remove('hidden');
+      this._renderStep1();
+    },
 
-      var worldName = (worldData && worldData.name) || 'Unknown World';
+    _renderStep1: function () {
+      var self = this;
+      var panelEl = this._panelEl;
+      if (!panelEl) return;
+      var worldName = (this._worldData && this._worldData.name) || 'Unknown World';
 
-      var portraitButtons = PORTRAITS.map(function (p, i) {
-        var selectedClass = i === 0 ? ' portrait-btn--selected' : '';
+      var portraitButtons = PORTRAITS.map(function (p) {
+        var isSelected = p.id === self._selectedPortrait;
         return (
           '<button class="portrait-btn' +
-          selectedClass +
+          (isSelected ? ' portrait-btn--selected' : '') +
           '" type="button"' +
           ' data-portrait="' +
           _escapeAttr(p.id) +
@@ -135,7 +195,7 @@
           _escapeAttr(p.label) +
           '"' +
           ' aria-pressed="' +
-          (i === 0 ? 'true' : 'false') +
+          (isSelected ? 'true' : 'false') +
           '">' +
           p.symbol +
           '</button>'
@@ -173,13 +233,14 @@
         '<p class="new-game-error hidden" id="ng-error"></p>' +
         '<div class="new-game-actions">' +
         '<button class="btn-cancel" id="ng-cancel" type="button">Cancel</button>' +
-        '<button class="app-btn app-btn--sm" id="ng-confirm" type="button">Begin Campaign</button>' +
+        '<button class="app-btn app-btn--sm" id="ng-next" type="button">Next: Choose Port</button>' +
         '</div>' +
         '</div>';
 
-      panelEl.classList.remove('hidden');
-
-      var self = this;
+      var nameInput = document.getElementById('ng-captain-name');
+      if (nameInput) nameInput.value = this._captainName;
+      var bioInput = document.getElementById('ng-bio');
+      if (bioInput) bioInput.value = this._captainBio;
 
       panelEl.querySelectorAll('.portrait-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -209,27 +270,15 @@
         self._hide();
       });
 
-      document.getElementById('ng-confirm').addEventListener('click', function () {
-        self._onConfirm();
+      document.getElementById('ng-next').addEventListener('click', function () {
+        self._onNext();
       });
     },
 
-    _hide: function () {
-      if (this._panelEl) {
-        this._panelEl.classList.add('hidden');
-        this._panelEl.innerHTML = '';
-      }
-      this._worldId = null;
-      this._worldData = null;
-      this._selectedShipClass = null;
-    },
-
-    _onConfirm: function () {
+    _onNext: function () {
       var nameEl = document.getElementById('ng-captain-name');
       var bioEl = document.getElementById('ng-bio');
       var errorEl = document.getElementById('ng-error');
-      var confirmBtn = document.getElementById('ng-confirm');
-      var cancelBtn = document.getElementById('ng-cancel');
 
       var captainName = (nameEl && nameEl.value.trim()) || '';
       if (!captainName) {
@@ -241,16 +290,213 @@
         return;
       }
 
+      var friendlyPorts = (this._worldData.settlements || []).filter(function (s) {
+        return FRIENDLY_PORT_TYPES.indexOf(s.type) !== -1;
+      });
+
+      if (friendlyPorts.length === 0) {
+        if (errorEl) {
+          errorEl.textContent = 'This world has no friendly ports — choose a different world.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (errorEl) errorEl.classList.add('hidden');
+
+      this._captainName = captainName;
+      this._captainBio = (bioEl && bioEl.value.trim()) || '';
+      this._renderPortStep(friendlyPorts);
+    },
+
+    _renderPortStep: function (friendlyPorts) {
+      if (this._portMap) {
+        this._portMap.remove();
+        this._portMap = null;
+      }
+      this._portMarkers = [];
+      this._selectedPortId = null;
+
+      var worldName = (this._worldData && this._worldData.name) || 'Unknown World';
+      var factions = (this._worldData && this._worldData.factions) || [];
+      var portCards = _buildPortCards(friendlyPorts, factions);
+      var self = this;
+
+      this._panelEl.innerHTML =
+        '<div class="new-game-panel new-game-panel--wide">' +
+        '<div class="new-game-world-badge">World: ' +
+        _escapeAttr(worldName) +
+        '</div>' +
+        '<h2 class="new-game-title">Choose Your Starting Port</h2>' +
+        '<div class="port-picker-layout">' +
+        '<div class="port-picker-map" id="ng-port-map"></div>' +
+        '<div class="port-picker-list" id="ng-port-list">' +
+        portCards +
+        '</div>' +
+        '</div>' +
+        '<p class="new-game-error hidden" id="ng-error"></p>' +
+        '<div class="new-game-actions">' +
+        '<button class="btn-cancel" id="ng-back" type="button">Back</button>' +
+        '<button class="app-btn app-btn--sm" id="ng-confirm" type="button" disabled>' +
+        'Begin Campaign' +
+        '</button>' +
+        '</div>' +
+        '</div>';
+
+      this._buildPortMap(friendlyPorts);
+
+      var portList = document.getElementById('ng-port-list');
+      if (portList) {
+        portList.querySelectorAll('.port-card').forEach(function (card) {
+          card.addEventListener('click', function () {
+            self._selectPort(card.getAttribute('data-port-id'));
+          });
+        });
+      }
+
+      document.getElementById('ng-back').addEventListener('click', function () {
+        if (self._portMap) {
+          self._portMap.remove();
+          self._portMap = null;
+        }
+        self._portMarkers = [];
+        self._renderStep1();
+      });
+
+      document.getElementById('ng-confirm').addEventListener('click', function () {
+        self._onConfirm();
+      });
+    },
+
+    _buildPortMap: function (friendlyPorts) {
+      var mapEl = document.getElementById('ng-port-map');
+      if (!mapEl || typeof L === 'undefined') return;
+
+      var worldData = this._worldData;
+      var self = this;
+
+      var map = L.map(mapEl, {
+        crs: L.CRS.Simple,
+        minZoom: -2,
+        maxZoom: 4,
+        zoomControl: true,
+      });
+      this._portMap = map;
+      this._portMarkers = [];
+
+      if (worldData && worldData.coastlines) {
+        worldData.coastlines.forEach(function (ring) {
+          L.polygon(ring, {
+            color: '#4a7c59',
+            fillColor: '#2d5a3d',
+            fillOpacity: 0.6,
+            weight: 2,
+          }).addTo(map);
+        });
+      }
+
+      friendlyPorts.forEach(function (s) {
+        var pos = s.position || s.pos;
+        if (!pos) return;
+        var marker = L.circleMarker(pos, {
+          radius: 8,
+          color: '#a07028',
+          fillColor: '#c8a84b',
+          fillOpacity: 0.85,
+          weight: 2,
+        });
+        marker.bindPopup('<strong>' + _escapeHtml(s.name) + '</strong>');
+        marker.on('click', function () {
+          self._selectPort(s.id);
+        });
+        marker.addTo(map);
+        self._portMarkers.push({ id: s.id, marker: marker });
+      });
+
+      if (worldData && worldData.bounds) {
+        map.fitBounds(worldData.bounds);
+      }
+    },
+
+    _selectPort: function (id) {
+      this._selectedPortId = id;
+
+      this._portMarkers.forEach(function (entry) {
+        if (entry.id === id) {
+          entry.marker.setRadius(11);
+          entry.marker.setStyle({
+            color: '#ffb74d',
+            fillColor: '#ffb74d',
+            fillOpacity: 1,
+            weight: 3,
+          });
+        } else {
+          entry.marker.setRadius(8);
+          entry.marker.setStyle({
+            color: '#a07028',
+            fillColor: '#c8a84b',
+            fillOpacity: 0.85,
+            weight: 2,
+          });
+        }
+      });
+
+      var portList = document.getElementById('ng-port-list');
+      if (portList) {
+        portList.querySelectorAll('.port-card').forEach(function (card) {
+          var isSelected = card.getAttribute('data-port-id') === id;
+          card.classList.toggle('port-card--selected', isSelected);
+          card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        });
+      }
+
+      var confirmBtn = document.getElementById('ng-confirm');
+      if (confirmBtn) confirmBtn.disabled = false;
+    },
+
+    _hide: function () {
+      if (this._portMap) {
+        this._portMap.remove();
+        this._portMap = null;
+      }
+      this._portMarkers = [];
+      this._selectedPortId = null;
+      this._captainName = '';
+      this._captainBio = '';
+      if (this._panelEl) {
+        this._panelEl.classList.add('hidden');
+        this._panelEl.innerHTML = '';
+      }
+      this._worldId = null;
+      this._worldData = null;
+      this._selectedShipClass = null;
+    },
+
+    _onConfirm: function () {
+      var errorEl = document.getElementById('ng-error');
+      var confirmBtn = document.getElementById('ng-confirm');
+      var backBtn = document.getElementById('ng-back');
+
+      if (!this._selectedPortId) {
+        if (errorEl) {
+          errorEl.textContent = 'Choose a port to begin your campaign.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+
       if (errorEl) errorEl.classList.add('hidden');
       if (confirmBtn) {
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Creating…';
       }
-      if (cancelBtn) cancelBtn.disabled = true;
+      if (backBtn) backBtn.disabled = true;
 
-      var bio = (bioEl && bioEl.value.trim()) || '';
+      var captainName = this._captainName;
+      var bio = this._captainBio;
       var selectedShipClass = this._selectedShipClass;
       var shipType = T.SHIP_TYPES[selectedShipClass];
+      var startingPortId = this._selectedPortId;
 
       var gameDoc = {
         worldId: this._worldId,
@@ -266,6 +512,7 @@
           stats: { command: 50, navigation: 50, cunning: 50, charisma: 50 },
         },
         flagshipId: null,
+        startingPortId: startingPortId,
         fog: [],
         settings: { difficulty: 'normal', mythicEnabled: true, pacing: 'async' },
       };
@@ -289,7 +536,7 @@
         maneuverability: shipType.baseStats.maneuverability,
         draft: shipType.baseStats.draft,
         damage: { hull: 0, sails: 0, guns: 0, hold: 0 },
-        location: null,
+        location: startingPortId,
         squadId: null,
       };
 
@@ -325,7 +572,7 @@
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Begin Campaign';
           }
-          if (cancelBtn) cancelBtn.disabled = false;
+          if (backBtn) backBtn.disabled = false;
           if (errorEl) {
             errorEl.textContent = 'Failed to create campaign: ' + err.message;
             errorEl.classList.remove('hidden');
