@@ -1176,3 +1176,74 @@
     max-height: 200px;
   }
 }
+
+/* ── Game map panel ─────────────────────────────────────────── */
+
+#game-map-panel {
+  margin-top: 1rem;
+}
+
+/* ── Game HUD strip ─────────────────────────────────────────── */
+
+.game-hud {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
+  background: rgba(30, 30, 46, 0.95);
+  border: 1px solid rgba(255, 183, 77, 0.2);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  font-size: 0.8rem;
+}
+
+.game-hud-portrait {
+  font-size: 1.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.game-hud-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.game-hud-label {
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.game-hud-value {
+  color: var(--color-text, #e0e0e0);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.game-hud-gold {
+  color: #ffb74d;
+  font-weight: 700;
+}
+
+#game-map-panel .tortuga-map {
+  border-radius: 0 0 6px 6px;
+}
+
+@media (max-width: 600px) {
+  .game-hud {
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .game-hud-value {
+    max-width: 90px;
+  }
+}
