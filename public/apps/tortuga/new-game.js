@@ -26,22 +26,6 @@
 
   var FRIENDLY_PORT_TYPES = ['colonial_port', 'free_port'];
 
-  function _buildWorldSnapshot(worldData) {
-    return {
-      geography: {
-        coastlines: worldData.coastlines || [],
-        bounds: worldData.bounds || null,
-        dimensions: worldData.dimensions || {},
-        windCurrentZones: worldData.windCurrentZones || [],
-        factionTerritory: worldData.factionTerritory || [],
-      },
-      settlements: (worldData.settlements || []).slice(),
-      hazards: (worldData.hazards || []).slice(),
-      factions: (worldData.factions || []).slice(),
-      tradeRoutes: (worldData.tradeRoutes || []).slice(),
-    };
-  }
-
   function _escapeAttr(str) {
     return String(str || '')
       .replace(/&/g, '&amp;')
@@ -500,7 +484,6 @@
 
       var gameDoc = {
         worldId: this._worldId,
-        worldSnapshot: _buildWorldSnapshot(this._worldData),
         phase: 'exploration',
         turnNumber: 0,
         captain: {
