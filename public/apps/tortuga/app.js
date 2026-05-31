@@ -48,7 +48,7 @@
   };
 
   T._startNewGame = function (worldId, worldData) {
-    T.newGame.show(worldId, worldData);
+    T.newGame.show(worldId, T.firestore.decodeWorld(worldData));
   };
 
   // ── Knobs helpers ────────────────────────────────────────────
