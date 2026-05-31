@@ -35,9 +35,78 @@
       .replace(/"/g, '&quot;');
   }
 
+  function _escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function _shipStatBar(label, value) {
+    var pct = Math.max(0, Math.min(100, value));
+    return (
+      '<div class="ship-stat-row">' +
+      '<span class="ship-stat-label">' +
+      _escapeHtml(label) +
+      '</span>' +
+      '<span class="ship-stat-bar"><span class="ship-stat-fill" style="width:' +
+      pct +
+      '%"></span></span>' +
+      '<span class="ship-stat-value">' +
+      value +
+      '</span>' +
+      '</div>'
+    );
+  }
+
+  function _buildShipCards(selectedClassId) {
+    return Object.keys(T.SHIP_TYPES)
+      .map(function (classId) {
+        var s = T.SHIP_TYPES[classId];
+        var bs = s.baseStats;
+        var isSelected = classId === selectedClassId;
+        return (
+          '<button class="ship-card' +
+          (isSelected ? ' ship-card--selected' : '') +
+          '" type="button"' +
+          ' data-class="' +
+          _escapeAttr(classId) +
+          '"' +
+          ' aria-pressed="' +
+          (isSelected ? 'true' : 'false') +
+          '">' +
+          '<div class="ship-card-header">' +
+          '<span class="ship-card-icon">' +
+          s.icon +
+          '</span>' +
+          '<span class="ship-card-name">' +
+          _escapeHtml(s.name) +
+          '</span>' +
+          '</div>' +
+          '<p class="ship-card-desc">' +
+          _escapeHtml(s.description) +
+          '</p>' +
+          '<div class="ship-card-stats">' +
+          _shipStatBar('Speed', bs.speed) +
+          _shipStatBar('Handle', bs.maneuverability) +
+          _shipStatBar('Hull', bs.hull.max) +
+          _shipStatBar('Cargo', bs.cargo.capacity) +
+          '</div>' +
+          '<div class="ship-card-guns">' +
+          bs.guns.count +
+          ' × ' +
+          bs.guns.weight +
+          'lb guns</div>' +
+          '</button>'
+        );
+      })
+      .join('');
+  }
+
   T.newGame = {
     _panelEl: null,
     _selectedPortrait: PORTRAITS[0].id,
+    _selectedShipClass: null,
     _worldId: null,
     _worldData: null,
 
@@ -45,6 +114,7 @@
       this._worldId = worldId;
       this._worldData = worldData;
       this._selectedPortrait = PORTRAITS[0].id;
+      this._selectedShipClass = Object.keys(T.SHIP_TYPES)[0];
 
       var panelEl = document.getElementById('new-game-panel');
       if (!panelEl) return;
@@ -94,6 +164,12 @@
         '<textarea class="knobs-input new-game-bio" id="ng-bio"' +
         ' rows="3" placeholder="Your captain\'s story…"></textarea>' +
         '</div>' +
+        '<div class="knobs-field">' +
+        '<label class="knobs-label">Flagship Class</label>' +
+        '<div class="ship-picker" id="ng-ship-picker">' +
+        _buildShipCards(this._selectedShipClass) +
+        '</div>' +
+        '</div>' +
         '<p class="new-game-error hidden" id="ng-error"></p>' +
         '<div class="new-game-actions">' +
         '<button class="btn-cancel" id="ng-cancel" type="button">Cancel</button>' +
@@ -117,6 +193,18 @@
         });
       });
 
+      panelEl.querySelectorAll('.ship-card').forEach(function (card) {
+        card.addEventListener('click', function () {
+          self._selectedShipClass = card.getAttribute('data-class');
+          panelEl.querySelectorAll('.ship-card').forEach(function (c) {
+            c.classList.remove('ship-card--selected');
+            c.setAttribute('aria-pressed', 'false');
+          });
+          card.classList.add('ship-card--selected');
+          card.setAttribute('aria-pressed', 'true');
+        });
+      });
+
       document.getElementById('ng-cancel').addEventListener('click', function () {
         self._hide();
       });
@@ -133,6 +221,7 @@
       }
       this._worldId = null;
       this._worldData = null;
+      this._selectedShipClass = null;
     },
 
     _onConfirm: function () {
@@ -160,6 +249,8 @@
       if (cancelBtn) cancelBtn.disabled = true;
 
       var bio = (bioEl && bioEl.value.trim()) || '';
+      var selectedShipClass = this._selectedShipClass;
+      var shipType = T.SHIP_TYPES[selectedShipClass];
 
       var gameDoc = {
         worldId: this._worldId,
@@ -179,19 +270,52 @@
         settings: { difficulty: 'normal', mythicEnabled: true, pacing: 'async' },
       };
 
+      var flagshipDoc = {
+        classId: selectedShipClass,
+        name: captainName + "'s " + shipType.name,
+        customFlag: null,
+        hull: { current: shipType.baseStats.hull.max, max: shipType.baseStats.hull.max },
+        sails: { current: shipType.baseStats.sails.max, max: shipType.baseStats.sails.max },
+        guns: { count: shipType.baseStats.guns.count, weight: shipType.baseStats.guns.weight },
+        crew: {
+          current: shipType.baseStats.crew.max,
+          min: shipType.baseStats.crew.min,
+          max: shipType.baseStats.crew.max,
+        },
+        morale: shipType.baseStats.morale,
+        cargo: { used: 0, capacity: shipType.baseStats.cargo.capacity, manifest: [] },
+        upgrades: [],
+        speed: shipType.baseStats.speed,
+        maneuverability: shipType.baseStats.maneuverability,
+        draft: shipType.baseStats.draft,
+        damage: { hull: 0, sails: 0, guns: 0, hold: 0 },
+        location: null,
+        squadId: null,
+      };
+
       var self = this;
+      var gameDocRef;
       T.firestore
         .createGame(gameDoc)
         .then(function (docRef) {
+          gameDocRef = docRef;
+          return T.firestore.createFlagship(docRef.id, flagshipDoc);
+        })
+        .then(function (shipDocRef) {
+          return T.firestore.updateGame(gameDocRef.id, { flagshipId: shipDocRef.id });
+        })
+        .then(function () {
           if (self._panelEl) {
             self._panelEl.innerHTML =
               '<div class="new-game-success">' +
               '<p class="new-game-success-title">Campaign created!</p>' +
               '<p class="new-game-success-meta">Captain ' +
               _escapeAttr(captainName) +
-              ' is ready to sail.</p>' +
+              ' sails aboard the ' +
+              _escapeAttr(captainName + "'s " + shipType.name) +
+              '.</p>' +
               '<p class="new-game-success-id">Game ID: ' +
-              _escapeAttr(docRef.id) +
+              _escapeAttr(gameDocRef.id) +
               '</p>' +
               '</div>';
           }
