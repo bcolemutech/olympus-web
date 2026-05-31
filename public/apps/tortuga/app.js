@@ -47,12 +47,8 @@
     _initEditor();
   };
 
-  T._startNewGame = function () {
-    var mapEl = document.getElementById('map-play');
-    if (mapEl) {
-      mapEl.classList.remove('hidden');
-      T.mapRenderer.init(mapEl, T.mapRenderer.PLACEHOLDER_WORLD);
-    }
+  T._startNewGame = function (worldId, worldData) {
+    T.newGame.show(worldId, worldData);
   };
 
   // ── Knobs helpers ────────────────────────────────────────────
