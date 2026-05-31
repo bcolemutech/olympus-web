@@ -161,6 +161,44 @@
       });
     },
 
+    onGame: function (gameId, callback) {
+      return T.state.db
+        .collection('tortuga_games')
+        .doc(gameId)
+        .onSnapshot(
+          function (snap) {
+            if (!snap.exists) {
+              callback(null, new Error('Game not found.'));
+              return;
+            }
+            callback(Object.assign({ id: snap.id }, snap.data()), null);
+          },
+          function (err) {
+            callback(null, err);
+          }
+        );
+    },
+
+    onFlagship: function (gameId, flagshipId, callback) {
+      return T.state.db
+        .collection('tortuga_games')
+        .doc(gameId)
+        .collection('ships')
+        .doc(flagshipId)
+        .onSnapshot(
+          function (snap) {
+            if (!snap.exists) {
+              callback(null, new Error('Flagship not found.'));
+              return;
+            }
+            callback(Object.assign({ id: snap.id }, snap.data()), null);
+          },
+          function (err) {
+            callback(null, err);
+          }
+        );
+    },
+
     // ── Decode ────────────────────────────────────────────
 
     decodeWorld: function (data) {

@@ -513,7 +513,7 @@
         },
         flagshipId: null,
         startingPortId: startingPortId,
-        fog: [],
+        fog: [startingPortId],
         settings: { difficulty: 'normal', mythicEnabled: true, pacing: 'async' },
       };
 
@@ -542,6 +542,7 @@
 
       var self = this;
       var gameDocRef;
+      var flagshipDocRef;
       T.firestore
         .createGame(gameDoc)
         .then(function (docRef) {
@@ -549,23 +550,23 @@
           return T.firestore.createFlagship(docRef.id, flagshipDoc);
         })
         .then(function (shipDocRef) {
+          flagshipDocRef = shipDocRef;
           return T.firestore.updateGame(gameDocRef.id, { flagshipId: shipDocRef.id });
         })
         .then(function () {
-          if (self._panelEl) {
-            self._panelEl.innerHTML =
-              '<div class="new-game-success">' +
-              '<p class="new-game-success-title">Campaign created!</p>' +
-              '<p class="new-game-success-meta">Captain ' +
-              _escapeAttr(captainName) +
-              ' sails aboard the ' +
-              _escapeAttr(captainName + "'s " + shipType.name) +
-              '.</p>' +
-              '<p class="new-game-success-id">Game ID: ' +
-              _escapeAttr(gameDocRef.id) +
-              '</p>' +
-              '</div>';
+          if (self._portMap) {
+            self._portMap.remove();
+            self._portMap = null;
           }
+          self._portMarkers = [];
+          var fullGameDoc = Object.assign({}, gameDoc, { flagshipId: flagshipDocRef.id });
+          T.gameMap.open(
+            gameDocRef.id,
+            fullGameDoc,
+            flagshipDocRef.id,
+            flagshipDoc,
+            self._worldData
+          );
         })
         .catch(function (err) {
           if (confirmBtn) {
