@@ -83,8 +83,9 @@
     var holes = [];
     (fog || []).forEach(function (settlementId) {
       var s = _settlementIndex[settlementId];
-      if (!s || !s.position) return;
-      holes.push(_makeCircle(s.position, revealR, 20));
+      var sPos = s && (s.position || s.pos);
+      if (!sPos) return;
+      holes.push(_makeCircle(sPos, revealR, 20));
     });
 
     var rings = [outer].concat(holes);
@@ -114,7 +115,8 @@
     // Fallback for pre-migration documents that have only a settlement location.
     if (flagshipDoc && flagshipDoc.location) {
       var s = _settlementIndex[flagshipDoc.location];
-      if (s && s.position) return s.position;
+      var pos = s && (s.position || s.pos);
+      if (pos) return pos;
     }
     return null;
   }

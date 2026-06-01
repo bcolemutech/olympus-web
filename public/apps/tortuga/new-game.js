@@ -523,10 +523,10 @@
         draft: shipType.baseStats.draft,
         damage: { hull: 0, sails: 0, guns: 0, hold: 0 },
         location: startingPortId,
-        position:
-          startingPort && startingPort.position
-            ? { y: startingPort.position[0], x: startingPort.position[1] }
-            : null,
+        position: (function () {
+          var p = startingPort && (startingPort.position || startingPort.pos);
+          return p ? { y: p[0], x: p[1] } : null;
+        })(),
         apRemaining: T.seaGraph.speedToAP(shipType.baseStats.speed),
         squadId: null,
       };
