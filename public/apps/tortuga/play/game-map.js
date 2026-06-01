@@ -25,6 +25,7 @@
   var _pendingMoveResult = null; // { displayPath, gridPath, steps }
   var _gameId = null;
   var _flagshipId = null;
+  var _mapClickHandler = null; // persistent Leaflet click listener
 
   // ── Portrait symbols (mirrors new-game.js) ───────────────────
 
@@ -133,6 +134,20 @@
     return group;
   }
 
+  function _buildShipLayerAtPos(pos) {
+    var group = L.layerGroup();
+    if (!pos) return group;
+    L.circleMarker(pos, {
+      radius: 9,
+      color: '#ffb74d',
+      fillColor: '#ffb74d',
+      fillOpacity: 0.9,
+      weight: 2,
+      interactive: false,
+    }).addTo(group);
+    return group;
+  }
+
   function _setShipLayer(layer) {
     if (_shipLayerRef) _shipLayerRef.remove();
     _shipLayerRef = layer;
@@ -144,6 +159,10 @@
   function _renderHud(gameDoc, flagshipDoc) {
     var hudEl = document.getElementById('game-hud');
     if (!hudEl) return;
+
+    // Preserve any active move-info content across re-renders.
+    var moveInfoEl = document.getElementById('game-hud-move-info');
+    var savedMoveInfo = moveInfoEl ? moveInfoEl.innerHTML : '';
 
     var captain = (gameDoc && gameDoc.captain) || {};
     var captainName = captain.name || '—';
@@ -210,14 +229,22 @@
       _apMax +
       '</span>' +
       '</div>' +
-      '<div class="game-hud-move-info" id="game-hud-move-info"></div>' +
+      '<div class="game-hud-move-info" id="game-hud-move-info">' +
+      savedMoveInfo +
+      '</div>' +
       '<div class="game-hud-actions">' +
       '<button class="game-hud-end-turn" id="game-hud-end-turn" type="button">End Turn</button>' +
       '</div>';
 
+    // Re-attach button listeners after innerHTML replacement.
     var endTurnBtn = document.getElementById('game-hud-end-turn');
-    if (endTurnBtn) {
-      endTurnBtn.addEventListener('click', _endTurn);
+    if (endTurnBtn) endTurnBtn.addEventListener('click', _endTurn);
+
+    if (savedMoveInfo) {
+      var confirmBtn = document.getElementById('game-hud-move-confirm');
+      var cancelBtn = document.getElementById('game-hud-move-cancel');
+      if (confirmBtn) confirmBtn.addEventListener('click', _confirmMove);
+      if (cancelBtn) cancelBtn.addEventListener('click', _cancelMove);
     }
   }
 
@@ -243,8 +270,6 @@
     _clearPathPreview();
 
     if (!result) {
-      // No water path to this point — re-register click immediately.
-      _registerMapClick();
       return;
     }
 
@@ -282,30 +307,33 @@
           '<span class="game-hud-move-cost game-hud-move-cost--over">Not enough AP (' +
           result.steps +
           ' needed)</span>' +
-          '<button class="game-hud-move-cancel" id="game-hud-move-cancel" type="button">Cancel</button>' +
           '</div>'
       );
-      var cancelBtn2 = document.getElementById('game-hud-move-cancel');
-      if (cancelBtn2) cancelBtn2.addEventListener('click', _cancelMove);
-      // Allow clicking a different destination.
-      _registerMapClick();
     }
   }
 
-  // ── Click registration ───────────────────────────────────────
+  // ── Persistent map click handler ─────────────────────────────
 
-  function _registerMapClick() {
-    if (_movementAnimating) return;
-    T.mapRenderer.awaitMapClick(function (pos) {
-      _onMapClick(pos);
-    });
+  function _attachMapClick() {
+    var map = T.mapRenderer.getMap();
+    if (!map) return;
+    _mapClickHandler = function (e) {
+      _onMapClick([e.latlng.lat, e.latlng.lng]);
+    };
+    map.on('click', _mapClickHandler);
+  }
+
+  function _detachMapClick() {
+    var map = T.mapRenderer.getMap();
+    if (map && _mapClickHandler) {
+      map.off('click', _mapClickHandler);
+    }
+    _mapClickHandler = null;
   }
 
   function _onMapClick(pos) {
-    if (_movementAnimating || !_seaGraph || !_currentPosition) {
-      _registerMapClick();
-      return;
-    }
+    if (_movementAnimating) return;
+    if (!_seaGraph || !_currentPosition) return;
     _clearPathPreview();
     var result = T.seaGraph.findPath(_seaGraph, _currentPosition, pos);
     _showPathPreview(result);
@@ -315,7 +343,6 @@
 
   function _cancelMove() {
     _clearPathPreview();
-    _registerMapClick();
   }
 
   function _confirmMove() {
@@ -343,20 +370,6 @@
     setTimeout(_step, 150);
   }
 
-  function _buildShipLayerAtPos(pos) {
-    var group = L.layerGroup();
-    if (!pos) return group;
-    L.circleMarker(pos, {
-      radius: 9,
-      color: '#ffb74d',
-      fillColor: '#ffb74d',
-      fillOpacity: 0.9,
-      weight: 2,
-      interactive: false,
-    }).addTo(group);
-    return group;
-  }
-
   function _finishMove(finalPos, stepsUsed) {
     _movementAnimating = false;
     _clearPathPreview();
@@ -367,14 +380,13 @@
 
     // Determine if final position is at a settlement.
     var arrivedAtSettlement = null;
+    var cellSize =
+      _seaGraph && _seaGraph.cellH ? Math.max(_seaGraph.cellH, _seaGraph.cellW) / 2 : 8;
     Object.keys(_settlementIndex).forEach(function (id) {
       var s = _settlementIndex[id];
       if (!s || !s.position) return;
       var dy = s.position[0] - finalPos[0];
       var dx = s.position[1] - finalPos[1];
-      // Snap threshold: within half a nav cell (approx)
-      var cellSize =
-        _seaGraph && _seaGraph.cellH ? Math.max(_seaGraph.cellH, _seaGraph.cellW) / 2 : 8;
       if (Math.sqrt(dy * dy + dx * dx) < cellSize) {
         arrivedAtSettlement = id;
       }
@@ -391,7 +403,6 @@
       });
 
     _renderHud(_lastGameDoc, Object.assign({}, _lastFlagshipDoc, { apRemaining: newAP }));
-    _registerMapClick();
   }
 
   // ── End Turn ─────────────────────────────────────────────────
@@ -414,7 +425,6 @@
       });
 
     _renderHud(_lastGameDoc, Object.assign({}, _lastFlagshipDoc, { apRemaining: _apMax }));
-    _registerMapClick();
   }
 
   // ── Live update handlers ─────────────────────────────────────
@@ -507,8 +517,8 @@
       _setFogLayer(_buildFogLayer(gameDoc.fog, worldData));
       _setShipLayer(_buildShipLayer(flagshipDoc));
 
-      // Start click-to-move loop.
-      _registerMapClick();
+      // Attach persistent click-to-move handler.
+      _attachMapClick();
 
       // Subscribe to live Firestore updates.
       _unsubGame = T.firestore.onGame(gameId, _onGameUpdate);
@@ -525,7 +535,7 @@
         _unsubFlagship = null;
       }
 
-      T.mapRenderer.cancelMapClick();
+      _detachMapClick();
       _clearPathPreview();
       T.mapRenderer.destroy();
 
