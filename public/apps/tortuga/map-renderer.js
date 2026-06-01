@@ -478,5 +478,9 @@
     isEditMode: function () {
       return _editMode;
     },
+
+    getMap: function () {
+      return _map;
+    },
   };
 })();
