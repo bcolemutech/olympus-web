@@ -59,6 +59,18 @@
     }, 3000);
   }
 
+  // ── Discovery toast ──────────────────────────────────────────
+
+  function _showDiscoveryToast(settlementIds) {
+    var names = settlementIds.map(function (id) {
+      return _escapeHtml((_settlementIndex[id] && _settlementIndex[id].name) || 'Unknown');
+    });
+    _setMoveInfo('<div class="game-hud-discovery">Discovered: ' + names.join(', ') + '</div>');
+    setTimeout(function () {
+      _setMoveInfo('');
+    }, 3000);
+  }
+
   // ── Fog layer ────────────────────────────────────────────────
   // Canvas-based fog uses destination-out compositing so overlapping
   // reveal circles don't re-fill each other (SVG evenodd fill rule breaks
