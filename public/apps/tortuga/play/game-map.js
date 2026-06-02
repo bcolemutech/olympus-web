@@ -47,15 +47,6 @@
       .replace(/>/g, '&gt;');
   }
 
-  function _makeCircle(center, radius, steps) {
-    var pts = [];
-    for (var i = 0; i < steps; i++) {
-      var angle = (2 * Math.PI * i) / steps;
-      pts.push([center[0] + radius * Math.sin(angle), center[1] + radius * Math.cos(angle)]);
-    }
-    return pts;
-  }
-
   // ── Discovery toast ──────────────────────────────────────────
 
   function _showDiscoveryToast(settlementIds) {
@@ -69,46 +60,78 @@
   }
 
   // ── Fog layer ────────────────────────────────────────────────
+  // Canvas-based fog uses destination-out compositing so overlapping
+  // reveal circles don't re-fill each other (SVG evenodd fill rule breaks
+  // when holes overlap).
+
+  var _FogLayer = L.Layer.extend({
+    initialize: function (fog, worldData) {
+      this._fog = fog;
+      this._worldData = worldData;
+    },
+
+    onAdd: function (map) {
+      this._map = map;
+      this._canvas = L.DomUtil.create('canvas', 'tortuga-fog-canvas');
+      this._canvas.style.position = 'absolute';
+      this._canvas.style.pointerEvents = 'none';
+      map.getPanes().overlayPane.appendChild(this._canvas);
+      map.on('viewreset moveend', this._draw, this);
+      this._draw();
+    },
+
+    onRemove: function (map) {
+      map.off('viewreset moveend', this._draw, this);
+      if (this._canvas && this._canvas.parentNode) {
+        this._canvas.parentNode.removeChild(this._canvas);
+      }
+      this._canvas = null;
+    },
+
+    _draw: function () {
+      var map = this._map;
+      var canvas = this._canvas;
+      if (!map || !canvas) return;
+
+      var pad = 256;
+      var size = map.getSize();
+      var w = size.x + pad * 2;
+      var h = size.y + pad * 2;
+
+      canvas.width = w;
+      canvas.height = h;
+      L.DomUtil.setPosition(canvas, map.containerPointToLayerPoint([-pad, -pad]));
+
+      var ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(10, 10, 20, 0.75)';
+      ctx.fillRect(0, 0, w, h);
+
+      var bounds = (this._worldData && this._worldData.bounds) || [
+        [0, 0],
+        [600, 800],
+      ];
+      var mapH = bounds[1][0] - bounds[0][0];
+      var mapW = bounds[1][1] - bounds[0][1];
+      var revealR = Math.max(15, Math.min(mapH, mapW) * 0.035);
+
+      ctx.globalCompositeOperation = 'destination-out';
+      (this._fog || []).forEach(function (settlementId) {
+        var s = _settlementIndex[settlementId];
+        if (!s || !s.position) return;
+        var pt = map.latLngToContainerPoint([s.position[0], s.position[1]]);
+        var northPt = map.latLngToContainerPoint([s.position[0] + revealR, s.position[1]]);
+        var rPx = Math.max(4, Math.abs(pt.y - northPt.y));
+        ctx.beginPath();
+        ctx.arc(pt.x + pad, pt.y + pad, rPx, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+      ctx.globalCompositeOperation = 'source-over';
+    },
+  });
 
   function _buildFogLayer(fog, worldData) {
-    var bounds = (worldData && worldData.bounds) || [
-      [0, 0],
-      [600, 800],
-    ];
-    var minY = bounds[0][0];
-    var minX = bounds[0][1];
-    var maxY = bounds[1][0];
-    var maxX = bounds[1][1];
-    var pad = 50;
-
-    var outer = [
-      [minY - pad, minX - pad],
-      [minY - pad, maxX + pad],
-      [maxY + pad, maxX + pad],
-      [maxY + pad, minX - pad],
-    ];
-
-    var height = maxY - minY;
-    var width = maxX - minX;
-    var revealR = Math.max(15, Math.min(height, width) * 0.035);
-
-    var holes = [];
-    (fog || []).forEach(function (settlementId) {
-      var s = _settlementIndex[settlementId];
-      if (!s || !s.position) return;
-      holes.push(_makeCircle(s.position, revealR, 20));
-    });
-
-    var rings = [outer].concat(holes);
-    return L.layerGroup([
-      L.polygon(rings, {
-        color: 'transparent',
-        fillColor: '#0a0a14',
-        fillOpacity: 0.75,
-        weight: 0,
-        interactive: false,
-      }),
-    ]);
+    return new _FogLayer(fog, worldData);
   }
 
   function _setFogLayer(layer) {
