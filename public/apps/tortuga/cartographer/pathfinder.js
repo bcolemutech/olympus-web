@@ -286,10 +286,60 @@
     };
   }
 
+  // BFS flood-fill returning all water cells reachable within maxSteps hops.
+  // Each hop (cardinal or diagonal) counts as 1 step, matching the AP cost
+  // used by findPathFull (steps = gridPath.length - 1).
+  function reachableCells(meta, fromWorld, maxSteps) {
+    var n = meta.gridSize;
+    var s = _worldToGrid(meta, fromWorld[0], fromWorld[1]);
+    var sw = _nearestWater(meta, s[0], s[1], 5);
+    if (!sw) return [];
+
+    var DIRS8 = [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+    ];
+    var dist = new Int16Array(n * n).fill(-1);
+    var queue = [];
+    var head = 0;
+    var startIdx = sw[0] * n + sw[1];
+    dist[startIdx] = 0;
+    queue.push(startIdx);
+    var result = [];
+
+    while (head < queue.length) {
+      var idx = queue[head++];
+      var ci = Math.floor(idx / n);
+      var cj = idx % n;
+      var cd = dist[idx];
+      if (cd > 0) {
+        result.push({ worldPos: _gridToWorld(meta, ci, cj), steps: cd });
+      }
+      if (cd >= maxSteps) continue;
+      for (var d = 0; d < 8; d++) {
+        var ni = ci + DIRS8[d][0];
+        var nj = cj + DIRS8[d][1];
+        if (ni < 0 || ni >= n || nj < 0 || nj >= n) continue;
+        var nIdx = ni * n + nj;
+        if (meta.mask[nIdx] || dist[nIdx] >= 0) continue;
+        dist[nIdx] = cd + 1;
+        queue.push(nIdx);
+      }
+    }
+    return result;
+  }
+
   var api = {
     buildLandMask: buildLandMask,
     findPath: findPath,
     findPathFull: findPathFull,
+    reachableCells: reachableCells,
     DEFAULT_GRID_SIZE: DEFAULT_GRID_SIZE,
   };
 

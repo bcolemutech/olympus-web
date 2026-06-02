@@ -25,7 +25,7 @@
   var _pendingMoveResult = null; // { displayPath, gridPath, steps }
   var _gameId = null;
   var _flagshipId = null;
-  var _mapClickHandler = null; // persistent Leaflet click listener
+  var _navCellLayer = null; // L.layerGroup of reachable-cell markers
 
   // ── Portrait symbols (mirrors new-game.js) ───────────────────
 
@@ -312,28 +312,43 @@
     }
   }
 
-  // ── Persistent map click handler ─────────────────────────────
+  // ── Reachable-cell markers ───────────────────────────────────
 
-  function _attachMapClick() {
-    var map = T.mapRenderer.getMap();
-    if (!map) return;
-    _mapClickHandler = function (e) {
-      _onMapClick([e.latlng.lat, e.latlng.lng]);
-    };
-    map.on('click', _mapClickHandler);
-  }
-
-  function _detachMapClick() {
-    var map = T.mapRenderer.getMap();
-    if (map && _mapClickHandler) {
-      map.off('click', _mapClickHandler);
+  function _clearNavCells() {
+    if (_navCellLayer) {
+      _navCellLayer.remove();
+      _navCellLayer = null;
     }
-    _mapClickHandler = null;
   }
 
-  function _onMapClick(pos) {
+  function _showReachableCells() {
+    _clearNavCells();
+    if (!_seaGraph || !_currentPosition || _movementAnimating || _apRemaining <= 0) return;
+    var cells = T.seaGraph.reachableCells(_seaGraph, _currentPosition, _apRemaining);
+    if (!cells.length) return;
+    var group = L.layerGroup();
+    cells.forEach(function (cell) {
+      var marker = L.circleMarker(cell.worldPos, {
+        radius: 6,
+        color: '#4caf50',
+        fillColor: '#4caf50',
+        fillOpacity: 0.25,
+        weight: 1,
+        opacity: 0.7,
+      });
+      marker.on('click', function (e) {
+        L.DomEvent.stopPropagation(e);
+        _onNavCellClick(cell.worldPos);
+      });
+      marker.addTo(group);
+    });
+    _navCellLayer = group;
+    T.mapRenderer.addExternalLayer('nav-cells', group);
+  }
+
+  function _onNavCellClick(pos) {
     if (_movementAnimating) return;
-    if (!_seaGraph || !_currentPosition) return;
+    _clearNavCells();
     _clearPathPreview();
     var result = T.seaGraph.findPath(_seaGraph, _currentPosition, pos);
     _showPathPreview(result);
@@ -343,6 +358,7 @@
 
   function _cancelMove() {
     _clearPathPreview();
+    _showReachableCells();
   }
 
   function _confirmMove() {
@@ -403,6 +419,7 @@
       });
 
     _renderHud(_lastGameDoc, Object.assign({}, _lastFlagshipDoc, { apRemaining: newAP }));
+    _showReachableCells();
   }
 
   // ── End Turn ─────────────────────────────────────────────────
@@ -425,6 +442,7 @@
       });
 
     _renderHud(_lastGameDoc, Object.assign({}, _lastFlagshipDoc, { apRemaining: _apMax }));
+    _showReachableCells();
   }
 
   // ── Live update handlers ─────────────────────────────────────
@@ -517,8 +535,8 @@
       _setFogLayer(_buildFogLayer(gameDoc.fog, worldData));
       _setShipLayer(_buildShipLayer(flagshipDoc));
 
-      // Attach persistent click-to-move handler.
-      _attachMapClick();
+      // Show reachable-cell markers for tap-to-move.
+      _showReachableCells();
 
       // Subscribe to live Firestore updates.
       _unsubGame = T.firestore.onGame(gameId, _onGameUpdate);
@@ -535,12 +553,13 @@
         _unsubFlagship = null;
       }
 
-      _detachMapClick();
+      _clearNavCells();
       _clearPathPreview();
       T.mapRenderer.destroy();
 
       _fogLayerRef = null;
       _shipLayerRef = null;
+      _navCellLayer = null;
       _pathPreviewLayer = null;
       _worldData = null;
       _settlementIndex = {};
