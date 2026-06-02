@@ -1247,6 +1247,12 @@
   order: 99;
 }
 
+.game-hud-discovery {
+  color: #80cbc4;
+  font-size: 0.85rem;
+  padding: 4px 0;
+}
+
 .game-hud-move-prompt {
   display: flex;
   align-items: center;

@@ -56,6 +56,18 @@
     return pts;
   }
 
+  // ── Discovery toast ──────────────────────────────────────────
+
+  function _showDiscoveryToast(settlementIds) {
+    var names = settlementIds.map(function (id) {
+      return _escapeHtml((_settlementIndex[id] && _settlementIndex[id].name) || 'Unknown');
+    });
+    _setMoveInfo('<div class="game-hud-discovery">Discovered: ' + names.join(', ') + '</div>');
+    setTimeout(function () {
+      _setMoveInfo('');
+    }, 3000);
+  }
+
   // ── Fog layer ────────────────────────────────────────────────
 
   function _buildFogLayer(fog, worldData) {
@@ -407,6 +419,36 @@
         arrivedAtSettlement = id;
       }
     });
+
+    // Scan for newly discovered settlements within discovery range.
+    var currentFog = (_lastGameDoc && _lastGameDoc.fog) || [];
+    var fogSet = {};
+    currentFog.forEach(function (id) {
+      fogSet[id] = true;
+    });
+    var newlyDiscovered = [];
+    Object.keys(_settlementIndex).forEach(function (id) {
+      if (fogSet[id]) return;
+      var s = _settlementIndex[id];
+      if (!s || !s.position) return;
+      var dy = s.position[0] - finalPos[0];
+      var dx = s.position[1] - finalPos[1];
+      var dist = Math.sqrt(dy * dy + dx * dx);
+      var radius = s.hidden || s.type === 'hidden_cove' ? T.HIDDEN_COVE_RADIUS : T.DISCOVERY_RADIUS;
+      if (dist < radius) {
+        newlyDiscovered.push(id);
+      }
+    });
+    if (newlyDiscovered.length > 0) {
+      T.firestore
+        .updateGame(_gameId, {
+          fog: firebase.firestore.FieldValue.arrayUnion.apply(null, newlyDiscovered),
+        })
+        .catch(function (err) {
+          console.error('[game-map] fog discovery update failed', err);
+        });
+      _showDiscoveryToast(newlyDiscovered);
+    }
 
     T.firestore
       .updateFlagship(_gameId, _flagshipId, {
