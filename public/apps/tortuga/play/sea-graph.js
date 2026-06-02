@@ -39,9 +39,16 @@
     return T.pathfinder.findPathFull(graph, fromPos, toPos);
   }
 
+  // Returns all water cells reachable within apBudget AP from fromPos.
+  // Each element: { worldPos: [y,x], steps: number }
+  function reachableCells(graph, fromPos, apBudget) {
+    return T.pathfinder.reachableCells(graph, fromPos, apBudget);
+  }
+
   T.seaGraph = {
     buildGraph: buildGraph,
     findPath: findPath,
+    reachableCells: reachableCells,
     speedToAP: speedToAP,
     NAV_GRID_SIZE: NAV_GRID_SIZE,
   };
