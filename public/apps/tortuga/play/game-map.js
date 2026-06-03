@@ -27,6 +27,25 @@
   var _flagshipId = null;
   var _navCellLayer = null; // L.layerGroup of reachable-cell markers
 
+  // ── Open port visit modal ────────────────────────────────────
+
+  function _openPortVisit() {
+    if (!_lastFlagshipDoc || !_lastFlagshipDoc.location) return;
+    var s = _settlementIndex[_lastFlagshipDoc.location];
+    T.portVisit.open(
+      _gameId,
+      _flagshipId,
+      _lastGameDoc,
+      _lastFlagshipDoc,
+      _lastFlagshipDoc.location,
+      (s && s.name) || 'Port',
+      _apMax,
+      function () {
+        _showReachableCells();
+      }
+    );
+  }
+
   // ── Portrait symbols (mirrors new-game.js) ───────────────────
 
   var PORTRAIT_SYMBOLS = {
@@ -223,9 +242,11 @@
     }
 
     var locationName = 'At Sea';
+    var atFriendlyPort = false;
     if (flagshipDoc && flagshipDoc.location) {
       var s = _settlementIndex[flagshipDoc.location];
       if (s && s.name) locationName = s.name;
+      if (s && T.FRIENDLY_PORT_TYPES.indexOf(s.type) !== -1) atFriendlyPort = true;
     }
 
     var apRemaining =
@@ -280,12 +301,17 @@
       savedMoveInfo +
       '</div>' +
       '<div class="game-hud-actions">' +
+      (atFriendlyPort
+        ? '<button class="game-hud-visit-port" id="game-hud-visit-port" type="button">Visit Port</button>'
+        : '') +
       '<button class="game-hud-end-turn" id="game-hud-end-turn" type="button">End Turn</button>' +
       '</div>';
 
     // Re-attach button listeners after innerHTML replacement.
     var endTurnBtn = document.getElementById('game-hud-end-turn');
     if (endTurnBtn) endTurnBtn.addEventListener('click', _endTurn);
+    var visitPortBtn = document.getElementById('game-hud-visit-port');
+    if (visitPortBtn) visitPortBtn.addEventListener('click', _openPortVisit);
 
     if (savedMoveInfo) {
       var confirmBtn = document.getElementById('game-hud-move-confirm');
@@ -495,7 +521,32 @@
         console.error('[game-map] updateFlagship failed', err);
       });
 
-    _renderHud(_lastGameDoc, Object.assign({}, _lastFlagshipDoc, { apRemaining: newAP }));
+    var patchedFlagship = Object.assign({}, _lastFlagshipDoc, {
+      apRemaining: newAP,
+      location: arrivedAtSettlement,
+      position: { y: finalPos[0], x: finalPos[1] },
+    });
+    _renderHud(_lastGameDoc, patchedFlagship);
+
+    if (arrivedAtSettlement) {
+      var arrSett = _settlementIndex[arrivedAtSettlement];
+      if (arrSett && T.FRIENDLY_PORT_TYPES.indexOf(arrSett.type) !== -1) {
+        T.portVisit.open(
+          _gameId,
+          _flagshipId,
+          _lastGameDoc,
+          patchedFlagship,
+          arrivedAtSettlement,
+          arrSett.name,
+          _apMax,
+          function () {
+            _showReachableCells();
+          }
+        );
+        return;
+      }
+    }
+
     _showReachableCells();
   }
 
@@ -532,6 +583,10 @@
     _lastGameDoc = gameDoc;
     _renderHud(gameDoc, _lastFlagshipDoc);
 
+    if (T.portVisit.isOpen()) {
+      T.portVisit.updateDocs(_lastGameDoc, _lastFlagshipDoc);
+    }
+
     var mapPanel = document.getElementById('game-map-panel');
     if (!mapPanel || mapPanel.classList.contains('hidden')) return;
     _setFogLayer(_buildFogLayer(gameDoc.fog, _worldData));
@@ -554,10 +609,15 @@
 
     _renderHud(_lastGameDoc, flagshipDoc);
 
+    if (T.portVisit.isOpen()) {
+      T.portVisit.updateDocs(_lastGameDoc, _lastFlagshipDoc);
+    }
+
     var mapPanel = document.getElementById('game-map-panel');
     if (!mapPanel || mapPanel.classList.contains('hidden')) return;
     if (!_movementAnimating) {
       _setShipLayer(_buildShipLayer(flagshipDoc));
+      _showReachableCells();
     }
   }
 

@@ -1344,3 +1344,234 @@
     max-width: 90px;
   }
 }
+
+/* ── Port visit modal ──────────────────────────────────────── */
+
+.port-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.port-dialog {
+  background: #131929;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.port-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.port-modal-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffb74d;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.port-modal-close {
+  background: none;
+  border: none;
+  color: #90a4ae;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.port-modal-close:hover {
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.port-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  padding: 0.75rem 0 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  margin-bottom: 0.25rem;
+}
+
+.port-status-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.port-status-label {
+  font-size: 0.65rem;
+  color: #90a4ae;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.port-status-value {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.port-status-gold {
+  color: #ffb74d;
+}
+
+.port-stat-bar {
+  display: inline-block;
+  width: 48px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.port-stat-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+
+.port-section {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.port-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.port-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #ffb74d;
+  margin: 0 0 0.55rem;
+}
+
+.port-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  flex-wrap: wrap;
+}
+
+.port-action-label {
+  flex: 1 1 140px;
+  font-size: 0.82rem;
+  color: #e0e0e0;
+}
+
+.port-action-cost {
+  font-size: 0.75rem;
+  color: #90a4ae;
+  min-width: 52px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.port-qty-input {
+  width: 52px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.82rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: #e0e0e0;
+  flex-shrink: 0;
+}
+
+.port-qty-input:focus {
+  border-color: rgba(255, 183, 77, 0.45);
+  outline: none;
+}
+
+.port-qty-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.port-btn {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: rgba(255, 183, 77, 0.12);
+  color: #ffb74d;
+  border: 1px solid rgba(255, 183, 77, 0.4);
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.port-btn:hover:not(:disabled) {
+  background: rgba(255, 183, 77, 0.22);
+}
+
+.port-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.port-btn--sm {
+  padding: 0.25rem 0.6rem;
+}
+
+.port-error {
+  font-size: 0.78rem;
+  color: #ef5350;
+  min-height: 1.1em;
+  margin: 0 0 0.4rem;
+}
+
+/* HUD Visit Port button */
+
+.game-hud-visit-port {
+  padding: 0.25rem 0.75rem;
+  background: rgba(102, 187, 106, 0.12);
+  color: #66bb6a;
+  border: 1px solid rgba(102, 187, 106, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  margin-right: 0.4rem;
+}
+
+.game-hud-visit-port:hover {
+  background: rgba(102, 187, 106, 0.22);
+}

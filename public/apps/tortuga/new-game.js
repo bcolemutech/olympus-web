@@ -24,7 +24,7 @@
     large: 'Large',
   };
 
-  var FRIENDLY_PORT_TYPES = ['colonial_port', 'free_port'];
+  var FRIENDLY_PORT_TYPES = T.FRIENDLY_PORT_TYPES;
 
   function _escapeAttr(str) {
     return String(str || '')
