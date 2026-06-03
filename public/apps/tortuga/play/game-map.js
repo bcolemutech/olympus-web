@@ -528,26 +528,35 @@
     });
     _renderHud(_lastGameDoc, patchedFlagship);
 
-    if (arrivedAtSettlement) {
-      var arrSett = _settlementIndex[arrivedAtSettlement];
-      if (arrSett && T.FRIENDLY_PORT_TYPES.indexOf(arrSett.type) !== -1) {
-        T.portVisit.open(
-          _gameId,
-          _flagshipId,
-          _lastGameDoc,
-          patchedFlagship,
-          arrivedAtSettlement,
-          arrSett.name,
-          _apMax,
-          function () {
-            _showReachableCells();
+    T.events.tryFire(
+      {
+        gameId: _gameId,
+        flagshipId: _flagshipId,
+        gameDoc: _lastGameDoc,
+        flagship: patchedFlagship,
+      },
+      function _afterEvent() {
+        if (arrivedAtSettlement) {
+          var arrSett = _settlementIndex[arrivedAtSettlement];
+          if (arrSett && T.FRIENDLY_PORT_TYPES.indexOf(arrSett.type) !== -1) {
+            T.portVisit.open(
+              _gameId,
+              _flagshipId,
+              _lastGameDoc,
+              patchedFlagship,
+              arrivedAtSettlement,
+              arrSett.name,
+              _apMax,
+              function () {
+                _showReachableCells();
+              }
+            );
+            return;
           }
-        );
-        return;
+        }
+        _showReachableCells();
       }
-    }
-
-    _showReachableCells();
+    );
   }
 
   // ── End Turn ─────────────────────────────────────────────────
