@@ -1575,3 +1575,95 @@
 .game-hud-visit-port:hover {
   background: rgba(102, 187, 106, 0.22);
 }
+
+/* ── Event modal ───────────────────────────────────────────── */
+
+.event-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1010;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.event-type-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.85rem;
+}
+
+.event-type-badge--storm {
+  background: rgba(239, 83, 80, 0.15);
+  color: #ef5350;
+  border: 1px solid rgba(239, 83, 80, 0.35);
+}
+
+.event-type-badge--wreckage {
+  background: rgba(255, 183, 77, 0.12);
+  color: #ffb74d;
+  border: 1px solid rgba(255, 183, 77, 0.35);
+}
+
+.event-type-badge--sighting {
+  background: rgba(128, 203, 196, 0.12);
+  color: #80cbc4;
+  border: 1px solid rgba(128, 203, 196, 0.3);
+}
+
+.event-narrative {
+  font-size: 0.88rem;
+  color: #cdd5e0;
+  line-height: 1.6;
+  margin: 0 0 1.25rem;
+  font-style: italic;
+}
+
+.event-choices {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.event-choice-btn {
+  padding: 0.35rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 183, 77, 0.45);
+  background: rgba(255, 183, 77, 0.1);
+  color: #ffb74d;
+  font-family: inherit;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.event-choice-btn:hover {
+  background: rgba(255, 183, 77, 0.22);
+}
+
+.event-choice-btn--primary {
+  background: rgba(255, 183, 77, 0.18);
+}
+
+.event-choice-btn--secondary {
+  background: transparent;
+  border-color: rgba(144, 164, 174, 0.4);
+  color: #90a4ae;
+}
+
+.event-choice-btn--secondary:hover {
+  color: #e0e0e0;
+  border-color: rgba(224, 224, 224, 0.4);
+}
