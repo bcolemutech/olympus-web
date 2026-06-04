@@ -305,6 +305,7 @@
         ? '<button class="game-hud-visit-port" id="game-hud-visit-port" type="button">Visit Port</button>'
         : '') +
       '<button class="game-hud-end-turn" id="game-hud-end-turn" type="button">End Turn</button>' +
+      '<button class="game-hud-log-btn" id="game-hud-log-btn" type="button">Log</button>' +
       '</div>';
 
     // Re-attach button listeners after innerHTML replacement.
@@ -312,6 +313,11 @@
     if (endTurnBtn) endTurnBtn.addEventListener('click', _endTurn);
     var visitPortBtn = document.getElementById('game-hud-visit-port');
     if (visitPortBtn) visitPortBtn.addEventListener('click', _openPortVisit);
+    var logBtn = document.getElementById('game-hud-log-btn');
+    if (logBtn)
+      logBtn.addEventListener('click', function () {
+        T.captainLog.open(_gameId);
+      });
 
     if (savedMoveInfo) {
       var confirmBtn = document.getElementById('game-hud-move-confirm');
@@ -437,6 +443,7 @@
   function _confirmMove() {
     if (!_pendingMoveResult || _movementAnimating) return;
     var result = _pendingMoveResult;
+    var fromPos = _currentPosition;
     _pendingMoveResult = null;
     _setMoveInfo('');
 
@@ -447,7 +454,7 @@
     function _step() {
       stepIndex++;
       if (stepIndex >= gridPath.length) {
-        _finishMove(gridPath[gridPath.length - 1], result.steps);
+        _finishMove(gridPath[gridPath.length - 1], result.steps, fromPos);
         return;
       }
       var pos = gridPath[stepIndex];
@@ -459,7 +466,7 @@
     setTimeout(_step, 150);
   }
 
-  function _finishMove(finalPos, stepsUsed) {
+  function _finishMove(finalPos, stepsUsed, fromPos) {
     _movementAnimating = false;
     _clearPathPreview();
 
@@ -520,6 +527,43 @@
       .catch(function (err) {
         console.error('[game-map] updateFlagship failed', err);
       });
+
+    var currentTurn = (_lastGameDoc && _lastGameDoc.turnNumber) || 0;
+    var arrSettlement = arrivedAtSettlement ? _settlementIndex[arrivedAtSettlement] : null;
+    var moveSummary = arrSettlement
+      ? 'Sailed to ' + arrSettlement.name + ' (' + stepsUsed + ' AP)'
+      : 'Sailed ' + stepsUsed + ' league' + (stepsUsed !== 1 ? 's' : '');
+    T.firestore
+      .addLogEntry(_gameId, {
+        turn: currentTurn,
+        type: 'move',
+        summary: moveSummary,
+        payload: {
+          from: fromPos ? { y: fromPos[0], x: fromPos[1] } : null,
+          to: { y: finalPos[0], x: finalPos[1] },
+          stepsUsed: stepsUsed,
+          settlementId: arrivedAtSettlement || null,
+        },
+      })
+      .catch(function (err) {
+        console.error('[game-map] addLogEntry (move) failed', err);
+      });
+
+    if (newlyDiscovered.length > 0) {
+      var discNames = newlyDiscovered.map(function (id) {
+        return (_settlementIndex[id] && _settlementIndex[id].name) || 'Unknown';
+      });
+      T.firestore
+        .addLogEntry(_gameId, {
+          turn: currentTurn,
+          type: 'discovery',
+          summary: 'Discovered: ' + discNames.join(', '),
+          payload: { settlementIds: newlyDiscovered, settlementNames: discNames },
+        })
+        .catch(function (err) {
+          console.error('[game-map] addLogEntry (discovery) failed', err);
+        });
+    }
 
     var patchedFlagship = Object.assign({}, _lastFlagshipDoc, {
       apRemaining: newAP,
