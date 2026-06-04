@@ -1749,8 +1749,22 @@
   color: var(--color-text-muted, #888);
 }
 
+.game-card-error {
+  font-size: 0.78rem;
+  color: #e05555;
+  margin: 0.2rem 0 0;
+}
+
 .game-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-top: 0.35rem;
+}
+
+.game-card-delete {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.5rem;
 }
 
 .game-card--skeleton {

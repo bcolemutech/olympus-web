@@ -69,7 +69,7 @@
     container.appendChild(msg);
   }
 
-  function _buildCard(game, onResume) {
+  function _buildCard(game, onResume, onDelete) {
     var card = document.createElement('div');
     card.className = 'game-card';
 
@@ -105,6 +105,10 @@
       '</span>';
     card.appendChild(metaEl);
 
+    var errorEl = document.createElement('p');
+    errorEl.className = 'game-card-error hidden';
+    card.appendChild(errorEl);
+
     var actionsEl = document.createElement('div');
     actionsEl.className = 'game-card-actions';
 
@@ -113,9 +117,28 @@
     continueBtn.setAttribute('type', 'button');
     continueBtn.textContent = 'Continue';
     continueBtn.addEventListener('click', function () {
-      onResume(game.id, game);
+      continueBtn.disabled = true;
+      continueBtn.textContent = 'Loading…';
+      errorEl.classList.add('hidden');
+      onResume(game.id, game, function (errMsg) {
+        continueBtn.disabled = false;
+        continueBtn.textContent = 'Continue';
+        errorEl.textContent = errMsg || 'Failed to load campaign.';
+        errorEl.classList.remove('hidden');
+      });
     });
     actionsEl.appendChild(continueBtn);
+
+    var deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn-cancel game-card-delete';
+    deleteBtn.setAttribute('type', 'button');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', function () {
+      if (window.confirm('Delete this campaign? This cannot be undone.')) {
+        onDelete(game.id);
+      }
+    });
+    actionsEl.appendChild(deleteBtn);
 
     card.appendChild(actionsEl);
 
@@ -125,12 +148,14 @@
   T.gameList = {
     _container: null,
     _onResume: null,
+    _onDelete: null,
     _unsub: null,
 
     render: function (containerEl, opts) {
       this.destroy();
       this._container = containerEl;
       this._onResume = (opts && opts.onResume) || null;
+      this._onDelete = (opts && opts.onDelete) || null;
 
       var self = this;
 
@@ -157,9 +182,15 @@
         containerEl.innerHTML = '';
         games.forEach(function (game) {
           containerEl.appendChild(
-            _buildCard(game, function (id, doc) {
-              if (self._onResume) self._onResume(id, doc);
-            })
+            _buildCard(
+              game,
+              function (id, doc, onError) {
+                if (self._onResume) self._onResume(id, doc, onError);
+              },
+              function (id) {
+                if (self._onDelete) self._onDelete(id);
+              }
+            )
           );
         });
       });
