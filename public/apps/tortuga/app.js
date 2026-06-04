@@ -51,9 +51,12 @@
     T.newGame.show(worldId, T.firestore.decodeWorld(worldData));
   };
 
-  T._resumeGame = function (gameId, gameDoc) {
+  T._resumeGame = function (gameId, gameDoc, onError) {
     var flagshipId = gameDoc.flagshipId;
-    if (!flagshipId) return;
+    if (!flagshipId) {
+      if (onError) onError('No flagship found for this campaign.');
+      return;
+    }
     T.firestore
       .updateGame(gameId, { lastPlayedAt: firebase.firestore.FieldValue.serverTimestamp() })
       .catch(function (err) {
@@ -62,11 +65,19 @@
     T.firestore
       .getFlagship(gameId, flagshipId)
       .then(function (flagshipDoc) {
-        var worldData = T.firestore.decodeWorld(gameDoc.worldSnapshot);
-        T.gameMap.open(gameId, gameDoc, flagshipId, flagshipDoc, worldData);
+        if (gameDoc.worldSnapshot) {
+          var worldData = T.firestore.decodeWorld(gameDoc.worldSnapshot);
+          T.gameMap.open(gameId, gameDoc, flagshipId, flagshipDoc, worldData);
+        } else {
+          return T.firestore.getWorld(gameDoc.worldId).then(function (worldDoc) {
+            var worldData = T.firestore.decodeWorld(worldDoc);
+            T.gameMap.open(gameId, gameDoc, flagshipId, flagshipDoc, worldData);
+          });
+        }
       })
       .catch(function (err) {
         console.error('[tortuga] resumeGame failed', err);
+        if (onError) onError('Failed to load campaign: ' + err.message);
       });
   };
 
@@ -505,8 +516,13 @@
       var gameListEl = document.getElementById('game-list-play');
       if (gameListEl) {
         T.gameList.render(gameListEl, {
-          onResume: function (gameId, gameDoc) {
-            T._resumeGame(gameId, gameDoc);
+          onResume: function (gameId, gameDoc, onError) {
+            T._resumeGame(gameId, gameDoc, onError);
+          },
+          onDelete: function (gameId) {
+            T.firestore.deleteGame(gameId).catch(function (err) {
+              console.error('[tortuga] deleteGame failed', err);
+            });
           },
         });
       }
