@@ -77,15 +77,33 @@
         <h1 class="app-title">The Account</h1>
         <p class="app-subtitle">On the account, Captain.</p>
         <div class="app-divider"></div>
-        <div class="world-list-section">
-          <div class="world-list-panel">
-            <div id="world-list-toolbar-play"></div>
-            <div id="world-list-play" class="world-list"></div>
+
+        <!-- Lobby: hidden while a game is active -->
+        <div class="play-lobby">
+          <!-- Your Campaigns -->
+          <div class="play-lobby-section">
+            <h2 class="play-lobby-heading">Your Campaigns</h2>
+            <div id="game-list-play" class="game-list"></div>
           </div>
-          <div id="world-preview-play" class="world-preview">
-            <p class="world-preview-placeholder">Select a world to preview</p>
+
+          <div class="app-divider"></div>
+
+          <!-- New Campaign (world chooser) -->
+          <div class="play-lobby-section">
+            <h2 class="play-lobby-heading">New Campaign</h2>
+            <div class="world-list-section">
+              <div class="world-list-panel">
+                <div id="world-list-toolbar-play"></div>
+                <div id="world-list-play" class="world-list"></div>
+              </div>
+              <div id="world-preview-play" class="world-preview">
+                <p class="world-preview-placeholder">Select a world to preview</p>
+              </div>
+            </div>
           </div>
         </div>
+        <!-- /.play-lobby -->
+
         <div id="new-game-panel" class="hidden"></div>
         <div id="game-map-panel" class="hidden">
           <div id="game-hud" class="game-hud"></div>
@@ -107,6 +125,7 @@
     <script src="/apps/tortuga/map-renderer.js"></script>
     <script src="/apps/tortuga/firestore.js"></script>
     <script src="/apps/tortuga/world-list.js"></script>
+    <script src="/apps/tortuga/game-list.js"></script>
     <script src="/apps/tortuga/cartographer/pathfinder.js"></script>
     <script src="/apps/tortuga/cartographer/overlay.js"></script>
     <script src="/apps/tortuga/cartographer/importer.js"></script>

@@ -487,6 +487,7 @@
 
       var gameDoc = {
         worldId: this._worldId,
+        worldName: (this._worldData && this._worldData.name) || '',
         phase: 'exploration',
         turnNumber: 0,
         captain: {
@@ -501,6 +502,7 @@
         startingPortId: startingPortId,
         fog: [startingPortId],
         settings: { difficulty: 'normal', mythicEnabled: true, pacing: 'async' },
+        worldSnapshot: T.firestore.encodeWorld(this._worldData),
       };
 
       var flagshipDoc = {
