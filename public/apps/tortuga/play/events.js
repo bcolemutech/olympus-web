@@ -44,7 +44,7 @@
 
   // ── Outcome resolution ───────────────────────────────────────
 
-  function _applyOutcome(outcome, ctx, doneCb) {
+  function _applyOutcome(outcome, ctx, doneCb, eventMeta) {
     _closeModal();
 
     var patch = {};
@@ -98,6 +98,22 @@
         console.error('[events] updateGame (lastEventTurn) failed', err);
       })
     );
+
+    if (eventMeta) {
+      T.firestore
+        .addLogEntry(ctx.gameId, {
+          turn: currentTurn,
+          type: 'event',
+          summary: eventMeta.title + ': ' + eventMeta.choiceLabel,
+          payload: Object.assign(
+            { eventTitle: eventMeta.title, choiceLabel: eventMeta.choiceLabel },
+            outcome
+          ),
+        })
+        .catch(function (err) {
+          console.error('[events] addLogEntry failed', err);
+        });
+    }
 
     Promise.all(promises).then(doneCb).catch(doneCb);
   }
@@ -166,7 +182,8 @@
       btn.addEventListener('click', function () {
         var choiceId = btn.getAttribute('data-choice-id');
         var choice = choiceMap[choiceId];
-        _applyOutcome(choice ? choice.outcome : {}, ctx, doneCb);
+        var meta = { title: event.title, choiceLabel: choice ? choice.label : '' };
+        _applyOutcome(choice ? choice.outcome : {}, ctx, doneCb, meta);
       });
     });
   }

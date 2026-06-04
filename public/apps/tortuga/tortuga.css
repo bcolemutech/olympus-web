@@ -1770,3 +1770,184 @@
 .game-card--skeleton {
   pointer-events: none;
 }
+
+/* ── Game HUD: Log button ──────────────────────────────────── */
+
+.game-hud-log-btn {
+  padding: 0.25rem 0.75rem;
+  background: rgba(100, 181, 246, 0.1);
+  color: #64b5f6;
+  border: 1px solid rgba(100, 181, 246, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.game-hud-log-btn:hover {
+  background: rgba(100, 181, 246, 0.2);
+}
+
+/* ── Captain's Log overlay ─────────────────────────────────── */
+
+.captain-log-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.captain-log-dialog {
+  background: #131929;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.25rem;
+  width: 100%;
+  max-width: 380px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.captain-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.captain-log-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e0e0e0;
+  letter-spacing: 0.03em;
+}
+
+.captain-log-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+}
+
+.captain-log-close:hover {
+  color: #e0e0e0;
+}
+
+.captain-log-search {
+  width: 100%;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.captain-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.captain-log-filter-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: #aaa;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+}
+
+.captain-log-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+}
+
+.captain-log-filter-btn--active {
+  background: rgba(100, 181, 246, 0.15);
+  border-color: rgba(100, 181, 246, 0.45);
+  color: #64b5f6;
+  font-weight: 700;
+}
+
+.captain-log-results {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.captain-log-entry {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.captain-log-entry-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.captain-log-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ccc;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.log-badge--discovery {
+  background: rgba(102, 187, 106, 0.18);
+  color: #66bb6a;
+}
+
+.log-badge--port {
+  background: rgba(255, 183, 77, 0.18);
+  color: #ffb74d;
+}
+
+.log-badge--event {
+  background: rgba(239, 83, 80, 0.18);
+  color: #ef5350;
+}
+
+.captain-log-turn {
+  font-size: 0.7rem;
+  color: #666;
+}
+
+.captain-log-summary {
+  font-size: 0.82rem;
+  color: #ccc;
+  line-height: 1.4;
+}
+
+.captain-log-empty {
+  font-size: 0.82rem;
+  color: #666;
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+.captain-log-load-more {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+}

@@ -636,6 +636,18 @@
       document.body.appendChild(_overlayEl);
 
       _render();
+
+      var portTurn = (gameDoc && gameDoc.turnNumber) || 0;
+      T.firestore
+        .addLogEntry(gameId, {
+          turn: portTurn,
+          type: 'port_visit',
+          summary: 'Made port at ' + (settlementName || 'Unknown Port'),
+          payload: { settlementId: settlementId || null, settlementName: settlementName || '' },
+        })
+        .catch(function (err) {
+          console.error('[port-visit] addLogEntry failed', err);
+        });
     },
 
     close: function () {

@@ -333,5 +333,32 @@
           return Object.assign({ id: snap.id }, snap.data());
         });
     },
+
+    // ── Captain's Log ─────────────────────────────────────
+
+    addLogEntry: function (gameId, entry) {
+      var ts = firebase.firestore.FieldValue.serverTimestamp();
+      return T.state.db
+        .collection('tortuga_games')
+        .doc(gameId)
+        .collection('log')
+        .add(Object.assign({}, entry, { createdAt: ts }));
+    },
+
+    loadLogEntries: function (gameId, options) {
+      var opts = options || {};
+      var query = T.state.db
+        .collection('tortuga_games')
+        .doc(gameId)
+        .collection('log')
+        .orderBy('createdAt', 'desc');
+      if (opts.startAfter) query = query.startAfter(opts.startAfter);
+      query = query.limit(opts.limit || 50);
+      return query.get().then(function (snap) {
+        return snap.docs.map(function (d) {
+          return Object.assign({ id: d.id }, d.data());
+        });
+      });
+    },
   };
 })();
