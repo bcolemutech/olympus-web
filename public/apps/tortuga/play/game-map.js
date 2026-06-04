@@ -659,11 +659,11 @@
 
       // Show/hide panels.
       var shellPlayEl = document.getElementById('shell-play');
-      var worldListSection = shellPlayEl && shellPlayEl.querySelector('.world-list-section');
+      var lobbyEl = shellPlayEl && shellPlayEl.querySelector('.play-lobby');
       var newGamePanel = document.getElementById('new-game-panel');
       var gameMapPanel = document.getElementById('game-map-panel');
 
-      if (worldListSection) worldListSection.classList.add('hidden');
+      if (lobbyEl) lobbyEl.classList.add('hidden');
       if (newGamePanel) {
         newGamePanel.classList.add('hidden');
         newGamePanel.innerHTML = '';
@@ -722,8 +722,8 @@
       if (gameMapPanel) gameMapPanel.classList.add('hidden');
 
       var shellPlayEl = document.getElementById('shell-play');
-      var worldListSection = shellPlayEl && shellPlayEl.querySelector('.world-list-section');
-      if (worldListSection) worldListSection.classList.remove('hidden');
+      var lobbyEl = shellPlayEl && shellPlayEl.querySelector('.play-lobby');
+      if (lobbyEl) lobbyEl.classList.remove('hidden');
     },
   };
 })();

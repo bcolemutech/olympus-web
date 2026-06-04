@@ -51,6 +51,25 @@
     T.newGame.show(worldId, T.firestore.decodeWorld(worldData));
   };
 
+  T._resumeGame = function (gameId, gameDoc) {
+    var flagshipId = gameDoc.flagshipId;
+    if (!flagshipId) return;
+    T.firestore
+      .updateGame(gameId, { lastPlayedAt: firebase.firestore.FieldValue.serverTimestamp() })
+      .catch(function (err) {
+        console.error('[tortuga] lastPlayedAt update failed', err);
+      });
+    T.firestore
+      .getFlagship(gameId, flagshipId)
+      .then(function (flagshipDoc) {
+        var worldData = T.firestore.decodeWorld(gameDoc.worldSnapshot);
+        T.gameMap.open(gameId, gameDoc, flagshipId, flagshipDoc, worldData);
+      })
+      .catch(function (err) {
+        console.error('[tortuga] resumeGame failed', err);
+      });
+  };
+
   // ── Knobs helpers ────────────────────────────────────────────
 
   function _escapeAttr(str) {
@@ -422,92 +441,15 @@
       });
   }
 
-  // §9 size caveat: Firestore docs are capped at 1 MB.
-  // For typical Azgaar maps (1000×600, ~50 coastline polygons, ~200 pts each),
-  // coastlines are ~50 KB; full payload is usually well under 200 KB.
-  // If Phase 2 maps grow larger, move coastlines to a subcollection.
-  //
-  // Firestore forbids nested arrays (array-in-array). All [y, x] coordinate
-  // pairs are stored as {y, x} objects. Coastlines (array of rings) are stored
-  // as [{pts: [{y,x},...]}]. Decode with _decodeWorldPayload when loading.
-  function _ptsToObjs(ring) {
-    return (ring || []).map(function (pt) {
-      return { y: pt[0], x: pt[1] };
-    });
-  }
-
   function _buildWorldPayload(name, description, era, shared) {
-    var w = _generatedWorld;
-    var b = w.bounds || [];
-    return {
+    var base = T.firestore.encodeWorld(_generatedWorld);
+    return Object.assign(base, {
       name: name,
       description: description || '',
       era: era,
       shared: !!shared,
-      sourceFormat: w.sourceFormat || 'azgaar-json',
-      dimensions: w.dimensions || {},
-      bounds: {
-        minY: (b[0] && b[0][0]) || 0,
-        minX: (b[0] && b[0][1]) || 0,
-        maxY: (b[1] && b[1][0]) || 0,
-        maxX: (b[1] && b[1][1]) || 0,
-      },
-      coastlines: (w.coastlines || []).map(function (ring) {
-        return { pts: _ptsToObjs(ring) };
-      }),
-      settlements: (w.settlements || []).map(function (s) {
-        var pos = s.position || s.pos;
-        return {
-          id: s.id,
-          name: s.name,
-          type: s.type || null,
-          position: pos ? { y: pos[0], x: pos[1] } : null,
-          parentFaction: s.parentFaction || s.faction || null,
-          baseSize: s.baseSize || null,
-          hidden: !!s.hidden,
-        };
-      }),
-      hazards: (w.hazards || []).map(function (h) {
-        return {
-          id: h.id,
-          type: h.type,
-          polygon: _ptsToObjs(h.polygon),
-          severity: h.severity || null,
-          name: h.name || null,
-        };
-      }),
-      factions: (w.factions || []).map(function (f) {
-        return {
-          id: f.id,
-          name: f.name,
-          archetype: f.archetype || null,
-          color: f.color || null,
-          homeSettlementId: f.homeSettlementId || null,
-        };
-      }),
-      tradeRoutes: (w.tradeRoutes || []).map(function (r) {
-        return { id: r.id, fromId: r.fromId, toId: r.toId, faction: r.faction || null };
-      }),
-      windCurrentZones: (w.windCurrentZones || []).map(function (wz) {
-        return {
-          id: wz.id,
-          name: wz.name || null,
-          direction: wz.direction || null,
-          strength: wz.strength || null,
-          bounds: _ptsToObjs(wz.bounds),
-        };
-      }),
-      factionTerritory: (w.factionTerritory || []).map(function (ft) {
-        return {
-          id: ft.id,
-          name: ft.name || null,
-          faction: ft.faction || null,
-          color: ft.color || null,
-          polygon: _ptsToObjs(ft.polygon),
-        };
-      }),
       createdByName: T.state.currentUser.displayName || T.state.currentUser.email || '',
-    };
+    });
   }
 
   // ── Init ─────────────────────────────────────────────────────
@@ -555,6 +497,17 @@
           if (e.target && e.target.id === 'knobs-save-btn') {
             _onSaveClick();
           }
+        });
+      }
+    }
+
+    if (mode === T.MODES.PLAY) {
+      var gameListEl = document.getElementById('game-list-play');
+      if (gameListEl) {
+        T.gameList.render(gameListEl, {
+          onResume: function (gameId, gameDoc) {
+            T._resumeGame(gameId, gameDoc);
+          },
         });
       }
     }
