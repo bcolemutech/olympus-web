@@ -10,6 +10,7 @@
   T.STAT_SCALE = 100;
   T.DISCOVERY_RADIUS = 30;
   T.HIDDEN_COVE_RADIUS = 12;
+  T.ARRIVAL_RADIUS = 30;
   T.FRIENDLY_PORT_TYPES = ['colonial_port', 'free_port'];
   T.EVENT_CHANCE = 0.25;
 

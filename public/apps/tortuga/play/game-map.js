@@ -14,6 +14,7 @@
   var _lastFlagshipDoc = null;
   var _fogLayerRef = null;
   var _shipLayerRef = null;
+  var _playSettlementLayerRef = null;
 
   // Movement state
   var _seaGraph = null;
@@ -96,8 +97,9 @@
   // when holes overlap).
 
   var _FogLayer = L.Layer.extend({
-    initialize: function (fog, worldData) {
+    initialize: function (fog, fogTrail, worldData) {
       this._fog = fog;
+      this._fogTrail = fogTrail || [];
       this._worldData = worldData;
     },
 
@@ -147,6 +149,7 @@
       var revealR = Math.max(15, Math.min(mapH, mapW) * 0.035);
 
       ctx.globalCompositeOperation = 'destination-out';
+
       (this._fog || []).forEach(function (settlementId) {
         var s = _settlementIndex[settlementId];
         if (!s || !s.position) return;
@@ -157,12 +160,28 @@
         ctx.arc(pt.x + pad, pt.y + pad, rPx, 0, 2 * Math.PI);
         ctx.fill();
       });
+
+      // Reveal corridors along the sailed trail
+      var trailR = Math.max(8, revealR * 0.7);
+      (this._fogTrail || []).forEach(function (token) {
+        var parts = token.split(',');
+        var ty = parseFloat(parts[0]);
+        var tx = parseFloat(parts[1]);
+        if (isNaN(ty) || isNaN(tx)) return;
+        var pt = map.latLngToContainerPoint([ty, tx]);
+        var northPt = map.latLngToContainerPoint([ty + trailR, tx]);
+        var rPx = Math.max(4, Math.abs(pt.y - northPt.y));
+        ctx.beginPath();
+        ctx.arc(pt.x + pad, pt.y + pad, rPx, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
       ctx.globalCompositeOperation = 'source-over';
     },
   });
 
-  function _buildFogLayer(fog, worldData) {
-    return new _FogLayer(fog, worldData);
+  function _buildFogLayer(fog, fogTrail, worldData) {
+    return new _FogLayer(fog, fogTrail, worldData);
   }
 
   function _setFogLayer(layer) {
@@ -218,6 +237,47 @@
     if (_shipLayerRef) _shipLayerRef.remove();
     _shipLayerRef = layer;
     T.mapRenderer.addExternalLayer('ship', layer);
+  }
+
+  // ── Play-mode settlement layer (fog-filtered) ─────────────────
+
+  var SETTLEMENT_COLORS = {
+    colonial_port: '#4dd0e1',
+    free_port: '#81c784',
+    fort: '#ff8a65',
+    hidden_cove: '#ce93d8',
+  };
+
+  function _buildPlaySettlementLayer(fog, worldData) {
+    var group = L.layerGroup();
+    if (!worldData || !worldData.settlements) return group;
+    var fogSet = {};
+    (fog || []).forEach(function (id) {
+      fogSet[id] = true;
+    });
+    worldData.settlements.forEach(function (s) {
+      if (!fogSet[s.id]) return;
+      var pos = s.position || s.pos;
+      if (!pos) return;
+      var color = SETTLEMENT_COLORS[s.type] || '#90a4ae';
+      L.circleMarker(pos, {
+        radius: 7,
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.85,
+        weight: 2,
+        interactive: false,
+      })
+        .bindTooltip(_escapeHtml(s.name || ''), { permanent: false, direction: 'top' })
+        .addTo(group);
+    });
+    return group;
+  }
+
+  function _setPlaySettlementLayer(layer) {
+    if (_playSettlementLayerRef) _playSettlementLayerRef.remove();
+    _playSettlementLayerRef = layer;
+    T.mapRenderer.addExternalLayer('play-settlements', layer);
   }
 
   // ── HUD ──────────────────────────────────────────────────────
@@ -457,7 +517,7 @@
     function _step() {
       stepIndex++;
       if (stepIndex >= gridPath.length) {
-        _finishMove(gridPath[gridPath.length - 1], result.steps, fromPos);
+        _finishMove(gridPath[gridPath.length - 1], result.steps, fromPos, gridPath);
         return;
       }
       var pos = gridPath[stepIndex];
@@ -469,7 +529,7 @@
     setTimeout(_step, 150);
   }
 
-  function _finishMove(finalPos, stepsUsed, fromPos) {
+  function _finishMove(finalPos, stepsUsed, fromPos, gridPath) {
     _movementAnimating = false;
     _clearPathPreview();
 
@@ -477,17 +537,18 @@
     _apRemaining = newAP;
     _currentPosition = finalPos;
 
-    // Determine if final position is at a settlement.
+    // Determine if final position is at a settlement — pick the nearest within ARRIVAL_RADIUS.
     var arrivedAtSettlement = null;
-    var cellSize =
-      _seaGraph && _seaGraph.cellH ? Math.max(_seaGraph.cellH, _seaGraph.cellW) / 2 : 8;
+    var arrivedDist = Infinity;
     Object.keys(_settlementIndex).forEach(function (id) {
       var s = _settlementIndex[id];
       if (!s || !s.position) return;
       var dy = s.position[0] - finalPos[0];
       var dx = s.position[1] - finalPos[1];
-      if (Math.sqrt(dy * dy + dx * dx) < cellSize) {
+      var dist = Math.sqrt(dy * dy + dx * dx);
+      if (dist < T.ARRIVAL_RADIUS && dist < arrivedDist) {
         arrivedAtSettlement = id;
+        arrivedDist = dist;
       }
     });
 
@@ -519,6 +580,31 @@
           console.error('[game-map] fog discovery update failed', err);
         });
       _showDiscoveryToast(newlyDiscovered);
+    }
+
+    // Persist sailed positions as fog trail tokens ("y,x") for open-water reveal.
+    // Sample every 3rd cell from the grid path plus the final position.
+    if (gridPath && gridPath.length > 0) {
+      var trailTokens = [];
+      var seen = {};
+      for (var ti = 0; ti < gridPath.length; ti++) {
+        if (ti % 3 === 0 || ti === gridPath.length - 1) {
+          var token = Math.round(gridPath[ti][0]) + ',' + Math.round(gridPath[ti][1]);
+          if (!seen[token]) {
+            seen[token] = true;
+            trailTokens.push(token);
+          }
+        }
+      }
+      if (trailTokens.length > 0) {
+        T.firestore
+          .updateGame(_gameId, {
+            fogTrail: firebase.firestore.FieldValue.arrayUnion.apply(null, trailTokens),
+          })
+          .catch(function (err) {
+            console.error('[game-map] fogTrail update failed', err);
+          });
+      }
     }
 
     T.firestore
@@ -594,6 +680,21 @@
               arrivedAtSettlement,
               arrSett.name,
               _apMax,
+              function () {
+                _showReachableCells();
+              }
+            );
+            return;
+          }
+          if (arrSett) {
+            T.exploreVisit.open(
+              _gameId,
+              _flagshipId,
+              _lastGameDoc,
+              patchedFlagship,
+              arrivedAtSettlement,
+              arrSett.name,
+              arrSett.type,
               function () {
                 _showReachableCells();
               }
@@ -767,7 +868,8 @@
 
     var mapPanel = document.getElementById('game-map-panel');
     if (!mapPanel || mapPanel.classList.contains('hidden')) return;
-    _setFogLayer(_buildFogLayer(gameDoc.fog, _worldData));
+    _setFogLayer(_buildFogLayer(gameDoc.fog, gameDoc.fogTrail, _worldData));
+    _setPlaySettlementLayer(_buildPlaySettlementLayer(gameDoc.fog, _worldData));
   }
 
   function _onFlagshipUpdate(flagshipDoc, err) {
@@ -846,9 +948,13 @@
       var mapEl = document.getElementById('map-play');
       T.mapRenderer.init(mapEl, worldData);
 
-      // Add fog and ship layers.
-      _setFogLayer(_buildFogLayer(gameDoc.fog, worldData));
+      // Hide the world-mode settlement layer; play mode uses its own fog-filtered layer.
+      T.mapRenderer.hideLayer(T.mapRenderer.LAYERS.SETTLEMENTS);
+
+      // Add fog, ship, and play-settlement layers.
+      _setFogLayer(_buildFogLayer(gameDoc.fog, gameDoc.fogTrail, worldData));
       _setShipLayer(_buildShipLayer(flagshipDoc));
+      _setPlaySettlementLayer(_buildPlaySettlementLayer(gameDoc.fog, worldData));
 
       // Show reachable-cell markers for tap-to-move.
       _showReachableCells();

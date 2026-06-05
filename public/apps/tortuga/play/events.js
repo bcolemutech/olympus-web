@@ -81,6 +81,11 @@
       }
     }
 
+    var goldGain = 0;
+    if (outcome.gold) {
+      goldGain = _rng(outcome.gold[0], outcome.gold[1]);
+    }
+
     var currentTurn = (ctx.gameDoc && ctx.gameDoc.turnNumber) || 0;
 
     var promises = [];
@@ -93,9 +98,13 @@
       );
     }
 
+    var gameUpdate = { lastEventTurn: currentTurn };
+    if (goldGain > 0) {
+      gameUpdate['captain.gold'] = firebase.firestore.FieldValue.increment(goldGain);
+    }
     promises.push(
-      T.firestore.updateGame(ctx.gameId, { lastEventTurn: currentTurn }).catch(function (err) {
-        console.error('[events] updateGame (lastEventTurn) failed', err);
+      T.firestore.updateGame(ctx.gameId, gameUpdate).catch(function (err) {
+        console.error('[events] updateGame failed', err);
       })
     );
 
@@ -191,6 +200,25 @@
   // ── Public API ───────────────────────────────────────────────
 
   T.events = {
+    // Force an exploration event drawn only from wreckage-type events.
+    // Bypasses the random EVENT_CHANCE and lastEventTurn guard.
+    fireExploration: function (ctx, doneCb) {
+      var pack = (T.EVENT_PACKS || []).filter(function (ev) {
+        return ev.type === 'wreckage';
+      });
+      if (!pack.length) {
+        doneCb();
+        return;
+      }
+      var event = _pickWeighted(pack);
+      if (!event) {
+        doneCb();
+        return;
+      }
+      var narrative = event.narratives[_rng(0, event.narratives.length - 1)];
+      _openModal(event, narrative, ctx, doneCb);
+    },
+
     tryFire: function (ctx, doneCb) {
       var currentTurn = (ctx.gameDoc && ctx.gameDoc.turnNumber) || 0;
       var lastEventTurn = ctx.gameDoc && ctx.gameDoc.lastEventTurn;
