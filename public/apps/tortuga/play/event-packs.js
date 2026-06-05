@@ -20,6 +20,7 @@
   //                  hullDmg?:  [min, max],
   //                  sailsDmg?: [min, max],
   //                  supplies?: { key: [min, max] },
+  //                  gold?:     [min, max],
   //                }
   //              }>}
   //
@@ -95,6 +96,7 @@
               rum: [0, 2],
               repairMaterials: [0, 2],
             },
+            gold: [0, 25],
           },
         },
         {
@@ -128,6 +130,7 @@
               shot: [1, 3],
               repairMaterials: [0, 1],
             },
+            gold: [0, 10],
           },
         },
         {
