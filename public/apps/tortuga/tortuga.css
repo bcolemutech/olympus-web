@@ -1771,6 +1771,129 @@
   pointer-events: none;
 }
 
+/* ── Difficulty picker (new-game + settings panel) ─────────── */
+
+.difficulty-picker {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.difficulty-card {
+  padding: 0.75rem;
+  background: var(--color-bg, #12121a);
+  border: 2px solid var(--color-border, #333);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--color-text, #e8e8f0);
+}
+
+.difficulty-card:hover {
+  border-color: #ffb74d;
+}
+
+.difficulty-card--selected {
+  border-color: #ffb74d;
+  background: rgba(255, 183, 77, 0.12);
+}
+
+.difficulty-card-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text, #e8e8f0);
+}
+
+.difficulty-card-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #888);
+  line-height: 1.35;
+}
+
+@media (max-width: 480px) {
+  .difficulty-picker {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Settings modal ─────────────────────────────────────────── */
+
+.settings-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.settings-dialog {
+  background: #131929;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-dialog-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffb74d;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.settings-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #ffb74d;
+  margin: 0 0 0.3rem;
+}
+
+.settings-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #888);
+  margin: 0 0 0.5rem;
+  font-style: italic;
+}
+
+.settings-error {
+  font-size: 0.8rem;
+  color: #e05555;
+  margin: 0;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
 /* ── Game HUD: Log button ──────────────────────────────────── */
 
 .game-hud-log-btn {
@@ -1788,6 +1911,27 @@
 
 .game-hud-log-btn:hover {
   background: rgba(100, 181, 246, 0.2);
+}
+
+/* ── Game HUD: Settings button ─────────────────────────────── */
+
+.game-hud-settings-btn {
+  padding: 0.25rem 0.75rem;
+  background: rgba(144, 164, 174, 0.08);
+  color: #90a4ae;
+  border: 1px solid rgba(144, 164, 174, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  margin-left: 0.4rem;
+}
+
+.game-hud-settings-btn:hover {
+  background: rgba(144, 164, 174, 0.16);
+  color: #cdd5e0;
 }
 
 /* ── Captain's Log overlay ─────────────────────────────────── */
