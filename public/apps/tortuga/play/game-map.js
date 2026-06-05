@@ -306,6 +306,7 @@
         : '') +
       '<button class="game-hud-end-turn" id="game-hud-end-turn" type="button">End Turn</button>' +
       '<button class="game-hud-log-btn" id="game-hud-log-btn" type="button">Log</button>' +
+      '<button class="game-hud-settings-btn" id="game-hud-settings-btn" type="button">Settings</button>' +
       '</div>';
 
     // Re-attach button listeners after innerHTML replacement.
@@ -318,6 +319,8 @@
       logBtn.addEventListener('click', function () {
         T.captainLog.open(_gameId);
       });
+    var settingsBtn = document.getElementById('game-hud-settings-btn');
+    if (settingsBtn) settingsBtn.addEventListener('click', _openSettingsPanel);
 
     if (savedMoveInfo) {
       var confirmBtn = document.getElementById('game-hud-move-confirm');
@@ -603,11 +606,133 @@
     );
   }
 
+  // ── Supply consumption ───────────────────────────────────────
+
+  function _consumeSupplies() {
+    var difficulty =
+      (_lastGameDoc && _lastGameDoc.settings && _lastGameDoc.settings.difficulty) || 'normal';
+    var mod = (T.DIFFICULTY_LEVELS[difficulty] || T.DIFFICULTY_LEVELS.normal).supplyRate;
+    var crew = (_lastFlagshipDoc && _lastFlagshipDoc.crew && _lastFlagshipDoc.crew.current) || 1;
+    var current = (_lastFlagshipDoc && _lastFlagshipDoc.supplies) || {};
+    var updates = {};
+    Object.keys(T.SUPPLY_BASE_RATES).forEach(function (key) {
+      var consumed = Math.round(crew * T.SUPPLY_BASE_RATES[key] * mod);
+      if (consumed > 0) {
+        updates['supplies.' + key] = Math.max(0, (current[key] || 0) - consumed);
+      }
+    });
+    if (Object.keys(updates).length === 0) return;
+    T.firestore.updateFlagship(_gameId, _flagshipId, updates).catch(function (err) {
+      console.error('[game-map] supply consumption failed', err);
+    });
+  }
+
+  // ── Settings panel ───────────────────────────────────────────
+
+  function _openSettingsPanel() {
+    var currentDifficulty =
+      (_lastGameDoc && _lastGameDoc.settings && _lastGameDoc.settings.difficulty) || 'normal';
+    var selectedDifficulty = currentDifficulty;
+
+    var overlayEl = document.createElement('div');
+    overlayEl.className = 'settings-modal-root';
+
+    var difficultyCards = Object.keys(T.DIFFICULTY_LEVELS)
+      .map(function (id) {
+        var d = T.DIFFICULTY_LEVELS[id];
+        var isSelected = id === currentDifficulty;
+        return (
+          '<button class="difficulty-card' +
+          (isSelected ? ' difficulty-card--selected' : '') +
+          '" type="button" data-difficulty="' +
+          id +
+          '" aria-pressed="' +
+          (isSelected ? 'true' : 'false') +
+          '">' +
+          '<span class="difficulty-card-label">' +
+          _escapeHtml(d.label) +
+          '</span>' +
+          '<span class="difficulty-card-desc">' +
+          _escapeHtml(d.description) +
+          '</span>' +
+          '</button>'
+        );
+      })
+      .join('');
+
+    overlayEl.innerHTML =
+      '<div class="settings-dialog">' +
+      '<div class="settings-dialog-header">' +
+      '<span class="settings-dialog-title">Game Settings</span>' +
+      '<button class="port-modal-close" id="settings-close" type="button" aria-label="Close">✕</button>' +
+      '</div>' +
+      '<div class="settings-section">' +
+      '<p class="settings-section-title">Difficulty</p>' +
+      '<p class="settings-hint">Changes apply to future turns.</p>' +
+      '<div class="difficulty-picker">' +
+      difficultyCards +
+      '</div>' +
+      '</div>' +
+      '<p class="settings-error hidden" id="settings-error"></p>' +
+      '<div class="settings-actions">' +
+      '<button class="btn-cancel" id="settings-cancel" type="button">Cancel</button>' +
+      '<button class="app-btn app-btn--sm" id="settings-save" type="button">Save</button>' +
+      '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlayEl);
+
+    overlayEl.querySelectorAll('.difficulty-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        selectedDifficulty = card.getAttribute('data-difficulty');
+        overlayEl.querySelectorAll('.difficulty-card').forEach(function (c) {
+          c.classList.remove('difficulty-card--selected');
+          c.setAttribute('aria-pressed', 'false');
+        });
+        card.classList.add('difficulty-card--selected');
+        card.setAttribute('aria-pressed', 'true');
+      });
+    });
+
+    function _close() {
+      if (overlayEl.parentNode) overlayEl.parentNode.removeChild(overlayEl);
+    }
+
+    document.getElementById('settings-close').addEventListener('click', _close);
+    document.getElementById('settings-cancel').addEventListener('click', _close);
+
+    document.getElementById('settings-save').addEventListener('click', function () {
+      var saveBtn = document.getElementById('settings-save');
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+      }
+      T.firestore
+        .updateGame(_gameId, { 'settings.difficulty': selectedDifficulty })
+        .then(function () {
+          _close();
+        })
+        .catch(function (err) {
+          console.error('[game-map] settings save failed', err);
+          var errEl = document.getElementById('settings-error');
+          if (errEl) {
+            errEl.textContent = 'Save failed: ' + err.message;
+            errEl.classList.remove('hidden');
+          }
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save';
+          }
+        });
+    });
+  }
+
   // ── End Turn ─────────────────────────────────────────────────
 
   function _endTurn() {
     if (_movementAnimating) return;
     _clearPathPreview();
+    _consumeSupplies();
     _apRemaining = _apMax;
 
     T.firestore.updateFlagship(_gameId, _flagshipId, { apRemaining: _apMax }).catch(function (err) {

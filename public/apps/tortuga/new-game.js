@@ -137,6 +137,7 @@
     _selectedPortrait: PORTRAITS[0].id,
     _selectedShipClass: null,
     _selectedPortId: null,
+    _selectedDifficulty: 'normal',
     _portMap: null,
     _portMarkers: null,
     _worldId: null,
@@ -150,6 +151,7 @@
       this._selectedPortrait = PORTRAITS[0].id;
       this._selectedShipClass = Object.keys(T.SHIP_TYPES)[0];
       this._selectedPortId = null;
+      this._selectedDifficulty = 'normal';
       this._captainName = '';
       this._captainBio = '';
 
@@ -217,7 +219,7 @@
         '<p class="new-game-error hidden" id="ng-error"></p>' +
         '<div class="new-game-actions">' +
         '<button class="btn-cancel" id="ng-cancel" type="button">Cancel</button>' +
-        '<button class="app-btn app-btn--sm" id="ng-next" type="button">Next: Choose Port</button>' +
+        '<button class="app-btn app-btn--sm" id="ng-next" type="button">Next: Difficulty</button>' +
         '</div>' +
         '</div>';
 
@@ -290,7 +292,75 @@
 
       this._captainName = captainName;
       this._captainBio = (bioEl && bioEl.value.trim()) || '';
-      this._renderPortStep(friendlyPorts);
+      this._renderDifficultyStep(friendlyPorts);
+    },
+
+    _renderDifficultyStep: function (friendlyPorts) {
+      var self = this;
+      var panelEl = this._panelEl;
+      if (!panelEl) return;
+      var worldName = (this._worldData && this._worldData.name) || 'Unknown World';
+
+      var difficultyCards = Object.keys(T.DIFFICULTY_LEVELS)
+        .map(function (id) {
+          var d = T.DIFFICULTY_LEVELS[id];
+          var isSelected = id === self._selectedDifficulty;
+          return (
+            '<button class="difficulty-card' +
+            (isSelected ? ' difficulty-card--selected' : '') +
+            '" type="button"' +
+            ' data-difficulty="' +
+            _escapeAttr(id) +
+            '"' +
+            ' aria-pressed="' +
+            (isSelected ? 'true' : 'false') +
+            '">' +
+            '<span class="difficulty-card-label">' +
+            _escapeHtml(d.label) +
+            '</span>' +
+            '<span class="difficulty-card-desc">' +
+            _escapeHtml(d.description) +
+            '</span>' +
+            '</button>'
+          );
+        })
+        .join('');
+
+      panelEl.innerHTML =
+        '<div class="new-game-panel">' +
+        '<div class="new-game-world-badge">World: ' +
+        _escapeAttr(worldName) +
+        '</div>' +
+        '<h2 class="new-game-title">Choose Difficulty</h2>' +
+        '<div class="difficulty-picker">' +
+        difficultyCards +
+        '</div>' +
+        '<p class="new-game-error hidden" id="ng-error"></p>' +
+        '<div class="new-game-actions">' +
+        '<button class="btn-cancel" id="ng-back" type="button">Back</button>' +
+        '<button class="app-btn app-btn--sm" id="ng-next" type="button">Next: Choose Port</button>' +
+        '</div>' +
+        '</div>';
+
+      panelEl.querySelectorAll('.difficulty-card').forEach(function (card) {
+        card.addEventListener('click', function () {
+          self._selectedDifficulty = card.getAttribute('data-difficulty');
+          panelEl.querySelectorAll('.difficulty-card').forEach(function (c) {
+            c.classList.remove('difficulty-card--selected');
+            c.setAttribute('aria-pressed', 'false');
+          });
+          card.classList.add('difficulty-card--selected');
+          card.setAttribute('aria-pressed', 'true');
+        });
+      });
+
+      document.getElementById('ng-back').addEventListener('click', function () {
+        self._renderStep1();
+      });
+
+      document.getElementById('ng-next').addEventListener('click', function () {
+        self._renderPortStep(friendlyPorts);
+      });
     },
 
     _renderPortStep: function (friendlyPorts) {
@@ -344,7 +414,7 @@
           self._portMap = null;
         }
         self._portMarkers = [];
-        self._renderStep1();
+        self._renderDifficultyStep(friendlyPorts);
       });
 
       document.getElementById('ng-confirm').addEventListener('click', function () {
@@ -501,7 +571,7 @@
         flagshipId: null,
         startingPortId: startingPortId,
         fog: [startingPortId],
-        settings: { difficulty: 'normal', mythicEnabled: true, pacing: 'async' },
+        settings: { difficulty: this._selectedDifficulty, mythicEnabled: true, pacing: 'async' },
         worldSnapshot: T.firestore.encodeWorld(this._worldData),
       };
 
