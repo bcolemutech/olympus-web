@@ -13,6 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Pin Node to the last release before the v24.17.0 keep-alive regression
+      # (nodejs/node#63989) that makes firebase-tools' node-fetch emit false
+      # "premature close" errors, retry the non-idempotent channel-release POST,
+      # and fail with "is the current active version". 24.16.0 is verified clean.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.16.0
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
