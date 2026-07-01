@@ -204,7 +204,12 @@ Nothing is discarded — both projects contribute their best ideas to the Loom a
 
 1. Set `enabled: false` in `apps.yaml` (soft retire; existing claims still resolve, no new entry point).
 2. Extract salvage: journeys/ships config → Loom scenario; document the resolution-injection approach into §5.
-3. Export/archive VO Firestore collections.
+3. Export/archive VO Firestore collections. Run via the "Export Void Odyssey
+   Firestore Data" GitHub Actions workflow (`workflow_dispatch`), which invokes
+   `scripts/export-void-odyssey.js` against production and uploads the archive
+   as a build artifact (90-day retention — download and store it elsewhere
+   before that window closes if VO isn't fully retired yet). See the script's
+   header comment for the restore procedure.
 4. Remove app code under `/public/apps/`; clean VO entry from `apps.yaml`.
 5. Revoke or repurpose `void-odyssey` custom claims.
 
