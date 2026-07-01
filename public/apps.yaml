@@ -15,7 +15,7 @@ apps:
     icon: "\U0001F680"
     type: embedded
     path: /apps/void-odyssey/
-    enabled: true
+    enabled: false
     order: 2
 
   - id: tortuga
