@@ -194,6 +194,10 @@ Nothing is discarded — both projects contribute their best ideas to the Loom a
 | **Tortuga**          | Shared-world-plus-private-saves architecture (→ §4 World/Character split); the Cartographer/Account mode distinction (→ build-vs-play loop); the Caribbean setting becomes a **world**, not its own app |
 | **The Cartographer** | Not decommissioned — becomes the Loom's primary canon source (§6 batch enrichment)                                                                                                                      |
 
+> Void Odyssey's journeys/ships scenario seed and its resolution-injection
+> pattern (server-side dice → AI context → narration) are captured in full in
+> `planning/loom-salvage-void-odyssey.md`, independent of the live VO app.
+
 ### Void Odyssey retirement (phased — silent retirement, no player comms)
 
 **Decision:** Retire silently. No heads-up to live VO players; soft `enabled: false` is acceptable. The execution path below is handled in Claude Code as a GitHub change.
