@@ -98,7 +98,9 @@ How each failure mode is contained:
 
 The narration prompt is explicitly told the Resolution is final: it may color _how_ something happened, never _whether_.
 
-**Soft-canon promotion.** When the model invents a detail to fill a gap ("a barkeep named Doral"), it's written to a provisional pool tied to the world. It becomes canon only when referenced again or confirmed — preventing one-off inventions from accreting into contradictions, while still letting the world grow organically. (Promotion policy is an open question — see §10.)
+**Rules seam (L-140).** ADJUDICATE calls the rules engine only through a fixed interface — `evaluate(proposedAction, worldState, characterState, dice) → Resolution` — with hand-coded per-world JS rules behind it for MVP. A data-driven rule schema (Phase 2, L-202) swaps in behind the same interface without reshaping the pipeline. See §11.
+
+**Soft-canon promotion.** When the model invents a detail to fill a gap ("a barkeep named Doral"), it's written to a provisional pool tied to the world. When referenced again or confirmed, it is promoted to an _established world fact in World State_ — never into Canon, which no one writes at play time (L-141, §11). This prevents one-off inventions from accreting into contradictions while still letting the world grow organically. MVP promotion rule: promote on second reference, behind a seam for later tuning (see §11).
 
 ---
 
@@ -148,6 +150,8 @@ loomPlayTurn(worldId, saveId, actionText)
 
 loomWorldTick(worldId)                 // scheduled/batch
   → advances off-screen world state, regenerates summaries
+  // presence-aware: defers locations with an active player,
+  // queuing changes as pending world events (see §11, L-201)
 ```
 
 ---
@@ -179,6 +183,8 @@ loom_turns (subcollection)
 ```
 
 Denormalize per Olympus convention: copy the canon details a turn needs into the turn/state docs at write time rather than joining at read time.
+
+Write model (per §11 decisions): all `loom_world_state` writes run in Firestore transactions, and `state_mutations` are expressed as deltas (add/remove/increment/set-flag) rather than whole-document overwrites — this is what makes the batch tick (L-201) and later concurrent multiplayer turns (L-401) merge cleanly without a migration.
 
 ---
 
@@ -253,11 +259,48 @@ MVP is the explicit gate: Phase 1's exit criterion is the whole thesis of the pr
 
 ---
 
-## 11. Open Questions
+## 11. Open Questions & Decisions
+
+### Decided (2026-07-02)
+
+- **Rule-engine expressiveness** (L-140 / #309) — **Hand-coded rules behind a stable seam.**
+  MVP rules are plain JS per world, but the pipeline only ever sees a fixed interface:
+
+  ```
+  rulesEngine.evaluate(proposedAction, worldState, characterState, dice)
+    → Resolution { outcome, state_mutations[], narrative_constraints[] }
+  ```
+
+  A data-driven rule engine can later implement the same interface without touching the
+  pipeline (Phase 2, L-202 / #313). Rationale: fastest path to testing the MVP thesis;
+  the seam — not the engine — is the architectural commitment.
+
+- **Canon authority** (L-141 / #310) — **Nobody writes Canon at play time.**
+  The model and players write only World/Character state and the soft-canon pool. Soft-canon
+  promotion (L-115 / #302) elevates entities to _established world facts inside World State_ —
+  never into Canon. Canon changes only through authoring: static-config commits now,
+  Cartographer/admin tooling in Phase 3. Rationale: Canon stays a trustable hand-authored
+  layer, and the security model stays clean — there is no runtime write path into canon,
+  client or server.
+
+- **World-tick vs. player presence** (L-201 / #312) — **Presence-aware tick + transactional
+  writes.** Every `loom_world_state` write — batch tick or player turn — runs in a Firestore
+  transaction, so writes are never torn. The tick additionally checks presence (recent-turn
+  timestamp per location) and defers simulating locations with an active player, emitting the
+  deferred changes as pending world events applied on that player's next turn. Rationale: no
+  global locks, no blocked player turns, no tick starvation in busy shared worlds — and it is
+  the same transactional model multiplayer (L-401) requires.
+
+- **Multiplayer conflict resolution** (L-401 / #317) — **Transactional turns.**
+  Each turn's COMMIT applies its `state_mutations` inside a Firestore transaction that
+  re-reads World State; conflicting concurrent turns retry automatically. Mutations are
+  expressed as _deltas_ (add/remove/increment/set-flag), never whole-document overwrites, so
+  retried turns merge cleanly. The Phase 1/2 write model (L-114 / #301) already specifies
+  transactional delta commits, so it is compatible as-is — no migration needed for the
+  shared-world tier.
+
+### Still open
 
 - **Name** — confirm "The Loom" vs. "Mnemosyne" or another.
-- **Soft-canon promotion policy** — promote on second reference? On explicit confirmation? Time-based decay for the provisional pool?
-- **Rule-engine expressiveness** — hand-coded per-world rules (fast, rigid) vs. a small data-driven rule schema (general, more work). MVP likely hand-coded; design the seam.
-- **World-tick vs. player presence** — how does batch simulation reconcile state if a player is mid-session when a tick runs? Locking, eventing, or tick-only-when-idle?
-- **Canon authority** — can players (or the model) ever write to canon, or only to World/Character state and the soft-canon pool?
-- **Multiplayer conflict resolution** — deferred, but the World State write model should not preclude it (last-write-wins vs. transactional turns).
+- **Soft-canon promotion policy** — MVP default is promote-on-second-reference behind a seam
+  (L-115 / #302); tuning (time-based decay, explicit confirmation) stays open.
