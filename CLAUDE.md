@@ -31,7 +31,6 @@ npm run format
 | The Symposium | `public/apps/symposium/` | Cocktail inventory management |
 | The Pantheon | `public/apps/admin/` | Admin panel for user management |
 | JSX Runner | `public/apps/jsx-runner/` | Dynamic React applet executor |
-| Void Odyssey | `public/apps/void-odyssey/` | AI-powered space exploration game |
 
 ---
 
@@ -54,7 +53,7 @@ npm run format
 ### Dev Tooling
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
-- **Jest 29** — Firestore security rules tests + Void Odyssey turn integration tests using Firebase emulator
+- **Jest 29** — Firestore security rules tests using Firebase emulator
 - **GitHub Actions** — 6 workflows for CI, preview deploys, and production deploys
 
 ---
@@ -73,16 +72,12 @@ olympus-web/
 │       ├── _template/             # Boilerplate for creating new apps
 │       ├── symposium/             # Cocktail inventory app (~6,500 lines JS)
 │       ├── admin/                 # Admin panel
-│       ├── jsx-runner/            # React applet executor
-│       └── void-odyssey/          # Space game with AI narrative
+│       └── jsx-runner/            # React applet executor
 ├── functions/
-│   ├── index.js                   # Cloud Functions: user/admin management (~2,200 lines)
+│   ├── index.js                   # Cloud Functions: user/admin management (~360 lines)
 │   └── gemini.js                  # Gemini/Vertex AI callGemini helper (extracted for testability)
 ├── tests/
-│   ├── firestore-rules.test.js    # Jest tests for Firestore security rules
-│   ├── void-odyssey-turn.test.js  # Integration tests for Void Odyssey turn function
-│   └── fixtures/
-│       └── void-odyssey.js        # Test fixture factories (makeGame, makeCrew, etc.)
+│   └── firestore-rules.test.js    # Jest tests for Firestore security rules
 ├── scripts/                       # One-time admin utility scripts
 ├── planning/                      # Architecture and design documentation
 ├── .github/workflows/             # CI/CD pipelines
@@ -187,7 +182,6 @@ npm run deploy            # Deploy hosting only (production)
 | `symposium_recipes/{id}` | `hasApp('symposium')` | Recipes |
 | `symposium_shopping_list/{id}` | `hasApp('symposium')` | Shopping list items |
 | `symposium_categories/{id}` | `hasApp('symposium')` | Categories/subcategories |
-| `void_odyssey_games/{gameId}` | User-scoped (userId match) | Game campaigns |
 | `apps/{appId}` | `hasApp(appId)` or admin | App registry |
 | `pool_handicap/{userId}` | Self read/write only | Billiards handicap data |
 
@@ -272,70 +266,6 @@ fix(void-odyssey): correct star map coordinate offset
 docs(admin): update user management instructions
 chore(ci): update Firebase deploy action version
 ```
-
----
-
-## Void Odyssey — AI Integration
-
-Void Odyssey generates narrative text via Gemini Flash (Vertex AI). The AI call is isolated in `functions/gemini.js` (`callGemini`), which `functions/index.js` imports. This separation enables Jest mocking for tests.
-
-### Void Odyssey Turn Integration Tests
-
-Tests live in `tests/void-odyssey-turn.test.js` with fixtures in `tests/fixtures/void-odyssey.js`. They run against the Firestore emulator with mocked AI responses.
-
-**Running tests locally:**
-```bash
-cd functions && npm ci                 # Ensure functions deps are installed
-cd tests && npm ci                     # Ensure test deps are installed
-firebase emulators:exec --only firestore --project demo-void-odyssey-test "cd tests && npx jest void-odyssey-turn --verbose"
-```
-
-**Running with real Gemini (requires credentials):**
-```bash
-VOID_ODYSSEY_LIVE_AI=true firebase emulators:exec --only firestore --project demo-void-odyssey-test "cd tests && npx jest void-odyssey-turn"
-```
-
-**Adding a new test scenario:**
-1. Open `tests/void-odyssey-turn.test.js`
-2. Use the fixture factories from `tests/fixtures/void-odyssey.js`:
-   - `makeGame(overrides)` — game document (supports `{ ship: {...} }` for nested overrides)
-   - `makeCrew(overrides)` — crew member
-   - `makeItem(overrides)` — cargo item
-   - `makeQuest(overrides)` — quest with objectives
-   - `makeLocation(overrides)` — location document
-   - `makeStarMapSystem(overrides)` — star map system
-   - `makeAiResponse(overrides)` — AI response with `stateMutations`, `newEntities`, etc.
-   - `makePlayerAction(overrides)` — player action input
-3. Follow this pattern:
-```js
-test('my scenario description', async () => {
-  // 1. Seed game state (customize as needed)
-  await seedGame({
-    game: { ship: { fuel: 50 } },
-    items: [makeItem({ id: 'item_old', name: 'Old Part' })],
-  });
-
-  // 2. Mock the AI response with specific mutations
-  mockAiResponse(makeAiResponse({
-    stateMutations: [
-      { type: 'remove_item', itemId: 'item_old' },
-      { type: 'add_item', item: { id: 'item_new', name: 'New Part', type: 'equipment', description: '...', cargoUnits: 2, quantity: 1, rarity: 'uncommon' } },
-    ],
-  }));
-
-  // 3. Call the turn function
-  const result = await callTurn({ type: 'freeform', input: 'Swap the part' });
-
-  // 4. Assert on the return value and/or Firestore state
-  const itemSnap = await gameRef().collection('items').doc('item_new').get();
-  expect(itemSnap.exists).toBe(true);
-});
-```
-
-**Available mutation types for `stateMutations`:**
-`ship_stat`, `credits`, `add_item`, `remove_item`, `crew_morale`, `crew_health`, `crew_relationship`, `crew_significant_moment`, `crew_departure`, `location_discover`, `location_update`, `travel`, `combat_start`, `combat_end`, `weapon_status`, `system_status`, `quest_start`, `quest_update`, `star_map_discover`, `star_map_update`
-
-**Known quirk:** `crew_relationship` uses `set()` with merge and dot-notation keys (e.g., `"relationships.crew_pilot"`), which Firestore stores as flat literal keys, not nested paths. Assert with `data['relationships.crew_pilot']` not `data.relationships.crew_pilot`.
 
 ---
 

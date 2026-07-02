@@ -297,30 +297,6 @@ service cloud.firestore {
       allow delete: if hasApp('symposium');
     }
 
-    // ── Void Odyssey ──────────────────────────────────────
-
-    match /void_odyssey_games/{gameId} {
-      allow read, delete: if request.auth != null
-        && request.auth.uid == resource.data.userId
-        && hasApp('void-odyssey');
-
-      allow update: if request.auth != null
-        && request.auth.uid == resource.data.userId
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.journey == resource.data.journey
-        && hasApp('void-odyssey');
-
-      allow create: if request.auth != null
-        && request.auth.uid == request.resource.data.userId
-        && hasApp('void-odyssey');
-
-      match /{subcollection}/{docId} {
-        allow read, write: if request.auth != null
-          && get(/databases/$(database)/documents/void_odyssey_games/$(gameId)).data.userId == request.auth.uid
-          && hasApp('void-odyssey');
-      }
-    }
-
     // ── App registry ──────────────────────────────────────
 
     match /apps/{appId} {
@@ -348,22 +324,6 @@ service cloud.firestore {
 
     // ── User profiles ─────────────────────────────────────
     match /users/{userId} {
-      allow read: if request.auth != null
-        && request.auth.uid == userId
-        && hasApp('void-odyssey');
-
-      // Users can set their own Void Odyssey difficulty preference
-      allow update: if request.auth != null
-        && request.auth.uid == userId
-        && hasApp('void-odyssey')
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voidOdysseyDifficulty'])
-        && request.resource.data.voidOdysseyDifficulty in ['easiest', 'easy', 'normal', 'hard', 'hardest'];
-      allow create: if request.auth != null
-        && request.auth.uid == userId
-        && hasApp('void-odyssey')
-        && request.resource.data.keys().hasOnly(['voidOdysseyDifficulty'])
-        && request.resource.data.voidOdysseyDifficulty in ['easiest', 'easy', 'normal', 'hard', 'hardest'];
-
       allow read, write: if hasAdmin();
     }
 
