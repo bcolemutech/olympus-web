@@ -9,15 +9,6 @@ apps:
     enabled: true
     order: 1
 
-  - id: void-odyssey
-    name: Void Odyssey
-    description: An AI-narrated space exploration adventure
-    icon: "\U0001F680"
-    type: embedded
-    path: /apps/void-odyssey/
-    enabled: false
-    order: 2
-
   - id: tortuga
     name: Tortuga
     description: A sea-faring pirate empire builder

@@ -211,7 +211,13 @@ Nothing is discarded — both projects contribute their best ideas to the Loom a
    before that window closes if VO isn't fully retired yet). See the script's
    header comment for the restore procedure.
 4. Remove app code under `/public/apps/`; clean VO entry from `apps.yaml`.
-5. Revoke or repurpose `void-odyssey` custom claims.
+5. Revoke `void-odyssey` custom claims (decided, not repurposed) — run via the
+   "Revoke Void Odyssey Claim" GitHub Actions workflow (`workflow_dispatch`),
+   which invokes `scripts/revoke-void-odyssey-claim.js` against production.
+   Repurposing the claim to `loom` was considered and rejected: it would
+   silently pre-grant a future app to former VO players before the Loom app
+   exists or has any content. Loom access will be granted fresh via Pantheon
+   under its own `loom` claim once it ships.
 
 ### Tortuga retirement (mostly design + scaffolding + open issues)
 
