@@ -198,6 +198,13 @@ Nothing is discarded — both projects contribute their best ideas to the Loom a
 > pattern (server-side dice → AI context → narration) are captured in full in
 > `planning/loom-salvage-void-odyssey.md`, independent of the live VO app.
 
+> Tortuga's hand-authored flavor content (starter-ship descriptions, era
+> faction catalogs, hidden cove names, world-event narrative prose) that lived
+> only in app code is captured in full in
+> `planning/loom-salvage-tortuga-caribbean.md`, independent of the live
+> Tortuga app. Structural/mechanical design content remains in
+> `planning/tortuga-design.md` (superseded, not deleted).
+
 ### Void Odyssey retirement (phased — silent retirement, no player comms)
 
 **Decision:** Retire silently. No heads-up to live VO players; soft `enabled: false` is acceptable. The execution path below is handled in Claude Code as a GitHub change.
@@ -222,10 +229,10 @@ Nothing is discarded — both projects contribute their best ideas to the Loom a
 ### Tortuga retirement (mostly design + scaffolding + open issues)
 
 1. Archive `planning/tortuga-design.md` with a pointer to this doc; lift the shared-world/private-save and mode-split sections into the Loom design lineage.
-2. Convert the Caribbean setting into a Loom world config (later phase).
-3. **GitHub issue cleanup** — triage all open Tortuga issues into one of: _migrate_ (relabel under a Loom milestone), _close — superseded_, or _close — won't-do_. Remove the Tortuga scaffolding once issues are dispositioned. Done via the browser GitHub UI per the iOS workflow.
-
-> **Action item:** the Tortuga GitHub issues need a disposition pass before scaffolding removal. This is a tracked task, not yet executed.
+2. Convert the Caribbean setting into a Loom world config (later phase, L-301 / #315). Hand-authored flavor content (ship descriptions, era faction catalogs, cove names, world-event prose) that lived only in Tortuga's app code is captured in `planning/loom-salvage-tortuga-caribbean.md`, independent of the live Tortuga app.
+3. **GitHub issue cleanup** — triage all open Tortuga issues into one of: _migrate_ (relabel under a Loom milestone), _close — superseded_, or _close — won't-do_. Done in L-006 (#291): all 26 open Tortuga issues closed as superseded (none migrated — the Loom's more generic architecture already has a broader tracked home for every concern raised).
+4. Remove the Tortuga scaffolding (L-007 / #292): app code, `apps.yaml` entry, and the `tortuga_worlds`/`tortuga_games`/`tortuga_user_prefs` Firestore rules blocks. Tortuga is client-side only — no Cloud Functions or Firestore indexes to remove.
+5. Revoke `tortuga` custom claims (decided, not repurposed — same rationale as the VO claim above). Run via the "Revoke Tortuga Claim" GitHub Actions workflow (`workflow_dispatch`), which invokes `scripts/revoke-tortuga-claim.js` against production.
 
 ---
 
