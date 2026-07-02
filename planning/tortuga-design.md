@@ -1,6 +1,13 @@
 # Tortuga — Game Design & Phased Implementation Plan
 
-> Status: **Draft for review**. Not yet finalized. Open questions are flagged inline and collected in §11.
+> **Status: Superseded.** Tortuga is being retired in favor of **The Loom** — see
+> `planning/the-loom-design.md`. Tortuga's best ideas are carried forward rather
+> than lost: the shared-world-plus-private-saves architecture becomes the Loom's
+> World State / Character State split (§4), the Cartographer/Account mode
+> distinction becomes the Loom's build-vs-play loop (§9 Salvage table), and the
+> Caribbean setting is preserved as a future Loom **world**, not its own app
+> (§9 retirement plan; converted in L-301 / #315). This document is kept for
+> historical reference only — do not build against it.
 
 ---
 
