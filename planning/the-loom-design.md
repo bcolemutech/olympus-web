@@ -16,7 +16,7 @@ The motivation is concrete. Existing platforms in this space are either too expe
 1. **Memory** — characters and platforms forget what happened (AI Dungeon's "dragon turns into a dentist"). The fix is a layered, server-owned state model where hard facts never decay.
 2. **Control** — the model breaks its own world's rules and invents contradicting facts. The fix is a turn pipeline where **the model proposes interpretation and prose, and the deterministic core owns truth.**
 
-Naming: the working title is **The Loom** (the Fates weave the thread of fate; the world is woven from threads of play). It pairs deliberately with The Cartographer — the Cartographer draws the map, the Loom weaves the story upon it. Open for confirmation (alt: _Mnemosyne_, leaning on the memory emphasis).
+Naming: **The Loom** (confirmed — see §11). The Fates weave the thread of fate; the world is woven from threads of play. It pairs deliberately with The Cartographer — the Cartographer draws the map, the Loom weaves the story upon it. (_Mnemosyne_ was considered and passed over.)
 
 ---
 
@@ -291,6 +291,10 @@ MVP is the explicit gate: Phase 1's exit criterion is the whole thesis of the pr
   global locks, no blocked player turns, no tick starvation in busy shared worlds — and it is
   the same transactional model multiplayer (L-401) requires.
 
+- **Name** — **"The Loom" confirmed** (maintainer call, 2026-07-02). _Mnemosyne_ considered and
+  passed over. The `loom` app id, `loom_*` collections, and `loom*` function names stand as
+  specified throughout this doc.
+
 - **Multiplayer conflict resolution** (L-401 / #317) — **Transactional turns.**
   Each turn's COMMIT applies its `state_mutations` inside a Firestore transaction that
   re-reads World State; conflicting concurrent turns retry automatically. Mutations are
@@ -301,6 +305,5 @@ MVP is the explicit gate: Phase 1's exit criterion is the whole thesis of the pr
 
 ### Still open
 
-- **Name** — confirm "The Loom" vs. "Mnemosyne" or another.
 - **Soft-canon promotion policy** — MVP default is promote-on-second-reference behind a seam
   (L-115 / #302); tuning (time-based decay, explicit confirmation) stays open.
