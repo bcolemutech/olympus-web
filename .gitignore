@@ -68,9 +68,5 @@ node_modules/
 # dataconnect generated files
 .dataconnect
 
-# Large Azgaar JSON exports used as manual-test artifacts
-# (Jest uses a small synthetic fixture in azgaar-json-sample.js instead)
-tests/fixtures/*.json
-
 # Void Odyssey Firestore export archives (may contain live user game data)
 scripts/export-output/
