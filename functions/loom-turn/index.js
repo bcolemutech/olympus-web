@@ -83,6 +83,7 @@ async function runTurnPipeline(params) {
     canonWorld,
     save,
     worldState,
+    saveRef,
   });
 
   return commitTurn({
