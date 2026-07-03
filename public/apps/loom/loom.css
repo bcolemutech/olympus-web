@@ -58,11 +58,69 @@
   font-size: 0.9rem;
 }
 
-.loom-note {
+.loom-save-card-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.loom-delete-btn {
+  background: none;
+  border: 1px solid rgba(255, 138, 101, 0.4);
+  border-radius: 8px;
+  color: #ff8a65;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.6rem 1.1rem;
+}
+
+.loom-delete-btn:hover,
+.loom-delete-btn:focus-visible {
+  background: rgba(255, 138, 101, 0.12);
+}
+
+.loom-new-save-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.loom-new-save-form.hidden {
+  display: none;
+}
+
+.loom-form-group {
+  margin-bottom: 0.9rem;
+}
+
+.loom-form-label {
+  display: block;
   color: #90a4ae;
   font-size: 0.85rem;
-  font-style: italic;
-  margin-top: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.loom-form-input {
+  width: 100%;
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.6rem 0.8rem;
+  box-sizing: border-box;
+}
+
+.loom-form-input:focus-visible {
+  outline: 2px solid rgba(255, 183, 77, 0.6);
+  outline-offset: 2px;
+}
+
+.loom-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .loom-summary {

@@ -2,10 +2,12 @@
 
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleAuth } = require('google-auth-library');
 const { runTurnPipeline, LoomTurnError } = require('./loom-turn');
+const loomCanon = require('./loom-canon');
+const { makeSave } = require('./loom-models');
 
 initializeApp();
 
@@ -361,6 +363,21 @@ exports.inviteUser = onCall(async (request) => {
 });
 
 /**
+ * Validates the caller is signed in and holds the `loom` app claim. Returns
+ * the caller's uid, or throws HttpsError.
+ */
+function requireLoomAuth(request) {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to play The Loom.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('loom')) {
+    throw new HttpsError('permission-denied', "You don't have access to The Loom.");
+  }
+  return request.auth.uid;
+}
+
+/**
  * loomPlayTurn — runs one turn of The Loom's turn pipeline (design doc §5,
  * §7). Callable by any signed-in user with the `loom` app claim who owns the
  * target save; the client only ever receives the narration/summary contract,
@@ -370,13 +387,7 @@ exports.inviteUser = onCall(async (request) => {
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
  */
 exports.loomPlayTurn = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'You must be signed in to play The Loom.');
-  }
-  const tokenApps = request.auth.token.apps;
-  if (!Array.isArray(tokenApps) || !tokenApps.includes('loom')) {
-    throw new HttpsError('permission-denied', "You don't have access to The Loom.");
-  }
+  const uid = requireLoomAuth(request);
 
   const { worldId, saveId, actionText } = request.data || {};
 
@@ -396,7 +407,7 @@ exports.loomPlayTurn = onCall(async (request) => {
   try {
     return await runTurnPipeline({
       db: getFirestore(),
-      uid: request.auth.uid,
+      uid,
       worldId: worldId.trim(),
       saveId: saveId.trim(),
       actionText: actionText.trim(),
@@ -408,4 +419,106 @@ exports.loomPlayTurn = onCall(async (request) => {
     console.error('loomPlayTurn error:', err);
     throw new HttpsError('internal', 'Failed to process turn.');
   }
+});
+
+/**
+ * loomCreateSave — creates a new save for the caller in a given world,
+ * initializing the character from that world's canon defaults (starting
+ * location, starting abilities). Callable by any signed-in user with the
+ * `loom` app claim.
+ *
+ * Data: { worldId: string, name: string, characterName: string }
+ * Returns: { saveId: string }
+ */
+exports.loomCreateSave = onCall(async (request) => {
+  const uid = requireLoomAuth(request);
+
+  const { worldId, name, characterName } = request.data || {};
+
+  if (typeof worldId !== 'string' || worldId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'worldId is required.');
+  }
+  if (typeof name !== 'string' || name.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'name is required.');
+  }
+  if (name.length > 200) {
+    throw new HttpsError('invalid-argument', 'name must be 200 characters or fewer.');
+  }
+  if (typeof characterName !== 'string' || characterName.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'characterName is required.');
+  }
+  if (characterName.length > 200) {
+    throw new HttpsError('invalid-argument', 'characterName must be 200 characters or fewer.');
+  }
+
+  const canonWorld = loomCanon.getWorld(worldId.trim());
+  if (!canonWorld) {
+    throw new HttpsError('not-found', 'Unknown world.');
+  }
+
+  const db = getFirestore();
+  const saveRef = db.collection('loom_saves').doc();
+
+  const save = makeSave({
+    ownerUid: uid,
+    worldId: worldId.trim(),
+    name: name.trim(),
+    character: {
+      name: characterName.trim(),
+      abilities: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
+    },
+    location: canonWorld.rules && canonWorld.rules.startingLocationId,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  try {
+    await saveRef.set(save);
+  } catch (err) {
+    console.error('loomCreateSave error:', err);
+    throw new HttpsError('internal', 'Failed to create save.');
+  }
+
+  return { saveId: saveRef.id };
+});
+
+/**
+ * loomDeleteSave — deletes one of the caller's own saves, including its
+ * loom_turns event log (Firestore does not cascade-delete subcollections).
+ * Callable by any signed-in user with the `loom` app claim who owns the save.
+ *
+ * Data: { saveId: string }
+ * Returns: { success: true }
+ */
+exports.loomDeleteSave = onCall(async (request) => {
+  const uid = requireLoomAuth(request);
+
+  const { saveId } = request.data || {};
+  if (typeof saveId !== 'string' || saveId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'saveId is required.');
+  }
+
+  const db = getFirestore();
+  const saveRef = db.collection('loom_saves').doc(saveId.trim());
+  const saveSnap = await saveRef.get();
+
+  if (!saveSnap.exists) {
+    throw new HttpsError('not-found', 'Save not found.');
+  }
+  if (saveSnap.data().ownerUid !== uid) {
+    throw new HttpsError('permission-denied', 'This is not your save.');
+  }
+
+  try {
+    const turnsSnap = await saveRef.collection('loom_turns').get();
+    const batch = db.batch();
+    turnsSnap.docs.forEach((doc) => batch.delete(doc.ref));
+    batch.delete(saveRef);
+    await batch.commit();
+  } catch (err) {
+    console.error('loomDeleteSave error:', err);
+    throw new HttpsError('internal', 'Failed to delete save.');
+  }
+
+  return { success: true };
 });

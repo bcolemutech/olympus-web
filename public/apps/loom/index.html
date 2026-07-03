@@ -58,7 +58,36 @@
           <div id="loom-save-list" class="loom-save-list"></div>
 
           <button class="app-btn" id="loom-new-save-btn" type="button">+ New Save</button>
-          <p class="loom-note hidden" id="loom-new-save-note">Creating new saves is coming soon.</p>
+
+          <form id="loom-new-save-form" class="loom-new-save-form hidden">
+            <div class="loom-form-group">
+              <label class="loom-form-label" for="loom-new-save-name">Save name</label>
+              <input
+                class="loom-form-input"
+                id="loom-new-save-name"
+                type="text"
+                maxlength="200"
+                placeholder="e.g. First Voyage"
+                required
+              />
+            </div>
+            <div class="loom-form-group">
+              <label class="loom-form-label" for="loom-new-character-name">Character name</label>
+              <input
+                class="loom-form-input"
+                id="loom-new-character-name"
+                type="text"
+                maxlength="200"
+                placeholder="e.g. Ishmael"
+                required
+              />
+            </div>
+            <p class="loom-error hidden" id="loom-new-save-error"></p>
+            <div class="loom-form-actions">
+              <button class="app-btn" id="loom-new-save-submit" type="submit">Create</button>
+              <button class="loom-back-link" id="loom-new-save-cancel" type="button">Cancel</button>
+            </div>
+          </form>
         </div>
 
         <!-- Play view -->

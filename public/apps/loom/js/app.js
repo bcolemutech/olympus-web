@@ -17,10 +17,17 @@
     showView('worlds');
   }
 
+  function hideNewSaveForm() {
+    Loom.getRef('loom-new-save-form').classList.add('hidden');
+    Loom.getRef('loom-new-save-name').value = '';
+    Loom.getRef('loom-new-character-name').value = '';
+    Loom.getRef('loom-new-save-error').classList.add('hidden');
+  }
+
   function showSaves(worldId, worldName) {
     state.worldId = worldId;
     Loom.getRef('loom-save-select-title').textContent = worldName;
-    Loom.getRef('loom-new-save-note').classList.add('hidden');
+    hideNewSaveForm();
     showView('saves');
     Loom.saves.loadSaves(worldId);
   }
@@ -53,7 +60,28 @@
       });
 
       Loom.getRef('loom-new-save-btn').addEventListener('click', function () {
-        Loom.getRef('loom-new-save-note').classList.remove('hidden');
+        Loom.getRef('loom-new-save-form').classList.remove('hidden');
+      });
+
+      Loom.getRef('loom-new-save-cancel').addEventListener('click', function () {
+        hideNewSaveForm();
+      });
+
+      Loom.getRef('loom-new-save-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var name = Loom.getRef('loom-new-save-name').value.trim();
+        var characterName = Loom.getRef('loom-new-character-name').value.trim();
+        if (!name || !characterName) return;
+
+        Loom.saves
+          .createSave(state.worldId, name, characterName)
+          .then(function (saveId) {
+            hideNewSaveForm();
+            showPlay(saveId, { recentSummary: '' });
+          })
+          .catch(function () {
+            // Error already surfaced inline by createSave(); nothing more to do here.
+          });
       });
 
       Loom.getRef('loom-turn-form').addEventListener('submit', function (e) {

@@ -5,9 +5,9 @@
   var state = Loom.state;
 
   /**
-   * Lists the current player's saves for a world. Read-only — loom_saves is
-   * server-write-only (L-101), so there is nothing to create/delete from the
-   * client yet; that lands with the real save-creation flow in L-121 (#306).
+   * Lists the current player's saves for a world. Read-only Firestore query —
+   * loom_saves is server-write-only (L-101), so create/delete below go
+   * through the loomCreateSave/loomDeleteSave callables (L-121).
    */
   function loadSaves(worldId) {
     var listEl = Loom.getRef('loom-save-list');
@@ -51,28 +51,79 @@
     var title = document.createElement('h3');
     title.className = 'loom-card-title';
     title.textContent = save.name || 'Unnamed Save';
+    card.appendChild(title);
 
     if (save.character && save.character.name) {
       var meta = document.createElement('p');
       meta.className = 'loom-card-tagline';
       meta.textContent = save.character.name;
-      card.appendChild(title);
       card.appendChild(meta);
-    } else {
-      card.appendChild(title);
     }
 
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'app-btn';
-    btn.textContent = 'Resume';
-    btn.addEventListener('click', function () {
+    var actions = document.createElement('div');
+    actions.className = 'loom-save-card-actions';
+
+    var resumeBtn = document.createElement('button');
+    resumeBtn.type = 'button';
+    resumeBtn.className = 'app-btn';
+    resumeBtn.textContent = 'Resume';
+    resumeBtn.addEventListener('click', function () {
       Loom.app.showPlay(saveId, save);
     });
-    card.appendChild(btn);
+    actions.appendChild(resumeBtn);
 
+    var deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'loom-delete-btn';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', function () {
+      deleteSave(saveId, save.name || 'Unnamed Save');
+    });
+    actions.appendChild(deleteBtn);
+
+    card.appendChild(actions);
     return card;
   }
 
-  Loom.saves = { loadSaves: loadSaves };
+  function deleteSave(saveId, saveName) {
+    if (!window.confirm('Delete "' + saveName + '"? This cannot be undone.')) {
+      return;
+    }
+
+    var errorEl = Loom.getRef('loom-saves-error');
+    errorEl.classList.add('hidden');
+
+    var loomDeleteSave = state.functions.httpsCallable('loomDeleteSave');
+    loomDeleteSave({ saveId: saveId })
+      .then(function () {
+        loadSaves(state.worldId);
+      })
+      .catch(function (err) {
+        errorEl.textContent = 'Could not delete save: ' + (err.message || 'Unknown error');
+        errorEl.classList.remove('hidden');
+      });
+  }
+
+  /** Creates a new save via the loomCreateSave callable. Returns a promise of the new saveId. */
+  function createSave(worldId, name, characterName) {
+    var errorEl = Loom.getRef('loom-new-save-error');
+    var submitBtn = Loom.getRef('loom-new-save-submit');
+    errorEl.classList.add('hidden');
+    submitBtn.disabled = true;
+
+    var loomCreateSave = state.functions.httpsCallable('loomCreateSave');
+    return loomCreateSave({ worldId: worldId, name: name, characterName: characterName })
+      .then(function (result) {
+        submitBtn.disabled = false;
+        return result.data.saveId;
+      })
+      .catch(function (err) {
+        submitBtn.disabled = false;
+        errorEl.textContent = 'Could not create save: ' + (err.message || 'Unknown error');
+        errorEl.classList.remove('hidden');
+        throw err;
+      });
+  }
+
+  Loom.saves = { loadSaves: loadSaves, createSave: createSave };
 })();
