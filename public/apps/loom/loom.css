@@ -1,0 +1,11 @@
+.loom-root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+}
+
+.loom-placeholder {
+  color: #90a4ae;
+  font-style: italic;
+}

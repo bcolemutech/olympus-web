@@ -18,6 +18,15 @@ apps:
     enabled: true
     order: 10
 
+  - id: loom
+    name: The Loom
+    description: A persistent narrative game world
+    icon: "\U0001F9F5"
+    type: embedded
+    path: /apps/loom/
+    enabled: true
+    order: 11
+
   # ── JSX applets ─────────────────────────────────────────
   - id: pool-powerups
     name: Pool Power-Ups
