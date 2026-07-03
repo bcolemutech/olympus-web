@@ -216,4 +216,25 @@ describe('loomPlayTurn — end-to-end happy path', () => {
     const worldStateSnap = await db.collection('loom_world_state').doc(WORLD_ID).get();
     expect(worldStateSnap.data().worldClock).toBe(42);
   });
+
+  it('survives crossing the summary-regen threshold (L-114 fire-and-forget trigger)', async () => {
+    await seedSave();
+
+    // SUMMARY_REGEN_THRESHOLD is 10 — the 10th turn (index 9) crosses it.
+    for (let i = 0; i < 10; i++) {
+      const result = await callTurn({
+        worldId: WORLD_ID,
+        saveId: SAVE_ID,
+        actionText: 'wait quietly turn ' + i,
+      });
+      expect(typeof result.narration).toBe('string');
+    }
+
+    const turnsSnap = await db
+      .collection('loom_saves')
+      .doc(SAVE_ID)
+      .collection('loom_turns')
+      .get();
+    expect(turnsSnap.size).toBe(10);
+  });
 });
