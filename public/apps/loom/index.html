@@ -35,7 +35,59 @@
       <div class="app-divider"></div>
 
       <div id="loom-root" class="loom-root">
-        <p class="loom-placeholder">The Loom is being woven. Play is coming soon.</p>
+        <!-- World selection -->
+        <div id="loom-view-worlds" class="loom-view">
+          <div id="loom-world-list" class="loom-world-list"></div>
+        </div>
+
+        <!-- Save selection -->
+        <div id="loom-view-saves" class="loom-view hidden">
+          <button class="loom-back-link" id="loom-back-to-worlds" type="button">
+            &larr; Choose a different world
+          </button>
+          <h2 class="loom-view-title" id="loom-save-select-title"></h2>
+
+          <div class="app-loading hidden" id="loom-saves-loading">
+            <div class="app-spinner"></div>
+          </div>
+          <p class="loom-error hidden" id="loom-saves-error"></p>
+          <p class="loom-empty-state hidden" id="loom-save-empty">
+            No saved adventures yet in this world.
+          </p>
+
+          <div id="loom-save-list" class="loom-save-list"></div>
+
+          <button class="app-btn" id="loom-new-save-btn" type="button">+ New Save</button>
+          <p class="loom-note hidden" id="loom-new-save-note">Creating new saves is coming soon.</p>
+        </div>
+
+        <!-- Play view -->
+        <div id="loom-view-play" class="loom-view hidden">
+          <button class="loom-back-link" id="loom-back-to-saves" type="button">&larr; Saves</button>
+
+          <div class="loom-summary hidden" id="loom-summary"></div>
+
+          <div class="loom-narration-log" id="loom-narration-log"></div>
+
+          <div class="loom-suggested-actions" id="loom-suggested-actions"></div>
+
+          <form id="loom-turn-form" class="loom-turn-form">
+            <textarea
+              class="loom-turn-input"
+              id="loom-turn-input"
+              placeholder="What do you do?"
+              rows="2"
+              maxlength="2000"
+            ></textarea>
+            <button class="app-btn" id="loom-turn-submit" type="submit">Act</button>
+          </form>
+
+          <div class="app-loading hidden" id="loom-turn-loading">
+            <div class="app-spinner"></div>
+            <p class="app-loading-text">The Loom weaves&hellip;</p>
+          </div>
+          <p class="loom-error hidden" id="loom-turn-error"></p>
+        </div>
       </div>
     </main>
 
@@ -44,6 +96,9 @@
 
     <!-- Loom modules (load order matters) -->
     <script src="/apps/loom/js/state.js"></script>
+    <script src="/apps/loom/js/worlds.js"></script>
+    <script src="/apps/loom/js/saves.js"></script>
+    <script src="/apps/loom/js/play.js"></script>
     <script src="/apps/loom/js/app.js"></script>
 
     <script>
