@@ -2,8 +2,10 @@
 
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
+const { getFirestore } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleAuth } = require('google-auth-library');
+const { runTurnPipeline, LoomTurnError } = require('./loom-turn');
 
 initializeApp();
 
@@ -356,4 +358,54 @@ exports.inviteUser = onCall(async (request) => {
   }
 
   return { uid: userRecord.uid, email: email.trim() };
+});
+
+/**
+ * loomPlayTurn — runs one turn of The Loom's turn pipeline (design doc §5,
+ * §7). Callable by any signed-in user with the `loom` app claim who owns the
+ * target save; the client only ever receives the narration/summary contract,
+ * never raw state authority.
+ *
+ * Data: { worldId: string, saveId: string, actionText: string }
+ * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
+ */
+exports.loomPlayTurn = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to play The Loom.');
+  }
+  const tokenApps = request.auth.token.apps;
+  if (!Array.isArray(tokenApps) || !tokenApps.includes('loom')) {
+    throw new HttpsError('permission-denied', "You don't have access to The Loom.");
+  }
+
+  const { worldId, saveId, actionText } = request.data || {};
+
+  if (typeof worldId !== 'string' || worldId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'worldId is required.');
+  }
+  if (typeof saveId !== 'string' || saveId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'saveId is required.');
+  }
+  if (typeof actionText !== 'string' || actionText.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'actionText is required.');
+  }
+  if (actionText.length > 2000) {
+    throw new HttpsError('invalid-argument', 'actionText must be 2000 characters or fewer.');
+  }
+
+  try {
+    return await runTurnPipeline({
+      db: getFirestore(),
+      uid: request.auth.uid,
+      worldId: worldId.trim(),
+      saveId: saveId.trim(),
+      actionText: actionText.trim(),
+    });
+  } catch (err) {
+    if (err instanceof LoomTurnError) {
+      throw new HttpsError(err.code, err.message);
+    }
+    console.error('loomPlayTurn error:', err);
+    throw new HttpsError('internal', 'Failed to process turn.');
+  }
 });
