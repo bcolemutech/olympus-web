@@ -71,6 +71,14 @@
         { "fieldPath": "ownerUid", "order": "ASCENDING" },
         { "fieldPath": "worldId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "loom_turns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entityRefs", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "index", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
