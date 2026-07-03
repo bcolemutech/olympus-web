@@ -297,6 +297,33 @@ service cloud.firestore {
       allow delete: if hasApp('symposium');
     }
 
+    // ── The Loom ───────────────────────────────────────────
+    // World/canon and shared World State are server/admin-managed only — no
+    // client writes. Saves and their turn log are owner-scoped for reads;
+    // all mutation goes through the loomPlayTurn callable (Admin SDK, which
+    // bypasses these rules). Soft-canon is server-write-only.
+
+    match /loom_worlds/{worldId} {
+      allow read: if hasApp('loom');
+    }
+
+    match /loom_world_state/{worldId} {
+      allow read: if hasApp('loom');
+    }
+
+    match /loom_saves/{saveId} {
+      allow read: if hasApp('loom') && resource.data.ownerUid == request.auth.uid;
+
+      match /loom_turns/{turnId} {
+        allow read: if hasApp('loom')
+            && get(/databases/$(database)/documents/loom_saves/$(saveId)).data.ownerUid == request.auth.uid;
+      }
+    }
+
+    match /loom_softcanon/{entityId} {
+      allow read: if hasApp('loom');
+    }
+
     // ── App registry ──────────────────────────────────────
 
     match /apps/{appId} {

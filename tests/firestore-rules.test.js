@@ -1483,3 +1483,176 @@ describe('apps — Firestore Security Rules', function () {
     });
   });
 });
+
+// ── loom_* collections ────────────────────────────────────────────────────────
+
+describe('loom_* — Firestore Security Rules', function () {
+  var testEnv;
+  var loomDb;
+  var wrongOwnerDb;
+  var noClaimDb;
+  var unauthDb;
+
+  var OWNER_UID = 'owner-001';
+  var SAVE_ID = 'save-001';
+
+  beforeAll(async function () {
+    var firestoreConfig = {
+      rules: readFileSync(RULES_PATH, 'utf8'),
+    };
+
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      var host = parts[0];
+      var portString = parts[1];
+      if (host) {
+        firestoreConfig.host = host;
+      }
+      if (portString) {
+        var parsedPort = parseInt(portString, 10);
+        if (!isNaN(parsedPort)) {
+          firestoreConfig.port = parsedPort;
+        }
+      }
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: firestoreConfig,
+    });
+  });
+
+  beforeEach(async function () {
+    await testEnv.clearFirestore();
+
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      var db = ctx.firestore();
+      await setDoc(doc(db, 'loom_worlds', 'world-001'), { name: 'Test World' });
+      await setDoc(doc(db, 'loom_world_state', 'world-001'), { worldClock: 0 });
+      await setDoc(doc(db, 'loom_saves', SAVE_ID), {
+        ownerUid: OWNER_UID,
+        worldId: 'world-001',
+      });
+      await setDoc(doc(db, 'loom_saves', SAVE_ID, 'loom_turns', 'turn-001'), {
+        index: 0,
+        actionText: 'look around',
+      });
+      await setDoc(doc(db, 'loom_softcanon', 'entity-001'), { name: 'Doral' });
+    });
+
+    loomDb = testEnv.authenticatedContext(OWNER_UID, { apps: ['loom'] }).firestore();
+    wrongOwnerDb = testEnv.authenticatedContext('owner-002', { apps: ['loom'] }).firestore();
+    noClaimDb = testEnv.authenticatedContext('no-claim-user', {}).firestore();
+    unauthDb = testEnv.unauthenticatedContext().firestore();
+  });
+
+  afterAll(async function () {
+    await testEnv.cleanup();
+  });
+
+  describe('loom_worlds', function () {
+    it('allows read for a user with the loom claim', async function () {
+      await assertSucceeds(getDoc(doc(loomDb, 'loom_worlds', 'world-001')));
+    });
+
+    it('denies read for a user without the loom claim', async function () {
+      await assertFails(getDoc(doc(noClaimDb, 'loom_worlds', 'world-001')));
+    });
+
+    it('denies read for an unauthenticated user', async function () {
+      await assertFails(getDoc(doc(unauthDb, 'loom_worlds', 'world-001')));
+    });
+
+    it('denies client write even with the loom claim', async function () {
+      await assertFails(setDoc(doc(loomDb, 'loom_worlds', 'world-002'), { name: 'Hack' }));
+    });
+  });
+
+  describe('loom_world_state', function () {
+    it('allows read for a user with the loom claim', async function () {
+      await assertSucceeds(getDoc(doc(loomDb, 'loom_world_state', 'world-001')));
+    });
+
+    it('denies read for a user without the loom claim', async function () {
+      await assertFails(getDoc(doc(noClaimDb, 'loom_world_state', 'world-001')));
+    });
+
+    it('denies client write even with the loom claim', async function () {
+      await assertFails(
+        setDoc(doc(loomDb, 'loom_world_state', 'world-001'), { worldClock: 999 })
+      );
+    });
+  });
+
+  describe('loom_saves', function () {
+    it('allows the owner to read their own save', async function () {
+      await assertSucceeds(getDoc(doc(loomDb, 'loom_saves', SAVE_ID)));
+    });
+
+    it('denies read for a different loom-claimed user', async function () {
+      await assertFails(getDoc(doc(wrongOwnerDb, 'loom_saves', SAVE_ID)));
+    });
+
+    it('denies read for a user without the loom claim', async function () {
+      await assertFails(getDoc(doc(noClaimDb, 'loom_saves', SAVE_ID)));
+    });
+
+    it('denies client write even by the owner', async function () {
+      await assertFails(
+        setDoc(doc(loomDb, 'loom_saves', SAVE_ID), { ownerUid: OWNER_UID, worldId: 'world-001' })
+      );
+    });
+
+    it('denies client create of a new save by the owner', async function () {
+      await assertFails(
+        setDoc(doc(loomDb, 'loom_saves', 'save-new'), {
+          ownerUid: OWNER_UID,
+          worldId: 'world-001',
+        })
+      );
+    });
+
+    describe('loom_turns subcollection', function () {
+      it('allows the owner to read their own turn log', async function () {
+        await assertSucceeds(
+          getDoc(doc(loomDb, 'loom_saves', SAVE_ID, 'loom_turns', 'turn-001'))
+        );
+      });
+
+      it('denies read for a different loom-claimed user', async function () {
+        await assertFails(
+          getDoc(doc(wrongOwnerDb, 'loom_saves', SAVE_ID, 'loom_turns', 'turn-001'))
+        );
+      });
+
+      it('denies client write even by the owner', async function () {
+        await assertFails(
+          setDoc(doc(loomDb, 'loom_saves', SAVE_ID, 'loom_turns', 'turn-002'), {
+            index: 1,
+            actionText: 'hack',
+          })
+        );
+      });
+    });
+  });
+
+  describe('loom_softcanon', function () {
+    it('allows read for a user with the loom claim', async function () {
+      await assertSucceeds(getDoc(doc(loomDb, 'loom_softcanon', 'entity-001')));
+    });
+
+    it('denies read for a user without the loom claim', async function () {
+      await assertFails(getDoc(doc(noClaimDb, 'loom_softcanon', 'entity-001')));
+    });
+
+    it('denies client write even with the loom claim', async function () {
+      await assertFails(
+        setDoc(doc(loomDb, 'loom_softcanon', 'entity-002'), { name: 'Hacked NPC' })
+      );
+    });
+  });
+});

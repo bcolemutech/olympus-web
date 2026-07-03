@@ -63,6 +63,14 @@
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "loom_saves",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerUid", "order": "ASCENDING" },
+        { "fieldPath": "worldId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
