@@ -43,6 +43,10 @@ function softCanonDocId(worldId, normalizedName) {
  * require reads-before-writes), so this is safe to call for any number of
  * entities in one turn.
  *
+ * Returns the resulting record for each processed name — auditable, and lets
+ * callers (including tests) see the effect of the write without a separate
+ * read racing the transaction's own commit.
+ *
  * @param {{
  *   transaction: FirebaseFirestore.Transaction,
  *   db: FirebaseFirestore.Firestore,
@@ -50,6 +54,7 @@ function softCanonDocId(worldId, normalizedName) {
  *   inventedEntities: string[],
  *   worldState: object,
  * }} params
+ * @returns {{ name: string, normalizedName: string, referenceCount: number, promoted: boolean }[]}
  */
 async function quarantineEntities(params) {
   const { transaction, db, worldId, inventedEntities, worldState } = params;
@@ -58,7 +63,7 @@ async function quarantineEntities(params) {
     new Set((inventedEntities || []).map((name) => String(name).trim()).filter(Boolean))
   );
   if (uniqueNames.length === 0) {
-    return;
+    return [];
   }
 
   const entries = uniqueNames
@@ -70,14 +75,14 @@ async function quarantineEntities(params) {
       })
     );
   if (entries.length === 0) {
-    return;
+    return [];
   }
 
   // All reads before any writes, per Firestore transaction rules.
   const snaps = await Promise.all(entries.map((entry) => transaction.get(entry.ref)));
   const now = FieldValue.serverTimestamp();
 
-  entries.forEach((entry, i) => {
+  return entries.map((entry, i) => {
     const snap = snaps[i];
 
     if (!snap.exists) {
@@ -91,13 +96,23 @@ async function quarantineEntities(params) {
         lastMentionedAt: now,
         promotedAt: null,
       });
-      return;
+      return {
+        name: entry.name,
+        normalizedName: entry.normalizedName,
+        referenceCount: 1,
+        promoted: false,
+      };
     }
 
     const existing = snap.data();
     if (existing.promoted) {
       transaction.update(entry.ref, { lastMentionedAt: now });
-      return;
+      return {
+        name: entry.name,
+        normalizedName: entry.normalizedName,
+        referenceCount: existing.referenceCount,
+        promoted: true,
+      };
     }
 
     const referenceCount = (existing.referenceCount || 0) + 1;
@@ -114,6 +129,13 @@ async function quarantineEntities(params) {
       worldState.globalFlags = worldState.globalFlags || {};
       worldState.globalFlags['entity_' + entry.normalizedName] = existing.name;
     }
+
+    return {
+      name: entry.name,
+      normalizedName: entry.normalizedName,
+      referenceCount,
+      promoted: shouldPromote,
+    };
   });
 }
 
