@@ -4,7 +4,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "test": "jest"
+    "test": "jest --forceExit"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.0",
@@ -17,6 +17,7 @@
   "jest": {
     "testEnvironment": "node",
     "testTimeout": 30000,
-    "modulePaths": ["<rootDir>", "<rootDir>/../functions/node_modules"]
+    "modulePaths": ["<rootDir>", "<rootDir>/../functions/node_modules"],
+    "maxWorkers": 1
   }
 }
