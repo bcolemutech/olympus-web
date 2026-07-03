@@ -2,19 +2,23 @@
 
 const { FieldValue } = require('firebase-admin/firestore');
 const { makeTurn, applyStateMutations } = require('../loom-models');
+const { quarantineEntities } = require('./soft-canon');
+const { shouldRegenerateSummary, maybeRegenerateSummary } = require('./summary');
 
 /**
  * Stage 5 — COMMIT (design doc §5, §8).
  *
  * Applies state_mutations to World/Character state, appends the turn to the
- * event log, and returns the client-facing contract. Runs inside a Firestore
- * transaction — re-reading fresh state and retrying on conflict — so a batch
- * tick (L-201) or another turn can never tear a write.
+ * event log, hands off model-invented entities to soft-canon quarantine, and
+ * triggers async summary regeneration past a threshold. Runs inside a
+ * Firestore transaction — re-reading fresh state and retrying on conflict —
+ * so a batch tick (L-201) or another turn can never tear a write.
  *
- * L-110 (#297) ships a minimal version: mutation application + append-only
- * turn log + updatedAt bookkeeping. L-114 (#301) hardens this with soft-canon
- * handoff (L-115 / #302) and threshold-triggered summary regeneration
- * (L-116 / #303) — same signature, richer body.
+ * L-110 (#297) shipped a minimal version (mutation application + append-only
+ * turn log + updatedAt bookkeeping). L-114 (#301) hardens it with the
+ * soft-canon handoff (L-115 / #302, still a no-op stub until that issue
+ * lands) and the summary-regen trigger (L-116 / #303, likewise still a
+ * no-op stub) — same signature, richer body.
  *
  * Mutations may carry a `target: 'save'` field to route them to Character
  * state instead of World State; anything else (the default) applies to World
@@ -31,6 +35,7 @@ const { makeTurn, applyStateMutations } = require('../loom-models');
  *   resolution: { outcome: string, mutations: object[], constraints: string[] },
  *   narration: string,
  *   entityRefs: string[],
+ *   inventedEntities: string[],
  *   suggestedActions: string[],
  * }} params
  * @returns {Promise<{ narration: string, stateSummary: string, suggestedActions: string[] }>}
@@ -46,10 +51,11 @@ async function commitTurn(params) {
     resolution,
     narration,
     entityRefs,
+    inventedEntities,
     suggestedActions,
   } = params;
 
-  return db.runTransaction(async (transaction) => {
+  const { contractResult, nextIndex } = await db.runTransaction(async (transaction) => {
     const turnsQuery = saveRef.collection('loom_turns').orderBy('index', 'desc').limit(1);
     const [saveSnap, worldStateSnap, lastTurnSnap] = await Promise.all([
       transaction.get(saveRef),
@@ -73,10 +79,10 @@ async function commitTurn(params) {
     applyStateMutations(save, saveMutations);
     applyStateMutations(worldState, worldMutations);
 
-    const nextIndex = lastTurnSnap.empty ? 0 : lastTurnSnap.docs[0].data().index + 1;
+    const turnIndex = lastTurnSnap.empty ? 0 : lastTurnSnap.docs[0].data().index + 1;
 
     const turn = makeTurn({
-      index: nextIndex,
+      index: turnIndex,
       actionText,
       proposedAction,
       resolution,
@@ -92,12 +98,31 @@ async function commitTurn(params) {
       Object.assign({}, worldState, { updatedAt: FieldValue.serverTimestamp() })
     );
 
+    await quarantineEntities({
+      transaction,
+      db,
+      worldId,
+      inventedEntities: inventedEntities || [],
+    });
+
     return {
-      narration,
-      stateSummary: save.recentSummary || '',
-      suggestedActions: suggestedActions || [],
+      nextIndex: turnIndex,
+      contractResult: {
+        narration,
+        stateSummary: save.recentSummary || '',
+        suggestedActions: suggestedActions || [],
+      },
     };
   });
+
+  if (shouldRegenerateSummary(nextIndex)) {
+    // Fire-and-forget: summary regen must not add per-turn latency.
+    maybeRegenerateSummary({ db, saveRef, worldId, turnIndex: nextIndex }).catch((err) => {
+      console.error('maybeRegenerateSummary failed:', err);
+    });
+  }
+
+  return contractResult;
 }
 
 module.exports = { commitTurn };

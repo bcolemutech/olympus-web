@@ -76,7 +76,7 @@ async function runTurnPipeline(params) {
 
   const proposedAction = await interpretAction({ actionText, canonWorld, save, worldState });
   const resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
-  const { narration, entityRefs, suggestedActions } = await narrateResolution({
+  const { narration, entityRefs, inventedEntities, suggestedActions } = await narrateResolution({
     actionText,
     proposedAction,
     resolution,
@@ -95,6 +95,7 @@ async function runTurnPipeline(params) {
     resolution,
     narration,
     entityRefs,
+    inventedEntities,
     suggestedActions,
   });
 }
