@@ -15,10 +15,9 @@ const { shouldRegenerateSummary, maybeRegenerateSummary } = require('./summary')
  * so a batch tick (L-201) or another turn can never tear a write.
  *
  * L-110 (#297) shipped a minimal version (mutation application + append-only
- * turn log + updatedAt bookkeeping). L-114 (#301) hardens it with the
- * soft-canon handoff (L-115 / #302, still a no-op stub until that issue
- * lands) and the summary-regen trigger (L-116 / #303, likewise still a
- * no-op stub) — same signature, richer body.
+ * turn log + updatedAt bookkeeping). L-114 (#301) added the soft-canon
+ * handoff and summary-regen trigger points; L-115 (#302) and L-116 (#303)
+ * filled in their real bodies respectively — same signature throughout.
  *
  * Mutations may carry a `target: 'save'` field to route them to Character
  * state instead of World State; anything else (the default) applies to World
@@ -91,19 +90,24 @@ async function commitTurn(params) {
       createdAt: FieldValue.serverTimestamp(),
     });
 
+    // Quarantine (and possibly promote into worldState.globalFlags) before the
+    // final writes below, so a promotion lands in the same worldState write —
+    // and before any of this transaction's own writes, per the Firestore
+    // reads-before-writes rule.
+    await quarantineEntities({
+      transaction,
+      db,
+      worldId,
+      inventedEntities: inventedEntities || [],
+      worldState,
+    });
+
     transaction.set(saveRef.collection('loom_turns').doc(), turn);
     transaction.set(saveRef, Object.assign({}, save, { updatedAt: FieldValue.serverTimestamp() }));
     transaction.set(
       worldStateRef,
       Object.assign({}, worldState, { updatedAt: FieldValue.serverTimestamp() })
     );
-
-    await quarantineEntities({
-      transaction,
-      db,
-      worldId,
-      inventedEntities: inventedEntities || [],
-    });
 
     return {
       nextIndex: turnIndex,
