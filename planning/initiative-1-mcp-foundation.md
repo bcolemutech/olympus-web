@@ -227,7 +227,8 @@ Crawl → walk → run _inside_ the initiative. Explicit exit criteria.
 | **1f — POC app**                     | Scriptorium claim, collection, 4 tools + 1 resource                                                 | Tools CRUD `scriptorium_notes` under the caller's identity                                             |
 | **1g — iOS acceptance**              | Add the Scriptorium connector on the **iOS Claude app** by URL                                      | **From iOS: authorize with Olympus login, then create/read/update/delete Scriptorium data via Claude** |
 | **1h — Hardening**                   | Revocation, rate limiting, audit log, cold-start/latency stance, error semantics                    | Revoked token denied; abusive calls throttled; events audited                                          |
-| **1i — Second connector (stretch)**  | One Symposium read tool as a second app module                                                      | Two connectors coexist on the client, each sees only its own tools; cross-app token replay fails       |
+| **1i — Grand Hall connections**      | "Manage connections" view in the Grand Hall profile: list authorized connectors, revoke each        | A user sees their active connectors and can revoke one; the revoked token is denied on next call       |
+| **1j — Second connector (stretch)**  | One Symposium read tool as a second app module                                                      | Two connectors coexist on the client, each sees only its own tools; cross-app token replay fails       |
 
 **Initiative exit criterion (the whole point):**
 
@@ -247,13 +248,13 @@ If that holds, the seam is proven and Cartographer (Initiative 2) and the game s
 - **Per-app connectors** — one shared AS + one host framework + N per-app resource servers; each app is a separate connector with an audience-bound token. This is the isolation model, replacing a single mega-connector with intra-connector scopes.
 - **Throwaway POC app ("Scriptorium")** — no LLM, no real domain; exists solely to prove the plumbing.
 - **Clean origin via Hosting rewrites** — `/mcp/**` and `/.well-known/**` on the primary origin.
+- **Access-token signing** — symmetric Functions secret for MVP; asymmetric/KMS is a later hardening option, not now.
+- **Consent management** — per-connect consent **plus** a "manage connections" list in the Grand Hall profile where a user can review and revoke authorized connectors (phase 1i).
+- **Cold-start latency** — accepted; no min-instances spend on `mcpServer` for the MVP. Revisit only if measured latency breaks client timeouts.
 
 ### Still open
 
-- **Access-token signing:** symmetric Functions secret (MVP) vs. asymmetric/KMS — defaulting to symmetric, revisit in hardening.
-- **Consent granularity:** per-connect consent only, or a manageable connections list in the Grand Hall profile?
 - **Intra-app scopes (read vs. write):** seam now, design later — do any Initiative 2/3 needs pull this forward?
-- **Cold-start latency:** accept it vs. min instances on `mcpServer` — decide in 1h against measured numbers.
 
 ---
 
