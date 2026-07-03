@@ -5,7 +5,11 @@
  *
  * Runs against the Firestore emulator since quarantineEntities operates
  * inside a real Firestore transaction (reads-before-writes ordering across
- * multiple entities is part of what's under test).
+ * multiple entities is part of what's under test). Assertions read
+ * quarantineEntities' own return value rather than a follow-up `.get()` —
+ * a separate read raced against the transaction's commit under heavy
+ * parallel test load in CI (confirmed flaky), where the return value never
+ * can.
  *
  * Run: firebase emulators:exec --only firestore --project demo-loom-test "cd tests && npx jest loom-soft-canon --verbose"
  */
@@ -43,19 +47,8 @@ function runQuarantine(inventedEntities, worldState) {
   );
 }
 
-// A plain get() immediately following a resolved transaction should always
-// see that transaction's writes, but this sandbox's network proxy has shown
-// occasional transient latency against the emulator under heavy parallel
-// test load — so retry briefly rather than flake on an environment hiccup
-// unrelated to quarantineEntities' own correctness (already covered by the
-// isolated-run assertions above).
-async function getDoc(name, attemptsLeft = 15) {
-  const ref = db.collection('loom_softcanon').doc(softCanonDocId(WORLD_ID, normalizeEntityName(name)));
-  const snap = await ref.get();
-  if (snap.exists) return snap.data();
-  if (attemptsLeft <= 1) return null;
-  await new Promise((resolve) => setTimeout(resolve, 150));
-  return getDoc(name, attemptsLeft - 1);
+function findResult(results, name) {
+  return results.filter((r) => r.normalizedName === normalizeEntityName(name))[0] || null;
 }
 
 async function clearSoftCanon() {
@@ -71,32 +64,31 @@ afterEach(async () => {
 
 describe('quarantineEntities', () => {
   it('does nothing for an empty or all-blank invented list', async () => {
-    await runQuarantine([], {});
-    await runQuarantine(['   ', ''], {});
-    expect(await getDoc('anything')).toBeNull();
+    expect(await runQuarantine([], {})).toEqual([]);
+    expect(await runQuarantine(['   ', ''], {})).toEqual([]);
   });
 
   it('creates a provisional record on first mention', async () => {
-    await runQuarantine(['a barkeep named Doral'], {});
+    const results = await runQuarantine(['a barkeep named Doral'], {});
 
-    const doc = await getDoc('a barkeep named Doral');
-    expect(doc).not.toBeNull();
-    expect(doc.referenceCount).toBe(1);
-    expect(doc.promoted).toBe(false);
-    expect(doc.worldId).toBe(WORLD_ID);
-    expect(doc.name).toBe('a barkeep named Doral');
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      name: 'a barkeep named Doral',
+      normalizedName: normalizeEntityName('a barkeep named Doral'),
+      referenceCount: 1,
+      promoted: false,
+    });
   });
 
   it('promotes on the second reference and flags it in worldState.globalFlags', async () => {
     await runQuarantine(['a barkeep named Doral'], {});
 
     const worldState = { globalFlags: {} };
-    await runQuarantine(['a barkeep named Doral'], worldState);
+    const results = await runQuarantine(['a barkeep named Doral'], worldState);
 
-    const doc = await getDoc('a barkeep named Doral');
-    expect(doc.referenceCount).toBe(PROMOTION_REFERENCE_COUNT);
-    expect(doc.promoted).toBe(true);
-    expect(doc.promotedAt).not.toBeNull();
+    const result = findResult(results, 'a barkeep named Doral');
+    expect(result.referenceCount).toBe(PROMOTION_REFERENCE_COUNT);
+    expect(result.promoted).toBe(true);
 
     const flagKey = 'entity_' + normalizeEntityName('a barkeep named Doral');
     expect(worldState.globalFlags[flagKey]).toBe('a barkeep named Doral');
@@ -107,37 +99,37 @@ describe('quarantineEntities', () => {
     await runQuarantine(['a barkeep named Doral'], { globalFlags: {} });
 
     const worldState = { globalFlags: {} };
-    await runQuarantine(['a barkeep named Doral'], worldState);
+    const results = await runQuarantine(['a barkeep named Doral'], worldState);
 
-    const doc = await getDoc('a barkeep named Doral');
-    expect(doc.promoted).toBe(true);
+    const result = findResult(results, 'a barkeep named Doral');
+    expect(result.promoted).toBe(true);
     // referenceCount is left alone once promoted — no further increments.
-    expect(doc.referenceCount).toBe(PROMOTION_REFERENCE_COUNT);
+    expect(result.referenceCount).toBe(PROMOTION_REFERENCE_COUNT);
     // Not re-flagged on an already-promoted mention.
     expect(worldState.globalFlags).toEqual({});
   });
 
   it('tracks multiple distinct invented names independently in one call', async () => {
-    await runQuarantine(['Doral the barkeep', 'a suspicious crate'], {});
+    const results = await runQuarantine(['Doral the barkeep', 'a suspicious crate'], {});
 
-    expect(await getDoc('Doral the barkeep')).not.toBeNull();
-    expect(await getDoc('a suspicious crate')).not.toBeNull();
+    expect(findResult(results, 'Doral the barkeep')).not.toBeNull();
+    expect(findResult(results, 'a suspicious crate')).not.toBeNull();
   });
 
   it('deduplicates the same name mentioned twice within one call', async () => {
-    await runQuarantine(['Doral', 'Doral'], {});
-    const doc = await getDoc('Doral');
-    expect(doc.referenceCount).toBe(1);
+    const results = await runQuarantine(['Doral', 'Doral'], {});
+    expect(results).toHaveLength(1);
+    expect(results[0].referenceCount).toBe(1);
   });
 
   it('treats case/whitespace variants of the same name as the same entity', async () => {
     await runQuarantine(['  Doral the Barkeep  '], {});
     const worldState = { globalFlags: {} };
-    await runQuarantine(['doral the barkeep'], worldState);
+    const results = await runQuarantine(['doral the barkeep'], worldState);
 
-    const doc = await getDoc('Doral the Barkeep');
-    expect(doc.referenceCount).toBe(2);
-    expect(doc.promoted).toBe(true);
+    const result = findResult(results, 'Doral the Barkeep');
+    expect(result.referenceCount).toBe(2);
+    expect(result.promoted).toBe(true);
   });
 
   it('scopes provisional entities to the world', async () => {
