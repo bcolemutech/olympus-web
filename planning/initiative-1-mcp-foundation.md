@@ -27,7 +27,7 @@ The Loom as it exists today is left untouched. Initiatives 2 and 3 are separate 
 MCP can be integrated in two directions. **This initiative builds only one of them, end to end.**
 
 - **Inbound (this initiative):** Olympus _is_ an MCP server. A human talks to _their own_ Claude client — including the **iOS Claude app** — and Claude reaches into Olympus to read and write via MCP tools and resources. The thinking happens in the user's Claude; **Olympus runs no LLM in this path and incurs no model cost.**
-- **Outbound (explicitly out of scope):** Olympus calling the Anthropic API with tools to drive its own features. That is Initiative 3's concern (swapping Gemini for Claude in the game loop) and is deliberately deferred. The tool definitions built here are designed so an outbound consumer _could_ reuse them later, but no outbound code is written now.
+- **Outbound (out of scope for the whole program):** Olympus calling a hosted LLM API to drive its own features. There is no current use case, so no outbound code is written anywhere in this three-initiative program. **All three initiatives are inbound-only** — Initiative 3 is Claude-as-narrator inside the Claude app, with Olympus as host and game engine (see §13), not Olympus calling out. If an internal LLM need ever arises, it would use **Gemini** (already proven in Olympus), never an outbound Anthropic call.
 
 **Consequence:** because iOS is a required target from day one, and the iOS/claude.ai custom-connector path only speaks **OAuth 2.1**, the OAuth authorization server is core to Initiative 1 — not a later "walk" step. There is no personal-access-token product path; a static bearer token exists only as a local dev/testing shim for MCP Inspector.
 
@@ -45,7 +45,7 @@ MCP can be integrated in two directions. **This initiative builds only one of th
 
 **Non-Goals (for now)**
 
-- Any outbound Anthropic API usage (Initiative 3).
+- Any outbound LLM API usage (not in this program; a future internal LLM need would use Gemini).
 - Any LLM running inside an Olympus app (the whole point is the external client).
 - Cartographer / Loom domain tools (later initiatives; only their _pattern_ is proven here).
 - MCP resources/prompts beyond the minimum needed to prove the model (rich resource catalogs come with real apps).
@@ -254,11 +254,11 @@ If that holds, the seam is proven and Cartographer (Initiative 2) and the game s
 
 ### Still open
 
-- **Intra-app scopes (read vs. write):** seam now, design later — do any Initiative 2/3 needs pull this forward?
+- **Intra-app scopes (read vs. write):** one scope per app for the MVP (connector = app); a `requiredScope` field per tool is a purely additive change behind the §8 seam. Recommendation is to defer. The likely early pull is **Cartographer** (Initiative 2): read canon freely, gate canon writes behind explicit consent. Decide when we design Cartographer, not now.
 
 ---
 
 ## 13. Handoff to Later Initiatives
 
 - **Initiative 2 (Cartographer):** a new app module registered through §8, mounted at `/mcp/cartographer`; its tools author canon. No new plumbing.
-- **Initiative 3 (game system):** reuses the _same tool definitions_ as an **outbound** consumer — a Cloud Function calling the Anthropic API with those tools — to run the game loop with Claude instead of Gemini. Initiative 1's registry is written so a tool module can be consumed either inbound (here) or outbound (there).
+- **Initiative 3 (game system):** also **inbound**. Claude, inside the user's Claude app, is the **narrator and intent layer**; Olympus is the **host and game engine** — rules, server dice, authoritative world/character state, and canon — exposed through the Initiative 1 MCP layer as tools (submit action, query state), MCP prompts (start/continue an adventure), and resources (current scene, character sheet). Olympus adjudicates and disposes; Claude narrates the fixed result. This carries the Loom's "the model proposes, the server disposes" pipeline into MCP without Olympus running any LLM. No new plumbing beyond richer tools/prompts/resources registered through §8.
