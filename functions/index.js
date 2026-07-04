@@ -11,6 +11,11 @@ const { makeSave } = require('./loom-models');
 
 initializeApp();
 
+// ── Inbound MCP (Initiative 1) ─────────────────────────
+// Streamable HTTP MCP server + OAuth discovery, served on the primary origin
+// via Hosting rewrites. See planning/initiative-1-mcp-foundation.md.
+exports.mcpServer = require('./mcp').mcpServer;
+
 // Reused across invitations to avoid per-call overhead.
 const googleAuth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/cloud-platform'],

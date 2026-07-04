@@ -36,6 +36,11 @@
       }
     ],
     "rewrites": [
+      { "source": "/mcp", "function": "mcpServer" },
+      { "source": "/mcp/**", "function": "mcpServer" },
+      { "source": "/.well-known/oauth-authorization-server", "function": "mcpServer" },
+      { "source": "/.well-known/oauth-protected-resource", "function": "mcpServer" },
+      { "source": "/.well-known/oauth-protected-resource/**", "function": "mcpServer" },
       {
         "source": "**",
         "destination": "/index.html"

@@ -1,0 +1,78 @@
+'use strict';
+
+const { onRequest } = require('firebase-functions/v2/https');
+const { handleMcpRequest } = require('./transport');
+const { buildHostServer } = require('./host');
+const { checkDevAuth } = require('./auth');
+const {
+  authorizationServerMetadata,
+  protectedResourceMetadata,
+  WELL_KNOWN_AS,
+  WELL_KNOWN_PR_PREFIX,
+} = require('./discovery');
+const { HOST_RESOURCE_PATH } = require('./config');
+
+// CORS for browser-based MCP clients (e.g. the claude.ai web connector). The
+// MCP session and protocol-version headers must be allowed on requests and
+// exposed on responses. Non-browser clients (iOS, desktop, Inspector proxy)
+// ignore these but they are harmless.
+function applyCors(req, res) {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Vary', 'Origin');
+  }
+  res.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.set(
+    'Access-Control-Allow-Headers',
+    'Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID'
+  );
+  res.set('Access-Control-Expose-Headers', 'Mcp-Session-Id, WWW-Authenticate');
+}
+
+// Dispatches a request routed here by Hosting rewrites (/mcp/**,
+// /.well-known/**). Exported for local testing; the deployed entry point is the
+// `mcpServer` function below.
+async function route(req, res) {
+  applyCors(req, res);
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+
+  const path = req.path || '/';
+
+  // Discovery documents (RFC 8414 / RFC 9728) — unauthenticated by spec.
+  if (path === WELL_KNOWN_AS) {
+    authorizationServerMetadata(req, res);
+    return;
+  }
+  if (path === WELL_KNOWN_PR_PREFIX || path.startsWith(`${WELL_KNOWN_PR_PREFIX}/`)) {
+    protectedResourceMetadata(req, res);
+    return;
+  }
+
+  // MCP transport. For the 1a spike this is the host diagnostic endpoint only;
+  // '/' covers hitting the function directly on the emulator (no Hosting
+  // rewrite in front). Per-app mounts (/mcp/<appId>) arrive in phase 1e.
+  if (path === HOST_RESOURCE_PATH || path === '/' || path === '') {
+    if (!checkDevAuth(req, res)) return;
+    await handleMcpRequest(req, res, buildHostServer);
+    return;
+  }
+
+  res.status(404).json({ error: 'not_found', message: 'No MCP resource at this path.' });
+}
+
+const mcpServer = onRequest({ region: 'us-central1', cors: false }, async (req, res) => {
+  try {
+    await route(req, res);
+  } catch (err) {
+    console.error('mcpServer error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'internal', message: 'MCP server error.' });
+    }
+  }
+});
+
+module.exports = { mcpServer, route };
