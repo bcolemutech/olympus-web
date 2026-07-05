@@ -26,7 +26,7 @@ const { verifyAccessToken } = require('../functions/mcp/oauth/tokens');
 const { base64UrlSha256 } = require('../functions/mcp/oauth/pkce');
 const { renderConsentPage } = require('../functions/mcp/oauth/consent-page');
 
-const CANONICAL = 'https://olympus-dfa00.web.app';
+const CANONICAL = 'https://bcoletech.com';
 const APP = 'scriptorium';
 const AUD = `${CANONICAL}/mcp/${APP}`;
 const REDIRECT = 'https://claude.ai/api/mcp/auth_callback';

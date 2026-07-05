@@ -10,7 +10,7 @@
 // whose RFC 8707 audience points at their own host and publish discovery docs
 // pointing at it — defeating the cross-app confinement audience binding exists
 // to provide. Override via OLYMPUS_ORIGIN for a different canonical domain.
-const PRIMARY_ORIGIN = process.env.OLYMPUS_ORIGIN || 'https://olympus-dfa00.web.app';
+const PRIMARY_ORIGIN = process.env.OLYMPUS_ORIGIN || 'https://bcoletech.com';
 
 // The host-level diagnostic MCP endpoint used by the 1a transport spike.
 // Per-app resource servers mount at /mcp/<appId> later (phases 1e–1f).
