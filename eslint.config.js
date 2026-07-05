@@ -12,7 +12,9 @@ export default [
         __filename: "readonly",
         console: "readonly",
         process: "readonly",
-        fetch: "readonly"
+        fetch: "readonly",
+        Buffer: "readonly",
+        URL: "readonly"
       }
     },
     rules: {
