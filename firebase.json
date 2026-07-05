@@ -38,6 +38,8 @@
     "rewrites": [
       { "source": "/mcp", "function": "mcpServer" },
       { "source": "/mcp/**", "function": "mcpServer" },
+      { "source": "/authorize", "function": "mcpServer" },
+      { "source": "/token", "function": "mcpServer" },
       { "source": "/.well-known/oauth-authorization-server", "function": "mcpServer" },
       { "source": "/.well-known/oauth-protected-resource", "function": "mcpServer" },
       { "source": "/.well-known/oauth-protected-resource/**", "function": "mcpServer" },

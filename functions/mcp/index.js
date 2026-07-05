@@ -11,6 +11,32 @@ const {
   WELL_KNOWN_PR_PREFIX,
 } = require('./discovery');
 const { HOST_RESOURCE_PATH } = require('./config');
+const { MCP_JWT_SECRET } = require('./oauth/config');
+
+// OAuth authorization-server handlers (/authorize, /token). Built lazily on
+// first use so Firebase Admin is initialized (by functions/index.js) first, and
+// cached across warm invocations.
+let _oauth;
+function oauthHandlers() {
+  if (!_oauth) {
+    const { getFirestore } = require('firebase-admin/firestore');
+    const { getAuth } = require('firebase-admin/auth');
+    const { createFirestoreStore } = require('./oauth/store');
+    const { createAuthorizeHandler } = require('./oauth/authorize');
+    const { createTokenHandler } = require('./oauth/token');
+
+    const store = createFirestoreStore(getFirestore());
+    const verifyIdToken = async (idToken) => {
+      const decoded = await getAuth().verifyIdToken(idToken);
+      return { uid: decoded.uid, sub: decoded.sub, apps: decoded.apps };
+    };
+    _oauth = {
+      authorize: createAuthorizeHandler({ store, verifyIdToken }),
+      token: createTokenHandler({ store }),
+    };
+  }
+  return _oauth;
+}
 
 // CORS for browser-based MCP clients (e.g. the claude.ai web connector). The
 // MCP session and protocol-version headers must be allowed on requests and
@@ -52,6 +78,16 @@ async function route(req, res) {
     return;
   }
 
+  // OAuth 2.1 authorization server (phase 1c). /register + /revoke land in 1d/1h.
+  if (path === '/authorize') {
+    await oauthHandlers().authorize(req, res);
+    return;
+  }
+  if (path === '/token') {
+    await oauthHandlers().token(req, res);
+    return;
+  }
+
   // MCP transport. For the 1a spike this is the host diagnostic endpoint only;
   // '/' covers hitting the function directly on the emulator (no Hosting
   // rewrite in front). Per-app mounts (/mcp/<appId>) arrive in phase 1e.
@@ -64,15 +100,18 @@ async function route(req, res) {
   res.status(404).json({ error: 'not_found', message: 'No MCP resource at this path.' });
 }
 
-const mcpServer = onRequest({ region: 'us-central1', cors: false }, async (req, res) => {
-  try {
-    await route(req, res);
-  } catch (err) {
-    console.error('mcpServer error:', err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'internal', message: 'MCP server error.' });
+const mcpServer = onRequest(
+  { region: 'us-central1', cors: false, secrets: [MCP_JWT_SECRET] },
+  async (req, res) => {
+    try {
+      await route(req, res);
+    } catch (err) {
+      console.error('mcpServer error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'internal', message: 'MCP server error.' });
+      }
     }
   }
-});
+);
 
 module.exports = { mcpServer, route };
