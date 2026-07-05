@@ -9,13 +9,33 @@ const { escapeHtml } = require('./respond');
 // original OAuth parameters back to /authorize; the server verifies the token,
 // confirms app entitlement, and issues the authorization code.
 //
-// `oauthParams` are echoed back on approval; every reflected value is
-// HTML-escaped and re-validated server-side on POST (the page is never trusted).
-function renderConsentPage({ appId, appName, clientName, redirectUri, oauthParams }) {
+// `oauthParams` are echoed back on approval and re-validated server-side on
+// POST (the page is never trusted). They carry attacker-controllable values
+// (state, resource), so they are emitted inside a <script type="application/
+// json"> block and read with JSON.parse — never interpolated into executable
+// JS. Only display strings (appName, clientName) go into HTML text, where
+// HTML-escaping is the correct transform.
+function jsonForScriptBlock(value) {
+  // Prevent the JSON text from terminating the <script> element or being
+  // reinterpreted as JS: escape '<', '>', '&', and the JS line separators
+  // U+2028/U+2029.
+  return JSON.stringify(value).replace(
+    /[<>&\u2028\u2029]/g,
+    (c) =>
+      ({
+        '<': '\\u003c',
+        '>': '\\u003e',
+        '&': '\\u0026',
+        '\u2028': '\\u2028',
+        '\u2029': '\\u2029',
+      })[c]
+  );
+}
+
+function renderConsentPage({ appId, appName, clientName, oauthParams }) {
   const safeAppName = escapeHtml(appName || appId);
   const safeClientName = escapeHtml(clientName || 'an MCP client');
-  const paramsJson = JSON.stringify(oauthParams).replace(/</g, '\\u003c');
-  const safeRedirect = escapeHtml(redirectUri);
+  const paramsJson = jsonForScriptBlock(oauthParams);
 
   return `<!doctype html>
 <html lang="en">
@@ -102,9 +122,10 @@ function renderConsentPage({ appId, appName, clientName, redirectUri, oauthParam
   <div class="error hidden" id="error" role="alert"></div>
 </div>
 
+<script type="application/json" id="oauth-params">${paramsJson}</script>
 <script>
-  var OAUTH = JSON.parse('${paramsJson}');
-  var REDIRECT_URI = '${safeRedirect}';
+  var OAUTH = JSON.parse(document.getElementById('oauth-params').textContent);
+  var REDIRECT_URI = OAUTH.redirect_uri;
 
   document.addEventListener('DOMContentLoaded', function () {
     var signin = document.getElementById('signin');

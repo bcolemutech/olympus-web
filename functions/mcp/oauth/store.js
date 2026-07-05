@@ -1,6 +1,18 @@
 'use strict';
 
+const { Timestamp } = require('firebase-admin/firestore');
 const { COLLECTIONS } = require('./config');
+
+// Adds a Firestore Timestamp mirror of expiresAtMs so a Firestore TTL policy
+// (configured on the `expireAt` field of mcp_oauth_codes / mcp_oauth_tokens)
+// can auto-delete expired docs — abandoned auth codes and revoked/expired
+// refresh tokens otherwise accumulate unbounded. Revoked-but-unexpired tokens
+// are retained until natural expiry so reuse detection still works.
+function withExpireAt(record) {
+  return typeof record.expiresAtMs === 'number'
+    ? { ...record, expireAt: Timestamp.fromMillis(record.expiresAtMs) }
+    : record;
+}
 
 // Persistence for the OAuth authorization server. The endpoint logic depends
 // only on this interface, so it can be exercised with an in-memory store in
@@ -45,7 +57,7 @@ function createFirestoreStore(db) {
     },
 
     async putCode(record) {
-      await col(COLLECTIONS.codes).doc(record.code).set(record);
+      await col(COLLECTIONS.codes).doc(record.code).set(withExpireAt(record));
     },
 
     async consumeCode(code) {
@@ -59,7 +71,7 @@ function createFirestoreStore(db) {
     },
 
     async putRefreshToken(record) {
-      await col(COLLECTIONS.tokens).doc(record.tokenHash).set(record);
+      await col(COLLECTIONS.tokens).doc(record.tokenHash).set(withExpireAt(record));
     },
 
     async getRefreshToken(tokenHash) {
@@ -73,21 +85,24 @@ function createFirestoreStore(db) {
       return db.runTransaction(async (tx) => {
         const snap = await tx.get(oldRef);
         const decision = evaluateRotation(snap.exists ? snap.data() : null, nowMs);
-        if (!decision.ok) {
-          // Reuse of a rotated token signals possible theft — revoke it hard.
-          if (decision.reason === 'reuse') {
-            tx.update(oldRef, { revoked: true });
-          }
-          return decision;
-        }
+        if (!decision.ok) return decision; // caller handles reuse (family revocation)
         tx.update(oldRef, { revoked: true, rotatedTo: newRecord.tokenHash });
-        tx.set(newRef, newRecord);
+        tx.set(newRef, withExpireAt(newRecord));
         return decision;
       });
     },
 
     async revokeRefreshToken(tokenHash) {
       await col(COLLECTIONS.tokens).doc(tokenHash).set({ revoked: true }, { merge: true });
+    },
+
+    // Revokes every refresh token in a rotation family (theft response).
+    async revokeFamily(familyId) {
+      const snap = await col(COLLECTIONS.tokens).where('familyId', '==', familyId).get();
+      if (snap.empty) return;
+      const batch = db.batch();
+      snap.docs.forEach((doc) => batch.update(doc.ref, { revoked: true }));
+      await batch.commit();
     },
   };
 }
@@ -121,12 +136,7 @@ function createInMemoryStore() {
     },
     async rotateRefreshToken(oldHash, newRecord, nowMs = Date.now()) {
       const decision = evaluateRotation(tokens.get(oldHash) || null, nowMs);
-      if (!decision.ok) {
-        if (decision.reason === 'reuse') {
-          tokens.set(oldHash, { ...tokens.get(oldHash), revoked: true });
-        }
-        return decision;
-      }
+      if (!decision.ok) return decision; // caller handles reuse (family revocation)
       tokens.set(oldHash, { ...decision.old, revoked: true, rotatedTo: newRecord.tokenHash });
       tokens.set(newRecord.tokenHash, newRecord);
       return decision;
@@ -134,6 +144,11 @@ function createInMemoryStore() {
     async revokeRefreshToken(tokenHash) {
       const existing = tokens.get(tokenHash);
       if (existing) tokens.set(tokenHash, { ...existing, revoked: true });
+    },
+    async revokeFamily(familyId) {
+      for (const [hash, record] of tokens) {
+        if (record.familyId === familyId) tokens.set(hash, { ...record, revoked: true });
+      }
     },
     // test-only introspection
     _debug: { clients, codes, tokens },

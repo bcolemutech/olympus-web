@@ -1,6 +1,6 @@
 'use strict';
 
-const { isEmulator, originFromRequest } = require('./config');
+const { isEmulator, resolveOrigin } = require('./config');
 
 // TEMPORARY dev/testing shim — NOT a product auth path.
 //
@@ -37,7 +37,7 @@ function bearerFrom(req) {
 }
 
 function denyUnauthorized(req, res, message) {
-  const origin = originFromRequest(req);
+  const origin = resolveOrigin(req);
   // RFC 9728: point the client at this resource's protected-resource metadata.
   const resourceMetadata = `${origin}/.well-known/oauth-protected-resource${req.path}`;
   res.set('WWW-Authenticate', `Bearer resource_metadata="${resourceMetadata}"`);

@@ -1,6 +1,6 @@
 'use strict';
 
-const { originFromRequest } = require('../config');
+const { resolveOrigin } = require('../config');
 const { renderConsentPage } = require('./consent-page');
 const { redirectError, oauthError, escapeHtml } = require('./respond');
 const { generateAuthCode } = require('./tokens');
@@ -134,12 +134,15 @@ function createAuthorizeHandler(deps) {
 
     res.set('Cache-Control', 'no-store');
     res.set('Content-Type', 'text/html; charset=utf-8');
+    // Anti-clickjacking: the consent screen is a security-decision surface, so
+    // it must never be framed and bait-overlaid to trick an approval click.
+    res.set('X-Frame-Options', 'DENY');
+    res.set('Content-Security-Policy', "frame-ancestors 'none'");
     res.status(200).send(
       renderConsentPage({
         appId: scopeResult.appId,
         appName: appNameFromId(scopeResult.appId),
         clientName: client.clientName,
-        redirectUri: params.redirectUri,
         oauthParams: echoParams(params),
       })
     );
@@ -171,7 +174,8 @@ function createAuthorizeHandler(deps) {
 
     // Resource indicator (RFC 8707): if supplied it must match this app's
     // endpoint; otherwise we derive it. The token's audience is bound to it.
-    const origin = originFromRequest(req);
+    // origin is the pinned canonical origin in production (never the Host header).
+    const origin = resolveOrigin(req);
     const audience = `${origin}/mcp/${appId}`;
     if (params.resource !== undefined && params.resource !== audience) {
       return oauthError(res, 'invalid_target', 'resource does not match the requested app.');
@@ -206,6 +210,7 @@ function createAuthorizeHandler(deps) {
       appId,
       scope: scopeForAppId(appId),
       audience,
+      issuer: origin,
       codeChallenge: params.codeChallenge,
       codeChallengeMethod: CODE_CHALLENGE_METHOD,
       createdAtMs: nowMs,

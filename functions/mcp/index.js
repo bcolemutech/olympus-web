@@ -30,9 +30,16 @@ function oauthHandlers() {
       const decoded = await getAuth().verifyIdToken(idToken);
       return { uid: decoded.uid, sub: decoded.sub, apps: decoded.apps };
     };
+    // Current app entitlements for a uid, re-checked on refresh so a revoked
+    // claim stops working within the access-token TTL.
+    const getEntitlements = async (uid) => {
+      const user = await getAuth().getUser(uid);
+      const apps = user.customClaims && user.customClaims.apps;
+      return Array.isArray(apps) ? apps : [];
+    };
     _oauth = {
       authorize: createAuthorizeHandler({ store, verifyIdToken }),
-      token: createTokenHandler({ store }),
+      token: createTokenHandler({ store, getEntitlements }),
     };
   }
   return _oauth;

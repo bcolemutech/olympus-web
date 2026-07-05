@@ -1,6 +1,6 @@
 'use strict';
 
-const { originFromRequest, KNOWN_RESOURCE_PATHS } = require('./config');
+const { resolveOrigin, KNOWN_RESOURCE_PATHS } = require('./config');
 
 const WELL_KNOWN_AS = '/.well-known/oauth-authorization-server';
 const WELL_KNOWN_PR_PREFIX = '/.well-known/oauth-protected-resource';
@@ -13,7 +13,7 @@ const WELL_KNOWN_PR_PREFIX = '/.well-known/oauth-protected-resource';
 // 7591) in 1d. PKCE with S256 is mandatory and public clients (auth method
 // "none") are the only supported client type (design §6, §10).
 function authorizationServerMetadata(req, res) {
-  const origin = originFromRequest(req);
+  const origin = resolveOrigin(req);
   res.set('Cache-Control', 'public, max-age=3600');
   res.json({
     issuer: origin,
@@ -42,7 +42,7 @@ function protectedResourceMetadata(req, res) {
     res.status(404).json({ error: 'not_found', message: 'Unknown MCP resource.' });
     return;
   }
-  const origin = originFromRequest(req);
+  const origin = resolveOrigin(req);
   res.set('Cache-Control', 'public, max-age=3600');
   res.json({
     resource: `${origin}${resourcePath}`,

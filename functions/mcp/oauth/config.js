@@ -22,11 +22,6 @@ function getSigningSecret() {
   throw new Error('MCP_JWT_SECRET is not configured.');
 }
 
-// Token issuer identifier for JWTs. Access tokens are self-validating: the
-// resource server (phase 1e) verifies signature + audience locally, avoiding a
-// datastore read on the hot path.
-const TOKEN_ISSUER = 'https://olympus-dfa00.web.app';
-
 const ACCESS_TOKEN_TTL_SECONDS = 3600; // 1 hour — short-lived; clients refresh
 const AUTH_CODE_TTL_SECONDS = 300; // 5 minutes, single-use (OAuth 2.1 guidance)
 const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, rotated on use
@@ -52,7 +47,6 @@ function scopeForAppId(appId) {
 module.exports = {
   MCP_JWT_SECRET,
   getSigningSecret,
-  TOKEN_ISSUER,
   ACCESS_TOKEN_TTL_SECONDS,
   AUTH_CODE_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,

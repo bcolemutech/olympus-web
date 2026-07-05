@@ -2,7 +2,12 @@
 
 const { oauthError } = require('./respond');
 const { verifyPkce } = require('./pkce');
-const { signAccessToken, generateRefreshToken, hashRefreshToken } = require('./tokens');
+const {
+  signAccessToken,
+  generateRefreshToken,
+  hashRefreshToken,
+  generateFamilyId,
+} = require('./tokens');
 const { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } = require('./config');
 
 function tokenResponse(res, { accessToken, refreshToken, scope }) {
@@ -18,11 +23,20 @@ function tokenResponse(res, { accessToken, refreshToken, scope }) {
 }
 
 function createTokenHandler(deps) {
-  const { store, now = () => Date.now() } = deps;
+  // getEntitlements(uid) -> current apps[] claim, used to re-check access on
+  // refresh so a revoked app claim stops working within the access-token TTL
+  // rather than lingering for the full refresh lifetime.
+  const { store, getEntitlements, now = () => Date.now() } = deps;
 
   // Issues a fresh access token + refresh token for a validated identity/app.
-  async function issueTokens(res, { uid, clientId, appId, scope, audience }, nowMs) {
-    const accessToken = signAccessToken({ uid, audience, scope });
+  // `familyId` groups a refresh token with its rotation successors for
+  // reuse-based family revocation.
+  async function issueTokens(
+    res,
+    { uid, clientId, appId, scope, audience, issuer, familyId },
+    nowMs
+  ) {
+    const accessToken = signAccessToken({ uid, audience, scope, issuer });
     const refreshToken = generateRefreshToken();
     await store.putRefreshToken({
       tokenHash: hashRefreshToken(refreshToken),
@@ -31,6 +45,8 @@ function createTokenHandler(deps) {
       appId,
       scope,
       audience,
+      issuer,
+      familyId,
       revoked: false,
       createdAtMs: nowMs,
       expiresAtMs: nowMs + REFRESH_TOKEN_TTL_SECONDS * 1000,
@@ -75,6 +91,8 @@ function createTokenHandler(deps) {
         appId: record.appId,
         scope: record.scope,
         audience: record.audience,
+        issuer: record.issuer,
+        familyId: generateFamilyId(), // new family for this authorization
       },
       now()
     );
@@ -95,6 +113,22 @@ function createTokenHandler(deps) {
       return oauthError(res, 'invalid_grant', 'Invalid refresh token.');
     }
 
+    // Re-check entitlement against the user's *current* claims. If the app was
+    // revoked since consent, stop issuing tokens (and revoke the family so the
+    // refresh chain is dead), rather than honoring it for the refresh lifetime.
+    if (getEntitlements) {
+      let apps;
+      try {
+        apps = await getEntitlements(old.uid);
+      } catch {
+        return oauthError(res, 'invalid_grant', 'Unable to verify access.');
+      }
+      if (!Array.isArray(apps) || !apps.includes(old.appId)) {
+        if (old.familyId) await store.revokeFamily(old.familyId);
+        return oauthError(res, 'invalid_grant', 'Access to this app has been revoked.');
+      }
+    }
+
     const nowMs = now();
     const newRefreshToken = generateRefreshToken();
     const newRecord = {
@@ -104,6 +138,8 @@ function createTokenHandler(deps) {
       appId: old.appId,
       scope: old.scope,
       audience: old.audience,
+      issuer: old.issuer,
+      familyId: old.familyId,
       revoked: false,
       createdAtMs: nowMs,
       expiresAtMs: nowMs + REFRESH_TOKEN_TTL_SECONDS * 1000,
@@ -112,10 +148,20 @@ function createTokenHandler(deps) {
 
     const result = await store.rotateRefreshToken(oldHash, newRecord, nowMs);
     if (!result.ok) {
+      // Reuse of an already-rotated token signals theft — kill the whole family
+      // so the attacker's live successor token is revoked too.
+      if (result.reason === 'reuse' && old.familyId) {
+        await store.revokeFamily(old.familyId);
+      }
       return oauthError(res, 'invalid_grant', 'Refresh token is no longer valid.');
     }
 
-    const accessToken = signAccessToken({ uid: old.uid, audience: old.audience, scope: old.scope });
+    const accessToken = signAccessToken({
+      uid: old.uid,
+      audience: old.audience,
+      scope: old.scope,
+      issuer: old.issuer,
+    });
     return tokenResponse(res, { accessToken, refreshToken: newRefreshToken, scope: old.scope });
   }
 
