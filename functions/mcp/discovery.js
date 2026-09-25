@@ -1,6 +1,7 @@
 'use strict';
 
-const { resolveOrigin, KNOWN_RESOURCE_PATHS } = require('./config');
+const { resolveOrigin, HOST_RESOURCE_PATH, APP_RESOURCE_PATH } = require('./config');
+const { registry: defaultRegistry } = require('./registry');
 
 const WELL_KNOWN_AS = '/.well-known/oauth-authorization-server';
 const WELL_KNOWN_PR_PREFIX = '/.well-known/oauth-protected-resource';
@@ -30,15 +31,21 @@ function authorizationServerMetadata(req, res) {
 
 // RFC 9728 — OAuth 2.0 Protected Resource Metadata (path-based).
 //
-// The protected resource is the MCP endpoint URL itself (e.g. .../mcp, and
-// later .../mcp/<appId>). The doc names the shared authorization server and the
+// The protected resource is the MCP endpoint URL itself (.../mcp, or
+// .../mcp/<appId>). The doc names the shared authorization server and the
 // scope required for that resource. It is served only for resources that
-// actually exist (KNOWN_RESOURCE_PATHS) so we never advertise a phantom
-// connector; per-app resources light up automatically as they register
-// (design §5.3).
-function protectedResourceMetadata(req, res) {
+// actually exist — the host endpoint plus every app in the registry — so we
+// never advertise a phantom connector; per-app resources light up
+// automatically as they register (design §5.3).
+function isKnownResource(resourcePath, registry) {
+  if (resourcePath === HOST_RESOURCE_PATH) return true;
+  const match = APP_RESOURCE_PATH.exec(resourcePath);
+  return Boolean(match) && registry.has(match[1]);
+}
+
+function protectedResourceMetadata(req, res, registry = defaultRegistry) {
   const resourcePath = req.path.slice(WELL_KNOWN_PR_PREFIX.length) || '/';
-  if (!KNOWN_RESOURCE_PATHS.has(resourcePath)) {
+  if (!isKnownResource(resourcePath, registry)) {
     res.status(404).json({ error: 'not_found', message: 'Unknown MCP resource.' });
     return;
   }

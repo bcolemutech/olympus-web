@@ -37,7 +37,7 @@ jobs:
           java-version: 21
       - uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "22" # match the Functions runtime (firebase.json nodejs22)
       - uses: w9jds/setup-firebase@v1.0.0
         with:
           gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}

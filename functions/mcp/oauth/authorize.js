@@ -91,7 +91,13 @@ async function validateClientAndRedirect(store, params, res) {
 }
 
 function createAuthorizeHandler(deps) {
-  const { store, verifyIdToken, now = () => Date.now() } = deps;
+  // isKnownApp(appId) -> whether an MCP connector is registered for the app.
+  // Required (no permissive default): tokens must never be minted for a
+  // resource that does not exist (RFC 8707 resource binding, phase 1e).
+  const { store, verifyIdToken, isKnownApp, now = () => Date.now() } = deps;
+  if (typeof isKnownApp !== 'function') {
+    throw new Error('createAuthorizeHandler requires isKnownApp.');
+  }
 
   // GET /authorize — render the consent screen after validating the request.
   async function handleGet(req, res) {
@@ -128,6 +134,15 @@ function createAuthorizeHandler(deps) {
         params.redirectUri,
         'invalid_scope',
         scopeResult.error,
+        params.state
+      );
+    }
+    if (!isKnownApp(scopeResult.appId)) {
+      return redirectError(
+        res,
+        params.redirectUri,
+        'invalid_scope',
+        `No MCP connector exists for ${scopeResult.appId}.`,
         params.state
       );
     }
@@ -172,6 +187,9 @@ function createAuthorizeHandler(deps) {
     const scopeResult = resolveAppScope(params.scope);
     if (scopeResult.error) return oauthError(res, 'invalid_scope', scopeResult.error);
     const appId = scopeResult.appId;
+    if (!isKnownApp(appId)) {
+      return oauthError(res, 'invalid_scope', `No MCP connector exists for ${appId}.`);
+    }
 
     // Resource indicator (RFC 8707): if supplied it must match this app's
     // endpoint; otherwise we derive it. The token's audience is bound to it.

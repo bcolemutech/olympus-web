@@ -79,7 +79,9 @@ function setup() {
   let clock = Date.now();
   const now = () => clock;
 
-  const authorize = createAuthorizeHandler({ store, verifyIdToken, now });
+  // Only scriptorium has a registered MCP connector in these tests.
+  const isKnownApp = (appId) => appId === APP;
+  const authorize = createAuthorizeHandler({ store, verifyIdToken, isKnownApp, now });
   const token = createTokenHandler({ store, getEntitlements, now });
   const register = createRegisterHandler({ store, now });
 
@@ -216,6 +218,36 @@ describe('authorize consent', () => {
     const url = new URL(res.body.redirect);
     expect(url.searchParams.get('code')).toBeTruthy();
     expect(url.searchParams.get('state')).toBe('xyz-state');
+  });
+});
+
+describe('resource binding at /authorize (phase 1e)', () => {
+  test('GET for an app with no MCP connector → redirect invalid_scope', async () => {
+    const { authorize } = setup();
+    const res = mockRes();
+    await authorize(
+      { method: 'GET', headers: HEADERS, query: { ...baseParams(), scope: 'mcp:symposium' } },
+      res
+    );
+    expect(res.statusCode).toBe(302);
+    const url = new URL(res.redirectedTo);
+    expect(url.searchParams.get('error')).toBe('invalid_scope');
+    expect(url.searchParams.get('state')).toBe('xyz-state');
+  });
+
+  test('POST for an app with no MCP connector → invalid_scope, no code minted', async () => {
+    const { authorize, store } = setup();
+    // uid-abc does hold the symposium claim; the missing connector alone blocks it.
+    const res = await approve(authorize, { scope: 'mcp:symposium' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('invalid_scope');
+    expect(store._debug.codes.size).toBe(0);
+  });
+
+  test('createAuthorizeHandler refuses to build without isKnownApp', () => {
+    expect(() =>
+      createAuthorizeHandler({ store: createInMemoryStore(), verifyIdToken: () => {} })
+    ).toThrow(/isKnownApp/);
   });
 });
 
