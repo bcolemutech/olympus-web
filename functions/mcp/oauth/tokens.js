@@ -15,10 +15,13 @@ const { getSigningSecret, ACCESS_TOKEN_TTL_SECONDS } = require('./config');
 // being replayed at app B, so the check must never be silently skippable by
 // omitting the argument.
 
-function signAccessToken({ uid, audience, scope, issuer, secret = getSigningSecret() }) {
+// `grantId` (claim `gid`) ties the token to its authorization so the resource
+// server can refuse it as soon as the grant is revoked (phase 1h).
+function signAccessToken({ uid, audience, scope, issuer, grantId, secret = getSigningSecret() }) {
   if (!audience) throw new Error('signAccessToken requires an audience.');
   if (!issuer) throw new Error('signAccessToken requires an issuer.');
-  return jwt.sign({ scope }, secret, {
+  if (!grantId) throw new Error('signAccessToken requires a grantId.');
+  return jwt.sign({ scope, gid: grantId }, secret, {
     algorithm: 'HS256',
     issuer,
     subject: uid,

@@ -35,7 +35,7 @@
         ]
       },
       {
-        "source": "/@(authorize|token|register|mcp)",
+        "source": "/@(authorize|token|register|revoke|mcp)",
         "headers": [
           { "key": "Cache-Control", "value": "no-store" }
         ]
@@ -53,6 +53,7 @@
       { "source": "/authorize", "function": "mcpServer" },
       { "source": "/token", "function": "mcpServer" },
       { "source": "/register", "function": "mcpServer" },
+      { "source": "/revoke", "function": "mcpServer" },
       { "source": "/.well-known/oauth-authorization-server", "function": "mcpServer" },
       { "source": "/.well-known/oauth-protected-resource", "function": "mcpServer" },
       { "source": "/.well-known/oauth-protected-resource/**", "function": "mcpServer" },

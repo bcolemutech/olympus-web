@@ -39,6 +39,7 @@ const { scriptoriumApp } = require('../functions/mcp/apps/scriptorium');
 const { createRegistry } = require('../functions/mcp/registry');
 const { handleAppRequest } = require('../functions/mcp/app-server');
 const { signAccessToken } = require('../functions/mcp/oauth/tokens');
+const { createInMemoryStore } = require('../functions/mcp/oauth/store');
 
 const adminApp = initializeApp(
   { projectId: 'demo-scriptorium-test' },
@@ -122,8 +123,19 @@ describe('MCP tools over the Firestore store', () => {
     registry.registerApp('scriptorium', scriptoriumApp({ store }));
     const app = express();
     app.use(express.json());
+    const oauthStore = createInMemoryStore();
+    oauthStore._debug.grants.set('grant-fs', {
+      grantId: 'grant-fs',
+      uid: 'uid-alice',
+      appId: 'scriptorium',
+      revoked: false,
+    });
     app.all('/mcp/:appId', (req, res) =>
-      handleAppRequest(req, res, { registry, appId: req.params.appId })
+      handleAppRequest(req, res, {
+        registry,
+        appId: req.params.appId,
+        getGrant: (grantId) => oauthStore.getGrant(grantId),
+      })
     );
     await new Promise((resolve) => {
       server = app.listen(0, '127.0.0.1', resolve);
@@ -133,6 +145,7 @@ describe('MCP tools over the Firestore store', () => {
       audience: 'https://bcoletech.com/mcp/scriptorium',
       scope: 'mcp:scriptorium',
       issuer: 'https://bcoletech.com',
+      grantId: 'grant-fs',
     });
     client = new Client({ name: 'scriptorium-fs-test', version: '0.0.0' });
     await client.connect(

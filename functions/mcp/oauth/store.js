@@ -23,6 +23,11 @@ function withExpireAt(record) {
 // Interface:
 //   getClient(clientId)                  -> client record | null
 //   putClient(record)                    -> void            (DCR, phase 1d)
+//   touchClient(clientId, expiresAtMs)   -> void            (extend client TTL)
+//   putGrant(record)                     -> void            (record.grantId is id)
+//   getGrant(grantId)                    -> grant | null
+//   touchGrant(grantId, nowMs, expiresAtMs) -> void         (on refresh)
+//   revokeGrant(grantId, reason, nowMs)  -> grant | null    (grant + its refresh family)
 //   putCode(record)                      -> void            (record.code is id)
 //   consumeCode(code)                    -> record | null   (atomic single-use)
 //   putRefreshToken(record)              -> void            (record.tokenHash is id)
@@ -53,7 +58,44 @@ function createFirestoreStore(db) {
     },
 
     async putClient(record) {
-      await col(COLLECTIONS.clients).doc(record.clientId).set(record);
+      await col(COLLECTIONS.clients).doc(record.clientId).set(withExpireAt(record));
+    },
+
+    async touchClient(clientId, expiresAtMs) {
+      await col(COLLECTIONS.clients)
+        .doc(clientId)
+        .set(withExpireAt({ expiresAtMs }), { merge: true });
+    },
+
+    async putGrant(record) {
+      await col(COLLECTIONS.grants).doc(record.grantId).set(withExpireAt(record));
+    },
+
+    async getGrant(grantId) {
+      const snap = await col(COLLECTIONS.grants).doc(grantId).get();
+      return snap.exists ? snap.data() : null;
+    },
+
+    async touchGrant(grantId, nowMs, expiresAtMs) {
+      await col(COLLECTIONS.grants)
+        .doc(grantId)
+        .set(withExpireAt({ lastUsedAtMs: nowMs, expiresAtMs }), { merge: true });
+    },
+
+    // Marks the grant revoked and kills its refresh-token family. Returns the
+    // grant as it was, or null if unknown. Idempotent.
+    async revokeGrant(grantId, reason, nowMs) {
+      const ref = col(COLLECTIONS.grants).doc(grantId);
+      const grant = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return null;
+        if (!snap.data().revoked) {
+          tx.update(ref, { revoked: true, revokedAtMs: nowMs, revokedReason: reason });
+        }
+        return snap.data();
+      });
+      await this.revokeFamily(grantId);
+      return grant;
     },
 
     async putCode(record) {
@@ -112,6 +154,7 @@ function createInMemoryStore() {
   const clients = new Map();
   const codes = new Map();
   const tokens = new Map();
+  const grants = new Map();
 
   return {
     async getClient(clientId) {
@@ -119,6 +162,28 @@ function createInMemoryStore() {
     },
     async putClient(record) {
       clients.set(record.clientId, record);
+    },
+    async touchClient(clientId, expiresAtMs) {
+      const existing = clients.get(clientId);
+      if (existing) clients.set(clientId, { ...existing, expiresAtMs });
+    },
+    async putGrant(record) {
+      grants.set(record.grantId, record);
+    },
+    async getGrant(grantId) {
+      return grants.get(grantId) || null;
+    },
+    async touchGrant(grantId, nowMs, expiresAtMs) {
+      const existing = grants.get(grantId);
+      if (existing) grants.set(grantId, { ...existing, lastUsedAtMs: nowMs, expiresAtMs });
+    },
+    async revokeGrant(grantId, reason, nowMs) {
+      const grant = grants.get(grantId) || null;
+      if (grant && !grant.revoked) {
+        grants.set(grantId, { ...grant, revoked: true, revokedAtMs: nowMs, revokedReason: reason });
+      }
+      await this.revokeFamily(grantId);
+      return grant;
     },
     async putCode(record) {
       codes.set(record.code, record);
@@ -151,7 +216,7 @@ function createInMemoryStore() {
       }
     },
     // test-only introspection
-    _debug: { clients, codes, tokens },
+    _debug: { clients, codes, tokens, grants },
   };
 }
 

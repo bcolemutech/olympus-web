@@ -30,9 +30,17 @@ const { createRegistry, ToolError } = require('../functions/mcp/registry');
 const { handleAppRequest } = require('../functions/mcp/app-server');
 const { protectedResourceMetadata } = require('../functions/mcp/discovery');
 const { signAccessToken } = require('../functions/mcp/oauth/tokens');
+const { createInMemoryStore } = require('../functions/mcp/oauth/store');
+const { createInMemoryAuditLog } = require('../functions/mcp/audit');
+const { createInMemoryRateLimiter } = require('../functions/mcp/rate-limit');
 
 const CANONICAL = 'https://bcoletech.com';
 const SECRET = process.env.MCP_JWT_SECRET;
+
+// Grants live in an in-memory OAuth store; the audit log and rate limiter are
+// swappable per test through `services`.
+const oauthStore = createInMemoryStore();
+const services = { audit: createInMemoryAuditLog(), rateLimiter: undefined };
 
 const registry = createRegistry();
 registry.registerApp('alpha', {
@@ -82,7 +90,13 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   app.all('/mcp/:appId', (req, res) =>
-    handleAppRequest(req, res, { registry, appId: req.params.appId })
+    handleAppRequest(req, res, {
+      registry,
+      appId: req.params.appId,
+      getGrant: (grantId) => oauthStore.getGrant(grantId),
+      audit: services.audit,
+      rateLimiter: services.rateLimiter,
+    })
   );
   app.get('/.well-known/oauth-protected-resource/*', (req, res) =>
     protectedResourceMetadata(req, res, registry)
@@ -95,12 +109,24 @@ beforeAll(async () => {
 
 afterAll(() => new Promise((resolve) => server.close(resolve)));
 
-function tokenFor(appId, { uid = 'uid-alice', scope = `mcp:${appId}` } = {}) {
+// Creates an active grant for (uid, appId) and signs a token referencing it.
+// Synchronous (seeds the in-memory map directly) so tokens can be minted in
+// test.each tables.
+let grantSeq = 0;
+function grantFor(appId, uid = 'uid-alice') {
+  grantSeq += 1;
+  const grantId = `grant${grantSeq}`;
+  oauthStore._debug.grants.set(grantId, { grantId, uid, appId, revoked: false });
+  return grantId;
+}
+
+function tokenFor(appId, { uid = 'uid-alice', scope = `mcp:${appId}`, grantId } = {}) {
   return signAccessToken({
     uid,
     audience: `${CANONICAL}/mcp/${appId}`,
     scope,
     issuer: CANONICAL,
+    grantId: grantId || grantFor(appId, uid),
   });
 }
 
@@ -255,6 +281,7 @@ describe('per-app MCP endpoint — token and access enforcement', () => {
         audience: 'https://olympus-dfa00.web.app/mcp/alpha',
         scope: 'mcp:alpha',
         issuer: CANONICAL,
+        grantId: grantFor('alpha'),
       }),
     ],
     ['not a JWT', 'opaque-garbage-token'],
@@ -391,5 +418,108 @@ describe('registry validation', () => {
     const r = createRegistry();
     r.registerApp('once', { tools: [tool] });
     expect(() => r.registerApp('once', { tools: [tool] })).toThrow(/already registered/);
+  });
+});
+
+describe('grant enforcement (phase 1h)', () => {
+  test('a token without a grant id is refused — the client must refresh', async () => {
+    const legacy = jwt.sign({ scope: 'mcp:alpha' }, SECRET, {
+      algorithm: 'HS256',
+      issuer: CANONICAL,
+      subject: 'uid-alice',
+      audience: `${CANONICAL}/mcp/alpha`,
+      expiresIn: 300,
+    });
+    const res = await rawInitialize('alpha', legacy);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('www-authenticate')).toMatch(/error="invalid_token"/);
+  });
+
+  test('revoking the grant refuses the very next call', async () => {
+    const grantId = grantFor('alpha');
+    const client = await connect('alpha', tokenFor('alpha', { grantId }));
+    expect((await client.listTools()).tools.length).toBeGreaterThan(0);
+
+    await oauthStore.revokeGrant(grantId, 'client_request', Date.now());
+
+    await expect(client.listTools()).rejects.toThrow();
+    const res = await rawInitialize('alpha', tokenFor('alpha', { grantId }));
+    expect(res.status).toBe(401);
+    expect(res.headers.get('www-authenticate')).toMatch(/revoked/);
+    await client.close().catch(() => {});
+  });
+
+  test.each([
+    ['another user', () => grantFor('alpha', 'uid-mallory')],
+    ['another app', () => grantFor('beta')],
+    ['no such grant', () => 'grant-does-not-exist'],
+  ])('a grant belonging to %s is refused', async (_label, makeGrant) => {
+    const res = await rawInitialize('alpha', tokenFor('alpha', { grantId: makeGrant() }));
+    expect(res.status).toBe(401);
+  });
+
+  test('handleAppRequest refuses to run without a grant lookup', async () => {
+    await expect(
+      handleAppRequest({ headers: {} }, {}, { registry, appId: 'alpha' })
+    ).rejects.toThrow(/getGrant/);
+  });
+});
+
+describe('tool calls: rate limiting and audit (phase 1h)', () => {
+  let client;
+  beforeEach(async () => {
+    services.audit = createInMemoryAuditLog();
+    client = await connect('alpha', tokenFor('alpha', { uid: 'uid-auditor' }));
+  });
+  afterEach(async () => {
+    services.rateLimiter = undefined;
+    await client.close();
+  });
+
+  test('every tool call is audited with its outcome, never its arguments', async () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await client.callTool({ name: 'echo', arguments: { text: 'private' } });
+    await client.callTool({ name: 'reject', arguments: {} });
+    await client.callTool({ name: 'boom', arguments: {} });
+    spy.mockRestore();
+
+    const calls = services.audit.events('tool_call');
+    expect(calls.map((c) => [c.tool, c.outcome])).toEqual([
+      ['echo', 'ok'],
+      ['reject', 'tool_error'],
+      ['boom', 'internal_error'],
+    ]);
+    for (const c of calls) {
+      expect(c).toMatchObject({ uid: 'uid-auditor', appId: 'alpha' });
+      expect(typeof c.durationMs).toBe('number');
+      expect(c.grantId).toMatch(/^grant/);
+    }
+    expect(JSON.stringify(services.audit.entries)).not.toMatch(/private/);
+  });
+
+  test('over-limit tool calls return a tool error the model can relay', async () => {
+    services.rateLimiter = createInMemoryRateLimiter({
+      limits: { tool_call: { limit: 2, windowMs: 60_000 } },
+    });
+    const results = [];
+    for (let i = 0; i < 3; i += 1) {
+      results.push(await client.callTool({ name: 'whoami', arguments: {} }));
+    }
+    expect(results.map((r) => Boolean(r.isError))).toEqual([false, false, true]);
+    expect(results[2].content[0].text).toMatch(/Rate limit reached\. Try again in \d+ seconds\./);
+    expect(services.audit.events('rate_limited')).toEqual([
+      expect.objectContaining({ bucket: 'tool_call', uid: 'uid-auditor', appId: 'alpha' }),
+    ]);
+  });
+
+  test('refused tokens are audited with a reason', async () => {
+    await rawInitialize('beta', tokenFor('alpha'));
+    await rawInitialize('alpha', tokenFor('alpha', { scope: 'mcp:beta' }));
+    await rawInitialize('alpha', tokenFor('alpha', { grantId: 'grant-does-not-exist' }));
+    expect(services.audit.events('access_rejected').map((e) => e.reason)).toEqual([
+      'invalid_token',
+      'insufficient_scope',
+      'grant_revoked',
+    ]);
   });
 });

@@ -26,10 +26,19 @@ const ACCESS_TOKEN_TTL_SECONDS = 3600; // 1 hour — short-lived; clients refres
 const AUTH_CODE_TTL_SECONDS = 300; // 5 minutes, single-use (OAuth 2.1 guidance)
 const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, rotated on use
 
+// A DCR registration that never completes an authorization expires after a
+// day; clients re-register freely, and Claude registers on every connect.
+// Clients that obtain tokens are kept alive for the refresh-token lifetime.
+const UNUSED_CLIENT_TTL_SECONDS = 60 * 60 * 24;
+
 const COLLECTIONS = {
   clients: 'mcp_oauth_clients',
   codes: 'mcp_oauth_codes',
   tokens: 'mcp_oauth_tokens',
+  // One doc per authorization ("grant"), keyed by the refresh-token family id.
+  // Access tokens carry it as `gid`; revoking the grant stops both the refresh
+  // chain and every outstanding access token (phase 1h).
+  grants: 'mcp_oauth_grants',
 };
 
 // One scope per app: mcp:<appId> maps to the hasApp(appId) requirement
@@ -50,6 +59,7 @@ module.exports = {
   ACCESS_TOKEN_TTL_SECONDS,
   AUTH_CODE_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
+  UNUSED_CLIENT_TTL_SECONDS,
   COLLECTIONS,
   SCOPE_PREFIX,
   appIdFromScope,

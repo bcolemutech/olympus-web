@@ -26,6 +26,9 @@ const { createInMemoryStore } = require('../functions/mcp/oauth/store');
 const { createAuthorizeHandler } = require('../functions/mcp/oauth/authorize');
 const { createTokenHandler } = require('../functions/mcp/oauth/token');
 const { createRegisterHandler } = require('../functions/mcp/oauth/register');
+const { createRevokeHandler } = require('../functions/mcp/oauth/revoke');
+const { createInMemoryAuditLog } = require('../functions/mcp/audit');
+const { createInMemoryRateLimiter } = require('../functions/mcp/rate-limit');
 const { authorizationServerMetadata } = require('../functions/mcp/discovery');
 const { verifyAccessToken } = require('../functions/mcp/oauth/tokens');
 const { base64UrlSha256 } = require('../functions/mcp/oauth/pkce');
@@ -62,7 +65,9 @@ const baseParams = () => ({
 
 const HEADERS = { host: 'olympus-dfa00.web.app', 'x-forwarded-proto': 'https' };
 
-function setup() {
+// `limits` (optional) swaps in an in-memory rate limiter with those budgets;
+// otherwise requests are unlimited.
+function setup({ limits } = {}) {
   const store = createInMemoryStore();
   store.putClient({ clientId: 'client-123', clientName: 'Claude', redirectUris: [REDIRECT] });
 
@@ -81,9 +86,13 @@ function setup() {
 
   // Only scriptorium has a registered MCP connector in these tests.
   const isKnownApp = (appId) => appId === APP;
-  const authorize = createAuthorizeHandler({ store, verifyIdToken, isKnownApp, now });
-  const token = createTokenHandler({ store, getEntitlements, now });
-  const register = createRegisterHandler({ store, now });
+  const audit = createInMemoryAuditLog({ now });
+  const rateLimiter = limits ? createInMemoryRateLimiter({ limits, now }) : undefined;
+  const deps = { store, audit, rateLimiter, now };
+  const authorize = createAuthorizeHandler({ ...deps, verifyIdToken, isKnownApp });
+  const token = createTokenHandler({ ...deps, getEntitlements });
+  const register = createRegisterHandler(deps);
+  const revoke = createRevokeHandler(deps);
 
   return {
     store,
@@ -91,6 +100,8 @@ function setup() {
     authorize,
     token,
     register,
+    revoke,
+    audit,
     advance: (ms) => (clock += ms),
   };
 }
@@ -515,6 +526,7 @@ describe('dynamic client registration (RFC 7591)', () => {
       [
         'clientId',
         'createdAtMs',
+        'expiresAtMs',
         'grantTypes',
         'redirectUris',
         'responseTypes',
@@ -630,10 +642,365 @@ describe('1d exit criterion: self-registered client, zero pre-configuration', ()
 });
 
 describe('authorization server metadata (RFC 8414)', () => {
-  test('advertises /register and no endpoint that does not exist yet', () => {
+  test('advertises /register and /revoke for public clients', () => {
     const res = mockRes();
     authorizationServerMetadata({ method: 'GET', headers: HEADERS, path: '/' }, res);
     expect(res.body.registration_endpoint).toBe(`${CANONICAL}/register`);
-    expect(res.body.revocation_endpoint).toBeUndefined();
+    expect(res.body.revocation_endpoint).toBe(`${CANONICAL}/revoke`);
+    expect(res.body.revocation_endpoint_auth_methods_supported).toEqual(['none']);
+  });
+});
+
+// ── Phase 1h: grants, revocation, TTL, rate limiting, audit ─────────────────
+
+async function revokeToken(revoke, tokenValue, clientId = 'client-123') {
+  const res = mockRes();
+  await revoke(
+    { method: 'POST', headers: HEADERS, body: { token: tokenValue, client_id: clientId } },
+    res
+  );
+  return res;
+}
+
+async function connectFlow(s) {
+  const res = await exchange(s.token, await getCode(s.authorize));
+  const claims = verifyAccessToken(res.body.access_token, { audience: AUD });
+  return { res, claims, grant: await s.store.getGrant(claims.gid) };
+}
+
+describe('grants (phase 1h)', () => {
+  test('a code exchange creates an active grant that the tokens reference', async () => {
+    const s = setup();
+    const { res, claims, grant } = await connectFlow(s);
+    expect(grant).toMatchObject({
+      grantId: claims.gid,
+      uid: 'uid-abc',
+      clientId: 'client-123',
+      clientName: 'Claude',
+      appId: APP,
+      revoked: false,
+    });
+    const refreshRecord = s.store._debug.tokens.get(
+      require('../functions/mcp/oauth/tokens').hashRefreshToken(res.body.refresh_token)
+    );
+    expect(refreshRecord.familyId).toBe(claims.gid);
+  });
+
+  test('each authorization is its own grant', async () => {
+    const s = setup();
+    const a = await connectFlow(s);
+    const b = await connectFlow(s);
+    expect(a.claims.gid).not.toBe(b.claims.gid);
+  });
+
+  test('refresh keeps the grant id and records last use', async () => {
+    const s = setup();
+    const { res, claims } = await connectFlow(s);
+    s.advance(60_000);
+    const next = await refresh(s.token, res.body.refresh_token);
+    const nextClaims = verifyAccessToken(next.body.access_token, { audience: AUD });
+    expect(nextClaims.gid).toBe(claims.gid);
+    expect((await s.store.getGrant(claims.gid)).lastUsedAtMs).toBeGreaterThan(
+      (await s.store.getGrant(claims.gid)).createdAtMs
+    );
+  });
+
+  test('refreshing on a revoked grant is refused', async () => {
+    const s = setup();
+    const { res, claims } = await connectFlow(s);
+    await s.store.revokeGrant(claims.gid, 'test', Date.now());
+    const next = await refresh(s.token, res.body.refresh_token);
+    expect(next.body.error).toBe('invalid_grant');
+    expect(s.audit.events('refresh_rejected').at(-1).reason).toBe('grant_revoked');
+  });
+
+  test('refresh-token reuse revokes the grant', async () => {
+    const s = setup();
+    const { res, claims } = await connectFlow(s);
+    await refresh(s.token, res.body.refresh_token);
+    await refresh(s.token, res.body.refresh_token); // replay
+    const grant = await s.store.getGrant(claims.gid);
+    expect(grant).toMatchObject({ revoked: true, revokedReason: 'reuse' });
+    expect(s.audit.events('grant_revoked')).toHaveLength(1);
+  });
+
+  test('losing the app claim revokes the grant on the next refresh', async () => {
+    const s = setup();
+    const { res, claims } = await connectFlow(s);
+    s.entitlements.set('uid-abc', ['symposium']);
+    await refresh(s.token, res.body.refresh_token);
+    expect(await s.store.getGrant(claims.gid)).toMatchObject({
+      revoked: true,
+      revokedReason: 'entitlement_revoked',
+    });
+  });
+
+  test('a refresh family from before grants existed is backfilled on refresh', async () => {
+    const s = setup();
+    const { hashRefreshToken } = require('../functions/mcp/oauth/tokens');
+    const legacyRefresh = 'legacy-refresh-token-value';
+    await s.store.putRefreshToken({
+      tokenHash: hashRefreshToken(legacyRefresh),
+      uid: 'uid-abc',
+      clientId: 'client-123',
+      appId: APP,
+      scope: 'mcp:scriptorium',
+      audience: AUD,
+      issuer: CANONICAL,
+      familyId: 'legacyfamily0001',
+      revoked: false,
+      createdAtMs: Date.now(),
+      expiresAtMs: Date.now() + 86_400_000,
+    });
+    const res = await refresh(s.token, legacyRefresh);
+    expect(res.statusCode).toBe(200);
+    const claims = verifyAccessToken(res.body.access_token, { audience: AUD });
+    expect(claims.gid).toBe('legacyfamily0001');
+    expect(await s.store.getGrant('legacyfamily0001')).toMatchObject({
+      uid: 'uid-abc',
+      appId: APP,
+      revoked: false,
+    });
+  });
+});
+
+describe('revocation endpoint (RFC 7009)', () => {
+  test('revoking the refresh token revokes the grant and its refresh family', async () => {
+    const s = setup();
+    const { res, claims } = await connectFlow(s);
+    const out = await revokeToken(s.revoke, res.body.refresh_token);
+    expect(out.statusCode).toBe(200);
+    expect(out.get('Cache-Control')).toBe('no-store');
+    expect(await s.store.getGrant(claims.gid)).toMatchObject({
+      revoked: true,
+      revokedReason: 'client_request',
+    });
+    expect((await refresh(s.token, res.body.refresh_token)).body.error).toBe('invalid_grant');
+    expect(s.audit.events('grant_revoked')).toEqual([
+      expect.objectContaining({ grantId: claims.gid, reason: 'client_request', uid: 'uid-abc' }),
+    ]);
+  });
+
+  test('revoking the access token revokes the grant too', async () => {
+    const s = setup();
+    const { res, claims } = await connectFlow(s);
+    await revokeToken(s.revoke, res.body.access_token);
+    expect((await s.store.getGrant(claims.gid)).revoked).toBe(true);
+  });
+
+  test('an expired access token can still revoke its grant', async () => {
+    const s = setup();
+    const { res, claims } = await connectFlow(s);
+    const jwt = require('jsonwebtoken');
+    const expired = jwt.sign(
+      { scope: 'mcp:scriptorium', gid: claims.gid },
+      process.env.MCP_JWT_SECRET,
+      {
+        algorithm: 'HS256',
+        issuer: CANONICAL,
+        subject: 'uid-abc',
+        audience: AUD,
+        expiresIn: -60,
+      }
+    );
+    expect(res.statusCode).toBe(200);
+    await revokeToken(s.revoke, expired);
+    expect((await s.store.getGrant(claims.gid)).revoked).toBe(true);
+  });
+
+  test('a token belonging to another client is left alone — still 200', async () => {
+    const s = setup();
+    const { res, claims } = await connectFlow(s);
+    const out = await revokeToken(s.revoke, res.body.refresh_token, 'some-other-client');
+    expect(out.statusCode).toBe(200);
+    expect((await s.store.getGrant(claims.gid)).revoked).toBe(false);
+    const viaAccess = await revokeToken(s.revoke, res.body.access_token, 'some-other-client');
+    expect(viaAccess.statusCode).toBe(200);
+    expect((await s.store.getGrant(claims.gid)).revoked).toBe(false);
+  });
+
+  test('an unknown or forged token → 200 with no effect', async () => {
+    const s = setup();
+    const { claims } = await connectFlow(s);
+    const jwt = require('jsonwebtoken');
+    const forged = jwt.sign({ gid: claims.gid }, 'wrong-secret', {
+      algorithm: 'HS256',
+      issuer: CANONICAL,
+      audience: AUD,
+    });
+    expect((await revokeToken(s.revoke, 'no-such-token')).statusCode).toBe(200);
+    expect((await revokeToken(s.revoke, forged)).statusCode).toBe(200);
+    expect((await s.store.getGrant(claims.gid)).revoked).toBe(false);
+  });
+
+  test('revocation is idempotent and audited once', async () => {
+    const s = setup();
+    const { res } = await connectFlow(s);
+    await revokeToken(s.revoke, res.body.refresh_token);
+    const again = await revokeToken(s.revoke, res.body.refresh_token);
+    expect(again.statusCode).toBe(200);
+    expect(s.audit.events('grant_revoked')).toHaveLength(1);
+  });
+
+  test('requires POST, token, and client_id', async () => {
+    const s = setup();
+    const get = mockRes();
+    await s.revoke({ method: 'GET', headers: HEADERS, query: {} }, get);
+    expect(get.statusCode).toBe(405);
+    const missing = mockRes();
+    await s.revoke({ method: 'POST', headers: HEADERS, body: { token: 'x' } }, missing);
+    expect(missing.body.error).toBe('invalid_request');
+  });
+});
+
+describe('client lifetime (TTL)', () => {
+  test('a new registration expires after a day unless it is used', async () => {
+    const s = setup();
+    const reg = mockRes();
+    await s.register(
+      { method: 'POST', headers: HEADERS, body: { redirect_uris: [REDIRECT] } },
+      reg
+    );
+    const client = await s.store.getClient(reg.body.client_id);
+    expect(client.expiresAtMs - client.createdAtMs).toBe(24 * 3600 * 1000);
+  });
+
+  test('obtaining tokens extends the client to the refresh-token lifetime', async () => {
+    const s = setup();
+    await connectFlow(s);
+    const client = await s.store.getClient('client-123');
+    expect(client.expiresAtMs - Date.now()).toBeGreaterThan(29 * 86400 * 1000);
+  });
+});
+
+describe('rate limiting (phase 1h)', () => {
+  const tiny = { limit: 2, windowMs: 60_000 };
+
+  test('registration is limited per IP, with Retry-After', async () => {
+    const s = setup({
+      limits: { register_ip: tiny, register_global: { limit: 100, windowMs: 60_000 } },
+    });
+    const headers = { ...HEADERS, 'cf-connecting-ip': '203.0.113.9' };
+    const statuses = [];
+    let last;
+    for (let i = 0; i < 3; i += 1) {
+      last = mockRes();
+      await s.register({ method: 'POST', headers, body: { redirect_uris: [REDIRECT] } }, last);
+      statuses.push(last.statusCode);
+    }
+    expect(statuses).toEqual([201, 201, 429]);
+    expect(last.body.error).toBe('rate_limited');
+    expect(Number(last.get('Retry-After'))).toBeGreaterThan(0);
+    expect(s.audit.events('rate_limited')).toEqual([
+      expect.objectContaining({ bucket: 'register_ip' }),
+    ]);
+
+    // A different address still gets through.
+    const other = mockRes();
+    await s.register(
+      {
+        method: 'POST',
+        headers: { ...HEADERS, 'cf-connecting-ip': '198.51.100.7' },
+        body: { redirect_uris: [REDIRECT] },
+      },
+      other
+    );
+    expect(other.statusCode).toBe(201);
+  });
+
+  test('the global registration budget binds even across addresses', async () => {
+    const s = setup({
+      limits: { register_ip: { limit: 100, windowMs: 60_000 }, register_global: tiny },
+    });
+    const statuses = [];
+    for (const ip of ['192.0.2.1', '192.0.2.2', '192.0.2.3']) {
+      const res = mockRes();
+      await s.register(
+        {
+          method: 'POST',
+          headers: { ...HEADERS, 'cf-connecting-ip': ip },
+          body: { redirect_uris: [REDIRECT] },
+        },
+        res
+      );
+      statuses.push(res.statusCode);
+    }
+    expect(statuses).toEqual([201, 201, 429]);
+  });
+
+  test('the token endpoint is limited per client', async () => {
+    const s = setup({ limits: { token_client: tiny } });
+    const statuses = [];
+    for (let i = 0; i < 3; i += 1) {
+      const res = mockRes();
+      await s.token(
+        {
+          method: 'POST',
+          headers: HEADERS,
+          body: { grant_type: 'refresh_token', refresh_token: 'x', client_id: 'client-123' },
+        },
+        res
+      );
+      statuses.push(res.statusCode);
+    }
+    expect(statuses).toEqual([400, 400, 429]);
+  });
+
+  test('approvals at /authorize are limited per IP', async () => {
+    const s = setup({ limits: { authorize_ip: tiny } });
+    const statuses = [];
+    for (let i = 0; i < 3; i += 1) statuses.push((await approve(s.authorize)).statusCode);
+    expect(statuses).toEqual([200, 200, 429]);
+  });
+
+  test('the limiter fails open when its store is unavailable', async () => {
+    const logger = require(
+      require.resolve('firebase-functions/logger', {
+        paths: [require('path').resolve(__dirname, '../functions')],
+      })
+    );
+    const spy = jest.spyOn(logger, 'error').mockImplementation(() => {});
+    const { createFirestoreRateLimiter } = require('../functions/mcp/rate-limit');
+    // A limiter whose counter store always throws.
+    const broken = createFirestoreRateLimiter(() => {
+      throw new Error('firestore unavailable');
+    });
+    expect(await broken.consume('tool_call', 'uid:app')).toEqual({ allowed: true });
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
+describe('audit log (phase 1h)', () => {
+  test('a full connect records each auth step, without any secrets', async () => {
+    const s = setup();
+    const reg = mockRes();
+    await s.register(
+      { method: 'POST', headers: HEADERS, body: { redirect_uris: [REDIRECT] } },
+      reg
+    );
+    const { res } = await connectFlow(s);
+    await refresh(s.token, res.body.refresh_token);
+
+    expect(s.audit.entries.map((e) => e.event)).toEqual([
+      'client_registered',
+      'authorization_granted',
+      'token_issued',
+      'token_refreshed',
+    ]);
+    const serialized = JSON.stringify(s.audit.entries);
+    expect(serialized).not.toContain(res.body.access_token);
+    expect(serialized).not.toContain(res.body.refresh_token);
+    expect(serialized).not.toMatch(/code_challenge|codeChallenge|redirect/i);
+  });
+
+  test('denied approvals are recorded with a reason', async () => {
+    const s = setup();
+    await approve(s.authorize, { idToken: 'user-without-app' });
+    await approve(s.authorize, { idToken: 'garbage' });
+    expect(s.audit.events('authorization_denied').map((e) => e.reason)).toEqual([
+      'no_entitlement',
+      'sign_in_failed',
+    ]);
   });
 });

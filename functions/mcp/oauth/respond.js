@@ -11,6 +11,12 @@ function oauthError(res, error, description, status) {
   res.status(code).json({ error, ...(description ? { error_description: description } : {}) });
 }
 
+// Rate-limited OAuth endpoint (phase 1h): 429 with Retry-After.
+function rateLimited(res, retryAfterSec) {
+  res.set('Retry-After', String(retryAfterSec));
+  oauthError(res, 'rate_limited', `Too many requests. Try again in ${retryAfterSec} seconds.`, 429);
+}
+
 // Authorization endpoint errors, once client_id + redirect_uri are validated:
 // redirect back to the client with error params (RFC 6749 §4.1.2.1),
 // preserving state.
@@ -32,4 +38,4 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-module.exports = { oauthError, redirectError, escapeHtml };
+module.exports = { oauthError, rateLimited, redirectError, escapeHtml };

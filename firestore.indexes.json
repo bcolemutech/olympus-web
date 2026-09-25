@@ -89,5 +89,12 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    { "collectionGroup": "mcp_oauth_clients", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "mcp_oauth_codes", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "mcp_oauth_tokens", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "mcp_oauth_grants", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "mcp_audit", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "mcp_rate_limits", "fieldPath": "expireAt", "ttl": true, "indexes": [] }
+  ]
 }
