@@ -708,6 +708,31 @@
         -webkit-text-fill-color: transparent;
       }
 
+      /* MCP connector tiles — teal; used from Claude rather than opened here */
+      .app-tile--connector {
+        border-color: rgba(77, 208, 225, 0.2);
+        background: linear-gradient(135deg, rgba(0, 96, 100, 0.25), rgba(0, 77, 64, 0.15));
+      }
+      .app-tile--connector:hover,
+      .app-tile--connector:focus {
+        border-color: rgba(77, 208, 225, 0.5);
+        box-shadow: 0 4px 24px rgba(77, 208, 225, 0.12);
+      }
+      .app-tile--connector .app-tile-title {
+        background: linear-gradient(135deg, #80deea, #4dd0e1);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .app-tile-connector {
+        display: block;
+        margin-top: 0.75rem;
+        font-size: 0.72rem;
+        color: #80deea;
+        word-break: break-all;
+        user-select: all;
+      }
+
       /* Inline JSX applet rendering area */
       .jsx-inline {
         width: 100%;
@@ -1376,6 +1401,25 @@
 
         jsxInlineBack.addEventListener('click', closeJsxApplet);
 
+        // ── MCP connector tiles ──────────────────────────────
+        // A connector app has no page to open; its tile copies the URL to add
+        // in Claude, with a brief confirmation in place of the description.
+        const copyConnectorUrl = (a, desc) => {
+          const show = (message) => {
+            desc.textContent = message;
+            clearTimeout(desc._restoreTimer);
+            desc._restoreTimer = setTimeout(() => {
+              desc.textContent = a.description;
+            }, 4000);
+          };
+          const manual = 'Copy the URL below, then add it in Claude under Settings → Connectors.';
+          if (!navigator.clipboard || !navigator.clipboard.writeText) return show(manual);
+          navigator.clipboard.writeText(a.connector).then(
+            () => show('Copied! In Claude, add it under Settings → Connectors.'),
+            () => show(manual)
+          );
+        };
+
         // ── Tile rendering ───────────────────────────────────
         const renderAppTiles = (apps, grid, empty) => {
           grid.innerHTML = '';
@@ -1388,7 +1432,10 @@
           grid.classList.remove('hidden');
           apps.forEach((a) => {
             const tile = document.createElement('div');
-            tile.className = 'app-tile' + (a.type === 'jsx' ? ' app-tile--jsx' : '');
+            tile.className =
+              'app-tile' +
+              (a.type === 'jsx' ? ' app-tile--jsx' : '') +
+              (a.type === 'connector' ? ' app-tile--connector' : '');
             tile.setAttribute('tabindex', '0');
             tile.setAttribute('role', 'button');
             tile.setAttribute('aria-label', a.name);
@@ -1410,6 +1457,13 @@
             tile.appendChild(title);
             tile.appendChild(desc);
 
+            if (a.type === 'connector' && a.connector) {
+              const url = document.createElement('code');
+              url.className = 'app-tile-connector';
+              url.textContent = a.connector;
+              tile.appendChild(url);
+            }
+
             const activateTile = () => {
               if (window.OlympusAnalytics)
                 OlympusAnalytics.logEvent('app_open', { app_id: a.id, app_type: a.type });
@@ -1419,6 +1473,8 @@
                 window.location.href = a.path;
               } else if (a.type === 'jsx' && a.file) {
                 loadJsxApplet(a);
+              } else if (a.type === 'connector' && a.connector) {
+                copyConnectorUrl(a, desc);
               }
             };
 

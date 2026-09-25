@@ -62,7 +62,13 @@
               card.className = 'app-card' + (app.enabled ? '' : ' app-card-disabled');
 
               var destination =
-                app.type === 'redirect' ? app.url : app.type === 'jsx' ? app.file : app.path;
+                app.type === 'redirect'
+                  ? app.url
+                  : app.type === 'jsx'
+                    ? app.file
+                    : app.type === 'connector'
+                      ? app.connector
+                      : app.path;
 
               card.innerHTML =
                 '<div class="app-card-icon">' +

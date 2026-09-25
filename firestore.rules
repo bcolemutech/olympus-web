@@ -324,6 +324,15 @@ service cloud.firestore {
       allow read: if hasApp('loom');
     }
 
+    // ── Scriptorium (MCP proof-of-concept) ────────────────
+    // Reached only through the MCP connector: the mcpServer function reads and
+    // writes via the Admin SDK after validating the audience-bound token and
+    // scoping every query to the caller's uid. No client access at all.
+
+    match /scriptorium_notes/{noteId} {
+      allow read, write: if false;
+    }
+
     // ── App registry ──────────────────────────────────────
 
     match /apps/{appId} {
