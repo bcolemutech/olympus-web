@@ -278,6 +278,81 @@ describe('per-app MCP endpoint — token and access enforcement', () => {
   });
 });
 
+describe('transport rejection logging', () => {
+  // Spy on the functions package's logger — the instance transport.js uses.
+  const logger = require(
+    require.resolve('firebase-functions/logger', {
+      paths: [require('path').resolve(__dirname, '../functions')],
+    })
+  );
+  let warn;
+  beforeEach(() => {
+    warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => warn.mockRestore());
+
+  function post(body, headers = {}) {
+    return fetch(`${base}/mcp/alpha`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: `Bearer ${tokenFor('alpha')}`,
+        ...headers,
+      },
+      body,
+    });
+  }
+  // res 'finish' fires just after the client sees the response.
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+  test('an unsupported protocol version is logged with what identifies it', async () => {
+    const res = await post(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
+      'Mcp-Protocol-Version': '2099-01-01',
+    });
+    expect(res.status).toBe(400);
+    await settle();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [message, fields] = warn.mock.calls[0];
+    expect(message).toMatch(/rejected/);
+    expect(fields).toEqual({
+      status: 400,
+      path: '/mcp/alpha',
+      httpMethod: 'POST',
+      rpcMethods: ['tools/list'],
+      protocolVersion: '2099-01-01',
+      bodyPresent: true,
+      contentType: 'application/json',
+    });
+  });
+
+  test('never logs the bearer token or message contents', async () => {
+    const res = await post(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { secret: 'hunter2' },
+      }),
+      { 'Mcp-Protocol-Version': 'not a version <script>' }
+    );
+    expect(res.status).toBe(400);
+    await settle();
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).not.toMatch(/hunter2|Bearer|eyJ/);
+    expect(warn.mock.calls[0][1].protocolVersion).toBe('<invalid>');
+  });
+
+  test('successful requests and auth failures are not logged', async () => {
+    const client = await connect('alpha', tokenFor('alpha'));
+    await client.listTools();
+    await client.close();
+    await rawInitialize('beta', tokenFor('alpha')); // 401 before the transport
+    await settle();
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
 describe('per-app discovery (RFC 9728)', () => {
   test('each registered app publishes its own protected-resource metadata', async () => {
     const res = await fetch(`${base}/.well-known/oauth-protected-resource/mcp/alpha`);
