@@ -13,8 +13,13 @@ const { escapeHtml } = require('./respond');
 // POST (the page is never trusted). They carry attacker-controllable values
 // (state, resource), so they are emitted inside a <script type="application/
 // json"> block and read with JSON.parse — never interpolated into executable
-// JS. Only display strings (appName, clientName) go into HTML text, where
-// HTML-escaping is the correct transform.
+// JS. Only display strings (appName, clientName, redirectHost) go into HTML
+// text, where HTML-escaping is the correct transform.
+//
+// clientName is self-asserted at Dynamic Client Registration, so it is not
+// proof of who the client is. redirectHost — where the authorization code will
+// be sent — is shown alongside it so the user can spot a client posing as a
+// name it does not own.
 function jsonForScriptBlock(value) {
   // Prevent the JSON text from terminating the <script> element or being
   // reinterpreted as JS: escape '<', '>', '&', and the JS line separators
@@ -32,9 +37,12 @@ function jsonForScriptBlock(value) {
   );
 }
 
-function renderConsentPage({ appId, appName, clientName, oauthParams }) {
+function renderConsentPage({ appId, appName, clientName, redirectHost, oauthParams }) {
   const safeAppName = escapeHtml(appName || appId);
   const safeClientName = escapeHtml(clientName || 'an MCP client');
+  const destLine = redirectHost
+    ? `<p class="dest">After you approve, you'll return to <b>${escapeHtml(redirectHost)}</b></p>`
+    : '';
   const paramsJson = jsonForScriptBlock(oauthParams);
 
   return `<!doctype html>
@@ -57,6 +65,8 @@ function renderConsentPage({ appId, appName, clientName, oauthParams }) {
     background:linear-gradient(135deg,#ffd54f,#ffb74d,#ff8a65);-webkit-background-clip:text;
     background-clip:text;-webkit-text-fill-color:transparent}
   .sub{font-size:.9rem;color:#90a4ae;font-style:italic;margin-bottom:1.5rem}
+  .dest{font-size:.82rem;color:#6b7280;margin:-1rem 0 1.5rem}
+  .dest b{color:#e0e0e0}
   .grant{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
     border-radius:10px;padding:1rem;margin-bottom:1.5rem;font-size:.9rem;line-height:1.6;text-align:left}
   .grant b{color:#ffd54f}
@@ -88,6 +98,7 @@ function renderConsentPage({ appId, appName, clientName, oauthParams }) {
   <div class="icon">&#128273;</div>
   <h1>Connect ${safeAppName}</h1>
   <p class="sub">${safeClientName} wants to connect to Olympus</p>
+  ${destLine}
 
   <div class="grant">
     This will let the connected client access <b>${safeAppName}</b> in Olympus on your

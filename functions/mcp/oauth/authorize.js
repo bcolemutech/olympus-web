@@ -143,6 +143,7 @@ function createAuthorizeHandler(deps) {
         appId: scopeResult.appId,
         appName: appNameFromId(scopeResult.appId),
         clientName: client.clientName,
+        redirectHost: new URL(params.redirectUri).host,
         oauthParams: echoParams(params),
       })
     );

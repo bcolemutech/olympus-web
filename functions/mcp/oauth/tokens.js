@@ -61,6 +61,14 @@ function generateAuthCode() {
   return crypto.randomBytes(32).toString('base64url');
 }
 
+// ── Client ids (DCR, phase 1d) ─────────────────────────────────────────
+
+// Public clients only, so the id is an identifier, not a credential — but it is
+// still unguessable so registrations cannot be enumerated.
+function generateClientId() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
 // Groups a refresh token and all its rotation successors into one "family".
 // On detected reuse the whole family is revoked (OAuth 2.1 / RFC 6819).
 function generateFamilyId() {
@@ -73,5 +81,6 @@ module.exports = {
   generateRefreshToken,
   hashRefreshToken,
   generateAuthCode,
+  generateClientId,
   generateFamilyId,
 };
