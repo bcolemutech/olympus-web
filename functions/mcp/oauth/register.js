@@ -1,7 +1,10 @@
 'use strict';
 
-const { oauthError } = require('./respond');
+const { oauthError, rateLimited } = require('./respond');
 const { generateClientId } = require('./tokens');
+const { UNUSED_CLIENT_TTL_SECONDS } = require('./config');
+const { noopAuditLog } = require('../audit');
+const { unlimited, clientIp } = require('../rate-limit');
 
 // Dynamic Client Registration (RFC 7591), phase 1d. This is what lets a
 // connector be added on iOS / claude.ai by pasting a URL: the client registers
@@ -145,11 +148,24 @@ function validateRegistration(body) {
 }
 
 function createRegisterHandler(deps) {
-  const { store, now = () => Date.now() } = deps;
+  const { store, audit = noopAuditLog, rateLimiter = unlimited, now = () => Date.now() } = deps;
 
   return async function handleRegister(req, res) {
     if (req.method !== 'POST') {
       return oauthError(res, 'invalid_request', 'The registration endpoint requires POST.', 405);
+    }
+
+    // Per-IP budget, plus a global one that also binds a client spreading
+    // its registrations across forged addresses.
+    for (const [bucket, key] of [
+      ['register_ip', clientIp(req)],
+      ['register_global', 'all'],
+    ]) {
+      const limit = await rateLimiter.consume(bucket, key);
+      if (!limit.allowed) {
+        await audit.record('rate_limited', { bucket });
+        return rateLimited(res, limit.retryAfterSec);
+      }
     }
 
     let metadata;
@@ -162,7 +178,14 @@ function createRegisterHandler(deps) {
 
     const nowMs = now();
     const clientId = generateClientId();
-    await store.putClient({ clientId, ...metadata, createdAtMs: nowMs });
+    // Unused registrations expire (TTL); obtaining tokens extends the client.
+    await store.putClient({
+      clientId,
+      ...metadata,
+      createdAtMs: nowMs,
+      expiresAtMs: nowMs + UNUSED_CLIENT_TTL_SECONDS * 1000,
+    });
+    await audit.record('client_registered', { clientId });
 
     res.set('Cache-Control', 'no-store');
     res.set('Pragma', 'no-cache');

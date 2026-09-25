@@ -19,20 +19,39 @@ const registerApps = require('./apps');
 // Populate the process-wide registry with every app's MCP module (design §8).
 registerApps(registry);
 
-// OAuth authorization-server handlers (/authorize, /token, /register). Built lazily on
-// first use so Firebase Admin is initialized (by functions/index.js) first, and
-// cached across warm invocations.
+// Firestore-backed services shared by the authorization server and the
+// per-app resource servers: the OAuth store (clients, codes, refresh tokens,
+// grants), the audit log, and the rate limiter. Built lazily on first use so
+// Firebase Admin is initialized (by functions/index.js) first, and cached
+// across warm invocations.
+let _services;
+function services() {
+  if (!_services) {
+    const { getFirestore } = require('firebase-admin/firestore');
+    const { createFirestoreStore } = require('./oauth/store');
+    const { createFirestoreAuditLog } = require('./audit');
+    const { createFirestoreRateLimiter } = require('./rate-limit');
+    _services = {
+      store: createFirestoreStore(getFirestore()),
+      audit: createFirestoreAuditLog(getFirestore),
+      rateLimiter: createFirestoreRateLimiter(getFirestore),
+    };
+  }
+  return _services;
+}
+
+// OAuth authorization-server handlers (/register, /authorize, /token,
+// /revoke), built lazily on first use.
 let _oauth;
 function oauthHandlers() {
   if (!_oauth) {
-    const { getFirestore } = require('firebase-admin/firestore');
     const { getAuth } = require('firebase-admin/auth');
-    const { createFirestoreStore } = require('./oauth/store');
     const { createAuthorizeHandler } = require('./oauth/authorize');
     const { createTokenHandler } = require('./oauth/token');
     const { createRegisterHandler } = require('./oauth/register');
+    const { createRevokeHandler } = require('./oauth/revoke');
 
-    const store = createFirestoreStore(getFirestore());
+    const { store, audit, rateLimiter } = services();
     const verifyIdToken = async (idToken) => {
       const decoded = await getAuth().verifyIdToken(idToken);
       return { uid: decoded.uid, sub: decoded.sub, apps: decoded.apps };
@@ -49,9 +68,12 @@ function oauthHandlers() {
         store,
         verifyIdToken,
         isKnownApp: (appId) => registry.has(appId),
+        audit,
+        rateLimiter,
       }),
-      token: createTokenHandler({ store, getEntitlements }),
-      register: createRegisterHandler({ store }),
+      token: createTokenHandler({ store, getEntitlements, audit, rateLimiter }),
+      register: createRegisterHandler({ store, audit, rateLimiter }),
+      revoke: createRevokeHandler({ store, audit, rateLimiter }),
     };
   }
   return _oauth;
@@ -97,7 +119,11 @@ async function route(req, res) {
     return;
   }
 
-  // OAuth 2.1 authorization server (phases 1c–1d). /revoke lands in 1h.
+  // OAuth 2.1 authorization server (phases 1c–1d, 1h).
+  if (path === '/revoke') {
+    await oauthHandlers().revoke(req, res);
+    return;
+  }
   if (path === '/register') {
     await oauthHandlers().register(req, res);
     return;
@@ -115,7 +141,14 @@ async function route(req, res) {
   // authenticated ctx. See app-server.js.
   const appMatch = APP_RESOURCE_PATH.exec(path);
   if (appMatch) {
-    await handleAppRequest(req, res, { registry, appId: appMatch[1] });
+    const { store, audit, rateLimiter } = services();
+    await handleAppRequest(req, res, {
+      registry,
+      appId: appMatch[1],
+      getGrant: (grantId) => store.getGrant(grantId),
+      audit,
+      rateLimiter,
+    });
     return;
   }
 

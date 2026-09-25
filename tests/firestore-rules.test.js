@@ -1728,3 +1728,48 @@ describe('scriptorium_notes — Firestore Security Rules', function () {
     await assertFails(getDoc(doc(unauthDb, 'scriptorium_notes', NOTE_ID)));
   });
 });
+
+describe('mcp_* — Firestore Security Rules', function () {
+  var testEnv;
+
+  beforeAll(async function () {
+    var firestoreConfig = { rules: readFileSync(RULES_PATH, 'utf8') };
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      if (parts[0]) firestoreConfig.host = parts[0];
+      var parsedPort = parseInt(parts[1], 10);
+      if (!isNaN(parsedPort)) firestoreConfig.port = parsedPort;
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+    testEnv = await initializeTestEnvironment({ projectId: PROJECT_ID, firestore: firestoreConfig });
+  });
+
+  afterAll(async function () {
+    await testEnv.cleanup();
+  });
+
+  // The OAuth server, audit log, and rate limiter are written only by the
+  // mcpServer function via the Admin SDK; no client — not even an admin — may
+  // read or write them (default deny, no match blocks).
+  var COLLECTIONS = [
+    'mcp_oauth_clients',
+    'mcp_oauth_codes',
+    'mcp_oauth_tokens',
+    'mcp_oauth_grants',
+    'mcp_audit',
+    'mcp_rate_limits',
+  ];
+
+  COLLECTIONS.forEach(function (collection) {
+    it('denies admin reads and writes on ' + collection, async function () {
+      var adminDb = testEnv
+        .authenticatedContext('admin-001', { admin: true, apps: ['scriptorium'] })
+        .firestore();
+      await assertFails(getDoc(doc(adminDb, collection, 'any')));
+      await assertFails(setDoc(doc(adminDb, collection, 'any'), { x: 1 }));
+    });
+  });
+});

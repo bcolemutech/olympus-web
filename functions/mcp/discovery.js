@@ -21,7 +21,8 @@ function authorizationServerMetadata(req, res) {
     authorization_endpoint: `${origin}/authorize`,
     token_endpoint: `${origin}/token`,
     registration_endpoint: `${origin}/register`,
-    // revocation_endpoint is advertised once /revoke exists (phase 1h).
+    revocation_endpoint: `${origin}/revoke`,
+    revocation_endpoint_auth_methods_supported: ['none'],
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
     token_endpoint_auth_methods_supported: ['none'],

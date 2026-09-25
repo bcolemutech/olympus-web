@@ -138,7 +138,7 @@ The AS is a small authorization server implemented in Cloud Functions. Firebase 
 
 **Token strategy**
 
-- **Access token:** signed JWT (`sub=uid`, `aud=<app resource>`, `exp` short, minimal claims snapshot). Self-validating → no datastore read on the hot path (matters on serverless).
+- **Access token:** signed JWT (`sub=uid`, `aud=<app resource>`, `exp` short, `gid=<grant>`, minimal claims snapshot). Signature, issuer, audience, and expiry validate locally; the resource server then reads one document, the grant, so a revoked connection is refused on its next call instead of lasting until the token expires (1h, revised from the original "no datastore read" goal; see §12).
 - **Refresh token:** opaque, stored hashed in Firestore, rotated on use, revocable.
 - **Signing key:** Functions secret for MVP (symmetric); asymmetric/KMS noted as a hardening follow-up.
 
@@ -206,9 +206,11 @@ Deliberately dumb; its only purpose is to exercise the plumbing.
 
 - **Three-layer app isolation:** separate connector URL · audience-bound token (RFC 8707) · `hasApp(appId)` check.
 - **PKCE S256 mandatory**, public clients only, exact redirect-URI matching per DCR registration.
-- **Short-lived access tokens**, rotating refresh tokens, revocation endpoint + `mcp_oauth_tokens` state.
+- **Short-lived access tokens**, rotating refresh tokens, revocation endpoint (RFC 7009) + per-authorization grant state (`mcp_oauth_grants`) checked on every MCP request.
 - **Least privilege in tools:** every handler authorizes against the mapped claims and validates inputs before any write; no raw passthrough to Firestore.
-- **Audit log** of auth events and tool calls (`mcp_audit`).
+- **Audit log** of auth events and tool calls (`mcp_audit`, 90-day TTL): identifiers and outcomes only, never tokens or tool arguments.
+- **Rate limiting:** Firestore fixed-window counters (`mcp_rate_limits`), fail-open. Registration is limited per IP and globally; approvals, token and revoke requests per IP or client; tool calls per user and app. Tool calls over the limit return a tool error the model can relay.
+- **TTL cleanup:** `expireAt` TTL policies on every `mcp_*` collection. A registration that never obtains tokens expires after a day.
 - **Default-deny Firestore rules** for all new collections; the server writes via Admin SDK only after in-code authorization.
 
 ---
@@ -251,6 +253,13 @@ If that holds, the seam is proven and Cartographer (Initiative 2) and the game s
 - **Access-token signing** — symmetric Functions secret for MVP; asymmetric/KMS is a later hardening option, not now.
 - **Consent management** — per-connect consent **plus** a "manage connections" list in the Grand Hall profile where a user can review and revoke authorized connectors (phase 1i).
 - **Cold-start latency** — accepted; no min-instances spend on `mcpServer` for the MVP. Revisit only if measured latency breaks client timeouts.
+
+### Decided (2026-09-25, phase 1h)
+
+- **Revocation is per grant.** Every code exchange starts a grant (keyed by the refresh-token family id) that access tokens reference as `gid`. Revoking either token type revokes the grant: its refresh family dies, and its access tokens are refused on their next call. This costs one document read per MCP request, accepted because connection management (1i) needs "denied on its next call", which self-validating tokens can't provide. Refresh-token reuse and loss of the app claim also revoke the grant.
+- **Rate limits fail open**, so a limiter outage never takes a working connector down. Budgets live in `functions/mcp/rate-limit.js`. Claude's registrations come from Anthropic's servers, so the per-IP registration budget is shared by everyone connecting through Claude.
+- **Error semantics** (from 1e, unchanged): 401 challenges point at protected-resource metadata; a revoked grant is `invalid_token`; tool failures are `isError` results (`ToolError` messages pass through, and anything else is "Internal error.").
+- **Cold start** stays accepted: no min-instances.
 
 ### Still open
 

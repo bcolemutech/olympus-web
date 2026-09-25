@@ -2,10 +2,12 @@
 
 const { resolveOrigin } = require('../config');
 const { renderConsentPage } = require('./consent-page');
-const { redirectError, oauthError, escapeHtml } = require('./respond');
+const { redirectError, oauthError, rateLimited, escapeHtml } = require('./respond');
 const { generateAuthCode } = require('./tokens');
 const { appIdFromScope, scopeForAppId, AUTH_CODE_TTL_SECONDS } = require('./config');
 const { CODE_CHALLENGE_METHOD, isValidChallenge } = require('./pkce');
+const { noopAuditLog } = require('../audit');
+const { unlimited, clientIp } = require('../rate-limit');
 
 // Parses the OAuth request parameters we care about from query (GET) or JSON
 // body (POST). Only these fields are ever echoed back to the client.
@@ -94,7 +96,14 @@ function createAuthorizeHandler(deps) {
   // isKnownApp(appId) -> whether an MCP connector is registered for the app.
   // Required (no permissive default): tokens must never be minted for a
   // resource that does not exist (RFC 8707 resource binding, phase 1e).
-  const { store, verifyIdToken, isKnownApp, now = () => Date.now() } = deps;
+  const {
+    store,
+    verifyIdToken,
+    isKnownApp,
+    audit = noopAuditLog,
+    rateLimiter = unlimited,
+    now = () => Date.now(),
+  } = deps;
   if (typeof isKnownApp !== 'function') {
     throw new Error('createAuthorizeHandler requires isKnownApp.');
   }
@@ -170,6 +179,12 @@ function createAuthorizeHandler(deps) {
     const body = req.body || {};
     const params = readParams(body);
 
+    const limit = await rateLimiter.consume('authorize_ip', clientIp(req));
+    if (!limit.allowed) {
+      await audit.record('rate_limited', { bucket: 'authorize_ip', clientId: params.clientId });
+      return rateLimited(res, limit.retryAfterSec);
+    }
+
     // Re-validate everything; never trust the page.
     if (!params.clientId) return oauthError(res, 'invalid_request', 'Missing client_id.');
     const client = await store.getClient(params.clientId);
@@ -205,12 +220,24 @@ function createAuthorizeHandler(deps) {
     try {
       decoded = await verifyIdToken(body.idToken);
     } catch {
+      await audit.record('authorization_denied', {
+        clientId: params.clientId,
+        appId,
+        reason: 'sign_in_failed',
+      });
       return oauthError(res, 'access_denied', 'Sign-in required.', 401);
     }
+    const uid = decoded.uid || decoded.sub;
 
     // Entitlement: the mcp:<appId> scope maps to hasApp(appId) (design §6).
     const apps = Array.isArray(decoded.apps) ? decoded.apps : [];
     if (!apps.includes(appId)) {
+      await audit.record('authorization_denied', {
+        uid,
+        clientId: params.clientId,
+        appId,
+        reason: 'no_entitlement',
+      });
       return oauthError(
         res,
         'access_denied',
@@ -225,7 +252,7 @@ function createAuthorizeHandler(deps) {
       code,
       clientId: params.clientId,
       redirectUri: params.redirectUri,
-      uid: decoded.uid || decoded.sub,
+      uid,
       appId,
       scope: scopeForAppId(appId),
       audience,
@@ -235,6 +262,7 @@ function createAuthorizeHandler(deps) {
       createdAtMs: nowMs,
       expiresAtMs: nowMs + AUTH_CODE_TTL_SECONDS * 1000,
     });
+    await audit.record('authorization_granted', { uid, clientId: params.clientId, appId });
 
     const redirect = new URL(params.redirectUri);
     redirect.searchParams.set('code', code);

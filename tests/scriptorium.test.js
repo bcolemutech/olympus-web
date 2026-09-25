@@ -27,6 +27,7 @@ const { signAccessToken } = require('../functions/mcp/oauth/tokens');
 const { scriptoriumApp } = require('../functions/mcp/apps/scriptorium');
 const { createInMemoryNotesStore } = require('../functions/mcp/apps/scriptorium/store');
 const registerApps = require('../functions/mcp/apps');
+const { createInMemoryStore } = require('../functions/mcp/oauth/store');
 
 const CANONICAL = 'https://bcoletech.com';
 const AUD = `${CANONICAL}/mcp/scriptorium`;
@@ -41,8 +42,18 @@ let base;
 let alice;
 let bob;
 
+// Each user connects under an active grant (phase 1h).
+const oauthStore = createInMemoryStore();
 function tokenFor(uid) {
-  return signAccessToken({ uid, audience: AUD, scope: 'mcp:scriptorium', issuer: CANONICAL });
+  const grantId = `grant-${uid}`;
+  oauthStore._debug.grants.set(grantId, { grantId, uid, appId: 'scriptorium', revoked: false });
+  return signAccessToken({
+    uid,
+    audience: AUD,
+    scope: 'mcp:scriptorium',
+    issuer: CANONICAL,
+    grantId,
+  });
 }
 
 async function connect(uid) {
@@ -64,7 +75,11 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   app.all('/mcp/:appId', (req, res) =>
-    handleAppRequest(req, res, { registry, appId: req.params.appId })
+    handleAppRequest(req, res, {
+      registry,
+      appId: req.params.appId,
+      getGrant: (grantId) => oauthStore.getGrant(grantId),
+    })
   );
   await new Promise((resolve) => {
     server = app.listen(0, '127.0.0.1', resolve);
