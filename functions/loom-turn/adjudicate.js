@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 
 /**
- * Stage 3 — ADJUDICATE (design doc §5, §11 L-140).
+ * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
  *
  * The spine of the control thesis: a deterministic rules engine + server-side
  * dice evaluate the proposed action against authoritative state and produce a

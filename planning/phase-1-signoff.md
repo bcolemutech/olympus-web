@@ -1,7 +1,7 @@
 # The Loom — Phase 1 (MVP) Exit-Criterion Sign-Off
 
 **Milestone:** The Loom — Phase 1: MVP
-**Gate (design doc §10):** "A multi-session adventure that, across a session gap, never forgets hard state, never breaks the seeded rules, and never silently contradicts canon. Resume works."
+**Gate (design doc §9):** "A multi-session adventure that, across a session gap, never forgets hard state, never breaks the seeded rules, and never silently contradicts canon. Resume works."
 
 ## Verification method
 
@@ -51,6 +51,6 @@ firebase emulators:exec --only firestore --project demo-loom-test \
   "cd tests && npx jest loom-verification --verbose"
 ```
 
-This is the Phase 1 gate sign-off referenced by design doc §10. Phase 2 work
+This is the Phase 1 gate sign-off referenced by design doc §9. Phase 2 work
 should not begin until this file reflects a passing run against the current
 `main`.

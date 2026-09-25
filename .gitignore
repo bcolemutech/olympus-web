@@ -67,6 +67,3 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
-
-# Void Odyssey Firestore export archives (may contain live user game data)
-scripts/export-output/

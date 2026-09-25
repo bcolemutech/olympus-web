@@ -3,9 +3,8 @@
 /**
  * Fixture factories for Loom turn-pipeline tests (L-130 / #307).
  *
- * Mirrors the style of the removed tests/fixtures/void-odyssey.js factory
- * pattern for this project's turn-test convention: small, override-friendly
- * builders rather than hand-rolled literals scattered across test files.
+ * Small, override-friendly builders rather than hand-rolled literals
+ * scattered across test files.
  */
 
 /** A minimal but structurally complete canon world (functions/loom-canon shape). */

@@ -349,11 +349,6 @@ service cloud.firestore {
           && validPoolHandicap();
     }
 
-    // ── User profiles ─────────────────────────────────────
-    match /users/{userId} {
-      allow read, write: if hasAdmin();
-    }
-
     // ── Default deny ───────────────────────────────────────
 
     match /{document=**} {

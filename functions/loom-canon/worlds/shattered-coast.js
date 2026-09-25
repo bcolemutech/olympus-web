@@ -3,12 +3,10 @@
 /**
  * The Shattered Coast — Phase 1 MVP seed world.
  *
- * A compact pirate-age Caribbean scenario, hand-authored from the salvaged
- * Tortuga Caribbean flavor material (planning/loom-salvage-tortuga-caribbean.md)
- * and shaped to the canon schema in functions/loom-canon/index.js. This is a
- * deliberately small world sized for one multi-session single-player
- * adventure (Phase 1 exit criterion), not the full Caribbean/VO conversion —
- * that broader effort is L-301 (#315), a Phase 3 issue.
+ * A compact pirate-age Caribbean scenario, hand-authored and shaped to the
+ * canon schema in functions/loom-canon/index.js. This is a deliberately small
+ * world sized for one multi-session single-player adventure (Phase 1 exit
+ * criterion).
  */
 
 module.exports = {

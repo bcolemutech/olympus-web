@@ -9,7 +9,7 @@
  * rather than this module generating them.
  */
 
-// ── Mutation vocabulary (design doc §8, §11 L-401) ─────────────────────────
+// ── Mutation vocabulary (design doc §8, §10 L-401) ─────────────────────────
 // state_mutations are deltas, never whole-document overwrites, so retried
 // transactional writes (batch tick, concurrent turns) merge cleanly.
 
