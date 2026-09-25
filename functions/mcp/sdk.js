@@ -1,17 +1,13 @@
 'use strict';
 
-// The `@modelcontextprotocol/sdk` package is ESM-only, but these Cloud
-// Functions run as CommonJS. Bridge the gap with dynamic import() and cache the
-// resulting module namespace per subpath so the resolution cost is paid once
-// per warm instance. This is the ESM/CJS friction the 1a transport spike exists
-// to de-risk (design §7).
-const cache = new Map();
-
+// Loads @modelcontextprotocol/sdk subpath modules. The SDK publishes a CommonJS
+// build under its "require" export condition, so these CommonJS functions load
+// it with require() — which also works under Jest, where the dynamic import()
+// used by the 1a spike needs --experimental-vm-modules. Kept async so callers
+// are unaffected if a future SDK drops the CommonJS build and this has to go
+// back to import().
 function loadSdk(subpath) {
-  if (!cache.has(subpath)) {
-    cache.set(subpath, import(`@modelcontextprotocol/sdk/${subpath}`));
-  }
-  return cache.get(subpath);
+  return Promise.resolve(require(`@modelcontextprotocol/sdk/${subpath}`));
 }
 
 module.exports = { loadSdk };

@@ -10,8 +10,14 @@ const {
   WELL_KNOWN_AS,
   WELL_KNOWN_PR_PREFIX,
 } = require('./discovery');
-const { HOST_RESOURCE_PATH } = require('./config');
+const { HOST_RESOURCE_PATH, APP_RESOURCE_PATH } = require('./config');
 const { MCP_JWT_SECRET } = require('./oauth/config');
+const { registry } = require('./registry');
+const { handleAppRequest } = require('./app-server');
+const registerApps = require('./apps');
+
+// Populate the process-wide registry with every app's MCP module (design §8).
+registerApps(registry);
 
 // OAuth authorization-server handlers (/authorize, /token, /register). Built lazily on
 // first use so Firebase Admin is initialized (by functions/index.js) first, and
@@ -39,7 +45,11 @@ function oauthHandlers() {
       return Array.isArray(apps) ? apps : [];
     };
     _oauth = {
-      authorize: createAuthorizeHandler({ store, verifyIdToken }),
+      authorize: createAuthorizeHandler({
+        store,
+        verifyIdToken,
+        isKnownApp: (appId) => registry.has(appId),
+      }),
       token: createTokenHandler({ store, getEntitlements }),
       register: createRegisterHandler({ store }),
     };
@@ -101,9 +111,17 @@ async function route(req, res) {
     return;
   }
 
-  // MCP transport. For the 1a spike this is the host diagnostic endpoint only;
-  // '/' covers hitting the function directly on the emulator (no Hosting
-  // rewrite in front). Per-app mounts (/mcp/<appId>) arrive in phase 1e.
+  // Per-app MCP resource servers (phase 1e): audience-bound token, hasApp gate,
+  // authenticated ctx. See app-server.js.
+  const appMatch = APP_RESOURCE_PATH.exec(path);
+  if (appMatch) {
+    await handleAppRequest(req, res, { registry, appId: appMatch[1] });
+    return;
+  }
+
+  // Host diagnostic endpoint (1a spike): dev-shim auth, emulator only. '/'
+  // covers hitting the function directly on the emulator (no Hosting rewrite in
+  // front).
   if (path === HOST_RESOURCE_PATH || path === '/' || path === '') {
     if (!checkDevAuth(req, res)) return;
     await handleMcpRequest(req, res, buildHostServer);

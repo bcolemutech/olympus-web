@@ -13,13 +13,11 @@
 const PRIMARY_ORIGIN = process.env.OLYMPUS_ORIGIN || 'https://bcoletech.com';
 
 // The host-level diagnostic MCP endpoint used by the 1a transport spike.
-// Per-app resource servers mount at /mcp/<appId> later (phases 1e–1f).
+// Per-app resource servers mount at /mcp/<appId> (phase 1e, see app-server.js).
 const HOST_RESOURCE_PATH = '/mcp';
 
-// Resources that currently exist as reachable MCP endpoints. Per-app resource
-// servers register here as they land; discovery docs (RFC 9728) are served
-// only for known resources so we never advertise a connector that 404s.
-const KNOWN_RESOURCE_PATHS = new Set([HOST_RESOURCE_PATH]);
+// /mcp/<appId> — the per-app resource path. Captures the app id.
+const APP_RESOURCE_PATH = /^\/mcp\/([^/]+)$/;
 
 // True when running under the Firebase emulator suite. The 1a dev bearer shim
 // only relaxes auth in this mode; deployed environments stay closed until the
@@ -51,7 +49,7 @@ function resolveOrigin(req) {
 module.exports = {
   PRIMARY_ORIGIN,
   HOST_RESOURCE_PATH,
-  KNOWN_RESOURCE_PATHS,
+  APP_RESOURCE_PATH,
   isEmulator,
   originFromRequest,
   resolveOrigin,
