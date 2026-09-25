@@ -8,6 +8,9 @@
  * Covers the phase-1c flow and the hardening from the PR #358 security review:
  * XSS-safe consent rendering, required audience, Host-header pinning,
  * refresh-token family revocation on reuse, and entitlement re-check on refresh.
+ * Also covers phase-1d Dynamic Client Registration (/register, RFC 7591),
+ * including the 1d exit criterion: a client with no pre-configuration
+ * registers itself and completes authorize → token.
  *
  * Run: cd tests && npx jest mcp-oauth --verbose
  */
@@ -22,6 +25,8 @@ const crypto = require('crypto');
 const { createInMemoryStore } = require('../functions/mcp/oauth/store');
 const { createAuthorizeHandler } = require('../functions/mcp/oauth/authorize');
 const { createTokenHandler } = require('../functions/mcp/oauth/token');
+const { createRegisterHandler } = require('../functions/mcp/oauth/register');
+const { authorizationServerMetadata } = require('../functions/mcp/discovery');
 const { verifyAccessToken } = require('../functions/mcp/oauth/tokens');
 const { base64UrlSha256 } = require('../functions/mcp/oauth/pkce');
 const { renderConsentPage } = require('../functions/mcp/oauth/consent-page');
@@ -76,12 +81,14 @@ function setup() {
 
   const authorize = createAuthorizeHandler({ store, verifyIdToken, now });
   const token = createTokenHandler({ store, getEntitlements, now });
+  const register = createRegisterHandler({ store, now });
 
   return {
     store,
     entitlements,
     authorize,
     token,
+    register,
     advance: (ms) => (clock += ms),
   };
 }
@@ -141,6 +148,13 @@ describe('authorize consent', () => {
     expect(res.statusCode).toBe(200);
     expect(res.html).toMatch(/Scriptorium/);
     expect(res.html).not.toMatch(/code=/);
+  });
+
+  test('shows the redirect host the code will be sent to', async () => {
+    const { authorize } = setup();
+    const res = mockRes();
+    await authorize({ method: 'GET', headers: HEADERS, query: baseParams() }, res);
+    expect(res.html).toMatch(/return to <b>claude\.ai<\/b>/);
   });
 
   test('sets anti-clickjacking headers', async () => {
@@ -343,5 +357,243 @@ describe('token — misc', () => {
     const res = mockRes();
     await token({ method: 'POST', headers: HEADERS, body: { grant_type: 'password' } }, res);
     expect(res.body.error).toBe('unsupported_grant_type');
+  });
+});
+
+async function registerClient(register, body) {
+  const res = mockRes();
+  await register({ method: 'POST', headers: HEADERS, body }, res);
+  return res;
+}
+
+describe('dynamic client registration (RFC 7591)', () => {
+  test('registers a public client and returns its metadata', async () => {
+    const { register, store } = setup();
+    const res = await registerClient(register, {
+      client_name: 'Claude',
+      redirect_uris: [REDIRECT],
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.get('Cache-Control')).toBe('no-store');
+    expect(res.body.client_id).toMatch(/^[0-9a-f]{32}$/);
+    expect(res.body.client_secret).toBeUndefined();
+    expect(res.body).toMatchObject({
+      client_name: 'Claude',
+      redirect_uris: [REDIRECT],
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+    });
+    expect(typeof res.body.client_id_issued_at).toBe('number');
+
+    const stored = await store.getClient(res.body.client_id);
+    expect(stored.redirectUris).toEqual([REDIRECT]);
+    expect(stored.clientName).toBe('Claude');
+  });
+
+  test('applies public-client defaults when optional metadata is omitted', async () => {
+    const { register } = setup();
+    const res = await registerClient(register, { redirect_uris: [REDIRECT] });
+    expect(res.statusCode).toBe(201);
+    expect(res.body.token_endpoint_auth_method).toBe('none');
+    expect(res.body.grant_types).toEqual(['authorization_code', 'refresh_token']);
+    expect(res.body.response_types).toEqual(['code']);
+    expect(res.body.client_name).toBeUndefined();
+  });
+
+  test('issues a distinct client_id per registration', async () => {
+    const { register } = setup();
+    const a = await registerClient(register, { redirect_uris: [REDIRECT] });
+    const b = await registerClient(register, { redirect_uris: [REDIRECT] });
+    expect(a.body.client_id).not.toBe(b.body.client_id);
+  });
+
+  test.each([
+    'http://localhost:6274/oauth/callback',
+    'http://127.0.0.1:33418/callback',
+    'http://[::1]:8080/cb',
+  ])('accepts loopback http redirect %s (native / CLI clients)', async (uri) => {
+    const { register } = setup();
+    const res = await registerClient(register, { redirect_uris: [uri] });
+    expect(res.statusCode).toBe(201);
+  });
+
+  test.each([
+    ['plain http on a public host', 'http://example.com/cb'],
+    ['custom scheme', 'com.example.app:/oauth'],
+    ['javascript URL', 'javascript:alert(1)'],
+    ['fragment', 'https://claude.ai/cb#frag'],
+    ['relative URL', '/cb'],
+    ['embedded credentials', 'https://user:pass@claude.ai/cb'],
+  ])('rejects a redirect_uri with %s', async (_label, uri) => {
+    const { register, store } = setup();
+    const res = await registerClient(register, { redirect_uris: [REDIRECT, uri] });
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('invalid_redirect_uri');
+    expect(store._debug.clients.size).toBe(1); // only setup()'s seeded client
+  });
+
+  test.each([
+    ['missing', {}],
+    ['empty', { redirect_uris: [] }],
+    ['not an array', { redirect_uris: REDIRECT }],
+  ])('rejects %s redirect_uris', async (_label, body) => {
+    const { register } = setup();
+    const res = await registerClient(register, body);
+    expect(res.body.error).toBe('invalid_redirect_uri');
+  });
+
+  test.each([
+    ['a confidential auth method', { token_endpoint_auth_method: 'client_secret_basic' }],
+    ['client_credentials grant', { grant_types: ['client_credentials'] }],
+    ['refresh without authorization_code', { grant_types: ['refresh_token'] }],
+    ['implicit response type', { response_types: ['token'] }],
+    ['an over-long client_name', { client_name: 'x'.repeat(101) }],
+    ['control characters in client_name', { client_name: 'Claude\nAdmin' }],
+    ['a non-string client_name', { client_name: 42 }],
+  ])('rejects %s with invalid_client_metadata', async (_label, extra) => {
+    const { register } = setup();
+    const res = await registerClient(register, { redirect_uris: [REDIRECT], ...extra });
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('invalid_client_metadata');
+  });
+
+  test('ignores unrecognized metadata instead of storing it', async () => {
+    const { register, store } = setup();
+    const res = await registerClient(register, {
+      redirect_uris: [REDIRECT],
+      logo_uri: 'https://evil.example/logo.png',
+      arbitrary_blob: 'x'.repeat(10000),
+    });
+    expect(res.statusCode).toBe(201);
+    const stored = await store.getClient(res.body.client_id);
+    expect(Object.keys(stored).sort()).toEqual(
+      [
+        'clientId',
+        'createdAtMs',
+        'grantTypes',
+        'redirectUris',
+        'responseTypes',
+        'tokenEndpointAuthMethod',
+      ].sort()
+    );
+  });
+
+  test('rejects a non-object body and non-POST methods', async () => {
+    const { register } = setup();
+    const notObject = await registerClient(register, 'redirect_uris=https://claude.ai/cb');
+    expect(notObject.body.error).toBe('invalid_client_metadata');
+
+    const res = mockRes();
+    await register({ method: 'GET', headers: HEADERS, query: {} }, res);
+    expect(res.statusCode).toBe(405);
+  });
+
+  test('a self-asserted client_name is HTML-escaped on the consent page', async () => {
+    const { register, authorize } = setup();
+    const reg = await registerClient(register, {
+      client_name: '<img src=x onerror=alert(1)>',
+      redirect_uris: [REDIRECT],
+    });
+    const res = mockRes();
+    await authorize(
+      {
+        method: 'GET',
+        headers: HEADERS,
+        query: { ...baseParams(), client_id: reg.body.client_id },
+      },
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.html).not.toMatch(/<img src=x/);
+    expect(res.html).toMatch(/&lt;img src=x onerror=alert\(1\)&gt;/);
+  });
+});
+
+describe('1d exit criterion: self-registered client, zero pre-configuration', () => {
+  test('registers, then completes authorize → token → refresh', async () => {
+    const { register, authorize, token } = setup();
+    const redirect = 'http://127.0.0.1:43110/callback';
+
+    // 1. Register (what a connector does after reading discovery).
+    const reg = await registerClient(register, {
+      client_name: 'MCP Inspector',
+      redirect_uris: [redirect],
+    });
+    expect(reg.statusCode).toBe(201);
+    const clientId = reg.body.client_id;
+    const params = { ...baseParams(), client_id: clientId, redirect_uri: redirect };
+
+    // 2. Consent page renders for the new client.
+    const page = mockRes();
+    await authorize({ method: 'GET', headers: HEADERS, query: params }, page);
+    expect(page.statusCode).toBe(200);
+    expect(page.html).toMatch(/MCP Inspector/);
+
+    // 3. User approves → single-use code redirected to the registered URI.
+    const approval = mockRes();
+    await authorize(
+      { method: 'POST', headers: HEADERS, body: { ...params, idToken: 'user-with-app' } },
+      approval
+    );
+    const redirectedTo = new URL(approval.body.redirect);
+    expect(`${redirectedTo.origin}${redirectedTo.pathname}`).toBe(redirect);
+    const code = redirectedTo.searchParams.get('code');
+
+    // 4. Exchange the code for tokens.
+    const tokens = await exchange(token, code, { client_id: clientId, redirect_uri: redirect });
+    expect(tokens.statusCode).toBe(200);
+    const payload = verifyAccessToken(tokens.body.access_token, { audience: AUD });
+    expect(payload.sub).toBe('uid-abc');
+
+    // 5. Refresh works for the self-registered client.
+    const refreshed = mockRes();
+    await token(
+      {
+        method: 'POST',
+        headers: HEADERS,
+        body: {
+          grant_type: 'refresh_token',
+          refresh_token: tokens.body.refresh_token,
+          client_id: clientId,
+        },
+      },
+      refreshed
+    );
+    expect(refreshed.statusCode).toBe(200);
+    expect(refreshed.body.refresh_token).not.toBe(tokens.body.refresh_token);
+  });
+
+  test('a redirect_uri not registered by that client is refused before any redirect', async () => {
+    const { register, authorize } = setup();
+    const reg = await registerClient(register, { redirect_uris: [REDIRECT] });
+    const res = mockRes();
+    await authorize(
+      {
+        method: 'GET',
+        headers: HEADERS,
+        query: {
+          ...baseParams(),
+          client_id: reg.body.client_id,
+          redirect_uri: 'https://evil.example/cb',
+        },
+      },
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.redirectedTo).toBeUndefined();
+  });
+});
+
+describe('authorization server metadata (RFC 8414)', () => {
+  test('advertises /register and no endpoint that does not exist yet', () => {
+    const res = mockRes();
+    authorizationServerMetadata({ method: 'GET', headers: HEADERS, path: '/' }, res);
+    expect(res.body.registration_endpoint).toBe(`${CANONICAL}/register`);
+    expect(res.body.revocation_endpoint).toBeUndefined();
   });
 });

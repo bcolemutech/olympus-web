@@ -13,7 +13,7 @@ const {
 const { HOST_RESOURCE_PATH } = require('./config');
 const { MCP_JWT_SECRET } = require('./oauth/config');
 
-// OAuth authorization-server handlers (/authorize, /token). Built lazily on
+// OAuth authorization-server handlers (/authorize, /token, /register). Built lazily on
 // first use so Firebase Admin is initialized (by functions/index.js) first, and
 // cached across warm invocations.
 let _oauth;
@@ -24,6 +24,7 @@ function oauthHandlers() {
     const { createFirestoreStore } = require('./oauth/store');
     const { createAuthorizeHandler } = require('./oauth/authorize');
     const { createTokenHandler } = require('./oauth/token');
+    const { createRegisterHandler } = require('./oauth/register');
 
     const store = createFirestoreStore(getFirestore());
     const verifyIdToken = async (idToken) => {
@@ -40,6 +41,7 @@ function oauthHandlers() {
     _oauth = {
       authorize: createAuthorizeHandler({ store, verifyIdToken }),
       token: createTokenHandler({ store, getEntitlements }),
+      register: createRegisterHandler({ store }),
     };
   }
   return _oauth;
@@ -85,7 +87,11 @@ async function route(req, res) {
     return;
   }
 
-  // OAuth 2.1 authorization server (phase 1c). /register + /revoke land in 1d/1h.
+  // OAuth 2.1 authorization server (phases 1c–1d). /revoke lands in 1h.
+  if (path === '/register') {
+    await oauthHandlers().register(req, res);
+    return;
+  }
   if (path === '/authorize') {
     await oauthHandlers().authorize(req, res);
     return;
