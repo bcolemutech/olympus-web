@@ -3,7 +3,7 @@
 /**
  * Phase 1 exit-criterion verification harness (L-131 / #308).
  *
- * This is the sign-off gate for The Loom's MVP milestone (design doc §10):
+ * This is the sign-off gate for The Loom's MVP milestone (design doc §9):
  * a scripted multi-session scenario against the real shattered-coast canon
  * world, exercising all three failure modes the whole project's thesis
  * rests on, plus resume:

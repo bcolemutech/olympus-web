@@ -95,7 +95,7 @@ olympus-web/
 
 ### IIFE Namespace Pattern
 
-All vanilla JS files use an Immediately Invoked Function Expression that attaches to a global namespace. Each app owns its namespace (e.g., `window.Symposium`, `window.VoidOdyssey`).
+All vanilla JS files use an Immediately Invoked Function Expression that attaches to a global namespace. Each app owns its namespace (e.g., `window.Symposium`, `window.Loom`).
 
 ```js
 // State file — defines namespace and exports constants
@@ -262,7 +262,7 @@ Follow Conventional Commits with scopes matching the app or area changed:
 
 ```
 feat(symposium): add batch delete for shopping list items
-fix(void-odyssey): correct star map coordinate offset
+fix(loom): correct soft-canon promotion threshold
 docs(admin): update user management instructions
 chore(ci): update Firebase deploy action version
 ```

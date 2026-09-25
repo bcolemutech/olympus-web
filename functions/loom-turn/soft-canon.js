@@ -3,7 +3,7 @@
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
- * Soft-canon quarantine (design doc §5, §11 L-115 / L-141).
+ * Soft-canon quarantine (design doc §5, §10 L-115 / L-141).
  *
  * When NARRATE (L-113 / #300) names an entity absent from canon/state, COMMIT
  * hands it off here to be written to `loom_softcanon` as provisional — never
