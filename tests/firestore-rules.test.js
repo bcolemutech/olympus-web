@@ -1656,3 +1656,75 @@ describe('loom_* — Firestore Security Rules', function () {
     });
   });
 });
+
+describe('scriptorium_notes — Firestore Security Rules', function () {
+  var testEnv;
+  var ownerDb;
+  var adminDb;
+  var unauthDb;
+
+  var OWNER_UID = 'scribe-001';
+  var NOTE_ID = 'note-001';
+
+  beforeAll(async function () {
+    var firestoreConfig = { rules: readFileSync(RULES_PATH, 'utf8') };
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      if (parts[0]) firestoreConfig.host = parts[0];
+      var parsedPort = parseInt(parts[1], 10);
+      if (!isNaN(parsedPort)) firestoreConfig.port = parsedPort;
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: firestoreConfig,
+    });
+  });
+
+  beforeEach(async function () {
+    await testEnv.clearFirestore();
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      await setDoc(doc(ctx.firestore(), 'scriptorium_notes', NOTE_ID), {
+        ownerUid: OWNER_UID,
+        title: 'A note',
+        body: '',
+      });
+    });
+    // Notes are reached only through the MCP connector (Admin SDK), so even
+    // the owner holding the scriptorium claim — or an admin — has no client access.
+    ownerDb = testEnv.authenticatedContext(OWNER_UID, { apps: ['scriptorium'] }).firestore();
+    adminDb = testEnv
+      .authenticatedContext('admin-001', { admin: true, apps: ['scriptorium'] })
+      .firestore();
+    unauthDb = testEnv.unauthenticatedContext().firestore();
+  });
+
+  afterAll(async function () {
+    await testEnv.cleanup();
+  });
+
+  it('denies the owner reading their note directly', async function () {
+    await assertFails(getDoc(doc(ownerDb, 'scriptorium_notes', NOTE_ID)));
+  });
+
+  it('denies the owner creating a note directly', async function () {
+    await assertFails(
+      setDoc(doc(ownerDb, 'scriptorium_notes', 'note-002'), { ownerUid: OWNER_UID, title: 'x' })
+    );
+  });
+
+  it('denies the owner updating a note directly', async function () {
+    await assertFails(updateDoc(doc(ownerDb, 'scriptorium_notes', NOTE_ID), { title: 'changed' }));
+  });
+
+  it('denies an admin reading notes directly', async function () {
+    await assertFails(getDoc(doc(adminDb, 'scriptorium_notes', NOTE_ID)));
+  });
+
+  it('denies unauthenticated reads', async function () {
+    await assertFails(getDoc(doc(unauthDb, 'scriptorium_notes', NOTE_ID)));
+  });
+});

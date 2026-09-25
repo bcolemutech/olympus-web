@@ -27,6 +27,17 @@ apps:
     enabled: true
     order: 11
 
+  # ── MCP connectors (used from Claude; no web UI) ────────
+  # `connector` is the URL to add in Claude. The Grand Hall tile copies it.
+  - id: scriptorium
+    name: Scriptorium
+    description: Notes you manage from Claude. Tap to copy the connector URL.
+    icon: "\U0001F4DC"
+    type: connector
+    connector: https://bcoletech.com/mcp/scriptorium
+    enabled: true
+    order: 30
+
   # ── JSX applets ─────────────────────────────────────────
   - id: pool-powerups
     name: Pool Power-Ups
