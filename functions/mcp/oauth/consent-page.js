@@ -197,7 +197,9 @@ function renderConsentPage({ appId, appName, clientName, redirectHost, oauthPara
         btn.disabled = false;
         return;
       }
-      user.getIdToken().then(function (idToken) {
+      // Force a refresh: a cached ID token predates any app claim granted since
+      // sign-in, and the server's entitlement check would wrongly refuse it.
+      user.getIdToken(true).then(function (idToken) {
         var body = Object.assign({ idToken: idToken }, OAUTH);
         return fetch(window.location.pathname, {
           method: 'POST',

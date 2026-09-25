@@ -251,6 +251,14 @@ describe('resource binding at /authorize (phase 1e)', () => {
   });
 });
 
+describe('consent page approval', () => {
+  test('forces a fresh ID token so a just-granted app claim is seen', () => {
+    const html = renderConsentPage({ appId: APP, appName: 'Scriptorium', oauthParams: {} });
+    expect(html).toMatch(/user\.getIdToken\(true\)/);
+    expect(html).not.toMatch(/user\.getIdToken\(\)/);
+  });
+});
+
 describe('consent page is XSS-safe', () => {
   test('malicious state/resource cannot break out of the params block', () => {
     const malicious = "');alert(document.domain)//";
