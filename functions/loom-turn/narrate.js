@@ -64,8 +64,8 @@ function buildSystemInstruction(knownEntities) {
   );
 }
 
-function buildEntitySection(canonWorldId, context) {
-  const snippet = loomCanon.getEntitySnippet(canonWorldId, context.entityId);
+function buildEntitySection(canonWorld, context) {
+  const snippet = loomCanon.entitySnippet(canonWorld, context.entityId);
   const historyText = context.turns.length
     ? context.turns.map((turn) => '  - ' + turn.narration).join('\n')
     : '  (no prior history)';
@@ -85,12 +85,12 @@ function buildEntitySection(canonWorldId, context) {
 }
 
 function buildUserMessage(params) {
-  const { actionText, resolution, canonWorldId, entityContexts, recentSummary } = params;
+  const { actionText, resolution, canonWorld, entityContexts, recentSummary } = params;
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
   const entitySections =
-    entityContexts.map((ctx) => buildEntitySection(canonWorldId, ctx)).join('\n\n') || '(none)';
+    entityContexts.map((ctx) => buildEntitySection(canonWorld, ctx)).join('\n\n') || '(none)';
 
   return (
     'PLAYER ACTION:\n' +
@@ -142,7 +142,12 @@ function resolveSceneEntityIds(canonWorld, save, proposedAction) {
     ? [].concat(currentLocation.npcIds || [], currentLocation.factionIds || [])
     : [];
   const candidateIds = Array.from(new Set(sceneEntityIds.concat(proposedAction.targets || [])));
-  return candidateIds.filter((id) => !!loomCanon.getEntity(canonWorld.id, id));
+  // Works on the loaded world object (static or Firestore-backed); retired
+  // entities are absent from the scene.
+  return candidateIds.filter((id) => {
+    const resolved = loomCanon.findEntity(canonWorld, id);
+    return Boolean(resolved) && !resolved.entity.retired;
+  });
 }
 
 /**
@@ -177,7 +182,7 @@ async function narrateResolution(params) {
       userMessage: buildUserMessage({
         actionText,
         resolution,
-        canonWorldId: canonWorld.id,
+        canonWorld,
         entityContexts,
         recentSummary: save.recentSummary,
       }),

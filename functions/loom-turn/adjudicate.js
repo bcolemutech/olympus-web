@@ -71,6 +71,15 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
   }
 
   const targetLocation = canonWorld.locations[targetId];
+  // A retired place stays resolvable for saves already there, but nobody can
+  // travel to it (Firestore worlds also drop it from connections).
+  if (targetLocation.retired) {
+    return {
+      outcome: 'blocked',
+      mutations: [],
+      constraints: ["That place can't be reached anymore."],
+    };
+  }
   const requiredAbility = targetLocation.rules && targetLocation.rules.requiresAbility;
   const abilities = characterState.abilities || [];
   if (requiredAbility && abilities.indexOf(requiredAbility) === -1) {

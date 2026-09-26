@@ -478,12 +478,13 @@ exports.loomCreateSave = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'characterName must be 200 characters or fewer.');
   }
 
-  const canonWorld = loomCanon.getWorld(worldId.trim());
+  const db = getFirestore();
+  // Static or Firestore-backed; drafts aren't playable until published.
+  const canonWorld = await loomCanon.loadWorld(worldId.trim(), { db });
   if (!canonWorld) {
     throw new HttpsError('not-found', 'Unknown world.');
   }
 
-  const db = getFirestore();
   const saveRef = db.collection('loom_saves').doc();
 
   const save = makeSave({

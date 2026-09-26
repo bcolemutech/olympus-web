@@ -44,7 +44,9 @@ async function intake(params) {
     throw new LoomTurnError('failed-precondition', 'worldId does not match this save.');
   }
 
-  const canonWorld = loomCanon.getWorld(worldId);
+  // Static or Firestore-backed; only published worlds are playable. Re-checked
+  // every turn so canon edits (canonVersion) reach the game on its next turn.
+  const canonWorld = await loomCanon.loadWorld(worldId, { db });
   if (!canonWorld) {
     throw new LoomTurnError('not-found', 'Unknown world.');
   }
