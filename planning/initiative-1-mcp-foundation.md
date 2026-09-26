@@ -2,23 +2,22 @@
 
 **Status:** Draft for review
 **Project:** Olympus (`olympus-dfa00`)
-**Program:** Crawl / Walk / Run — three initiatives that build on each other
-**This initiative:** Crawl — prove inbound MCP works end to end, as a reusable per-app substrate
-**Related:** The Loom (frozen as-is), The Cartographer (Initiative 2), Loom-as-game-system (Initiative 3)
+**Program:** two initiatives that build on each other — prove the MCP layer, then run the Loom through it
+**This initiative:** prove inbound MCP works end to end, as a reusable per-app substrate
+**Related:** The Loom, Loom-as-game-system (Initiative 2), [The Cartographer](./the-cartographer-design.md) (a Loom feature, not an initiative)
 
 ---
 
 ## 1. Program Context
 
-This is the first of three initiatives that bring Claude and Olympus together incrementally:
+This is the first of two initiatives that bring Claude and Olympus together incrementally:
 
-| #     | Initiative                    | Role                                                                                                                                    |
-| ----- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | **MCP Foundation** (this doc) | Make MCP a first-class, reusable capability of the Olympus platform, proven by a throwaway POC app. Core plumbing for everything after. |
-| 2     | The Cartographer              | A world/lore-building app that uses the Initiative 1 MCP layer so Claude can help author canon.                                         |
-| 3     | Game system                   | Brings it together, meeting the Loom's goals — using MCP + Claude (external) for AI flavor instead of Gemini.                           |
+| #     | Initiative                    | Role                                                                                                                                                                                                          |
+| ----- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **MCP Foundation** (this doc) | Make MCP a first-class, reusable capability of the Olympus platform, proven by a throwaway POC app. Core plumbing for everything after.                                                                       |
+| 2     | Game system                   | Brings it together, meeting the Loom's goals — using MCP + Claude (external) for AI flavor instead of Gemini — including the authoring tools that turn a Cartographer-loaded draft world into a playable one. |
 
-The Loom as it exists today is left untouched. Initiatives 2 and 3 are separate planning docs/milestones; this doc is scoped strictly to Initiative 1.
+Initiative 2 is a separate planning doc/milestone; this doc is scoped strictly to Initiative 1. The Cartographer, which turns Azgaar maps into draft Loom worlds, is a Loom feature (Loom Phase 3, [`the-cartographer-design.md`](./the-cartographer-design.md)), not an initiative of this program.
 
 ---
 
@@ -27,9 +26,9 @@ The Loom as it exists today is left untouched. Initiatives 2 and 3 are separate 
 MCP can be integrated in two directions. **This initiative builds only one of them, end to end.**
 
 - **Inbound (this initiative):** Olympus _is_ an MCP server. A human talks to _their own_ Claude client — including the **iOS Claude app** — and Claude reaches into Olympus to read and write via MCP tools and resources. The thinking happens in the user's Claude; **Olympus runs no LLM in this path and incurs no model cost.**
-- **Outbound (out of scope for the whole program):** Olympus calling a hosted LLM API to drive its own features. There is no current use case, so no outbound code is written anywhere in this three-initiative program. **All three initiatives are inbound-only** — Initiative 3 is Claude-as-narrator inside the Claude app, with Olympus as host and game engine (see §13), not Olympus calling out. If an internal LLM need ever arises, it would use **Gemini** (already proven in Olympus), never an outbound Anthropic call.
+- **Outbound (out of scope for the whole program):** Olympus calling a hosted LLM API to drive its own features. There is no current use case, so no outbound code is written anywhere in this two-initiative program. **Both initiatives are inbound-only** — Initiative 2 is Claude-as-narrator inside the Claude app, with Olympus as host and game engine (see §13), not Olympus calling out. If an internal LLM need ever arises, it would use **Gemini** (already proven in Olympus), never an outbound Anthropic call.
 
-**Consequence:** because iOS is a required target from day one, and the iOS/claude.ai custom-connector path only speaks **OAuth 2.1**, the OAuth authorization server is core to Initiative 1 — not a later "walk" step. There is no personal-access-token product path; a static bearer token exists only as a local dev/testing shim for MCP Inspector.
+**Consequence:** because iOS is a required target from day one, and the iOS/claude.ai custom-connector path only speaks **OAuth 2.1**, the OAuth authorization server is core to Initiative 1 — not a later step. There is no personal-access-token product path; a static bearer token exists only as a local dev/testing shim for MCP Inspector.
 
 ---
 
@@ -38,7 +37,7 @@ MCP can be integrated in two directions. **This initiative builds only one of th
 **Goals**
 
 - A reusable MCP capability any Olympus app can plug into by registering tools/resources — mirroring how apps already register in `apps.yaml` and own a `hasApp()` claim.
-- **Per-app connectors:** each app (POC, later Symposium, Loom, Cartographer) is a _separate connector_ the user sets up on the client, with its own URL, its own audience-bound token, and its own tool list.
+- **Per-app connectors:** each app (POC, later Symposium and the Loom) is a _separate connector_ the user sets up on the client, with its own URL, its own audience-bound token, and its own tool list.
 - Full inbound OAuth 2.1 handshake with **Dynamic Client Registration**, so a connector can be added on iOS by pasting a URL.
 - A throwaway POC app that proves create/read/update/delete from an external Claude client with real Olympus auth.
 - Identity and authorization that reuse the existing Firebase Auth + custom-claims model exactly.
@@ -47,7 +46,7 @@ MCP can be integrated in two directions. **This initiative builds only one of th
 
 - Any outbound LLM API usage (not in this program; a future internal LLM need would use Gemini).
 - Any LLM running inside an Olympus app (the whole point is the external client).
-- Cartographer / Loom domain tools (later initiatives; only their _pattern_ is proven here).
+- Loom domain tools (Initiative 2; only their _pattern_ is proven here).
 - MCP resources/prompts beyond the minimum needed to prove the model (rich resource catalogs come with real apps).
 - Fine-grained intra-app scopes (read vs. write). The connector boundary = app boundary for the MVP; intra-app scopes stay behind a seam.
 
@@ -236,7 +235,7 @@ Crawl → walk → run _inside_ the initiative. Explicit exit criteria.
 
 > From the **iOS Claude app**, add Olympus as a connector by URL, authorize with your Olympus login, and have Claude **read and write the POC app's data** — with a second app's connector proving clean per-app division.
 
-If that holds, the seam is proven and Cartographer (Initiative 2) and the game system (Initiative 3) inherit it.
+If that holds, the seam is proven and the game system (Initiative 2) inherits it.
 
 ---
 
@@ -263,11 +262,10 @@ If that holds, the seam is proven and Cartographer (Initiative 2) and the game s
 
 ### Still open
 
-- **Intra-app scopes (read vs. write):** one scope per app for the MVP (connector = app); a `requiredScope` field per tool is a purely additive change behind the §8 seam. Recommendation is to defer. The likely early pull is **Cartographer** (Initiative 2): read canon freely, gate canon writes behind explicit consent. Decide when we design Cartographer, not now.
+- **Intra-app scopes (read vs. write):** one scope per app for the MVP (connector = app); a `requiredScope` field per tool is a purely additive change behind the §8 seam. Recommendation is to defer. The likely early pull is the Loom's **authoring tools** (Initiative 2): read a world freely, gate canon writes to a draft world behind explicit consent. Decide when Initiative 2 is designed, not now.
 
 ---
 
 ## 13. Handoff to Later Initiatives
 
-- **Initiative 2 (Cartographer):** a new app module registered through §8, mounted at `/mcp/cartographer`; its tools author canon. No new plumbing.
-- **Initiative 3 (game system):** also **inbound**. Claude, inside the user's Claude app, is the **narrator and intent layer**; Olympus is the **host and game engine** — rules, server dice, authoritative world/character state, and canon — exposed through the Initiative 1 MCP layer as tools (submit action, query state), MCP prompts (start/continue an adventure), and resources (current scene, character sheet). Olympus adjudicates and disposes; Claude narrates the fixed result. This carries the Loom's "the model proposes, the server disposes" pipeline into MCP without Olympus running any LLM. No new plumbing beyond richer tools/prompts/resources registered through §8.
+- **Initiative 2 (game system):** also **inbound**. Claude, inside the user's Claude app, is the **narrator and intent layer**; Olympus is the **host and game engine** — rules, server dice, authoritative world/character state, and canon — exposed through the Initiative 1 MCP layer as tools (submit action, query state), MCP prompts (start/continue an adventure), and resources (current scene, character sheet). Olympus adjudicates and disposes; Claude narrates the fixed result. This carries the Loom's "the model proposes, the server disposes" pipeline into MCP without Olympus running any LLM. No new plumbing beyond richer tools/prompts/resources registered through §8. It also carries the Loom's **authoring tools**: Claude reads a draft world loaded by the Cartographer (geography, politics, map) and adds lore, characters, rules, and an opening hook before the world is published.

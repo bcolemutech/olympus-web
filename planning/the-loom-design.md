@@ -2,13 +2,13 @@
 
 **Status:** Draft for review
 **Project:** Olympus (`olympus-dfa00`)
-**Related:** The Cartographer (canon source — Azgaar-map-based world builder), `sustainable-ai-game-worlds.md`
+**Related:** [The Cartographer](./the-cartographer-design.md) (Azgaar map intake → draft worlds), `sustainable-ai-game-worlds.md`
 
 ---
 
 ## 1. Overview
 
-The Loom is a shared narrative engine for Olympus: a way to **rapidly stand up a persistent game world and then play inside it like a sandbox.** It combines a server-owned AI-GM turn loop, a shared-world-plus-private-saves structure, and a build-vs-play mode split — with The Cartographer supplying world generation — into one reusable substrate rather than a separate app per setting.
+The Loom is a shared narrative engine for Olympus: a way to **rapidly stand up a persistent game world and then play inside it like a sandbox.** It combines a server-owned AI-GM turn loop, a shared-world-plus-private-saves structure, and a build-vs-play mode split — with The Cartographer turning Azgaar maps into starting-point worlds — into one reusable substrate rather than a separate app per setting.
 
 The motivation is concrete. Existing platforms in this space are either too expensive to run a real campaign on (AI Dungeon's credit/context tiers, NovelAI's Opus tier) or the AI experience is weak in exactly the ways that break immersion. By building on Olympus and routing AI through Gemini 2.5 Flash, cost stays low. The harder problem is the AI experience, and the entire design is organized around two failures that every competitor exhibits:
 
@@ -27,7 +27,7 @@ Naming: **The Loom** (confirmed — see §10). The Fates weave the thread of fat
 - Persistent, shared world state that survives across sessions and (eventually) players.
 - Demonstrable resistance to the three failure modes: forgotten events, hallucinated facts, rule-breaking.
 - Low marginal cost per turn; expensive AI work concentrated into batch runs that benefit the whole world.
-- Canon ingestion from The Cartographer as the "rapidly build a world" half of the loop.
+- World intake from Azgaar maps via The Cartographer as the "rapidly build a world" half of the loop: a map becomes a draft world (geography, politics, map image), and Claude helps flesh it out through MCP authoring tools.
 
 **Non-Goals (for now)**
 
@@ -55,12 +55,12 @@ These inherit directly from Olympus conventions and add one:
 
 Four layers, each with a different mutability and owner. The separation is what prevents forgetting: hard state lives in Firestore and is never truncated to fit a context window; only the _narrative recap_ is ever summarized.
 
-| Layer                           | Source / store                                                            | Mutability                                    | Role                                                                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Canon**                       | Static JS config, or Firestore for Cartographer-generated/editable worlds | Read-only at play time                        | World definition: places, factions, characters, rules, lore                                                            |
-| **World State**                 | Firestore (`loom_world_state`)                                            | Server-mutated, shared                        | The live persistent simulation — who's where, what's changed, faction standings. Makes the world feel alive and shared |
-| **Character/Session State**     | Firestore (`loom_saves`)                                                  | Server-mutated, private per player            | Private saved games: position, inventory, personal goals, relationship deltas, private flags                           |
-| **Event Log + Rolling Summary** | Firestore (`loom_turns` subcollection) + a regenerated summary field      | Append-only log; summary regenerated in batch | History plus a dense recap. Entity-keyed retrieval surfaces specific past beats when relevant                          |
+| Layer                           | Source / store                                                       | Mutability                                    | Role                                                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Canon**                       | Static JS config, or Firestore for Cartographer-loaded worlds        | Read-only at play time                        | World definition: places, factions, characters, rules, lore                                                            |
+| **World State**                 | Firestore (`loom_world_state`)                                       | Server-mutated, shared                        | The live persistent simulation — who's where, what's changed, faction standings. Makes the world feel alive and shared |
+| **Character/Session State**     | Firestore (`loom_saves`)                                             | Server-mutated, private per player            | Private saved games: position, inventory, personal goals, relationship deltas, private flags                           |
+| **Event Log + Rolling Summary** | Firestore (`loom_turns` subcollection) + a regenerated summary field | Append-only log; summary regenerated in batch | History plus a dense recap. Entity-keyed retrieval surfaces specific past beats when relevant                          |
 
 This gives a shared world across players with private saved games: World State is the shared layer, Character State is the private layer.
 
@@ -106,10 +106,10 @@ The narration prompt is explicitly told the Resolution is final: it may color _h
 
 This reconciles turn-based play with the "concentrate spend into batch world-sim runs" principle from `sustainable-ai-game-worlds.md`.
 
-| Mode                     | When                                        | Model                                     | Examples                                                                                                            |
-| ------------------------ | ------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Real-time / per-turn** | Every player action; latency-sensitive      | Gemini 2.5 Flash                          | Intent parse, narration (~1–2 calls/turn)                                                                           |
-| **Batch / async**        | Infrequent; benefits the whole shared world | Flash or Claude Sonnet where quality pays | World-tick simulation (off-screen NPCs/factions act), event-log summary regeneration, Cartographer canon enrichment |
+| Mode                     | When                                        | Model                                     | Examples                                                                             |
+| ------------------------ | ------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Real-time / per-turn** | Every player action; latency-sensitive      | Gemini 2.5 Flash                          | Intent parse, narration (~1–2 calls/turn)                                            |
+| **Batch / async**        | Infrequent; benefits the whole shared world | Flash or Claude Sonnet where quality pays | World-tick simulation (off-screen NPCs/factions act), event-log summary regeneration |
 
 Per-turn cost is held to a couple of cheap Flash calls. The expensive, world-enriching work runs as scheduled batch jobs whose output is shared by everyone in the world — the per-turn calls are the one deliberate exception to the minimize-real-time-calls principle.
 
@@ -190,13 +190,13 @@ Write model (per §10 decisions): all `loom_world_state` writes run in Firestore
 
 Explicit phase exit criteria, MVP-first.
 
-| Phase                | Scope                                                                                                      | Exit criterion                                                                                                                                                        |
-| -------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1 — MVP**          | Single-player, one hand-authored world, text-only, full §5 pipeline + four-layer memory + a small rule set | A multi-session adventure that, across a session gap, **never forgets hard state, never breaks the seeded rules, and never silently contradicts canon.** Resume works |
-| **2 — Living world** | `loomWorldTick` batch simulation; richer rule sets                                                         | Off-screen world visibly changes between sessions without per-turn cost increase                                                                                      |
-| **3 — Rapid worlds** | Cartographer (generalized for the Loom, Azgaar map import) → Loom canon ingestion                          | A new playable world stands up from Cartographer output without hand-authoring                                                                                        |
-| **4 — Multiplayer**  | Four tiers: shared leaderboards → shared world → async co-op → sync co-op                                  | Shared World State is consistent across two concurrent players                                                                                                        |
-| **5 — Visuals**      | Imagen 4 scene/portrait generation                                                                         | Images generated within batch budget                                                                                                                                  |
+| Phase                | Scope                                                                                                              | Exit criterion                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 — MVP**          | Single-player, one hand-authored world, text-only, full §5 pipeline + four-layer memory + a small rule set         | A multi-session adventure that, across a session gap, **never forgets hard state, never breaks the seeded rules, and never silently contradicts canon.** Resume works |
+| **2 — Living world** | `loomWorldTick` batch simulation; richer rule sets                                                                 | Off-screen world visibly changes between sessions without per-turn cost increase                                                                                      |
+| **3 — Rapid worlds** | The Cartographer: an uploaded Azgaar map is processed and loaded as a draft world (geography, politics, map image) | An uploaded Azgaar map becomes a draft world whose places, routes, factions and map match the source, with no hand-editing                                            |
+| **4 — Multiplayer**  | Four tiers: shared leaderboards → shared world → async co-op → sync co-op                                          | Shared World State is consistent across two concurrent players                                                                                                        |
+| **5 — Visuals**      | Imagen 4 scene/portrait generation                                                                                 | Images generated within batch budget                                                                                                                                  |
 
 MVP is the explicit gate: Phase 1's exit criterion is the whole thesis of the project. If it doesn't hold, nothing downstream matters.
 
@@ -221,10 +221,11 @@ MVP is the explicit gate: Phase 1's exit criterion is the whole thesis of the pr
 - **Canon authority** (L-141 / #310) — **Nobody writes Canon at play time.**
   The model and players write only World/Character state and the soft-canon pool. Soft-canon
   promotion (L-115 / #302) elevates entities to _established world facts inside World State_ —
-  never into Canon. Canon changes only through authoring: static-config commits now,
-  Cartographer/admin tooling in Phase 3. Rationale: Canon stays a trustable hand-authored
-  layer, and the security model stays clean — there is no runtime write path into canon,
-  client or server.
+  never into Canon. Canon changes only through authoring, never at play time: static-config
+  commits, a Cartographer import (which creates a new draft world), and MCP authoring tools
+  that flesh out a draft world before it's published. Rationale: Canon stays a trustable
+  authored layer, and the security model stays clean — there is no write path into canon
+  during play, client or server.
 
 - **World-tick vs. player presence** (L-201 / #312) — **Presence-aware tick + transactional
   writes.** Every `loom_world_state` write — batch tick or player turn — runs in a Firestore
