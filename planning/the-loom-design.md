@@ -2,7 +2,7 @@
 
 **Status:** Draft for review
 **Project:** Olympus (`olympus-dfa00`)
-**Related:** [The Cartographer](./the-cartographer-design.md) (Azgaar map intake → draft worlds), `sustainable-ai-game-worlds.md`
+**Related:** [The Cartographer](./the-cartographer-design.md) (the world-building app: Azgaar map intake, then building with Claude over MCP), `sustainable-ai-game-worlds.md`
 
 ---
 
@@ -27,7 +27,7 @@ Naming: **The Loom** (confirmed — see §10). The Fates weave the thread of fat
 - Persistent, shared world state that survives across sessions and (eventually) players.
 - Demonstrable resistance to the three failure modes: forgotten events, hallucinated facts, rule-breaking.
 - Low marginal cost per turn; expensive AI work concentrated into batch runs that benefit the whole world.
-- World intake from Azgaar maps via The Cartographer as the "rapidly build a world" half of the loop: a map becomes a draft world (geography, politics, map image), and Claude helps flesh it out through MCP authoring tools.
+- World intake from Azgaar maps via The Cartographer as the "rapidly build a world" half of the loop: a map is loaded as a draft world (geography, politics, map image), Claude helps build it out through the Cartographer's MCP connector, and the published world is played here. In-game AI stays Gemini (§6); MCP is for authoring and fixing world data, not for play.
 
 **Non-Goals (for now)**
 
@@ -57,7 +57,7 @@ Four layers, each with a different mutability and owner. The separation is what 
 
 | Layer                           | Source / store                                                       | Mutability                                    | Role                                                                                                                   |
 | ------------------------------- | -------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Canon**                       | Static JS config, or Firestore for Cartographer-loaded worlds        | Read-only at play time                        | World definition: places, factions, characters, rules, lore                                                            |
+| **Canon**                       | Static JS config, or Firestore for Cartographer-loaded worlds        | Read-only to the play pipeline                | World definition: places, factions, characters, rules, lore                                                            |
 | **World State**                 | Firestore (`loom_world_state`)                                       | Server-mutated, shared                        | The live persistent simulation — who's where, what's changed, faction standings. Makes the world feel alive and shared |
 | **Character/Session State**     | Firestore (`loom_saves`)                                             | Server-mutated, private per player            | Private saved games: position, inventory, personal goals, relationship deltas, private flags                           |
 | **Event Log + Rolling Summary** | Firestore (`loom_turns` subcollection) + a regenerated summary field | Append-only log; summary regenerated in batch | History plus a dense recap. Entity-keyed retrieval surfaces specific past beats when relevant                          |
@@ -119,15 +119,15 @@ Per-turn cost is held to a couple of cheap Flash calls. The expensive, world-enr
 
 Standard "add a new app" path from the architecture doc — nothing exotic.
 
-| Concern   | Implementation                                                                                                            |
-| --------- | ------------------------------------------------------------------------------------------------------------------------- |
-| App       | Embedded app at `/public/apps/loom/`, IIFE namespace modules, no build step                                               |
-| Registry  | `apps.yaml` entry, `type: embedded`, `path: /apps/loom/`                                                                  |
-| Auth      | Custom claim `hasApp('loom')`; admin-granted via The Pantheon                                                             |
-| Frontend  | Vanilla JS + Firebase compat SDK; Leaflet only if a world surfaces a map                                                  |
-| Functions | `loomPlayTurn` (callable), `loomCreateWorld`, `loomWorldTick` (scheduled/batch) — Node 22, CommonJS, Vertex calls proxied |
-| Rules     | Default-deny; `loom_*` collections gated on `hasApp('loom')`; saves owner-scoped                                          |
-| Deploy    | Existing GitHub Actions; Environment Protection Rules for approval                                                        |
+| Concern   | Implementation                                                                                                                                 |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| App       | Embedded app at `/public/apps/loom/`, IIFE namespace modules, no build step                                                                    |
+| Registry  | `apps.yaml` entry, `type: embedded`, `path: /apps/loom/`                                                                                       |
+| Auth      | Custom claim `hasApp('loom')`; admin-granted via The Pantheon                                                                                  |
+| Frontend  | Vanilla JS + Firebase compat SDK; Leaflet only if a world surfaces a map                                                                       |
+| Functions | `loomPlayTurn` (callable), `loomWorldTick` (scheduled/batch) — Node 22, CommonJS, Vertex calls proxied; worlds are created by the Cartographer |
+| Rules     | Default-deny; `loom_*` collections gated on `hasApp('loom')`; saves owner-scoped                                                               |
+| Deploy    | Existing GitHub Actions; Environment Protection Rules for approval                                                                             |
 
 ### Firestore collections
 
@@ -190,13 +190,13 @@ Write model (per §10 decisions): all `loom_world_state` writes run in Firestore
 
 Explicit phase exit criteria, MVP-first.
 
-| Phase                | Scope                                                                                                              | Exit criterion                                                                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1 — MVP**          | Single-player, one hand-authored world, text-only, full §5 pipeline + four-layer memory + a small rule set         | A multi-session adventure that, across a session gap, **never forgets hard state, never breaks the seeded rules, and never silently contradicts canon.** Resume works |
-| **2 — Living world** | `loomWorldTick` batch simulation; richer rule sets                                                                 | Off-screen world visibly changes between sessions without per-turn cost increase                                                                                      |
-| **3 — Rapid worlds** | The Cartographer: an uploaded Azgaar map is processed and loaded as a draft world (geography, politics, map image) | An uploaded Azgaar map becomes a draft world whose places, routes, factions and map match the source, with no hand-editing                                            |
-| **4 — Multiplayer**  | Four tiers: shared leaderboards → shared world → async co-op → sync co-op                                          | Shared World State is consistent across two concurrent players                                                                                                        |
-| **5 — Visuals**      | Imagen 4 scene/portrait generation                                                                                 | Images generated within batch budget                                                                                                                                  |
+| Phase                | Scope                                                                                                                                      | Exit criterion                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 — MVP**          | Single-player, one hand-authored world, text-only, full §5 pipeline + four-layer memory + a small rule set                                 | A multi-session adventure that, across a session gap, **never forgets hard state, never breaks the seeded rules, and never silently contradicts canon.** Resume works |
+| **2 — Living world** | `loomWorldTick` batch simulation; richer rule sets                                                                                         | Off-screen world visibly changes between sessions without per-turn cost increase                                                                                      |
+| **3 — Rapid worlds** | The Cartographer: an Azgaar map is loaded as a draft world (geography, politics, map image), built out with Claude over MCP, and published | An uploaded map becomes a published, playable world with no hand-editing of config; a later MCP fix reaches games on their next turn                                  |
+| **4 — Multiplayer**  | Four tiers: shared leaderboards → shared world → async co-op → sync co-op                                                                  | Shared World State is consistent across two concurrent players                                                                                                        |
+| **5 — Visuals**      | Imagen 4 scene/portrait generation                                                                                                         | Images generated within batch budget                                                                                                                                  |
 
 MVP is the explicit gate: Phase 1's exit criterion is the whole thesis of the project. If it doesn't hold, nothing downstream matters.
 
@@ -221,11 +221,13 @@ MVP is the explicit gate: Phase 1's exit criterion is the whole thesis of the pr
 - **Canon authority** (L-141 / #310) — **Nobody writes Canon at play time.**
   The model and players write only World/Character state and the soft-canon pool. Soft-canon
   promotion (L-115 / #302) elevates entities to _established world facts inside World State_ —
-  never into Canon. Canon changes only through authoring, never at play time: static-config
-  commits, a Cartographer import (which creates a new draft world), and MCP authoring tools
-  that flesh out a draft world before it's published. Rationale: Canon stays a trustable
-  authored layer, and the security model stays clean — there is no write path into canon
-  during play, client or server.
+  never into Canon. Canon changes only through authoring, never by the play pipeline:
+  static-config commits, a Cartographer import (which creates a new draft world), and the
+  Cartographer's MCP tools, which edit draft and published worlds. An edit to a published world
+  reaches each game on its next turn, and published entities are retired rather than deleted,
+  so a save never loses what it references. Rationale: Canon stays a trustable authored layer,
+  and the security model stays clean — the play pipeline has no write path into canon, client
+  or server.
 
 - **World-tick vs. player presence** (L-201 / #312) — **Presence-aware tick + transactional
   writes.** Every `loom_world_state` write — batch tick or player turn — runs in a Firestore
