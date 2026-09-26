@@ -46,4 +46,4 @@ jobs:
       - name: Install test dependencies
         run: npm ci --prefix tests
       - name: Run Firestore rules tests
-        run: firebase emulators:exec --only firestore --project olympus-dfa00 "cd tests && npm test"
+        run: firebase emulators:exec --only firestore,storage --project olympus-dfa00 "cd tests && npm test"

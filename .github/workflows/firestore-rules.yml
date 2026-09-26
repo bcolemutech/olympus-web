@@ -44,6 +44,6 @@ jobs:
         run: npm run test:install
 
       - name: Run Firestore rules tests
-        run: firebase emulators:exec --only firestore --project demo-olympus-rules-test "cd tests && npm test"
+        run: firebase emulators:exec --only firestore,storage --project demo-olympus-rules-test "cd tests && npm test"
         env:
           CI: true

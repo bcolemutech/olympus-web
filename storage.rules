@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Cloud Storage security rules (C-1 / #368, design
+// planning/the-cartographer-design.md §3.1, §5). Default deny: only the paths
+// below are reachable from clients.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function hasApp(appId) {
+      return request.auth != null
+          && request.auth.token.apps is list
+          && appId in request.auth.token.apps;
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── The Cartographer: map uploads ─────────────────────
+    // A world builder uploads an Azgaar "Save as JSON" export (map.json) and
+    // optionally its rendered image (map.png) into their own upload folder;
+    // the cartographerImport function reads them with the Admin SDK and
+    // removes them after a successful import.
+
+    match /cartographer/{uid}/{uploadId}/{file} {
+      allow read, delete: if isOwner(uid) && hasApp('cartographer');
+
+      allow create, update: if isOwner(uid)
+          && hasApp('cartographer')
+          && uploadId.matches('^[A-Za-z0-9_-]{8,64}$')
+          && (
+            (file == 'map.json'
+              && request.resource.contentType == 'application/json'
+              && request.resource.size <= 50 * 1024 * 1024)
+            || (file == 'map.png'
+              && request.resource.contentType == 'image/png'
+              && request.resource.size <= 30 * 1024 * 1024)
+          );
+    }
+
+    // ── World map images ──────────────────────────────────
+    // Copied here by the import function. Readable by players and world
+    // builders; written only by the server.
+
+    match /worlds/{worldId}/{file} {
+      allow read: if hasApp('loom') || hasApp('cartographer');
+    }
+  }
+}
