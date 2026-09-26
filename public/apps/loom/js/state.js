@@ -15,9 +15,9 @@
     turnInProgress: false,
   };
 
-  // Display-only list of Phase 1 worlds. Canon itself lives server-side
-  // (functions/loom-canon/) — this is just enough metadata for the world
-  // picker; a Firestore-backed world list is a Phase 3 concern (L-300).
+  // Static worlds shipped with the app (display metadata only; canon lives
+  // server-side in functions/loom-canon/). worlds.js adds published
+  // Cartographer worlds from Firestore at runtime.
   Loom.WORLDS = [
     {
       id: 'shattered-coast',

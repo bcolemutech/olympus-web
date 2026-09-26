@@ -147,7 +147,7 @@ The MCP tools can change a world while it's being played, so canon changes have 
 
 - **Settlement detail.** Large maps have thousands of settlements (Nisia has 663, plus 56 points of interest). **Recommendation:** import all of them and decide on filtering (for example, skipping hamlets under a population threshold) after trying play with a large map.
 - **Map image format.** PNG only, or also SVG? **Recommendation:** PNG only for now.
-- **Async canon accessors.** Should the Firestore seam make `getWorld` and friends async across the turn pipeline, or load a whole world into a per-instance cache (checked against `canonVersion` each turn) so the turn code stays synchronous? **Recommendation:** decide after reading the turn code. The cache is likely simpler.
+- ~~**Async canon accessors.**~~ **Decided in C-4 (#371):** only two places load a world, the turn pipeline's intake and `loomCreateSave`, and both were already async. So `loom-canon` gained an async `loadWorld()` for those two entry points, with a per-instance whole-world cache checked against `canonVersion` (one document read per turn). The pipeline's stages keep working synchronously on the loaded object, and narrate's two by-id lookups now use it too (`findEntity` / `entitySnippet`).
 - **Consent for writes to published worlds.** Intra-app scopes (Initiative 1 §12) could separate "read and edit drafts" from "change published worlds". **Recommendation:** one `mcp:cartographer` scope for now, and revisit if you want Claude's access to live worlds to be narrower.
 - **Fixing World State and saves over MCP.** This is the long-term "fix things" use (for example, a stuck save). **Recommendation:** leave it out of this phase. It needs its own rules for editing live player data.
 

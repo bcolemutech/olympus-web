@@ -303,8 +303,17 @@ service cloud.firestore {
     // all mutation goes through the loomPlayTurn callable (Admin SDK, which
     // bypasses these rules). Soft-canon is server-write-only.
 
+    // Worlds: static config, or loaded by the Cartographer (C-4). Players
+    // (loom) see published worlds only — drafts belong to world builders
+    // (cartographer). Entity subcollections are for world builders; the Loom's
+    // server reads canon via the Admin SDK. No client writes.
     match /loom_worlds/{worldId} {
-      allow read: if hasApp('loom');
+      allow read: if hasApp('cartographer')
+        || (hasApp('loom') && resource.data.status == 'published');
+
+      match /{collection}/{entityId} {
+        allow read: if hasApp('cartographer');
+      }
     }
 
     match /loom_world_state/{worldId} {

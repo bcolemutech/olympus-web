@@ -7,7 +7,17 @@ const {
 } = require('@firebase/rules-unit-testing');
 const { readFileSync } = require('fs');
 const { resolve } = require('path');
-const { doc, setDoc, getDoc, updateDoc, serverTimestamp } = require('firebase/firestore');
+const {
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  collection,
+  query,
+  where,
+  serverTimestamp,
+} = require('firebase/firestore');
 
 const RULES_PATH = resolve(__dirname, '../firestore.rules');
 const PROJECT_ID =
@@ -1531,7 +1541,9 @@ describe('loom_* — Firestore Security Rules', function () {
 
     await testEnv.withSecurityRulesDisabled(async function (ctx) {
       var db = ctx.firestore();
-      await setDoc(doc(db, 'loom_worlds', 'world-001'), { name: 'Test World' });
+      await setDoc(doc(db, 'loom_worlds', 'world-001'), { name: 'Test World', status: 'published' });
+      await setDoc(doc(db, 'loom_worlds', 'draft-001'), { name: 'Draft World', status: 'draft' });
+      await setDoc(doc(db, 'loom_worlds', 'world-001', 'locations', 'loc_1'), { name: 'Town' });
       await setDoc(doc(db, 'loom_world_state', 'world-001'), { worldClock: 0 });
       await setDoc(doc(db, 'loom_saves', SAVE_ID), {
         ownerUid: OWNER_UID,
@@ -1569,6 +1581,29 @@ describe('loom_* — Firestore Security Rules', function () {
 
     it('denies client write even with the loom claim', async function () {
       await assertFails(setDoc(doc(loomDb, 'loom_worlds', 'world-002'), { name: 'Hack' }));
+    });
+
+    // Cartographer-loaded worlds (C-4): drafts belong to world builders.
+    it('denies a loom player reading a draft world', async function () {
+      await assertFails(getDoc(doc(loomDb, 'loom_worlds', 'draft-001')));
+    });
+
+    it('lets a loom player list published worlds only', async function () {
+      await assertSucceeds(
+        getDocs(query(collection(loomDb, 'loom_worlds'), where('status', '==', 'published')))
+      );
+      await assertFails(getDocs(collection(loomDb, 'loom_worlds')));
+    });
+
+    it('lets a cartographer user read drafts and entity subcollections', async function () {
+      var builderDb = testEnv.authenticatedContext('builder-001', { apps: ['cartographer'] }).firestore();
+      await assertSucceeds(getDoc(doc(builderDb, 'loom_worlds', 'draft-001')));
+      await assertSucceeds(getDoc(doc(builderDb, 'loom_worlds', 'world-001', 'locations', 'loc_1')));
+      await assertFails(setDoc(doc(builderDb, 'loom_worlds', 'draft-001'), { status: 'published' }));
+    });
+
+    it('denies a loom player reading entity subcollections', async function () {
+      await assertFails(getDoc(doc(loomDb, 'loom_worlds', 'world-001', 'locations', 'loc_1')));
     });
   });
 

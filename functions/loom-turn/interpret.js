@@ -48,15 +48,23 @@ function buildSystemInstruction(knownEntities) {
 
 function buildKnownEntities(canonWorld) {
   const entities = [];
-  Object.values(canonWorld.locations).forEach((location) => {
-    entities.push({ id: location.id, name: location.name, kind: 'location' });
-  });
-  Object.values(canonWorld.factions).forEach((faction) => {
-    entities.push({ id: faction.id, name: faction.name, kind: 'faction' });
-  });
-  Object.values(canonWorld.characters).forEach((character) => {
-    entities.push({ id: character.id, name: character.name, kind: 'character' });
-  });
+  // Retired entities (soft-removed from a published world) can't be targeted.
+  const live = (entity) => !entity.retired;
+  Object.values(canonWorld.locations)
+    .filter(live)
+    .forEach((location) => {
+      entities.push({ id: location.id, name: location.name, kind: 'location' });
+    });
+  Object.values(canonWorld.factions)
+    .filter(live)
+    .forEach((faction) => {
+      entities.push({ id: faction.id, name: faction.name, kind: 'faction' });
+    });
+  Object.values(canonWorld.characters)
+    .filter(live)
+    .forEach((character) => {
+      entities.push({ id: character.id, name: character.name, kind: 'character' });
+    });
   return entities;
 }
 

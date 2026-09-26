@@ -436,7 +436,7 @@ describe('loomPlayTurn — works against a fully synthetic world', () => {
   });
 
   it('completes a turn end-to-end against a minimal fixture world (not just shattered-coast)', async () => {
-    jest.spyOn(loomCanon, 'getWorld').mockReturnValueOnce(makeWorld());
+    jest.spyOn(loomCanon, 'loadWorld').mockResolvedValueOnce(makeWorld());
 
     const save = makeSaveDoc(
       makeSave({
