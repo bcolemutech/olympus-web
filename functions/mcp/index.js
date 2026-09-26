@@ -178,4 +178,4 @@ const mcpServer = onRequest(
   }
 );
 
-module.exports = { mcpServer, route };
+module.exports = { mcpServer, route, services };

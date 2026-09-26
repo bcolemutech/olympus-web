@@ -862,6 +862,69 @@
         text-align: right;
       }
 
+      .profile-section-desc {
+        font-size: 0.85rem;
+        color: #6b7280;
+        margin: -0.5rem 0 1rem;
+        line-height: 1.5;
+      }
+
+      /* Sworn Envoys — MCP connections the user has authorized (phase 1i) */
+      .connection-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.85rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .connection-row:last-child {
+        border-bottom: none;
+      }
+      .connection-icon {
+        font-size: 1.6rem;
+        flex-shrink: 0;
+      }
+      .connection-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .connection-title {
+        font-size: 0.95rem;
+        color: #e0e0e0;
+        overflow-wrap: anywhere;
+      }
+      .connection-meta {
+        font-size: 0.78rem;
+        color: #6b7280;
+        margin-top: 0.2rem;
+      }
+      .connection-revoke {
+        flex-shrink: 0;
+        padding: 0.45rem 0.9rem;
+        font-family: inherit;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #fca5a5;
+        background: transparent;
+        border: 1px solid rgba(220, 38, 38, 0.35);
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .connection-revoke:hover:not(:disabled) {
+        background: rgba(220, 38, 38, 0.1);
+      }
+      .connection-revoke:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .connections-error {
+        font-size: 0.85rem;
+        color: #fca5a5;
+        margin-top: 0.75rem;
+      }
+
       .profile-field-mono {
         font-family: 'Courier New', Courier, monospace;
         font-size: 0.8rem;
@@ -1159,6 +1222,32 @@
               Seek an Oracle to gain passage.
             </p>
           </div>
+        </section>
+
+        <!-- Sworn Envoys: MCP connections (phase 1i) -->
+        <section class="profile-section">
+          <h2 class="profile-section-title">Sworn Envoys</h2>
+          <p class="profile-section-desc">
+            AI assistants you've connected through an MCP connector, such as Claude. Revoking one
+            cuts it off on its very next request.
+          </p>
+
+          <div class="profile-apps-loading hidden" id="connections-loading">
+            <div class="spinner spinner--small"></div>
+            <span class="profile-apps-loading-text">Summoning your envoys&hellip;</span>
+          </div>
+
+          <div class="profile-card hidden" id="connections-list"></div>
+
+          <div class="empty-state hidden" id="connections-empty">
+            <span class="empty-state-icon" aria-hidden="true">&#128220;</span>
+            <p class="empty-state-text">
+              No envoys have sworn service.<br />
+              Add a connector tile's URL in Claude to connect one.
+            </p>
+          </div>
+
+          <p class="connections-error hidden" id="connections-error" role="alert"></p>
         </section>
 
         <!-- Raw Claims (debug) -->
@@ -1519,6 +1608,114 @@
           }
         };
 
+        // ── Sworn Envoys: MCP connections (phase 1i) ─────────
+        const connectionsList = document.getElementById('connections-list');
+        const connectionsEmpty = document.getElementById('connections-empty');
+        const connectionsLoading = document.getElementById('connections-loading');
+        const connectionsError = document.getElementById('connections-error');
+
+        const formatConnectionDate = (iso) =>
+          iso
+            ? new Date(iso).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })
+            : '—';
+
+        const showConnectionsError = (message) => {
+          connectionsError.textContent = message;
+          connectionsError.classList.remove('hidden');
+        };
+
+        const updateConnectionsEmpty = () => {
+          const none = connectionsList.children.length === 0;
+          connectionsList.classList.toggle('hidden', none);
+          connectionsEmpty.classList.toggle('hidden', !none);
+        };
+
+        const revokeConnection = async (connection, app, row, button) => {
+          const who = connection.clientName || 'this assistant';
+          const ok = window.confirm(
+            `Revoke ${who}'s access to ${app.name}? It will be disconnected on its next request.`
+          );
+          if (!ok) return;
+          connectionsError.classList.add('hidden');
+          button.disabled = true;
+          button.textContent = 'Revoking…';
+          try {
+            await firebase.functions().httpsCallable('mcpRevokeConnection')({
+              grantId: connection.grantId,
+            });
+            row.remove();
+            updateConnectionsEmpty();
+          } catch (err) {
+            console.error('Failed to revoke connection:', err);
+            button.disabled = false;
+            button.textContent = 'Revoke';
+            showConnectionsError('Could not revoke that connection. Please try again.');
+          }
+        };
+
+        const renderConnections = (connections, appsById) => {
+          connectionsList.innerHTML = '';
+          connections.forEach((c) => {
+            const app = appsById[c.appId] || { name: c.appId, icon: '\u{1F50C}' };
+            const row = document.createElement('div');
+            row.className = 'connection-row';
+
+            const icon = document.createElement('span');
+            icon.className = 'connection-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.textContent = app.icon;
+
+            const info = document.createElement('div');
+            info.className = 'connection-info';
+            const title = document.createElement('div');
+            title.className = 'connection-title';
+            title.textContent = `${c.clientName || 'Unknown assistant'} → ${app.name}`;
+            const meta = document.createElement('div');
+            meta.className = 'connection-meta';
+            meta.textContent =
+              `Connected ${formatConnectionDate(c.connectedAt)} · ` +
+              `Last used ${formatConnectionDate(c.lastUsedAt || c.connectedAt)}`;
+            info.appendChild(title);
+            info.appendChild(meta);
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'connection-revoke';
+            button.textContent = 'Revoke';
+            button.addEventListener('click', () => revokeConnection(c, app, row, button));
+
+            row.appendChild(icon);
+            row.appendChild(info);
+            row.appendChild(button);
+            connectionsList.appendChild(row);
+          });
+          updateConnectionsEmpty();
+        };
+
+        const loadConnections = async () => {
+          connectionsError.classList.add('hidden');
+          connectionsList.classList.add('hidden');
+          connectionsEmpty.classList.add('hidden');
+          connectionsLoading.classList.remove('hidden');
+          try {
+            const [result, apps] = await Promise.all([
+              firebase.functions().httpsCallable('mcpListConnections')(),
+              fetchAllApps(),
+            ]);
+            const appsById = Object.fromEntries(apps.map((a) => [a.id, a]));
+            renderConnections(result.data.connections || [], appsById);
+          } catch (err) {
+            console.error('Failed to load connections:', err);
+            showConnectionsError('Could not load your connections.');
+          } finally {
+            connectionsLoading.classList.add('hidden');
+          }
+        };
+
         const showProfileView = async (user) => {
           authView.classList.add('hidden');
           profileView.classList.remove('hidden');
@@ -1530,6 +1727,9 @@
             undefined,
             { year: 'numeric', month: 'long', day: 'numeric' }
           );
+
+          // Load connections alongside the granted apps.
+          loadConnections();
 
           // Load granted apps
           profileAppGrid.classList.add('hidden');

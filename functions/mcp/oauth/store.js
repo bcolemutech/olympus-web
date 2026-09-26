@@ -26,6 +26,7 @@ function withExpireAt(record) {
 //   touchClient(clientId, expiresAtMs)   -> void            (extend client TTL)
 //   putGrant(record)                     -> void            (record.grantId is id)
 //   getGrant(grantId)                    -> grant | null
+//   listGrantsForUser(uid)               -> grant[]         (any state; 1i)
 //   touchGrant(grantId, nowMs, expiresAtMs) -> void         (on refresh)
 //   revokeGrant(grantId, reason, nowMs)  -> grant | null    (grant + its refresh family)
 //   putCode(record)                      -> void            (record.code is id)
@@ -74,6 +75,11 @@ function createFirestoreStore(db) {
     async getGrant(grantId) {
       const snap = await col(COLLECTIONS.grants).doc(grantId).get();
       return snap.exists ? snap.data() : null;
+    },
+
+    async listGrantsForUser(uid) {
+      const snap = await col(COLLECTIONS.grants).where('uid', '==', uid).limit(200).get();
+      return snap.docs.map((doc) => doc.data());
     },
 
     async touchGrant(grantId, nowMs, expiresAtMs) {
@@ -172,6 +178,9 @@ function createInMemoryStore() {
     },
     async getGrant(grantId) {
       return grants.get(grantId) || null;
+    },
+    async listGrantsForUser(uid) {
+      return [...grants.values()].filter((g) => g.uid === uid);
     },
     async touchGrant(grantId, nowMs, expiresAtMs) {
       const existing = grants.get(grantId);
