@@ -16,6 +16,28 @@ initializeApp();
 // via Hosting rewrites. See planning/initiative-1-mcp-foundation.md.
 exports.mcpServer = require('./mcp').mcpServer;
 
+// Grand Hall "connected assistants" (phase 1i): the signed-in user lists and
+// revokes their own MCP connections. See functions/mcp/connections.js.
+const mcpConnections = require('./mcp/connections');
+let _connections;
+function connectionsService() {
+  if (!_connections) {
+    const { store, audit } = require('./mcp').services();
+    _connections = mcpConnections.createConnectionsService({ store, audit });
+  }
+  return _connections;
+}
+
+exports.mcpListConnections = onCall(async (request) => {
+  const uid = mcpConnections.requireSignedIn(request);
+  return { connections: await connectionsService().list(uid) };
+});
+
+exports.mcpRevokeConnection = onCall(async (request) => {
+  const uid = mcpConnections.requireSignedIn(request);
+  return connectionsService().revoke(uid, (request.data || {}).grantId);
+});
+
 // Reused across invitations to avoid per-call overhead.
 const googleAuth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/cloud-platform'],
