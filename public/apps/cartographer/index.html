@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Cartographer — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-functions-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-storage-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- App-specific styles -->
+    <link rel="stylesheet" href="/apps/cartographer/cartographer.css" />
+  </head>
+  <body>
+    <!-- Shared header — rendered by app-header.js -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard — shown while checking auth state -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Unrolling the charts&hellip;</p>
+    </div>
+
+    <!-- Main content — hidden until authenticated -->
+    <main class="app-main hidden" id="app-main">
+      <h1 class="app-title">The Cartographer</h1>
+      <p class="app-subtitle">Turn Azgaar maps into Loom worlds</p>
+      <div class="app-divider"></div>
+
+      <div class="carto-root">
+        <p class="carto-denied hidden" id="carto-denied">
+          You don't have access to the Cartographer. Ask an admin to grant it in The Pantheon.
+        </p>
+
+        <!-- New world from a map -->
+        <section class="carto-section" id="carto-upload-section">
+          <h2 class="carto-section-title">New world from a map</h2>
+          <p class="carto-help">
+            In Azgaar's Fantasy Map Generator, use <b>Save → "Save as JSON"</b> for the map, and
+            optionally <b>Export → PNG</b> for its image. The map becomes a <b>draft</b> world: its
+            places, routes, realms, provinces and points of interest. Add the story later, then
+            publish it to the Loom.
+          </p>
+          <form class="carto-form" id="carto-upload-form">
+            <div class="carto-form-group">
+              <label class="carto-label" for="carto-json">Map (Azgaar JSON)</label>
+              <input
+                class="carto-input"
+                id="carto-json"
+                type="file"
+                accept=".json,application/json"
+                required
+              />
+            </div>
+            <div class="carto-form-group">
+              <label class="carto-label" for="carto-png">Map image (PNG, optional)</label>
+              <input class="carto-input" id="carto-png" type="file" accept=".png,image/png" />
+            </div>
+            <div class="carto-form-group">
+              <label class="carto-label" for="carto-name">World name (optional)</label>
+              <input
+                class="carto-input"
+                id="carto-name"
+                type="text"
+                maxlength="100"
+                placeholder="Defaults to the map's name"
+              />
+            </div>
+            <div class="carto-progress hidden" id="carto-progress">
+              <div class="carto-progress-bar" id="carto-progress-bar"></div>
+            </div>
+            <p class="carto-status hidden" id="carto-status" role="status"></p>
+            <p class="carto-error hidden" id="carto-upload-error" role="alert"></p>
+            <button class="app-btn" id="carto-upload-btn" type="submit">Upload and load map</button>
+          </form>
+          <div class="carto-result hidden" id="carto-result"></div>
+        </section>
+
+        <!-- Worlds -->
+        <section class="carto-section" id="carto-worlds-section">
+          <h2 class="carto-section-title">Worlds</h2>
+          <div class="app-loading hidden" id="carto-worlds-loading">
+            <div class="app-spinner"></div>
+          </div>
+          <p class="carto-error hidden" id="carto-worlds-error" role="alert"></p>
+          <p class="carto-empty hidden" id="carto-worlds-empty">
+            No worlds yet. Upload a map to start one.
+          </p>
+          <div class="carto-world-list" id="carto-world-list"></div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <!-- Cartographer modules (load order matters) -->
+    <script src="/apps/cartographer/js/state.js"></script>
+    <script src="/apps/cartographer/js/upload.js"></script>
+    <script src="/apps/cartographer/js/worlds.js"></script>
+    <script src="/apps/cartographer/js/app.js"></script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        firebase.auth().onAuthStateChanged(function (user) {
+          if (!user) {
+            window.location.href = '/';
+            return;
+          }
+
+          window.OlympusHeader.render('The Cartographer');
+
+          document.getElementById('app-loading').classList.add('hidden');
+          document.getElementById('app-main').classList.remove('hidden');
+
+          window.Cartographer.app.init(user);
+        });
+      });
+    </script>
+  </body>
+</html>

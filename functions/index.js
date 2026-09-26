@@ -16,6 +16,33 @@ initializeApp();
 // via Hosting rewrites. See planning/initiative-1-mcp-foundation.md.
 exports.mcpServer = require('./mcp').mcpServer;
 
+// ── The Cartographer (C-5) ─────────────────────────────
+// Upload an Azgaar map → parse, map, and load it as a draft Loom world; then
+// publish it to the Loom. See functions/cartographer/service.js.
+const cartographer = require('./cartographer/service');
+let _cartographerService;
+function cartographerService() {
+  if (!_cartographerService) {
+    const { getStorage } = require('firebase-admin/storage');
+    _cartographerService = cartographer.createCartographerService({
+      db: getFirestore(),
+      bucket: getStorage().bucket(),
+    });
+  }
+  return _cartographerService;
+}
+
+// Large maps parse and load in seconds, but allow headroom for big exports.
+exports.cartographerImport = onCall({ memory: '1GiB', timeoutSeconds: 300 }, async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return cartographerService().importUpload(uid, request.data || {});
+});
+
+exports.cartographerPublish = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return cartographerService().publishWorld(uid, request.data || {});
+});
+
 // Grand Hall "connected assistants" (phase 1i): the signed-in user lists and
 // revokes their own MCP connections. See functions/mcp/connections.js.
 const mcpConnections = require('./mcp/connections');

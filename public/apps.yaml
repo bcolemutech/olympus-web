@@ -27,6 +27,15 @@ apps:
     enabled: true
     order: 11
 
+  - id: cartographer
+    name: The Cartographer
+    description: Turn Azgaar maps into worlds for the Loom
+    icon: "\U0001F5FA"
+    type: embedded
+    path: /apps/cartographer/
+    enabled: true
+    order: 12
+
   # ── MCP connectors (used from Claude; no web UI) ────────
   # `connector` is the URL to add in Claude. The Grand Hall tile copies it.
   - id: scriptorium
