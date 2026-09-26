@@ -34,7 +34,8 @@ function slim(full) {
     ]),
     settings: pick(settings, ['populationRate', 'urbanization', 'distanceUnit', 'distanceScale']),
     pack: {
-      cells: pack.cells.map((c) => pick(c, ['i', 'h', 'biome', 'province', 'state', 'burg'])),
+      cells: pack.cells.map((c) => pick(c, ['i', 'h', 'f', 'biome', 'province', 'state', 'burg'])),
+      features: pack.features.map((f) => pick(f, ['i', 'type', 'land', 'cells', 'group', 'name'])),
       biomes: pack.biomes.map((b) => pick(b, ['i', 'name', 'color'])),
       burgs: pack.burgs.map((b) =>
         pick(b, [
@@ -43,6 +44,7 @@ function slim(full) {
           'x',
           'y',
           'cell',
+          'feature',
           'state',
           'population',
           'port',
