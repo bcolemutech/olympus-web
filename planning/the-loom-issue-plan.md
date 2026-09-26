@@ -61,15 +61,15 @@ The aim is to **keep Opus off the bulk of the work** and reserve it for the part
 
 ## Phases 2–5 — Epics & later decisions (milestones #15–18)
 
-| ID    | #   | Title                                         | Model      | Why                                                                  |
-| ----- | --- | --------------------------------------------- | ---------- | -------------------------------------------------------------------- |
-| L-200 | 311 | [Epic] `loomWorldTick` batch world simulation | **Opus**   | Decompose + design batch-sim model (concurrency-sensitive)           |
-| L-201 | 312 | Decision: world-tick vs. player presence      | **Opus**   | Concurrency reasoning; multiplayer-compat implications               |
-| L-202 | 313 | [Epic] Richer rule sets                       | **Sonnet** | Epic shell + additive rules (Opus only if a rule _schema_ is chosen) |
-| L-300 | 314 | [Epic] Cartographer → Loom canon ingestion    | **Opus**   | Decompose + design lossless schema mapping onto the L-103 seam       |
-| L-400 | 316 | [Epic] Multiplayer (four tiers)               | **Opus**   | Decompose + design shared-state/concurrency model                    |
-| L-401 | 317 | Decision: multiplayer conflict resolution     | **Opus**   | Distributed-write correctness; ripples into earlier write model      |
-| L-500 | 318 | [Epic] Imagen 4 scene/portrait generation     | **Sonnet** | Imagen already proven elsewhere in Olympus                           |
+| ID    | #   | Title                                                       | Model      | Why                                                                                                                                                              |
+| ----- | --- | ----------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L-200 | 311 | [Epic] `loomWorldTick` batch world simulation               | **Opus**   | Decompose + design batch-sim model (concurrency-sensitive)                                                                                                       |
+| L-201 | 312 | Decision: world-tick vs. player presence                    | **Opus**   | Concurrency reasoning; multiplayer-compat implications                                                                                                           |
+| L-202 | 313 | [Epic] Richer rule sets                                     | **Sonnet** | Epic shell + additive rules (Opus only if a rule _schema_ is chosen)                                                                                             |
+| L-300 | 314 | [Epic] The Cartographer: Azgaar intake + MCP world building | **Opus**   | Decompose (C-1..C-7); design the Azgaar → canon mapping, the Firestore canon seam (L-103), and editing published worlds safely; see `the-cartographer-design.md` |
+| L-400 | 316 | [Epic] Multiplayer (four tiers)                             | **Opus**   | Decompose + design shared-state/concurrency model                                                                                                                |
+| L-401 | 317 | Decision: multiplayer conflict resolution                   | **Opus**   | Distributed-write correctness; ripples into earlier write model                                                                                                  |
+| L-500 | 318 | [Epic] Imagen 4 scene/portrait generation                   | **Sonnet** | Imagen already proven elsewhere in Olympus                                                                                                                       |
 
 ---
 
