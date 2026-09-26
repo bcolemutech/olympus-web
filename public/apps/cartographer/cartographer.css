@@ -1,0 +1,216 @@
+.carto-root {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.carto-section {
+  margin-bottom: 2.5rem;
+}
+
+.carto-section-title {
+  margin: 0 0 0.75rem;
+  color: #e0e0e0;
+  font-size: 1.15rem;
+}
+
+.carto-help {
+  margin: 0 0 1.25rem;
+  color: #90a4ae;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.carto-help b {
+  color: #e0e0e0;
+}
+
+.carto-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.carto-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.carto-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.carto-input {
+  padding: 0.6rem 0.8rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.carto-input:focus {
+  outline: none;
+  border-color: rgba(255, 183, 77, 0.5);
+}
+
+textarea.carto-input {
+  resize: vertical;
+}
+
+.carto-progress {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.carto-progress-bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #ffd54f, #ffb74d);
+  transition: width 0.2s;
+}
+
+.carto-status {
+  margin: 0;
+  color: #ffb74d;
+  font-size: 0.9rem;
+}
+
+.carto-error {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 0.9rem;
+}
+
+.carto-empty,
+.carto-denied {
+  color: #90a4ae;
+  font-style: italic;
+}
+
+.carto-result {
+  margin-top: 1.25rem;
+  padding: 1rem 1.25rem;
+  background: rgba(129, 199, 132, 0.08);
+  border: 1px solid rgba(129, 199, 132, 0.3);
+  border-radius: 10px;
+}
+
+.carto-result-title {
+  margin: 0 0 0.4rem;
+  color: #a5d6a7;
+  font-weight: 600;
+}
+
+.carto-world-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.carto-world-card {
+  text-align: left;
+  cursor: default;
+}
+
+.carto-world-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.carto-world-name {
+  margin: 0;
+  color: #e0e0e0;
+  overflow-wrap: anywhere;
+}
+
+.carto-tagline {
+  margin: 0 0 0.4rem;
+  color: #90a4ae;
+  font-style: italic;
+}
+
+.carto-meta {
+  margin: 0 0 0.3rem;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.carto-badge {
+  flex-shrink: 0;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+}
+
+.carto-badge--draft {
+  color: #ffb74d;
+}
+
+.carto-badge--published {
+  color: #81c784;
+}
+
+.carto-badge--importing {
+  color: #90a4ae;
+}
+
+.carto-badge--failed {
+  color: #e57373;
+}
+
+.carto-warnings {
+  margin: 0.5rem 0;
+  color: #90a4ae;
+  font-size: 0.85rem;
+}
+
+.carto-warnings summary {
+  cursor: pointer;
+}
+
+.carto-warnings ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.carto-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.carto-publish-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.carto-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #ffb74d;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.carto-link:hover,
+.carto-link:focus-visible {
+  text-decoration: underline;
+}
