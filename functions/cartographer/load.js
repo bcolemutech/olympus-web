@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const loomCanon = require('../loom-canon');
+const { importStamp } = require('./sources');
 
 // Loader — step 3 of the Cartographer's programmatic load (design
 // planning/the-cartographer-design.md §3.3; C-4 / #371).
@@ -13,6 +14,8 @@ const loomCanon = require('../loom-canon');
 //     { id, name, tagline, openingHook, rules, map, status, canonVersion,
 //       source, counts, warnings, createdAtMs, updatedAtMs }
 //   loom_worlds/{worldId}/locations|factions|regions/{entityId}
+//     each with a description stamped `sources: { description: 'import' }`
+//     (functions/cartographer/sources.js), so grading sees it as import text
 //
 // Status goes `importing` → `draft`. Entities are written in batches while the
 // world is `importing`, so the Loom (loom-canon loadWorld) never sees a
@@ -46,7 +49,11 @@ async function writeEntities(worldRef, canon) {
   const writes = [];
   for (const collection of WRITTEN_COLLECTIONS) {
     for (const entity of Object.values(canon[collection] || {})) {
-      writes.push([worldRef.collection(collection).doc(entity.id), entity]);
+      const sources = importStamp(entity);
+      writes.push([
+        worldRef.collection(collection).doc(entity.id),
+        sources ? { ...entity, sources } : entity,
+      ]);
     }
   }
   for (let i = 0; i < writes.length; i += BATCH_SIZE) {

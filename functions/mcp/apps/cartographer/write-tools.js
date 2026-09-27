@@ -5,6 +5,7 @@ const { FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const { normalizeName } = require('../../../loom-turn/interpret');
 const { worldId, entityId } = require('./schemas');
+const { SOURCES } = require('../../../cartographer/sources');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
 // design.md §4.1, §4.2; C-7 / #374): Claude adds to, fixes and changes worlds,
@@ -22,6 +23,9 @@ const { worldId, entityId } = require('./schemas');
 //     road, trail or sea link.
 //   - Realm relations stay symmetric (vassal ↔ suzerain mirror each other).
 //   - A character's home and the cast lists (npcIds) the Loom reads agree.
+//   - A description set here is stamped `sources.description: 'mcp'`, which is
+//     what grading counts as written up (functions/loom-canon/grading.js).
+//     Sending the current text again stamps it too: an approval of it.
 //   - Published worlds never lose anything: removal is `retired: true`, so a
 //     save that references it keeps working. Drafts delete, and every
 //     reference to what was deleted is cleaned up.
@@ -196,6 +200,22 @@ function patcher(e) {
 const link = (id) => new FieldPath('geo', 'links', id);
 const relation = (id) => new FieldPath('politics', 'relations', id);
 
+// A description set over MCP: the new text if it changed, and the 'mcp' stamp
+// whenever it isn't stamped so already (re-sending the text approves it).
+function describe(entity, description) {
+  const changes = {};
+  if (description === undefined) return changes;
+  if (description !== entity.description) changes.description = description;
+  if (changes.description !== undefined || (entity.sources || {}).description !== SOURCES.MCP) {
+    changes['sources.description'] = SOURCES.MCP;
+  }
+  return changes;
+}
+
+const changedFields = (fields) => [
+  ...new Set(Object.keys(fields).map((f) => (f === 'sources.description' ? 'description' : f))),
+];
+
 function requireSome(args, fields) {
   if (!fields.some((field) => args[field] !== undefined)) {
     throw new ToolError(`Nothing to change: give at least one of ${fields.join(', ')}.`);
@@ -356,6 +376,7 @@ function writeTools({ writer }) {
         'Change a place’s name, description, the realms present there (factionIds, replacing ' +
         'the list), or its rules: requiresAbility (an ability a traveller needs to get in) and ' +
         'hostileToFactionId. A rule set to null is removed. Names stay unique in the world. ' +
+        'Setting a description, even the current text, marks the place as written up. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -397,9 +418,7 @@ function writeTools({ writer }) {
           if (args.name !== undefined && args.name !== place.name) {
             fields.name = checkName(world, args.name, place.id);
           }
-          if (args.description !== undefined && args.description !== place.description) {
-            fields.description = args.description;
-          }
+          Object.assign(fields, describe(place, args.description));
           if (args.factionIds !== undefined) {
             const ids = [...new Set(args.factionIds)];
             ids.forEach((id) => live(world, 'faction', id));
@@ -420,7 +439,7 @@ function writeTools({ writer }) {
           }
           return {
             location: { id: place.id, name: fields.name || place.name },
-            updated: Object.keys(fields),
+            updated: changedFields(fields),
           };
         });
       },
@@ -550,10 +569,11 @@ function writeTools({ writer }) {
             patch('faction', faction.id, 'name', checkName(world, args.name, faction.id));
             updated.push('name');
           }
-          if (args.description !== undefined && args.description !== faction.description) {
-            patch('faction', faction.id, 'description', args.description);
-            updated.push('description');
+          const described = describe(faction, args.description);
+          for (const [field, value] of Object.entries(described)) {
+            patch('faction', faction.id, field, value);
           }
+          if (Object.keys(described).length) updated.push('description');
           if (args.disposition !== undefined && args.disposition !== faction.disposition) {
             patch('faction', faction.id, 'disposition', args.disposition);
             updated.push('disposition');
@@ -606,6 +626,7 @@ function writeTools({ writer }) {
             id,
             name: args.name,
             description: args.description,
+            sources: { description: SOURCES.MCP },
             locationId: home.id,
             ...(faction ? { factionId: faction.id } : {}),
           });
@@ -651,9 +672,7 @@ function writeTools({ writer }) {
           if (args.name !== undefined && args.name !== character.name) {
             fields.name = checkName(world, args.name, id);
           }
-          if (args.description !== undefined && args.description !== character.description) {
-            fields.description = args.description;
-          }
+          Object.assign(fields, describe(character, args.description));
           if (args.locationId !== undefined && args.locationId !== character.locationId) {
             live(world, 'location', args.locationId);
             fields.locationId = args.locationId;
@@ -674,7 +693,7 @@ function writeTools({ writer }) {
           if (Object.keys(fields).length) e.update(e.ref('characters', id), fields);
           return {
             character: { id, name: fields.name || character.name },
-            updated: Object.keys(fields),
+            updated: changedFields(fields),
           };
         });
       },
