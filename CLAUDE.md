@@ -31,6 +31,9 @@ npm run format
 | The Symposium | `public/apps/symposium/` | Cocktail inventory management |
 | The Pantheon | `public/apps/admin/` | Admin panel for user management |
 | JSX Runner | `public/apps/jsx-runner/` | Dynamic React applet executor |
+| The Loom | `public/apps/loom/` | AI-narrated game system; plays worlds with Gemini |
+| The Cartographer | `public/apps/cartographer/` | Turns Azgaar maps into Loom worlds; MCP connector at `/mcp/cartographer` |
+| Scriptorium | *(MCP connector only)* | Notes managed from Claude at `/mcp/scriptorium` |
 
 ---
 
@@ -47,13 +50,15 @@ npm run format
 ### Backend
 - **Firebase Hosting** — Static, `public/` directory
 - **Firestore** — `us-central1`, schema enforced by security rules
-- **Cloud Functions v2** — Node.js 22, ES module CommonJS in `functions/index.js`
+- **Cloud Functions v2** — Node.js 22, CommonJS; entry point `functions/index.js`
+- **Cloud Storage** — `olympus-dfa00.firebasestorage.app`, rules in `storage.rules` (Cartographer map uploads and world images)
+- **MCP server** — `@modelcontextprotocol/sdk`, Streamable HTTP with its own OAuth 2.1 authorization server, in `functions/mcp/`
 - **Firebase Auth** — Email/password + Google Sign-in
 
 ### Dev Tooling
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
-- **Jest 29** — Firestore security rules tests using Firebase emulator
+- **Jest 29** — Rules, Cloud Functions, Loom, Cartographer and MCP tests against the Firestore and Storage emulators
 - **GitHub Actions** — 6 workflows for CI, preview deploys, and production deploys
 
 ---
@@ -72,19 +77,26 @@ olympus-web/
 │       ├── _template/             # Boilerplate for creating new apps
 │       ├── symposium/             # Cocktail inventory app (~6,500 lines JS)
 │       ├── admin/                 # Admin panel
-│       └── jsx-runner/            # React applet executor
+│       ├── jsx-runner/            # React applet executor
+│       ├── loom/                  # The Loom game client
+│       └── cartographer/          # The Cartographer: map upload, worlds, publish
 ├── functions/
-│   ├── index.js                   # Cloud Functions: user/admin management (~360 lines)
-│   └── gemini.js                  # Gemini/Vertex AI callGemini helper (extracted for testability)
-├── tests/
-│   └── firestore-rules.test.js    # Jest tests for Firestore security rules
+│   ├── index.js                   # All Cloud Function exports (admin, Loom, Cartographer, MCP)
+│   ├── gemini.js                  # Gemini/Vertex AI callGemini helper (extracted for testability)
+│   ├── loom-canon/                # World canon: static worlds + Firestore worlds (loadWorld)
+│   ├── loom-turn/                 # Turn pipeline: intake → interpret → adjudicate → narrate → commit
+│   ├── loom-models.js             # Loom save and turn document shapes
+│   ├── cartographer/              # Azgaar parse → map → load, import and publish service
+│   └── mcp/                       # MCP host, OAuth server, registry, apps/ (scriptorium, cartographer)
+├── tests/                         # Jest suites (rules, Loom, Cartographer, MCP) + fixtures/
 ├── scripts/                       # One-time admin utility scripts
 ├── planning/                      # Architecture and design documentation
 ├── .github/workflows/             # CI/CD pipelines
 ├── firebase.json                  # Firebase configuration
 ├── firestore.rules                # Firestore security rules
 ├── firestore.indexes.json         # Firestore index definitions
-├── .firebaserc                    # Firebase project alias
+├── storage.rules                  # Cloud Storage security rules
+├── .firebaserc                    # Firebase project alias + Storage deploy target
 ├── eslint.config.js               # ESLint configuration
 └── .prettierrc                    # Prettier configuration
 ```
@@ -184,14 +196,20 @@ npm run deploy            # Deploy hosting only (production)
 | `symposium_categories/{id}` | `hasApp('symposium')` | Categories/subcategories |
 | `apps/{appId}` | `hasApp(appId)` or admin | App registry |
 | `pool_handicap/{userId}` | Self read/write only | Billiards handicap data |
+| `loom_worlds/{worldId}` | `hasApp('cartographer')`; `hasApp('loom')` for published only | Cartographer worlds; entity subcollections (`locations`, `factions`, `regions`, `characters`, `lore`) readable by `cartographer` only |
+| `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history |
+| `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
+| `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
+| `scriptorium_notes/{id}` | Deny (server only) | Scriptorium notes, via MCP |
+| `mcp_*` (`oauth_clients`, `oauth_codes`, `oauth_tokens`, `oauth_grants`, `audit`, `rate_limits`) | Deny (server only) | MCP OAuth state, audit log, rate limits |
 
-Default: all other paths deny read/write.
+Client writes to Loom and Cartographer data are denied; the Cloud Functions write through the Admin SDK. Default: all other paths deny read/write.
 
 ---
 
 ## Cloud Functions
 
-All functions are Firebase Callable (HTTPS) Functions v2. They are in `functions/index.js`.
+Functions v2, all exported from `functions/index.js`. Everything is a Callable except `mcpServer`, an HTTP function behind the Hosting rewrites for `/mcp/**`, `/authorize`, `/token`, `/register`, `/revoke` and the `.well-known` discovery docs.
 
 | Function | Who Can Call | Purpose |
 |---|---|---|
@@ -201,7 +219,12 @@ All functions are Firebase Callable (HTTPS) Functions v2. They are in `functions
 | `inviteUser` | Admin only | Create new user account |
 | `manageAccess` | Admin only | Add/remove app from user's claims |
 | `setUserDisabled` | Admin only | Enable/disable a user |
-| `getUserByEmail` | Admin only | Look up user by email |
+| `loomCreateSave` / `loomDeleteSave` | `loom` claim (own saves) | Start or delete a game |
+| `loomPlayTurn` | `loom` claim (own saves) | Run one turn of the Loom pipeline |
+| `cartographerImport` | `cartographer` claim | Uploaded Azgaar map → draft world |
+| `cartographerPublish` | `cartographer` claim | Publish a draft world to the Loom |
+| `mcpListConnections` / `mcpRevokeConnection` | Signed-in user (own connections) | Grand Hall "Manage connections" |
+| `mcpServer` | OAuth bearer token per connector | MCP connectors (Scriptorium, Cartographer) and the OAuth server |
 
 Functions preserve existing custom claims when modifying them (merge pattern, not overwrite).
 
@@ -213,8 +236,8 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 |---|---|---|
 | `code-quality.yml` | Push/PR to main | ESLint + Prettier check |
 | `firebase-hosting-pull-request.yml` | Pull Request | Deploy preview channel, comment URL on PR |
-| `firebase-hosting-merge.yml` | Push to main | Deploy hosting + Firestore rules/indexes + Cloud Functions |
-| `firestore-rules.yml` | Push/PR to main | Run Jest tests against Firestore emulator |
+| `firebase-hosting-merge.yml` | Push to main | Deploy hosting + Firestore rules/indexes + Storage rules + Cloud Functions |
+| `firestore-rules.yml` | Push/PR to main | Run the Jest suite against the Firestore and Storage emulators |
 | `set-admin.yml` | Manual dispatch | Grant or revoke admin claim |
 | `seed-categories.yml` | Manual dispatch | Populate Symposium categories |
 
