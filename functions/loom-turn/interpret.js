@@ -141,4 +141,4 @@ async function interpretAction(params) {
   };
 }
 
-module.exports = { interpretAction, resolveTarget, buildKnownEntities };
+module.exports = { interpretAction, resolveTarget, buildKnownEntities, normalizeName: normalize };
