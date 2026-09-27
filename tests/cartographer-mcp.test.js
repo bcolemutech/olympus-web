@@ -40,6 +40,7 @@ const { loadDraftWorld } = require('../functions/cartographer/load');
 const loomCanon = require('../functions/loom-canon');
 const { cartographerApp } = require('../functions/mcp/apps/cartographer');
 const { createFirestoreWorldReader } = require('../functions/mcp/apps/cartographer/reader');
+const { createFirestoreWorldWriter } = require('../functions/mcp/apps/cartographer/writer');
 const registerApps = require('../functions/mcp/apps');
 const { createRegistry } = require('../functions/mcp/registry');
 const { handleAppRequest } = require('../functions/mcp/app-server');
@@ -57,7 +58,10 @@ const worlds = () => db.collection('loom_worlds');
 const registry = createRegistry();
 registry.registerApp(
   'cartographer',
-  cartographerApp({ reader: createFirestoreWorldReader(() => db) })
+  cartographerApp({
+    reader: createFirestoreWorldReader(() => db),
+    writer: createFirestoreWorldWriter(() => db),
+  })
 );
 const oauthStore = createInMemoryStore();
 
@@ -229,7 +233,8 @@ afterAll(async () => {
 describe('connector surface', () => {
   test('exposes the read tools, all read-only, and the worlds resource', async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual([
+    const reads = tools.filter((t) => t.annotations.readOnlyHint);
+    expect(reads.map((t) => t.name).sort()).toEqual([
       'find_locations',
       'get_character',
       'get_faction',
@@ -239,7 +244,6 @@ describe('connector surface', () => {
       'get_world',
       'list_worlds',
     ]);
-    for (const tool of tools) expect(tool.annotations.readOnlyHint).toBe(true);
 
     const { resources } = await client.listResources();
     expect(resources).toEqual([

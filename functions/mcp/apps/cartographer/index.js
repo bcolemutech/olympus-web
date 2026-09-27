@@ -3,36 +3,28 @@
 const { z } = require('zod');
 const { ToolError } = require('../../registry');
 const { createFirestoreWorldReader } = require('./reader');
+const { createFirestoreWorldWriter } = require('./writer');
+const { worldId, entityId } = require('./schemas');
+const { writeTools } = require('./write-tools');
 const views = require('./views');
 
-// The Cartographer's MCP connector, read side (design planning/the-
-// cartographer-design.md §4, §4.1; C-6 / #373). Mounted at /mcp/cartographer
-// and gated by the `cartographer` claim, it lets Claude explore any imported
-// world — draft or published — so it can help build it. The write tools come
-// in C-7 (#374).
+// The Cartographer's MCP connector (design planning/the-cartographer-design.md
+// §4; C-6 / #373, C-7 / #374). Mounted at /mcp/cartographer and gated by the
+// `cartographer` claim, it lets Claude explore any imported world — draft or
+// published — and build on it: the read tools below, and the write tools in
+// write-tools.js.
 //
-// Every tool is read-only. Results are sized for a conversation: overviews
-// and rows carry ids for follow-up calls, find_locations pages, and long lists
-// are capped. Retired entities (soft-removed from a published world) still
-// resolve by id and are marked `retired`; find_locations leaves them out
-// unless asked.
+// Read results are sized for a conversation: overviews and rows carry ids for
+// follow-up calls, find_locations pages, and long lists are capped. Retired
+// entities (soft-removed from a published world) still resolve by id and are
+// marked `retired`; find_locations leaves them out unless asked.
 
 const APP_ID = 'cartographer';
 const MAX_WORLDS = 100;
 const DEFAULT_FIND_LIMIT = 20;
 const MAX_FIND_LIMIT = 100;
 
-const worldId = z
-  .string()
-  .regex(/^[a-z0-9-]{1,64}$/, 'worldId must be a world id returned by list_worlds')
-  .describe('The world id, from list_worlds.');
-const entityId = (what, from) =>
-  z
-    .string()
-    .regex(/^[A-Za-z0-9_-]{1,80}$/, `must be a ${what} id`)
-    .describe(`The ${what} id, from ${from}.`);
-
-function cartographerApp({ reader }) {
+function cartographerApp({ reader, writer }) {
   // Loads a world the tools can read, or explains why it can't.
   async function worldFor(id) {
     const loaded = await reader.loadWorld(id);
@@ -245,6 +237,7 @@ function cartographerApp({ reader }) {
           return { worldId: world.id, ...views.loreDetail(world, entry) };
         },
       },
+      ...writeTools({ writer }),
     ],
     resources: [
       {
@@ -266,7 +259,10 @@ function register(registry) {
   const { getFirestore } = require('firebase-admin/firestore');
   registry.registerApp(
     APP_ID,
-    cartographerApp({ reader: createFirestoreWorldReader(getFirestore) })
+    cartographerApp({
+      reader: createFirestoreWorldReader(getFirestore),
+      writer: createFirestoreWorldWriter(getFirestore),
+    })
   );
 }
 
