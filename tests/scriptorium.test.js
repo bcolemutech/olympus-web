@@ -120,7 +120,7 @@ describe('Scriptorium tool surface', () => {
   test('the production registration exposes the same app', () => {
     const prod = createRegistry();
     registerApps(prod);
-    expect(prod.appIds()).toEqual(['scriptorium']);
+    expect(prod.appIds()).toContain('scriptorium');
     expect(prod.getApp('scriptorium').tools.map((t) => t.name)).toEqual([
       'list_notes',
       'create_note',

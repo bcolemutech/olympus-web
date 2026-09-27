@@ -108,13 +108,15 @@ The Cartographer registers an app module through the MCP registry seam (Initiati
 
 ### 4.1 Tools (initial proposal)
 
-| Group     | Tools                                                                                                                                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Read      | `list_worlds` (status, counts); `get_world` (overview, regions, factions); `find_locations` (by name, region, faction, or near a location); `get_location`, `get_faction`, `get_region`, `get_character`     |
-| Write     | `update_world` (name, tagline, opening hook); `update_location` (description, rules, factions present); `connect_locations` / `disconnect_locations`; `update_faction` (description, disposition, relations) |
-| Add       | `add_character`, `update_character`; `add_lore`, `update_lore` (with entity references)                                                                                                                      |
-| Retire    | `retire_entity`: a soft removal (below)                                                                                                                                                                      |
-| Lifecycle | `publish_world`                                                                                                                                                                                              |
+| Group     | Tools                                                                                                                                                                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read      | `list_worlds` (status, counts); `get_world` (overview, realms with their regions, characters, lore, readiness to publish); `find_locations` (by name, region, faction, kind, or near a location; paged); `get_location`, `get_faction`, `get_region`, `get_character`, `get_lore`; resource `cartographer://worlds` |
+| Write     | `update_world` (name, tagline, opening hook); `update_location` (description, rules, factions present); `connect_locations` / `disconnect_locations`; `update_faction` (description, disposition, relations)                                                                                                        |
+| Add       | `add_character`, `update_character`; `add_lore`, `update_lore` (with entity references)                                                                                                                                                                                                                             |
+| Retire    | `retire_entity`: a soft removal (below)                                                                                                                                                                                                                                                                             |
+| Lifecycle | `publish_world`                                                                                                                                                                                                                                                                                                     |
+
+Read results are sized for a conversation (C-6, #373). Rows carry ids for follow-up calls, `find_locations` pages its results, and long lists are capped. Places nearest another place come with a compass direction, a distance in map units, and travel hops along connections. Retired entities still resolve by id and are marked `retired`.
 
 Every write validates its input: ids must exist, connections stay symmetric, and names stay unique within the world. Writes to one world are serialized in a transaction, and each call is audited as a `tool_call` in `mcp_audit`.
 

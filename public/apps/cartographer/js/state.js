@@ -17,6 +17,9 @@
   // Import runs parse → map → load server-side; big maps need more than the
   // callable default of 70 seconds.
   Cartographer.IMPORT_TIMEOUT_MS = 300000;
+  // The MCP connector to add in Claude (always the canonical origin: its
+  // tokens are issued for that audience).
+  Cartographer.CONNECTOR_URL = 'https://bcoletech.com/mcp/cartographer';
 
   // ── Lazy-cached DOM ref helper ──────────────────
   var refCache = {};

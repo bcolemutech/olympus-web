@@ -1,0 +1,273 @@
+'use strict';
+
+const { z } = require('zod');
+const { ToolError } = require('../../registry');
+const { createFirestoreWorldReader } = require('./reader');
+const views = require('./views');
+
+// The Cartographer's MCP connector, read side (design planning/the-
+// cartographer-design.md §4, §4.1; C-6 / #373). Mounted at /mcp/cartographer
+// and gated by the `cartographer` claim, it lets Claude explore any imported
+// world — draft or published — so it can help build it. The write tools come
+// in C-7 (#374).
+//
+// Every tool is read-only. Results are sized for a conversation: overviews
+// and rows carry ids for follow-up calls, find_locations pages, and long lists
+// are capped. Retired entities (soft-removed from a published world) still
+// resolve by id and are marked `retired`; find_locations leaves them out
+// unless asked.
+
+const APP_ID = 'cartographer';
+const MAX_WORLDS = 100;
+const DEFAULT_FIND_LIMIT = 20;
+const MAX_FIND_LIMIT = 100;
+
+const worldId = z
+  .string()
+  .regex(/^[a-z0-9-]{1,64}$/, 'worldId must be a world id returned by list_worlds')
+  .describe('The world id, from list_worlds.');
+const entityId = (what, from) =>
+  z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,80}$/, `must be a ${what} id`)
+    .describe(`The ${what} id, from ${from}.`);
+
+function cartographerApp({ reader }) {
+  // Loads a world the tools can read, or explains why it can't.
+  async function worldFor(id) {
+    const loaded = await reader.loadWorld(id);
+    if (!loaded) throw new ToolError(`World "${id}" not found. Use list_worlds to see world ids.`);
+    const { meta, world } = loaded;
+    if (world) return { meta, world };
+    if (meta.status === 'importing') {
+      throw new ToolError('This world is still importing. Try again in a minute.');
+    }
+    if (meta.status === 'failed') {
+      throw new ToolError(
+        `This world's import failed${meta.error ? `: ${meta.error}` : ''}. Upload the map again in the Cartographer.`
+      );
+    }
+    throw new ToolError(`This world can't be read (status: ${meta.status}).`);
+  }
+
+  function entityFor(world, collection, id, what, hint) {
+    const entity = (world[collection] || {})[id];
+    if (!entity) throw new ToolError(`No ${what} "${id}" in this world. ${hint}`);
+    return entity;
+  }
+
+  const readOnly = { readOnlyHint: true, openWorldHint: false };
+
+  return {
+    tools: [
+      {
+        name: 'list_worlds',
+        title: 'List worlds',
+        description:
+          'List the worlds imported into the Cartographer, newest first, with each one’s status ' +
+          '(draft, published, importing or failed) and what its map contained.',
+        annotations: readOnly,
+        handler: async () => {
+          const worlds = (await reader.listWorlds({ limit: MAX_WORLDS })).map(views.worldRow);
+          return { worlds, count: worlds.length };
+        },
+      },
+      {
+        name: 'get_world',
+        title: 'Get world overview',
+        description:
+          'Overview of one world: name, tagline, opening hook, status, starting location, whether ' +
+          'it is ready to publish, counts, its realms (factions) with their regions, and its ' +
+          'characters and lore. Start here before exploring a world.',
+        inputSchema: { worldId },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { meta, world } = await worldFor(args.worldId);
+          return views.worldOverview(meta, world);
+        },
+      },
+      {
+        name: 'find_locations',
+        title: 'Find locations',
+        description:
+          'Search a world’s places — settlements and points of interest — by name, region, ' +
+          'realm (faction) or kind, or list those nearest another place. Filters combine. ' +
+          'Results are paged: pass nextOffset back as offset for more. Largest settlements come ' +
+          'first, or nearest first with `near` (distance is in map units, hops counts travel ' +
+          'steps along connections).',
+        inputSchema: {
+          worldId,
+          name: z
+            .string()
+            .trim()
+            .min(1)
+            .max(100)
+            .optional()
+            .describe('Part of the name to look for (case and accents ignored).'),
+          regionId: entityId('region', 'get_world').optional(),
+          factionId: entityId('faction', 'get_world').optional(),
+          near: entityId('location', 'find_locations')
+            .optional()
+            .describe('A location id: list places nearest to it.'),
+          kind: z
+            .enum(['settlement', 'poi'])
+            .optional()
+            .describe('Only settlements, or only points of interest (poi).'),
+          includeRetired: z
+            .boolean()
+            .optional()
+            .describe('Include places retired from a published world (default false).'),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_FIND_LIMIT)
+            .optional()
+            .describe(`Results per page (default ${DEFAULT_FIND_LIMIT}).`),
+          offset: z.number().int().min(0).optional().describe('Results to skip (default 0).'),
+        },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          if (args.near) {
+            entityFor(world, 'locations', args.near, 'location', 'Use find_locations by name.');
+          }
+          if (args.regionId) {
+            entityFor(world, 'regions', args.regionId, 'region', 'Use get_world to see regions.');
+          }
+          if (args.factionId) {
+            entityFor(world, 'factions', args.factionId, 'faction', 'Use get_world to see realms.');
+          }
+          return {
+            worldId: world.id,
+            ...views.findLocations(world, {
+              ...args,
+              limit: args.limit || DEFAULT_FIND_LIMIT,
+              offset: args.offset || 0,
+            }),
+          };
+        },
+      },
+      {
+        name: 'get_location',
+        title: 'Get location',
+        description:
+          'One place in full: description, population, region and realm, its connections (by ' +
+          'road, trail or sea, with direction and distance), the characters found there, and ' +
+          'the lore about it.',
+        inputSchema: { worldId, locationId: entityId('location', 'find_locations') },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const location = entityFor(
+            world,
+            'locations',
+            args.locationId,
+            'location',
+            'Use find_locations to look one up.'
+          );
+          return { worldId: world.id, ...views.locationDetail(world, location) };
+        },
+      },
+      {
+        name: 'get_faction',
+        title: 'Get faction',
+        description:
+          'One realm or faction in full: description, government, capital, largest settlements, ' +
+          'regions, relations with other realms, members, and lore.',
+        inputSchema: { worldId, factionId: entityId('faction', 'get_world') },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const faction = entityFor(
+            world,
+            'factions',
+            args.factionId,
+            'faction',
+            'Use get_world to see realms.'
+          );
+          return { worldId: world.id, ...views.factionDetail(world, faction) };
+        },
+      },
+      {
+        name: 'get_region',
+        title: 'Get region',
+        description:
+          'One region (province) in full: its realm, capital, settlements (largest first), and lore.',
+        inputSchema: { worldId, regionId: entityId('region', 'get_world') },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const region = entityFor(
+            world,
+            'regions',
+            args.regionId,
+            'region',
+            'Use get_world to see regions.'
+          );
+          return { worldId: world.id, ...views.regionDetail(world, region) };
+        },
+      },
+      {
+        name: 'get_character',
+        title: 'Get character',
+        description: 'One character in full: description, faction, where they are found, and lore.',
+        inputSchema: { worldId, characterId: entityId('character', 'get_world') },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const character = entityFor(
+            world,
+            'characters',
+            args.characterId,
+            'character',
+            'Use get_world to see characters.'
+          );
+          return { worldId: world.id, ...views.characterDetail(world, character) };
+        },
+      },
+      {
+        name: 'get_lore',
+        title: 'Get lore',
+        description:
+          'One lore entry in full: its text and the places, realms and people it is about.',
+        inputSchema: { worldId, loreId: entityId('lore', 'get_world') },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const entry = entityFor(
+            world,
+            'lore',
+            args.loreId,
+            'lore entry',
+            'Use get_world to see lore.'
+          );
+          return { worldId: world.id, ...views.loreDetail(world, entry) };
+        },
+      },
+    ],
+    resources: [
+      {
+        name: 'worlds',
+        uri: 'cartographer://worlds',
+        title: 'Worlds',
+        description: 'Every world in the Cartographer, newest first (read-only snapshot).',
+        mimeType: 'application/json',
+        read: async () => ({
+          worlds: (await reader.listWorlds({ limit: MAX_WORLDS })).map(views.worldRow),
+        }),
+      },
+    ],
+  };
+}
+
+// Registers the Cartographer on the production registry, backed by Firestore.
+function register(registry) {
+  const { getFirestore } = require('firebase-admin/firestore');
+  registry.registerApp(
+    APP_ID,
+    cartographerApp({ reader: createFirestoreWorldReader(getFirestore) })
+  );
+}
+
+module.exports = { register, cartographerApp, APP_ID };
