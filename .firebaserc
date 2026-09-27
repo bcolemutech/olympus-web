@@ -1,5 +1,12 @@
 {
   "projects": {
     "default": "olympus-dfa00"
+  },
+  "targets": {
+    "olympus-dfa00": {
+      "storage": {
+        "main": ["olympus-dfa00.firebasestorage.app"]
+      }
+    }
   }
 }
