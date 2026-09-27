@@ -6,4 +6,5 @@
 // grantable in The Pantheon.
 module.exports = function registerApps(registry) {
   require('./scriptorium').register(registry);
+  require('./cartographer').register(registry);
 };
