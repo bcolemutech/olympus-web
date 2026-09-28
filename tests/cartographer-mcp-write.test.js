@@ -191,6 +191,7 @@ test('exposes the write tools with honest hints', async () => {
     'update_faction',
     'update_location',
     'update_lore',
+    'update_region',
     'update_world',
   ]);
   const byName = Object.fromEntries(tools.map((t) => [t.name, t]));

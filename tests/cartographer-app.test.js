@@ -25,7 +25,12 @@ const functionsTest = require('firebase-functions-test')(
   { projectId: PROJECT, storageBucket: BUCKET },
   null
 );
-const { cartographerImport, cartographerPublish, loomCreateSave } = require('../functions/index');
+const {
+  cartographerImport,
+  cartographerPublish,
+  cartographerCompletion,
+  loomCreateSave,
+} = require('../functions/index');
 const fs = require('fs');
 const path = require('path');
 const functionsDir = path.resolve(__dirname, '../functions');
@@ -68,6 +73,7 @@ async function upload({ json = RAW, png, uid = BUILDER.uid } = {}) {
 const exists = async (name) => (await bucket.file(name).exists())[0];
 const importAs = (auth, data) => cartographerImport.run({ data, auth });
 const publishAs = (auth, data) => cartographerPublish.run({ data, auth });
+const completionAs = (auth, data) => cartographerCompletion.run({ data, auth });
 
 beforeEach(async () => {
   loomCanon.clearWorldCache();
@@ -237,6 +243,51 @@ describe('cartographerPublish', () => {
   test('rejects over-long text', async () => {
     await expect(
       publishAs(BUILDER, { worldId, openingHook: 'x'.repeat(2001), startingLocationId: 'loc_1' })
+    ).rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+});
+
+describe('cartographerCompletion (L-323)', () => {
+  test('reports how many places are playable, graded on the server', async () => {
+    const { worldId } = await importAs(BUILDER, { uploadId: await upload() });
+    await expect(completionAs(BUILDER, { worldIds: [worldId, 'no-such-world'] })).resolves.toEqual({
+      worlds: { [worldId]: { total: 719, playable: 0, rich: 0, share: 0 } },
+    });
+
+    const worldRef = db.collection('loom_worlds').doc(worldId);
+    await worldRef
+      .collection('locations')
+      .doc('loc_1')
+      .update({ description: 'A rain-soaked port.', 'sources.description': 'mcp' });
+    await worldRef.update({ canonVersion: 2 });
+    await expect(completionAs(BUILDER, { worldIds: [worldId] })).resolves.toEqual({
+      worlds: { [worldId]: { total: 719, playable: 1, rich: 0, share: 0.001 } },
+    });
+
+    // A resident and lore make it rich: still one playable place, now rich too.
+    await worldRef
+      .collection('characters')
+      .doc('chr_mara')
+      .set({ id: 'chr_mara', name: 'Mara', description: 'Harbourmaster.', locationId: 'loc_1' });
+    await worldRef
+      .collection('lore')
+      .doc('lore_founding')
+      .set({ id: 'lore_founding', title: 'Founding', text: '…', entityRefs: ['loc_1'] });
+    await worldRef.update({ canonVersion: 3 });
+    await expect(completionAs(BUILDER, { worldIds: [worldId] })).resolves.toEqual({
+      worlds: { [worldId]: { total: 719, playable: 1, rich: 1, share: 0.001 } },
+    });
+  });
+
+  test('needs the cartographer claim and valid world ids', async () => {
+    await expect(completionAs(PLAYER, { worldIds: [] })).rejects.toMatchObject({
+      code: 'permission-denied',
+    });
+    await expect(completionAs(BUILDER, { worldIds: ['Bad/Id'] })).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    await expect(
+      completionAs(BUILDER, { worldIds: Array.from({ length: 21 }, (_, i) => `w-${i}`) })
     ).rejects.toMatchObject({ code: 'invalid-argument' });
   });
 });

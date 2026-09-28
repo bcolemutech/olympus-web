@@ -43,6 +43,12 @@ exports.cartographerPublish = onCall(async (request) => {
   return cartographerService().publishWorld(uid, request.data || {});
 });
 
+// How built each world is (Layered Worlds, L-323 / #392), for the page.
+exports.cartographerCompletion = onCall(async (request) => {
+  cartographer.requireCartographer(request);
+  return cartographerService().worldCompletion(request.data || {});
+});
+
 // Grand Hall "connected assistants" (phase 1i): the signed-in user lists and
 // revokes their own MCP connections. See functions/mcp/connections.js.
 const mcpConnections = require('./mcp/connections');

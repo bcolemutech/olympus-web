@@ -6,6 +6,8 @@ const { createFirestoreWorldReader } = require('./reader');
 const { createFirestoreWorldWriter } = require('./writer');
 const { worldId, entityId } = require('./schemas');
 const { writeTools } = require('./write-tools');
+const { GRADES } = require('../../../loom-canon/grading');
+const { workList } = require('./work');
 const views = require('./views');
 
 // The Cartographer's MCP connector (design planning/the-cartographer-design.md
@@ -18,11 +20,19 @@ const views = require('./views');
 // follow-up calls, find_locations pages, and long lists are capped. Retired
 // entities (soft-removed from a published world) still resolve by id and are
 // marked `retired`; find_locations leaves them out unless asked.
+//
+// Places, realms and regions carry their grade (Unbuilt, Stub, Playable,
+// Rich) and what they are missing (planning/the-loom-layered-worlds.md §4),
+// and list_work says what to build next (§6; L-323 / #392).
 
 const APP_ID = 'cartographer';
 const MAX_WORLDS = 100;
 const DEFAULT_FIND_LIMIT = 20;
 const MAX_FIND_LIMIT = 100;
+const NEEDS = ['description', 'residents', 'lore', 'town', 'battleMap'];
+const GRADE_HELP =
+  'Grades: unbuilt (a layer it needs is missing), stub (import text only), playable ' +
+  '(written up: players may enter), rich (playable, with residents and lore).';
 
 function cartographerApp({ reader, writer }) {
   // Loads a world the tools can read, or explains why it can't.
@@ -69,8 +79,10 @@ function cartographerApp({ reader, writer }) {
         title: 'Get world overview',
         description:
           'Overview of one world: name, tagline, opening hook, status, starting location, whether ' +
-          'it is ready to publish, counts, its realms (factions) with their regions, and its ' +
-          'characters and lore. Start here before exploring a world.',
+          'it is ready to publish, how built it is (places, realms and regions by grade), counts, ' +
+          'its realms (factions) with their regions, and its characters and lore. Start here ' +
+          'before exploring a world. ' +
+          GRADE_HELP,
         inputSchema: { worldId },
         annotations: readOnly,
         handler: async (ctx, args) => {
@@ -86,7 +98,7 @@ function cartographerApp({ reader, writer }) {
           'realm (faction) or kind, or list those nearest another place. Filters combine. ' +
           'Results are paged: pass nextOffset back as offset for more. Largest settlements come ' +
           'first, or nearest first with `near` (distance is in map units, hops counts travel ' +
-          'steps along connections).',
+          'steps along connections). Every row carries its grade, and `grade` filters by one.',
         inputSchema: {
           worldId,
           name: z
@@ -105,6 +117,7 @@ function cartographerApp({ reader, writer }) {
             .enum(['settlement', 'poi'])
             .optional()
             .describe('Only settlements, or only points of interest (poi).'),
+          grade: z.enum(GRADES).optional().describe('Only places with this grade.'),
           includeRetired: z
             .boolean()
             .optional()
@@ -141,12 +154,63 @@ function cartographerApp({ reader, writer }) {
         },
       },
       {
+        name: 'list_work',
+        title: 'List work to build',
+        description:
+          'What to build next in a world, most useful first, each item with its grade and what ' +
+          'it is missing. A place must be Playable for players to enter it, so the list grows ' +
+          'the world outward from where the game is: frontier (closed places next to an open ' +
+          'one, or the starting location), then other closed places nearest the start, then ' +
+          'open places that could be richer, then realms and regions to describe. Write a place ' +
+          'up with update_location (setting a description marks it written), add residents ' +
+          'with add_character and lore with add_lore. Paged: pass nextOffset back as offset. ' +
+          GRADE_HELP,
+        inputSchema: {
+          worldId,
+          kind: z
+            .enum(['settlement', 'poi', 'faction', 'region'])
+            .optional()
+            .describe('Only this kind of thing.'),
+          grade: z.enum(GRADES).optional().describe('Only items with this grade.'),
+          need: z
+            .enum(NEEDS)
+            .optional()
+            .describe('Only items missing this (e.g. description, residents, lore).'),
+          near: entityId('location', 'find_locations')
+            .optional()
+            .describe('Build around this place instead of the starting location.'),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(MAX_FIND_LIMIT)
+            .optional()
+            .describe(`Items per page (default ${DEFAULT_FIND_LIMIT}).`),
+          offset: z.number().int().min(0).optional().describe('Items to skip (default 0).'),
+        },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          if (args.near) {
+            entityFor(world, 'locations', args.near, 'location', 'Use find_locations by name.');
+          }
+          return {
+            worldId: world.id,
+            ...workList(world, {
+              ...args,
+              limit: args.limit || DEFAULT_FIND_LIMIT,
+              offset: args.offset || 0,
+            }),
+          };
+        },
+      },
+      {
         name: 'get_location',
         title: 'Get location',
         description:
-          'One place in full: description, population, region and realm, its connections (by ' +
-          'road, trail or sea, with direction and distance), the characters found there, and ' +
-          'the lore about it.',
+          'One place in full: description, its grade and what it is missing, population, region ' +
+          'and realm, its connections (by road, trail or sea, with direction, distance and ' +
+          'grade), the characters found there, and the lore about it.',
         inputSchema: { worldId, locationId: entityId('location', 'find_locations') },
         annotations: readOnly,
         handler: async (ctx, args) => {
@@ -165,8 +229,8 @@ function cartographerApp({ reader, writer }) {
         name: 'get_faction',
         title: 'Get faction',
         description:
-          'One realm or faction in full: description, government, capital, largest settlements, ' +
-          'regions, relations with other realms, members, and lore.',
+          'One realm or faction in full: description, grade, government, capital, largest ' +
+          'settlements, regions, relations with other realms, members, and lore.',
         inputSchema: { worldId, factionId: entityId('faction', 'get_world') },
         annotations: readOnly,
         handler: async (ctx, args) => {
@@ -185,7 +249,8 @@ function cartographerApp({ reader, writer }) {
         name: 'get_region',
         title: 'Get region',
         description:
-          'One region (province) in full: its realm, capital, settlements (largest first), and lore.',
+          'One region (province) in full: description, grade, its realm, capital, settlements ' +
+          '(largest first, with grades), and lore.',
         inputSchema: { worldId, regionId: entityId('region', 'get_world') },
         annotations: readOnly,
         handler: async (ctx, args) => {

@@ -198,6 +198,11 @@
             : '')
       )
     );
+    if (status === 'draft' || status === 'published') {
+      var completion = el('p', 'carto-meta carto-completion', 'Checking how built it is…');
+      completion.id = 'carto-completion-' + world.id;
+      card.appendChild(completion);
+    }
     if (status === 'failed' && world.error) card.appendChild(el('p', 'carto-error', world.error));
     if (world.warnings && world.warnings.length) card.appendChild(warningsList(world.warnings));
 
@@ -220,6 +225,48 @@
     return card;
   }
 
+  // ── Completion ───────────────────────────────────
+  // How many places are Playable (open to players) and Rich, graded on the
+  // server (cartographerCompletion).
+
+  function percent(share) {
+    if (share > 0 && share < 0.01) return '<1%';
+    return Math.round(share * 100) + '%';
+  }
+
+  function describeCompletion(c) {
+    var n = Cartographer.formatNumber;
+    return (
+      n(c.playable) +
+      ' of ' +
+      n(c.total) +
+      ' places playable (' +
+      percent(c.share) +
+      ')' +
+      (c.rich ? ' · ' + n(c.rich) + ' rich' : '')
+    );
+  }
+
+  function loadCompletion(worldIds) {
+    if (!worldIds.length) return;
+    state.functions
+      .httpsCallable('cartographerCompletion')({ worldIds: worldIds.slice(0, 20) })
+      .then(function (result) {
+        var worlds = (result.data && result.data.worlds) || {};
+        worldIds.forEach(function (id) {
+          var node = document.getElementById('carto-completion-' + id);
+          if (node) node.textContent = worlds[id] ? describeCompletion(worlds[id]) : '';
+        });
+      })
+      .catch(function (err) {
+        console.error('Failed to load completion:', err);
+        worldIds.forEach(function (id) {
+          var node = document.getElementById('carto-completion-' + id);
+          if (node) node.textContent = '';
+        });
+      });
+  }
+
   function loadWorlds() {
     show('carto-worlds-loading', true);
     show('carto-worlds-error', false);
@@ -230,10 +277,14 @@
       .then(function (snap) {
         var list = ref('carto-world-list');
         list.innerHTML = '';
+        var graded = [];
         snap.docs.forEach(function (doc) {
-          list.appendChild(renderWorld(doc.data()));
+          var world = doc.data();
+          list.appendChild(renderWorld(world));
+          if (world.status === 'draft' || world.status === 'published') graded.push(world.id);
         });
         show('carto-worlds-empty', snap.empty);
+        loadCompletion(graded);
       })
       .catch(function (err) {
         console.error('Failed to load worlds:', err);

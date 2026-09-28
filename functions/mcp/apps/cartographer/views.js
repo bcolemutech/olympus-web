@@ -5,6 +5,8 @@
 // rows carry ids for follow-up calls plus the names a reader needs, long lists
 // are paged or capped, and nothing here mutates the (frozen) world.
 
+const { gradeLocation, gradeEntity, gradeWorld } = require('../../../loom-canon/grading');
+
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
 const COMPASS = [
@@ -94,6 +96,9 @@ function charactersAt(world, location) {
 const byPopulationThenName = (a, b) =>
   populationOf(b) - populationOf(a) || a.name.localeCompare(b.name);
 
+// A grade and what it is missing (functions/loom-canon/grading.js).
+const graded = ({ grade, checklist }) => ({ grade, missing: checklist });
+
 // ── Rows ───────────────────────────────────────────────────────────────
 
 // `within` drops the region or realm a list is already scoped to.
@@ -108,6 +113,7 @@ function locationRow(world, location, within = {}) {
   if (region && !within.region) row.region = region.name;
   const faction = world.factions[(location.factionIds || [])[0]];
   if (faction && !within.realm) row.realm = faction.name;
+  row.grade = gradeLocation(world, location).grade;
   if (location.retired) row.retired = true;
   return row;
 }
@@ -197,6 +203,7 @@ function worldOverview(meta, world) {
     source: meta.source
       ? { mapName: meta.source.mapName || null, azgaarVersion: meta.source.version || null }
       : null,
+    completion: gradeWorld(world),
     counts: {
       settlements: live(locations.filter((l) => kindOf(l) === 'settlement')).length,
       pointsOfInterest: live(locations.filter((l) => kindOf(l) === 'poi')).length,
@@ -225,7 +232,7 @@ function worldOverview(meta, world) {
 }
 
 function findLocations(world, query) {
-  const { name, regionId, factionId, near, kind, includeRetired = false } = query;
+  const { name, regionId, factionId, near, kind, grade, includeRetired = false } = query;
   const { limit, offset } = query;
   const origin = near ? world.locations[near] : null;
   const needle = name ? fold(name) : '';
@@ -237,7 +244,8 @@ function findLocations(world, query) {
       (!kind || kindOf(location) === kind) &&
       (!regionId || geoOf(location).regionId === regionId) &&
       (!factionId || (location.factionIds || []).includes(factionId)) &&
-      (!needle || fold(location.name).includes(needle))
+      (!needle || fold(location.name).includes(needle)) &&
+      (!grade || gradeLocation(world, location).grade === grade)
   );
 
   // Exact name matches first, then prefixes; then nearest (with `near`) or
@@ -284,6 +292,7 @@ function locationDetail(world, location) {
     name: location.name,
     kind: kindOf(location),
     description: location.description || '',
+    ...graded(gradeLocation(world, location)),
   };
   if (location.retired) result.retired = true;
   if (geo.kind === 'settlement') {
@@ -299,6 +308,7 @@ function locationDetail(world, location) {
     ...ref(world.locations, id),
     via: links[id] || null,
     ...bearing(location, world.locations[id] || {}),
+    ...(world.locations[id] ? { grade: gradeLocation(world, world.locations[id]).grade } : {}),
   }));
   result.characters = charactersAt(world, location);
   result.lore = loreAbout(world, location.id);
@@ -328,6 +338,7 @@ function factionDetail(world, faction) {
     id: faction.id,
     name: faction.name,
     description: faction.description || '',
+    ...graded(gradeEntity(world, 'faction', faction)),
     disposition: faction.disposition || 'neutral',
     form: politics.formName || null,
     government: politics.form || null,
@@ -365,6 +376,8 @@ function regionDetail(world, region) {
   const result = {
     id: region.id,
     name: region.name,
+    description: region.description || '',
+    ...graded(gradeEntity(world, 'region', region)),
     form: region.formName || null,
     realm: region.factionId ? ref(world.factions, region.factionId) : null,
     capital: ref(world.locations, region.capitalLocationId),

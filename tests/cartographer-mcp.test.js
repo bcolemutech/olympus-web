@@ -158,19 +158,25 @@ async function seed() {
     locationId: 'loc_1',
     retired: true,
   });
-  await live.collection('lore').doc('lore_founding').set({
-    id: 'lore_founding',
-    title: 'The Founding of Burdendal',
-    text: 'Burdendal was raised on the wreck of the first fleet.',
-    entityRefs: ['loc_1', 'fac_1'],
-  });
-  await live.collection('lore').doc('lore_old').set({
-    id: 'lore_old',
-    title: 'A Forgotten Tale',
-    text: 'Nobody remembers.',
-    entityRefs: ['loc_1'],
-    retired: true,
-  });
+  await live
+    .collection('lore')
+    .doc('lore_founding')
+    .set({
+      id: 'lore_founding',
+      title: 'The Founding of Burdendal',
+      text: 'Burdendal was raised on the wreck of the first fleet.',
+      entityRefs: ['loc_1', 'fac_1'],
+    });
+  await live
+    .collection('lore')
+    .doc('lore_old')
+    .set({
+      id: 'lore_old',
+      title: 'A Forgotten Tale',
+      text: 'Nobody remembers.',
+      entityRefs: ['loc_1'],
+      retired: true,
+    });
   await live.collection('locations').doc('poi_1').update({ retired: true });
   await bumpCanon(LIVE, {
     status: 'published',
@@ -180,23 +186,27 @@ async function seed() {
     publishedAtMs: T0 + 5000,
   });
 
-  await worlds().doc('half-built-aaaaaa').set({
-    id: 'half-built-aaaaaa',
-    name: 'Half Built',
-    status: 'importing',
-    canonVersion: 0,
-    createdAtMs: T0 + 2000,
-    updatedAtMs: T0 + 2000,
-  });
-  await worlds().doc('broken-bbbbbb').set({
-    id: 'broken-bbbbbb',
-    name: 'Broken',
-    status: 'failed',
-    error: 'Write quota exceeded',
-    canonVersion: 0,
-    createdAtMs: T0 + 3000,
-    updatedAtMs: T0 + 3000,
-  });
+  await worlds()
+    .doc('half-built-aaaaaa')
+    .set({
+      id: 'half-built-aaaaaa',
+      name: 'Half Built',
+      status: 'importing',
+      canonVersion: 0,
+      createdAtMs: T0 + 2000,
+      updatedAtMs: T0 + 2000,
+    });
+  await worlds()
+    .doc('broken-bbbbbb')
+    .set({
+      id: 'broken-bbbbbb',
+      name: 'Broken',
+      status: 'failed',
+      error: 'Write quota exceeded',
+      canonVersion: 0,
+      createdAtMs: T0 + 3000,
+      updatedAtMs: T0 + 3000,
+    });
 }
 
 beforeAll(async () => {
@@ -242,6 +252,7 @@ describe('connector surface', () => {
       'get_lore',
       'get_region',
       'get_world',
+      'list_work',
       'list_worlds',
     ]);
 
@@ -391,6 +402,7 @@ describe('find_locations', () => {
       port: true,
       region: 'Burdendal County',
       realm: 'Kingdom of Pendonia',
+      grade: 'stub',
     });
 
     // Exact, then prefix, then anywhere in the name — each largest first,
@@ -507,10 +519,31 @@ describe('get_location, get_faction, get_region', () => {
       ],
     });
     expect(place.connections).toEqual([
-      { id: 'loc_120', name: 'Dunscombe', via: 'sea', distance: 29, direction: 'northwest' },
-      { id: 'loc_229', name: 'Wisin', via: 'sea', distance: 27, direction: 'south' },
-      { id: 'loc_231', name: 'Ashleaches', via: 'trail', distance: 25, direction: 'northeast' },
-      { id: 'loc_631', name: 'Dunsmouth', via: 'trail', distance: 21, direction: 'southeast' },
+      {
+        id: 'loc_120',
+        name: 'Dunscombe',
+        via: 'sea',
+        distance: 29,
+        direction: 'northwest',
+        grade: 'stub',
+      },
+      { id: 'loc_229', name: 'Wisin', via: 'sea', distance: 27, direction: 'south', grade: 'stub' },
+      {
+        id: 'loc_231',
+        name: 'Ashleaches',
+        via: 'trail',
+        distance: 25,
+        direction: 'northeast',
+        grade: 'stub',
+      },
+      {
+        id: 'loc_631',
+        name: 'Dunsmouth',
+        via: 'trail',
+        distance: 21,
+        direction: 'southeast',
+        grade: 'stub',
+      },
     ]);
   });
 
@@ -560,6 +593,7 @@ describe('get_location, get_faction, get_region', () => {
       population: 28473,
       capital: true,
       port: true,
+      grade: 'stub',
     });
   });
 
@@ -587,9 +621,9 @@ describe('get_character and get_lore', () => {
       location: { id: 'loc_1', name: 'Burdendal' },
       lore: [],
     });
-    expect(await read('get_character', { worldId: LIVE, characterId: 'chr_ghost' })).toMatchObject(
-      { retired: true }
-    );
+    expect(await read('get_character', { worldId: LIVE, characterId: 'chr_ghost' })).toMatchObject({
+      retired: true,
+    });
     expect(await errorText('get_character', { worldId: DRAFT, characterId: 'chr_mara' })).toMatch(
       /No character/
     );
