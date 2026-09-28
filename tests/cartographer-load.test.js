@@ -106,13 +106,21 @@ describe('loading a draft world', () => {
     expect(await count(worldId, 'regions')).toBe(145);
   });
 
-  test('reads back exactly what the mapper produced', async () => {
+  test('reads back exactly what the mapper produced, descriptions stamped as import', async () => {
     const { worldId } = await importNisia();
     const world = await loomCanon.loadWorld(worldId, { db, playableOnly: false });
     const { canon } = mapped();
+    const stamped = (entities) =>
+      Object.fromEntries(
+        Object.entries(entities).map(([id, e]) => [
+          id,
+          { ...e, sources: { description: 'import' } },
+        ])
+      );
     expect(world.status).toBe('draft');
-    expect(world.locations).toEqual(canon.locations);
-    expect(world.factions).toEqual(canon.factions);
+    expect(world.locations).toEqual(stamped(canon.locations));
+    expect(world.factions).toEqual(stamped(canon.factions));
+    // Regions have no description, so nothing to stamp.
     expect(world.regions).toEqual(canon.regions);
     expect(Object.isFrozen(world.locations.loc_1)).toBe(true);
   });

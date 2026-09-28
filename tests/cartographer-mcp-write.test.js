@@ -113,12 +113,14 @@ async function freshWorld({ published = false } = {}) {
     worldId,
   });
   if (published) {
-    await worlds().doc(worldId).update({
-      status: 'published',
-      openingHook: 'A storm drives your ship ashore at Burdendal.',
-      rules: { startingLocationId: 'loc_1' },
-      canonVersion: 2,
-    });
+    await worlds()
+      .doc(worldId)
+      .update({
+        status: 'published',
+        openingHook: 'A storm drives your ship ashore at Burdendal.',
+        rules: { startingLocationId: 'loc_1' },
+        canonVersion: 2,
+      });
   }
   return worldId;
 }
@@ -266,11 +268,12 @@ describe('names stay unique among places, realms and characters', () => {
         locationId: 'loc_1',
       })
     ).toMatch(/faction "Kingdom of Pendonia" \(fac_1\)/);
-    expect(await refused('update_faction', { worldId, factionId: 'fac_2', name: 'Burdendal' }))
-      .toMatch(/loc_1/);
     expect(
-      await refused('update_location', { worldId, locationId: 'loc_1', name: '!!!' })
-    ).toMatch(/at least one letter or digit/);
+      await refused('update_faction', { worldId, factionId: 'fac_2', name: 'Burdendal' })
+    ).toMatch(/loc_1/);
+    expect(await refused('update_location', { worldId, locationId: 'loc_1', name: '!!!' })).toMatch(
+      /at least one letter or digit/
+    );
   });
 
   test('renaming a thing to a variant of its own name is fine', async () => {
@@ -333,6 +336,55 @@ describe('update_location', () => {
   });
 });
 
+describe('descriptions written over MCP are stamped as written (L-321)', () => {
+  let worldId;
+  beforeAll(async () => {
+    worldId = await freshWorld();
+  });
+
+  test('imports arrive stamped as import; a new description is stamped mcp', async () => {
+    expect((await raw(worldId, 'locations', 'loc_1')).sources).toEqual({ description: 'import' });
+    await ok('update_location', { worldId, locationId: 'loc_1', description: 'Slate and rain.' });
+    expect(await raw(worldId, 'locations', 'loc_1')).toMatchObject({
+      description: 'Slate and rain.',
+      sources: { description: 'mcp' },
+    });
+  });
+
+  test('re-sending the imported text approves it, once', async () => {
+    const { description } = await raw(worldId, 'locations', 'loc_631');
+    const before = await version(worldId);
+    const first = await ok('update_location', { worldId, locationId: 'loc_631', description });
+    expect(first).toMatchObject({ changed: true, updated: ['description'] });
+    expect(await raw(worldId, 'locations', 'loc_631')).toMatchObject({
+      description,
+      sources: { description: 'mcp' },
+    });
+    expect(await version(worldId)).toBe(before + 1);
+    const again = await ok('update_location', { worldId, locationId: 'loc_631', description });
+    expect(again).toMatchObject({ changed: false, updated: [] });
+  });
+
+  test('other edits leave the stamp alone', async () => {
+    await ok('update_location', { worldId, locationId: 'loc_24', name: 'Hitchel Harbour' });
+    expect((await raw(worldId, 'locations', 'loc_24')).sources).toEqual({ description: 'import' });
+  });
+
+  test('realms and characters are stamped the same way', async () => {
+    await ok('update_faction', { worldId, factionId: 'fac_1', description: 'An old kingdom.' });
+    expect((await raw(worldId, 'factions', 'fac_1')).sources).toEqual({ description: 'mcp' });
+    await ok('add_character', {
+      worldId,
+      name: 'Mara Quill',
+      description: 'Harbourmaster.',
+      locationId: 'loc_1',
+    });
+    expect((await raw(worldId, 'characters', 'chr_mara-quill')).sources).toEqual({
+      description: 'mcp',
+    });
+  });
+});
+
 describe('connections stay symmetric', () => {
   let worldId;
   beforeAll(async () => {
@@ -341,7 +393,10 @@ describe('connections stay symmetric', () => {
 
   test('connect links both ends the same way; connecting again changes how', async () => {
     await ok('connect_locations', { worldId, fromId: 'loc_1', toId: 'loc_24', via: 'sea' });
-    const [a, b] = [await raw(worldId, 'locations', 'loc_1'), await raw(worldId, 'locations', 'loc_24')];
+    const [a, b] = [
+      await raw(worldId, 'locations', 'loc_1'),
+      await raw(worldId, 'locations', 'loc_24'),
+    ];
     expect(a.connections).toContain('loc_24');
     expect(b.connections).toContain('loc_1');
     expect([a.geo.links.loc_24, b.geo.links.loc_1]).toEqual(['sea', 'sea']);
@@ -358,7 +413,10 @@ describe('connections stay symmetric', () => {
 
   test('disconnect removes both ends; an absent link commits nothing', async () => {
     await ok('disconnect_locations', { worldId, fromId: 'loc_1', toId: 'loc_24' });
-    const [a, b] = [await raw(worldId, 'locations', 'loc_1'), await raw(worldId, 'locations', 'loc_24')];
+    const [a, b] = [
+      await raw(worldId, 'locations', 'loc_1'),
+      await raw(worldId, 'locations', 'loc_24'),
+    ];
     expect(a.connections).not.toContain('loc_24');
     expect(b.connections).not.toContain('loc_1');
     expect(a.geo.links).not.toHaveProperty('loc_24');
@@ -378,7 +436,9 @@ describe('connections stay symmetric', () => {
     const [neighbour] = leaf.connections;
     const result = await ok('disconnect_locations', { worldId, fromId: neighbour, toId: leaf.id });
     expect(result.warnings).toEqual([
-      expect.stringMatching(new RegExp(`^1 place\\(s\\) can no longer be reached from Burdendal: .*\\(${leaf.id}\\)`)),
+      expect.stringMatching(
+        new RegExp(`^1 place\\(s\\) can no longer be reached from Burdendal: .*\\(${leaf.id}\\)`)
+      ),
     ]);
   });
 
@@ -422,7 +482,11 @@ describe('update_faction', () => {
       await refused('update_faction', { worldId, factionId: 'fac_1', relations: { fac_1: 'ally' } })
     ).toMatch(/no relation to itself/);
     await refused('update_faction', { worldId, factionId: 'fac_1', relations: { fac_99: 'ally' } });
-    await refused('update_faction', { worldId, factionId: 'fac_1', relations: { fac_2: 'besties' } });
+    await refused('update_faction', {
+      worldId,
+      factionId: 'fac_1',
+      relations: { fac_2: 'besties' },
+    });
   });
 });
 
@@ -504,9 +568,9 @@ describe('lore', () => {
       text: 'Rewritten.',
       entityRefs: ['loc_631'],
     });
-    expect(
-      await refused('add_lore', { worldId, title: 'x', text: 'y', about: ['loc_0'] })
-    ).toMatch(/No place, realm, region or character "loc_0"/);
+    expect(await refused('add_lore', { worldId, title: 'x', text: 'y', about: ['loc_0'] })).toMatch(
+      /No place, realm, region or character "loc_0"/
+    );
     await refused('add_lore', { worldId, title: 'x', text: 'y', about: [] });
   });
 });
@@ -532,9 +596,10 @@ describe('retire_entity in a published world is soft', () => {
     expect(play.locations.loc_631.retired).toBe(true);
     expect(play.locations.loc_1.connections).not.toContain('loc_631');
 
-    expect(await ok('retire_entity', { worldId, type: 'location', id: 'loc_631' })).toMatchObject(
-      { changed: false, note: 'Already retired.' }
-    );
+    expect(await ok('retire_entity', { worldId, type: 'location', id: 'loc_631' })).toMatchObject({
+      changed: false,
+      note: 'Already retired.',
+    });
   });
 
   test('the starting location can’t be retired', async () => {
