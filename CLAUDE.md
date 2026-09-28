@@ -223,6 +223,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `loomPlayTurn` | `loom` claim (own saves) | Run one turn of the Loom pipeline |
 | `cartographerImport` | `cartographer` claim | Uploaded Azgaar map → draft world |
 | `cartographerPublish` | `cartographer` claim | Publish a draft world to the Loom |
+| `cartographerCompletion` | `cartographer` claim | How built each world is (Playable places), for the Cartographer page |
 | `mcpListConnections` / `mcpRevokeConnection` | Signed-in user (own connections) | Grand Hall "Manage connections" |
 | `mcpServer` | OAuth bearer token per connector | MCP connectors (Scriptorium, Cartographer) and the OAuth server |
 

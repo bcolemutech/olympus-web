@@ -599,6 +599,37 @@ function writeTools({ writer }) {
       },
     },
     {
+      name: 'update_region',
+      title: 'Update region',
+      description:
+        'Change a region’s (province’s) name or description. Regions arrive from the map with ' +
+        'no description; writing one, or sending the current text again, marks it as written ' +
+        'up. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        regionId: entityId('region', 'get_world'),
+        name: name.optional().describe('New name.'),
+        description: text(MAX_DESCRIPTION, 'description')
+          .optional()
+          .describe('New description: the land, its people, what it is known for.'),
+      },
+      annotations: replacing,
+      handler: (ctx, args) => {
+        requireSome(args, ['name', 'description']);
+        return edit(ctx, args, (e) => {
+          const region = existing(e.world, 'region', args.regionId);
+          const fields = describe(region, args.description);
+          if (args.name !== undefined && args.name !== region.name) fields.name = args.name;
+          if (Object.keys(fields).length) e.update(e.ref('regions', region.id), fields);
+          return {
+            region: { id: region.id, name: fields.name || region.name },
+            updated: changedFields(fields),
+          };
+        });
+      },
+    },
+    {
       name: 'add_character',
       title: 'Add character',
       description:

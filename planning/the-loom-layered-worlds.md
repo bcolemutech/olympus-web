@@ -101,15 +101,19 @@ When burgs ship, a settlement also needs a town layout, and when battle maps shi
 
 ## 6. Over MCP
 
-- **`list_work`** (`worldId`, and optionally `layer`, `kind`, `grade`, `near`, `limit`, `offset`) lists what to build, each item with its grade and missing checklist, in priority order:
-  1. Closed places on the **frontier**, meaning next to a Playable place, nearest the start first. The world grows outward from where you play.
+- **`list_work`** (`worldId`, and optionally `kind`, `grade`, `need`, `near`, `limit`, `offset`) lists what to build, each item with its grade and what it is missing, in priority order:
+  1. Closed places on the **frontier**: next to a Playable place, or the starting location itself (or `near`), nearest first. The world grows outward from where you play.
   2. Other closed places, by travel steps from the start.
   3. Playable places missing what would make them Rich.
-- **Grades in the read tools.** `get_world` shows completion by layer and grade, and `get_location` shows its grade and checklist. `find_locations` rows carry a grade and can filter by one.
+  4. Realms and regions to describe (never gated).
+
+  Layers show up as needs (`town`, `battleMap`) once they ship, so `need` filters by layer as well as by description, residents or lore. Each page explains the needs on it once, naming the tool that fills each.
+- **Grades in the read tools.** `get_world` shows completion by grade (places, realms, regions); `get_location`, `get_faction` and `get_region` show their grade and checklist; connections and `find_locations` rows carry a grade, and `find_locations` can filter by one.
+- **`update_region`** writes a region's name and description. Regions arrive from Azgaar with none, so without it their grades could never rise.
 - **Write tools stamp sources** (§4.3), so a place's grade updates on the next read.
 - **Per-layer tools** arrive with each layer's epic (§8, §9), including the Gemini generators: `generate_town_layout` and `generate_battle_map`.
 
-The Cartographer page shows each world's completion, as the share of places that are Playable.
+The Cartographer page shows each world's completion, the Playable places and their share, graded on the server by the `cartographerCompletion` callable.
 
 ---
 

@@ -5,6 +5,7 @@ const loomCanon = require('../loom-canon');
 const { parseAzgaarExport, AzgaarFormatError } = require('./parse');
 const { mapToCanon } = require('./map');
 const { loadDraftWorld, newWorldId } = require('./load');
+const { gradeWorld } = require('../loom-canon/grading');
 
 // The Cartographer's server side (design planning/the-cartographer-design.md
 // §3.1, §3.4; C-5 / #372), behind the cartographerImport and
@@ -19,6 +20,11 @@ const { loadDraftWorld, newWorldId } = require('./load');
 // publishWorld(uid, { worldId, openingHook, startingLocationId, tagline })
 //   Applies the given opening hook / starting location / tagline, checks the
 //   world is playable, and publishes it — the Loom then lists and plays it.
+//
+// worldCompletion({ worldIds })
+//   How built each world is, for the Cartographer page: its places by grade
+//   (planning/the-loom-layered-worlds.md §4, §6; L-323 / #392). Graded here
+//   because the page would otherwise read every entity of every world.
 //   (Until the MCP write tools exist, the Cartographer page supplies the hook
 //   and starting location at publish time.)
 
@@ -27,6 +33,7 @@ const WORLD_ID = /^[a-z0-9-]{1,64}$/;
 const MAX_NAME = 100;
 const MAX_HOOK = 2000;
 const MAX_TAGLINE = 200;
+const MAX_COMPLETION_WORLDS = 20;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 // Width and height from a PNG's IHDR chunk (the first 24 bytes), or null.
@@ -195,7 +202,34 @@ function createCartographerService({ db, bucket, now = () => Date.now() }) {
     return { worldId, status: 'published' };
   }
 
-  return { importUpload, publishWorld };
+  async function worldCompletion({ worldIds } = {}) {
+    if (
+      !Array.isArray(worldIds) ||
+      worldIds.length > MAX_COMPLETION_WORLDS ||
+      !worldIds.every((id) => typeof id === 'string' && WORLD_ID.test(id))
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        `worldIds must be up to ${MAX_COMPLETION_WORLDS} world ids.`
+      );
+    }
+    const worlds = {};
+    for (const id of new Set(worldIds)) {
+      const world = await loomCanon.loadWorld(id, { db, playableOnly: false });
+      const summary = world && gradeWorld(world);
+      if (!summary || !summary.graded) continue;
+      const { places } = summary;
+      worlds[id] = {
+        total: places.total,
+        playable: places.playable + places.rich,
+        rich: places.rich,
+        share: places.open,
+      };
+    }
+    return { worlds };
+  }
+
+  return { importUpload, publishWorld, worldCompletion };
 }
 
 function requireCartographer(request) {
