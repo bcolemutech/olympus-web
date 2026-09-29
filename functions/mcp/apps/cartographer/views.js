@@ -5,7 +5,12 @@
 // rows carry ids for follow-up calls plus the names a reader needs, long lists
 // are paged or capped, and nothing here mutates the (frozen) world.
 
-const { gradeLocation, gradeEntity, gradeWorld } = require('../../../loom-canon/grading');
+const {
+  gradeLocation,
+  gradeEntity,
+  gradeWorld,
+  isPlayable,
+} = require('../../../loom-canon/grading');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -182,6 +187,8 @@ function worldOverview(meta, world) {
   if (!world.openingHook) missing.push('an opening hook');
   if (!start || !world.locations[start] || world.locations[start].retired) {
     missing.push('a starting location');
+  } else if (!isPlayable(world, world.locations[start])) {
+    missing.push('a starting location players can enter (write it up first)');
   }
 
   const map = world.map || {};

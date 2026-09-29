@@ -178,6 +178,7 @@ async function seed() {
       retired: true,
     });
   await live.collection('locations').doc('poi_1').update({ retired: true });
+  await live.collection('locations').doc('loc_1').update({ 'sources.description': 'mcp' }); // the start, written up (L-322)
   await bumpCanon(LIVE, {
     status: 'published',
     tagline: 'Twenty-three realms, one coastline.',

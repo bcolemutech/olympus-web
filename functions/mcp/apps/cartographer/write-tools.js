@@ -6,6 +6,8 @@ const { ToolError } = require('../../registry');
 const { normalizeName } = require('../../../loom-turn/interpret');
 const { worldId, entityId } = require('./schemas');
 const { SOURCES } = require('../../../cartographer/sources');
+const { isPlayable } = require('../../../loom-canon/grading');
+const { whyClosed } = require('../../../cartographer/service');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
 // design.md §4.1, §4.2; C-7 / #374): Claude adds to, fixes and changes worlds,
@@ -350,10 +352,20 @@ function writeTools({ writer }) {
             fields.openingHook = args.openingHook;
           }
           const start = args.startingLocationId;
+          const warnings = [];
           if (start !== undefined) {
             live(world, 'location', start);
             if (start !== (world.rules || {}).startingLocationId) {
               fields['rules.startingLocationId'] = start;
+            }
+            // New games begin here, and players can only enter Playable places.
+            if (!isPlayable(world, world.locations[start])) {
+              warnings.push(
+                `The start isn't open to players yet (${whyClosed(world, start)}). ` +
+                  (world.status === 'published'
+                    ? "New games can't begin until it is written up."
+                    : 'Write it up before publishing.')
+              );
             }
           }
           if (Object.keys(fields).length) e.updateWorld(fields);
@@ -365,6 +377,7 @@ function writeTools({ writer }) {
                 ? { startingLocation: { id: start, name: world.locations[start].name } }
                 : {}),
             },
+            ...(warnings.length ? { warnings } : {}),
           };
         });
       },

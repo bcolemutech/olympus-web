@@ -7,6 +7,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleAuth } = require('google-auth-library');
 const { runTurnPipeline, LoomTurnError } = require('./loom-turn');
 const loomCanon = require('./loom-canon');
+const { isPlayable } = require('./loom-canon/grading');
 const { makeSave } = require('./loom-models');
 
 initializeApp();
@@ -516,6 +517,12 @@ exports.loomCreateSave = onCall(async (request) => {
   const canonWorld = await loomCanon.loadWorld(worldId.trim(), { db });
   if (!canonWorld) {
     throw new HttpsError('not-found', 'Unknown world.');
+  }
+  // New games begin at the starting location, so it must be open to players
+  // (Layered Worlds gate, L-322 / #391); static worlds are exempt.
+  const start = canonWorld.rules && canonWorld.locations[canonWorld.rules.startingLocationId];
+  if (!start || start.retired || !isPlayable(canonWorld, start)) {
+    throw new HttpsError('failed-precondition', "This world isn't ready to play yet.");
   }
 
   const saveRef = db.collection('loom_saves').doc();

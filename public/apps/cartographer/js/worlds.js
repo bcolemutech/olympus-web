@@ -81,6 +81,14 @@
     datalist.id = listId;
     startGroup.appendChild(start);
     startGroup.appendChild(datalist);
+    startGroup.appendChild(
+      el(
+        'p',
+        'carto-hint',
+        'Players can only enter places that are written up, so write this one up with Claude ' +
+          'first. Publishing will say if it still needs anything.'
+      )
+    );
 
     var error = el('p', 'carto-error hidden');
     error.setAttribute('role', 'alert');
