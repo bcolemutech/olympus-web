@@ -94,7 +94,7 @@ When burgs ship, a settlement also needs a town layout, and when battle maps shi
 - **Travel.** The rules engine (ADJUDICATE) refuses a move into a place below Playable with a blocked outcome: "The way to _X_ is closed. Turn back." Nothing changes and no time passes.
 - **Nobody is stranded.** A save standing in a place that is below the bar (after the bar rises, or a revision) stays there and can leave. Only entering is refused.
 - **The narrator** is told which exits are closed, so it describes them as barred rather than inventing what lies beyond.
-- **New games.** Publishing requires the starting location to be Playable, and `loomCreateSave` refuses a world whose start has since dropped below the bar ("This world isn't ready to play yet").
+- **New games.** Publishing requires the starting location to be Playable, and `loomCreateSave` refuses a world whose start has since dropped below the bar ("This world isn't ready to play yet"). Setting a start that isn't Playable over MCP (`update_world`) succeeds but warns, since new games can't begin there until it is written up.
 - **Shared by everyone.** Grades are world-level, so every player, and every future multiplayer tier, sees the same open and closed places.
 
 ---

@@ -5,7 +5,7 @@ const loomCanon = require('../loom-canon');
 const { parseAzgaarExport, AzgaarFormatError } = require('./parse');
 const { mapToCanon } = require('./map');
 const { loadDraftWorld, newWorldId } = require('./load');
-const { gradeWorld } = require('../loom-canon/grading');
+const { gradeWorld, gradeLocation, isPlayable } = require('../loom-canon/grading');
 
 // The Cartographer's server side (design planning/the-cartographer-design.md
 // §3.1, §3.4; C-5 / #372), behind the cartographerImport and
@@ -19,7 +19,8 @@ const { gradeWorld } = require('../loom-canon/grading');
 //
 // publishWorld(uid, { worldId, openingHook, startingLocationId, tagline })
 //   Applies the given opening hook / starting location / tagline, checks the
-//   world is playable, and publishes it — the Loom then lists and plays it.
+//   world is playable (its starting location graded Playable, so players can
+//   enter it), and publishes it — the Loom then lists and plays it.
 //
 // worldCompletion({ worldIds })
 //   How built each world is, for the Cartographer page: its places by grade
@@ -41,6 +42,15 @@ function pngDimensions(header) {
   if (!header || header.length < 24 || !header.subarray(0, 8).equals(PNG_SIGNATURE)) return null;
   if (header.toString('ascii', 12, 16) !== 'IHDR') return null;
   return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+}
+
+// Why a place isn't Playable, for a refusal: "Burdendal: its description is
+// still the imported text".
+function whyClosed(world, locationId) {
+  const reasons = gradeLocation(world, world.locations[locationId])
+    .checklist.filter((item) => item.for === 'playable')
+    .map((item) => item.message.charAt(0).toLowerCase() + item.message.slice(1, -1));
+  return `${world.locations[locationId].name}: ${reasons.join('; ')}`;
 }
 
 function optionalText(value, max, field) {
@@ -166,6 +176,9 @@ function createCartographerService({ db, bucket, now = () => Date.now() }) {
     if (!finalHook) problems.push('an opening hook');
     if (!start || !world.locations[start] || world.locations[start].retired) {
       problems.push('a starting location that exists in this world');
+    } else if (!isPlayable(world, world.locations[start])) {
+      // Players can only enter Playable places (Layered Worlds §5; L-322).
+      problems.push(`a starting location players can enter (${whyClosed(world, start)})`);
     }
     const broken = Object.values(world.locations).filter((l) =>
       (l.connections || []).some((id) => !world.locations[id])
@@ -243,4 +256,4 @@ function requireCartographer(request) {
   return request.auth.uid;
 }
 
-module.exports = { createCartographerService, requireCartographer, pngDimensions };
+module.exports = { createCartographerService, requireCartographer, pngDimensions, whyClosed };

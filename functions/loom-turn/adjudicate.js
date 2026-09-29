@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { isPlayable } = require('../loom-canon/grading');
 
 /**
  * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
@@ -24,6 +25,11 @@ const crypto = require('crypto');
  * mirroring the design doc's own "can the character fly?" example. Anything
  * else falls back to a simple d20-vs-difficulty-class check so server dice
  * are exercised uniformly. Richer per-verb rules are Phase 2 (L-202 / #313).
+ *
+ * The Layered Worlds gate (planning/the-loom-layered-worlds.md §5; L-322 /
+ * #391): a place that isn't graded Playable (functions/loom-canon/grading.js)
+ * is closed, and a move into it is blocked. Leaving a closed place never is,
+ * so no save is stranded. Hand-authored static worlds are exempt.
  */
 
 const DEFAULT_DIFFICULTY_CLASS = 10;
@@ -78,6 +84,13 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
       outcome: 'blocked',
       mutations: [],
       constraints: ["That place can't be reached anymore."],
+    };
+  }
+  if (!isPlayable(canonWorld, targetLocation)) {
+    return {
+      outcome: 'blocked',
+      mutations: [],
+      constraints: ['The way to ' + targetLocation.name + ' is closed. Turn back.'],
     };
   }
   const requiredAbility = targetLocation.rules && targetLocation.rules.requiresAbility;

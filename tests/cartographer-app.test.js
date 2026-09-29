@@ -71,6 +71,16 @@ async function upload({ json = RAW, png, uid = BUILDER.uid } = {}) {
 }
 
 const exists = async (name) => (await bucket.file(name).exists())[0];
+
+// Writes a place up, as an MCP edit would, so the gate (L-322) lets players in.
+async function writeUp(worldId, id) {
+  const worldRef = db.collection('loom_worlds').doc(worldId);
+  await worldRef
+    .collection('locations')
+    .doc(id)
+    .update({ description: 'A rain-soaked port.', 'sources.description': 'mcp' });
+  await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+}
 const importAs = (auth, data) => cartographerImport.run({ data, auth });
 const publishAs = (auth, data) => cartographerPublish.run({ data, auth });
 const completionAs = (auth, data) => cartographerCompletion.run({ data, auth });
@@ -189,10 +199,20 @@ describe('cartographerPublish', () => {
       code: 'failed-precondition',
       message: expect.stringMatching(/starting location/),
     });
+    // The start must be open to players: written up, not the import text (L-322).
+    await expect(
+      publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' })
+    ).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message:
+        'Not ready to publish. It needs a starting location players can enter ' +
+        '(Burdendal: its description is still the imported text).',
+    });
     expect((await db.collection('loom_worlds').doc(worldId).get()).data().status).toBe('draft');
   });
 
   test('publishes with an opening hook and starting location; the Loom can then play it', async () => {
+    await writeUp(worldId, 'loc_1');
     await expect(
       publishAs(BUILDER, {
         worldId,
@@ -208,7 +228,7 @@ describe('cartographerPublish', () => {
       openingHook: 'A storm drives your ship ashore at Burdendal.',
       tagline: 'Twenty-three realms, one coastline.',
       rules: { startingLocationId: 'loc_1' },
-      canonVersion: 2,
+      canonVersion: 3, // import 1, write-up 2, publish 3
       publishedBy: BUILDER.uid,
     });
     expect(typeof world.publishedAtMs).toBe('number');
@@ -222,6 +242,7 @@ describe('cartographerPublish', () => {
   });
 
   test('only a draft can be published', async () => {
+    await writeUp(worldId, 'loc_1');
     await publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' });
     await expect(
       publishAs(BUILDER, { worldId, openingHook: 'Again.', startingLocationId: 'loc_1' })

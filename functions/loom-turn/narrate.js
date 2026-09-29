@@ -2,6 +2,7 @@
 
 const { callGemini } = require('../gemini');
 const loomCanon = require('../loom-canon');
+const { isPlayable } = require('../loom-canon/grading');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
 
@@ -84,8 +85,48 @@ function buildEntitySection(canonWorld, context) {
   );
 }
 
+// Where the player stands once this action resolves: a successful move's
+// destination, or where they already were (NARRATE runs before COMMIT).
+function locationAfter(save, resolution) {
+  const move = (resolution.mutations || []).find(
+    (m) => m.target === 'save' && m.path === 'location'
+  );
+  return move ? move.value : save.location;
+}
+
+// The ways on from where the player ends up, each open or closed (the Layered
+// Worlds gate, L-322 / #391), so the narrator never describes the far side of
+// a place players can't enter.
+function buildExitsSection(canonWorld, locationId) {
+  const here = locationId && canonWorld.locations[locationId];
+  if (!here) return '';
+  const links = (here.geo && here.geo.links) || {};
+  const exits = (here.connections || [])
+    .map((id) => canonWorld.locations[id])
+    .filter(Boolean)
+    .map((place) => ({ place, open: isPlayable(canonWorld, place) }));
+  if (!exits.length) return '';
+  const lines = exits.map(
+    ({ place, open }) =>
+      '- ' +
+      place.name +
+      ' (' +
+      place.id +
+      ')' +
+      (links[place.id] ? ', by ' + links[place.id] : '') +
+      ': ' +
+      (open ? 'open' : 'CLOSED')
+  );
+  const note = exits.some((exit) => !exit.open)
+    ? 'Closed ways are barred to the player: describe them as closed or impassable, never ' +
+      'what lies beyond them.\n'
+    : '';
+  return 'WAYS ON FROM ' + here.name + ':\n' + note + lines.join('\n');
+}
+
 function buildUserMessage(params) {
-  const { actionText, resolution, canonWorld, entityContexts, recentSummary } = params;
+  const { actionText, resolution, canonWorld, entityContexts, recentSummary, exitsSection } =
+    params;
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
@@ -107,7 +148,8 @@ function buildUserMessage(params) {
     (recentSummary || '(none yet)') +
     '\n\n' +
     'RELEVANT ENTITIES:\n' +
-    entitySections
+    entitySections +
+    (exitsSection ? '\n\n' + exitsSection : '')
   );
 }
 
@@ -185,6 +227,7 @@ async function narrateResolution(params) {
         canonWorld,
         entityContexts,
         recentSummary: save.recentSummary,
+        exitsSection: buildExitsSection(canonWorld, locationAfter(save, resolution)),
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,

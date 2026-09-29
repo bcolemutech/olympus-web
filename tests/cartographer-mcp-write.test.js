@@ -221,6 +221,10 @@ describe('update_world', () => {
       changed: true,
       updated: ['tagline', 'openingHook', 'startingLocationId'],
       world: { startingLocation: { id: 'loc_1', name: 'Burdendal' } },
+      warnings: [
+        "The start isn't open to players yet (Burdendal: its description is still the " +
+          'imported text). Write it up before publishing.',
+      ],
     });
     const doc = (await worlds().doc(worldId).get()).data();
     expect(doc).toMatchObject({
@@ -230,6 +234,12 @@ describe('update_world', () => {
       canonVersion: 2,
       updatedBy: BUILDER,
     });
+    // Not ready until the start is written up: players can only enter Playable places.
+    expect(await ok('get_world', { worldId })).toMatchObject({
+      readyToPublish: false,
+      missing: ['a starting location players can enter (write it up first)'],
+    });
+    await ok('update_location', { worldId, locationId: 'loc_1', description: 'Slate and rain.' });
     expect((await ok('get_world', { worldId })).readyToPublish).toBe(true);
   });
 
@@ -718,6 +728,10 @@ describe('publish_world', () => {
       openingHook: 'A storm.',
       startingLocationId: 'loc_1',
     });
+    expect(await refused('publish_world', { worldId })).toMatch(
+      /a starting location players can enter \(Burdendal: its description is still the imported text\)/
+    );
+    await ok('update_location', { worldId, locationId: 'loc_1', description: 'Slate and rain.' });
     expect(await ok('publish_world', { worldId })).toMatchObject({ worldId, status: 'published' });
     expect((await worlds().doc(worldId).get()).data()).toMatchObject({
       status: 'published',
@@ -788,6 +802,11 @@ describe('exit criterion: build with Claude, play, fix, keep playing', () => {
       title: 'The Quill Ledger',
       text: 'Mara keeps a ledger of every ship lost on the bar.',
       about: ['chr_mara-quill'],
+    });
+    await ok('update_location', {
+      worldId,
+      locationId: 'loc_1',
+      description: 'A rain-soaked port of slate roofs and tarred rope.',
     });
     await ok('publish_world', { worldId });
 

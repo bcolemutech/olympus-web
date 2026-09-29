@@ -165,6 +165,12 @@ textarea.carto-input {
   font-size: 0.85rem;
 }
 
+.carto-hint {
+  margin: 0.2rem 0 0;
+  color: #90a4ae;
+  font-size: 0.8rem;
+}
+
 .carto-completion {
   color: #a5d6a7;
 }

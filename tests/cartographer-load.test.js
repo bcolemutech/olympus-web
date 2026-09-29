@@ -50,6 +50,8 @@ async function importNisia(extra = {}) {
   return loadDraftWorld({ db, mapped: mapped(), source: PARSED.source, uploadedBy: UID, ...extra });
 }
 
+// Publishes with Burdendal (loc_1) as the start, written up so the gate
+// (L-322) lets new games begin there.
 async function publish(worldId, patch = {}) {
   const ref = db.collection('loom_worlds').doc(worldId);
   await ref.update({
@@ -59,6 +61,18 @@ async function publish(worldId, patch = {}) {
     canonVersion: (await ref.get()).data().canonVersion + 1,
     ...patch,
   });
+  await writeUp(worldId, 'loc_1');
+}
+
+// Writes places up, as an MCP edit would, so players may enter them.
+async function writeUp(worldId, ...ids) {
+  const places = db.collection('loom_worlds').doc(worldId).collection('locations');
+  await Promise.all(
+    ids.map((id) =>
+      places.doc(id).update({ description: `Written up: ${id}.`, 'sources.description': 'mcp' })
+    )
+  );
+  await bump(worldId);
 }
 
 async function bump(worldId) {
@@ -208,6 +222,12 @@ describe('the Loom and Firestore worlds', () => {
       .update({ retired: true });
     await bump(worldId);
 
+    // Where someone standing in the retired place would go: open to players.
+    await writeUp(
+      worldId,
+      (await loomCanon.loadWorld(worldId, { db })).locations[retiredId].connections[0]
+    );
+
     const world = await loomCanon.loadWorld(worldId, { db });
     expect(world.locations[retiredId].retired).toBe(true);
     expect(loomCanon.findEntity(world, retiredId)).not.toBeNull();
@@ -245,8 +265,9 @@ describe('the Loom and Firestore worlds', () => {
       data: { worldId, name: 'First voyage', characterName: 'Mara' },
       auth: PLAYER,
     });
+    const destination = (await loomCanon.loadWorld(worldId, { db })).locations.loc_1.connections[0];
+    await writeUp(worldId, destination);
     const world = await loomCanon.loadWorld(worldId, { db });
-    const destination = world.locations.loc_1.connections[0];
 
     mockCallGemini.mockImplementation((options) => {
       if (options.systemInstruction.indexOf('INTERPRET stage') !== -1) {
