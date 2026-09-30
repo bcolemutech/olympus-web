@@ -9,6 +9,7 @@ const { runTurnPipeline, LoomTurnError } = require('./loom-turn');
 const loomCanon = require('./loom-canon');
 const { isPlayable } = require('./loom-canon/grading');
 const { withNeighbours } = require('./loom-turn/discovery');
+const { arrivalPlace } = require('./loom-canon/town');
 const { mapView } = require('./loom-turn/map-view');
 const { makeSave } = require('./loom-models');
 
@@ -592,6 +593,8 @@ exports.loomCreateSave = onCall(async (request) => {
       abilities: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
     },
     location: canonWorld.rules && canonWorld.rules.startingLocationId,
+    // A start with a town layout (L-342) begins at its first open entrance.
+    placeId: (arrivalPlace(canonWorld, start.id, null) || {}).id || null,
     // The world map shows what a save has discovered (L-331): at first, the
     // start and the places it connects to.
     discovered: withNeighbours(canonWorld, start.id),

@@ -285,15 +285,20 @@ describe('cartographerCompletion (L-323)', () => {
       worlds: { [worldId]: { total: 719, playable: 1, rich: 0, share: 0.001 } },
     });
 
-    // A resident and lore make it rich: still one playable place, now rich too.
-    await worldRef
-      .collection('characters')
-      .doc('chr_mara')
-      .set({ id: 'chr_mara', name: 'Mara', description: 'Harbourmaster.', locationId: 'loc_1' });
-    await worldRef
-      .collection('lore')
-      .doc('lore_founding')
-      .set({ id: 'lore_founding', title: 'Founding', text: '…', entityRefs: ['loc_1'] });
+    // Enough residents and lore for a great city (a capital of 28,473) make
+    // it rich: still one playable place, now rich too.
+    for (let i = 1; i <= 6; i += 1) {
+      await worldRef
+        .collection('characters')
+        .doc(`chr_${i}`)
+        .set({ id: `chr_${i}`, name: `Local ${i}`, description: 'A local.', locationId: 'loc_1' });
+    }
+    for (let i = 1; i <= 3; i += 1) {
+      await worldRef
+        .collection('lore')
+        .doc(`lore_${i}`)
+        .set({ id: `lore_${i}`, title: `Tale ${i}`, text: '…', entityRefs: ['loc_1'] });
+    }
     await worldRef.update({ canonVersion: 3 });
     await expect(completionAs(BUILDER, { worldIds: [worldId] })).resolves.toEqual({
       worlds: { [worldId]: { total: 719, playable: 1, rich: 1, share: 0.001 } },

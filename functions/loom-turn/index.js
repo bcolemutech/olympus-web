@@ -86,7 +86,7 @@ async function runTurnPipeline(params) {
   let actionText = params.actionText;
   let proposedAction;
   if (action) {
-    const target = canonWorld.locations[action.target];
+    const target = canonWorld.locations[action.target] || (canonWorld.places || {})[action.target];
     actionText = 'travel to ' + (target ? target.name : action.target);
     proposedAction = { verb: 'move', targets: [action.target], params: { from: 'map' } };
   } else {

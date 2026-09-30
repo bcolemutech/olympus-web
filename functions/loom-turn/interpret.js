@@ -46,7 +46,9 @@ function buildSystemInstruction(knownEntities) {
   );
 }
 
-function buildKnownEntities(canonWorld) {
+// The world's places, realms and characters, plus the places of the town the
+// player is in (L-342), so "go to the market" resolves to that town's market.
+function buildKnownEntities(canonWorld, save) {
   const entities = [];
   // Retired entities (soft-removed from a published world) can't be targeted.
   const live = (entity) => !entity.retired;
@@ -65,6 +67,12 @@ function buildKnownEntities(canonWorld) {
     .forEach((character) => {
       entities.push({ id: character.id, name: character.name, kind: 'character' });
     });
+  const here = save && save.location;
+  Object.values(canonWorld.places || {})
+    .filter((place) => live(place) && place.locationId === here)
+    .forEach((place) => {
+      entities.push({ id: place.id, name: place.name, kind: 'place' });
+    });
   return entities;
 }
 
@@ -78,6 +86,13 @@ function normalize(text) {
 
 /** Resolves a raw target string to a known entity id, or returns it unchanged if no match. */
 function resolveTarget(rawTarget, knownEntities) {
+  // An exact id first: Cartographer ids (loc_1, plc_1_tavern) contain
+  // underscores, which normalizing would turn into dashes — and the fuzzy
+  // match below would then find any place whose name appears in the id
+  // ("plc-1-tavern" contains "ver").
+  const exact = knownEntities.find((e) => e.id === String(rawTarget).trim());
+  if (exact) return exact.id;
+
   const normalized = normalize(rawTarget);
 
   const byId = knownEntities.find((e) => e.id === normalized);
@@ -111,8 +126,8 @@ function fallbackProposedAction(actionText) {
  * @returns {Promise<{ verb: string, targets: string[], params: object }>}
  */
 async function interpretAction(params) {
-  const { actionText, canonWorld } = params;
-  const knownEntities = buildKnownEntities(canonWorld);
+  const { actionText, canonWorld, save } = params;
+  const knownEntities = buildKnownEntities(canonWorld, save);
 
   let raw;
   try {

@@ -185,9 +185,10 @@ test('get_location shows the grade, the checklist, and which neighbours are open
   const place = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
   expect(place).toMatchObject({
     grade: 'playable',
+    // Burdendal is a capital of 28,473: a great city's bar (SIZE_TIERS).
     missing: [
-      { need: 'residents', for: 'rich', message: 'Nobody lives here yet.' },
-      { need: 'lore', for: 'rich', message: 'There is no lore about it.' },
+      { need: 'residents', for: 'rich', message: 'A great city needs 6 residents (it has 0).' },
+      { need: 'lore', for: 'rich', message: 'A great city needs 3 lore entries (it has 0).' },
     ],
   });
   expect(place.connections.map((c) => c.grade)).toEqual(['stub', 'stub', 'stub', 'stub']);
@@ -199,19 +200,29 @@ test('get_location shows the grade, the checklist, and which neighbours are open
   });
 });
 
-test('residents and lore make it rich, and it leaves the work list', async () => {
-  await ok('add_character', {
-    worldId: WORLD,
-    name: 'Mara Quill',
-    description: 'Harbourmaster of Burdendal.',
-    locationId: 'loc_1',
-  });
-  await ok('add_lore', {
-    worldId: WORLD,
-    title: 'The Founding',
-    text: 'Raised on the wreck of the first fleet.',
-    about: ['loc_1'],
-  });
+test('enough residents and lore for its size make it rich, and it leaves the work list', async () => {
+  const people = ['Mara Quill', 'Tobin Reed', 'Elsa Varne', 'Corin Hale', 'Isa Wren', 'Pell Marr'];
+  for (const [i, name] of people.entries()) {
+    await ok('add_character', {
+      worldId: WORLD,
+      name,
+      description: `A Burdendal local, one of ${i + 1}.`,
+      locationId: 'loc_1',
+    });
+    // One resident short of a great city's six: still only playable.
+    if (i === 4) {
+      expect(
+        (await ok('get_location', { worldId: WORLD, locationId: 'loc_1' })).missing[0]
+      ).toEqual({
+        need: 'residents',
+        for: 'rich',
+        message: 'A great city needs 6 residents (it has 5).',
+      });
+    }
+  }
+  for (const title of ['The Founding', 'The Drowned Bells', 'The Salt Tithe']) {
+    await ok('add_lore', { worldId: WORLD, title, text: `${title}, retold.`, about: ['loc_1'] });
+  }
   expect((await ok('get_location', { worldId: WORLD, locationId: 'loc_1' })).grade).toBe('rich');
   const list = await work({ limit: 100 });
   expect(list.completion).toMatchObject({ playable: 0, rich: 1 });
