@@ -180,6 +180,27 @@ describe('mapping Nisia', () => {
     expect(descriptions.some((d) => /^Village of about \d/.test(d))).toBe(true);
   });
 
+  test('settlements carry their town seeds; points of interest have none (L-341)', () => {
+    expect(canon.locations.loc_1.geo.seeds).toEqual({
+      type: 'Naval',
+      culture: 'Angshire',
+      walls: true,
+      citadel: true,
+      plaza: true,
+      temple: true,
+      shanty: false,
+    });
+    const settlements = locations.filter((l) => l.geo.kind === 'settlement');
+    expect(settlements.every((l) => l.geo.seeds && l.geo.seeds.culture && l.geo.seeds.type)).toBe(
+      true
+    );
+    expect(settlements.filter((l) => l.geo.seeds.walls)).toHaveLength(168);
+    expect(settlements.filter((l) => l.geo.seeds.plaza)).toHaveLength(26);
+    expect(locations.filter((l) => l.geo.kind === 'poi').every((l) => !l.geo.seeds)).toBe(true);
+    // The map's distance scale, so maps can show real distances.
+    expect(canon.map.distance).toEqual({ unit: 'mi', perMapUnit: 2 });
+  });
+
   test('a faction: politics and relations from diplomacy', () => {
     const pendonia = canon.factions.fac_1;
     expect(pendonia).toMatchObject({

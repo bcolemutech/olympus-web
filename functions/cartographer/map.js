@@ -13,6 +13,9 @@
 //   locations  loc_<i> (settlements), poi_<i> (points of interest from markers)
 //              { id, name, description, connections, factionIds, npcIds, rules,
 //                geo: { kind, x, y, links: { [locationId]: 'road'|'trail'|'sea' }, … } }
+//              settlements also carry geo.seeds, Azgaar's facts for laying out the
+//              town: { type, culture, walls, citadel, plaza, temple, shanty }
+//              (L-341 / #395; plaza is the market square)
 //   factions   fac_<i>  { id, name, description, disposition: 'neutral',
 //                         politics: { form, formName, color, capitalLocationId, relations } }
 //   regions    reg_<i>  { id, name, formName, factionId, capitalLocationId, color, locationIds }
@@ -121,12 +124,35 @@ function factionDescription(state, settlementCount, capitalName) {
   return `${capitalize(article(form))} ${form} of ${count}${capital}.`;
 }
 
+// What Azgaar says about a town, for laying it out (L-341 / #395).
+function settlementSeeds(s, cultureName) {
+  return {
+    type: s.type || null,
+    culture:
+      (s.cultureId !== null && s.cultureId !== undefined && cultureName.get(s.cultureId)) || null,
+    walls: Boolean(s.walls),
+    citadel: Boolean(s.citadel),
+    plaza: Boolean(s.plaza),
+    temple: Boolean(s.temple),
+    shanty: Boolean(s.shanty),
+  };
+}
+
+// Azgaar's distance scale (units per map unit, e.g. 2 mi), when it has one.
+function mapDistance(scale) {
+  const { distanceUnit, distanceScale } = scale || {};
+  return typeof distanceUnit === 'string' && distanceUnit && distanceScale > 0
+    ? { distance: { unit: distanceUnit, perMapUnit: distanceScale } }
+    : {};
+}
+
 function mapToCanon(parsed, { name } = {}) {
   const warnings = createWarnings(parsed.warnings);
   const uniqueName = createNames();
   const provinceName = new Map(parsed.provinces.map((p) => [p.id, p.name]));
 
   const biomeName = new Map(parsed.biomes.map((b) => [b.id, b.name]));
+  const cultureName = new Map((parsed.cultures || []).map((c) => [c.id, c.name]));
   const featureType = new Map(parsed.features.map((f) => [f.id, f.type]));
   const statesById = new Map(parsed.states.map((s) => [s.id, s]));
   const settlements = [...parsed.settlements].sort(byId);
@@ -204,6 +230,7 @@ function mapToCanon(parsed, { name } = {}) {
         biome: biomeName.get(s.biomeId) || null,
         regionId: s.provinceId ? regId(s.provinceId) : null,
         links: {},
+        seeds: settlementSeeds(s, cultureName),
       },
     };
     nodes.push({ id, x: s.x, y: s.y, featureId: s.featureId, port: s.port, settlement: true });
@@ -426,7 +453,12 @@ function mapToCanon(parsed, { name } = {}) {
       name: (name || '').trim() || parsed.source.mapName,
       tagline: '',
       openingHook: '',
-      map: { width: parsed.source.width, height: parsed.source.height, imagePath: null },
+      map: {
+        width: parsed.source.width,
+        height: parsed.source.height,
+        imagePath: null,
+        ...mapDistance(parsed.scale),
+      },
       locations,
       factions,
       regions,

@@ -210,7 +210,9 @@ function cartographerApp({ reader, writer }) {
         description:
           'One place in full: description, its grade and what it is missing, population, region ' +
           'and realm, its connections (by road, trail or sea, with direction, distance and ' +
-          'grade), the characters found there, and the lore about it.',
+          'grade), the characters found there, and the lore about it. A settlement also has ' +
+          'seeds: what the map says about the town (type, culture, and whether it has walls, a ' +
+          'citadel, a plaza (market square), a temple, a shanty town).',
         inputSchema: { worldId, locationId: entityId('location', 'find_locations') },
         annotations: readOnly,
         handler: async (ctx, args) => {

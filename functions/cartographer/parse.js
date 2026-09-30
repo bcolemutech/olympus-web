@@ -19,7 +19,11 @@
 //     biomes       [{ id, name, color }]
 //     features     [{ id, type, cells }]                    — 'island' | 'ocean' | 'lake' | …
 //     settlements  [{ id, name, x, y, cellId, featureId, stateId, provinceId, biomeId,
-//                     population, port, capital, type, group }]   — population in people
+//                     population, port, capital, type, group, cultureId,
+//                     walls, citadel, plaza, temple, shanty }]  — population in people;
+//                     the last five are Azgaar's town features (plaza is the market
+//                     square), which seed town layouts (L-341 / #395)
+//     cultures     [{ id, name, type }]                     — 0 is Azgaar's "Wildlands"
 //     states       [{ id, name, fullName, form, formName, color, capitalSettlementId,
 //                     relations: { [stateId]: relation } }]
 //     provinces    [{ id, name, fullName, formName, stateId, capitalSettlementId, color }]
@@ -226,6 +230,15 @@ function parseAzgaarExport(input, { maxBytes = MAX_BYTES } = {}) {
     );
   }
 
+  // Cultures, unlike states, have a real entry 0 ("Wildlands").
+  const cultures = (Array.isArray(pack.cultures) ? pack.cultures : [])
+    .filter((c) => c && Number.isInteger(c.i) && c.i >= 0 && !c.removed)
+    .map((c) => ({
+      id: c.i,
+      name: cleanText(c.name, MAX_NAME) || `Culture ${c.i}`,
+      type: typeof c.type === 'string' ? c.type : null,
+    }));
+  const cultureIds = new Set(cultures.map((c) => c.id));
   const stateIds = new Set(realEntries(pack.states).map((s) => s.i));
   const provinceIds = new Set(realEntries(pack.provinces).map((p) => p.i));
   const populationRate = isFiniteNumber(settings.populationRate) ? settings.populationRate : 1000;
@@ -272,6 +285,12 @@ function parseAzgaarExport(input, { maxBytes = MAX_BYTES } = {}) {
       capital: Boolean(b.capital),
       type: typeof b.type === 'string' ? b.type : null,
       group: typeof b.group === 'string' ? b.group : null,
+      cultureId: Number.isInteger(b.culture) && cultureIds.has(b.culture) ? b.culture : null,
+      walls: Boolean(b.walls),
+      citadel: Boolean(b.citadel),
+      plaza: Boolean(b.plaza),
+      temple: Boolean(b.temple),
+      shanty: Boolean(b.shanty),
     });
   }
   if (settlements.length === 0) {
@@ -406,6 +425,7 @@ function parseAzgaarExport(input, { maxBytes = MAX_BYTES } = {}) {
     biomes,
     features,
     settlements,
+    cultures,
     states,
     provinces,
     routes,

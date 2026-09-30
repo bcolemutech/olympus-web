@@ -17,12 +17,13 @@
 // come from MCP. Stamps already present are left alone, so the backfill is
 // safe to run twice.
 //
-// No dependencies: the script (ES modules, under scripts/) and the tests both
-// load this file.
+// No outside dependencies: the script (ES modules, under scripts/) and the
+// tests both load this file.
+
+const { applyBackfill } = require('./backfill');
 
 const SOURCES = Object.freeze({ IMPORT: 'import', MCP: 'mcp', GEMINI: 'gemini' });
 const BACKFILLED = ['locations', 'factions', 'characters'];
-const BATCH_SIZE = 400;
 
 // The stamp the loader gives an imported entity that has a description.
 function importStamp(entity) {
@@ -84,26 +85,20 @@ function planSourceBackfill({ entities, mapped }) {
 
 /**
  * Writes the planned stamps, then bumps the world's canonVersion so every
- * cached copy of it reloads.
+ * cached copy of it reloads (functions/cartographer/backfill.js).
  * @returns {Promise<{ written: number, canonVersion: number|null }>}
  */
-async function applySourceBackfill(db, worldId, plan, { now = () => Date.now() } = {}) {
-  const worldRef = db.collection('loom_worlds').doc(worldId);
-  for (let i = 0; i < plan.updates.length; i += BATCH_SIZE) {
-    const batch = db.batch();
-    for (const { collection, id, source } of plan.updates.slice(i, i + BATCH_SIZE)) {
-      batch.update(worldRef.collection(collection).doc(id), { 'sources.description': source });
-    }
-    await batch.commit();
-  }
-  if (!plan.updates.length) return { written: 0, canonVersion: null };
-  const canonVersion = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(worldRef);
-    const next = (snap.data().canonVersion || 0) + 1;
-    tx.update(worldRef, { canonVersion: next, updatedAtMs: now() });
-    return next;
-  });
-  return { written: plan.updates.length, canonVersion };
+function applySourceBackfill(db, worldId, plan, options) {
+  return applyBackfill(db, worldId, { writes: sourceWrites(plan) }, options);
+}
+
+// The plan's stamps as backfill writes.
+function sourceWrites(plan) {
+  return plan.updates.map(({ collection, id, source }) => ({
+    collection,
+    id,
+    fields: { 'sources.description': source },
+  }));
 }
 
 module.exports = {
@@ -112,4 +107,5 @@ module.exports = {
   checkExportMatchesWorld,
   planSourceBackfill,
   applySourceBackfill,
+  sourceWrites,
 };

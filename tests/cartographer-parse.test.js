@@ -85,6 +85,26 @@ describe('parsing the Nisia export', () => {
     expect(map.warnings).toEqual([]);
   });
 
+  test('settlements keep the town features that seed layouts, and their culture (L-341)', () => {
+    const count = (key) => map.settlements.filter((s) => s[key]).length;
+    expect({
+      walls: count('walls'),
+      citadel: count('citadel'),
+      plaza: count('plaza'),
+      temple: count('temple'),
+      shanty: count('shanty'),
+    }).toEqual({ walls: 168, citadel: 101, plaza: 26, temple: 13, shanty: 14 });
+    expect(map.settlements.every((s) => s.cultureId !== null)).toBe(true);
+    expect(map.cultures).toEqual([
+      { id: 0, name: 'Wildlands', type: 'Generic' },
+      { id: 1, name: 'Angshire', type: 'Generic' },
+      { id: 2, name: 'Yotunn', type: 'Generic' },
+      { id: 3, name: 'Rakhnid', type: 'Nomadic' },
+      { id: 4, name: 'Uruk', type: 'Hunting' },
+      { id: 5, name: 'Nortumbic', type: 'Hunting' },
+    ]);
+  });
+
   test('settlements resolve province, biome and landmass from their cell, with population in people', () => {
     expect(map.settlements[0]).toEqual({
       id: 1,
@@ -101,6 +121,12 @@ describe('parsing the Nisia export', () => {
       capital: true,
       type: 'Naval',
       group: 'capital',
+      cultureId: 1,
+      walls: true,
+      citadel: true,
+      plaza: true,
+      temple: true,
+      shanty: false,
     });
     expect(map.settlements.filter((s) => s.port)).toHaveLength(148);
     expect(map.settlements.filter((s) => s.capital)).toHaveLength(23);

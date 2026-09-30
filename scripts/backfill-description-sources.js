@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Backfill where each description in a Cartographer world came from
- * (planning/the-loom-layered-worlds.md §4.3; L-321 / #390).
+ * Backfill a Cartographer world imported before these existed
+ * (planning/the-loom-layered-worlds.md §4.3, §8):
+ *   - where each description came from (L-321 / #390), and
+ *   - with the export, each settlement's town seeds and the map's distance
+ *     scale (L-341 / #395).
  *
  * Grading counts a place as written up only when `sources.description` isn't
  * 'import'. Worlds imported before sources existed have no stamps, so this
@@ -38,8 +41,10 @@ const { mapToCanon } = require('../functions/cartographer/map.js');
 const {
   checkExportMatchesWorld,
   planSourceBackfill,
-  applySourceBackfill,
+  sourceWrites,
 } = require('../functions/cartographer/sources.js');
+const { planSeedBackfill } = require('../functions/cartographer/seeds.js');
+const { applyBackfill } = require('../functions/cartographer/backfill.js');
 
 const SHOW_WRITTEN = 25;
 
@@ -118,7 +123,8 @@ async function main() {
     console.log('No export given: every place and realm will be marked as import text.');
   }
 
-  const plan = planSourceBackfill({ entities: await readEntities(worldRef), mapped });
+  const entities = await readEntities(worldRef);
+  const plan = planSourceBackfill({ entities, mapped });
   for (const [collection, c] of Object.entries(plan.summary)) {
     console.log(
       `${collection}: ${c.total} — ${c.import} import text, ${c.mcp} written, ` +
@@ -132,18 +138,33 @@ async function main() {
     if (written.length > SHOW_WRITTEN) console.log(`  … and ${written.length - SHOW_WRITTEN} more`);
   }
 
-  if (!plan.updates.length) return console.log('Nothing to stamp.');
+  // Town seeds (L-341): only the original export knows them.
+  const seeds = mapped
+    ? planSeedBackfill({ meta, entities, mapped })
+    : { writes: [], worldFields: {}, summary: null };
+  if (seeds.summary) {
+    const c = seeds.summary;
+    console.log(
+      `town seeds: ${c.settlements} settlements — ${c.toSeed} to seed, ` +
+        `${c.alreadySeeded} already seeded, ${c.unknown} unknown to the map`
+    );
+    if (c.distance) {
+      console.log(`map distance: ${c.distance.perMapUnit} ${c.distance.unit} per map unit, to add`);
+    }
+  }
+
+  const writes = [...sourceWrites(plan), ...seeds.writes];
+  const changes = writes.length + Object.keys(seeds.worldFields).length;
+  if (!changes) return console.log('Nothing to backfill.');
   if (!apply) {
     return console.log(
-      `DRY RUN: nothing written. Re-run with --apply to write ${plan.updates.length} stamps.`
+      `DRY RUN: nothing written. Re-run with --apply to write ${changes} changes.`
     );
   }
-  const typed = await ask(
-    `Type the world id (${worldId}) to write ${plan.updates.length} stamps: `
-  );
+  const typed = await ask(`Type the world id (${worldId}) to write ${changes} changes: `);
   if (typed !== worldId) return console.log('Not confirmed. Nothing written.');
-  const result = await applySourceBackfill(db, worldId, plan);
-  console.log(`Wrote ${result.written} stamps; canonVersion is now ${result.canonVersion}.`);
+  const result = await applyBackfill(db, worldId, { writes, worldFields: seeds.worldFields });
+  console.log(`Wrote ${changes} changes; canonVersion is now ${result.canonVersion}.`);
 }
 
 main().catch((err) => {

@@ -206,6 +206,7 @@ function worldOverview(meta, world) {
       width: map.width || null,
       height: map.height || null,
       hasImage: Boolean(map.imagePath),
+      ...(map.distance ? { distance: map.distance } : {}),
     },
     source: meta.source
       ? { mapName: meta.source.mapName || null, azgaarVersion: meta.source.version || null }
@@ -309,6 +310,8 @@ function locationDetail(world, location) {
   }
   if (geo.biome) result.biome = geo.biome;
   if (geo.markerType) result.markerType = geo.markerType;
+  // What Azgaar says about a town: the seeds for its layout (L-341).
+  if (geo.seeds) result.seeds = geo.seeds;
   result.region = geo.regionId ? ref(world.regions, geo.regionId) : null;
   result.factions = (location.factionIds || []).map((id) => ref(world.factions, id));
   result.connections = (location.connections || []).map((id) => ({
