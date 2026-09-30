@@ -36,6 +36,7 @@ const { shouldRegenerateSummary, maybeRegenerateSummary } = require('./summary')
  *   entityRefs: string[],
  *   inventedEntities: string[],
  *   suggestedActions: string[],
+ *   discovered?: string[],   — places this turn revealed (./discovery.js)
  * }} params
  * @returns {Promise<{ narration: string, stateSummary: string, suggestedActions: string[] }>}
  */
@@ -52,6 +53,7 @@ async function commitTurn(params) {
     entityRefs,
     inventedEntities,
     suggestedActions,
+    discovered = [],
   } = params;
 
   const { contractResult, nextIndex } = await db.runTransaction(async (transaction) => {
@@ -76,6 +78,10 @@ async function commitTurn(params) {
     const worldMutations = mutations.filter((m) => m.target !== 'save');
 
     applyStateMutations(save, saveMutations);
+    applyStateMutations(
+      save,
+      discovered.map((id) => ({ op: 'add', path: 'discovered', value: id }))
+    );
     applyStateMutations(worldState, worldMutations);
 
     const turnIndex = lastTurnSnap.empty ? 0 : lastTurnSnap.docs[0].data().index + 1;

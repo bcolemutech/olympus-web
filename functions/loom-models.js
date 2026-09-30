@@ -167,6 +167,16 @@ function validateSave(data) {
   if (!characterResult.valid) {
     errors.push.apply(errors, characterResult.errors);
   }
+  // Places the save has discovered (world map, L-331); older saves have none.
+  if (
+    data.discovered !== undefined &&
+    (!Array.isArray(data.discovered) ||
+      data.discovered.some(function (id) {
+        return typeof id !== 'string';
+      }))
+  ) {
+    errors.push('discovered must be an array of location ids');
+  }
   if (
     typeof data.privateFlags !== 'object' ||
     data.privateFlags === null ||
@@ -272,6 +282,7 @@ function makeSave(fields) {
     name: fields.name,
     character: makeCharacter(fields.character),
     location: fields.location || null,
+    discovered: fields.discovered || [],
     privateFlags: fields.privateFlags || {},
     relationships: fields.relationships || {},
     recentSummary: fields.recentSummary || '',
