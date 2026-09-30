@@ -108,6 +108,7 @@ When burgs ship, a settlement also needs a town layout, and when battle maps shi
   4. Realms and regions to describe (never gated).
 
   Layers show up as needs (`town`, `battleMap`) once they ship, so `need` filters by layer as well as by description, residents or lore. Each page explains the needs on it once, naming the tool that fills each.
+
 - **Grades in the read tools.** `get_world` shows completion by grade (places, realms, regions); `get_location`, `get_faction` and `get_region` show their grade and checklist; connections and `find_locations` rows carry a grade, and `find_locations` can filter by one.
 - **`update_region`** writes a region's name and description. Regions arrive from Azgaar with none, so without it their grades could never rise.
 - **Write tools stamp sources** (§4.3), so a place's grade updates on the next read.
@@ -133,12 +134,25 @@ The Loom's play screen gains a **map** beside the story:
 
 - **Data.** A world gains a `places` subcollection: `{ id, locationId (its settlement), name, kind, description, connections, entrance, npcIds, rules, sources, position }`. `kind` is one of gate, harbour, market, temple, citadel, tavern, district, and so on. `position` is in the town's own coordinates, for drawing. An **entrance** place (a gate, or a harbour) links to the settlement's routes on the world map.
 - **Azgaar seeds.** The importer keeps Azgaar's settlement details as `geo.seeds`: walls, citadel, plaza (the market square), temple, shanty town, settlement type (naval, lake, river, hunting, …), and culture, alongside the port and capital flags it already kept. (Azgaar's `market` field is a trade-region id, not a building, so it isn't a seed.) In Nisia, for example, 168 settlements have walls, 148 a port, 101 a citadel, 26 a plaza, 14 a shanty town, and 13 a temple. They seed layouts: walls mean gates, a port means a harbour, a citadel means a citadel. The same backfill script (§4.3) adds them to already-imported worlds, and optionally Azgaar's distance scale, so the map can show miles.
-- **Movement.**
-  - **Arriving:** you arrive at the entrance that matches your route (the harbour by sea, a gate by road).
-  - **Moving:** you move between connected places in town.
-  - **Leaving:** you leave from an entrance.
+- **Entrances.** An entrance carries `entrance: { via: [...] }`, the world routes it serves: a harbour `['sea']`, a gate `['road', 'trail']`. With no list, it serves every route. Characters can have a `placeId` in town as well as their `locationId`.
+- **Movement** (L-342 / #396; `functions/loom-canon/town.js`):
+  - **Arriving:** you land at the open entrance serving your route (the harbour by sea, a gate by road), else any open entrance. A town with no open entrance is entered as a whole, as before towns existed.
+  - **Moving:** you move between connected places in town, gated like the world map ("The way to _X_ is closed. Turn back.").
+  - **Leaving:** you leave only from an entrance serving the route out ("To set out for Dunsmouth by trail, go to The North Gate first."). A closed or unreachable destination is reported first.
+  - **Older saves:** a save with no `placeId` in a town that has a layout stands at its default entrance (the first open one). A recorded place is kept even if it is retired, so nobody is stranded.
 
-  ADJUDICATE, NARRATE and INTERPRET become layer-aware, and the position records `placeId`.
+  The position records `placeId` alongside `location`. INTERPRET knows the current town's places. NARRATE's scene is the place's cast, plus residents with no place of their own ("about town"), plus the realm; its exits are the town's links and, from an entrance, the routes out.
+
+- **Grading.** Places in town are graded (Playable once written up; Rich with someone there or lore about them) and gated. A settlement's town requirement (a layout with an open entrance, every place reachable from one) is implemented but **switched on only after the MCP town tools (L-343 / #397) have been used to lay out the start town and its open neighbours**, in a one-line follow-up. Turning it on before towns can be built would close every settlement, including every open place in Nisia. The **Rich bar scales** with a settlement (requested 2026-09-29), counting residents and lore anywhere in its town:
+
+  | Size       | Population  | Residents | Lore |
+  | ---------- | ----------- | --------- | ---- |
+  | Village    | under 1,000 | 1         | 1    |
+  | Town       | 1,000+      | 2         | 1    |
+  | City       | 10,000+     | 4         | 2    |
+  | Great city | 30,000+     | 6         | 3    |
+
+  A capital counts as one size larger. The Playable bar is unchanged.
 
 - **MCP.**
   - **Reading:** `get_town` shows a settlement's layout.

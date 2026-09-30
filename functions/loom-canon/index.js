@@ -46,7 +46,8 @@
  * planning/the-cartographer-design.md §3.3, §4.2). loadWorld(worldId, { db })
  * returns a static world from WORLDS, or assembles one from `loom_worlds/
  * {worldId}` and its entity subcollections — the same CanonWorld shape,
- * extended with optional `geo` / `politics` / `regions` / `map` and the world's
+ * extended with optional `geo` / `politics` / `regions` / `map`, `places` (the
+ * town layer: places inside settlements, ./town.js; L-342 / #396), and the world's
  * `status` and `canonVersion`. Only `published` worlds are playable.
  *
  * Canon can be edited while a world is being played (the Cartographer's MCP
@@ -117,8 +118,8 @@ function getLoreEntry(worldId, loreId) {
 
 /**
  * Resolves an entity id of unknown kind against a world object's locations,
- * factions, and characters (checked in that order). Returns { type, entity }
- * or null. Works for static and Firestore-backed worlds alike.
+ * factions, characters, and places in town (checked in that order). Returns
+ * { type, entity } or null. Works for static and Firestore-backed worlds alike.
  */
 function findEntity(world, entityId) {
   if (!world) return null;
@@ -126,6 +127,9 @@ function findEntity(world, entityId) {
   if (world.factions[entityId]) return { type: 'faction', entity: world.factions[entityId] };
   if (world.characters[entityId]) {
     return { type: 'character', entity: world.characters[entityId] };
+  }
+  if (world.places && world.places[entityId]) {
+    return { type: 'place', entity: world.places[entityId] };
   }
   return null;
 }
@@ -164,7 +168,7 @@ function getEntitySnippet(worldId, entityId) {
 // ── Firestore-backed worlds ──────────────────────────────────────────────
 
 const WORLDS_COLLECTION = 'loom_worlds';
-const ENTITY_COLLECTIONS = ['locations', 'factions', 'regions', 'characters', 'lore'];
+const ENTITY_COLLECTIONS = ['locations', 'factions', 'regions', 'characters', 'lore', 'places'];
 const LOADABLE_STATUSES = ['draft', 'published'];
 
 // worldId → { canonVersion, world }, per Cloud Functions instance.
@@ -185,6 +189,12 @@ function toPlayView(world) {
     location.connections = (location.connections || []).filter(isLiveLocation);
     location.factionIds = (location.factionIds || []).filter(isLiveFaction);
     location.npcIds = (location.npcIds || []).filter(isLiveCharacter);
+  });
+  // Places in town (L-342) follow the same rules.
+  const isLivePlace = live(world.places || {});
+  Object.values(world.places || {}).forEach(function (place) {
+    place.connections = (place.connections || []).filter(isLivePlace);
+    place.npcIds = (place.npcIds || []).filter(isLiveCharacter);
   });
   return world;
 }

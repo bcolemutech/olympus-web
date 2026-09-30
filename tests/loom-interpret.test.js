@@ -70,6 +70,16 @@ describe('resolveTarget', () => {
   it('returns the raw text unchanged when nothing matches', () => {
     expect(resolveTarget('a mysterious stranger', knownEntities)).toBe('a mysterious stranger');
   });
+
+  it('matches an id with underscores exactly, before any fuzzy name match', () => {
+    // "plc-1-tavern" (the id, normalized) contains "ver", a Nisia town.
+    const nisia = [
+      { id: 'loc_366', name: 'Ver', kind: 'location' },
+      { id: 'plc_1_tavern', name: 'The Gull & Anchor', kind: 'place' },
+    ];
+    expect(resolveTarget('plc_1_tavern', nisia)).toBe('plc_1_tavern');
+    expect(resolveTarget(' loc_366 ', nisia)).toBe('loc_366');
+  });
 });
 
 describe('interpretAction', () => {

@@ -176,7 +176,8 @@ describe('whole worlds', () => {
     w.locations.gone = { id: 'gone', name: 'Gone', retired: true, geo: { kind: 'poi' } };
     expect(gradeWorld(w)).toEqual({
       graded: true,
-      rubricVersion: 1,
+      rubricVersion: 2,
+      inTown: { total: 0, unbuilt: 0, stub: 0, playable: 0, rich: 0 },
       places: {
         total: 3,
         unbuilt: 0,

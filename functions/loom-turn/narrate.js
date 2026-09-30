@@ -2,7 +2,8 @@
 
 const { callGemini } = require('../gemini');
 const loomCanon = require('../loom-canon');
-const { isPlayable } = require('../loom-canon/grading');
+const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
+const town = require('../loom-canon/town');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
 
@@ -87,19 +88,63 @@ function buildEntitySection(canonWorld, context) {
 
 // Where the player stands once this action resolves: a successful move's
 // destination, or where they already were (NARRATE runs before COMMIT).
-function locationAfter(save, resolution) {
-  const move = (resolution.mutations || []).find(
-    (m) => m.target === 'save' && m.path === 'location'
-  );
-  return move ? move.value : save.location;
+function positionAfter(save, resolution) {
+  const change = (path) =>
+    (resolution.mutations || []).find((m) => m.target === 'save' && m.path === path);
+  const move = change('location');
+  const step = change('placeId');
+  return {
+    location: move ? move.value : save.location,
+    // A move across the map leaves town unless it lands somewhere in the next.
+    placeId: step ? step.value : move ? null : save.placeId,
+  };
 }
 
 // The ways on from where the player ends up, each open or closed (the Layered
 // Worlds gate, L-322 / #391), so the narrator never describes the far side of
 // a place players can't enter.
-function buildExitsSection(canonWorld, locationId) {
+// In a town with a layout (L-342), the ways on are the town's own links and,
+// from an entrance, the routes out that it serves.
+function buildTownExitsSection(canonWorld, settlement, place) {
+  const links = (settlement.geo && settlement.geo.links) || {};
+  const exits = (place.connections || [])
+    .map((id) => canonWorld.places[id])
+    .filter(Boolean)
+    .map((to) => ({ label: to.name + ' (' + to.id + ')', open: isPlaceOpen(canonWorld, to) }));
+  if (town.isEntrance(place)) {
+    (settlement.connections || [])
+      .map((id) => canonWorld.locations[id])
+      .filter((to) => to && town.serves(place, links[to.id]))
+      .forEach((to) => {
+        exits.push({
+          label:
+            to.name + ' (' + to.id + '), out of town' + (links[to.id] ? ' by ' + links[to.id] : ''),
+          open: isPlayable(canonWorld, to),
+        });
+      });
+  }
+  if (!exits.length) return '';
+  const note = exits.some((exit) => !exit.open)
+    ? 'Closed ways are barred to the player: describe them as closed or impassable, never ' +
+      'what lies beyond them.\n'
+    : '';
+  return (
+    'WAYS ON FROM ' +
+    place.name +
+    ', ' +
+    settlement.name +
+    ':\n' +
+    note +
+    exits.map(({ label, open }) => '- ' + label + ': ' + (open ? 'open' : 'CLOSED')).join('\n')
+  );
+}
+
+function buildExitsSection(canonWorld, position) {
+  const locationId = position.location;
   const here = locationId && canonWorld.locations[locationId];
   if (!here) return '';
+  const place = town.positionOf(canonWorld, position).place;
+  if (place) return buildTownExitsSection(canonWorld, here, place);
   const links = (here.geo && here.geo.links) || {};
   const exits = (here.connections || [])
     .map((id) => canonWorld.locations[id])
@@ -180,9 +225,18 @@ function sanitizeStringArray(value) {
 /** Relevant entities for this scene: the location's default cast plus the action's resolved targets. */
 function resolveSceneEntityIds(canonWorld, save, proposedAction) {
   const currentLocation = save.location && canonWorld.locations[save.location];
-  const sceneEntityIds = currentLocation
+  const place = currentLocation && town.positionOf(canonWorld, save).place;
+  let sceneEntityIds = currentLocation
     ? [].concat(currentLocation.npcIds || [], currentLocation.factionIds || [])
     : [];
+  if (place) {
+    // In a town with a layout (L-342): the people at this place, and residents
+    // with no place of their own, who could be anywhere about town.
+    const aboutTown = Object.values(canonWorld.characters || {})
+      .filter((c) => c.locationId === currentLocation.id && (!c.placeId || c.placeId === place.id))
+      .map((c) => c.id);
+    sceneEntityIds = [].concat(place.npcIds || [], aboutTown, currentLocation.factionIds || []);
+  }
   const candidateIds = Array.from(new Set(sceneEntityIds.concat(proposedAction.targets || [])));
   // Works on the loaded world object (static or Firestore-backed); retired
   // entities are absent from the scene.
@@ -214,7 +268,7 @@ async function narrateResolution(params) {
 
   const entityRefs = resolveSceneEntityIds(canonWorld, save, proposedAction);
   const entityContexts = await retrieveContextForEntities({ saveRef, save, entityIds: entityRefs });
-  const knownEntities = buildKnownEntities(canonWorld);
+  const knownEntities = buildKnownEntities(canonWorld, save);
 
   let raw;
   try {
@@ -227,7 +281,7 @@ async function narrateResolution(params) {
         canonWorld,
         entityContexts,
         recentSummary: save.recentSummary,
-        exitsSection: buildExitsSection(canonWorld, locationAfter(save, resolution)),
+        exitsSection: buildExitsSection(canonWorld, positionAfter(save, resolution)),
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,

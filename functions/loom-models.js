@@ -167,6 +167,9 @@ function validateSave(data) {
   if (!characterResult.valid) {
     errors.push.apply(errors, characterResult.errors);
   }
+  if (data.placeId !== undefined && data.placeId !== null && typeof data.placeId !== 'string') {
+    errors.push('placeId must be a place id or null');
+  }
   // Places the save has discovered (world map, L-331); older saves have none.
   if (
     data.discovered !== undefined &&
@@ -282,6 +285,7 @@ function makeSave(fields) {
     name: fields.name,
     character: makeCharacter(fields.character),
     location: fields.location || null,
+    placeId: fields.placeId || null, // where in town (L-342), or null
     discovered: fields.discovered || [],
     privateFlags: fields.privateFlags || {},
     relationships: fields.relationships || {},
