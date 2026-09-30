@@ -6,6 +6,7 @@ const { interpretAction } = require('./interpret');
 const { adjudicateAction } = require('./adjudicate');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
+const { newlyDiscovered } = require('./discovery');
 
 /**
  * Thrown by pipeline stages to signal a specific HttpsError code the
@@ -63,11 +64,17 @@ async function intake(params) {
  * COMMIT — and returns the client-facing contract. The client never sees raw
  * state authority; only { narration, stateSummary, suggestedActions }.
  *
- * @param {{ db: FirebaseFirestore.Firestore, uid: string, worldId: string, saveId: string, actionText: string }} params
+ * A turn is either typed text, or a structured action from the world map
+ * (`action: { verb: 'move', target }`; L-331 / #393). A structured move needs
+ * no model to interpret it, so it skips INTERPRET's Gemini call, but it is
+ * adjudicated, gated and narrated exactly like a typed one.
+ *
+ * @param {{ db: FirebaseFirestore.Firestore, uid: string, worldId: string, saveId: string,
+ *           actionText?: string, action?: { verb: 'move', target: string } }} params
  * @returns {Promise<{ narration: string, stateSummary: string, suggestedActions: string[] }>}
  */
 async function runTurnPipeline(params) {
-  const { db, uid, worldId, saveId, actionText } = params;
+  const { db, uid, worldId, saveId, action } = params;
 
   const { save, saveRef, worldState, worldStateRef, canonWorld } = await intake({
     db,
@@ -76,7 +83,15 @@ async function runTurnPipeline(params) {
     saveId,
   });
 
-  const proposedAction = await interpretAction({ actionText, canonWorld, save, worldState });
+  let actionText = params.actionText;
+  let proposedAction;
+  if (action) {
+    const target = canonWorld.locations[action.target];
+    actionText = 'travel to ' + (target ? target.name : action.target);
+    proposedAction = { verb: 'move', targets: [action.target], params: { from: 'map' } };
+  } else {
+    proposedAction = await interpretAction({ actionText, canonWorld, save, worldState });
+  }
   const resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
   const { narration, entityRefs, inventedEntities, suggestedActions } = await narrateResolution({
     actionText,
@@ -100,6 +115,7 @@ async function runTurnPipeline(params) {
     entityRefs,
     inventedEntities,
     suggestedActions,
+    discovered: newlyDiscovered(canonWorld, save, resolution),
   });
 }
 

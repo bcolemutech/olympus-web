@@ -8,6 +8,8 @@ const { GoogleAuth } = require('google-auth-library');
 const { runTurnPipeline, LoomTurnError } = require('./loom-turn');
 const loomCanon = require('./loom-canon');
 const { isPlayable } = require('./loom-canon/grading');
+const { withNeighbours } = require('./loom-turn/discovery');
+const { mapView } = require('./loom-turn/map-view');
 const { makeSave } = require('./loom-models');
 
 initializeApp();
@@ -445,12 +447,14 @@ function requireLoomAuth(request) {
  * never raw state authority.
  *
  * Data: { worldId: string, saveId: string, actionText: string }
+ *    or { worldId, saveId, action: { verb: 'move', target: locationId } } — a
+ *       move made on the world map (L-331 / #393), which skips INTERPRET
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
  */
 exports.loomPlayTurn = onCall(async (request) => {
   const uid = requireLoomAuth(request);
 
-  const { worldId, saveId, actionText } = request.data || {};
+  const { worldId, saveId, actionText, action } = request.data || {};
 
   if (typeof worldId !== 'string' || worldId.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'worldId is required.');
@@ -458,11 +462,28 @@ exports.loomPlayTurn = onCall(async (request) => {
   if (typeof saveId !== 'string' || saveId.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'saveId is required.');
   }
-  if (typeof actionText !== 'string' || actionText.trim().length === 0) {
-    throw new HttpsError('invalid-argument', 'actionText is required.');
-  }
-  if (actionText.length > 2000) {
-    throw new HttpsError('invalid-argument', 'actionText must be 2000 characters or fewer.');
+  if (action !== undefined && action !== null) {
+    if (actionText !== undefined) {
+      throw new HttpsError('invalid-argument', 'Send actionText or action, not both.');
+    }
+    if (
+      typeof action !== 'object' ||
+      action.verb !== 'move' ||
+      typeof action.target !== 'string' ||
+      !/^[A-Za-z0-9_-]{1,80}$/.test(action.target)
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'action must be { verb: "move", target: <location id> }.'
+      );
+    }
+  } else {
+    if (typeof actionText !== 'string' || actionText.trim().length === 0) {
+      throw new HttpsError('invalid-argument', 'actionText is required.');
+    }
+    if (actionText.length > 2000) {
+      throw new HttpsError('invalid-argument', 'actionText must be 2000 characters or fewer.');
+    }
   }
 
   try {
@@ -471,7 +492,9 @@ exports.loomPlayTurn = onCall(async (request) => {
       uid,
       worldId: worldId.trim(),
       saveId: saveId.trim(),
-      actionText: actionText.trim(),
+      ...(action
+        ? { action: { verb: 'move', target: action.target } }
+        : { actionText: actionText.trim() }),
     });
   } catch (err) {
     if (err instanceof LoomTurnError) {
@@ -480,6 +503,39 @@ exports.loomPlayTurn = onCall(async (request) => {
     console.error('loomPlayTurn error:', err);
     throw new HttpsError('internal', 'Failed to process turn.');
   }
+});
+
+/**
+ * loomGetMap — what a save may see of its world's map (Layered Worlds §7;
+ * L-331 / #393): its discovered places with positions, the links between
+ * them, which are open to players, where it stands, and the map image. The
+ * world's entity subcollections stay unreadable to Loom clients; this is the
+ * only way the map reaches them, and it never includes undiscovered places.
+ *
+ * Data: { worldId: string, saveId: string }
+ * Returns: { worldId, name, here, places[], links[], map }
+ */
+exports.loomGetMap = onCall(async (request) => {
+  const uid = requireLoomAuth(request);
+  const { worldId, saveId } = request.data || {};
+  if (typeof worldId !== 'string' || worldId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'worldId is required.');
+  }
+  if (typeof saveId !== 'string' || saveId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'saveId is required.');
+  }
+
+  const db = getFirestore();
+  const snap = await db.collection('loom_saves').doc(saveId.trim()).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Save not found.');
+  const save = snap.data();
+  if (save.ownerUid !== uid) throw new HttpsError('permission-denied', 'This is not your save.');
+  if (save.worldId !== worldId.trim()) {
+    throw new HttpsError('failed-precondition', 'worldId does not match this save.');
+  }
+  const canonWorld = await loomCanon.loadWorld(worldId.trim(), { db });
+  if (!canonWorld) throw new HttpsError('not-found', 'Unknown world.');
+  return mapView(canonWorld, save);
 });
 
 /**
@@ -536,6 +592,9 @@ exports.loomCreateSave = onCall(async (request) => {
       abilities: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
     },
     location: canonWorld.rules && canonWorld.rules.startingLocationId,
+    // The world map shows what a save has discovered (L-331): at first, the
+    // start and the places it connects to.
+    discovered: withNeighbours(canonWorld, start.id),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
