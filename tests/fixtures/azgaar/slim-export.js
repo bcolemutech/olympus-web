@@ -4,7 +4,8 @@
 /**
  * Produces a slim Azgaar "Save as JSON" fixture for Cartographer tests
  * (C-2 / #369): the same structure as a real full export, keeping only the
- * sections and fields the Cartographer reads (design §3.2). Drops `grid`,
+ * sections and fields the Cartographer reads (design §3.2), including each
+ * settlement's town features and culture (L-341 / #395). Drops `grid`,
  * `vertices`, economy data (deals, goods, markets, …), coats of arms, and
  * name bases — about 5.4 MB → 0.4 MB for the Nisia map.
  *
@@ -51,9 +52,16 @@ function slim(full) {
           'capital',
           'type',
           'group',
+          'culture',
+          'walls',
+          'citadel',
+          'plaza',
+          'temple',
+          'shanty',
           'removed',
         ])
       ),
+      cultures: (pack.cultures || []).map((c) => pick(c, ['i', 'name', 'type', 'removed'])),
       states: pack.states.map((s) =>
         pick(s, [
           'i',
