@@ -7,6 +7,7 @@ const { normalizeName } = require('../../../loom-turn/interpret');
 const { worldId, entityId } = require('./schemas');
 const { SOURCES } = require('../../../cartographer/sources');
 const { isPlayable } = require('../../../loom-canon/grading');
+const town = require('../../../loom-canon/town');
 const { whyClosed } = require('../../../cartographer/service');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
@@ -62,6 +63,7 @@ const COLLECTION = {
   region: 'regions',
   character: 'characters',
   lore: 'lore',
+  place: 'places',
 };
 const HINT = {
   location: 'Use find_locations to look one up.',
@@ -69,6 +71,7 @@ const HINT = {
   region: 'Use get_world to see regions.',
   character: 'Use get_world to see characters.',
   lore: 'Use get_world to see lore.',
+  place: 'Use get_town to see a town’s places.',
 };
 const UNREACHABLE_SHOWN = 5;
 
@@ -218,6 +221,37 @@ const changedFields = (fields) => [
   ...new Set(Object.keys(fields).map((f) => (f === 'sources.description' ? 'description' : f))),
 ];
 
+// A live place of a settlement's town (L-343).
+function placeIn(world, settlement, placeId) {
+  const place = live(world, 'place', placeId);
+  if (!settlement || place.locationId !== settlement.id) {
+    throw new ToolError(
+      `${place.name} (${place.id}) is not in ${settlement ? settlement.name : 'that town'}.`
+    );
+  }
+  return place;
+}
+
+// The town's layout report as it will be after a change (L-343).
+function layoutAfter(world, settlement, { set = {}, remove = [] } = {}) {
+  const places = { ...(world.places || {}) };
+  for (const id of remove) delete places[id];
+  Object.assign(places, set);
+  return town.layoutReport({ ...world, places }, settlement);
+}
+
+// A town with places keeps at least one way in and out (L-343).
+function keepsAWayIn(world, place, { removing = false, entranceAfter = null } = {}) {
+  const others = town.placesOf(world, place.locationId).filter((p) => p.id !== place.id);
+  const stillAnEntrance = !removing && entranceAfter !== false && town.isEntrance(place);
+  if (!town.isEntrance(place) || stillAnEntrance || !others.length) return;
+  if (others.some(town.isEntrance)) return;
+  throw new ToolError(
+    `${place.name} is the town's only way in and out. Make another place a way in ` +
+      '(update_place with entranceFor) first.'
+  );
+}
+
 function requireSome(args, fields) {
   if (!fields.some((field) => args[field] !== undefined)) {
     throw new ToolError(`Nothing to change: give at least one of ${fields.join(', ')}.`);
@@ -239,6 +273,13 @@ function deleteFromDraft(e, kind, entity) {
   }
 
   if (kind === 'location') {
+    const inTown = town.placesOf(world, id);
+    if (inTown.length) {
+      throw new ToolError(
+        `It has a town of ${inTown.length} place(s). Remove them with retire_entity ` +
+          '(type place) first.'
+      );
+    }
     const residents = Object.values(world.characters || {}).filter((c) => c.locationId === id);
     if (residents.length) {
       throw new ToolError(
@@ -288,6 +329,21 @@ function deleteFromDraft(e, kind, entity) {
     for (const other of Object.values(world.factions)) {
       if (other.id !== id && ((other.politics || {}).relations || {})[id]) {
         patch('faction', other.id, relation(id), FieldValue.delete());
+      }
+    }
+  }
+
+  if (kind === 'place') {
+    const here = Object.values(world.characters || {}).filter((c) => c.placeId === id);
+    if (here.length) {
+      throw new ToolError(
+        `Characters are found here: ${here.map((c) => `${c.name} (${c.id})`).join(', ')}. ` +
+          'Move them with update_character first.'
+      );
+    }
+    for (const other of Object.values(world.places || {})) {
+      if (other.id !== id && (other.connections || []).includes(id)) {
+        patch('place', other.id, 'connections', FieldValue.arrayRemove(id));
       }
     }
   }
@@ -656,6 +712,9 @@ function writeTools({ writer }) {
           'Who they are: appearance, manner, what they want.'
         ),
         locationId: entityId('location', 'find_locations').describe('Where they are found.'),
+        placeId: entityId('place', 'get_town')
+          .optional()
+          .describe('Where in that town they are found, if it has a layout.'),
         factionId: entityId('faction', 'get_world').optional().describe('Their realm or faction.'),
       },
       annotations: additive,
@@ -664,6 +723,7 @@ function writeTools({ writer }) {
           const { world } = e;
           checkName(world, args.name);
           const home = live(world, 'location', args.locationId);
+          const place = args.placeId ? placeIn(world, home, args.placeId) : null;
           const faction = args.factionId ? live(world, 'faction', args.factionId) : null;
           const id = newId(world, 'character', 'chr', args.name);
           e.create(e.ref('characters', id), {
@@ -672,6 +732,7 @@ function writeTools({ writer }) {
             description: args.description,
             sources: { description: SOURCES.MCP },
             locationId: home.id,
+            ...(place ? { placeId: place.id } : {}),
             ...(faction ? { factionId: faction.id } : {}),
           });
           e.update(e.ref('locations', home.id), 'npcIds', FieldValue.arrayUnion(id));
@@ -680,6 +741,7 @@ function writeTools({ writer }) {
               id,
               name: args.name,
               location: { id: home.id, name: home.name },
+              ...(place ? { place: { id: place.id, name: place.name } } : {}),
               faction: faction ? { id: faction.id, name: faction.name } : null,
             },
           };
@@ -689,8 +751,8 @@ function writeTools({ writer }) {
       name: 'update_character',
       title: 'Update character',
       description:
-        'Change a character’s name, description, where they are found (moves them), or realm ' +
-        '(null removes it). Fields you omit are left unchanged. ' +
+        'Change a character’s name, description, where they are found (moves them), their ' +
+        'place in that town, or realm (null removes it). Fields you omit are left unchanged. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -700,6 +762,10 @@ function writeTools({ writer }) {
         locationId: entityId('location', 'find_locations')
           .optional()
           .describe('Move them to this place.'),
+        placeId: entityId('place', 'get_town')
+          .nullable()
+          .optional()
+          .describe('Where in their town they are found; null for anywhere about town.'),
         factionId: entityId('faction', 'get_world')
           .nullable()
           .optional()
@@ -707,7 +773,7 @@ function writeTools({ writer }) {
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description', 'locationId', 'factionId']);
+        requireSome(args, ['name', 'description', 'locationId', 'placeId', 'factionId']);
         return edit(ctx, args, (e) => {
           const { world } = e;
           const character = existing(world, 'character', args.characterId);
@@ -727,6 +793,18 @@ function writeTools({ writer }) {
               }
             }
             e.update(e.ref('locations', args.locationId), 'npcIds', FieldValue.arrayUnion(id));
+          }
+          // Their place in town (L-343): in their (new) settlement, or cleared
+          // when they move to another one without a new place.
+          const homeId = fields.locationId || character.locationId;
+          if (args.placeId) {
+            const place = placeIn(world, world.locations[homeId], args.placeId);
+            if (place.id !== character.placeId) fields.placeId = place.id;
+          } else if (
+            character.placeId &&
+            (args.placeId === null || fields.locationId !== undefined)
+          ) {
+            fields.placeId = FieldValue.delete();
           }
           if (args.factionId === null && character.factionId) {
             fields.factionId = FieldValue.delete();
@@ -825,7 +903,9 @@ function writeTools({ writer }) {
         'starting location of a published world can’t be retired.',
       inputSchema: {
         worldId,
-        type: z.enum(['location', 'faction', 'character', 'lore']).describe('What kind it is.'),
+        type: z
+          .enum(['location', 'faction', 'character', 'lore', 'place'])
+          .describe('What kind it is (place: a place in town).'),
         id: entityId('entity', 'get_world or find_locations'),
       },
       annotations: removing,
@@ -834,10 +914,15 @@ function writeTools({ writer }) {
           const { world } = e;
           const entity = existing(world, args.type, args.id);
           const subject = { type: args.type, id: entity.id, name: labelOf(entity) };
+          if (args.type === 'place') keepsAWayIn(world, entity, { removing: true });
           const warnings =
             args.type === 'location'
               ? reachWarnings(world, { removed: entity.id }, (entity.connections || [])[0])
-              : [];
+              : args.type === 'place'
+                ? layoutAfter(world, world.locations[entity.locationId], {
+                    remove: [entity.id],
+                  }).problems
+                : [];
 
           if (world.status === 'published') {
             if (entity.retired) return { note: 'Already retired.', entity: subject };
@@ -878,4 +963,22 @@ function writeTools({ writer }) {
   ];
 }
 
-module.exports = { writeTools };
+// Shared with the town tools (./town-tools.js).
+const helpers = {
+  COLLECTION,
+  text,
+  name,
+  existing,
+  live,
+  checkName,
+  newId,
+  describe,
+  changedFields,
+  requireSome,
+  placeIn,
+  keepsAWayIn,
+  layoutAfter,
+  MAX_DESCRIPTION,
+};
+
+module.exports = { writeTools, helpers };

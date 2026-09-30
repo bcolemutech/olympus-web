@@ -154,9 +154,13 @@ The Loom's play screen gains a **map** beside the story:
 
   A capital counts as one size larger. The Playable bar is unchanged.
 
-- **MCP.**
-  - **Reading:** `get_town` shows a settlement's layout.
-  - **Editing:** `add_place`, `update_place`, `connect_places` and `retire_entity` work in town with the same integrity rules as the world layer (names unique within the town, links two-way, casts follow homes).
+- **MCP** (L-343 / #397).
+  - **Reading:** `get_town` shows a settlement's layout: each place (kind, links, grade, residents), which places are ways in and out and which world routes each serves, and a layout report (what keeps it from working: no written-up way in, unreachable places; and routes no way out serves). A settlement's `get_location` carries a short town summary.
+  - **Editing:** `add_place` (with `entranceFor` for ways in and out, `connectTo` for links, an optional `position`), `update_place`, `connect_places`, `disconnect_places`, and `retire_entity` with type `place`. Every result includes the layout report after the edit. Place ids are `plc_<settlement>_<name>`, for example `plc_1_the-harbour`.
+  - **Rules:** place names are unique within the town and never a world place, realm or character's name. Links are two-way and stay inside one town. A town with places keeps at least one way in and out. Descriptions are stamped as written up.
+  - **Characters** can be given a `placeId` in their town with `add_character` and `update_character`. Moving them to another settlement clears it.
+  - **Removal:** in a published world, places are retired. In a draft, a place is deleted and every link to it cleaned; this is refused while characters are found there, and a settlement with a town can't be deleted until its places are.
+  - **Work list:** places inside towns that aren't Rich form a `town` tier, right after the frontier and nearest town first.
 - **Gemini.** `generate_town_layout` (worldId, locationId, optional guidance) sends the seeds, description and culture to Gemini for structured JSON against a schema. The result is validated (connected, named, with the places the seeds require) and saved as `gemini`. It only fills an unbuilt town, unless asked to replace one.
 - **UI.** A town view, drawn as an SVG from the places' positions: where you are, where you can go, and a click to move.
 
