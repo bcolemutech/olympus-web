@@ -205,3 +205,253 @@
 .loom-turn-input:disabled {
   opacity: 0.6;
 }
+
+/* ── World map (L-332 / #394) ─────────────────────── */
+
+.loom-root--wide {
+  max-width: 1200px;
+}
+
+/* The shared .app-main caps apps at 900px; the map and story need more. */
+.app-main:has(.loom-root--wide) {
+  max-width: 1240px;
+}
+
+.loom-play-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.loom-play-tabs.hidden {
+  display: none;
+}
+
+.loom-play-tab {
+  flex: 1;
+  padding: 0.5rem 0;
+  font: inherit;
+  font-size: 0.9rem;
+  color: #90a4ae;
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.loom-play-tab.is-active {
+  color: #ffb74d;
+  border-color: rgba(255, 183, 77, 0.45);
+  background: rgba(255, 183, 77, 0.1);
+}
+
+.loom-map-pane {
+  position: relative;
+}
+
+.loom-map-pane.hidden {
+  display: none;
+}
+
+/* Phones: one pane at a time, chosen by the tabs; the map fits the screen
+   below them (opening the tab scrolls them to the top). */
+@media (max-width: 899px) {
+  .loom-play--map[data-tab='story'] .loom-map-pane,
+  .loom-play--map[data-tab='map'] .loom-story-pane {
+    display: none;
+  }
+
+  .loom-map-panel {
+    height: calc(100dvh - 5.5rem);
+    max-height: 44rem;
+  }
+}
+
+/* Wide screens: map and story side by side; no tabs. */
+@media (min-width: 900px) {
+  .loom-play-tabs {
+    display: none;
+  }
+
+  .loom-play--map .loom-play-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+}
+
+.loom-map-panel {
+  position: relative;
+  height: 65vh;
+  min-height: 320px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0d1424;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.loom-map-panel:active {
+  cursor: grabbing;
+}
+
+.loom-map-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  max-width: none;
+  pointer-events: none;
+}
+
+.loom-map-image.hidden {
+  display: none;
+}
+
+.loom-map-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.loom-map-route-casing {
+  stroke: rgba(10, 14, 26, 0.55);
+  stroke-width: 5.5;
+  stroke-linecap: round;
+}
+
+.loom-map-route {
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.loom-map-route--road {
+  stroke: #ffb74d;
+}
+
+.loom-map-route--trail {
+  stroke: #d7b98a;
+  stroke-dasharray: 6 5;
+}
+
+.loom-map-route--sea {
+  stroke: #4fc3f7;
+  stroke-dasharray: 2 6;
+}
+
+.loom-map-dot {
+  stroke: #0a0e1a;
+  stroke-width: 1.5;
+}
+
+.loom-map-place.is-open .loom-map-dot {
+  fill: #a5d6a7;
+}
+
+.loom-map-place.is-closed .loom-map-dot {
+  fill: #4b5563;
+  stroke: #9ca3af;
+  stroke-dasharray: 2 2;
+}
+
+.loom-map-place.is-here .loom-map-dot {
+  fill: #ffb74d;
+}
+
+.loom-map-ring {
+  fill: none;
+  stroke: #ffb74d;
+  stroke-width: 2;
+}
+
+.loom-map-place.is-selected .loom-map-dot {
+  stroke: #ffffff;
+  stroke-width: 2.5;
+}
+
+.loom-map-lock {
+  font-size: 10px;
+}
+
+.loom-map-label {
+  fill: #e0e0e0;
+  font-size: 12px;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(10, 14, 26, 0.85);
+  stroke-width: 3px;
+}
+
+.loom-map-place.is-closed .loom-map-label {
+  fill: #9ca3af;
+}
+
+.loom-map-controls {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.loom-map-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  font-size: 1.1rem;
+  color: #e0e0e0;
+  background: rgba(10, 14, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.loom-map-btn:hover,
+.loom-map-btn:focus-visible {
+  border-color: rgba(255, 183, 77, 0.6);
+}
+
+/* The place card floats over the bottom of the map, so its Travel button is
+   always in reach, even on a phone. */
+.loom-map-info {
+  position: absolute;
+  left: 0.6rem;
+  right: 3.4rem;
+  bottom: 0.6rem;
+  max-width: 22rem;
+  padding: 0.65rem 0.9rem;
+  background: rgba(10, 14, 26, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+}
+
+.loom-map-hint,
+.loom-map-info-facts {
+  margin: 0;
+  color: #90a4ae;
+  font-size: 0.85rem;
+}
+
+.loom-map-info-name {
+  margin: 0 0 0.2rem;
+  color: #e0e0e0;
+  font-size: 1rem;
+}
+
+.loom-map-info-status {
+  margin: 0.5rem 0 0;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.loom-map-info-status.is-closed {
+  color: #9ca3af;
+}
+
+.loom-map-travel {
+  margin-top: 0.6rem;
+}

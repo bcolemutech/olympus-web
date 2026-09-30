@@ -65,33 +65,48 @@
   }
 
   /**
-   * Submits a turn via the loomPlayTurn callable. The client only ever
-   * receives { narration, stateSummary, suggestedActions } — no raw state
-   * authority, per the design doc's turn pipeline contract.
+   * Plays a turn via the loomPlayTurn callable: typed text, or a structured
+   * move from the world map. The client only ever receives { narration,
+   * stateSummary, suggestedActions } — no raw state authority, per the
+   * design doc's turn pipeline contract. The map reloads after every turn.
    */
-  function submitTurn(actionText) {
-    var trimmed = (actionText || '').trim();
-    if (!trimmed || state.turnInProgress) return;
+  function playTurn(turn, label) {
+    if (state.turnInProgress) return;
 
     state.turnInProgress = true;
     setLoading(true);
     showError(null);
     renderSuggestedActions([]);
+    Loom.map.render(); // the Travel button disables while a turn runs
 
     var loomPlayTurn = state.functions.httpsCallable('loomPlayTurn');
-    loomPlayTurn({ worldId: state.worldId, saveId: state.saveId, actionText: trimmed })
+    var request = Object.assign({ worldId: state.worldId, saveId: state.saveId }, turn);
+    loomPlayTurn(request)
       .then(function (result) {
         state.turnInProgress = false;
         setLoading(false);
-        appendNarration(trimmed, result.data.narration);
+        appendNarration(label, result.data.narration);
         renderSummary(result.data.stateSummary);
         renderSuggestedActions(result.data.suggestedActions);
+        Loom.map.load();
       })
       .catch(function (err) {
         state.turnInProgress = false;
         setLoading(false);
+        Loom.map.render();
         showError('The Loom faltered: ' + (err.message || 'Unknown error'));
       });
+  }
+
+  function submitTurn(actionText) {
+    var trimmed = (actionText || '').trim();
+    if (!trimmed) return;
+    playTurn({ actionText: trimmed }, trimmed);
+  }
+
+  /** Travels to a place chosen on the world map (L-332 / #394). */
+  function travelTo(locationId, name) {
+    playTurn({ action: { verb: 'move', target: locationId } }, 'travel to ' + name);
   }
 
   /** Resets the play view for a newly-selected save. */
@@ -106,7 +121,10 @@
 
     var inputEl = Loom.getRef('loom-turn-input');
     inputEl.value = '';
+
+    Loom.map.reset();
+    Loom.map.load();
   }
 
-  Loom.play = { init: init, submitTurn: submitTurn };
+  Loom.play = { init: init, submitTurn: submitTurn, travelTo: travelTo };
 })();

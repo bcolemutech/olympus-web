@@ -10,6 +10,7 @@
     <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
     <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
     <script defer src="/__/firebase/12.9.0/firebase-functions-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-storage-compat.js"></script>
     <script defer src="/__/firebase/init.js?useEmulator=true"></script>
 
     <!-- Shared Olympus styles -->
@@ -94,28 +95,89 @@
         <div id="loom-view-play" class="loom-view hidden">
           <button class="loom-back-link" id="loom-back-to-saves" type="button">&larr; Saves</button>
 
-          <div class="loom-summary hidden" id="loom-summary"></div>
-
-          <div class="loom-narration-log" id="loom-narration-log"></div>
-
-          <div class="loom-suggested-actions" id="loom-suggested-actions"></div>
-
-          <form id="loom-turn-form" class="loom-turn-form">
-            <textarea
-              class="loom-turn-input"
-              id="loom-turn-input"
-              placeholder="What do you do?"
-              rows="2"
-              maxlength="2000"
-            ></textarea>
-            <button class="app-btn" id="loom-turn-submit" type="submit">Act</button>
-          </form>
-
-          <div class="app-loading hidden" id="loom-turn-loading">
-            <div class="app-spinner"></div>
-            <p class="app-loading-text">The Loom weaves&hellip;</p>
+          <!-- Story / Map tabs: phones only, and only for worlds with a map -->
+          <div class="loom-play-tabs hidden" id="loom-play-tabs" role="tablist">
+            <button
+              class="loom-play-tab is-active"
+              id="loom-tab-story"
+              type="button"
+              role="tab"
+              aria-selected="true"
+            >
+              Story
+            </button>
+            <button
+              class="loom-play-tab"
+              id="loom-tab-map"
+              type="button"
+              role="tab"
+              aria-selected="false"
+            >
+              Map
+            </button>
           </div>
-          <p class="loom-error hidden" id="loom-turn-error"></p>
+
+          <div class="loom-play-layout">
+            <!-- World map (map.js): discovered places, routes, and travel -->
+            <section class="loom-map-pane hidden" id="loom-map-pane" aria-label="World map">
+              <div class="loom-map-panel" id="loom-map-panel">
+                <img class="loom-map-image hidden" id="loom-map-image" alt="" draggable="false" />
+                <svg class="loom-map-overlay" id="loom-map-overlay" aria-hidden="true"></svg>
+                <div class="loom-map-controls">
+                  <button
+                    class="loom-map-btn"
+                    id="loom-map-zoom-in"
+                    type="button"
+                    aria-label="Zoom in"
+                  >
+                    +
+                  </button>
+                  <button
+                    class="loom-map-btn"
+                    id="loom-map-zoom-out"
+                    type="button"
+                    aria-label="Zoom out"
+                  >
+                    &minus;
+                  </button>
+                  <button
+                    class="loom-map-btn"
+                    id="loom-map-home"
+                    type="button"
+                    aria-label="Show where I am"
+                  >
+                    &#9678;
+                  </button>
+                </div>
+              </div>
+              <div class="loom-map-info" id="loom-map-info" aria-live="polite"></div>
+            </section>
+
+            <section class="loom-story-pane" aria-label="Story">
+              <div class="loom-summary hidden" id="loom-summary"></div>
+
+              <div class="loom-narration-log" id="loom-narration-log"></div>
+
+              <div class="loom-suggested-actions" id="loom-suggested-actions"></div>
+
+              <form id="loom-turn-form" class="loom-turn-form">
+                <textarea
+                  class="loom-turn-input"
+                  id="loom-turn-input"
+                  placeholder="What do you do?"
+                  rows="2"
+                  maxlength="2000"
+                ></textarea>
+                <button class="app-btn" id="loom-turn-submit" type="submit">Act</button>
+              </form>
+
+              <div class="app-loading hidden" id="loom-turn-loading">
+                <div class="app-spinner"></div>
+                <p class="app-loading-text">The Loom weaves&hellip;</p>
+              </div>
+              <p class="loom-error hidden" id="loom-turn-error"></p>
+            </section>
+          </div>
         </div>
       </div>
     </main>
@@ -125,8 +187,10 @@
 
     <!-- Loom modules (load order matters) -->
     <script src="/apps/loom/js/state.js"></script>
+    <script src="/apps/loom/js/map-math.js"></script>
     <script src="/apps/loom/js/worlds.js"></script>
     <script src="/apps/loom/js/saves.js"></script>
+    <script src="/apps/loom/js/map.js"></script>
     <script src="/apps/loom/js/play.js"></script>
     <script src="/apps/loom/js/app.js"></script>
 

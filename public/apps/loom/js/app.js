@@ -9,6 +9,9 @@
     Loom.getRef('loom-view-worlds').classList.toggle('hidden', view !== 'worlds');
     Loom.getRef('loom-view-saves').classList.toggle('hidden', view !== 'saves');
     Loom.getRef('loom-view-play').classList.toggle('hidden', view !== 'play');
+    // The play view widens for its map; the other views keep the narrow column.
+    var withMap = Loom.getRef('loom-view-play').classList.contains('loom-play--map');
+    Loom.getRef('loom-root').classList.toggle('loom-root--wide', view === 'play' && withMap);
   }
 
   function showWorlds() {
@@ -48,6 +51,7 @@
       state.uid = user.uid;
 
       Loom.worlds.renderWorldList();
+      Loom.map.init();
       showWorlds();
 
       Loom.getRef('loom-back-to-worlds').addEventListener('click', showWorlds);
