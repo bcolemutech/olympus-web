@@ -418,8 +418,13 @@
     });
   }
 
+  // Presses on the panel's own buttons and card are theirs, not the map's:
+  // captured as the start of a drag, they never reach the button (the click
+  // goes to the panel), as in desktop Chrome with the Town / World switch.
+  var PANEL_UI = '.loom-map-controls, .loom-map-layers, .loom-map-info';
+
   function onPointerDown(event) {
-    if (!map.view || event.target.closest('.loom-map-controls')) return;
+    if (!map.view || event.target.closest(PANEL_UI)) return;
     try {
       ref('loom-map-panel').setPointerCapture(event.pointerId);
     } catch {
