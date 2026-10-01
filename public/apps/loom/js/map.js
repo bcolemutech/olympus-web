@@ -151,6 +151,7 @@
     map.view = map.views[mode];
     updateLayerButtons();
     if (!map.view) frame();
+    debugCause('switch to ' + mode);
     render();
   }
 
@@ -235,6 +236,7 @@
         }
         updateLayerButtons();
 
+        debugCause(firstLoad ? 'first load' : 'reload after a turn');
         if (firstLoad || !map.view) {
           frame();
         } else {
@@ -272,6 +274,7 @@
     if (!size.width || !size.height) return;
     map.view = M.clamp(map.view, size, bounds());
     var v = map.view;
+    debugWatch(v, size);
 
     var overlayEl = ref('loom-map-overlay');
     ref('loom-map-panel').classList.toggle('is-town', map.mode === 'town');
@@ -450,6 +453,13 @@
   function onPointerMove(event) {
     if (!map.pointers[event.pointerId] || !map.gesture) return;
     map.pointers[event.pointerId] = localPoint(event);
+    debugCause(
+      event.type +
+        ' n=' +
+        Object.keys(map.pointers).length +
+        ' ' +
+        (map.gesture ? map.gesture.kind : '-')
+    );
     var size = panelSize();
     var points = pointerList();
     if (map.gesture.kind === 'drag' && points.length === 1) {
@@ -515,6 +525,20 @@
   function onWheel(event) {
     if (!map.view) return;
     event.preventDefault();
+    debugCause(
+      'wheel dy=' +
+        Math.round(event.deltaY) +
+        ' m=' +
+        event.deltaMode +
+        (event.ctrlKey ? ' ctrl' : '')
+    );
+    debugNote(
+      'wheel dy=' +
+        Math.round(event.deltaY) +
+        ' m=' +
+        event.deltaMode +
+        (event.ctrlKey ? ' ctrl' : '')
+    );
     var p = localPoint(event);
     map.view = M.zoomAt(
       map.view,
@@ -531,6 +555,7 @@
     if (!map.view) return;
     var size = panelSize();
     map.view = M.zoomAt(map.view, factor, size.width / 2, size.height / 2, size, bounds());
+    debugCause('zoom button');
     render();
   }
 
@@ -541,6 +566,48 @@
 
   var DEBUG = /[?&]mapdebug(=|&|$)/.test(window.location.search);
   var debugEvents = [];
+  var debugLast = { view: null, mode: null, cause: '' }; // the last view drawn, and why
+
+  // Logs any single redraw that zooms by half again or more, or moves what
+  // was under the middle of the panel by more than 150 px on screen: a jump,
+  // with what came just before it.
+  function debugWatch(v, size) {
+    if (!DEBUG) return;
+    var was = debugLast.view;
+    if (was && debugLast.mode === map.mode) {
+      var zoomed = Math.abs(Math.log(v.scale / was.scale)) > Math.log(1.5);
+      var under = M.toMap(was, size.width / 2, size.height / 2);
+      var now = M.toScreen(v, under.x, under.y);
+      var moved = Math.hypot(now.x - size.width / 2, now.y - size.height / 2) > 150;
+      if (zoomed || moved) {
+        var r = function (x) {
+          return Math.round(x * 100) / 100;
+        };
+        debugNote(
+          'JUMP after ' +
+            debugLast.cause +
+            ': s ' +
+            r(was.scale) +
+            '>' +
+            r(v.scale) +
+            ' x ' +
+            r(was.x) +
+            '>' +
+            r(v.x) +
+            ' y ' +
+            r(was.y) +
+            '>' +
+            r(v.y)
+        );
+      }
+    }
+    debugLast.view = { scale: v.scale, x: v.x, y: v.y };
+    debugLast.mode = map.mode;
+  }
+
+  function debugCause(cause) {
+    if (DEBUG) debugLast.cause = cause;
+  }
 
   function debugNote(label, event) {
     if (!DEBUG) return;
@@ -654,6 +721,7 @@
       if (!map.data) return;
       if (map.mode === 'town') Loom.town.selectHere();
       else map.selected = map.data.here;
+      debugCause('home button');
       frame();
       render();
     });
@@ -671,6 +739,7 @@
     });
     window.addEventListener('resize', function () {
       debugNote('resize');
+      debugCause('resize');
       render();
     });
     showTab('story');
