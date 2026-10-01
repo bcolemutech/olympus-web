@@ -135,9 +135,17 @@ afterAll(async () => {
 
 // The tests build on each other, like a session with Claude.
 
-test('a fresh import: everything is a stub, and the start is the only frontier', async () => {
+test('a fresh import: nothing is open, and the start is the only frontier', async () => {
   const list = await work({ limit: 5 });
-  expect(list.completion).toMatchObject({ total: 719, stub: 719, playable: 0, rich: 0, open: 0 });
+  // No settlement has a town yet, so all are Unbuilt; points of interest are Stub.
+  expect(list.completion).toMatchObject({
+    total: 719,
+    unbuilt: 663,
+    stub: 56,
+    playable: 0,
+    rich: 0,
+    open: 0,
+  });
   expect(list.origin).toEqual({ id: 'loc_1', name: 'Burdendal' });
   expect(list.byTier).toEqual({ frontier: 1, town: 0, closed: 718, enrich: 0, describe: 168 });
   expect(list.items[0]).toEqual({
@@ -146,39 +154,60 @@ test('a fresh import: everything is a stub, and the start is the only frontier',
     id: 'loc_1',
     name: 'Burdendal',
     kind: 'settlement',
-    grade: 'stub',
+    grade: 'unbuilt',
     hops: 0,
     population: 28473,
-    missing: ['description', 'residents', 'lore'],
+    missing: ['town', 'description', 'residents', 'lore'],
     // How far it is toward Rich, so "missing residents" isn't read as "nobody".
     progress: { size: 'great city', residents: '0 of 6', lore: '0 of 3' },
   });
   // Then the closed places nearest the start.
   expect(list.items.slice(1).every((i) => i.priority === 'closed' && i.hops === 1)).toBe(true);
-  expect(Object.keys(list.howTo)).toEqual(['description', 'residents', 'lore']);
+  expect(Object.keys(list.howTo)).toEqual(['town', 'description', 'residents', 'lore']);
+  expect(list.howTo.town).toMatch(/add_place/);
   expect(list.howTo.description).toMatch(/update_location/);
   expect(list).toMatchObject({ total: 887, offset: 0, count: 5, nextOffset: 5 });
 });
 
-test('writing up the start opens it and moves the frontier to its neighbours', async () => {
+test('writing up the start and laying out its town opens it, moving the frontier on', async () => {
   await ok('update_location', {
     worldId: WORLD,
     locationId: 'loc_1',
     description: 'A rain-soaked port of slate roofs and tarred rope.',
   });
-  const list = await work({ limit: 5 });
-  expect(list.completion).toMatchObject({ stub: 718, playable: 1, open: 0.001 });
+  // Written up, but still Unbuilt: it has no town.
+  const written = await work({ limit: 1 });
+  expect(written.items[0]).toMatchObject({
+    id: 'loc_1',
+    grade: 'unbuilt',
+    missing: ['town', 'residents', 'lore'],
+  });
+  expect(written.items[0].progress).toMatchObject({ residents: '0 of 6' });
+
+  await ok('add_place', {
+    worldId: WORLD,
+    locationId: 'loc_1',
+    name: 'The Harbour',
+    kind: 'harbour',
+    description: 'Slate quays and tarred rope.',
+    entranceFor: ['sea', 'trail'],
+  });
+  const list = await work({ limit: 6 });
+  expect(list.completion).toMatchObject({ unbuilt: 662, playable: 1, open: 0.001 });
   expect(summary(list.items)).toEqual([
-    ['frontier', 'loc_631', 'stub', 1],
-    ['frontier', 'loc_120', 'stub', 1],
-    ['frontier', 'loc_231', 'stub', 1],
-    ['frontier', 'loc_229', 'stub', 1],
-    ['closed', list.items[4].id, 'stub', 2],
+    ['frontier', 'loc_631', 'unbuilt', 1],
+    ['frontier', 'loc_120', 'unbuilt', 1],
+    ['frontier', 'loc_231', 'unbuilt', 1],
+    ['frontier', 'loc_229', 'unbuilt', 1],
+    // The harbour itself, written up but with nobody there yet.
+    ['town', 'plc_1_the-harbour', 'playable', 0],
+    ['closed', list.items[5].id, list.items[5].grade, 2],
   ]);
-  expect(list.byTier).toMatchObject({ frontier: 4, enrich: 1 });
+  expect(list.byTier).toMatchObject({ frontier: 4, town: 1, enrich: 1 });
 
   const start = await work({ grade: 'playable' });
   expect(start.items).toEqual([
+    expect.objectContaining({ priority: 'town', id: 'plc_1_the-harbour' }),
     expect.objectContaining({ priority: 'enrich', id: 'loc_1', missing: ['residents', 'lore'] }),
   ]);
 });
@@ -193,13 +222,23 @@ test('get_location shows the grade, the checklist, and which neighbours are open
       { need: 'lore', for: 'rich', message: 'A great city needs 3 lore entries (it has 0).' },
     ],
   });
-  expect(place.connections.map((c) => c.grade)).toEqual(['stub', 'stub', 'stub', 'stub']);
+  expect(place.connections.map((c) => c.grade)).toEqual([
+    'unbuilt',
+    'unbuilt',
+    'unbuilt',
+    'unbuilt',
+  ]);
+  expect(place.town).toEqual({ places: 1, waysInAndOut: ['The Harbour'], valid: true });
   const neighbour = await ok('get_location', { worldId: WORLD, locationId: 'loc_631' });
   expect(neighbour.connections.find((c) => c.id === 'loc_1').grade).toBe('playable');
-  expect(neighbour.missing[0]).toMatchObject({
-    need: 'description',
-    message: 'Its description is still the imported text.',
-  });
+  expect(neighbour.missing.slice(0, 2)).toEqual([
+    { need: 'town', for: 'playable', message: 'It has no town layout.' },
+    {
+      need: 'description',
+      for: 'playable',
+      message: 'Its description is still the imported text.',
+    },
+  ]);
 });
 
 test('enough residents and lore for its size make it rich, and it leaves the work list', async () => {
@@ -236,22 +275,25 @@ test('enough residents and lore for its size make it rich, and it leaves the wor
   expect(list.completion).toMatchObject({ playable: 0, rich: 1 });
   // Nothing rich is ever work: it has left the list entirely.
   expect((await work({ grade: 'rich' })).total).toBe(0);
-  expect((await work({ limit: 1 })).total).toBe(886);
+  // 887 to start with, less Burdendal, plus its harbour.
+  expect((await work({ limit: 1 })).total).toBe(887);
 
   const rich = await ok('find_locations', { worldId: WORLD, grade: 'rich' });
   expect(rich.locations).toEqual([expect.objectContaining({ id: 'loc_1', grade: 'rich' })]);
   const overview = await ok('get_world', { worldId: WORLD });
   expect(overview.completion).toMatchObject({
     graded: true,
-    places: { total: 719, rich: 1, stub: 718 },
+    places: { total: 719, rich: 1, unbuilt: 662, stub: 56 },
     factions: { stub: 23 },
     regions: { stub: 145 },
   });
 });
 
 test('filters: by kind, by what is missing, and around another place', async () => {
-  // Only settlements take residents: 662 of them still need people.
-  const needingPeople = await work({ need: 'residents', limit: 3 });
+  // Settlements take residents (662 still need people), and so do places in
+  // town (the harbour).
+  expect((await work({ need: 'residents' })).total).toBe(663);
+  const needingPeople = await work({ need: 'residents', kind: 'settlement', limit: 3 });
   expect(needingPeople.total).toBe(662);
   expect(needingPeople.items.every((i) => i.kind === 'settlement')).toBe(true);
   expect(needingPeople.items.every((i) => i.missing.includes('residents'))).toBe(true);

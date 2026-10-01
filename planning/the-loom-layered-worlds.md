@@ -94,7 +94,7 @@ When burgs ship, a settlement also needs a town layout, and when battle maps shi
 - **Travel.** The rules engine (ADJUDICATE) refuses a move into a place below Playable with a blocked outcome: "The way to _X_ is closed. Turn back." Nothing changes and no time passes.
 - **Nobody is stranded.** A save standing in a place that is below the bar (after the bar rises, or a revision) stays there and can leave. Only entering is refused.
 - **The narrator** is told which exits are closed, so it describes them as barred rather than inventing what lies beyond.
-- **New games.** Publishing requires the starting location to be Playable, and `loomCreateSave` refuses a world whose start has since dropped below the bar ("This world isn't ready to play yet"). Setting a start that isn't Playable over MCP (`update_world`) succeeds but warns, since new games can't begin there until it is written up.
+- **New games.** Publishing requires the starting location to be Playable, and `loomCreateSave` refuses a world whose start has since dropped below the bar ("This world isn't ready to play yet"). Setting a start that isn't Playable over MCP (`update_world`) succeeds but warns, since new games can't begin there until it is open (written up, with its town laid out).
 - **Shared by everyone.** Grades are world-level, so every player, and every future multiplayer tier, sees the same open and closed places.
 
 ---
@@ -143,7 +143,7 @@ The Loom's play screen gains a **map** beside the story:
 
   The position records `placeId` alongside `location`. INTERPRET knows the current town's places. NARRATE's scene is the place's cast, plus residents with no place of their own ("about town"), plus the realm; its exits are the town's links and, from an entrance, the routes out.
 
-- **Grading.** Places in town are graded (Playable once written up; Rich with someone there or lore about them) and gated. A settlement's town requirement (a layout with an open entrance, every place reachable from one) is implemented but **switched on only after the MCP town tools (L-343 / #397) have been used to lay out the start town and its open neighbours**, in a one-line follow-up. Turning it on before towns can be built would close every settlement, including every open place in Nisia. The **Rich bar scales** with a settlement (requested 2026-09-29), counting residents and lore anywhere in its town:
+- **Grading.** Places in town are graded (Playable once written up; Rich with someone there or lore about them) and gated. A settlement's town requirement (a layout with an open entrance, every place reachable from one) is **on**: a settlement without a working layout is Unbuilt and closed. It was switched on (2026-10-01) only after the MCP town tools (L-343 / #397) had laid out Nisia's open towns, Hatham and Daldockley, so nothing open closed. The **Rich bar scales** with a settlement (requested 2026-09-29), counting residents and lore anywhere in its town:
 
   | Size       | Population  | Residents | Lore |
   | ---------- | ----------- | --------- | ---- |

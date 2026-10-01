@@ -27,6 +27,7 @@ const functionsTest = require('firebase-functions-test')(
 );
 // Requiring functions/index.js initializes the functions package's admin app,
 // which the loader and loom-canon below share.
+const { layOutTowns } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn } = require('../functions/index');
 const path = require('path');
 const fs = require('fs');
@@ -72,6 +73,7 @@ async function writeUp(worldId, ...ids) {
       places.doc(id).update({ description: `Written up: ${id}.`, 'sources.description': 'mcp' })
     )
   );
+  await layOutTowns(db.collection('loom_worlds').doc(worldId), ...ids); // and its town
   await bump(worldId);
 }
 
