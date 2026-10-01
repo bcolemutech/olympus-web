@@ -21,6 +21,7 @@ jest.mock('../functions/gemini', () => ({
 }));
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
+const { layOutTowns } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
 
 const fs = require('fs');
@@ -57,6 +58,7 @@ async function writeUp(...ids) {
     )
   );
   const ref = db.collection('loom_worlds').doc(WORLD);
+  await layOutTowns(ref, ...ids); // a settlement also needs its town
   await ref.update({ canonVersion: (await ref.get()).data().canonVersion + 1 });
 }
 

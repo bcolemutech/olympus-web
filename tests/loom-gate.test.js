@@ -20,6 +20,7 @@ jest.mock('../functions/gemini', () => ({
 }));
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
+const { layOutTowns } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn } = require('../functions/index');
 
 const fs = require('fs');
@@ -73,6 +74,7 @@ async function writeUp(worldId, ...ids) {
         .update({ description: `Written up: ${id}.`, 'sources.description': 'mcp' })
     )
   );
+  await layOutTowns(worldRef(worldId), ...ids); // a settlement also needs its town
   const version = (await worldRef(worldId).get()).data().canonVersion;
   await worldRef(worldId).update({ canonVersion: version + 1 });
 }
@@ -164,21 +166,37 @@ describe('travel', () => {
     expect(prompts.at(-1)).toContain('The way to Dunsmouth is closed. Turn back.');
 
     // The narrator is told which ways on are open and which are closed.
-    expect(prompts.at(-1)).toContain('WAYS ON FROM Burdendal:');
-    expect(prompts.at(-1)).toContain('- Dunsmouth (loc_631), by trail: CLOSED');
-    expect(prompts.at(-1)).toContain('- Wisin (loc_229), by sea: CLOSED');
+    expect(prompts.at(-1)).toContain('WAYS ON FROM The Town Gate, Burdendal:');
+    expect(prompts.at(-1)).toContain('- Dunsmouth (loc_631), out of town by trail: CLOSED');
+    expect(prompts.at(-1)).toContain('- Wisin (loc_229), out of town by sea: CLOSED');
     expect(prompts.at(-1)).toMatch(/describe them as closed or impassable, never what lies beyond/);
   });
 
-  test('once written up, the same place can be entered', async () => {
+  test('written up but with no town laid out, a settlement is still closed', async () => {
+    const ref = worldRef(worldId);
+    await ref
+      .collection('locations')
+      .doc('loc_631')
+      .update({ description: 'Written up: loc_631.', 'sources.description': 'mcp' });
+    await ref.update({ canonVersion: (await ref.get()).data().canonVersion + 1 });
+    playerMovesTo('loc_631');
+    await turn(worldId, saveId);
+    expect((await saveOf(saveId)).location).toBe('loc_1');
+    expect((await lastTurn(saveId)).resolution).toMatchObject({
+      outcome: 'blocked',
+      constraints: ['The way to Dunsmouth is closed. Turn back.'],
+    });
+  });
+
+  test('once written up and laid out, the same place can be entered', async () => {
     await writeUp(worldId, 'loc_631');
     playerMovesTo('loc_631');
     await turn(worldId, saveId);
     expect((await saveOf(saveId)).location).toBe('loc_631');
     expect((await lastTurn(saveId)).resolution.outcome).toBe('success');
     // Narrated from where the player arrives: Burdendal is open behind them.
-    expect(prompts.at(-1)).toContain('WAYS ON FROM Dunsmouth:');
-    expect(prompts.at(-1)).toContain('- Burdendal (loc_1), by trail: open');
+    expect(prompts.at(-1)).toContain('WAYS ON FROM The Town Gate, Dunsmouth:');
+    expect(prompts.at(-1)).toContain('- Burdendal (loc_1), out of town by trail: open');
   });
 
   test('nobody is stranded: a save standing in a closed place can still leave', async () => {

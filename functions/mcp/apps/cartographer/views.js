@@ -190,7 +190,7 @@ function worldOverview(meta, world) {
   if (!start || !world.locations[start] || world.locations[start].retired) {
     missing.push('a starting location');
   } else if (!isPlayable(world, world.locations[start])) {
-    missing.push('a starting location players can enter (write it up first)');
+    missing.push('a starting location players can enter (get_location lists what it needs)');
   }
 
   const map = world.map || {};

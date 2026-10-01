@@ -22,6 +22,7 @@ jest.mock('../functions/gemini', () => ({
 }));
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
+const { layOutTowns } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn } = require('../functions/index');
 
 const fs = require('fs');
@@ -83,6 +84,8 @@ async function writeUp(collection, ...ids) {
         .update({ description: `Written up: ${id}.`, sources: WRITTEN })
     )
   );
+  // A settlement also needs its town; Burdendal keeps the one built above.
+  if (collection === 'locations') await layOutTowns(worldRef, ...ids);
   await bump();
 }
 async function bump() {
@@ -198,7 +201,7 @@ describe('a walk through Burdendal', () => {
   });
 
   test('arriving by sea lands at the harbour', async () => {
-    await standAt(saveId, 'loc_229', null); // Wisin, no town layout
+    await standAt(saveId, 'loc_229', null); // Wisin, an older save with no place
     expect(await moveTo(saveId, 'loc_1')).toMatchObject({
       outcome: 'success',
       constraints: ['You arrive at Burdendal, at The Harbour.'],
@@ -269,7 +272,11 @@ describe('a walk through Burdendal', () => {
       'To set out for Wisin by sea, go to The Harbour first.',
     ]);
     expect(await moveTo(saveId, 'loc_631')).toMatchObject({ outcome: 'success' });
-    expect(await saveOf(saveId)).toMatchObject({ location: 'loc_631', placeId: null });
+    // Dunsmouth's own town (tests/helpers/towns.js): arrival is at its gate.
+    expect(await saveOf(saveId)).toMatchObject({
+      location: 'loc_631',
+      placeId: 'plc_631_town-gate',
+    });
   });
 
   test('a closed destination is reported before the way out', async () => {
@@ -328,11 +335,12 @@ describe('towns in grading', () => {
     });
     expect(grading.gradePlace(world, world.places.plc_1_tavern).grade).toBe('rich');
     expect(grading.isPlaceOpen(world, world.places.plc_1_temple)).toBe(false);
+    // Burdendal's five, and the gates of Wisin and Dunsmouth.
     expect(grading.gradeWorld(world).inTown).toEqual({
-      total: 5,
+      total: 7,
       unbuilt: 0,
       stub: 1,
-      playable: 3,
+      playable: 5,
       rich: 1,
     });
   });
@@ -346,12 +354,15 @@ describe('towns in grading', () => {
     });
   });
 
-  test('the town requirement exists but is off until towns can be built (L-343)', () => {
-    expect(grading.LAYER_CHECKS.town).toBeNull();
-    const layers = { town: town.hasTownLayout };
-    expect(grading.gradeLocation(world, world.locations.loc_1, { layers }).grade).toBe('playable');
-    // A written-up settlement with no layout is Unbuilt once it is required.
-    const dunsmouth = grading.gradeLocation(world, world.locations.loc_631, { layers });
+  test('the town requirement is on: a written-up settlement needs a working layout', () => {
+    expect(grading.gradeLocation(world, world.locations.loc_1).grade).toBe('playable');
+    expect(grading.gradeLocation(world, world.locations.loc_631).grade).toBe('playable');
+    // Without its town, written-up Dunsmouth is Unbuilt, and closed.
+    const places = { ...world.places };
+    delete places['plc_631_town-gate'];
+    const unbuilt = { ...world, places };
+    const dunsmouth = grading.gradeLocation(unbuilt, unbuilt.locations.loc_631);
+    expect(grading.isPlayable(unbuilt, unbuilt.locations.loc_631)).toBe(false);
     expect(dunsmouth.grade).toBe('unbuilt');
     expect(dunsmouth.checklist[0]).toEqual({
       need: 'town',

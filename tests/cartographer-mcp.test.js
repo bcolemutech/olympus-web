@@ -34,6 +34,7 @@ const { getFirestore } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
 );
 
+const { layOutTowns } = require('./helpers/towns');
 const { parseAzgaarExport } = require('../functions/cartographer/parse');
 const { mapToCanon } = require('../functions/cartographer/map');
 const { loadDraftWorld } = require('../functions/cartographer/load');
@@ -178,7 +179,9 @@ async function seed() {
       retired: true,
     });
   await live.collection('locations').doc('poi_1').update({ retired: true });
-  await live.collection('locations').doc('loc_1').update({ 'sources.description': 'mcp' }); // the start, written up (L-322)
+  // The start, open to players (L-322): written up, with its town laid out.
+  await live.collection('locations').doc('loc_1').update({ 'sources.description': 'mcp' });
+  await layOutTowns(live, 'loc_1');
   await bumpCanon(LIVE, {
     status: 'published',
     tagline: 'Twenty-three realms, one coastline.',
@@ -404,7 +407,7 @@ describe('find_locations', () => {
       port: true,
       region: 'Burdendal County',
       realm: 'Kingdom of Pendonia',
-      grade: 'stub',
+      grade: 'unbuilt', // no town yet
     });
 
     // Exact, then prefix, then anywhere in the name — each largest first,
@@ -536,16 +539,23 @@ describe('get_location, get_faction, get_region', () => {
         via: 'sea',
         distance: 29,
         direction: 'northwest',
-        grade: 'stub',
+        grade: 'unbuilt',
       },
-      { id: 'loc_229', name: 'Wisin', via: 'sea', distance: 27, direction: 'south', grade: 'stub' },
+      {
+        id: 'loc_229',
+        name: 'Wisin',
+        via: 'sea',
+        distance: 27,
+        direction: 'south',
+        grade: 'unbuilt',
+      },
       {
         id: 'loc_231',
         name: 'Ashleaches',
         via: 'trail',
         distance: 25,
         direction: 'northeast',
-        grade: 'stub',
+        grade: 'unbuilt',
       },
       {
         id: 'loc_631',
@@ -553,7 +563,7 @@ describe('get_location, get_faction, get_region', () => {
         via: 'trail',
         distance: 21,
         direction: 'southeast',
-        grade: 'stub',
+        grade: 'unbuilt',
       },
     ]);
   });
@@ -604,7 +614,7 @@ describe('get_location, get_faction, get_region', () => {
       population: 28473,
       capital: true,
       port: true,
-      grade: 'stub',
+      grade: 'unbuilt',
     });
   });
 

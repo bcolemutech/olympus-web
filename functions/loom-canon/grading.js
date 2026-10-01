@@ -22,11 +22,12 @@
  * (scripts/backfill-description-sources.js).
  *
  * Layer requirements switch on as the layers ship: LAYER_CHECKS.town and
- * LAYER_CHECKS.battleMap become functions that say whether a place has a
- * valid layer. While they are null, the layer isn't required. The town check
- * exists (./town.js hasTownLayout, L-342) and is switched on only after the
- * MCP town tools (L-343 / #397) have laid out the start town and its open
- * neighbours, so no world closes before it can be fixed.
+ * LAYER_CHECKS.battleMap are functions that say whether a place has a valid
+ * layer, and null while a layer isn't required. The town requirement is on
+ * (L-342, switched on once the MCP town tools (L-343 / #397) had laid out
+ * the start town and its open neighbours): a settlement needs a working town
+ * layout (./town.js hasTownLayout) to be Playable. Battle maps aren't
+ * required yet.
  *
  * Places in town (L-342) are graded too: Playable once written up, Rich with
  * someone there or lore about them. A settlement's Rich bar grows with its
@@ -39,7 +40,11 @@
 
 const RUBRIC_VERSION = 2; // 2: the Rich bar scales with a settlement's size
 const GRADES = ['unbuilt', 'stub', 'playable', 'rich'];
-const LAYER_CHECKS = Object.freeze({ town: null, battleMap: null });
+const LAYER_CHECKS = Object.freeze({
+  // Required lazily: town.js reads isPlaceOpen from this module.
+  town: (world, settlement) => require('./town').hasTownLayout(world, settlement),
+  battleMap: null,
+});
 const IMPORT = 'import';
 
 const rank = (grade) => GRADES.indexOf(grade);

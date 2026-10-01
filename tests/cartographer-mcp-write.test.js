@@ -226,8 +226,9 @@ describe('update_world', () => {
       updated: ['tagline', 'openingHook', 'startingLocationId'],
       world: { startingLocation: { id: 'loc_1', name: 'Burdendal' } },
       warnings: [
-        "The start isn't open to players yet (Burdendal: its description is still the " +
-          'imported text). Write it up before publishing.',
+        "The start isn't open to players yet (Burdendal: it has no town layout; its " +
+          'description is still the imported text). Open it before publishing; get_location ' +
+          'lists what it needs.',
       ],
     });
     const doc = (await worlds().doc(worldId).get()).data();
@@ -238,12 +239,22 @@ describe('update_world', () => {
       canonVersion: 2,
       updatedBy: BUILDER,
     });
-    // Not ready until the start is written up: players can only enter Playable places.
-    expect(await ok('get_world', { worldId })).toMatchObject({
+    // Not ready until the start is open: written up, with its town laid out.
+    const notReady = {
       readyToPublish: false,
-      missing: ['a starting location players can enter (write it up first)'],
-    });
+      missing: ['a starting location players can enter (get_location lists what it needs)'],
+    };
+    expect(await ok('get_world', { worldId })).toMatchObject(notReady);
     await ok('update_location', { worldId, locationId: 'loc_1', description: 'Slate and rain.' });
+    expect(await ok('get_world', { worldId })).toMatchObject(notReady);
+    await ok('add_place', {
+      worldId,
+      locationId: 'loc_1',
+      name: 'The Harbour',
+      kind: 'harbour',
+      description: 'Slate quays and tarred rope.',
+      entranceFor: ['sea', 'trail'],
+    });
     expect((await ok('get_world', { worldId })).readyToPublish).toBe(true);
   });
 
@@ -733,9 +744,22 @@ describe('publish_world', () => {
       startingLocationId: 'loc_1',
     });
     expect(await refused('publish_world', { worldId })).toMatch(
-      /a starting location players can enter \(Burdendal: its description is still the imported text\)/
+      /a starting location players can enter \(Burdendal: it has no town layout; its description is still the imported text\)/
     );
     await ok('update_location', { worldId, locationId: 'loc_1', description: 'Slate and rain.' });
+    // Written up, but a settlement needs its town too.
+    expect(await refused('publish_world', { worldId })).toMatch(
+      /players can enter \(Burdendal: it has no town layout\)/
+    );
+    // A settlement also needs its town: one way in and out will do.
+    await ok('add_place', {
+      worldId,
+      locationId: 'loc_1',
+      name: 'The Harbour',
+      kind: 'harbour',
+      description: 'Slate quays and tarred rope.',
+      entranceFor: ['sea', 'trail'],
+    });
     expect(await ok('publish_world', { worldId })).toMatchObject({ worldId, status: 'published' });
     expect((await worlds().doc(worldId).get()).data()).toMatchObject({
       status: 'published',
@@ -811,6 +835,15 @@ describe('exit criterion: build with Claude, play, fix, keep playing', () => {
       worldId,
       locationId: 'loc_1',
       description: 'A rain-soaked port of slate roofs and tarred rope.',
+    });
+    // A settlement also needs its town: one way in and out will do.
+    await ok('add_place', {
+      worldId,
+      locationId: 'loc_1',
+      name: 'The Harbour',
+      kind: 'harbour',
+      description: 'Slate quays and tarred rope.',
+      entranceFor: ['sea', 'trail'],
     });
     await ok('publish_world', { worldId });
 

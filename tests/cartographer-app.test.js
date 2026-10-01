@@ -40,6 +40,7 @@ const { getFirestore } = require(
 const { getStorage } = require(
   require.resolve('firebase-admin/storage', { paths: [functionsDir] })
 );
+const { layOutTowns } = require('./helpers/towns');
 const loomCanon = require('../functions/loom-canon');
 
 const db = getFirestore();
@@ -79,6 +80,7 @@ async function writeUp(worldId, id) {
     .collection('locations')
     .doc(id)
     .update({ description: 'A rain-soaked port.', 'sources.description': 'mcp' });
+  await layOutTowns(worldRef, id); // a settlement also needs its town
   await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
 }
 const importAs = (auth, data) => cartographerImport.run({ data, auth });
@@ -206,7 +208,7 @@ describe('cartographerPublish', () => {
       code: 'failed-precondition',
       message:
         'Not ready to publish. It needs a starting location players can enter ' +
-        '(Burdendal: its description is still the imported text).',
+        '(Burdendal: it has no town layout; its description is still the imported text).',
     });
     expect((await db.collection('loom_worlds').doc(worldId).get()).data().status).toBe('draft');
   });
@@ -280,6 +282,7 @@ describe('cartographerCompletion (L-323)', () => {
       .collection('locations')
       .doc('loc_1')
       .update({ description: 'A rain-soaked port.', 'sources.description': 'mcp' });
+    await layOutTowns(worldRef, 'loc_1');
     await worldRef.update({ canonVersion: 2 });
     await expect(completionAs(BUILDER, { worldIds: [worldId] })).resolves.toEqual({
       worlds: { [worldId]: { total: 719, playable: 1, rich: 0, share: 0.001 } },

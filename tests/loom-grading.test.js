@@ -23,13 +23,18 @@ const { parseAzgaarExport } = require('../functions/cartographer/parse');
 const { mapToCanon } = require('../functions/cartographer/map');
 const { importStamp } = require('../functions/cartographer/sources');
 const loomCanon = require('../functions/loom-canon');
+const { withTowns } = require('./helpers/towns');
 
 const WRITTEN = { description: 'mcp' };
 const IMPORTED = { description: 'import' };
 
 // A small Cartographer world: a written-up port with a resident and lore, a
-// stub town, a written ruin, and a realm and region.
+// stub town, a written ruin, and a realm and region. Both settlements have a
+// town layout (one gate each), as the town requirement asks.
 function world(overrides = {}) {
+  return withTowns(world.bare(overrides), 'port', 'town');
+}
+world.bare = (overrides = {}) => {
   return {
     id: 'test-coast',
     status: 'published',
@@ -76,7 +81,7 @@ function world(overrides = {}) {
     },
     ...overrides,
   };
-}
+};
 
 const needs = (result) => result.checklist.map((item) => `${item.for}:${item.need}`);
 
@@ -155,11 +160,12 @@ describe('residents in town', () => {
       description: 'A tower.',
       sources: WRITTEN,
       connections: [],
+      entrance: { via: ['sea'] }, // its own way in, so the layout stays valid
     };
     const unplaced = { ...base, locations: { ...base.locations, port } };
     const placed = {
       ...unplaced,
-      places: { plc_port_tower: harbourTower },
+      places: { ...unplaced.places, plc_port_tower: harbourTower },
       characters: {
         chr_mara: { id: 'chr_mara', name: 'Mara', locationId: 'port', placeId: 'plc_port_tower' },
       },
@@ -177,8 +183,21 @@ describe('residents in town', () => {
 });
 
 describe('layers switch on as they ship', () => {
-  test('no layer is required yet', () => {
-    expect(LAYER_CHECKS).toEqual({ town: null, battleMap: null });
+  test('towns are required; battle maps not yet', () => {
+    expect(typeof LAYER_CHECKS.town).toBe('function');
+    expect(LAYER_CHECKS.battleMap).toBeNull();
+  });
+
+  test('a written-up settlement without a town layout is Unbuilt, and closed', () => {
+    const w = world.bare();
+    expect(gradeLocation(w, w.locations.port)).toEqual({
+      grade: 'unbuilt',
+      checklist: [{ need: 'town', for: 'playable', message: 'It has no town layout.' }],
+    });
+    expect(isPlayable(w, w.locations.port)).toBe(false);
+    // Points of interest need a battle map, not a town: not required yet.
+    expect(isPlayable(w, w.locations.ruin)).toBe(true);
+    expect(isPlayable(world(), world().locations.port)).toBe(true);
   });
 
   test('a required layer that is missing makes a place Unbuilt, however well written', () => {
@@ -216,7 +235,7 @@ describe('whole worlds', () => {
     expect(gradeWorld(w)).toEqual({
       graded: true,
       rubricVersion: 2,
-      inTown: { total: 0, unbuilt: 0, stub: 0, playable: 0, rich: 0 },
+      inTown: { total: 2, unbuilt: 0, stub: 0, playable: 2, rich: 0 },
       places: {
         total: 3,
         unbuilt: 0,
@@ -232,7 +251,7 @@ describe('whole worlds', () => {
     });
   });
 
-  test('a freshly imported Nisia is all Stub, and nothing in it is open', () => {
+  test('a freshly imported Nisia: settlements Unbuilt, the rest Stub, nothing open', () => {
     const parsed = parseAzgaarExport(
       fs.readFileSync(path.join(__dirname, 'fixtures/azgaar/nisia.json'))
     );
@@ -249,8 +268,9 @@ describe('whole worlds', () => {
       factions: stamp(canon.factions),
     };
     const summary = gradeWorld(nisia);
-    expect(summary.places).toMatchObject({ total: 719, stub: 719, open: 0 });
-    expect(summary.places.settlements.stub).toBe(663);
+    // No settlement has a town yet: Unbuilt. Points of interest are Stub.
+    expect(summary.places).toMatchObject({ total: 719, unbuilt: 663, stub: 56, open: 0 });
+    expect(summary.places.settlements.unbuilt).toBe(663);
     expect(summary.places.pointsOfInterest.stub).toBe(56);
     expect(summary.factions.stub).toBe(23);
     expect(summary.regions.stub).toBe(145);

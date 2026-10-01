@@ -419,8 +419,8 @@ function writeTools({ writer }) {
               warnings.push(
                 `The start isn't open to players yet (${whyClosed(world, start)}). ` +
                   (world.status === 'published'
-                    ? "New games can't begin until it is written up."
-                    : 'Write it up before publishing.')
+                    ? "New games can't begin until it is open; get_location lists what it needs."
+                    : 'Open it before publishing; get_location lists what it needs.')
               );
             }
           }

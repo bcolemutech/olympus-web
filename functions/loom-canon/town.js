@@ -145,7 +145,7 @@ function layoutReport(world, settlement) {
 /**
  * Whether a settlement has a usable town layout: at least one open entrance,
  * and every place reachable from the entrances. This is the town requirement
- * grading applies once it is switched on (grading.LAYER_CHECKS.town).
+ * grading applies to every settlement (grading.LAYER_CHECKS.town).
  */
 function hasTownLayout(world, settlement) {
   const places = placesOf(world, settlement.id);
