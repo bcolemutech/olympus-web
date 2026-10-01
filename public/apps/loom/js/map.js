@@ -12,6 +12,10 @@
   // The image moves with a CSS transform; markers, routes and labels are
   // drawn in screen space on an SVG overlay, so they stay the same size at
   // every zoom. The maths lives in map-math.js.
+  //
+  // In a settlement with a town layout, the same panel shows the town view
+  // instead (town.js; L-345 / #399), with a switch back to the world map.
+  // Each layer keeps its own view, so switching keeps your place in both.
 
   var Loom = window.Loom;
   var state = Loom.state;
@@ -24,8 +28,12 @@
 
   var map = {
     data: null, // loomGetMap's result
-    view: null, // { scale, x, y }
-    selected: null, // a place id
+    view: null, // { scale, x, y }, of the layer showing
+    mode: 'world', // 'world' | 'town'
+    views: { world: null, town: null }, // each layer's view while the other shows
+    townId: null, // the settlement whose town is loaded
+    worldUsable: false, // the world has a map with positioned places
+    selected: null, // a world place id (the town keeps its own)
     imagePath: null,
     pointers: {}, // pointerId → { x, y }
     gesture: null,
@@ -47,6 +55,15 @@
     });
     if (text !== undefined) node.textContent = text;
     return node;
+  }
+
+  // The coordinate space of the layer showing.
+  function bounds() {
+    return map.mode === 'town' ? Loom.town.BOUNDS : map.data.map;
+  }
+
+  function isPhone() {
+    return window.matchMedia('(max-width: 899px)').matches;
   }
 
   function panelSize() {
@@ -83,6 +100,7 @@
 
   // The map only exists for worlds with coordinates (Cartographer worlds).
   function setAvailable(available) {
+    if (!available) ref('loom-map-layers').classList.add('hidden');
     ref('loom-view-play').classList.toggle('loom-play--map', available);
     ref('loom-root').classList.toggle('loom-root--wide', available);
     ref('loom-play-tabs').classList.toggle('hidden', !available);
@@ -99,13 +117,41 @@
     });
     if (tab === 'map' && map.data) {
       // On a phone, bring the tabs to the top so the whole map is in view.
-      if (window.matchMedia('(max-width: 899px)').matches) {
+      if (isPhone()) {
         ref('loom-play-tabs').scrollIntoView({ block: 'start' });
       }
       // The panel had no size while hidden: frame it now it's visible.
       if (!map.view) frame();
       render();
     }
+  }
+
+  // ── Layers: the world map and the town view ───────
+
+  function updateLayerButtons() {
+    var current = Loom.town.current();
+    var both = Boolean(current) && map.worldUsable;
+    ref('loom-map-layers').classList.toggle('hidden', !both);
+    if (current) ref('loom-layer-town').textContent = current.name;
+    ['town', 'world'].forEach(function (mode) {
+      var button = ref('loom-layer-' + mode);
+      button.classList.toggle('is-active', map.mode === mode);
+      button.setAttribute('aria-pressed', String(map.mode === mode));
+    });
+  }
+
+  function setMode(mode) {
+    if (mode === 'town' && !Loom.town.current()) mode = 'world';
+    if (mode === map.mode) {
+      updateLayerButtons();
+      return;
+    }
+    map.views[map.mode] = map.view;
+    map.mode = mode;
+    map.view = map.views[mode];
+    updateLayerButtons();
+    if (!map.view) frame();
+    render();
   }
 
   // ── Loading ───────────────────────────────────────
@@ -136,10 +182,15 @@
       });
   }
 
-  // Frames the discovered places around where the player stands.
+  // Frames the discovered places around where the player stands, or the
+  // whole town.
   function frame() {
     var size = panelSize();
     if (!size.width || !size.height) return;
+    if (map.mode === 'town') {
+      map.view = M.fit(Loom.town.framePoints(), size, bounds());
+      return;
+    }
     var here = placeById(map.data.here);
     map.view = M.fit(positioned(), size, map.data.map, here && { x: here.x, y: here.y });
   }
@@ -153,22 +204,42 @@
       .then(function (result) {
         if (saveId !== state.saveId) return; // the player moved on meanwhile
         var data = result.data;
-        var usable =
+        var usable = Boolean(
           data &&
           data.map &&
           data.places.some(function (p) {
             return typeof p.x === 'number';
-          });
-        setAvailable(Boolean(usable));
-        if (!usable) return;
+          })
+        );
+        var townData = (data && data.town) || null;
+        setAvailable(usable || Boolean(townData));
+        if (!usable && !townData) return;
         var firstLoad = !map.data;
         map.data = data;
-        loadImage(data);
+        map.worldUsable = usable;
+        if (usable) loadImage(data);
+        Loom.town.setData(townData);
+
+        // Entering a town shows it; leaving one goes back to the world map.
+        var townId = townData ? townData.locationId : null;
+        var entered = townId !== map.townId;
+        map.townId = townId;
+        if (entered) map.views.town = null;
+        var mode = townData && (entered || !usable || map.mode === 'town') ? 'town' : 'world';
+        if (mode !== map.mode) {
+          map.views[map.mode] = map.view;
+          map.mode = mode;
+          map.view = map.views[mode];
+        } else if (entered && mode === 'town') {
+          map.view = null;
+        }
+        updateLayerButtons();
+
         if (firstLoad || !map.view) {
           frame();
         } else {
-          var here = placeById(data.here);
-          if (here) map.view = M.reveal(map.view, here, panelSize(), data.map);
+          var herePoint = mode === 'town' ? Loom.town.herePoint() : placeById(data.here);
+          if (herePoint) map.view = M.reveal(map.view, herePoint, panelSize(), bounds());
         }
         render();
       })
@@ -182,7 +253,12 @@
   function reset() {
     map.data = null;
     map.view = null;
+    map.mode = 'world';
+    map.views = { world: null, town: null };
+    map.townId = null;
+    map.worldUsable = false;
     map.selected = null;
+    Loom.town.reset();
     ref('loom-map-overlay').innerHTML = '';
     ref('loom-map-info').innerHTML = '';
     setAvailable(false);
@@ -194,8 +270,19 @@
     if (!map.data || !map.view) return;
     var size = panelSize();
     if (!size.width || !size.height) return;
-    map.view = M.clamp(map.view, size, map.data.map);
+    map.view = M.clamp(map.view, size, bounds());
     var v = map.view;
+
+    var overlayEl = ref('loom-map-overlay');
+    ref('loom-map-panel').classList.toggle('is-town', map.mode === 'town');
+    if (map.mode === 'town') {
+      overlayEl.setAttribute('width', size.width);
+      overlayEl.setAttribute('height', size.height);
+      overlayEl.innerHTML = '';
+      Loom.town.draw(overlayEl, v);
+      Loom.town.renderInfo(ref('loom-map-info'), act);
+      return;
+    }
 
     var img = ref('loom-map-image');
     img.style.transform = 'translate(' + v.x + 'px, ' + v.y + 'px) scale(' + v.scale + ')';
@@ -303,12 +390,17 @@
       go.type = 'button';
       go.disabled = state.turnInProgress;
       go.addEventListener('click', function () {
-        Loom.play.travelTo(place.id, place.name);
-        // On a phone, the story is where the journey is told.
-        if (window.matchMedia('(max-width: 899px)').matches) showTab('story');
+        act(place.id, place.name);
       });
       info.appendChild(go);
     }
+  }
+
+  // A move from a card: a place in town, or a world place.
+  function act(id, name) {
+    Loom.play.travelTo(id, name);
+    // On a phone, the story is where the journey is told.
+    if (isPhone()) showTab('story');
   }
 
   // ── Gestures ──────────────────────────────────────
@@ -356,7 +448,7 @@
         p.x - map.gesture.last.x,
         p.y - map.gesture.last.y,
         size,
-        map.data.map
+        bounds()
       );
       map.gesture.last = p;
       render();
@@ -370,7 +462,7 @@
           mid.x,
           mid.y,
           size,
-          map.data.map
+          bounds()
         );
         render();
       }
@@ -394,6 +486,11 @@
 
   // Selects the place nearest a tap, if any is close enough.
   function select(point) {
+    if (map.mode === 'town') {
+      Loom.town.pick(point, map.view);
+      render();
+      return;
+    }
     var best = null;
     positioned().forEach(function (p) {
       var s = M.toScreen(map.view, p.x, p.y);
@@ -414,7 +511,7 @@
       p.x,
       p.y,
       panelSize(),
-      map.data.map
+      bounds()
     );
     render();
   }
@@ -422,7 +519,7 @@
   function zoomBy(factor) {
     if (!map.view) return;
     var size = panelSize();
-    map.view = M.zoomAt(map.view, factor, size.width / 2, size.height / 2, size, map.data.map);
+    map.view = M.zoomAt(map.view, factor, size.width / 2, size.height / 2, size, bounds());
     render();
   }
 
@@ -442,9 +539,17 @@
       zoomBy(1 / 1.5);
     });
     ref('loom-map-home').addEventListener('click', function () {
-      map.selected = map.data && map.data.here;
+      if (!map.data) return;
+      if (map.mode === 'town') Loom.town.selectHere();
+      else map.selected = map.data.here;
       frame();
       render();
+    });
+    ref('loom-layer-town').addEventListener('click', function () {
+      setMode('town');
+    });
+    ref('loom-layer-world').addEventListener('click', function () {
+      setMode('world');
     });
     ref('loom-tab-story').addEventListener('click', function () {
       showTab('story');

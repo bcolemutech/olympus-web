@@ -23,12 +23,12 @@ jest.mock('../functions/gemini', () => ({
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
 const { layOutTowns } = require('./helpers/towns');
-const { loomCreateSave, loomPlayTurn } = require('../functions/index');
+const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
 
 const fs = require('fs');
 const path = require('path');
 const functionsDir = path.resolve(__dirname, '../functions');
-const { getFirestore } = require(
+const { getFirestore, FieldValue } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
 );
 const { parseAzgaarExport } = require('../functions/cartographer/parse');
@@ -437,5 +437,123 @@ describe('the Rich bar scales with a settlement', () => {
     expect(grading.sizeTier(settlement(45000)).name).toBe('great city');
     expect(grading.sizeTier(settlement(8552, true)).name).toBe('city');
     expect(grading.sizeTier(settlement(45000, true)).name).toBe('great city');
+  });
+});
+
+describe('the town view: loomGetMap’s town (L-345)', () => {
+  let saveId;
+  const townOf = async () =>
+    (await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER })).town;
+
+  beforeAll(async () => {
+    ({ saveId } = await newGame());
+  });
+
+  test('a save in Burdendal sees its whole town, where it stands, and the ways out', async () => {
+    const view = await townOf();
+    expect(view).toMatchObject({
+      locationId: 'loc_1',
+      name: 'Burdendal',
+      here: 'plc_1_gate',
+      next: ['plc_1_market'],
+    });
+    expect(view.places).toEqual([
+      {
+        id: 'plc_1_gate',
+        name: 'The North Gate',
+        kind: 'gate',
+        open: true,
+        entranceFor: ['road', 'trail'],
+      },
+      {
+        id: 'plc_1_harbour',
+        name: 'The Harbour',
+        kind: 'harbour',
+        open: true,
+        entranceFor: ['sea'],
+      },
+      { id: 'plc_1_market', name: 'Market Square', kind: 'market', open: true },
+      { id: 'plc_1_tavern', name: 'The Gull & Anchor', kind: 'tavern', open: true },
+      // Still import text: closed.
+      { id: 'plc_1_temple', name: 'Temple of the Tides', kind: 'temple', open: false },
+    ]);
+    expect(view.links).toEqual([
+      { from: 'plc_1_gate', to: 'plc_1_market' },
+      { from: 'plc_1_harbour', to: 'plc_1_market' },
+      { from: 'plc_1_market', to: 'plc_1_tavern' },
+      { from: 'plc_1_market', to: 'plc_1_temple' },
+    ]);
+    // The routes out, each with the ways out that serve it.
+    expect(view.exits).toEqual([
+      { id: 'loc_120', name: 'Dunscombe', via: 'sea', open: false, waysOut: ['plc_1_harbour'] },
+      { id: 'loc_229', name: 'Wisin', via: 'sea', open: true, waysOut: ['plc_1_harbour'] },
+      { id: 'loc_231', name: 'Ashleaches', via: 'trail', open: false, waysOut: ['plc_1_gate'] },
+      { id: 'loc_631', name: 'Dunsmouth', via: 'trail', open: true, waysOut: ['plc_1_gate'] },
+    ]);
+  });
+
+  test('`next` follows the save: from the market, everything linked to it', async () => {
+    await standAt(saveId, 'loc_1', 'plc_1_market');
+    expect((await townOf()).next).toEqual([
+      'plc_1_gate',
+      'plc_1_harbour',
+      'plc_1_tavern',
+      'plc_1_temple',
+    ]);
+  });
+
+  test('positions come through when they are inside the town, and nothing else does', async () => {
+    await worldRef
+      .collection('places')
+      .doc('plc_1_market')
+      .update({ position: { x: 500, y: 450 } });
+    await worldRef
+      .collection('places')
+      .doc('plc_1_tavern')
+      .update({ position: { x: 5000, y: 1 } });
+    await bump();
+    const view = await townOf();
+    const byId = Object.fromEntries(view.places.map((p) => [p.id, p]));
+    expect(byId.plc_1_market.position).toEqual({ x: 500, y: 450 });
+    expect(byId.plc_1_tavern).not.toHaveProperty('position'); // off the town's 0–1000
+    for (const place of view.places) {
+      expect(
+        Object.keys(place).every((k) =>
+          ['id', 'name', 'kind', 'open', 'entranceFor', 'position', 'retired'].includes(k)
+        )
+      ).toBe(true);
+    }
+  });
+
+  test('a retired place stays in view while the save stands in it', async () => {
+    await standAt(saveId, 'loc_1', 'plc_1_tavern');
+    await worldRef.collection('places').doc('plc_1_tavern').update({ retired: true });
+    await bump();
+    const view = await townOf();
+    expect(view.here).toBe('plc_1_tavern');
+    expect(view.places.find((p) => p.id === 'plc_1_tavern')).toMatchObject({ retired: true });
+    // Nobody is stranded: its own way back to the market stays.
+    expect(view.next).toEqual(['plc_1_market']);
+    await worldRef
+      .collection('places')
+      .doc('plc_1_tavern')
+      .update({ retired: FieldValue.delete() });
+    await bump();
+  });
+
+  test('the routes out name only places the save has discovered', async () => {
+    await standAt(saveId, 'loc_1', 'plc_1_gate');
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ discovered: ['loc_1', 'loc_631'] });
+    expect((await townOf()).exits.map((e) => e.id)).toEqual(['loc_631']);
+  });
+
+  test('outside a town there is no town view; the world map still shows', async () => {
+    await standAt(saveId, 'loc_231', null); // Ashleaches: no town
+    const result = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(result.town).toBeNull();
+    expect(result.here).toBe('loc_231');
   });
 });

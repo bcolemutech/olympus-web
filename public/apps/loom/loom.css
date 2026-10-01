@@ -455,3 +455,128 @@
 .loom-map-travel {
   margin-top: 0.6rem;
 }
+
+/* The layer switch: the town you are in, or the world map (L-345). */
+.loom-map-layers {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  display: flex;
+  padding: 0.15rem;
+  background: rgba(10, 14, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9px;
+}
+
+.loom-map-layers.hidden {
+  display: none;
+}
+
+.loom-map-layer {
+  max-width: 10rem;
+  padding: 0.35rem 0.7rem;
+  overflow: hidden;
+  color: #90a4ae;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.loom-map-layer.is-active {
+  color: #ffb74d;
+  background: rgba(255, 183, 77, 0.12);
+}
+
+.loom-map-layer:focus-visible {
+  outline: 1px solid rgba(255, 183, 77, 0.6);
+}
+
+/* ── The town view (town.js; L-345 / #399) ─────────── */
+
+.loom-map-panel.is-town .loom-map-image {
+  display: none;
+}
+
+.loom-town-ground {
+  fill: rgba(215, 185, 138, 0.05);
+  stroke: rgba(215, 185, 138, 0.18);
+  stroke-width: 1;
+}
+
+.loom-town-path-casing {
+  stroke: rgba(10, 14, 26, 0.6);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.loom-town-path {
+  stroke: #cbbd9f;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.loom-town-path.is-closed {
+  stroke: #4b5563;
+  stroke-dasharray: 4 5;
+}
+
+.loom-town-dot {
+  stroke: #0a0e1a;
+  stroke-width: 2;
+}
+
+.loom-town-place.is-open .loom-town-dot {
+  fill: #a5d6a7;
+}
+
+.loom-town-place.is-entrance.is-open .loom-town-dot {
+  fill: #80cbc4;
+}
+
+.loom-town-place.is-closed .loom-town-dot {
+  fill: #4b5563;
+  stroke: #9ca3af;
+  stroke-dasharray: 2 2;
+}
+
+.loom-town-place.is-near .loom-town-dot {
+  stroke: #ffb74d;
+  stroke-width: 2;
+}
+
+.loom-town-place.is-here .loom-town-dot {
+  fill: #ffb74d;
+}
+
+.loom-town-place.is-selected .loom-town-dot {
+  stroke: #ffffff;
+  stroke-width: 3;
+}
+
+.loom-town-label {
+  fill: #e0e0e0;
+  font-size: 12.5px;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(10, 14, 26, 0.9);
+  stroke-width: 3.5px;
+}
+
+.loom-town-place.is-here .loom-town-label {
+  fill: #ffb74d;
+  font-weight: 600;
+}
+
+.loom-town-place.is-closed .loom-town-label {
+  fill: #9ca3af;
+}
+
+.loom-town-routes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+}

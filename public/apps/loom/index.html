@@ -118,11 +118,30 @@
           </div>
 
           <div class="loom-play-layout">
-            <!-- World map (map.js): discovered places, routes, and travel -->
-            <section class="loom-map-pane hidden" id="loom-map-pane" aria-label="World map">
+            <!-- The map (map.js): the world map (discovered places, routes, travel),
+                 or, in a town, the town view (town.js) -->
+            <section class="loom-map-pane hidden" id="loom-map-pane" aria-label="Map">
               <div class="loom-map-panel" id="loom-map-panel">
                 <img class="loom-map-image hidden" id="loom-map-image" alt="" draggable="false" />
                 <svg class="loom-map-overlay" id="loom-map-overlay" aria-hidden="true"></svg>
+                <div class="loom-map-layers hidden" id="loom-map-layers" role="group">
+                  <button
+                    class="loom-map-layer is-active"
+                    id="loom-layer-town"
+                    type="button"
+                    aria-pressed="true"
+                  >
+                    Town
+                  </button>
+                  <button
+                    class="loom-map-layer"
+                    id="loom-layer-world"
+                    type="button"
+                    aria-pressed="false"
+                  >
+                    World
+                  </button>
+                </div>
                 <div class="loom-map-controls">
                   <button
                     class="loom-map-btn"
@@ -188,8 +207,10 @@
     <!-- Loom modules (load order matters) -->
     <script src="/apps/loom/js/state.js"></script>
     <script src="/apps/loom/js/map-math.js"></script>
+    <script src="/apps/loom/js/town-layout.js"></script>
     <script src="/apps/loom/js/worlds.js"></script>
     <script src="/apps/loom/js/saves.js"></script>
+    <script src="/apps/loom/js/town.js"></script>
     <script src="/apps/loom/js/map.js"></script>
     <script src="/apps/loom/js/play.js"></script>
     <script src="/apps/loom/js/app.js"></script>

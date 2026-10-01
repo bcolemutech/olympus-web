@@ -513,8 +513,11 @@ exports.loomPlayTurn = onCall(async (request) => {
  * world's entity subcollections stay unreadable to Loom clients; this is the
  * only way the map reaches them, and it never includes undiscovered places.
  *
+ * In a settlement with a town layout it also returns that town, for the town
+ * view (L-345 / #399): its places, links, ways in and out, and routes out.
+ *
  * Data: { worldId: string, saveId: string }
- * Returns: { worldId, name, here, places[], links[], map }
+ * Returns: { worldId, name, here, places[], links[], town, map }
  */
 exports.loomGetMap = onCall(async (request) => {
   const uid = requireLoomAuth(request);
