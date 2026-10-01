@@ -88,6 +88,52 @@ describe('zoom and pan', () => {
     close(after.y, before.y);
   });
 
+  test('a pinch keeps the map point under the fingers there, worked out from its start', () => {
+    const start = { scale: 2, x: -1200, y: -900 };
+    const at = { mid: { x: 180, y: 240 }, distance: 200 };
+    const under = math.toMap(start, 180, 240);
+    // Fingers closing to half their spread: half the scale, same point under them.
+    const out = math.pinch(start, at, { mid: { x: 180, y: 240 }, distance: 100 }, PHONE, MAP);
+    close(out.scale, 1);
+    const still = math.toMap(out, 180, 240);
+    close(still.x, under.x);
+    close(still.y, under.y);
+    // Moving both fingers together pans: the same point follows the midpoint.
+    const moved = math.pinch(start, at, { mid: { x: 200, y: 260 }, distance: 100 }, PHONE, MAP);
+    const followed = math.toMap(moved, 200, 260);
+    close(followed.x, under.x);
+    close(followed.y, under.y);
+  });
+
+  test('a long pinch out lands where one big step would: nothing builds up', () => {
+    const start = { scale: 2.8, x: -300, y: -1500 };
+    const at = { mid: { x: 180, y: 300 }, distance: 300 };
+    // Many small steps, each worked out from the start, as the fingers close.
+    let view = start;
+    for (let d = 299; d >= 150; d--) {
+      view = math.pinch(start, at, { mid: { x: 180, y: 300 }, distance: d }, PHONE, MAP);
+    }
+    expect(view).toEqual(
+      math.pinch(start, at, { mid: { x: 180, y: 300 }, distance: 150 }, PHONE, MAP)
+    );
+    // Pinching out past the whole map stops at the whole map, centred.
+    const all = math.pinch(start, at, { mid: { x: 180, y: 300 }, distance: 1 }, PHONE, MAP);
+    expect(all).toEqual(math.clamp({ scale: 0, x: 0, y: 0 }, PHONE, MAP));
+  });
+
+  test('a pinch with no spread changes nothing', () => {
+    const start = { scale: 2, x: -1200, y: -900 };
+    expect(
+      math.pinch(
+        start,
+        { mid: { x: 0, y: 0 }, distance: 0 },
+        { mid: { x: 9, y: 9 }, distance: 50 },
+        PHONE,
+        MAP
+      )
+    ).toEqual(math.clamp(start, PHONE, MAP));
+  });
+
   test('panning moves the view, within the map', () => {
     const view = { scale: 2, x: -1000, y: -800 };
     expect(math.pan(view, 50, -30, DESKTOP, MAP)).toEqual({ scale: 2, x: -950, y: -830 });

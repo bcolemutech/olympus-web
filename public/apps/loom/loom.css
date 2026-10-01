@@ -261,8 +261,11 @@
     display: none;
   }
 
+  /* svh, not dvh: the panel keeps its height while the browser's toolbar
+     shows or hides mid-gesture (#420). */
   .loom-map-panel {
-    height: calc(100dvh - 5.5rem);
+    height: calc(100vh - 5.5rem);
+    height: calc(100svh - 5.5rem);
     max-height: 44rem;
   }
 }
@@ -454,6 +457,24 @@
 
 .loom-map-travel {
   margin-top: 0.6rem;
+}
+
+/* A temporary readout for #420 (?mapdebug=1). */
+.loom-map-debug {
+  position: absolute;
+  top: 3rem;
+  left: 0.6rem;
+  z-index: 2;
+  max-width: calc(100% - 4rem);
+  margin: 0;
+  padding: 0.3rem 0.45rem;
+  overflow: hidden;
+  color: #9ee7ff;
+  font: 10px/1.35 monospace;
+  white-space: pre;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 6px;
+  pointer-events: none;
 }
 
 /* The layer switch: the town you are in, or the world map (L-345). */

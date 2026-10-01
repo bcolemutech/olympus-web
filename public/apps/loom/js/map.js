@@ -281,6 +281,7 @@
       overlayEl.innerHTML = '';
       Loom.town.draw(overlayEl, v);
       Loom.town.renderInfo(ref('loom-map-info'), act);
+      showDebug();
       return;
     }
 
@@ -351,6 +352,7 @@
     });
 
     renderInfo(near);
+    showDebug();
   }
 
   // The card for the selected place, with the one action it allows.
@@ -424,20 +426,28 @@
       // Some pointers can't be captured; dragging still works without it.
     }
     map.pointers[event.pointerId] = localPoint(event);
+    debugNote(event.type, event);
     var points = pointerList();
     if (points.length === 1) {
       map.gesture = { kind: 'drag', start: points[0], last: points[0], moved: 0 };
     } else if (points.length === 2) {
-      map.gesture = {
-        kind: 'pinch',
-        distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
-      };
+      // A pinch is worked out from where it started (M.pinch; #420).
+      map.gesture = { kind: 'pinch', startView: map.view, start: spreadOf(points) };
     }
+  }
+
+  // Two fingers' midpoint and how far apart they are.
+  function spreadOf(points) {
+    return {
+      mid: { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 },
+      distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
+    };
   }
 
   function onPointerMove(event) {
     if (!map.pointers[event.pointerId] || !map.gesture) return;
     map.pointers[event.pointerId] = localPoint(event);
+    debugNote(event.type, event);
     var size = panelSize();
     var points = pointerList();
     if (map.gesture.kind === 'drag' && points.length === 1) {
@@ -453,20 +463,14 @@
       map.gesture.last = p;
       render();
     } else if (map.gesture.kind === 'pinch' && points.length === 2) {
-      var distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-      if (map.gesture.distance > 0) {
-        var mid = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
-        map.view = M.zoomAt(
-          map.view,
-          distance / map.gesture.distance,
-          mid.x,
-          mid.y,
-          size,
-          bounds()
-        );
-        render();
-      }
-      map.gesture.distance = distance;
+      map.view = M.pinch(
+        map.gesture.startView,
+        map.gesture.start,
+        spreadOf(points),
+        size,
+        bounds()
+      );
+      render();
     }
   }
 
@@ -475,6 +479,7 @@
     var point = localPoint(event);
     var gesture = map.gesture;
     delete map.pointers[event.pointerId];
+    debugNote(event.type, event);
     if (gesture && gesture.kind === 'drag' && gesture.moved <= TAP_SLOP) select(point);
     // A finger lifted from a pinch leaves a plain drag, not a tap.
     var left = pointerList();
@@ -523,6 +528,74 @@
     render();
   }
 
+  // ── A temporary readout for #420 (?mapdebug=1) ────
+  // Shows the view and what the browser reports during a gesture, to see
+  // what DuckDuckGo on iPhone does when the world map is pinched out. To be
+  // removed once #420 is understood.
+
+  var DEBUG = /[?&]mapdebug(=|&|$)/.test(window.location.search);
+  var debugEvents = [];
+
+  function debugNote(label, event) {
+    if (!DEBUG) return;
+    var line = label;
+    if (event && event.pointerId !== undefined) line += ' #' + event.pointerId;
+    if (event && event.clientX !== undefined) {
+      var p = localPoint(event);
+      line +=
+        ' c(' +
+        Math.round(event.clientX) +
+        ',' +
+        Math.round(event.clientY) +
+        ') l(' +
+        Math.round(p.x) +
+        ',' +
+        Math.round(p.y) +
+        ')';
+    }
+    debugEvents.unshift(line);
+    debugEvents.length = Math.min(debugEvents.length, 8);
+    showDebug();
+  }
+
+  function showDebug() {
+    if (!DEBUG) return;
+    var panel = ref('loom-map-panel');
+    var box = document.getElementById('loom-map-debug');
+    if (!box) {
+      box = el('pre', 'loom-map-debug');
+      box.id = 'loom-map-debug';
+      panel.appendChild(box);
+    }
+    var rect = panel.getBoundingClientRect();
+    var vv = window.visualViewport;
+    var v = map.view;
+    var n = function (x) {
+      return Math.round(x * 100) / 100;
+    };
+    box.textContent = [
+      map.mode + (v ? ' s=' + n(v.scale) + ' x=' + n(v.x) + ' y=' + n(v.y) : ' (no view)'),
+      'panel ' + n(rect.width) + 'x' + n(rect.height) + ' top=' + n(rect.top),
+      'scrollY=' + n(window.scrollY) + ' innerH=' + window.innerHeight,
+      vv
+        ? 'vv s=' +
+          n(vv.scale) +
+          ' top=' +
+          n(vv.offsetTop) +
+          ' page=' +
+          n(vv.pageTop) +
+          ' h=' +
+          n(vv.height)
+        : 'no visualViewport',
+      'pointers=' +
+        Object.keys(map.pointers).length +
+        ' gesture=' +
+        (map.gesture ? map.gesture.kind : '-'),
+    ]
+      .concat(debugEvents)
+      .join('\n');
+  }
+
   // ── Wiring ────────────────────────────────────────
 
   function init() {
@@ -532,6 +605,39 @@
     panel.addEventListener('pointerup', onPointerUp);
     panel.addEventListener('pointercancel', onPointerUp);
     panel.addEventListener('wheel', onWheel, { passive: false });
+    // WebKit (Safari, and every browser on iPhone) has pinch gestures of its
+    // own that can zoom the page along with the map, despite touch-action:
+    // none (#420). Every touch on the map is the map's.
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (type) {
+      panel.addEventListener(
+        type,
+        function (event) {
+          debugNote(type);
+          event.preventDefault();
+        },
+        { passive: false }
+      );
+    });
+    panel.addEventListener(
+      'touchmove',
+      function (event) {
+        event.preventDefault();
+      },
+      { passive: false }
+    );
+    if (DEBUG) {
+      window.addEventListener('scroll', function () {
+        debugNote('scroll');
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () {
+          debugNote('vv-resize');
+        });
+        window.visualViewport.addEventListener('scroll', function () {
+          debugNote('vv-scroll');
+        });
+      }
+    }
     ref('loom-map-zoom-in').addEventListener('click', function () {
       zoomBy(1.5);
     });
@@ -557,7 +663,10 @@
     ref('loom-tab-map').addEventListener('click', function () {
       showTab('map');
     });
-    window.addEventListener('resize', render);
+    window.addEventListener('resize', function () {
+      debugNote('resize');
+      render();
+    });
     showTab('story');
   }
 

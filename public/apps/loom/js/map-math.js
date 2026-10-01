@@ -77,6 +77,23 @@
     return clamp({ scale: scale, x: sx - anchor.x * scale, y: sy - anchor.y * scale }, panel, map);
   }
 
+  // A pinch, worked out from where it started (#420): the map point that was
+  // under the fingers' midpoint when the pinch began stays under their
+  // midpoint now, at the scale their spread gives. Computing each step from
+  // the start, not from the last step, means nothing drifts or builds up, and
+  // moving both fingers together pans. `start` and `now` are
+  // { mid: { x, y }, distance }, in panel pixels.
+  function pinch(startView, start, now, panel, map) {
+    if (!(start.distance > 0) || !(now.distance > 0)) return clamp(startView, panel, map);
+    var anchor = toMap(startView, start.mid.x, start.mid.y);
+    var scale = startView.scale * (now.distance / start.distance);
+    return clamp(
+      { scale: scale, x: now.mid.x - anchor.x * scale, y: now.mid.y - anchor.y * scale },
+      panel,
+      map
+    );
+  }
+
   function pan(view, dx, dy, panel, map) {
     return clamp({ scale: view.scale, x: view.x + dx, y: view.y + dy }, panel, map);
   }
@@ -98,6 +115,7 @@
     clamp: clamp,
     fit: fit,
     zoomAt: zoomAt,
+    pinch: pinch,
     pan: pan,
     reveal: reveal,
   };
