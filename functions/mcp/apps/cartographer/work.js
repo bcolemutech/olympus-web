@@ -5,6 +5,7 @@ const {
   gradePlace,
   gradeEntity,
   gradeWorld,
+  settlementProgress,
   rank,
 } = require('../../../loom-canon/grading');
 const { hopsFrom } = require('./views');
@@ -33,7 +34,10 @@ const HOW_TO = {
   description:
     'Write a description: update_location for a place, update_faction for a realm, ' +
     'update_region for a region. Sending the current text again approves it as written.',
-  residents: 'Add a character who lives there: add_character (with placeId for a place in town).',
+  residents:
+    'Add a character who lives there: add_character (with placeId for a place in town). A ' +
+    'settlement needs more people the bigger it is (progress shows have and want); anyone ' +
+    'living anywhere in its town counts.',
   lore: 'Add lore about it: add_lore.',
   town:
     'Lay out the town: add_place (ways in and out with entranceFor), connect_places; check ' +
@@ -42,6 +46,16 @@ const HOW_TO = {
 };
 
 const geoOf = (location) => location.geo || {};
+
+// "1 of 2" style counts for a settlement's Rich needs.
+function progressOf(world, settlement) {
+  const { size, residents, lore } = settlementProgress(world, settlement);
+  return {
+    size,
+    residents: `${residents.have} of ${residents.want}`,
+    lore: `${lore.have} of ${lore.want}`,
+  };
+}
 const byTierThenNearest = (a, b) =>
   TIERS.indexOf(a.priority) - TIERS.indexOf(b.priority) ||
   (a.hops ?? Infinity) - (b.hops ?? Infinity) ||
@@ -79,6 +93,8 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       hops: hops.has(place.id) ? hops.get(place.id) : null,
       ...(geo.kind === 'settlement' ? { population: Math.round(geo.population || 0) } : {}),
       missing: checklist.map((item) => item.need),
+      // Counts, so "missing residents" reads as "1 of 2", not "nobody".
+      ...(geo.kind === 'settlement' ? { progress: progressOf(world, place) } : {}),
     });
   }
   // Places inside towns (L-343), ordered by their town's distance.

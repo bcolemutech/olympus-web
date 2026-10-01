@@ -137,6 +137,45 @@ describe('places', () => {
   });
 });
 
+describe('residents in town', () => {
+  // The case Claude reported: placing a character at a spot in their town
+  // must not stop them counting as one of the settlement's residents.
+  test('a character given a place in town still counts for the settlement', () => {
+    const { settlementProgress } = require('../functions/loom-canon/grading');
+    const base = world();
+    const port = {
+      ...base.locations.port,
+      npcIds: [],
+      geo: { kind: 'settlement', population: 5000 },
+    };
+    const harbourTower = {
+      id: 'plc_port_tower',
+      locationId: 'port',
+      name: 'Harbour Tower',
+      description: 'A tower.',
+      sources: WRITTEN,
+      connections: [],
+    };
+    const unplaced = { ...base, locations: { ...base.locations, port } };
+    const placed = {
+      ...unplaced,
+      places: { plc_port_tower: harbourTower },
+      characters: {
+        chr_mara: { id: 'chr_mara', name: 'Mara', locationId: 'port', placeId: 'plc_port_tower' },
+      },
+    };
+    expect(settlementProgress(unplaced, port)).toEqual({
+      size: 'town',
+      residents: { have: 1, want: 2 },
+      lore: { have: 1, want: 1 },
+    });
+    expect(settlementProgress(placed, port)).toEqual(settlementProgress(unplaced, port));
+    expect(gradeLocation(placed, port).checklist).toEqual([
+      { need: 'residents', for: 'rich', message: 'A town needs 2 residents (it has 1).' },
+    ]);
+  });
+});
+
 describe('layers switch on as they ship', () => {
   test('no layer is required yet', () => {
     expect(LAYER_CHECKS).toEqual({ town: null, battleMap: null });
