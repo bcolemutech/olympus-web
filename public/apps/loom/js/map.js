@@ -151,7 +151,6 @@
     map.view = map.views[mode];
     updateLayerButtons();
     if (!map.view) frame();
-    debugCause('switch to ' + mode);
     render();
   }
 
@@ -236,7 +235,6 @@
         }
         updateLayerButtons();
 
-        debugCause(firstLoad ? 'first load' : 'reload after a turn');
         if (firstLoad || !map.view) {
           frame();
         } else {
@@ -274,7 +272,6 @@
     if (!size.width || !size.height) return;
     map.view = M.clamp(map.view, size, bounds());
     var v = map.view;
-    debugWatch(v, size);
 
     var overlayEl = ref('loom-map-overlay');
     ref('loom-map-panel').classList.toggle('is-town', map.mode === 'town');
@@ -284,7 +281,6 @@
       overlayEl.innerHTML = '';
       Loom.town.draw(overlayEl, v);
       Loom.town.renderInfo(ref('loom-map-info'), act);
-      showDebug();
       return;
     }
 
@@ -355,7 +351,6 @@
     });
 
     renderInfo(near);
-    showDebug();
   }
 
   // The card for the selected place, with the one action it allows.
@@ -437,29 +432,18 @@
     // pointer whose end the browser never reported.
     if (event.isPrimary) map.pointers = {};
     map.pointers[event.pointerId] = localPoint(event);
-    debugNote(
-      'down' + (event.isPrimary ? ' P' : '') + ' n=' + Object.keys(map.pointers).length,
-      event
-    );
     var points = pointerList();
     if (points.length === 1) {
       map.gesture = { kind: 'drag', start: points[0], last: points[0], moved: 0 };
     } else if (points.length === 2) {
-      // Based on the fingers' first move (M.pinchMove; #420).
-      map.gesture = { kind: 'pinch', track: null };
+      // A pinch is worked out from where it started (M.pinch; #420).
+      map.gesture = { kind: 'pinch', startView: map.view, start: M.spreadOf(points) };
     }
   }
 
   function onPointerMove(event) {
     if (!map.pointers[event.pointerId] || !map.gesture) return;
     map.pointers[event.pointerId] = localPoint(event);
-    debugCause(
-      event.type +
-        ' n=' +
-        Object.keys(map.pointers).length +
-        ' ' +
-        (map.gesture ? map.gesture.kind : '-')
-    );
     var size = panelSize();
     var points = pointerList();
     if (map.gesture.kind === 'drag' && points.length === 1) {
@@ -475,17 +459,13 @@
       map.gesture.last = p;
       render();
     } else if (map.gesture.kind === 'pinch' && points.length === 2) {
-      var step = M.pinchMove(map.gesture.track, points, map.view, size, bounds());
-      map.gesture.track = step.track;
-      if (step.based) {
-        debugNote(
-          'pinch base d=' +
-            Math.round(step.track.start.distance) +
-            ' s=' +
-            Math.round(step.track.startView.scale * 100) / 100
-        );
-      }
-      map.view = step.view;
+      map.view = M.pinch(
+        map.gesture.startView,
+        map.gesture.start,
+        M.spreadOf(points),
+        size,
+        bounds()
+      );
       render();
     }
   }
@@ -495,7 +475,6 @@
     var point = localPoint(event);
     var gesture = map.gesture;
     delete map.pointers[event.pointerId];
-    debugNote(event.type, event);
     if (gesture && gesture.kind === 'drag' && gesture.moved <= TAP_SLOP) select(point);
     // A finger lifted from a pinch leaves a plain drag, not a tap.
     var left = pointerList();
@@ -525,20 +504,6 @@
   function onWheel(event) {
     if (!map.view) return;
     event.preventDefault();
-    debugCause(
-      'wheel dy=' +
-        Math.round(event.deltaY) +
-        ' m=' +
-        event.deltaMode +
-        (event.ctrlKey ? ' ctrl' : '')
-    );
-    debugNote(
-      'wheel dy=' +
-        Math.round(event.deltaY) +
-        ' m=' +
-        event.deltaMode +
-        (event.ctrlKey ? ' ctrl' : '')
-    );
     var p = localPoint(event);
     map.view = M.zoomAt(
       map.view,
@@ -555,118 +520,7 @@
     if (!map.view) return;
     var size = panelSize();
     map.view = M.zoomAt(map.view, factor, size.width / 2, size.height / 2, size, bounds());
-    debugCause('zoom button');
     render();
-  }
-
-  // ── A temporary readout for #420 (?mapdebug=1) ────
-  // Shows the view and what the browser reports during a gesture, to see
-  // what DuckDuckGo on iPhone does when the world map is pinched out. To be
-  // removed once #420 is understood.
-
-  var DEBUG = /[?&]mapdebug(=|&|$)/.test(window.location.search);
-  var debugEvents = [];
-  var debugLast = { view: null, mode: null, cause: '' }; // the last view drawn, and why
-
-  // Logs any single redraw that zooms by half again or more, or moves what
-  // was under the middle of the panel by more than 150 px on screen: a jump,
-  // with what came just before it.
-  function debugWatch(v, size) {
-    if (!DEBUG) return;
-    var was = debugLast.view;
-    if (was && debugLast.mode === map.mode) {
-      var zoomed = Math.abs(Math.log(v.scale / was.scale)) > Math.log(1.5);
-      var under = M.toMap(was, size.width / 2, size.height / 2);
-      var now = M.toScreen(v, under.x, under.y);
-      var moved = Math.hypot(now.x - size.width / 2, now.y - size.height / 2) > 150;
-      if (zoomed || moved) {
-        var r = function (x) {
-          return Math.round(x * 100) / 100;
-        };
-        debugNote(
-          'JUMP after ' +
-            debugLast.cause +
-            ': s ' +
-            r(was.scale) +
-            '>' +
-            r(v.scale) +
-            ' x ' +
-            r(was.x) +
-            '>' +
-            r(v.x) +
-            ' y ' +
-            r(was.y) +
-            '>' +
-            r(v.y)
-        );
-      }
-    }
-    debugLast.view = { scale: v.scale, x: v.x, y: v.y };
-    debugLast.mode = map.mode;
-  }
-
-  function debugCause(cause) {
-    if (DEBUG) debugLast.cause = cause;
-  }
-
-  function debugNote(label, event) {
-    if (!DEBUG) return;
-    var line = label;
-    if (event && event.pointerId !== undefined) line += ' #' + event.pointerId;
-    if (event && event.clientX !== undefined) {
-      var p = localPoint(event);
-      line +=
-        ' c(' +
-        Math.round(event.clientX) +
-        ',' +
-        Math.round(event.clientY) +
-        ') l(' +
-        Math.round(p.x) +
-        ',' +
-        Math.round(p.y) +
-        ')';
-    }
-    debugEvents.unshift(line);
-    debugEvents.length = Math.min(debugEvents.length, 10);
-    showDebug();
-  }
-
-  function showDebug() {
-    if (!DEBUG) return;
-    var panel = ref('loom-map-panel');
-    var box = document.getElementById('loom-map-debug');
-    if (!box) {
-      box = el('pre', 'loom-map-debug');
-      box.id = 'loom-map-debug';
-      panel.appendChild(box);
-    }
-    var rect = panel.getBoundingClientRect();
-    var vv = window.visualViewport;
-    var v = map.view;
-    var n = function (x) {
-      return Math.round(x * 100) / 100;
-    };
-    box.textContent = [
-      map.mode + (v ? ' s=' + n(v.scale) + ' x=' + n(v.x) + ' y=' + n(v.y) : ' (no view)'),
-      'panel ' + n(rect.width) + 'x' + n(rect.height) + ' top=' + n(rect.top),
-      'scrollY=' + n(window.scrollY) + ' innerH=' + window.innerHeight,
-      vv
-        ? 'vv s=' +
-          n(vv.scale) +
-          ' top=' +
-          n(vv.offsetTop) +
-          ' page=' +
-          n(vv.pageTop) +
-          ' h=' +
-          n(vv.height)
-        : 'no visualViewport',
-      'pointers=' +
-        Object.keys(map.pointers).length +
-        ' gesture=' +
-        (map.gesture ? map.gesture.kind : '-'),
-    ]
-      .concat(debugEvents)
-      .join('\n');
   }
 
   // ── Wiring ────────────────────────────────────────
@@ -685,7 +539,6 @@
       panel.addEventListener(
         type,
         function (event) {
-          if (type !== 'gesturechange') debugNote(type);
           event.preventDefault();
         },
         { passive: false }
@@ -698,19 +551,7 @@
       },
       { passive: false }
     );
-    if (DEBUG) {
-      window.addEventListener('scroll', function () {
-        debugNote('scroll');
-      });
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', function () {
-          debugNote('vv-resize');
-        });
-        window.visualViewport.addEventListener('scroll', function () {
-          debugNote('vv-scroll');
-        });
-      }
-    }
+
     ref('loom-map-zoom-in').addEventListener('click', function () {
       zoomBy(1.5);
     });
@@ -721,7 +562,6 @@
       if (!map.data) return;
       if (map.mode === 'town') Loom.town.selectHere();
       else map.selected = map.data.here;
-      debugCause('home button');
       frame();
       render();
     });
@@ -737,11 +577,7 @@
     ref('loom-tab-map').addEventListener('click', function () {
       showTab('map');
     });
-    window.addEventListener('resize', function () {
-      debugNote('resize');
-      debugCause('resize');
-      render();
-    });
+    window.addEventListener('resize', render);
     showTab('story');
   }
 

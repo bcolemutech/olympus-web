@@ -13,8 +13,6 @@
 
   var MAX_SCALE = 6;
   var FOCUS_SPAN = 110; // at least this many map units across the panel
-  var MIN_SPREAD = 30; // px: a pinch is based on fingers at least this far apart
-  var JUMP = 90; // px: further than a finger moves between two events
 
   function toScreen(view, mx, my) {
     return { x: mx * view.scale + view.x, y: my * view.scale + view.y };
@@ -29,10 +27,15 @@
     return Math.min(panel.width / map.width, panel.height / map.height);
   }
 
+  // The nearest allowed scale: between the whole map and the maximum.
+  function clampScale(scale, panel, map) {
+    return Math.max(minScale(panel, map), Math.min(MAX_SCALE, scale));
+  }
+
   // Keeps the map covering the panel where it can, and centred where it
   // is smaller than the panel.
   function clamp(view, panel, map) {
-    var scale = Math.max(minScale(panel, map), Math.min(MAX_SCALE, view.scale));
+    var scale = clampScale(view.scale, panel, map);
     var w = map.width * scale;
     var h = map.height * scale;
     var x =
@@ -72,10 +75,13 @@
     );
   }
 
-  // Zooms by `factor` about a screen point, which stays put.
+  // Zooms by `factor` about a screen point, which stays put. The scale is
+  // limited before the map is placed (#420): placing it for a scale past the
+  // limit, then limiting the scale, moved the map far from the point (at the
+  // maximum zoom, every further zoom-in jumped it toward the bottom-right).
   function zoomAt(view, factor, sx, sy, panel, map) {
     var anchor = toMap(view, sx, sy);
-    var scale = view.scale * factor;
+    var scale = clampScale(view.scale * factor, panel, map);
     return clamp({ scale: scale, x: sx - anchor.x * scale, y: sy - anchor.y * scale }, panel, map);
   }
 
@@ -88,7 +94,7 @@
   function pinch(startView, start, now, panel, map) {
     if (!(start.distance > 0) || !(now.distance > 0)) return clamp(startView, panel, map);
     var anchor = toMap(startView, start.mid.x, start.mid.y);
-    var scale = startView.scale * (now.distance / start.distance);
+    var scale = clampScale(startView.scale * (now.distance / start.distance), panel, map); // as in zoomAt
     return clamp(
       { scale: scale, x: now.mid.x - anchor.x * scale, y: now.mid.y - anchor.y * scale },
       panel,
@@ -101,34 +107,6 @@
     return {
       mid: { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 },
       distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
-    };
-  }
-
-  // One step of a two-finger pinch (#420), robust to points a browser reports
-  // wrongly. `track` is null when the pinch begins, then what this returns.
-  // The pinch is based on the fingers' first move, not where they were said
-  // to touch down; it waits until they are at least MIN_SPREAD apart (a tiny
-  // base turns any spread into a huge zoom); and if either finger jumps
-  // further than JUMP in one step, which no finger does, the point was
-  // misreported, so the pinch starts again from there. Returns
-  // { track, view, based } (`based` when the pinch was (re)based this step).
-  function pinchMove(track, points, view, panel, map) {
-    var now = spreadOf(points);
-    var jumped =
-      track &&
-      (Math.hypot(points[0].x - track.last[0].x, points[0].y - track.last[0].y) > JUMP ||
-        Math.hypot(points[1].x - track.last[1].x, points[1].y - track.last[1].y) > JUMP);
-    var last = [
-      { x: points[0].x, y: points[0].y },
-      { x: points[1].x, y: points[1].y },
-    ];
-    if (!track || jumped || track.start.distance < MIN_SPREAD) {
-      return { track: { startView: view, start: now, last: last }, view: view, based: true };
-    }
-    return {
-      track: { startView: track.startView, start: track.start, last: last },
-      view: pinch(track.startView, track.start, now, panel, map),
-      based: false,
     };
   }
 
@@ -153,11 +131,9 @@
     clamp: clamp,
     fit: fit,
     zoomAt: zoomAt,
+    clampScale: clampScale,
     pinch: pinch,
-    pinchMove: pinchMove,
     spreadOf: spreadOf,
-    MIN_SPREAD: MIN_SPREAD,
-    JUMP: JUMP,
     pan: pan,
     reveal: reveal,
   };
