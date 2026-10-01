@@ -196,7 +196,7 @@ npm run deploy            # Deploy hosting only (production)
 | `symposium_categories/{id}` | `hasApp('symposium')` | Categories/subcategories |
 | `apps/{appId}` | `hasApp(appId)` or admin | App registry |
 | `pool_handicap/{userId}` | Self read/write only | Billiards handicap data |
-| `loom_worlds/{worldId}` | `hasApp('cartographer')`; `hasApp('loom')` for published only | Cartographer worlds; entity subcollections (`locations`, `factions`, `regions`, `characters`, `lore`) readable by `cartographer` only |
+| `loom_worlds/{worldId}` | `hasApp('cartographer')`; `hasApp('loom')` for published only | Cartographer worlds; entity subcollections (`locations`, `factions`, `regions`, `characters`, `lore`, `places`) readable by `cartographer` only |
 | `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history |
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |

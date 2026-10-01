@@ -139,7 +139,7 @@ test('a fresh import: everything is a stub, and the start is the only frontier',
   const list = await work({ limit: 5 });
   expect(list.completion).toMatchObject({ total: 719, stub: 719, playable: 0, rich: 0, open: 0 });
   expect(list.origin).toEqual({ id: 'loc_1', name: 'Burdendal' });
-  expect(list.byTier).toEqual({ frontier: 1, closed: 718, enrich: 0, describe: 168 });
+  expect(list.byTier).toEqual({ frontier: 1, town: 0, closed: 718, enrich: 0, describe: 168 });
   expect(list.items[0]).toEqual({
     priority: 'frontier',
     type: 'location',

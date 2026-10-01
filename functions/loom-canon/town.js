@@ -84,17 +84,10 @@ function positionOf(world, save) {
   return { location, place: fallback };
 }
 
-/**
- * Whether a settlement has a usable town layout: at least one open entrance,
- * and every place reachable from the entrances. This is the town requirement
- * grading applies once it is switched on (grading.LAYER_CHECKS.town).
- */
-function hasTownLayout(world, settlement) {
-  const places = placesOf(world, settlement.id);
-  const entrances = places.filter(isEntrance);
-  if (!entrances.some((place) => isPlaceOpen(world, place))) return false;
+// Places reachable from a town's entrances along its own links.
+function reachableFromEntrances(world, places) {
   const ids = new Set(places.map((place) => place.id));
-  const seen = new Set(entrances.map((place) => place.id));
+  const seen = new Set(places.filter(isEntrance).map((place) => place.id));
   const queue = [...seen];
   while (queue.length) {
     const place = world.places[queue.shift()];
@@ -105,7 +98,59 @@ function hasTownLayout(world, settlement) {
       }
     }
   }
-  return seen.size === ids.size;
+  return seen;
+}
+
+/**
+ * What is wrong with a settlement's town, for the builders (get_town, and
+ * the MCP town tools' warnings): `problems` make the layout invalid (no open
+ * entrance, places that can't be reached); `warnings` don't (a world route
+ * that no way out serves, so travellers can't leave that way).
+ */
+function layoutReport(world, settlement) {
+  const places = placesOf(world, settlement.id);
+  const entrances = places.filter(isEntrance);
+  const problems = [];
+  const warnings = [];
+  if (!places.length) {
+    return { valid: false, problems: ['It has no town layout yet.'], warnings };
+  }
+  if (!entrances.length) {
+    problems.push('No place is a way in or out (give one entranceFor).');
+  } else if (!entrances.some((place) => isPlaceOpen(world, place))) {
+    problems.push('No way in or out is written up yet, so nobody can enter.');
+  }
+  const seen = reachableFromEntrances(world, places);
+  const stranded = places.filter((place) => !seen.has(place.id));
+  if (entrances.length && stranded.length) {
+    problems.push(
+      'Not reachable from a way in: ' +
+        stranded.map((place) => place.name + ' (' + place.id + ')').join(', ') +
+        '.'
+    );
+  }
+  const links = (settlement.geo && settlement.geo.links) || {};
+  for (const id of settlement.connections || []) {
+    const via = links[id] || null;
+    if (entrances.length && !entrances.some((place) => serves(place, via))) {
+      const to = world.locations[id];
+      warnings.push(
+        'No way out serves the ' + (via || 'route') + ' to ' + (to ? to.name : id) + '.'
+      );
+    }
+  }
+  return { valid: !problems.length, problems, warnings };
+}
+
+/**
+ * Whether a settlement has a usable town layout: at least one open entrance,
+ * and every place reachable from the entrances. This is the town requirement
+ * grading applies once it is switched on (grading.LAYER_CHECKS.town).
+ */
+function hasTownLayout(world, settlement) {
+  const places = placesOf(world, settlement.id);
+  if (!places.filter(isEntrance).some((place) => isPlaceOpen(world, place))) return false;
+  return reachableFromEntrances(world, places).size === places.length;
 }
 
 module.exports = {
@@ -117,4 +162,5 @@ module.exports = {
   arrivalPlace,
   positionOf,
   hasTownLayout,
+  layoutReport,
 };

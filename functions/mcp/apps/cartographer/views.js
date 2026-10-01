@@ -10,7 +10,9 @@ const {
   gradeEntity,
   gradeWorld,
   isPlayable,
+  gradePlace,
 } = require('../../../loom-canon/grading');
+const town = require('../../../loom-canon/town');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -312,6 +314,15 @@ function locationDetail(world, location) {
   if (geo.markerType) result.markerType = geo.markerType;
   // What Azgaar says about a town: the seeds for its layout (L-341).
   if (geo.seeds) result.seeds = geo.seeds;
+  // Its town layout, if it has one (L-342, L-343): see get_town for the rest.
+  const inTown = town.placesOf(world, location.id);
+  if (inTown.length) {
+    result.town = {
+      places: inTown.length,
+      waysInAndOut: inTown.filter(town.isEntrance).map((place) => place.name),
+      valid: town.layoutReport(world, location).valid,
+    };
+  }
   result.region = geo.regionId ? ref(world.regions, geo.regionId) : null;
   result.factions = (location.factionIds || []).map((id) => ref(world.factions, id));
   result.connections = (location.connections || []).map((id) => ({
@@ -399,6 +410,53 @@ function regionDetail(world, region) {
   return result;
 }
 
+// A settlement's town in full (L-343 / #397): its places, the world routes and
+// which ways out serve them, and what is wrong with the layout, if anything.
+function townDetail(world, settlement) {
+  const links = (settlement.geo && settlement.geo.links) || {};
+  const places = Object.values(world.places || {})
+    .filter((place) => place.locationId === settlement.id)
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+  const entrances = places.filter((place) => !place.retired && town.isEntrance(place));
+  const report = town.layoutReport(world, settlement);
+  return {
+    id: settlement.id,
+    name: settlement.name,
+    grade: gradeLocation(world, settlement).grade,
+    ...(settlement.geo && settlement.geo.seeds ? { seeds: settlement.geo.seeds } : {}),
+    layout: report,
+    routes: (settlement.connections || []).map((id) => ({
+      ...ref(world.locations, id),
+      via: links[id] || null,
+      waysOut: entrances
+        .filter((place) => town.serves(place, links[id] || null))
+        .map((place) => ({ id: place.id, name: place.name })),
+    })),
+    places: places.map((place) => {
+      const graded = gradePlace(world, place);
+      const row = {
+        id: place.id,
+        name: place.name,
+        kind: place.kind || null,
+        description: place.description || '',
+        entranceFor: place.entrance ? (place.entrance.via || []).slice() : null,
+        grade: graded.grade,
+        missing: graded.checklist,
+        connections: (place.connections || []).map((id) => ref(world.places, id)),
+        residents: Object.values(world.characters || {})
+          .filter(
+            (c) => !c.retired && (c.placeId === place.id || (place.npcIds || []).includes(c.id))
+          )
+          .map((c) => ({ id: c.id, name: c.name })),
+        lore: loreAbout(world, place.id),
+      };
+      if (place.position) row.position = place.position;
+      if (place.retired) row.retired = true;
+      return row;
+    }),
+  };
+}
+
 function characterDetail(world, character) {
   const result = {
     id: character.id,
@@ -406,6 +464,7 @@ function characterDetail(world, character) {
     description: character.description || '',
     faction: character.factionId ? ref(world.factions, character.factionId) : null,
     location: character.locationId ? ref(world.locations, character.locationId) : null,
+    ...(character.placeId ? { place: ref(world.places || {}, character.placeId) } : {}),
     lore: loreAbout(world, character.id),
   };
   if (character.retired) result.retired = true;
@@ -418,6 +477,7 @@ function loreDetail(world, entry) {
     ['faction', world.factions],
     ['region', world.regions || {}],
     ['character', world.characters || {}],
+    ['place', world.places || {}],
   ];
   const result = {
     id: entry.id,
@@ -441,6 +501,7 @@ module.exports = {
   locationDetail,
   factionDetail,
   regionDetail,
+  townDetail,
   characterDetail,
   loreDetail,
   bearing,

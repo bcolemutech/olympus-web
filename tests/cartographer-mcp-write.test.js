@@ -183,14 +183,18 @@ test('exposes the write tools with honest hints', async () => {
   expect(writes.map((t) => t.name).sort()).toEqual([
     'add_character',
     'add_lore',
+    'add_place',
     'connect_locations',
+    'connect_places',
     'disconnect_locations',
+    'disconnect_places',
     'publish_world',
     'retire_entity',
     'update_character',
     'update_faction',
     'update_location',
     'update_lore',
+    'update_place',
     'update_region',
     'update_world',
   ]);

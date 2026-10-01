@@ -252,6 +252,7 @@ describe('connector surface', () => {
       'get_location',
       'get_lore',
       'get_region',
+      'get_town',
       'get_world',
       'list_work',
       'list_worlds',

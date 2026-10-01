@@ -6,6 +6,7 @@ const { createFirestoreWorldReader } = require('./reader');
 const { createFirestoreWorldWriter } = require('./writer');
 const { worldId, entityId } = require('./schemas');
 const { writeTools } = require('./write-tools');
+const { townTools } = require('./town-tools');
 const { GRADES } = require('../../../loom-canon/grading');
 const { workList } = require('./work');
 const views = require('./views');
@@ -160,17 +161,18 @@ function cartographerApp({ reader, writer }) {
           'What to build next in a world, most useful first, each item with its grade and what ' +
           'it is missing. A place must be Playable for players to enter it, so the list grows ' +
           'the world outward from where the game is: frontier (closed places next to an open ' +
-          'one, or the starting location), then other closed places nearest the start, then ' +
-          'open places that could be richer, then realms and regions to describe. Write a place ' +
+          'one, or the starting location), then places inside the nearest towns, then other ' +
+          'closed places nearest the start, then open places that could be richer, then realms ' +
+          'and regions to describe. Write a place ' +
           'up with update_location (setting a description marks it written), add residents ' +
           'with add_character and lore with add_lore. Paged: pass nextOffset back as offset. ' +
           GRADE_HELP,
         inputSchema: {
           worldId,
           kind: z
-            .enum(['settlement', 'poi', 'faction', 'region'])
+            .enum(['settlement', 'poi', 'place', 'faction', 'region'])
             .optional()
-            .describe('Only this kind of thing.'),
+            .describe('Only this kind of thing (place: a place in town).'),
           grade: z.enum(GRADES).optional().describe('Only items with this grade.'),
           need: z
             .enum(NEEDS)
@@ -268,6 +270,33 @@ function cartographerApp({ reader, writer }) {
         },
       },
       {
+        name: 'get_town',
+        title: 'Get town',
+        description:
+          'A settlement’s town layout (the places inside it): each place with its kind, links, ' +
+          'grade and residents; which places are ways in and out (entranceFor) and which world ' +
+          'routes each serves; and whether the layout works (every place reachable from a written-' +
+          'up way in). Build towns with add_place, update_place, connect_places and ' +
+          'disconnect_places. ' +
+          GRADE_HELP,
+        inputSchema: { worldId, locationId: entityId('location', 'find_locations') },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const settlement = entityFor(
+            world,
+            'locations',
+            args.locationId,
+            'location',
+            'Use find_locations to look one up.'
+          );
+          if ((settlement.geo || {}).kind !== 'settlement') {
+            throw new ToolError(`${settlement.name} isn't a settlement, so it has no town.`);
+          }
+          return { worldId: world.id, ...views.townDetail(world, settlement) };
+        },
+      },
+      {
         name: 'get_character',
         title: 'Get character',
         description: 'One character in full: description, faction, where they are found, and lore.',
@@ -305,6 +334,7 @@ function cartographerApp({ reader, writer }) {
         },
       },
       ...writeTools({ writer }),
+      ...townTools({ writer }),
     ],
     resources: [
       {

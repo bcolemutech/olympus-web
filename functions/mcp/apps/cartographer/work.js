@@ -1,6 +1,12 @@
 'use strict';
 
-const { gradeLocation, gradeEntity, gradeWorld, rank } = require('../../../loom-canon/grading');
+const {
+  gradeLocation,
+  gradePlace,
+  gradeEntity,
+  gradeWorld,
+  rank,
+} = require('../../../loom-canon/grading');
 const { hopsFrom } = require('./views');
 
 // The build work list (planning/the-loom-layered-worlds.md §6; L-323 / #392):
@@ -10,6 +16,8 @@ const { hopsFrom } = require('./views');
 //
 //   frontier  closed places players are about to reach: next to an open
 //             place, or the starting location (or `near`) itself
+//   town      places inside towns that aren't Rich yet (L-343), nearest
+//             town first: a town you can reach is worth building out
 //   closed    every other closed place
 //   enrich    open places that could be Rich (residents, lore)
 //   describe  realms and regions to write up (never gated)
@@ -18,16 +26,18 @@ const { hopsFrom } = require('./views');
 // start), then largest, then by name. Grades are computed on every call
 // (functions/loom-canon/grading.js), so an edit shows on the next one.
 
-const TIERS = ['frontier', 'closed', 'enrich', 'describe'];
+const TIERS = ['frontier', 'town', 'closed', 'enrich', 'describe'];
 
 // Items list their needs by name; each need on a page is explained once.
 const HOW_TO = {
   description:
     'Write a description: update_location for a place, update_faction for a realm, ' +
     'update_region for a region. Sending the current text again approves it as written.',
-  residents: 'Add a character who lives there: add_character.',
+  residents: 'Add a character who lives there: add_character (with placeId for a place in town).',
   lore: 'Add lore about it: add_lore.',
-  town: 'Lay out the town.',
+  town:
+    'Lay out the town: add_place (ways in and out with entranceFor), connect_places; check ' +
+    'it with get_town.',
   battleMap: 'Draw its battle map.',
 };
 
@@ -68,6 +78,24 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       grade: placeGrade,
       hops: hops.has(place.id) ? hops.get(place.id) : null,
       ...(geo.kind === 'settlement' ? { population: Math.round(geo.population || 0) } : {}),
+      missing: checklist.map((item) => item.need),
+    });
+  }
+  // Places inside towns (L-343), ordered by their town's distance.
+  for (const place of Object.values(world.places || {}).filter((p) => !p.retired)) {
+    const settlement = world.locations[place.locationId];
+    if (!settlement || settlement.retired) continue;
+    const { grade: placeGrade, checklist } = gradePlace(world, place);
+    if (placeGrade === 'rich') continue;
+    items.push({
+      priority: 'town',
+      type: 'place',
+      id: place.id,
+      name: place.name,
+      kind: 'place',
+      grade: placeGrade,
+      hops: hops.has(settlement.id) ? hops.get(settlement.id) : null,
+      town: { id: settlement.id, name: settlement.name },
       missing: checklist.map((item) => item.need),
     });
   }
