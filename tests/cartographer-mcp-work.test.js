@@ -150,6 +150,8 @@ test('a fresh import: everything is a stub, and the start is the only frontier',
     hops: 0,
     population: 28473,
     missing: ['description', 'residents', 'lore'],
+    // How far it is toward Rich, so "missing residents" isn't read as "nobody".
+    progress: { size: 'great city', residents: '0 of 6', lore: '0 of 3' },
   });
   // Then the closed places nearest the start.
   expect(list.items.slice(1).every((i) => i.priority === 'closed' && i.hops === 1)).toBe(true);
@@ -211,6 +213,12 @@ test('enough residents and lore for its size make it rich, and it leaves the wor
     });
     // One resident short of a great city's six: still only playable.
     if (i === 4) {
+      const enrich = await work({ grade: 'playable', kind: 'settlement' });
+      expect(enrich.items[0]).toMatchObject({
+        id: 'loc_1',
+        missing: ['residents', 'lore'],
+        progress: { residents: '5 of 6', lore: '0 of 3' },
+      });
       expect(
         (await ok('get_location', { worldId: WORLD, locationId: 'loc_1' })).missing[0]
       ).toEqual({

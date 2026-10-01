@@ -148,6 +148,24 @@ function layerItem(layers, layer, world, entity) {
 }
 
 /**
+ * How far a settlement is toward Rich: its size, and the residents and lore it
+ * has against what its size needs (anyone or anything anywhere in its town
+ * counts). Grading and the MCP work list both read this, so they never
+ * disagree about a count.
+ */
+function settlementProgress(world, location) {
+  const tier = sizeTier(location);
+  const lore =
+    loreAbout(world, location.id) +
+    townPlaces(world, location.id).reduce((n, place) => n + loreAbout(world, place.id), 0);
+  return {
+    size: tier.name,
+    residents: { have: residentsOf(world, location), want: tier.residents },
+    lore: { have: lore, want: tier.lore },
+  };
+}
+
+/**
  * Grades a place on the world map (a settlement or point of interest).
  * @returns {{ grade: string, checklist: { need, for, message }[], exempt?: true }}
  */
@@ -158,11 +176,9 @@ function gradeLocation(world, location, { layers = LAYER_CHECKS } = {}) {
   if (!isWritten(location)) checklist.push(descriptionItem(location));
   if (settlement) {
     const tier = sizeTier(location);
-    const lore =
-      loreAbout(world, location.id) +
-      townPlaces(world, location.id).reduce((n, place) => n + loreAbout(world, place.id), 0);
-    checklist.push(richItem('residents', residentsOf(world, location), tier.residents, tier));
-    checklist.push(richItem('lore', lore, tier.lore, tier));
+    const { residents, lore } = settlementProgress(world, location);
+    checklist.push(richItem('residents', residents.have, residents.want, tier));
+    checklist.push(richItem('lore', lore.have, lore.want, tier));
   } else {
     checklist.push(richItem('lore', loreAbout(world, location.id), 1));
   }
@@ -276,5 +292,6 @@ module.exports = {
   isPlayable,
   isPlaceOpen,
   sizeTier,
+  settlementProgress,
   rank,
 };
