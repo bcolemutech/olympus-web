@@ -17,7 +17,7 @@
  *
  * "Written" means a non-empty description whose recorded source isn't the
  * import: `sources.description` is 'import' (the Cartographer loader), 'mcp'
- * (the MCP write tools) or 'gemini' (the generators). A description with no
+ * (the MCP write tools) or 'gemini' (reserved; nothing writes it). A description with no
  * recorded source counts as imported until the backfill stamps it
  * (scripts/backfill-description-sources.js).
  *

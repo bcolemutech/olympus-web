@@ -6,7 +6,8 @@
 //
 //   import   written by the Cartographer loader (functions/cartographer/load.js)
 //   mcp      written through the Cartographer's MCP write tools
-//   gemini   written by a Gemini building tool
+//   gemini   reserved; nothing writes it (Gemini doesn't generate world
+//            content: planning/the-loom-layered-worlds.md §2)
 //
 // Worlds imported before sources existed are backfilled by
 // scripts/backfill-description-sources.js, which uses the helpers below. It

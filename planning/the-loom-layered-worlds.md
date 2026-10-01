@@ -26,7 +26,7 @@ This keeps the Loom's canon-authority rule unchanged (Loom design §10): the pla
 - **Graded and gated, never generated in play.** Unbuilt areas are unavailable. The player is turned back, and nothing is generated to fill the gap.
 - **The Playable bar** is a written description (not the import text) **plus the layer you would step into**: a town layout for a settlement, and a battle map for a point of interest or a place in town. Residents and lore raise a place to **Rich** but never block entry.
 - **Gating applies to every published world as soon as it ships**, Nisia included. Nisia closes down to the places already written up.
-- **Gemini generators are building tools**, run from the Cartographer page or over MCP. Their output is validated, saved, and graded like any other edit.
+- **No Gemini world generation** (2026-10-01; this replaces the earlier plan for Gemini town-layout and battle-map generators, L-344 and L-353, now dropped). Gemini's job is **GM duties in the Loom**: interpreting and narrating turns, and summaries. Later it may also make **artwork** (L-500). It never generates world content in the Cartographer: every layer is built over MCP, by Claude or another AI, or by hand.
 - **Battle maps are for navigation first.** Combat stays narrated; tactical rules can come later with richer rule sets (L-202 / #313).
 - **Epics are slices by layer**, each playable when it lands (§10).
 
@@ -34,11 +34,11 @@ This keeps the Loom's canon-authority rule unchanged (Loom design §10): the pla
 
 ## 3. Layers
 
-| Layer    | What it is                                                        | You enter it by                             | Built by                                                         |
-| -------- | ----------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------- |
-| World    | Settlements and points of interest, realms, regions, routes       | Starting a game; travelling along routes    | The Cartographer import; written up over MCP                     |
-| Burg     | A settlement's places: gates, harbour, market, temple, taverns, … | Arriving at a settlement                    | MCP tools, or Gemini's town-layout generator, seeded from Azgaar |
-| Location | A battle map of a point of interest or a place in town            | Arriving at that point of interest or place | MCP tools, or Gemini's battle-map generator                      |
+| Layer    | What it is                                                        | You enter it by                             | Built by                                     |
+| -------- | ----------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------- |
+| World    | Settlements and points of interest, realms, regions, routes       | Starting a game; travelling along routes    | The Cartographer import; written up over MCP |
+| Burg     | A settlement's places: gates, harbour, market, temple, taverns, … | Arriving at a settlement                    | MCP tools, seeded from Azgaar                |
+| Location | A battle map of a point of interest or a place in town            | Arriving at that point of interest or place | MCP tools                                    |
 
 A save's position becomes a chain: **settlement or point of interest → place in town → cell on its map**. Each layer has its own movement rules (§8, §9).
 
@@ -78,7 +78,7 @@ Each entity records where its gradable fields came from: `sources: { description
 
 - The **Cartographer loader** stamps `import`.
 - The **MCP write tools** stamp `mcp`.
-- The **Gemini generators** stamp `gemini`.
+- `gemini` is reserved and nothing writes it: Gemini doesn't generate world content (§2).
 - A description counts as written when its source isn't `import`.
 
 **Existing worlds** get the stamps from a local dry-run script, per the project convention of running one-off production fixes locally, not in Actions. The script re-runs the parser and mapper on the world's original Azgaar export (Nisia's is in the gitignored `maps/` folder). A description that still matches the mapper's output word for word is marked `import`, and anything else `mcp`. Without the original export, every description is marked `import`.
@@ -112,7 +112,7 @@ When burgs ship, a settlement also needs a town layout, and when battle maps shi
 - **Grades in the read tools.** `get_world` shows completion by grade (places, realms, regions); `get_location`, `get_faction` and `get_region` show their grade and checklist; connections and `find_locations` rows carry a grade, and `find_locations` can filter by one.
 - **`update_region`** writes a region's name and description. Regions arrive from Azgaar with none, so without it their grades could never rise.
 - **Write tools stamp sources** (§4.3), so a place's grade updates on the next read.
-- **Per-layer tools** arrive with each layer's epic (§8, §9), including the Gemini generators: `generate_town_layout` and `generate_battle_map`.
+- **Per-layer tools** arrive with each layer's epic (§8, §9).
 
 The Cartographer page shows each world's completion, the Playable places and their share, graded on the server by the `cartographerCompletion` callable.
 
@@ -161,7 +161,6 @@ The Loom's play screen gains a **map** beside the story:
   - **Characters** can be given a `placeId` in their town with `add_character` and `update_character`. Moving them to another settlement clears it.
   - **Removal:** in a published world, places are retired. In a draft, a place is deleted and every link to it cleaned; this is refused while characters are found there, and a settlement with a town can't be deleted until its places are.
   - **Work list:** places inside towns that aren't Rich form a `town` tier, right after the frontier and nearest town first.
-- **Gemini.** `generate_town_layout` (worldId, locationId, optional guidance) sends the seeds, description and culture to Gemini for structured JSON against a schema. The result is validated (connected, named, with the places the seeds require) and saved as `gemini`. It only fills an unbuilt town, unless asked to replace one.
 - **UI.** A town view, drawn as an SVG from the places' positions: where you are, where you can go, and a click to move.
 
 ---
@@ -171,7 +170,6 @@ The Loom's play screen gains a **map** beside the story:
 - **Data.** A point of interest or a place in town can carry `battleMap: { width, height, rows, features, exits, sources }`. `rows` is the grid, one character per cell from a fixed legend (floor, wall, door, water, trees, rubble, and so on). `features` are named cells (the bar, the altar, the well), and `exits` are cells that lead out, to the town or to the world. Maps are capped at 64 × 64.
 - **Movement.** A save's position adds `cell: { x, y }`. You move step by step, or straight to a feature or exit. Walls block and doors pass, and leaving by an exit returns you to the layer above. Combat stays narrated.
 - **MCP.** `get_battle_map` reads a map, and `set_battle_map` writes one. It validates the size, the legend, and that every exit and feature can be reached from an entry.
-- **Gemini.** `generate_battle_map` (worldId, placeId, optional guidance) returns a validated grid, saved as `gemini`.
 - **UI.** A grid view (canvas) with tokens for you and the people there, and a tap on a cell to move.
 
 ---
@@ -180,12 +178,12 @@ The Loom's play screen gains a **map** beside the story:
 
 One milestone, **The Loom — Phase 3b: Layered Worlds**, with four epics, each ending in something playable.
 
-| Epic                           | Sub-issues                                                                                                                                                                                                                                           | Exit criterion                                                                                                                              |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **L-320 Grading and gating**   | L-321 grading module, `sources` stamping (loader, MCP), backfill script · L-322 the gate: ADJUDICATE, NARRATE, `loomCreateSave`, publish · L-323 MCP `list_work` and grades in the read tools; completion on the Cartographer page                   | In Nisia, travel to an unwritten place is turned back; Claude finds it with `list_work`, writes it up, and it opens on the game's next turn |
-| **L-330 World map navigation** | L-331 discovered places in saves, structured moves · L-332 the map view: image, markers, routes, discovered and locked places, click to travel                                                                                                       | Nisia is played from the map: discovered places show, closed ones are locked, travel is a click                                             |
-| **L-340 Burgs**                | L-341 Azgaar settlement seeds (parser, mapper, backfill) · L-342 the town layer in canon and saves, movement in town, graded and gated · L-343 MCP town tools · L-344 Gemini town-layout generator (MCP and Cartographer page) · L-345 the town view | Burdendal is laid out (by Claude, or Gemini on request); a player arrives at the harbour, walks to the market, and leaves by a gate         |
-| **L-350 Battle maps**          | L-351 the battle-map layer in canon and saves, grid movement, graded and gated · L-352 MCP battle-map tools · L-353 Gemini battle-map generator · L-354 the grid view                                                                                | A Burdendal tavern gets a battle map; a player walks it cell by cell and leaves by the door                                                 |
+| Epic                           | Sub-issues                                                                                                                                                                                                                         | Exit criterion                                                                                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **L-320 Grading and gating**   | L-321 grading module, `sources` stamping (loader, MCP), backfill script · L-322 the gate: ADJUDICATE, NARRATE, `loomCreateSave`, publish · L-323 MCP `list_work` and grades in the read tools; completion on the Cartographer page | In Nisia, travel to an unwritten place is turned back; Claude finds it with `list_work`, writes it up, and it opens on the game's next turn |
+| **L-330 World map navigation** | L-331 discovered places in saves, structured moves · L-332 the map view: image, markers, routes, discovered and locked places, click to travel                                                                                     | Nisia is played from the map: discovered places show, closed ones are locked, travel is a click                                             |
+| **L-340 Burgs**                | L-341 Azgaar settlement seeds (parser, mapper, backfill) · L-342 the town layer in canon and saves, movement in town, graded and gated · L-343 MCP town tools · L-345 the town view                                                | Burdendal is laid out by Claude over MCP; a player arrives at the harbour, walks to the market, and leaves by a gate                        |
+| **L-350 Battle maps**          | L-351 the battle-map layer in canon and saves, grid movement, graded and gated · L-352 MCP battle-map tools · L-354 the grid view                                                                                                  | A Burdendal tavern gets a battle map; a player walks it cell by cell and leaves by the door                                                 |
 
 **Order:** L-320 comes first, because everything else is graded and gated through it. L-330 can follow immediately, since it needs no new data. L-340 comes before L-350, since places in town are where most battle maps live.
 
