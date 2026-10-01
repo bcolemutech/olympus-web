@@ -430,29 +430,26 @@
     } catch {
       // Some pointers can't be captured; dragging still works without it.
     }
+    // A first finger begins a new gesture: anything still recorded is a
+    // pointer whose end the browser never reported.
+    if (event.isPrimary) map.pointers = {};
     map.pointers[event.pointerId] = localPoint(event);
-    debugNote(event.type, event);
+    debugNote(
+      'down' + (event.isPrimary ? ' P' : '') + ' n=' + Object.keys(map.pointers).length,
+      event
+    );
     var points = pointerList();
     if (points.length === 1) {
       map.gesture = { kind: 'drag', start: points[0], last: points[0], moved: 0 };
     } else if (points.length === 2) {
-      // A pinch is worked out from where it started (M.pinch; #420).
-      map.gesture = { kind: 'pinch', startView: map.view, start: spreadOf(points) };
+      // Based on the fingers' first move (M.pinchMove; #420).
+      map.gesture = { kind: 'pinch', track: null };
     }
-  }
-
-  // Two fingers' midpoint and how far apart they are.
-  function spreadOf(points) {
-    return {
-      mid: { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 },
-      distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
-    };
   }
 
   function onPointerMove(event) {
     if (!map.pointers[event.pointerId] || !map.gesture) return;
     map.pointers[event.pointerId] = localPoint(event);
-    debugNote(event.type, event);
     var size = panelSize();
     var points = pointerList();
     if (map.gesture.kind === 'drag' && points.length === 1) {
@@ -468,13 +465,17 @@
       map.gesture.last = p;
       render();
     } else if (map.gesture.kind === 'pinch' && points.length === 2) {
-      map.view = M.pinch(
-        map.gesture.startView,
-        map.gesture.start,
-        spreadOf(points),
-        size,
-        bounds()
-      );
+      var step = M.pinchMove(map.gesture.track, points, map.view, size, bounds());
+      map.gesture.track = step.track;
+      if (step.based) {
+        debugNote(
+          'pinch base d=' +
+            Math.round(step.track.start.distance) +
+            ' s=' +
+            Math.round(step.track.startView.scale * 100) / 100
+        );
+      }
+      map.view = step.view;
       render();
     }
   }
@@ -559,7 +560,7 @@
         ')';
     }
     debugEvents.unshift(line);
-    debugEvents.length = Math.min(debugEvents.length, 8);
+    debugEvents.length = Math.min(debugEvents.length, 10);
     showDebug();
   }
 
@@ -617,7 +618,7 @@
       panel.addEventListener(
         type,
         function (event) {
-          debugNote(type);
+          if (type !== 'gesturechange') debugNote(type);
           event.preventDefault();
         },
         { passive: false }

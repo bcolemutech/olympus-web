@@ -134,6 +134,59 @@ describe('zoom and pan', () => {
     ).toEqual(math.clamp(start, PHONE, MAP));
   });
 
+  describe('pinchMove: a pinch that survives badly reported points (#420)', () => {
+    const START = { scale: 2.8, x: -300, y: -1500 };
+    const fingers = (d, mid = { x: 180, y: 300 }) => [
+      { x: mid.x - d / 2, y: mid.y },
+      { x: mid.x + d / 2, y: mid.y },
+    ];
+    // Runs a pinch through these finger positions, as map.js does.
+    const run = (steps, view = START) => {
+      let track = null;
+      let based = 0;
+      for (const points of steps) {
+        const step = math.pinchMove(track, points, view, PHONE, MAP);
+        track = step.track;
+        view = step.view;
+        if (step.based) based += 1;
+      }
+      return { view, based };
+    };
+
+    test('the first move only bases the pinch; then it follows the fingers', () => {
+      const first = math.pinchMove(null, fingers(200), START, PHONE, MAP);
+      expect(first).toMatchObject({ based: true, view: START });
+      const out = run([fingers(200), fingers(150), fingers(100)]);
+      close(out.view.scale, 1.4); // half the spread, half the scale
+      expect(out.based).toBe(1);
+    });
+
+    test('a finger reported in the wrong place for an event does not zoom the map', () => {
+      // Pinching out, with one report of the second finger on top of the first.
+      const glitch = [
+        { x: 80, y: 300 },
+        { x: 81, y: 300 },
+      ];
+      const out = run([fingers(200), fingers(180), glitch, fingers(180), fingers(160)]);
+      expect(out.view.scale).toBeLessThan(START.scale);
+      expect(out.based).toBe(3); // the start, the glitch, and the way back
+    });
+
+    test('fingers that start nearly together wait until they are apart', () => {
+      // Two fingers almost on one point, then spreading: no zoom until they
+      // are MIN_SPREAD apart, then a zoom from there, not from nothing.
+      const out = run([fingers(4), fingers(12), fingers(20), fingers(36), fingers(54)]);
+      expect(out.view.scale).toBeLessThan(START.scale * 2);
+      expect(out.view.scale).toBeGreaterThan(START.scale);
+    });
+
+    test('a long pinch out still reaches the whole map', () => {
+      const steps = [];
+      for (let d = 300; d >= 20; d -= 10) steps.push(fingers(d));
+      expect(run(steps).view).toEqual(math.clamp({ scale: 0, x: 0, y: 0 }, PHONE, MAP));
+    });
+  });
+
   test('panning moves the view, within the map', () => {
     const view = { scale: 2, x: -1000, y: -800 };
     expect(math.pan(view, 50, -30, DESKTOP, MAP)).toEqual({ scale: 2, x: -950, y: -830 });

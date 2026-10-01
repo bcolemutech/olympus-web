@@ -13,6 +13,8 @@
 
   var MAX_SCALE = 6;
   var FOCUS_SPAN = 110; // at least this many map units across the panel
+  var MIN_SPREAD = 30; // px: a pinch is based on fingers at least this far apart
+  var JUMP = 90; // px: further than a finger moves between two events
 
   function toScreen(view, mx, my) {
     return { x: mx * view.scale + view.x, y: my * view.scale + view.y };
@@ -94,6 +96,42 @@
     );
   }
 
+  // Two fingers' midpoint and how far apart they are.
+  function spreadOf(points) {
+    return {
+      mid: { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 },
+      distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
+    };
+  }
+
+  // One step of a two-finger pinch (#420), robust to points a browser reports
+  // wrongly. `track` is null when the pinch begins, then what this returns.
+  // The pinch is based on the fingers' first move, not where they were said
+  // to touch down; it waits until they are at least MIN_SPREAD apart (a tiny
+  // base turns any spread into a huge zoom); and if either finger jumps
+  // further than JUMP in one step, which no finger does, the point was
+  // misreported, so the pinch starts again from there. Returns
+  // { track, view, based } (`based` when the pinch was (re)based this step).
+  function pinchMove(track, points, view, panel, map) {
+    var now = spreadOf(points);
+    var jumped =
+      track &&
+      (Math.hypot(points[0].x - track.last[0].x, points[0].y - track.last[0].y) > JUMP ||
+        Math.hypot(points[1].x - track.last[1].x, points[1].y - track.last[1].y) > JUMP);
+    var last = [
+      { x: points[0].x, y: points[0].y },
+      { x: points[1].x, y: points[1].y },
+    ];
+    if (!track || jumped || track.start.distance < MIN_SPREAD) {
+      return { track: { startView: view, start: now, last: last }, view: view, based: true };
+    }
+    return {
+      track: { startView: track.startView, start: track.start, last: last },
+      view: pinch(track.startView, track.start, now, panel, map),
+      based: false,
+    };
+  }
+
   function pan(view, dx, dy, panel, map) {
     return clamp({ scale: view.scale, x: view.x + dx, y: view.y + dy }, panel, map);
   }
@@ -116,6 +154,10 @@
     fit: fit,
     zoomAt: zoomAt,
     pinch: pinch,
+    pinchMove: pinchMove,
+    spreadOf: spreadOf,
+    MIN_SPREAD: MIN_SPREAD,
+    JUMP: JUMP,
     pan: pan,
     reveal: reveal,
   };
