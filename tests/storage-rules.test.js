@@ -43,6 +43,7 @@ beforeEach(async () => {
   await testEnv.clearStorage();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await ctx.storage().ref('worlds/nisia-000001/map.png').put(bytes(16), PNG_TYPE);
+    await ctx.storage().ref('worlds/nisia-000001/town-loc_1-abc123.png').put(bytes(16), PNG_TYPE);
     await ctx.storage().ref(`cartographer/${BUILDER}/${UPLOAD}/map.json`).put(bytes(16), JSON_TYPE);
   });
 });
@@ -60,6 +61,21 @@ describe('Cartographer uploads', () => {
   test('a world builder can upload an Azgaar JSON export and a PNG to their own folder', async () => {
     await assertSucceeds(builder().ref(uploadPath('map.json')).put(bytes(1024), JSON_TYPE));
     await assertSucceeds(builder().ref(uploadPath('map.png')).put(bytes(1024), PNG_TYPE));
+  });
+
+  test("a town's art (town.png) uploads to the same folder, as a PNG only (L-347)", async () => {
+    await assertSucceeds(builder().ref(uploadPath('town.png')).put(bytes(1024), PNG_TYPE));
+    await assertFails(builder().ref(uploadPath('town.png')).put(bytes(64), JSON_TYPE));
+    await assertFails(
+      storageAs('someone-else', ['cartographer'])
+        .ref(uploadPath('town.png'))
+        .put(bytes(64), PNG_TYPE)
+    );
+    await assertFails(
+      builder()
+        .ref(uploadPath('town.png'))
+        .put(bytes(30 * 1024 * 1024 + 1), PNG_TYPE)
+    );
   });
 
   test('…and read and delete their own uploads', async () => {
@@ -118,6 +134,13 @@ describe('world map images', () => {
       storageAs('player-001', ['loom']).ref('worlds/nisia-000001/map.png').getMetadata()
     );
     await assertSucceeds(builder().ref('worlds/nisia-000001/map.png').getMetadata());
+  });
+
+  test("so can towns' art, which no client can write", async () => {
+    const art = 'worlds/nisia-000001/town-loc_1-abc123.png';
+    await assertSucceeds(storageAs('player-001', ['loom']).ref(art).getMetadata());
+    await assertFails(storageAs('someone', ['symposium']).ref(art).getMetadata());
+    await assertFails(builder().ref(art).put(bytes(8), PNG_TYPE));
   });
 
   test('others cannot, and no client can write them', async () => {

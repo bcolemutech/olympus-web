@@ -29,6 +29,7 @@ const {
   cartographerImport,
   cartographerPublish,
   cartographerCompletion,
+  cartographerTownImage,
   loomCreateSave,
 } = require('../functions/index');
 const fs = require('fs');
@@ -86,6 +87,7 @@ async function writeUp(worldId, id) {
 const importAs = (auth, data) => cartographerImport.run({ data, auth });
 const publishAs = (auth, data) => cartographerPublish.run({ data, auth });
 const completionAs = (auth, data) => cartographerCompletion.run({ data, auth });
+const townArtAs = (auth, data) => cartographerTownImage.run({ data, auth });
 
 beforeEach(async () => {
   loomCanon.clearWorldCache();
@@ -318,5 +320,119 @@ describe('cartographerCompletion (L-323)', () => {
     await expect(
       completionAs(BUILDER, { worldIds: Array.from({ length: 21 }, (_, i) => `w-${i}`) })
     ).rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+});
+
+describe('cartographerTownImage (L-347)', () => {
+  let worldId;
+  const loc1 = async () =>
+    (
+      await db.collection('loom_worlds').doc(worldId).collection('locations').doc('loc_1').get()
+    ).data();
+  const version = async () =>
+    (await db.collection('loom_worlds').doc(worldId).get()).data().canonVersion;
+  // Uploads a town image to the builder's folder, as the page does.
+  async function uploadTown(png, uid = BUILDER.uid) {
+    seq += 1;
+    const uploadId = `town-up-${String(seq).padStart(4, '0')}`;
+    await bucket
+      .file(`cartographer/${uid}/${uploadId}/town.png`)
+      .save(png, { contentType: 'image/png' });
+    return uploadId;
+  }
+
+  // Every test starts from a fresh import (the suite clears worlds and files).
+  beforeEach(async () => {
+    ({ worldId } = await importAs(BUILDER, { uploadId: await upload() }));
+  });
+  const attach = async (png) =>
+    townArtAs(BUILDER, { worldId, locationId: 'loc_1', uploadId: await uploadTown(png) });
+
+  test('attaches a PNG to a settlement: copied beside the map, recorded, upload removed', async () => {
+    const before = await version();
+    const uploadId = await uploadTown(tinyPng(800, 600));
+    await expect(townArtAs(BUILDER, { worldId, locationId: 'loc_1', uploadId })).resolves.toEqual({
+      worldId,
+      locationId: 'loc_1',
+      name: 'Burdendal',
+      image: { width: 800, height: 600 },
+    });
+    const { image } = (await loc1()).town;
+    expect(image).toMatchObject({ width: 800, height: 600 });
+    expect(image.path).toMatch(new RegExp(`^worlds/${worldId}/town-loc_1-[a-z0-9]+\\.png$`));
+    expect(await exists(image.path)).toBe(true);
+    expect(await exists(`cartographer/${BUILDER.uid}/${uploadId}/town.png`)).toBe(false);
+    expect(await version()).toBe(before + 1); // games see it on their next turn
+  });
+
+  test('replacing it stores the new image under a new name and deletes the old one', async () => {
+    await attach(tinyPng(800, 600));
+    const old = (await loc1()).town.image.path;
+    await attach(tinyPng(1024, 1024));
+    const { image } = (await loc1()).town;
+    expect(image).toMatchObject({ width: 1024, height: 1024 });
+    expect(image.path).not.toBe(old);
+    expect(await exists(image.path)).toBe(true);
+    expect(await exists(old)).toBe(false);
+  });
+
+  test('removing it deletes the field and the file; removing again changes nothing', async () => {
+    await attach(tinyPng(800, 600));
+    const { path: art } = (await loc1()).town.image;
+    await expect(
+      townArtAs(BUILDER, { worldId, locationId: 'loc_1', remove: true })
+    ).resolves.toMatchObject({ name: 'Burdendal', image: null });
+    expect((await loc1()).town || {}).not.toHaveProperty('image');
+    expect(await exists(art)).toBe(false);
+    const before = await version();
+    await townArtAs(BUILDER, { worldId, locationId: 'loc_1', remove: true });
+    expect(await version()).toBe(before);
+  });
+
+  test('refuses what is not a settlement, a bad image, and a missing upload — leaving nothing behind', async () => {
+    const poi = await uploadTown(tinyPng(64, 64));
+    await expect(
+      townArtAs(BUILDER, { worldId, locationId: 'poi_1', uploadId: poi })
+    ).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message: expect.stringMatching(/isn't a settlement/),
+    });
+    const [left] = await bucket.getFiles({ prefix: `worlds/${worldId}/town-poi_1` });
+    expect(left).toEqual([]); // the copy made before the check is cleaned up
+    await expect(
+      townArtAs(BUILDER, {
+        worldId,
+        locationId: 'loc_99999',
+        uploadId: await uploadTown(tinyPng(64, 64)),
+      })
+    ).rejects.toMatchObject({ code: 'not-found' });
+    await expect(
+      townArtAs(BUILDER, {
+        worldId,
+        locationId: 'loc_1',
+        uploadId: await uploadTown(Buffer.from('not a png at all, just text')),
+      })
+    ).rejects.toMatchObject({ code: 'invalid-argument', message: expect.stringMatching(/PNG/) });
+    await expect(
+      townArtAs(BUILDER, { worldId, locationId: 'loc_1', uploadId: 'never-uploaded' })
+    ).rejects.toMatchObject({ code: 'not-found' });
+  });
+
+  test('needs the cartographer claim, valid ids, and a world that exists', async () => {
+    await expect(
+      townArtAs(PLAYER, { worldId, locationId: 'loc_1', remove: true })
+    ).rejects.toMatchObject({ code: 'permission-denied' });
+    await expect(
+      townArtAs(BUILDER, { worldId: 'Bad/Id', locationId: 'loc_1', remove: true })
+    ).rejects.toMatchObject({ code: 'invalid-argument' });
+    await expect(townArtAs(BUILDER, { worldId, locationId: 'loc_1' })).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    await expect(
+      townArtAs(BUILDER, { worldId: 'no-such-world', locationId: 'loc_1', remove: true })
+    ).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message: expect.stringMatching(/World not found/),
+    });
   });
 });

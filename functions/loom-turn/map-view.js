@@ -178,6 +178,7 @@ function townView(canonWorld, save, discovered) {
     });
   }
 
+  const art = settlement.town && settlement.town.image;
   return {
     locationId: location,
     name: settlement.name,
@@ -186,6 +187,9 @@ function townView(canonWorld, save, discovered) {
     places,
     links,
     exits,
+    // The town's art (L-347), drawn behind the places, fitted to the town's
+    // 0–1000 square: { path (Cloud Storage), width, height }, or null.
+    image: art ? { path: art.path, width: art.width, height: art.height } : null,
   };
 }
 

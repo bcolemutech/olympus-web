@@ -109,19 +109,8 @@
     // Settlement names → ids, loaded when the form opens. The largest capital
     // is suggested as the starting place.
     var idsByName = {};
-    state.db
-      .collection('loom_worlds')
-      .doc(world.id)
-      .collection('locations')
-      .where('geo.kind', '==', 'settlement')
-      .get()
-      .then(function (snap) {
-        var settlements = snap.docs.map(function (d) {
-          return d.data();
-        });
-        settlements.sort(function (a, b) {
-          return a.name.localeCompare(b.name);
-        });
+    Cartographer.loadSettlements(world.id)
+      .then(function (settlements) {
         settlements.forEach(function (s) {
           idsByName[s.name.toLowerCase()] = s.id;
           var option = el('option');
@@ -228,6 +217,19 @@
       var play = el('a', 'app-btn', 'Play in the Loom');
       play.href = '/apps/loom/';
       actions.appendChild(play);
+    }
+    if (status === 'draft' || status === 'published') {
+      var art = el('button', 'app-btn carto-town-art-btn', 'Town art…');
+      art.type = 'button';
+      art.addEventListener('click', function () {
+        art.disabled = true;
+        card.appendChild(
+          Cartographer.townArt.buildForm(world, function () {
+            art.disabled = false;
+          })
+        );
+      });
+      actions.appendChild(art);
     }
     if (actions.children.length) card.appendChild(actions);
     return card;

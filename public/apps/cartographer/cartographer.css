@@ -224,10 +224,33 @@ textarea.carto-input {
   margin-top: 0.75rem;
 }
 
-.carto-publish-form {
+.carto-publish-form,
+.carto-town-art-form {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Town art (L-347): the form's title, and the towns that have art. */
+.carto-subtitle {
+  margin: 0;
+  color: #e0e0e0;
+  font-size: 1rem;
+}
+
+.carto-town-art-rows {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carto-town-art-rows li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  color: #d1d5db;
+  font-size: 0.9rem;
 }
 
 .carto-link {

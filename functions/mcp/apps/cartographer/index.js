@@ -277,7 +277,9 @@ function cartographerApp({ reader, writer }) {
           'grade and residents; which places are ways in and out (entranceFor) and which world ' +
           'routes each serves; and whether the layout works (every place reachable from a written-' +
           'up way in). Build towns with add_place, update_place, connect_places and ' +
-          'disconnect_places. ' +
+          'disconnect_places. `art` is the size of the town’s image, if it has one (uploaded on ' +
+          'the Cartographer page): the town view draws it fitted to the town’s 0–1000 square, ' +
+          'so set place positions to line up with it. ' +
           GRADE_HELP,
         inputSchema: { worldId, locationId: entityId('location', 'find_locations') },
         annotations: readOnly,

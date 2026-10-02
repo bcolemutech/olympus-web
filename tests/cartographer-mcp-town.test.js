@@ -505,3 +505,22 @@ test('list_work puts the places of the nearest towns right after the frontier', 
   const tiers = [...new Set(all.items.map((i) => i.priority))];
   expect(tiers.indexOf('town')).toBeLessThan(tiers.indexOf('closed'));
 });
+
+test('get_town says whether a town has art, and its size (L-347)', async () => {
+  expect((await ok('get_town', { worldId: LIVE, locationId: 'loc_1' })).art).toBeNull();
+  await worlds()
+    .doc(LIVE)
+    .collection('locations')
+    .doc('loc_1')
+    .update({
+      'town.image': { path: `worlds/${LIVE}/town-loc_1-x.png`, width: 1200, height: 900 },
+    });
+  const meta = (await worlds().doc(LIVE).get()).data();
+  await worlds()
+    .doc(LIVE)
+    .update({ canonVersion: meta.canonVersion + 1 });
+  expect((await ok('get_town', { worldId: LIVE, locationId: 'loc_1' })).art).toEqual({
+    width: 1200,
+    height: 900,
+  });
+});

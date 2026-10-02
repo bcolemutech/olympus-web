@@ -28,9 +28,11 @@ let _cartographerService;
 function cartographerService() {
   if (!_cartographerService) {
     const { getStorage } = require('firebase-admin/storage');
+    const { createFirestoreWorldWriter } = require('./mcp/apps/cartographer/writer');
     _cartographerService = cartographer.createCartographerService({
       db: getFirestore(),
       bucket: getStorage().bucket(),
+      writer: createFirestoreWorldWriter(() => getFirestore()),
     });
   }
   return _cartographerService;
@@ -51,6 +53,12 @@ exports.cartographerPublish = onCall(async (request) => {
 exports.cartographerCompletion = onCall(async (request) => {
   cartographer.requireCartographer(request);
   return cartographerService().worldCompletion(request.data || {});
+});
+
+// A town's art (Layered Worlds, L-347 / #416): attach, replace or remove it.
+exports.cartographerTownImage = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return cartographerService().townImage(uid, request.data || {});
 });
 
 // Grand Hall "connected assistants" (phase 1i): the signed-in user lists and

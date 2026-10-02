@@ -424,6 +424,12 @@ function townDetail(world, settlement) {
     name: settlement.name,
     grade: gradeLocation(world, settlement).grade,
     ...(settlement.geo && settlement.geo.seeds ? { seeds: settlement.geo.seeds } : {}),
+    // Its art (L-347), uploaded on the Cartographer page: the image's size,
+    // drawn fitted to the town's 0–1000 square, or null.
+    art:
+      settlement.town && settlement.town.image
+        ? { width: settlement.town.image.width, height: settlement.town.image.height }
+        : null,
     layout: report,
     routes: (settlement.connections || []).map((id) => ({
       ...ref(world.locations, id),

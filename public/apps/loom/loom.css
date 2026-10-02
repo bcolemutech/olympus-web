@@ -510,6 +510,10 @@
   stroke-width: 1;
 }
 
+.loom-town-art {
+  opacity: 0.9;
+}
+
 .loom-town-path-casing {
   stroke: rgba(10, 14, 26, 0.6);
   stroke-width: 8;
