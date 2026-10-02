@@ -27,10 +27,15 @@
     return Math.min(panel.width / map.width, panel.height / map.height);
   }
 
+  // The nearest allowed scale: between the whole map and the maximum.
+  function clampScale(scale, panel, map) {
+    return Math.max(minScale(panel, map), Math.min(MAX_SCALE, scale));
+  }
+
   // Keeps the map covering the panel where it can, and centred where it
   // is smaller than the panel.
   function clamp(view, panel, map) {
-    var scale = Math.max(minScale(panel, map), Math.min(MAX_SCALE, view.scale));
+    var scale = clampScale(view.scale, panel, map);
     var w = map.width * scale;
     var h = map.height * scale;
     var x =
@@ -70,10 +75,13 @@
     );
   }
 
-  // Zooms by `factor` about a screen point, which stays put.
+  // Zooms by `factor` about a screen point, which stays put. The scale is
+  // limited before the map is placed (#420): placing it for a scale past the
+  // limit, then limiting the scale, moved the map far from the point (at the
+  // maximum zoom, every further zoom-in jumped it toward the bottom-right).
   function zoomAt(view, factor, sx, sy, panel, map) {
     var anchor = toMap(view, sx, sy);
-    var scale = view.scale * factor;
+    var scale = clampScale(view.scale * factor, panel, map);
     return clamp({ scale: scale, x: sx - anchor.x * scale, y: sy - anchor.y * scale }, panel, map);
   }
 
@@ -86,12 +94,20 @@
   function pinch(startView, start, now, panel, map) {
     if (!(start.distance > 0) || !(now.distance > 0)) return clamp(startView, panel, map);
     var anchor = toMap(startView, start.mid.x, start.mid.y);
-    var scale = startView.scale * (now.distance / start.distance);
+    var scale = clampScale(startView.scale * (now.distance / start.distance), panel, map); // as in zoomAt
     return clamp(
       { scale: scale, x: now.mid.x - anchor.x * scale, y: now.mid.y - anchor.y * scale },
       panel,
       map
     );
+  }
+
+  // Two fingers' midpoint and how far apart they are.
+  function spreadOf(points) {
+    return {
+      mid: { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 },
+      distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y),
+    };
   }
 
   function pan(view, dx, dy, panel, map) {
@@ -115,7 +131,9 @@
     clamp: clamp,
     fit: fit,
     zoomAt: zoomAt,
+    clampScale: clampScale,
     pinch: pinch,
+    spreadOf: spreadOf,
     pan: pan,
     reveal: reveal,
   };

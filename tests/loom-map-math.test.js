@@ -134,6 +134,46 @@ describe('zoom and pan', () => {
     ).toEqual(math.clamp(start, PHONE, MAP));
   });
 
+  describe('at the zoom limits, zooming further leaves the map where it is (#420)', () => {
+    // At the maximum, a zoom-in used to place the map for the scale asked for
+    // (6 × 1.5 = 9) and then limit the scale to 6, which moved it ~1,800 px
+    // toward the bottom-right on every press of +.
+    const AT_MAX = { scale: math.MAX_SCALE, x: -1032.81, y: -5210.35 };
+    const PANEL = { width: 661.78, height: 544.69 }; // the iPad's, from the readout
+
+    test('the + button, or the wheel, at the maximum changes nothing', () => {
+      const pressed = math.zoomAt(AT_MAX, 1.5, PANEL.width / 2, PANEL.height / 2, PANEL, MAP);
+      expect(pressed).toEqual(math.clamp(AT_MAX, PANEL, MAP));
+      const wheeled = math.zoomAt(AT_MAX, Math.exp(0.15), 120, 400, PANEL, MAP);
+      expect(wheeled).toEqual(math.clamp(AT_MAX, PANEL, MAP));
+    });
+
+    test('zooming in to the maximum keeps the point under the cursor', () => {
+      const near = { scale: 5.94, x: -578.24, y: -3382.79 };
+      const under = math.toMap(near, 331, 272);
+      const zoomed = math.zoomAt(near, 1.5, 331, 272, PANEL, MAP);
+      expect(zoomed.scale).toBe(math.MAX_SCALE);
+      const still = math.toMap(zoomed, 331, 272);
+      close(still.x, under.x);
+      close(still.y, under.y);
+    });
+
+    test('spreading the fingers past the maximum keeps the point under them', () => {
+      const at = { mid: { x: 200, y: 260 }, distance: 100 };
+      const under = math.toMap(AT_MAX, 200, 260);
+      const out = math.pinch(AT_MAX, at, { mid: { x: 200, y: 260 }, distance: 300 }, PANEL, MAP);
+      expect(out.scale).toBe(math.MAX_SCALE);
+      const still = math.toMap(out, 200, 260);
+      close(still.x, under.x);
+      close(still.y, under.y);
+    });
+
+    test('zooming out at the whole map changes nothing', () => {
+      const all = math.clamp({ scale: 0, x: 0, y: 0 }, PANEL, MAP);
+      expect(math.zoomAt(all, 1 / 1.5, 50, 50, PANEL, MAP)).toEqual(all);
+    });
+  });
+
   test('panning moves the view, within the map', () => {
     const view = { scale: 2, x: -1000, y: -800 };
     expect(math.pan(view, 50, -30, DESKTOP, MAP)).toEqual({ scale: 2, x: -950, y: -830 });
