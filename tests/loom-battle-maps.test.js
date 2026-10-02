@@ -1,0 +1,616 @@
+'use strict';
+
+/**
+ * The battle-map layer (planning/the-loom-layered-worlds.md §9; L-351 / #400):
+ * arriving at a place with a map lands on it, moving on the grid (to a cell,
+ * a feature, an exit), leaving by an exit (out to the town, or onto another
+ * map), what the narrator and the interpreter are told, new games, and
+ * grading with generic maps. Played through the Loom's callables on a Nisia
+ * world in the Firestore emulator (Gemini mocked), plus pure tests.
+ *
+ * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
+ *        "cd tests && npx jest loom-battle-maps --verbose"
+ */
+
+const PROJECT = 'demo-loom-battle-maps';
+process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+process.env.GCLOUD_PROJECT = PROJECT;
+
+const mockCallGemini = jest.fn();
+jest.mock('../functions/gemini', () => ({
+  callGemini: (...args) => mockCallGemini(...args),
+}));
+
+const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
+const { layOutTowns } = require('./helpers/towns');
+const { loomCreateSave, loomPlayTurn } = require('../functions/index');
+
+const fs = require('fs');
+const path = require('path');
+const functionsDir = path.resolve(__dirname, '../functions');
+const { getFirestore } = require(
+  require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
+);
+const { parseAzgaarExport } = require('../functions/cartographer/parse');
+const { mapToCanon } = require('../functions/cartographer/map');
+const { loadDraftWorld } = require('../functions/cartographer/load');
+const loomCanon = require('../functions/loom-canon');
+const maps = require('../functions/loom-canon/maps');
+const grading = require('../functions/loom-canon/grading');
+const { evaluate } = require('../functions/loom-turn/adjudicate');
+const { validateSave } = require('../functions/loom-models');
+
+const db = getFirestore();
+const PLAYER = { uid: 'player-001', token: { apps: ['loom'] } };
+const WORLD = 'nisia-b0b0b0';
+const worldRef = db.collection('loom_worlds').doc(WORLD);
+const WRITTEN = { description: 'mcp' };
+
+// Burdendal (loc_1): a gate, a market and a tavern. The tavern, the Gull &
+// Anchor, has its own map, with stairs down to a cellar map; the market has a
+// generic market-stall map; the gate has none.
+const PLACES = {
+  plc_1_gate: {
+    name: 'The North Gate',
+    kind: 'gate',
+    entrance: { via: ['road', 'trail'] },
+    connections: ['plc_1_market', 'plc_1_tavern'],
+  },
+  plc_1_market: {
+    name: 'Market Square',
+    kind: 'market',
+    connections: ['plc_1_gate', 'plc_1_tavern'],
+    battleMap: { mapId: 'bm_stall' },
+  },
+  plc_1_tavern: {
+    name: 'The Gull & Anchor',
+    kind: 'tavern',
+    connections: ['plc_1_gate', 'plc_1_market'],
+    battleMap: { mapId: 'bm_tavern' },
+  },
+};
+const MAPS = {
+  bm_tavern: {
+    name: 'The Gull & Anchor, ground floor',
+    width: 12,
+    height: 8,
+    image: null,
+    entries: [
+      { id: 'door', x: 1, y: 4 },
+      { id: 'stair-top', x: 10, y: 6 },
+    ],
+    exits: [
+      { id: 'front-door', name: 'the front door', x: 0, y: 4, to: 'out' },
+      { id: 'cellar-stairs', name: 'the cellar stairs', x: 11, y: 7, to: { map: 'bm_cellar' } },
+    ],
+    features: [
+      { id: 'bar', name: 'the bar', x: 3, y: 2 },
+      { id: 'hearth', name: 'the hearth', x: 9, y: 1 },
+    ],
+    generic: null,
+  },
+  bm_cellar: {
+    name: 'The cellar',
+    width: 6,
+    height: 6,
+    image: null,
+    entries: [{ id: 'stair-foot', x: 5, y: 5 }],
+    exits: [
+      {
+        id: 'stairs-up',
+        name: 'the stairs up',
+        x: 5,
+        y: 4,
+        to: { map: 'bm_tavern', entry: 'stair-top' },
+      },
+    ],
+    features: [{ id: 'casks', name: 'the casks', x: 1, y: 1 }],
+    generic: null,
+  },
+  bm_stall: {
+    name: 'A market stall',
+    width: 8,
+    height: 8,
+    image: null,
+    entries: [{ id: 'aisle', x: 4, y: 7 }],
+    exits: [{ id: 'aisle-out', name: 'the aisle', x: 4, y: 7, to: 'out' }],
+    features: [],
+    generic: { kind: 'market', terrain: null },
+  },
+};
+
+async function bump() {
+  await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+}
+
+// Every turn is the move given: a target, a target list, or null (look).
+const prompts = { interpret: [], narrate: [] };
+function playerMovesTo(target) {
+  mockCallGemini.mockImplementation(async (options) => {
+    if (options.systemInstruction.includes('INTERPRET stage')) {
+      prompts.interpret.push(options.systemInstruction);
+      return target
+        ? { verb: 'move', targets: Array.isArray(target) ? target : [target], params: {} }
+        : { verb: 'look', targets: [], params: {} };
+    }
+    if (options.systemInstruction.includes('summarizer')) return 'A summary.';
+    prompts.narrate.push(options.userMessage);
+    return { narration: 'You go on.', inventedEntities: [], suggestedActions: [] };
+  });
+}
+
+const newGame = () =>
+  loomCreateSave.run({
+    data: { worldId: WORLD, name: 'Voyage', characterName: 'Tam' },
+    auth: PLAYER,
+  });
+const turn = (saveId) =>
+  loomPlayTurn.run({ data: { worldId: WORLD, saveId, actionText: 'go on' }, auth: PLAYER });
+const saveOf = async (saveId) => (await db.collection('loom_saves').doc(saveId).get()).data();
+const lastResolution = async (saveId) =>
+  (
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .collection('loom_turns')
+      .orderBy('index', 'desc')
+      .limit(1)
+      .get()
+  ).docs[0].data().resolution;
+async function moveTo(saveId, target) {
+  playerMovesTo(target);
+  await turn(saveId);
+  return lastResolution(saveId);
+}
+// A step on the grid, as the grid view sends it.
+async function stepTo(saveId, cell) {
+  playerMovesTo(null);
+  await loomPlayTurn.run({
+    data: { worldId: WORLD, saveId, action: { verb: 'move', cell } },
+    auth: PLAYER,
+  });
+  return lastResolution(saveId);
+}
+const standAt = (saveId, placeId, mapId = null, cell = null) =>
+  db.collection('loom_saves').doc(saveId).update({ location: 'loc_1', placeId, mapId, cell });
+const where = async (saveId) => {
+  const { location, placeId, mapId, cell } = await saveOf(saveId);
+  return { location, placeId, mapId, cell };
+};
+
+beforeAll(async () => {
+  await db.recursiveDelete(db.collection('loom_worlds'));
+  await db.recursiveDelete(db.collection('loom_saves'));
+  const parsed = parseAzgaarExport(
+    fs.readFileSync(path.join(__dirname, 'fixtures/azgaar/nisia.json'))
+  );
+  await loadDraftWorld({
+    db,
+    mapped: mapToCanon(parsed),
+    source: parsed.source,
+    uploadedBy: 'builder-001',
+    worldId: WORLD,
+  });
+  await worldRef.update({
+    status: 'published',
+    openingHook: 'A storm drives your ship ashore at Burdendal.',
+    rules: { startingLocationId: 'loc_1' },
+    canonVersion: 2,
+  });
+  for (const [id, place] of Object.entries(PLACES)) {
+    await worldRef
+      .collection('places')
+      .doc(id)
+      .set({
+        id,
+        locationId: 'loc_1',
+        description: `${place.name}, as the locals know it.`,
+        sources: WRITTEN,
+        npcIds: [],
+        rules: {},
+        entrance: null,
+        ...place,
+      });
+  }
+  for (const [id, map] of Object.entries(MAPS)) {
+    await worldRef
+      .collection('battleMaps')
+      .doc(id)
+      .set({ id, sources: WRITTEN, ...map });
+  }
+  await worldRef
+    .collection('locations')
+    .doc('loc_1')
+    .update({ description: 'Written up: Burdendal.', sources: WRITTEN });
+  await layOutTowns(worldRef, 'loc_1');
+  await bump();
+});
+
+beforeEach(() => {
+  loomCanon.clearWorldCache();
+  mockCallGemini.mockReset();
+  prompts.interpret.length = 0;
+  prompts.narrate.length = 0;
+});
+
+afterAll(async () => {
+  await db.recursiveDelete(db.collection('loom_worlds'));
+  await db.recursiveDelete(db.collection('loom_saves'));
+  functionsTest.cleanup();
+});
+
+describe('a visit to the Gull & Anchor', () => {
+  let saveId;
+  beforeAll(async () => {
+    ({ saveId } = await newGame());
+  });
+
+  test('walking into a place with a map lands on it, at its entry', async () => {
+    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_gate', mapId: null });
+    expect(await moveTo(saveId, 'plc_1_tavern')).toMatchObject({
+      outcome: 'success',
+      constraints: ['You make your way to The Gull & Anchor.'],
+    });
+    expect(await where(saveId)).toEqual({
+      location: 'loc_1',
+      placeId: 'plc_1_tavern',
+      mapId: 'bm_tavern',
+      cell: { x: 1, y: 4 },
+    });
+  });
+
+  test('the narrator is told where on the map, the features, and the only ways on', async () => {
+    playerMovesTo(null);
+    await turn(saveId);
+    const message = prompts.narrate.at(-1);
+    expect(message).toContain(
+      'ON THE MAP OF The Gull & Anchor (The Gull & Anchor, ground floor, 12 × 8 cells): ' +
+        'the player stands at (1, 4).'
+    );
+    expect(message).toContain('Features: the bar (3, 2); the hearth (9, 1).');
+    expect(message).toContain('- the front door (0, 4): out of The Gull & Anchor');
+    expect(message).toContain('- the cellar stairs (11, 7): to The cellar');
+    expect(message).not.toContain('WAYS ON FROM'); // the town's ways wait until they leave
+  });
+
+  test('the interpreter knows the features and the ways out, as targets', async () => {
+    playerMovesTo(null);
+    await turn(saveId);
+    const prompt = prompts.interpret.at(-1);
+    expect(prompt).toContain('- feature:bar (feature here): the bar');
+    expect(prompt).toContain('- exit:front-door (way out of here): the front door');
+  });
+
+  test('walking to a feature, typed', async () => {
+    expect(await moveTo(saveId, 'feature:bar')).toMatchObject({
+      outcome: 'success',
+      constraints: ['You move to the bar.'],
+    });
+    expect((await where(saveId)).cell).toEqual({ x: 3, y: 2 });
+    expect((await moveTo(saveId, 'feature:bar')).constraints).toEqual(["You're already there."]);
+    expect((await moveTo(saveId, 'feature:piano')).outcome).toBe('invalid_target');
+  });
+
+  test('stepping to a cell, from the grid; nothing blocks movement, but the edges do', async () => {
+    expect(await stepTo(saveId, { x: 9, y: 1 })).toMatchObject({
+      outcome: 'success',
+      constraints: ['You move to the hearth.'],
+    });
+    expect(await stepTo(saveId, { x: 6, y: 5 })).toMatchObject({
+      outcome: 'success',
+      constraints: ['You move across The Gull & Anchor, ground floor.'],
+    });
+    expect((await where(saveId)).cell).toEqual({ x: 6, y: 5 });
+    expect((await stepTo(saveId, { x: 12, y: 0 })).constraints).toEqual(["That's off the map."]);
+  });
+
+  test('anywhere else waits until they have left the map', async () => {
+    expect((await moveTo(saveId, 'plc_1_market')).constraints).toEqual([
+      'To leave The Gull & Anchor, go out by the front door first.',
+    ]);
+    expect((await moveTo(saveId, 'loc_631')).outcome).toBe('blocked');
+    expect((await moveTo(saveId, 'plc_1_tavern')).constraints).toEqual(["You're already there."]);
+  });
+
+  test('stairs to another map, and back up to the entry they name', async () => {
+    expect(await moveTo(saveId, 'exit:cellar-stairs')).toMatchObject({
+      outcome: 'success',
+      constraints: ['You go by the cellar stairs to The cellar.'],
+    });
+    expect(await where(saveId)).toMatchObject({
+      placeId: 'plc_1_tavern',
+      mapId: 'bm_cellar',
+      cell: { x: 5, y: 5 },
+    });
+    // On the cellar, the way out of the tavern is back up the stairs.
+    expect((await moveTo(saveId, 'plc_1_market')).constraints).toEqual([
+      'To leave The Gull & Anchor, go out by the stairs up first.',
+    ]);
+    // Stepping onto an exit's cell leaves by it, too.
+    await stepTo(saveId, { x: 5, y: 4 });
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 10, y: 6 } });
+  });
+
+  test('out by the front door: back in town, at the tavern, off its map', async () => {
+    expect(await moveTo(saveId, 'exit:front-door')).toMatchObject({
+      outcome: 'success',
+      constraints: ['You leave The Gull & Anchor by the front door.'],
+    });
+    expect(await where(saveId)).toEqual({
+      location: 'loc_1',
+      placeId: 'plc_1_tavern',
+      mapId: null,
+      cell: null,
+    });
+    playerMovesTo(null);
+    await turn(saveId);
+    expect(prompts.narrate.at(-1)).toContain('WAYS ON FROM The Gull & Anchor, Burdendal:');
+  });
+
+  test('going to the place again steps back onto its map', async () => {
+    expect(await moveTo(saveId, 'plc_1_tavern')).toMatchObject({
+      outcome: 'success',
+      constraints: ['You go into The Gull & Anchor.'],
+    });
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 1, y: 4 } });
+  });
+
+  test('a generic map works like any other; a place with none is entered off-map', async () => {
+    await standAt(saveId, 'plc_1_tavern');
+    await moveTo(saveId, 'plc_1_market');
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_stall', cell: { x: 4, y: 7 } });
+    await moveTo(saveId, 'exit:aisle-out');
+    await moveTo(saveId, 'plc_1_gate');
+    expect(await where(saveId)).toEqual({
+      location: 'loc_1',
+      placeId: 'plc_1_gate',
+      mapId: null,
+      cell: null,
+    });
+  });
+});
+
+describe('nobody is stranded, and the turn request is checked', () => {
+  test('a retired map is not entered, but a save on one can still leave by its exits', async () => {
+    const { saveId } = await newGame();
+    await worldRef.collection('battleMaps').doc('bm_tavern').update({ retired: true });
+    await bump();
+    await standAt(saveId, 'plc_1_gate');
+    await moveTo(saveId, 'plc_1_tavern');
+    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_tavern', mapId: null });
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 2, y: 2 });
+    await moveTo(saveId, 'exit:front-door');
+    expect(await where(saveId)).toMatchObject({ mapId: null, cell: null });
+    await worldRef.collection('battleMaps').doc('bm_tavern').update({ retired: false });
+    await bump();
+  });
+
+  test('a grid step off a map is refused; bad cells are refused before the turn', async () => {
+    const { saveId } = await newGame();
+    expect((await stepTo(saveId, { x: 1, y: 1 })).constraints).toEqual([
+      "There's no map here to move on.",
+    ]);
+    for (const cell of [{ x: -1, y: 0 }, { x: 0, y: 64 }, { x: 1.5, y: 2 }, null]) {
+      await expect(
+        loomPlayTurn.run({
+          data: { worldId: WORLD, saveId, action: { verb: 'move', cell } },
+          auth: PLAYER,
+        })
+      ).rejects.toMatchObject({ code: 'invalid-argument' });
+    }
+  });
+
+  test('a game that starts at a place with a map starts on it', async () => {
+    await worldRef
+      .collection('places')
+      .doc('plc_1_gate')
+      .update({ battleMap: { mapId: 'bm_stall' } });
+    await bump();
+    const { saveId } = await newGame();
+    expect(await where(saveId)).toMatchObject({
+      placeId: 'plc_1_gate',
+      mapId: 'bm_stall',
+      cell: { x: 4, y: 7 },
+    });
+    await worldRef.collection('places').doc('plc_1_gate').update({ battleMap: null });
+    await bump();
+  });
+});
+
+describe('points of interest, and the rules engine (pure)', () => {
+  // A settlement and a ruin linked by a trail; the ruin has a battle map.
+  const world = {
+    id: 'w',
+    status: 'published',
+    locations: {
+      town: {
+        id: 'town',
+        name: 'Town',
+        connections: ['ruin'],
+        description: 'Written.',
+        sources: WRITTEN,
+        geo: { kind: 'settlement', links: { ruin: 'trail' } },
+      },
+      ruin: {
+        id: 'ruin',
+        name: 'The Ruin',
+        connections: ['town'],
+        description: 'Broken towers.',
+        sources: WRITTEN,
+        geo: { kind: 'poi', links: { town: 'trail' } },
+        battleMap: { mapId: 'bm_ruin' },
+      },
+    },
+    // The town needs a layout to be open (the town requirement): one gate.
+    places: {
+      plc_gate: {
+        id: 'plc_gate',
+        locationId: 'town',
+        name: 'The Gate',
+        description: 'A gate.',
+        sources: WRITTEN,
+        entrance: { via: ['trail'] },
+        connections: [],
+      },
+    },
+    battleMaps: {
+      bm_ruin: {
+        id: 'bm_ruin',
+        name: 'The Ruin',
+        width: 10,
+        height: 10,
+        entries: [{ id: 'gap', x: 0, y: 5 }],
+        exits: [{ id: 'gap-out', name: 'the gap in the wall', x: 0, y: 5, to: 'out' }],
+        features: [],
+        generic: null,
+      },
+      bm_walled: {
+        id: 'bm_walled',
+        name: 'No way out',
+        width: 4,
+        height: 4,
+        entries: [{ id: 'in', x: 1, y: 1 }],
+        exits: [],
+        features: [],
+        generic: null,
+      },
+    },
+    factions: {},
+    characters: {},
+  };
+  const move = (save, targets, params = {}) =>
+    evaluate({ verb: 'move', targets, params }, {}, save, 10, world);
+
+  test('travelling to a point of interest with a map lands on it', () => {
+    const result = move({ location: 'town' }, ['ruin']);
+    expect(result.outcome).toBe('success');
+    expect(result.mutations).toEqual(
+      expect.arrayContaining([
+        { target: 'save', op: 'set-flag', path: 'location', value: 'ruin' },
+        { target: 'save', op: 'set-flag', path: 'mapId', value: 'bm_ruin' },
+        { target: 'save', op: 'set-flag', path: 'cell', value: { x: 0, y: 5 } },
+      ])
+    );
+  });
+
+  test('leaving it by its exit is back out in the world; then travel is as before', () => {
+    const left = move({ location: 'ruin', mapId: 'bm_ruin', cell: { x: 4, y: 4 } }, [
+      'exit:gap-out',
+    ]);
+    expect(left.constraints).toEqual(['You leave The Ruin by the gap in the wall.']);
+    expect(move({ location: 'ruin', mapId: null }, ['town']).outcome).toBe('success');
+  });
+
+  test('a map with no exits holds nobody: the move goes ahead, off the map', () => {
+    const result = move({ location: 'ruin', mapId: 'bm_walled', cell: { x: 1, y: 1 } }, ['town']);
+    expect(result.outcome).toBe('success');
+    expect(result.mutations).toEqual(
+      expect.arrayContaining([{ target: 'save', op: 'set-flag', path: 'mapId', value: null }])
+    );
+  });
+
+  test('saves validate their place on a map', () => {
+    const save = (extra) => ({
+      ownerUid: 'u',
+      worldId: 'w',
+      name: 'n',
+      character: { name: 'c', condition: 'healthy', inventory: [], abilities: [], goals: [] },
+      privateFlags: {},
+      relationships: {},
+      recentSummary: '',
+      ...extra,
+    });
+    expect(validateSave(save({ mapId: 'bm_ruin', cell: { x: 0, y: 5 } })).valid).toBe(true);
+    expect(validateSave(save({ mapId: null, cell: null })).valid).toBe(true);
+    expect(validateSave(save({ mapId: 7 })).valid).toBe(false);
+    expect(validateSave(save({ cell: { x: -1, y: 0 } })).valid).toBe(false);
+  });
+
+  test('map helpers: kind, entry, edges', () => {
+    expect(maps.kindOf(world, world.locations.ruin)).toBe('own');
+    expect(maps.kindOf(world, world.locations.town)).toBeNull();
+    expect(maps.entryCell(world.battleMaps.bm_ruin, 'nowhere')).toEqual({ x: 0, y: 5 });
+    expect(maps.inBounds(world.battleMaps.bm_ruin, { x: 10, y: 0 })).toBe(false);
+  });
+});
+
+describe('grading with battle maps (switched on in a test; off in play)', () => {
+  const layers = { town: null, battleMap: maps.kindOf };
+  const base = () => ({
+    id: 'w',
+    status: 'published',
+    locations: {
+      ruin: {
+        id: 'ruin',
+        name: 'The Ruin',
+        description: 'Broken towers.',
+        sources: WRITTEN,
+        geo: { kind: 'poi' },
+      },
+    },
+    places: {
+      plc_inn: {
+        id: 'plc_inn',
+        locationId: 'loc_x',
+        name: 'The Inn',
+        description: 'Warm.',
+        sources: WRITTEN,
+        npcIds: [],
+        connections: [],
+      },
+    },
+    battleMaps: {
+      bm_own: { id: 'bm_own', name: 'The Ruin', width: 4, height: 4, generic: null },
+      bm_generic: {
+        id: 'bm_generic',
+        name: 'An inn',
+        width: 4,
+        height: 4,
+        generic: { kind: 'tavern' },
+      },
+    },
+    lore: {
+      l1: { id: 'l1', title: 'Towers', text: '…', entityRefs: ['ruin', 'plc_inn'] },
+    },
+    characters: {},
+    factions: {},
+  });
+
+  test('battle maps are not required in play yet', () => {
+    expect(grading.LAYER_CHECKS.battleMap).toBeNull();
+    const w = base();
+    expect(grading.gradeLocation(w, w.locations.ruin).grade).toBe('rich');
+  });
+
+  test('no map: Unbuilt, and closed', () => {
+    const w = base();
+    expect(grading.gradeLocation(w, w.locations.ruin, { layers })).toEqual({
+      grade: 'unbuilt',
+      checklist: [{ need: 'battleMap', for: 'playable', message: 'It has no battle map.' }],
+    });
+    expect(grading.gradePlace(w, w.places.plc_inn, { layers }).grade).toBe('unbuilt');
+  });
+
+  test('a generic map: Playable, but short of Rich', () => {
+    const w = base();
+    w.locations.ruin.battleMap = { mapId: 'bm_generic' };
+    w.places.plc_inn.battleMap = { mapId: 'bm_generic' };
+    const generic = { need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' };
+    expect(grading.gradeLocation(w, w.locations.ruin, { layers })).toEqual({
+      grade: 'playable',
+      checklist: [generic],
+    });
+    expect(grading.gradePlace(w, w.places.plc_inn, { layers })).toEqual({
+      grade: 'playable',
+      checklist: [generic],
+    });
+  });
+
+  test('its own map: Rich, with the rest of the bar met; a retired map counts as none', () => {
+    const w = base();
+    w.locations.ruin.battleMap = { mapId: 'bm_own' };
+    expect(grading.gradeLocation(w, w.locations.ruin, { layers }).grade).toBe('rich');
+    w.battleMaps.bm_own.retired = true;
+    expect(grading.gradeLocation(w, w.locations.ruin, { layers }).grade).toBe('unbuilt');
+  });
+});

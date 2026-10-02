@@ -10,6 +10,7 @@ const loomCanon = require('./loom-canon');
 const { isPlayable } = require('./loom-canon/grading');
 const { withNeighbours } = require('./loom-turn/discovery');
 const { arrivalPlace } = require('./loom-canon/town');
+const maps = require('./loom-canon/maps');
 const { mapView } = require('./loom-turn/map-view');
 const { makeSave } = require('./loom-models');
 
@@ -458,6 +459,8 @@ function requireLoomAuth(request) {
  * Data: { worldId: string, saveId: string, actionText: string }
  *    or { worldId, saveId, action: { verb: 'move', target: locationId } } — a
  *       move made on the world map (L-331 / #393), which skips INTERPRET
+ *    or { worldId, saveId, action: { verb: 'move', cell: { x, y } } } — a step
+ *       on a battle map (L-351), likewise
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
  */
 exports.loomPlayTurn = onCall(async (request) => {
@@ -475,15 +478,19 @@ exports.loomPlayTurn = onCall(async (request) => {
     if (actionText !== undefined) {
       throw new HttpsError('invalid-argument', 'Send actionText or action, not both.');
     }
+    const isCell = (cell) =>
+      Boolean(cell) &&
+      typeof cell === 'object' &&
+      [cell.x, cell.y].every((n) => Number.isInteger(n) && n >= 0 && n < maps.MAX_SIDE);
+    const hasTarget = typeof action.target === 'string';
     if (
       typeof action !== 'object' ||
       action.verb !== 'move' ||
-      typeof action.target !== 'string' ||
-      !/^[A-Za-z0-9_-]{1,80}$/.test(action.target)
+      (hasTarget ? !/^[A-Za-z0-9_-]{1,80}$/.test(action.target) : !isCell(action.cell))
     ) {
       throw new HttpsError(
         'invalid-argument',
-        'action must be { verb: "move", target: <location id> }.'
+        'action must be { verb: "move", target: <place id> } or { verb: "move", cell: { x, y } }.'
       );
     }
   } else {
@@ -502,7 +509,12 @@ exports.loomPlayTurn = onCall(async (request) => {
       worldId: worldId.trim(),
       saveId: saveId.trim(),
       ...(action
-        ? { action: { verb: 'move', target: action.target } }
+        ? {
+            action:
+              typeof action.target === 'string'
+                ? { verb: 'move', target: action.target }
+                : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
+          }
         : { actionText: actionText.trim() }),
     });
   } catch (err) {
@@ -595,6 +607,7 @@ exports.loomCreateSave = onCall(async (request) => {
 
   const saveRef = db.collection('loom_saves').doc();
 
+  const startPlace = arrivalPlace(canonWorld, start.id, null);
   const save = makeSave({
     ownerUid: uid,
     worldId: worldId.trim(),
@@ -604,8 +617,12 @@ exports.loomCreateSave = onCall(async (request) => {
       abilities: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
     },
     location: canonWorld.rules && canonWorld.rules.startingLocationId,
-    // A start with a town layout (L-342) begins at its first open entrance.
-    placeId: (arrivalPlace(canonWorld, start.id, null) || {}).id || null,
+    // A start with a town layout (L-342) begins at its first open entrance,
+    // and on its battle map if it has one (L-351).
+    placeId: startPlace ? startPlace.id : null,
+    ...Object.fromEntries(
+      maps.arrivalMutations(canonWorld, startPlace || start, {}).map((m) => [m.path, m.value])
+    ),
     // The world map shows what a save has discovered (L-331): at first, the
     // start and the places it connects to.
     discovered: withNeighbours(canonWorld, start.id),

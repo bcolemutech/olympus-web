@@ -1,6 +1,7 @@
 'use strict';
 
 const { callGemini } = require('../gemini');
+const maps = require('../loom-canon/maps');
 
 /**
  * Stage 2 — INTERPRET (design doc §5).
@@ -51,6 +52,17 @@ function buildSystemInstruction(knownEntities) {
 // player is in (L-342), so "go to the market" resolves to that town's market.
 function buildKnownEntities(canonWorld, save) {
   const entities = [];
+  // On a battle map (L-351): its features and ways out first, the nearest
+  // things there are. Targeted as "feature:<id>" and "exit:<id>".
+  const onMap = save ? maps.positionOf(canonWorld, save).map : null;
+  if (onMap) {
+    (onMap.features || []).forEach((f) => {
+      entities.push({ id: 'feature:' + f.id, name: f.name, kind: 'feature here' });
+    });
+    (onMap.exits || []).forEach((e) => {
+      entities.push({ id: 'exit:' + e.id, name: e.name, kind: 'way out of here' });
+    });
+  }
   // Retired entities (soft-removed from a published world) can't be targeted.
   const live = (entity) => !entity.retired;
   Object.values(canonWorld.locations)

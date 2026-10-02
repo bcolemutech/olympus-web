@@ -65,7 +65,8 @@ async function intake(params) {
  * state authority; only { narration, stateSummary, suggestedActions }.
  *
  * A turn is either typed text, or a structured action from the world map
- * (`action: { verb: 'move', target }`; L-331 / #393). A structured move needs
+ * (`action: { verb: 'move', target }`; L-331 / #393) or a battle map
+ * (`action: { verb: 'move', cell: { x, y } }`; L-351). A structured move needs
  * no model to interpret it, so it skips INTERPRET's Gemini call, but it is
  * adjudicated, gated and narrated exactly like a typed one.
  *
@@ -85,7 +86,10 @@ async function runTurnPipeline(params) {
 
   let actionText = params.actionText;
   let proposedAction;
-  if (action) {
+  if (action && action.cell) {
+    actionText = 'move to (' + action.cell.x + ', ' + action.cell.y + ')';
+    proposedAction = { verb: 'move', targets: [], params: { from: 'map', cell: action.cell } };
+  } else if (action) {
     const target = canonWorld.locations[action.target] || (canonWorld.places || {})[action.target];
     actionText = 'travel to ' + (target ? target.name : action.target);
     proposedAction = { verb: 'move', targets: [action.target], params: { from: 'map' } };

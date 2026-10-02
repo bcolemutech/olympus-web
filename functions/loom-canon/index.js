@@ -168,7 +168,15 @@ function getEntitySnippet(worldId, entityId) {
 // ── Firestore-backed worlds ──────────────────────────────────────────────
 
 const WORLDS_COLLECTION = 'loom_worlds';
-const ENTITY_COLLECTIONS = ['locations', 'factions', 'regions', 'characters', 'lore', 'places'];
+const ENTITY_COLLECTIONS = [
+  'locations',
+  'factions',
+  'regions',
+  'characters',
+  'lore',
+  'places',
+  'battleMaps', // battle maps of places and points of interest (L-351; ./maps.js)
+];
 const LOADABLE_STATUSES = ['draft', 'published'];
 
 // worldId → { canonVersion, world }, per Cloud Functions instance.
