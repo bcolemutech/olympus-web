@@ -228,6 +228,8 @@ One milestone, **The Loom — Phase 3b: Layered Worlds**, with six epics, each e
 | **L-370 Game time** (later)       | To be planned: `save.time` and how long each resolution takes (steps in town, travel by miles and route kind, nights on the road, other turns, waiting and resting) · the narrator and interpreter know the time · the day and time in the play view, and travel times on the map cards · time on battle maps | Walking from Hatham to Daldockley by trail takes about 2½ hours, steps in town take minutes, the narrator describes nightfall, and the play view shows "Day 1, evening" |
 | **L-360 Off-road travel** (later) | To be planned: terrain for the whole map from the Azgaar export (biome, height, land or sea for every cell) · travel cross-country to any known place · random events in the wilderness, played on generic terrain maps                                                                                       | A player sets out cross-country, is stopped by an event in the rainforest on a generic map, and goes on                                                                 |
 
+**Movement and vision** (turns, walls and doors, waypoints, fog of war) follow as their own phase, in [`the-loom-movement-and-vision.md`](./the-loom-movement-and-vision.md) (2026-10-02). Game time comes after it.
+
 **Order:** L-320 comes first, because everything else is graded and gated through it. L-330 can follow immediately, since it needs no new data. L-340 comes before L-350, since places in town are where most battle maps live. L-370 comes after L-350, so battle-map moves take time from the start. L-360 comes last, since wilderness events are played on generic battle maps, and cross-country travel takes time.
 
 ---
