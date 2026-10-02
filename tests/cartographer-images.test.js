@@ -81,6 +81,32 @@ describe('battle maps', () => {
     ).toBe(true);
   });
 
+  test('SVG art (L-356): drawn to the grid, one viewBox unit per cell', () => {
+    // A dark red cell at (8, 6), on a brown floor.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8">' +
+      '<rect width="12" height="8" fill="#6d5a45"/>' +
+      '<rect x="8" y="6" width="1" height="1" fill="#a01818"/></svg>';
+    const { jpeg: jpg, legend } = images.renderBattleMap(TAVERN, Buffer.from(svg));
+    const img = decoded(jpg);
+    expect(legend.art).toBe(true);
+    expect(Math.max(img.width, img.height)).toBe(images.MAX_SIDE);
+    const cell = legend.cellSize.width;
+    expect(near(pixel(img, 8.5 * cell, 6.5 * cell), [160, 24, 24])).toBe(true);
+    expect(near(pixel(img, 6.5 * cell, 6.5 * cell), [109, 90, 69])).toBe(true);
+  });
+
+  test('transparent art shows the plain background, not black', () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8">' +
+      '<rect x="0" y="0" width="6" height="8" fill="#e0e0e0"/></svg>';
+    const { jpeg: jpg, legend } = images.renderBattleMap(TAVERN, Buffer.from(svg));
+    const img = decoded(jpg);
+    const cell = legend.cellSize.width;
+    expect(near(pixel(img, 10.5 * cell, 6.5 * cell), [26, 31, 44])).toBe(true); // see-through
+    expect(near(pixel(img, 4.5 * cell, 6.5 * cell), [224, 224, 224])).toBe(true);
+  });
+
   test('a small image is not scaled up', () => {
     const { legend } = images.renderBattleMap(TAVERN, png(600, 400));
     expect(legend.image).toEqual({ width: 600, height: 400 });

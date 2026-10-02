@@ -12,6 +12,7 @@ const { GRADES } = require('../../../loom-canon/grading');
 const { workList } = require('./work');
 const views = require('./views');
 const images = require('./images');
+const { MAX_SVG_BYTES } = require('../../../cartographer/svg');
 const town = require('../../../loom-canon/town');
 
 // The Cartographer's MCP connector (design planning/the-cartographer-design.md
@@ -447,6 +448,91 @@ function cartographerApp({ reader, writer, art }) {
         },
       },
       {
+        name: 'set_art',
+        title: 'Draw art (SVG)',
+        description:
+          'Give a battle map or a town art you draw yourself, as SVG, so it can be stubbed out ' +
+          'without another AI. Battle maps: use viewBox="0 0 <width> <height>", one unit per ' +
+          'cell, so cell (x, y) is the square from (x, y) to (x+1, y+1); the art is stretched ' +
+          'to the grid. Towns: use viewBox="0 0 1000 1000", the same space as place positions. ' +
+          'Plain drawing is fine: shapes, paths, text, gradients, patterns, filters, and <use> ' +
+          'of things in the same SVG. Scripts, event handlers, links or images from elsewhere, ' +
+          'foreignObject and DOCTYPE are refused. Up to 1 MB. The game draws names, exits and ' +
+          'features itself, so the art needn’t label them. Check the result with view_image. ' +
+          'svg null takes the art away. Replaces any art there, PNG or SVG.',
+        inputSchema: {
+          worldId,
+          of: z.enum(['battleMap', 'town']).describe('What the art is for.'),
+          id: entityId('battle map or settlement', 'list_battle_maps or find_locations'),
+          svg: z
+            .string()
+            .max(MAX_SVG_BYTES)
+            .nullable()
+            .describe('The SVG, or null to take the art away.'),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const target =
+            args.of === 'battleMap'
+              ? entityFor(
+                  world,
+                  'battleMaps',
+                  args.id,
+                  'battle map',
+                  'Use list_battle_maps to see them.'
+                )
+              : entityFor(
+                  world,
+                  'locations',
+                  args.id,
+                  'location',
+                  'Use find_locations to look one up.'
+                );
+          if (args.of === 'town' && (target.geo || {}).kind !== 'settlement') {
+            throw new ToolError(`${target.name} isn't a settlement, so it has no town.`);
+          }
+          let result;
+          try {
+            result = await art.draw(ctx.uid, args);
+          } catch (err) {
+            if (err instanceof ToolError) throw err;
+            if (err && typeof err.code === 'string' && err.message)
+              throw new ToolError(err.message);
+            throw err;
+          }
+          const warnings = [];
+          const size = result.image;
+          if (size) {
+            const aspect = size.width / size.height;
+            if (args.of === 'battleMap') {
+              const grid = target.width / target.height;
+              if (Math.abs(aspect - grid) / grid > 0.02) {
+                warnings.push(
+                  `Its shape (${size.width} × ${size.height}) isn't the grid's (${target.width} × ` +
+                    `${target.height}), so it is stretched to fit. Use viewBox="0 0 ${target.width} ` +
+                    `${target.height}" to line cells up exactly.`
+                );
+              }
+            } else if (Math.abs(aspect - 1) > 0.02) {
+              warnings.push(
+                `It isn't square (${size.width} × ${size.height}): the town view fits it inside the ` +
+                  'town’s square, centred, and place positions are in that square. Use ' +
+                  'viewBox="0 0 1000 1000" to line them up exactly.'
+              );
+            }
+          }
+          return {
+            of: args.of,
+            id: args.id,
+            name: result.name,
+            art: size ? { format: size.format, width: size.width, height: size.height } : null,
+            ...(warnings.length ? { warnings } : {}),
+            ...(size ? { next: 'Check it with view_image.' } : {}),
+          };
+        },
+      },
+      {
         name: 'get_character',
         title: 'Get character',
         description: 'One character in full: description, faction, where they are found, and lore.',
@@ -505,17 +591,31 @@ function cartographerApp({ reader, writer, art }) {
 // Registers the Cartographer on the production registry, backed by Firestore.
 function register(registry) {
   const { getFirestore } = require('firebase-admin/firestore');
+  const { getStorage } = require('firebase-admin/storage');
+  const writer = createFirestoreWorldWriter(getFirestore);
+  // The Cartographer's own service stores art (set_art), as the page does.
+  let service;
+  const cartographer = () => {
+    if (!service) {
+      const { createCartographerService } = require('../../../cartographer/service');
+      service = createCartographerService({
+        db: getFirestore(),
+        bucket: getStorage().bucket(),
+        writer,
+      });
+    }
+    return service;
+  };
   registry.registerApp(
     APP_ID,
     cartographerApp({
       reader: createFirestoreWorldReader(getFirestore),
-      writer: createFirestoreWorldWriter(getFirestore),
-      // Art, read from Cloud Storage for view_image.
+      writer,
       art: {
-        load: async (path) => {
-          const { getStorage } = require('firebase-admin/storage');
-          return (await getStorage().bucket().file(path).download())[0];
-        },
+        // Read from Cloud Storage for view_image.
+        load: async (path) => (await getStorage().bucket().file(path).download())[0],
+        // SVG Claude draws (set_art).
+        draw: (uid, args) => cartographer().drawArt(uid, args),
       },
     })
   );

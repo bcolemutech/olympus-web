@@ -26,8 +26,9 @@
       hint:
         "A town's art is drawn behind its places in the Loom's town view, fitted to a square. " +
         'Set place positions with Claude (0–1000 each way) to line them up with it; Claude can ' +
-        'check them with view_image. Azgaar can open a settlement in Watabou’s Medieval ' +
-        'Fantasy City Generator, which exports a PNG that works well.',
+        'check them with view_image. Upload a PNG or an SVG, or ask Claude to draw one ' +
+        '(set_art). Azgaar can open a settlement in Watabou’s Medieval Fantasy City ' +
+        'Generator, which exports images that work well.',
       pick: 'Settlement',
       of: 'settlements',
       file: 'town.png',
@@ -45,8 +46,9 @@
       title: 'Battle-map art',
       hint:
         "A battle map's art is drawn under its grid in the Loom, stretched to fit it. Draw the " +
-        'map with Claude first (set_battle_map); Claude can then check that its entries, exits ' +
-        'and features line up with the art, with view_image.',
+        'map with Claude first (set_battle_map). Upload a PNG or an SVG, or ask Claude to draw ' +
+        'one (set_art); Claude can check that its entries, exits and features line up with ' +
+        'the art, with view_image.',
       pick: 'Battle map',
       of: 'battle maps',
       file: 'battlemap.png',
@@ -78,10 +80,10 @@
     townGroup.appendChild(datalist);
 
     var fileGroup = el('div', 'carto-form-group');
-    fileGroup.appendChild(el('label', 'carto-label', 'Image (PNG, up to 30 MB)'));
+    fileGroup.appendChild(el('label', 'carto-label', 'Image (PNG up to 30 MB, or SVG up to 1 MB)'));
     var file = el('input', 'carto-input');
     file.type = 'file';
-    file.accept = '.png,image/png';
+    file.accept = '.png,.svg,image/png,image/svg+xml';
     file.required = true;
     fileGroup.appendChild(file);
 
@@ -189,17 +191,28 @@
       var settlement = byName[townInput.value.trim().toLowerCase()];
       var image = file.files[0];
       if (!settlement) return say(error, 'Pick one from the list.');
-      if (!image) return say(error, 'Choose a PNG image.');
-      if (image.size > Cartographer.MAX_PNG_BYTES) {
+      if (!image) return say(error, 'Choose a PNG or SVG image.');
+      // SVG art (L-356) is checked on the server before it is used.
+      var svg = image.type === 'image/svg+xml' || /\.svg$/i.test(image.name);
+      if (svg && image.size > Cartographer.MAX_SVG_BYTES) {
+        return say(error, 'The SVG is larger than 1 MB.');
+      }
+      if (!svg && image.size > Cartographer.MAX_PNG_BYTES) {
         return say(error, 'The image is larger than 30 MB.');
       }
       submit.disabled = true;
       var uploadId = Cartographer.upload.newUploadId();
       say(status, 'Uploading…');
       Cartographer.upload
-        .uploadFile(uploadId, kind.file, image, 'image/png', function (f) {
-          say(status, 'Uploading… ' + Math.round(f * 100) + '%');
-        })
+        .uploadFile(
+          uploadId,
+          svg ? kind.file.replace(/\.png$/, '.svg') : kind.file,
+          image,
+          svg ? 'image/svg+xml' : 'image/png',
+          function (f) {
+            say(status, 'Uploading… ' + Math.round(f * 100) + '%');
+          }
+        )
         .then(function () {
           say(status, 'Checking the image…');
           var data = { worldId: world.id, uploadId: uploadId };
