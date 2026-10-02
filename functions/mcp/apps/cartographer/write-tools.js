@@ -64,6 +64,7 @@ const COLLECTION = {
   character: 'characters',
   lore: 'lore',
   place: 'places',
+  battleMap: 'battleMaps',
 };
 const HINT = {
   location: 'Use find_locations to look one up.',
@@ -72,6 +73,7 @@ const HINT = {
   character: 'Use get_world to see characters.',
   lore: 'Use get_world to see lore.',
   place: 'Use get_town to see a town’s places.',
+  battleMap: 'Use list_battle_maps to see them.',
 };
 const UNREACHABLE_SHOWN = 5;
 
@@ -897,14 +899,15 @@ function writeTools({ writer }) {
       name: 'retire_entity',
       title: 'Retire or remove',
       description:
-        'Remove a place, realm, character or lore entry. In a published world it is retired: ' +
-        'kept, so saves that reference it keep working, but players can no longer reach, meet ' +
-        'or hear of it. In a draft it is deleted, along with every reference to it. The ' +
-        'starting location of a published world can’t be retired.',
+        'Remove a place, realm, character, lore entry or battle map. In a published world it ' +
+        'is retired: kept, so saves that reference it keep working, but players can no longer ' +
+        'reach, meet or hear of it. In a draft it is deleted, along with every reference to it. ' +
+        'The starting location of a published world can’t be retired, nor a battle map that a ' +
+        'place still uses or another map’s exit leads to.',
       inputSchema: {
         worldId,
         type: z
-          .enum(['location', 'faction', 'character', 'lore', 'place'])
+          .enum(['location', 'faction', 'character', 'lore', 'place', 'battleMap'])
           .describe('What kind it is (place: a place in town).'),
         id: entityId('entity', 'get_world or find_locations'),
       },
@@ -915,6 +918,7 @@ function writeTools({ writer }) {
           const entity = existing(world, args.type, args.id);
           const subject = { type: args.type, id: entity.id, name: labelOf(entity) };
           if (args.type === 'place') keepsAWayIn(world, entity, { removing: true });
+          if (args.type === 'battleMap') mapStillNeeded(world, entity);
           const warnings =
             args.type === 'location'
               ? reachWarnings(world, { removed: entity.id }, (entity.connections || [])[0])
@@ -961,6 +965,34 @@ function writeTools({ writer }) {
       }),
     },
   ];
+}
+
+// A battle map can't go while a place uses it or another map's exit leads to
+// it (L-352): players would land nowhere.
+function mapStillNeeded(world, map) {
+  const uses = (e) => !e.retired && e.battleMap && e.battleMap.mapId === map.id;
+  const users = [
+    ...Object.values(world.locations).filter(uses),
+    ...Object.values(world.places || {}).filter(uses),
+  ];
+  if (users.length) {
+    throw new ToolError(
+      `It is the battle map of ${users.map((u) => `${u.name} (${u.id})`).join(', ')}. ` +
+        'Give them another map (assign_battle_map) first.'
+    );
+  }
+  const linking = Object.values(world.battleMaps || {}).filter(
+    (other) =>
+      other.id !== map.id &&
+      !other.retired &&
+      (other.exits || []).some((e) => e.to && e.to !== 'out' && e.to.map === map.id)
+  );
+  if (linking.length) {
+    throw new ToolError(
+      `Exits on ${linking.map((m) => `${m.name} (${m.id})`).join(', ')} lead to it. Change ` +
+        'them (set_battle_map) first.'
+    );
+  }
 }
 
 // Shared with the town tools (./town-tools.js).

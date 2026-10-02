@@ -250,6 +250,7 @@ describe('connector surface', () => {
     const reads = tools.filter((t) => t.annotations.readOnlyHint);
     expect(reads.map((t) => t.name).sort()).toEqual([
       'find_locations',
+      'get_battle_map',
       'get_character',
       'get_faction',
       'get_location',
@@ -257,6 +258,7 @@ describe('connector surface', () => {
       'get_region',
       'get_town',
       'get_world',
+      'list_battle_maps',
       'list_work',
       'list_worlds',
     ]);

@@ -8,6 +8,7 @@ const {
   settlementProgress,
   rank,
 } = require('../../../loom-canon/grading');
+const maps = require('../../../loom-canon/maps');
 const { hopsFrom } = require('./views');
 
 // The build work list (planning/the-loom-layered-worlds.md §6; L-323 / #392):
@@ -42,7 +43,10 @@ const HOW_TO = {
   town:
     'Lay out the town: add_place (ways in and out with entranceFor), connect_places; check ' +
     'it with get_town.',
-  battleMap: 'Draw its battle map.',
+  battleMap:
+    'Give it a battle map: draw one with set_battle_map, or pick a generic one from ' +
+    'list_battle_maps, then assign_battle_map. A generic map opens a place; only its own ' +
+    'map can make it Rich.',
 };
 
 const geoOf = (location) => location.geo || {};
@@ -73,10 +77,20 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
   const grades = new Map(places.map((l) => [l.id, gradeLocation(world, l)]));
   const isOpen = (id) => grades.has(id) && rank(grades.get(id).grade) >= rank('playable');
 
+  // Battle maps (L-352): every point of interest and place in town says
+  // whether it has a map ('own', 'generic' or 'none'). `need: 'battleMap'`
+  // lists the ones without their own map, Rich or not: their own map is what
+  // they lack (while maps aren't required yet, grading doesn't say so).
+  const forMaps = need === 'battleMap';
+  const mapStatus = (entity) => maps.kindOf(world, entity) || 'none';
+  const skip = (grade, entity) =>
+    grade === 'rich' && !(forMaps && entity && mapStatus(entity) !== 'own');
+
   const items = [];
   for (const place of places) {
     const { grade: placeGrade, checklist } = grades.get(place.id);
-    if (placeGrade === 'rich') continue;
+    const mapped = geoOf(place).kind !== 'settlement' ? place : null;
+    if (skip(placeGrade, mapped)) continue;
     let priority = 'enrich';
     if (!isOpen(place.id)) {
       const nextToOpen = (place.connections || []).some(isOpen);
@@ -95,6 +109,7 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       missing: checklist.map((item) => item.need),
       // Counts, so "missing residents" reads as "1 of 2", not "nobody".
       ...(geo.kind === 'settlement' ? { progress: progressOf(world, place) } : {}),
+      ...(mapped ? { battleMap: mapStatus(place) } : {}),
     });
   }
   // Places inside towns (L-343), ordered by their town's distance.
@@ -102,7 +117,7 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
     const settlement = world.locations[place.locationId];
     if (!settlement || settlement.retired) continue;
     const { grade: placeGrade, checklist } = gradePlace(world, place);
-    if (placeGrade === 'rich') continue;
+    if (skip(placeGrade, place)) continue;
     items.push({
       priority: 'town',
       type: 'place',
@@ -113,6 +128,7 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       hops: hops.has(settlement.id) ? hops.get(settlement.id) : null,
       town: { id: settlement.id, name: settlement.name },
       missing: checklist.map((item) => item.need),
+      battleMap: mapStatus(place),
     });
   }
   for (const [type, collection] of [
@@ -139,7 +155,9 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       (item) =>
         (!kind || item.kind === kind) &&
         (!grade || item.grade === grade) &&
-        (!need || item.missing.includes(need))
+        (!need ||
+          item.missing.includes(need) ||
+          (forMaps && item.battleMap && item.battleMap !== 'own'))
     )
     .sort(byTierThenNearest);
 
@@ -155,7 +173,9 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
     count: page.length,
     items: page,
     howTo: Object.fromEntries(
-      [...new Set(page.flatMap((item) => item.missing))].map((n) => [n, HOW_TO[n] || n])
+      [...new Set(page.flatMap((item) => item.missing).concat(forMaps ? ['battleMap'] : []))].map(
+        (n) => [n, HOW_TO[n] || n]
+      )
     ),
   };
   if (offset + page.length < matching.length) result.nextOffset = offset + page.length;
