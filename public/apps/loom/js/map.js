@@ -386,14 +386,32 @@
     } else if (!via) {
       info.appendChild(el('p', 'loom-map-info-status', 'Not directly reachable from here.'));
     } else {
-      var go = el('button', 'app-btn loom-map-travel', 'Travel here');
-      go.type = 'button';
-      go.disabled = state.turnInProgress;
-      go.addEventListener('click', function () {
-        act(place.id, place.name);
+      // Where to arrive, when more than one way in serves the route (L-346):
+      // travelling to a way in arrives by it.
+      var ways = (place.waysIn || []).filter(function (w) {
+        return typeof via !== 'string' || w.via.indexOf(via) !== -1;
       });
-      info.appendChild(go);
+      if (ways.length > 1) {
+        info.appendChild(el('p', 'loom-map-info-status', 'Travel here, arriving by:'));
+        var choices = el('div', 'loom-town-routes');
+        ways.forEach(function (way) {
+          choices.appendChild(travelButton(way.name, way.id, place.name + ' by ' + way.name));
+        });
+        info.appendChild(choices);
+      } else {
+        info.appendChild(travelButton('Travel here', place.id, place.name));
+      }
     }
+  }
+
+  function travelButton(text, id, name) {
+    var go = el('button', 'app-btn loom-map-travel', text);
+    go.type = 'button';
+    go.disabled = state.turnInProgress;
+    go.addEventListener('click', function () {
+      act(id, name);
+    });
+    return go;
   }
 
   // A move from a card: a place in town, or a world place.

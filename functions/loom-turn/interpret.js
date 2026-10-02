@@ -39,7 +39,8 @@ function buildSystemInstruction(knownEntities) {
     '"move", "attack", "talk", "take", "use")\n' +
     '- targets: an array of strings naming entities the action refers to. Use the exact ' +
     'id from the known-entities list when the player clearly means one of them; ' +
-    'otherwise include the raw text mentioned.\n' +
+    'otherwise include the raw text mentioned. To travel to a town by one of its ways in ' +
+    '("to Daldockley by the King\'s Causeway"), target that way in.\n' +
     '- params: an object of any other relevant details (e.g. {"item": "sword"}). Use an ' +
     'empty object if there are none.\n\n' +
     'Respond with ONLY a JSON object: { "verb": string, "targets": string[], "params": object }'
@@ -72,6 +73,16 @@ function buildKnownEntities(canonWorld, save) {
     .filter((place) => live(place) && place.locationId === here)
     .forEach((place) => {
       entities.push({ id: place.id, name: place.name, kind: 'place' });
+    });
+  // The ways into the towns next to here (L-346), so "to Daldockley by the
+  // King's Causeway" can name where to arrive. After the town's own places,
+  // so a name both share ("The Harbour") means the one here.
+  const neighbours = new Set((here && (canonWorld.locations[here] || {}).connections) || []);
+  Object.values(canonWorld.places || {})
+    .filter((place) => live(place) && place.entrance && neighbours.has(place.locationId))
+    .forEach((place) => {
+      const town = canonWorld.locations[place.locationId];
+      entities.push({ id: place.id, name: place.name, kind: 'way into ' + town.name });
     });
   return entities;
 }

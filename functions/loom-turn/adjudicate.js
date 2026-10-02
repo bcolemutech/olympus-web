@@ -91,16 +91,34 @@ function evaluateTownMove(target, characterState, canonWorld) {
   };
 }
 
+// The way in a traveller asks to arrive by (L-346): a move whose target is a
+// way into another town ("to the King's Causeway"), or one naming the town and
+// then its way in ([loc_191, plc_191_…]). Null when they name none.
+function chosenWayIn(proposedAction, canonWorld) {
+  const places = canonWorld.places || {};
+  const [first, second] = proposedAction.targets;
+  const asked = places[first] ? places[first] : places[second];
+  if (!asked || !town.isEntrance(asked)) return null;
+  if (!places[first] && asked.locationId !== first) return null; // a way into another town
+  return asked;
+}
+
 function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
-  const targetId = proposedAction.targets[0];
   const currentId = characterState.location;
 
   if (!currentId || !canonWorld.locations[currentId]) {
     return blocked('You have nowhere established to move from yet.');
   }
 
-  const targetPlace = targetId && (canonWorld.places || {})[targetId];
-  if (targetPlace) return evaluateTownMove(targetPlace, characterState, canonWorld);
+  const first = proposedAction.targets[0];
+  const targetPlace = first && (canonWorld.places || {})[first];
+  if (targetPlace && targetPlace.locationId === currentId) {
+    return evaluateTownMove(targetPlace, characterState, canonWorld);
+  }
+  // A place in another town can only be reached as its way in, travelling there.
+  const wayIn = chosenWayIn(proposedAction, canonWorld);
+  if (targetPlace && !wayIn) return blocked("You can't get there directly from here.");
+  const targetId = wayIn ? wayIn.locationId : first;
 
   if (!targetId || !canonWorld.locations[targetId]) {
     return {
@@ -144,8 +162,13 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
     return blocked(leaveHint(targetLocation, exits, via));
   }
 
-  // Arriving at a town lands at the open entrance serving the route.
-  const arrival = town.arrivalPlace(canonWorld, targetId, via);
+  // Arriving at a town lands at the way in the traveller chose (L-346), or
+  // else at the open entrance serving the route.
+  if (wayIn) {
+    const refused = refuseWayIn(wayIn, targetLocation, via, characterState, canonWorld);
+    if (refused) return refused;
+  }
+  const arrival = wayIn || town.arrivalPlace(canonWorld, targetId, via);
   const mutations = [{ target: 'save', op: 'set-flag', path: 'location', value: targetId }];
   if (arrival || characterState.placeId) {
     mutations.push({
@@ -163,6 +186,38 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
       'You arrive at ' + targetLocation.name + (arrival ? ', at ' + arrival.name : '') + '.',
     ],
   };
+}
+
+// Why a chosen way in can't be used, or null if it can.
+function refuseWayIn(wayIn, destination, via, characterState, canonWorld) {
+  if (wayIn.retired) return blocked("That way in can't be used anymore.");
+  if (!isPlaceOpen(canonWorld, wayIn)) {
+    return blocked(
+      'The way into ' + destination.name + ' by ' + wayIn.name + ' is closed. Turn back.'
+    );
+  }
+  if (!town.serves(wayIn, via)) {
+    const serving = town
+      .entrancesOf(canonWorld, destination.id)
+      .filter((p) => town.serves(p, via) && isPlaceOpen(canonWorld, p));
+    return blocked(
+      wayIn.name +
+        ' is no way in by ' +
+        (via || 'this route') +
+        '.' +
+        (serving.length ? ' Arrive by ' + nameList(serving) + '.' : '')
+    );
+  }
+  const required = missingAbility(wayIn, characterState);
+  if (required) return blocked('You lack what it takes to get in (requires: ' + required + ').');
+  return null;
+}
+
+function nameList(places) {
+  const names = places.map((p) => p.name);
+  return names.length < 2
+    ? names.join('')
+    : names.slice(0, -1).join(', ') + ' or ' + names[names.length - 1];
 }
 
 function evaluateGeneric(proposedAction, dice) {

@@ -45,6 +45,9 @@ function mapView(canonWorld, save) {
       row.population = Math.round(geo.population || 0);
       if (geo.capital) row.capital = true;
       if (geo.port) row.port = true;
+      // Where a traveller can choose to arrive (L-346): its open ways in.
+      const ways = row.open ? waysInto(canonWorld, id) : [];
+      if (ways.length) row.waysIn = ways;
     }
     if (geo.markerType) row.markerType = geo.markerType;
     if (place.retired) row.retired = true;
@@ -86,6 +89,15 @@ function mapView(canonWorld, save) {
   };
 }
 
+// A settlement's open ways in, and the routes each serves (`via`, a route
+// kind, narrows them to the ones serving it).
+function waysInto(canonWorld, locationId, via) {
+  return town
+    .entrancesOf(canonWorld, locationId)
+    .filter((p) => isPlaceOpen(canonWorld, p) && (via === undefined || town.serves(p, via)))
+    .map((p) => ({ id: p.id, name: p.name, via: servedRoutes(p) }));
+}
+
 // The world routes an entrance serves, in a fixed order (no list: all of them).
 function servedRoutes(place) {
   const via = place.entrance && place.entrance.via;
@@ -105,7 +117,8 @@ function positionIn(place) {
  * serve, their positions where set (the view places the rest), the links
  * between them, where the save stands, the places one step away (`next`, as
  * the rules engine allows: the links from here), and the world routes out of
- * town with the ways out that serve each (`exits`, discovered places only).
+ * town with the ways out that serve each and the ways in at the other end
+ * (`exits`, discovered places only).
  * Like the world map: no descriptions, and nothing outside the town.
  */
 function townView(canonWorld, save, discovered) {
@@ -153,12 +166,15 @@ function townView(canonWorld, save, discovered) {
     const to = canonWorld.locations[id];
     if (!to || !discovered.has(id)) continue;
     const via = town.routeBetween(canonWorld, location, id);
+    const open = isPlayable(canonWorld, to);
     exits.push({
       id,
       name: to.name,
       via,
-      open: isPlayable(canonWorld, to),
+      open,
       waysOut: entrances.filter((p) => town.serves(p, via)).map((p) => p.id),
+      // Where you can choose to arrive by this route (L-346).
+      waysIn: open ? waysInto(canonWorld, id, via).map((p) => ({ id: p.id, name: p.name })) : [],
     });
   }
 
