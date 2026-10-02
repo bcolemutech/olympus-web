@@ -13,6 +13,7 @@ const {
   gradePlace,
 } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
+const maps = require('../../../loom-canon/maps');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -312,6 +313,8 @@ function locationDetail(world, location) {
   }
   if (geo.biome) result.biome = geo.biome;
   if (geo.markerType) result.markerType = geo.markerType;
+  // A point of interest's battle map (L-351, L-352): see get_battle_map.
+  if (geo.kind !== 'settlement') result.battleMap = mapRef(world, location);
   // What Azgaar says about a town: the seeds for its layout (L-341).
   if (geo.seeds) result.seeds = geo.seeds;
   // Its town layout, if it has one (L-342, L-343): see get_town for the rest.
@@ -457,6 +460,7 @@ function townDetail(world, settlement) {
         lore: loreAbout(world, place.id),
       };
       if (place.position) row.position = place.position;
+      row.battleMap = mapRef(world, place);
       if (place.retired) row.retired = true;
       return row;
     }),
@@ -500,7 +504,74 @@ function loreDetail(world, entry) {
   return result;
 }
 
+// ── Battle maps (L-351, L-352) ─────────────────────────────────────────
+
+// A place's battle map, in short: { id, name, generic }, or null.
+function mapRef(world, entity) {
+  const map = maps.mapOf(world, entity);
+  return map ? { id: map.id, name: map.name, generic: Boolean(map.generic) } : null;
+}
+
+// The places and points of interest that use a map.
+function usersOf(world, mapId) {
+  const uses = (e) => !e.retired && e.battleMap && e.battleMap.mapId === mapId;
+  return [
+    ...Object.values(world.locations)
+      .filter(uses)
+      .map((l) => ({ type: 'location', id: l.id, name: l.name })),
+    ...Object.values(world.places || {})
+      .filter(uses)
+      .map((p) => ({
+        type: 'place',
+        id: p.id,
+        name: p.name,
+        town: (world.locations[p.locationId] || {}).name || null,
+      })),
+  ];
+}
+
+function battleMapRow(world, map) {
+  return {
+    id: map.id,
+    name: map.name,
+    size: { width: map.width, height: map.height },
+    generic: map.generic || null,
+    hasImage: Boolean(map.image),
+    usedBy: usersOf(world, map.id).length,
+    ...(map.retired ? { retired: true } : {}),
+  };
+}
+
+function battleMapDetail(world, map) {
+  const exitTo = (exit) => {
+    if (!exit.to || exit.to === 'out') return 'out';
+    const next = (world.battleMaps || {})[exit.to.map];
+    return {
+      map: exit.to.map,
+      mapName: next ? next.name : null,
+      entry: exit.to.entry || null,
+    };
+  };
+  return {
+    id: map.id,
+    name: map.name,
+    width: map.width,
+    height: map.height,
+    image: map.image ? { width: map.imageWidth || null, height: map.imageHeight || null } : null,
+    generic: map.generic || null,
+    entries: map.entries || [],
+    exits: (map.exits || []).map((exit) => ({ ...exit, to: exitTo(exit) })),
+    features: map.features || [],
+    usedBy: usersOf(world, map.id),
+    ...(map.retired ? { retired: true } : {}),
+  };
+}
+
 module.exports = {
+  mapRef,
+  usersOf,
+  battleMapRow,
+  battleMapDetail,
   worldRow,
   worldOverview,
   findLocations,

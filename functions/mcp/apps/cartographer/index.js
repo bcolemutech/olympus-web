@@ -7,6 +7,7 @@ const { createFirestoreWorldWriter } = require('./writer');
 const { worldId, entityId } = require('./schemas');
 const { writeTools } = require('./write-tools');
 const { townTools } = require('./town-tools');
+const { mapTools } = require('./map-tools');
 const { GRADES } = require('../../../loom-canon/grading');
 const { workList } = require('./work');
 const views = require('./views');
@@ -299,6 +300,61 @@ function cartographerApp({ reader, writer }) {
         },
       },
       {
+        name: 'list_battle_maps',
+        title: 'List battle maps',
+        description:
+          'A world’s battle maps: the grids that points of interest and places in town are ' +
+          'walked on in the Loom. Each with its size, whether it is generic (kind and terrain: ' +
+          'reusable, for any number of places) and how many places use it. Filter to generic ' +
+          'maps, and by kind or terrain, to find one to assign. A generic map opens a place, but ' +
+          'only its own map can make it Rich. Make maps with set_battle_map; assign them with ' +
+          'assign_battle_map.',
+        inputSchema: {
+          worldId,
+          generic: z.boolean().optional().describe('Only generic maps (true) or only own maps.'),
+          kind: z.string().max(40).optional().describe('Generic maps of this kind, e.g. tavern.'),
+          terrain: z.string().max(40).optional().describe('Generic maps of this terrain.'),
+        },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const lower = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v);
+          const rows = Object.values(world.battleMaps || {})
+            .filter((m) => !m.retired)
+            .filter((m) => args.generic === undefined || Boolean(m.generic) === args.generic)
+            .filter((m) => !args.kind || lower((m.generic || {}).kind) === lower(args.kind))
+            .filter(
+              (m) => !args.terrain || lower((m.generic || {}).terrain) === lower(args.terrain)
+            )
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((m) => views.battleMapRow(world, m));
+          return { worldId: world.id, maps: rows, count: rows.length };
+        },
+      },
+      {
+        name: 'get_battle_map',
+        title: 'Get battle map',
+        description:
+          'One battle map in full: its grid size, entries (where players arrive), exits (each ' +
+          'leading out to the town or the world, or to an entry on another map), features (named ' +
+          'cells such as the bar), whether it is generic, whether it has an image (uploaded on ' +
+          'the Cartographer page) and which places use it. Cells are { x, y } from the top-left, ' +
+          '0-based.',
+        inputSchema: { worldId, mapId: entityId('battle map', 'list_battle_maps') },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const map = entityFor(
+            world,
+            'battleMaps',
+            args.mapId,
+            'battle map',
+            'Use list_battle_maps to see them.'
+          );
+          return { worldId: world.id, ...views.battleMapDetail(world, map) };
+        },
+      },
+      {
         name: 'get_character',
         title: 'Get character',
         description: 'One character in full: description, faction, where they are found, and lore.',
@@ -337,6 +393,7 @@ function cartographerApp({ reader, writer }) {
       },
       ...writeTools({ writer }),
       ...townTools({ writer }),
+      ...mapTools({ writer }),
     ],
     resources: [
       {

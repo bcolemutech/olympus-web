@@ -189,11 +189,14 @@ The Loom's play screen gains a **map** beside the story:
   - **The narrator:** its ways-on section becomes ON THE MAP: where you stand, the features, and the exits, which are the only ways on.
 - **Later: object layers.** Walls and doors that block or pass, and objects to interact with (a lever, a chest, a locked door), sit on top of the grid as layers, with no change to the map's art.
 - **Grading.** A point of interest or a place in town needs a live map, its own or an assigned generic one, to be Playable. A generic map stops it short of Rich: Rich needs its own map, and its checklist says so ("It uses a generic battle map"). Like the town requirement, this is switched on only once the open places have maps, so nothing open closes (§4.4).
-- **MCP** (L-352).
-  - `get_battle_map` reads a map, and `list_battle_maps` lists a world's maps, generic ones by kind and terrain.
-  - `set_battle_map` creates or changes a map (name, size, entries, exits, features, generic tags). It checks that every cell it names is on the grid, and that the map has at least one entry and one exit.
-  - `assign_battle_map` points a place at a map, its own or generic. `list_work` includes places with no map, and places still on a generic one (they can't be Rich).
-  - Images can't be sent over MCP: they are uploaded on the Cartographer page.
+- **MCP** (L-352 / #401; `functions/mcp/apps/cartographer/map-tools.js`).
+  - **Reading:** `get_battle_map` reads a map in full, including where its exits lead and which places use it. `list_battle_maps` lists a world's maps, with filters for generic ones and by kind and terrain.
+  - **Drawing:** `set_battle_map` creates a map (`bm_<name>`), or replaces one's grid while keeping its image. It checks that the map has at least one entry and one exit, that every cell it names is on the grid (at most 64 × 64), that ids are unique, that no two exits share a cell, and that no feature sits on an exit. An exit to another map must name a live map and an entry that exists, and a change can't remove an entry another map's exit leads to. It warns when the grid shrinks; players beyond the new edge move to its entry.
+  - **Assigning:** `assign_battle_map` gives a point of interest or a place in town a map, its own or generic, or takes it away with `null`. Settlements are refused: they have towns.
+  - **Showing:** `get_location` (for points of interest) and `get_town` (for each place) show the map.
+  - **Work list:** `list_work` gives each point of interest and place in town a `battleMap` status (`own`, `generic` or `none`). `need: 'battleMap'` lists every one without its own map, Rich or not.
+  - **Removing:** `retire_entity` with type `battleMap` retires a map (published) or deletes it (draft). It's refused while a place uses the map or another map's exit leads to it.
+  - **Images** can't be sent over MCP: they are uploaded on the Cartographer page.
 - **Art** (L-355). The Cartographer page uploads a map's image, for its own maps or generic ones, to Cloud Storage. A map without one is drawn as a plain grid. Generated art comes later with Imagen (L-500 / #318).
 - **UI** (L-354). A grid view: the map's image (or a plain grid) with the grid over it, tokens for you and the people there, exits and features marked, and a tap on a cell to move. It works on a phone.
 
