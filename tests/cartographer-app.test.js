@@ -357,7 +357,7 @@ describe('cartographerTownImage (L-347)', () => {
       worldId,
       locationId: 'loc_1',
       name: 'Burdendal',
-      image: { width: 800, height: 600 },
+      image: { width: 800, height: 600, format: 'png' },
     });
     const { image } = (await loc1()).town;
     expect(image).toMatchObject({ width: 800, height: 600 });
@@ -485,7 +485,7 @@ describe('cartographerMapImage (L-355)', () => {
       worldId,
       mapId: 'bm_tavern',
       name: 'The Gull & Anchor',
-      image: { width: 1200, height: 800 },
+      image: { width: 1200, height: 800, format: 'png' },
     });
     const first = (await tavern()).image;
     expect(first).toMatchObject({ width: 1200, height: 800 });
@@ -508,6 +508,43 @@ describe('cartographerMapImage (L-355)', () => {
     });
     expect((await tavern()).image).toBeNull();
     expect(await exists(second.path)).toBe(false);
+  });
+
+  test('an SVG upload (L-356): checked, stored as SVG; an unsafe one is refused', async () => {
+    seq += 1;
+    const uploadId = `map-svg-${String(seq).padStart(4, '0')}`;
+    const svgAt = (id) => `cartographer/${BUILDER.uid}/${id}/battlemap.svg`;
+    await bucket
+      .file(svgAt(uploadId))
+      .save(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8"><rect width="12" height="8"/></svg>',
+        {
+          contentType: 'image/svg+xml',
+        }
+      );
+    await expect(
+      mapArtAs(BUILDER, { worldId, mapId: 'bm_tavern', uploadId })
+    ).resolves.toMatchObject({
+      image: { width: 12, height: 8, format: 'svg' },
+    });
+    const { image } = await tavern();
+    expect(image.path).toMatch(/\.svg$/);
+    const [meta] = await bucket.file(image.path).getMetadata();
+    expect(meta).toMatchObject({ contentType: 'image/svg+xml', contentDisposition: 'attachment' });
+    expect(await exists(svgAt(uploadId))).toBe(false); // the upload is cleared
+
+    seq += 1;
+    const bad = `map-svg-${String(seq).padStart(4, '0')}`;
+    await bucket
+      .file(svgAt(bad))
+      .save('<svg viewBox="0 0 1 1" onload="alert(1)"></svg>', { contentType: 'image/svg+xml' });
+    await expect(
+      mapArtAs(BUILDER, { worldId, mapId: 'bm_tavern', uploadId: bad })
+    ).rejects.toMatchObject({
+      code: 'invalid-argument',
+      message: expect.stringMatching(/can't be used: it has an event handler/),
+    });
+    expect((await tavern()).image.path).toBe(image.path); // unchanged
   });
 
   test('refuses an unknown or retired map, and needs the claim', async () => {

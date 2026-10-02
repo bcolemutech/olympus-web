@@ -14,6 +14,7 @@
   // Upload limits, mirrored from storage.rules (the server enforces them too).
   Cartographer.MAX_JSON_BYTES = 50 * 1024 * 1024;
   Cartographer.MAX_PNG_BYTES = 30 * 1024 * 1024;
+  Cartographer.MAX_SVG_BYTES = 1024 * 1024; // SVG art (L-356)
   // Import runs parse → map → load server-side; big maps need more than the
   // callable default of 70 seconds.
   Cartographer.IMPORT_TIMEOUT_MS = 300000;

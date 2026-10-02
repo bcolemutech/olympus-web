@@ -9,6 +9,7 @@ const { mapToCanon } = require('./map');
 const { loadDraftWorld, newWorldId } = require('./load');
 const { gradeWorld, gradeLocation, isPlayable } = require('../loom-canon/grading');
 const { ToolError } = require('../mcp/registry');
+const { checkSvg } = require('./svg');
 
 // The Cartographer's server side (design planning/the-cartographer-design.md
 // §3.1, §3.4; C-5 / #372), behind the cartographerImport and
@@ -37,6 +38,11 @@ const { ToolError } = require('../mcp/registry');
 // mapImage(uid, { worldId, mapId, uploadId } | { worldId, mapId, remove })
 //   A battle map's art (L-355 / #417), the same way, from battlemap.png, as
 //   the map's `image: { path, width, height }` (stretched to its grid).
+//
+// drawArt(uid, { worldId, of: 'battleMap' | 'town', id, svg })
+//   SVG art Claude draws over MCP (set_art; L-356 / #431); svg null removes
+//   it. Uploads may be SVG too (battlemap.svg, town.svg). SVG is checked
+//   (./svg.js) and stored as image/svg+xml, with `format: 'svg'` on the image.
 //
 // worldCompletion({ worldIds })
 //   How built each world is, for the Cartographer page: its places by grade
@@ -266,28 +272,62 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
   // no copy behind.
   //   kind: { file (upload name), label, name (for the path), place(e) → the
   //           entity, apply(e, entity, image | null) → its previous image }
-  async function attachArt(uid, { worldId, uploadId, remove }, id, kind) {
+  // Art is a PNG or (L-356) an SVG: from the upload folder (kind.file, or
+  // the same name ending .svg), or as SVG text drawn over MCP (`svg`). SVG is
+  // checked (./svg.js) and stored as image/svg+xml, to be downloaded, never
+  // shown, if opened directly.
+  async function attachArt(uid, { worldId, uploadId, remove, svg }, id, kind) {
     if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
       throw new HttpsError('invalid-argument', 'worldId is required.');
     }
     if (typeof id !== 'string' || !ENTITY_ID.test(id)) {
       throw new HttpsError('invalid-argument', `${kind.idField} is required.`);
     }
-    if (!remove && (typeof uploadId !== 'string' || !UPLOAD_ID.test(uploadId))) {
+    const drawn = typeof svg === 'string';
+    if (!remove && !drawn && (typeof uploadId !== 'string' || !UPLOAD_ID.test(uploadId))) {
       throw new HttpsError('invalid-argument', 'uploadId is required.');
     }
 
     let image = null;
-    if (!remove) {
-      const upload = uploadFile(uid, uploadId, kind.file);
-      const [exists] = await upload.exists();
-      if (!exists) throw new HttpsError('not-found', `Upload the ${kind.label} first.`);
-      const [header] = await upload.download({ start: 0, end: 23 });
-      const size = pngDimensions(header);
-      if (!size) throw new HttpsError('invalid-argument', `The ${kind.label} is not a valid PNG.`);
-      const stamp = now().toString(36) + crypto.randomBytes(3).toString('hex');
-      image = { path: `worlds/${worldId}/${kind.name}-${id}-${stamp}.png`, ...size };
-      await upload.copy(bucket.file(image.path));
+    const pathFor = (ext) =>
+      `worlds/${worldId}/${kind.name}-${id}-${now().toString(36)}${crypto
+        .randomBytes(3)
+        .toString('hex')}.${ext}`;
+    const saveSvg = async (text) => {
+      let checked;
+      try {
+        checked = checkSvg(text);
+      } catch (err) {
+        throw new HttpsError(
+          'invalid-argument',
+          `The ${kind.label} can't be used: ${err.message}.`
+        );
+      }
+      image = { path: pathFor('svg'), width: checked.width, height: checked.height, format: 'svg' };
+      await bucket.file(image.path).save(checked.svg, {
+        contentType: 'image/svg+xml',
+        metadata: { contentDisposition: 'attachment' },
+      });
+    };
+    if (drawn) {
+      await saveSvg(svg);
+    } else if (!remove) {
+      const svgUpload = uploadFile(uid, uploadId, kind.file.replace(/\.png$/, '.svg'));
+      const pngUpload = uploadFile(uid, uploadId, kind.file);
+      if ((await svgUpload.exists())[0]) {
+        const [bytes] = await svgUpload.download();
+        await saveSvg(bytes.toString('utf8'));
+      } else {
+        const [exists] = await pngUpload.exists();
+        if (!exists) throw new HttpsError('not-found', `Upload the ${kind.label} first.`);
+        const [header] = await pngUpload.download({ start: 0, end: 23 });
+        const size = pngDimensions(header);
+        if (!size) {
+          throw new HttpsError('invalid-argument', `The ${kind.label} is not a valid PNG.`);
+        }
+        image = { path: pathFor('png'), ...size };
+        await pngUpload.copy(bucket.file(image.path));
+      }
     }
 
     let result;
@@ -315,14 +355,16 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
         .delete()
         .catch(() => {});
     }
-    if (!remove) {
+    if (!remove && !drawn) {
       await bucket.deleteFiles({ prefix: `cartographer/${uid}/${uploadId}/` }).catch(() => {});
     }
     return {
       worldId,
       [kind.idField]: id,
       name: result.name,
-      image: image ? { width: image.width, height: image.height } : null,
+      image: image
+        ? { width: image.width, height: image.height, format: image.format || 'png' }
+        : null,
     };
   }
 
@@ -379,7 +421,16 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
   const townImage = (uid, data = {}) => attachArt(uid, data, data.locationId, TOWN_ART);
   const mapImage = (uid, data = {}) => attachArt(uid, data, data.mapId, MAP_ART);
 
-  return { importUpload, publishWorld, worldCompletion, townImage, mapImage };
+  // SVG art drawn over MCP (set_art, L-356): `svg` text, or null to remove.
+  const drawArt = (uid, { worldId, of, id, svg }) =>
+    attachArt(
+      uid,
+      { worldId, svg: svg === null ? undefined : svg, remove: svg === null },
+      id,
+      of === 'town' ? TOWN_ART : MAP_ART
+    );
+
+  return { importUpload, publishWorld, worldCompletion, townImage, mapImage, drawArt };
 }
 
 function requireCartographer(request) {

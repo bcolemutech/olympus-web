@@ -61,18 +61,28 @@ const PARSED = parseAzgaarExport(
   fs.readFileSync(path.join(__dirname, 'fixtures/azgaar/nisia.json'))
 );
 
+// SVG art (set_art) goes through the Cartographer's real service, into the
+// Storage emulator; view_image reads from memory first, then from there.
+const { getStorage } = require(
+  require.resolve('firebase-admin/storage', { paths: [functionsDir] })
+);
+const { createCartographerService } = require('../functions/cartographer/service');
+const bucket = getStorage(adminApp).bucket('demo-cartographer-maps.appspot.com');
+const writer = createFirestoreWorldWriter(() => db);
+const service = createCartographerService({ db, bucket, writer });
+
 const registry = createRegistry();
 registry.registerApp(
   'cartographer',
   cartographerApp({
     reader: createFirestoreWorldReader(() => db),
-    writer: createFirestoreWorldWriter(() => db),
-    // Art for view_image, from memory instead of Cloud Storage.
+    writer,
     art: {
       load: async (artPath) => {
-        if (!ARTS[artPath]) throw new Error('No such object.');
-        return ARTS[artPath];
+        if (ARTS[artPath]) return ARTS[artPath];
+        return (await bucket.file(artPath).download())[0];
       },
+      draw: (uid, args) => service.drawArt(uid, args),
     },
   })
 );
@@ -624,5 +634,114 @@ describe('view_image: what Claude sees', () => {
   test('view_image only reads', async () => {
     const { tools } = await client.listTools();
     expect(tools.find((t) => t.name === 'view_image').annotations.readOnlyHint).toBe(true);
+  });
+});
+
+describe('set_art: Claude draws the art, as SVG (L-356)', () => {
+  const W = LIVE;
+  const SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8">' +
+    '<rect width="12" height="8" fill="#6d5a45"/>' +
+    '<rect x="2" y="1" width="4" height="2" fill="#3b2a1d"/></svg>';
+  const tavernMap = () => mapDoc(W, 'bm_the-gull-anchor-ground-floor');
+
+  test('a battle map’s art: stored as SVG, to be downloaded if opened directly', async () => {
+    const result = await ok('set_art', {
+      worldId: W,
+      of: 'battleMap',
+      id: 'bm_the-gull-anchor-ground-floor',
+      svg: SVG,
+    });
+    expect(result).toEqual({
+      of: 'battleMap',
+      id: 'bm_the-gull-anchor-ground-floor',
+      name: 'The Gull & Anchor, ground floor',
+      art: { format: 'svg', width: 12, height: 8 },
+      next: 'Check it with view_image.',
+    });
+    const { image } = await tavernMap();
+    expect(image).toMatchObject({ width: 12, height: 8, format: 'svg' });
+    expect(image.path).toMatch(
+      /^worlds\/nisia-m0m0m0\/map-bm_the-gull-anchor-ground-floor-.+\.svg$/
+    );
+    const [meta] = await bucket.file(image.path).getMetadata();
+    expect(meta).toMatchObject({ contentType: 'image/svg+xml', contentDisposition: 'attachment' });
+    // view_image draws it, under the grid.
+    const seen = await call('view_image', {
+      worldId: W,
+      of: 'battleMap',
+      id: 'bm_the-gull-anchor-ground-floor',
+    });
+    expect(seen.structuredContent).toMatchObject({ art: true });
+    expect(seen.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+  });
+
+  test('a shape that isn’t the grid’s is stretched, with a warning; replacing deletes the old', async () => {
+    const old = (await tavernMap()).image.path;
+    const wide = await ok('set_art', {
+      worldId: W,
+      of: 'battleMap',
+      id: 'bm_the-gull-anchor-ground-floor',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100"/></svg>',
+    });
+    expect(wide.warnings[0]).toMatch(/isn't the grid's \(12 × 8\), so it is stretched/);
+    expect((await bucket.file(old).exists())[0]).toBe(false);
+  });
+
+  test('a town’s art; not square is fitted, with a warning', async () => {
+    const square = await ok('set_art', {
+      worldId: W,
+      of: 'town',
+      id: 'loc_1',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><circle cx="500" cy="500" r="400"/></svg>',
+    });
+    expect(square).toMatchObject({ art: { format: 'svg', width: 1000, height: 1000 } });
+    expect(square).not.toHaveProperty('warnings');
+    const loc = (await worlds().doc(W).collection('locations').doc('loc_1').get()).data();
+    expect(loc.town.image).toMatchObject({ format: 'svg', width: 1000 });
+    const wide = await ok('set_art', {
+      worldId: W,
+      of: 'town',
+      id: 'loc_1',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><rect width="1600" height="900"/></svg>',
+    });
+    expect(wide.warnings[0]).toMatch(/isn't square/);
+    expect((await ok('get_town', { worldId: W, locationId: 'loc_1' })).art).toEqual({
+      width: 1600,
+      height: 900,
+    });
+  });
+
+  test('unsafe SVG is refused, and nothing is stored', async () => {
+    const before = (await tavernMap()).image.path;
+    expect(
+      await refused('set_art', {
+        worldId: W,
+        of: 'battleMap',
+        id: 'bm_the-gull-anchor-ground-floor',
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8"><script>alert(1)</script></svg>',
+      })
+    ).toMatch(/can't be used: it has a script/);
+    expect((await tavernMap()).image.path).toBe(before);
+    expect(await refused('set_art', { worldId: W, of: 'town', id: 'poi_1', svg: SVG })).toMatch(
+      /isn't a settlement/
+    );
+    expect(
+      await refused('set_art', { worldId: W, of: 'battleMap', id: 'bm_nowhere', svg: SVG })
+    ).toMatch(/No battle map "bm_nowhere"/);
+  });
+
+  test('svg null takes the art away', async () => {
+    const art = (await tavernMap()).image.path;
+    expect(
+      await ok('set_art', {
+        worldId: W,
+        of: 'battleMap',
+        id: 'bm_the-gull-anchor-ground-floor',
+        svg: null,
+      })
+    ).toMatchObject({ art: null });
+    expect((await tavernMap()).image).toBeNull();
+    expect((await bucket.file(art).exists())[0]).toBe(false);
   });
 });

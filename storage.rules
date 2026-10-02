@@ -36,6 +36,10 @@ service firebase.storage {
             || ((file == 'map.png' || file == 'town.png' || file == 'battlemap.png')
               && request.resource.contentType == 'image/png'
               && request.resource.size <= 30 * 1024 * 1024)
+            // SVG art (L-356), checked by the function before it is used.
+            || ((file == 'town.svg' || file == 'battlemap.svg')
+              && request.resource.contentType == 'image/svg+xml'
+              && request.resource.size <= 1024 * 1024)
           );
     }
 

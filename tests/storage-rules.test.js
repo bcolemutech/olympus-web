@@ -68,6 +68,17 @@ describe('Cartographer uploads', () => {
     // A battle map's art (L-355) the same way.
     await assertSucceeds(builder().ref(uploadPath('battlemap.png')).put(bytes(1024), PNG_TYPE));
     await assertFails(builder().ref(uploadPath('battlemap.png')).put(bytes(64), JSON_TYPE));
+    // SVG art (L-356): as image/svg+xml, up to 1 MB.
+    const SVG_TYPE = { contentType: 'image/svg+xml' };
+    await assertSucceeds(builder().ref(uploadPath('town.svg')).put(bytes(1024), SVG_TYPE));
+    await assertSucceeds(builder().ref(uploadPath('battlemap.svg')).put(bytes(1024), SVG_TYPE));
+    await assertFails(builder().ref(uploadPath('battlemap.svg')).put(bytes(64), PNG_TYPE));
+    await assertFails(builder().ref(uploadPath('map.svg')).put(bytes(64), SVG_TYPE));
+    await assertFails(
+      builder()
+        .ref(uploadPath('town.svg'))
+        .put(bytes(1024 * 1024 + 1), SVG_TYPE)
+    );
     await assertFails(builder().ref(uploadPath('town.png')).put(bytes(64), JSON_TYPE));
     await assertFails(
       storageAs('someone-else', ['cartographer'])

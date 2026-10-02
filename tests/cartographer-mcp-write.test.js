@@ -191,6 +191,7 @@ test('exposes the write tools with honest hints', async () => {
     'disconnect_places',
     'publish_world',
     'retire_entity',
+    'set_art',
     'set_battle_map',
     'update_character',
     'update_faction',

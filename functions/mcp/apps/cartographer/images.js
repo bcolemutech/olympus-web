@@ -3,6 +3,7 @@
 const { PNG } = require('pngjs');
 const jpeg = require('jpeg-js');
 const { pngDimensions } = require('../../../cartographer/service');
+const { isSvg } = require('../../../cartographer/svg');
 
 // Images Claude can see (planning/the-loom-layered-worlds.md §9; L-355 /
 // #417): a town's art, a battle map's art, or the world map, scaled down for
@@ -12,8 +13,9 @@ const { pngDimensions } = require('../../../cartographer/service');
 // a town or battle map is drawn on a plain background, so a layout can be
 // checked before any art exists.
 //
-// Pure JavaScript (pngjs, jpeg-js); digits come from a tiny built-in font, so
-// nothing depends on system fonts.
+// PNG art is read with pngjs, SVG art (L-356) rasterised with resvg; the
+// result is JPEG (jpeg-js). Digits come from a tiny built-in font, so the
+// overlay depends on no system fonts.
 
 const MAX_SIDE = 1568; // the long side Claude sees best
 const MAX_PIXELS = 36e6; // larger images are refused rather than decoded
@@ -142,7 +144,29 @@ function marker(c, x, y, n, shape, colour, size) {
 
 // ── PNG in, JPEG out ──────────────────────────────────────────────────────
 
-function decode(png) {
+// Art bytes (PNG, or SVG text) as pixels on the plain background: any
+// transparency is blended onto it, so see-through art never shows as black.
+function decode(art) {
+  const bytes = Buffer.from(art);
+  let png = bytes;
+  if (isSvg(bytes)) {
+    const { Resvg } = require('@resvg/resvg-js');
+    let rendered;
+    try {
+      const probe = new Resvg(bytes.toString('utf8'));
+      const long = Math.max(probe.width, probe.height) || 1;
+      const side = (n) => Math.max(1, Math.round((n / long) * MAX_SIDE));
+      rendered = new Resvg(bytes.toString('utf8'), {
+        fitTo:
+          probe.width >= probe.height
+            ? { mode: 'width', value: side(probe.width) }
+            : { mode: 'height', value: side(probe.height) },
+      }).render();
+    } catch (err) {
+      throw new Error(`the SVG could not be drawn (${err.message})`);
+    }
+    png = rendered.asPng();
+  }
   const size = pngDimensions(png.subarray(0, 24));
   if (!size) throw new Error('not a PNG');
   if (size.width * size.height > MAX_PIXELS) {
@@ -151,6 +175,15 @@ function decode(png) {
     throw err;
   }
   const { width, height, data } = PNG.sync.read(png);
+  const [r, g, b] = COLOURS.plain;
+  for (let i = 0; i < width * height; i++) {
+    const a = data[i * 4 + 3] / 255;
+    if (a === 1) continue;
+    data[i * 4] = Math.round(data[i * 4] * a + r * (1 - a));
+    data[i * 4 + 1] = Math.round(data[i * 4 + 1] * a + g * (1 - a));
+    data[i * 4 + 2] = Math.round(data[i * 4 + 2] * a + b * (1 - a));
+    data[i * 4 + 3] = 255;
+  }
   return { width, height, data };
 }
 
@@ -206,10 +239,10 @@ function drawInto(c, img, x0, y0, w, h) {
  * a plain background, the grid with every fifth line labelled, and numbered
  * markers for entries, exits and features.
  */
-function renderBattleMap(map, png) {
+function renderBattleMap(map, art) {
   let base;
-  if (png) {
-    base = scaleDown(decode(png));
+  if (art) {
+    base = scaleDown(decode(art));
   } else {
     const cell = Math.max(12, Math.min(48, Math.floor(1200 / Math.max(map.width, map.height))));
     base = canvas(map.width * cell, map.height * cell, COLOURS.plain);
@@ -251,7 +284,7 @@ function renderBattleMap(map, png) {
       of: 'battleMap',
       id: map.id,
       name: map.name,
-      art: Boolean(png),
+      art: Boolean(art),
       grid: { width: map.width, height: map.height },
       image: { width: base.width, height: base.height },
       cellSize: { width: round(cw), height: round(ch) },
@@ -269,8 +302,8 @@ function renderBattleMap(map, png) {
  * draws it) or a plain square, a grid every 100 units (labelled every 200),
  * the links between places, and numbered markers at the places' positions.
  */
-function renderTown(world, settlement, places, png) {
-  const art = png ? scaleDown(decode(png)) : null;
+function renderTown(world, settlement, places, artBytes) {
+  const art = artBytes ? scaleDown(decode(artBytes)) : null;
   const side = art ? Math.max(art.width, art.height) : 1000;
   const base = canvas(side, side, COLOURS.plain);
   if (art)
@@ -328,7 +361,7 @@ function renderTown(world, settlement, places, png) {
       of: 'town',
       id: settlement.id,
       name: settlement.name,
-      art: Boolean(png),
+      art: Boolean(artBytes),
       image: { width: side, height: side },
       reading:
         'The town’s 0–1000 square fills the image (the art fitted inside it, centred, as the ' +
@@ -342,8 +375,8 @@ function renderTown(world, settlement, places, png) {
 }
 
 /** The world map, scaled down, with how its coordinates map onto the image. */
-function renderWorld(world, png) {
-  const img = scaleDown(decode(png));
+function renderWorld(world, art) {
+  const img = scaleDown(decode(art));
   const map = world.map || {};
   return {
     jpeg: encode(img),
