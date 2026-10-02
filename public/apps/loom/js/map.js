@@ -14,8 +14,9 @@
   // every zoom. The maths lives in map-math.js.
   //
   // In a settlement with a town layout, the same panel shows the town view
-  // instead (town.js; L-345 / #399), with a switch back to the world map.
-  // Each layer keeps its own view, so switching keeps your place in both.
+  // instead (town.js; L-345 / #399), and on a battle map the grid view
+  // (battle.js; L-354 / #403), with a switch between the layers there are.
+  // Each layer keeps its own view, so switching keeps your place in each.
 
   var Loom = window.Loom;
   var state = Loom.state;
@@ -29,9 +30,10 @@
   var map = {
     data: null, // loomGetMap's result
     view: null, // { scale, x, y }, of the layer showing
-    mode: 'world', // 'world' | 'town'
-    views: { world: null, town: null }, // each layer's view while the other shows
+    mode: 'world', // 'world' | 'town' | 'battle'
+    views: { world: null, town: null, battle: null }, // each layer's view while another shows
     townId: null, // the settlement whose town is loaded
+    battleId: null, // the battle map loaded
     worldUsable: false, // the world has a map with positioned places
     selected: null, // a world place id (the town keeps its own)
     imagePath: null,
@@ -59,6 +61,7 @@
 
   // The coordinate space of the layer showing.
   function bounds() {
+    if (map.mode === 'battle') return Loom.battle.bounds();
     return map.mode === 'town' ? Loom.town.BOUNDS : map.data.map;
   }
 
@@ -126,22 +129,33 @@
     }
   }
 
-  // ── Layers: the world map and the town view ───────
+  // ── Layers: the world map, the town view, the grid view ─
+
+  function available(mode) {
+    if (mode === 'battle') return Boolean(Loom.battle.current());
+    if (mode === 'town') return Boolean(Loom.town.current());
+    return map.worldUsable;
+  }
 
   function updateLayerButtons() {
-    var current = Loom.town.current();
-    var both = Boolean(current) && map.worldUsable;
-    ref('loom-map-layers').classList.toggle('hidden', !both);
-    if (current) ref('loom-layer-town').textContent = current.name;
-    ['town', 'world'].forEach(function (mode) {
+    var town = Loom.town.current();
+    var battle = Loom.battle.current();
+    var layers = ['battle', 'town', 'world'].filter(available);
+    ref('loom-map-layers').classList.toggle('hidden', layers.length < 2);
+    if (town) ref('loom-layer-town').textContent = town.name;
+    if (battle) {
+      ref('loom-layer-battle').textContent = battle.host ? battle.host.name : battle.name;
+    }
+    ['battle', 'town', 'world'].forEach(function (mode) {
       var button = ref('loom-layer-' + mode);
+      button.classList.toggle('hidden', !available(mode));
       button.classList.toggle('is-active', map.mode === mode);
       button.setAttribute('aria-pressed', String(map.mode === mode));
     });
   }
 
   function setMode(mode) {
-    if (mode === 'town' && !Loom.town.current()) mode = 'world';
+    if (!available(mode)) mode = available('town') ? 'town' : 'world';
     if (mode === map.mode) {
       updateLayerButtons();
       return;
@@ -187,6 +201,10 @@
   function frame() {
     var size = panelSize();
     if (!size.width || !size.height) return;
+    if (map.mode === 'battle') {
+      map.view = M.fit(Loom.battle.framePoints(), size, bounds());
+      return;
+    }
     if (map.mode === 'town') {
       map.view = M.fit(Loom.town.framePoints(), size, bounds());
       return;
@@ -212,25 +230,36 @@
           })
         );
         var townData = (data && data.town) || null;
-        setAvailable(usable || Boolean(townData));
-        if (!usable && !townData) return;
+        var battleData = (data && data.battleMap) || null;
+        setAvailable(usable || Boolean(townData) || Boolean(battleData));
+        if (!usable && !townData && !battleData) return;
         var firstLoad = !map.data;
         map.data = data;
         map.worldUsable = usable;
         if (usable) loadImage(data);
         Loom.town.setData(townData);
+        Loom.battle.setData(battleData);
 
-        // Entering a town shows it; leaving one goes back to the world map.
+        // Entering a battle map or a town shows it; leaving one goes back to
+        // the layer above. Otherwise the layer the player chose stays.
         var townId = townData ? townData.locationId : null;
-        var entered = townId !== map.townId;
+        var mapId = battleData ? battleData.id : null;
+        var enteredTown = townId !== map.townId;
+        var enteredMap = mapId !== map.battleId;
         map.townId = townId;
-        if (entered) map.views.town = null;
-        var mode = townData && (entered || !usable || map.mode === 'town') ? 'town' : 'world';
+        map.battleId = mapId;
+        if (enteredTown) map.views.town = null;
+        if (enteredMap) map.views.battle = null;
+        var mode;
+        if (battleData && (enteredMap || map.mode === 'battle')) mode = 'battle';
+        else if (townData && (enteredTown || map.mode !== 'world' || !usable)) mode = 'town';
+        else if (battleData && !usable && !townData) mode = 'battle';
+        else mode = usable ? 'world' : townData ? 'town' : 'battle';
         if (mode !== map.mode) {
           map.views[map.mode] = map.view;
           map.mode = mode;
           map.view = map.views[mode];
-        } else if (entered && mode === 'town') {
+        } else if ((mode === 'town' && enteredTown) || (mode === 'battle' && enteredMap)) {
           map.view = null;
         }
         updateLayerButtons();
@@ -238,7 +267,12 @@
         if (firstLoad || !map.view) {
           frame();
         } else {
-          var herePoint = mode === 'town' ? Loom.town.herePoint() : placeById(data.here);
+          var herePoint =
+            mode === 'battle'
+              ? Loom.battle.herePoint()
+              : mode === 'town'
+                ? Loom.town.herePoint()
+                : placeById(data.here);
           if (herePoint) map.view = M.reveal(map.view, herePoint, panelSize(), bounds());
         }
         render();
@@ -254,11 +288,13 @@
     map.data = null;
     map.view = null;
     map.mode = 'world';
-    map.views = { world: null, town: null };
+    map.views = { world: null, town: null, battle: null };
     map.townId = null;
+    map.battleId = null;
     map.worldUsable = false;
     map.selected = null;
     Loom.town.reset();
+    Loom.battle.reset();
     ref('loom-map-overlay').innerHTML = '';
     ref('loom-map-info').innerHTML = '';
     setAvailable(false);
@@ -274,7 +310,15 @@
     var v = map.view;
 
     var overlayEl = ref('loom-map-overlay');
-    ref('loom-map-panel').classList.toggle('is-town', map.mode === 'town');
+    ref('loom-map-panel').classList.toggle('is-town', map.mode !== 'world');
+    if (map.mode === 'battle') {
+      overlayEl.setAttribute('width', size.width);
+      overlayEl.setAttribute('height', size.height);
+      overlayEl.innerHTML = '';
+      Loom.battle.draw(overlayEl, v);
+      Loom.battle.renderInfo(ref('loom-map-info'), actCell);
+      return;
+    }
     if (map.mode === 'town') {
       overlayEl.setAttribute('width', size.width);
       overlayEl.setAttribute('height', size.height);
@@ -421,6 +465,12 @@
     if (isPhone()) showTab('story');
   }
 
+  // A step on a battle map, from the grid view's card.
+  function actCell(cell, label) {
+    Loom.play.moveToCell(cell, label);
+    if (isPhone()) showTab('story');
+  }
+
   // ── Gestures ──────────────────────────────────────
 
   function localPoint(event) {
@@ -504,6 +554,11 @@
 
   // Selects the place nearest a tap, if any is close enough.
   function select(point) {
+    if (map.mode === 'battle') {
+      Loom.battle.pick(point, map.view);
+      render();
+      return;
+    }
     if (map.mode === 'town') {
       Loom.town.pick(point, map.view);
       render();
@@ -578,10 +633,14 @@
     });
     ref('loom-map-home').addEventListener('click', function () {
       if (!map.data) return;
-      if (map.mode === 'town') Loom.town.selectHere();
+      if (map.mode === 'battle') Loom.battle.selectHere();
+      else if (map.mode === 'town') Loom.town.selectHere();
       else map.selected = map.data.here;
       frame();
       render();
+    });
+    ref('loom-layer-battle').addEventListener('click', function () {
+      setMode('battle');
     });
     ref('loom-layer-town').addEventListener('click', function () {
       setMode('town');

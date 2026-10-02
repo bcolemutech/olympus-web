@@ -2,6 +2,7 @@
 
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
+const maps = require('../loom-canon/maps');
 const { discoveredBy } = require('./discovery');
 
 const ROUTES = ['road', 'trail', 'sea'];
@@ -19,7 +20,8 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * the map is null.
  *
  * In a settlement with a town layout, `town` is the town the save stands in,
- * for the town view (townView below); elsewhere it is null.
+ * for the town view (townView below); elsewhere it is null. On a battle map,
+ * `battleMap` is that map, for the grid view (battleView below); else null.
  */
 function mapView(canonWorld, save) {
   const discovered = new Set(discoveredBy(canonWorld, save));
@@ -76,6 +78,7 @@ function mapView(canonWorld, save) {
     places,
     links,
     town: townView(canonWorld, save, discovered),
+    battleMap: battleView(canonWorld, save),
     map:
       map && map.width
         ? {
@@ -193,4 +196,52 @@ function townView(canonWorld, save, discovered) {
   };
 }
 
-module.exports = { mapView, townView };
+/**
+ * The battle map a save stands on (planning/the-loom-layered-worlds.md §9;
+ * L-354 / #403), for the grid view: its grid and art, where the save stands,
+ * its entries, exits (and where each leads) and features, and the people
+ * found at the place. Characters have no cells yet, so they are listed, not
+ * placed. Null off a map.
+ */
+function battleView(canonWorld, save) {
+  const { map, cell } = maps.positionOf(canonWorld, save);
+  if (!map) return null;
+  const host = maps.hostOf(canonWorld, save);
+  const isPlace = host && Boolean((canonWorld.places || {})[host.id]);
+  const people = host
+    ? Object.values(canonWorld.characters || {})
+        .filter((c) => !c.retired)
+        .filter((c) =>
+          isPlace
+            ? c.placeId === host.id || (host.npcIds || []).includes(c.id)
+            : c.locationId === host.id && !c.placeId
+        )
+        .map((c) => ({ id: c.id, name: c.name }))
+    : [];
+  return {
+    id: map.id,
+    name: map.name,
+    width: map.width,
+    height: map.height,
+    image: map.image
+      ? { path: map.image.path, width: map.image.width, height: map.image.height }
+      : null,
+    here: { x: cell.x, y: cell.y },
+    host: host ? { id: host.id, name: host.name } : null,
+    entries: (map.entries || []).map((e) => ({ id: e.id, x: e.x, y: e.y })),
+    exits: (map.exits || []).map((e) => {
+      const next = e.to && e.to !== 'out' ? (canonWorld.battleMaps || {})[e.to.map] : null;
+      return {
+        id: e.id,
+        name: e.name,
+        x: e.x,
+        y: e.y,
+        to: next ? { map: next.id, name: next.name } : 'out',
+      };
+    }),
+    features: (map.features || []).map((f) => ({ id: f.id, name: f.name, x: f.x, y: f.y })),
+    people,
+  };
+}
+
+module.exports = { mapView, townView, battleView };

@@ -204,7 +204,10 @@ The Loom's play screen gains a **map** beside the story:
   - **The legend:** it ties each number to its id, name and cell or position, and lists places with no position.
   - **The world map:** it comes with how map coordinates fall on the image.
   - **Without art,** a battle map or town is drawn on a plain background, so a layout can be checked before any art exists. The renderer is pure JavaScript (pngjs, jpeg-js), and its digits come from a built-in font.
-- **UI** (L-354). A grid view: the map's image (or a plain grid) with the grid over it, tokens for you and the people there, exits and features marked, and a tap on a cell to move. It works on a phone.
+- **UI** (L-354 / #403; `public/apps/loom/js/battle.js`). The grid view is the map's art (stretched to the grid) or a plain grid, with the grid over it. It marks exits (red, labelled), features (amber, labelled) and entries, and shows your token (white, in the amber ring). Tapping a cell opens a card with the one move it allows: **Move here**, **Go to the bar**, or **Go out by the front door**, sent as `action: { verb: 'move', cell }`.
+  - **Who's here:** characters have no cells yet, so the card lists the people at the place rather than placing their tokens.
+  - **Switching layers:** entering a map shows it, and leaving goes back to the town or the world. The layer switch offers each layer there is (the map, the town, the world), and keeps your choice while you're on the map.
+  - **The data:** `loomGetMap` carries it as `battleMap`: the grid, the art, where you stand, entries, exits (and where each leads), features and people.
 
 ---
 

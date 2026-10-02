@@ -540,10 +540,11 @@ exports.loomPlayTurn = onCall(async (request) => {
  * only way the map reaches them, and it never includes undiscovered places.
  *
  * In a settlement with a town layout it also returns that town, for the town
- * view (L-345 / #399): its places, links, ways in and out, and routes out.
+ * view (L-345 / #399): its places, links, ways in and out, and routes out. On
+ * a battle map it returns that map, for the grid view (L-354 / #403).
  *
  * Data: { worldId: string, saveId: string }
- * Returns: { worldId, name, here, places[], links[], town, map }
+ * Returns: { worldId, name, here, places[], links[], town, battleMap, map }
  */
 exports.loomGetMap = onCall(async (request) => {
   const uid = requireLoomAuth(request);

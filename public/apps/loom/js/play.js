@@ -109,6 +109,11 @@
     playTurn({ action: { verb: 'move', target: locationId } }, 'travel to ' + name);
   }
 
+  /** Steps to a cell on a battle map, from the grid view (L-354 / #403). */
+  function moveToCell(cell, label) {
+    playTurn({ action: { verb: 'move', cell: { x: cell.x, y: cell.y } } }, label);
+  }
+
   /** Resets the play view for a newly-selected save. */
   function init(saveId, save) {
     state.saveId = saveId;
@@ -126,5 +131,5 @@
     Loom.map.load();
   }
 
-  Loom.play = { init: init, submitTurn: submitTurn, travelTo: travelTo };
+  Loom.play = { init: init, submitTurn: submitTurn, travelTo: travelTo, moveToCell: moveToCell };
 })();
