@@ -279,20 +279,35 @@
       info.appendChild(el('p', 'loom-map-info-facts', 'Ways on from here: ' + names.join(', ')));
       return;
     }
-    var list = el('div', 'loom-town-routes');
     exits.forEach(function (exit) {
       var label = exit.name + (exit.via ? ' by ' + exit.via : '');
-      if (exit.open) {
+      if (!exit.open) {
+        info.appendChild(el('p', 'loom-map-info-status is-closed', label + ': the way is closed.'));
+        return;
+      }
+      var list = el('div', 'loom-town-routes');
+      var ways = exit.waysIn || [];
+      if (ways.length > 1) {
+        // Where to arrive (L-346): travelling to a way in arrives by it.
+        info.appendChild(
+          el('p', 'loom-map-info-status', 'Set out for ' + label + ', arriving by:')
+        );
+        ways.forEach(function (way) {
+          list.appendChild(
+            button(way.name, function () {
+              act(way.id, exit.name + ' by ' + way.name);
+            })
+          );
+        });
+      } else {
         list.appendChild(
           button('Set out for ' + label, function () {
             act(exit.id, exit.name);
           })
         );
-      } else {
-        list.appendChild(el('p', 'loom-map-info-status is-closed', label + ': the way is closed.'));
       }
+      info.appendChild(list);
     });
-    info.appendChild(list);
   }
 
   /**

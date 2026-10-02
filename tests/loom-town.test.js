@@ -99,7 +99,7 @@ function playerMovesTo(target) {
     if (options.systemInstruction.includes('INTERPRET stage')) {
       prompts.interpret.push(options.systemInstruction);
       return target
-        ? { verb: 'move', targets: [target], params: {} }
+        ? { verb: 'move', targets: Array.isArray(target) ? target : [target], params: {} }
         : { verb: 'look', targets: [], params: {} };
     }
     if (options.systemInstruction.includes('summarizer')) return 'A summary.';
@@ -484,11 +484,40 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
       { from: 'plc_1_market', to: 'plc_1_temple' },
     ]);
     // The routes out, each with the ways out that serve it.
+    const gate = (id) => [{ id, name: 'The Town Gate' }];
     expect(view.exits).toEqual([
-      { id: 'loc_120', name: 'Dunscombe', via: 'sea', open: false, waysOut: ['plc_1_harbour'] },
-      { id: 'loc_229', name: 'Wisin', via: 'sea', open: true, waysOut: ['plc_1_harbour'] },
-      { id: 'loc_231', name: 'Ashleaches', via: 'trail', open: false, waysOut: ['plc_1_gate'] },
-      { id: 'loc_631', name: 'Dunsmouth', via: 'trail', open: true, waysOut: ['plc_1_gate'] },
+      {
+        id: 'loc_120',
+        name: 'Dunscombe',
+        via: 'sea',
+        open: false,
+        waysOut: ['plc_1_harbour'],
+        waysIn: [],
+      },
+      {
+        id: 'loc_229',
+        name: 'Wisin',
+        via: 'sea',
+        open: true,
+        waysOut: ['plc_1_harbour'],
+        waysIn: gate('plc_229_town-gate'),
+      },
+      {
+        id: 'loc_231',
+        name: 'Ashleaches',
+        via: 'trail',
+        open: false,
+        waysOut: ['plc_1_gate'],
+        waysIn: [],
+      },
+      {
+        id: 'loc_631',
+        name: 'Dunsmouth',
+        via: 'trail',
+        open: true,
+        waysOut: ['plc_1_gate'],
+        waysIn: gate('plc_631_town-gate'),
+      },
     ]);
   });
 
@@ -555,5 +584,132 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
     const result = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
     expect(result.town).toBeNull();
     expect(result.here).toBe('loc_231');
+  });
+});
+
+describe('choosing the way in (L-346)', () => {
+  // Dunsmouth (loc_631), by trail from Burdendal's North Gate, gains more
+  // ways in: a west gate for the trail too, a quay for the sea only, and an
+  // old gate still in import text.
+  const DUNSMOUTH = {
+    'plc_631_west-gate': { name: 'The West Gate', entrance: { via: ['trail'] }, sources: WRITTEN },
+    plc_631_quay: { name: 'The Quay', entrance: { via: ['sea'] }, sources: WRITTEN },
+    'plc_631_old-gate': {
+      name: 'The Old Gate',
+      entrance: { via: ['trail'] },
+      sources: { description: 'import' },
+    },
+  };
+  let saveId;
+  const atTheGate = () => standAt(saveId, 'loc_1', 'plc_1_gate');
+
+  beforeAll(async () => {
+    for (const [id, place] of Object.entries(DUNSMOUTH)) {
+      await worldRef
+        .collection('places')
+        .doc(id)
+        .set({
+          id,
+          locationId: 'loc_631',
+          kind: 'gate',
+          description: `${place.name}.`,
+          connections: ['plc_631_town-gate'],
+          npcIds: [],
+          rules: {},
+          ...place,
+        });
+    }
+    await bump();
+    ({ saveId } = await newGame());
+  });
+
+  afterAll(async () => {
+    for (const id of Object.keys(DUNSMOUTH)) await worldRef.collection('places').doc(id).delete();
+    await bump();
+  });
+
+  test('a move to a way into the next town travels there and arrives by it', async () => {
+    await atTheGate();
+    expect(await moveTo(saveId, 'plc_631_west-gate')).toMatchObject({
+      outcome: 'success',
+      constraints: ['You arrive at Dunsmouth, at The West Gate.'],
+    });
+    expect(await saveOf(saveId)).toMatchObject({
+      location: 'loc_631',
+      placeId: 'plc_631_west-gate',
+    });
+  });
+
+  test('naming the town, then its way in, does the same', async () => {
+    await atTheGate();
+    await moveTo(saveId, ['loc_631', 'plc_631_west-gate']);
+    expect(await saveOf(saveId)).toMatchObject({ placeId: 'plc_631_west-gate' });
+  });
+
+  test('naming only the town arrives as before: the first open way in serving the route', async () => {
+    await atTheGate();
+    await moveTo(saveId, 'loc_631');
+    expect(await saveOf(saveId)).toMatchObject({
+      location: 'loc_631',
+      placeId: 'plc_631_town-gate',
+    });
+  });
+
+  test('a way in that does not serve the route is refused, naming the ones that do', async () => {
+    await atTheGate();
+    expect((await moveTo(saveId, 'plc_631_quay')).constraints).toEqual([
+      'The Quay is no way in by trail. Arrive by The Town Gate or The West Gate.',
+    ]);
+    expect(await saveOf(saveId)).toMatchObject({ location: 'loc_1', placeId: 'plc_1_gate' });
+  });
+
+  test('a closed way in is refused, and leaving still needs the right way out', async () => {
+    await atTheGate();
+    expect((await moveTo(saveId, 'plc_631_old-gate')).constraints).toEqual([
+      'The way into Dunsmouth by The Old Gate is closed. Turn back.',
+    ]);
+    await standAt(saveId, 'loc_1', 'plc_1_market');
+    expect((await moveTo(saveId, 'plc_631_west-gate')).constraints).toEqual([
+      'To set out for Dunsmouth by trail, go to The North Gate first.',
+    ]);
+  });
+
+  test('a place in another town that is no way in cannot be reached directly', async () => {
+    await standAt(saveId, 'loc_631', 'plc_631_west-gate');
+    expect((await moveTo(saveId, 'plc_1_market')).constraints).toEqual([
+      "You can't get there directly from here.",
+    ]);
+  });
+
+  test('the interpreter knows the ways into the towns next to here, and no others', async () => {
+    await atTheGate();
+    playerMovesTo(null);
+    await turn(saveId);
+    const prompt = prompts.interpret.at(-1);
+    expect(prompt).toContain('- plc_631_west-gate (way into Dunsmouth): The West Gate');
+    expect(prompt).toContain('- plc_631_quay (way into Dunsmouth): The Quay');
+    expect(prompt).toContain('target that way in');
+    // Burdendal's own places are plain places; nothing from towns further off.
+    expect(prompt).toContain('- plc_1_market (place): Market Square');
+    expect(prompt).not.toMatch(/way into Burdendal/);
+  });
+
+  test('loomGetMap offers the choice: open ways in, and those serving each route out', async () => {
+    await atTheGate();
+    const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    const dunsmouth = view.places.find((p) => p.id === 'loc_631');
+    expect(dunsmouth.waysIn).toEqual([
+      { id: 'plc_631_quay', name: 'The Quay', via: ['sea'] },
+      { id: 'plc_631_town-gate', name: 'The Town Gate', via: ['road', 'trail', 'sea'] },
+      { id: 'plc_631_west-gate', name: 'The West Gate', via: ['trail'] },
+    ]);
+    // Closed places offer no ways in.
+    expect(view.places.find((p) => p.id === 'loc_231')).not.toHaveProperty('waysIn');
+    const byTrail = view.town.exits.find((e) => e.id === 'loc_631');
+    expect(byTrail.waysIn).toEqual([
+      { id: 'plc_631_town-gate', name: 'The Town Gate' },
+      { id: 'plc_631_west-gate', name: 'The West Gate' },
+    ]);
+    expect(view.town.exits.find((e) => e.id === 'loc_231').waysIn).toEqual([]);
   });
 });

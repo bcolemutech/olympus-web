@@ -229,8 +229,11 @@ describe('loomGetMap', () => {
       population: 28473,
       capital: true,
       port: true,
+      // Where a traveller can arrive (L-346): its open ways in.
+      waysIn: [{ id: 'plc_1_town-gate', name: 'The Town Gate', via: ['road', 'trail', 'sea'] }],
     });
     expect(map.places.find((p) => p.id === 'loc_229')).toMatchObject({ open: false });
+    expect(map.places.find((p) => p.id === 'loc_229')).not.toHaveProperty('waysIn');
     // Links only between discovered places, each once.
     const shown = new Set(BURDENDAL_AND_AROUND);
     expect(map.links.every((l) => shown.has(l.from) && shown.has(l.to))).toBe(true);
