@@ -58,6 +58,27 @@
       });
   };
 
+  // A world's live battle maps, sorted by name (L-355).
+  Cartographer.loadBattleMaps = function (worldId) {
+    return Cartographer.state.db
+      .collection('loom_worlds')
+      .doc(worldId)
+      .collection('battleMaps')
+      .get()
+      .then(function (snap) {
+        return snap.docs
+          .map(function (d) {
+            return d.data();
+          })
+          .filter(function (m) {
+            return !m.retired;
+          })
+          .sort(function (a, b) {
+            return a.name.localeCompare(b.name);
+          });
+      });
+  };
+
   Cartographer.formatDate = function (ms) {
     return ms
       ? new Date(ms).toLocaleDateString(undefined, {

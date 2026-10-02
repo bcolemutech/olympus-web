@@ -1,12 +1,13 @@
 (function () {
   'use strict';
 
-  // A town's art (planning/the-loom-layered-worlds.md §8; L-347 / #416): a
-  // PNG drawn behind the town's places in the Loom's town view. The page
-  // uploads it to the builder's upload folder; cartographerTownImage checks
-  // it, copies it beside the world's map image and records it on the
-  // settlement (games see it on their next turn). Art can be replaced or
-  // removed.
+  // Art (planning/the-loom-layered-worlds.md §8, §9): a town's, drawn behind
+  // its places in the Loom's town view (L-347 / #416), and a battle map's,
+  // drawn under its grid (L-355 / #417). The page uploads a PNG to the
+  // builder's upload folder; the callable checks it, copies it beside the
+  // world's map image and records it (games see it on their next turn). Art
+  // can be replaced or removed. Claude sees it, with what's placed on it,
+  // through the connector's view_image.
 
   var Cartographer = window.Cartographer;
   var state = Cartographer.state;
@@ -18,25 +19,54 @@
     return node;
   }
 
-  /** The "Town art" form for a world's card; `onClose` runs when it closes. */
-  function buildForm(world, onClose) {
-    var form = el('form', 'carto-form carto-town-art-form');
-    var listId = 'carto-town-' + world.id;
-
-    form.appendChild(el('h4', 'carto-subtitle', 'Town art'));
-    form.appendChild(
-      el(
-        'p',
-        'carto-hint',
+  // What each kind of art is attached to, and how.
+  var KINDS = {
+    town: {
+      title: 'Town art',
+      hint:
         "A town's art is drawn behind its places in the Loom's town view, fitted to a square. " +
-          'Set place positions with Claude (0–1000 each way) to line them up with it. Azgaar ' +
-          "can open a settlement in Watabou's Medieval Fantasy City Generator, which exports a " +
-          'PNG that works well.'
-      )
-    );
+        'Set place positions with Claude (0–1000 each way) to line them up with it; Claude can ' +
+        'check them with view_image. Azgaar can open a settlement in Watabou’s Medieval ' +
+        'Fantasy City Generator, which exports a PNG that works well.',
+      pick: 'Settlement',
+      of: 'settlements',
+      file: 'town.png',
+      callable: 'cartographerTownImage',
+      idField: 'locationId',
+      load: function (worldId) {
+        return Cartographer.loadSettlements(worldId).then(function (settlements) {
+          return settlements.map(function (s) {
+            return { id: s.id, name: s.name, image: s.town && s.town.image };
+          });
+        });
+      },
+    },
+    battleMap: {
+      title: 'Battle-map art',
+      hint:
+        "A battle map's art is drawn under its grid in the Loom, stretched to fit it. Draw the " +
+        'map with Claude first (set_battle_map); Claude can then check that its entries, exits ' +
+        'and features line up with the art, with view_image.',
+      pick: 'Battle map',
+      of: 'battle maps',
+      file: 'battlemap.png',
+      callable: 'cartographerMapImage',
+      idField: 'mapId',
+      load: Cartographer.loadBattleMaps,
+    },
+  };
+
+  /** The art form of a kind ('town', 'battleMap') for a world's card. */
+  function buildForm(world, kindName, onClose) {
+    var kind = KINDS[kindName];
+    var form = el('form', 'carto-form carto-art-form');
+    var listId = 'carto-art-' + kindName + '-' + world.id;
+
+    form.appendChild(el('h4', 'carto-subtitle', kind.title));
+    form.appendChild(el('p', 'carto-hint', kind.hint));
 
     var townGroup = el('div', 'carto-form-group');
-    townGroup.appendChild(el('label', 'carto-label', 'Settlement'));
+    townGroup.appendChild(el('label', 'carto-label', kind.pick));
     var townInput = el('input', 'carto-input');
     townInput.type = 'text';
     townInput.required = true;
@@ -60,14 +90,14 @@
     var error = el('p', 'carto-error hidden');
     error.setAttribute('role', 'alert');
     var actions = el('div', 'carto-form-actions');
-    var submit = el('button', 'app-btn', 'Upload town art');
+    var submit = el('button', 'app-btn', 'Upload ' + kind.title.toLowerCase());
     submit.type = 'submit';
     var close = el('button', 'carto-link', 'Close');
     close.type = 'button';
     actions.appendChild(submit);
     actions.appendChild(close);
 
-    var withArt = el('div', 'carto-town-art-list');
+    var withArt = el('div', 'carto-art-list');
 
     form.appendChild(townGroup);
     form.appendChild(fileGroup);
@@ -81,57 +111,57 @@
       node.classList.toggle('hidden', !text);
     }
 
-    // Settlement names → ids, and the towns that already have art.
+    // Names → items, and the ones that already have art.
     var byName = {};
     function load() {
-      return Cartographer.loadSettlements(world.id)
-        .then(function (settlements) {
+      return kind
+        .load(world.id)
+        .then(function (items) {
           byName = {};
           datalist.innerHTML = '';
-          settlements.forEach(function (s) {
-            byName[s.name.toLowerCase()] = s;
+          items.forEach(function (item) {
+            byName[item.name.toLowerCase()] = item;
             var option = el('option');
-            option.value = s.name;
+            option.value = item.name;
             datalist.appendChild(option);
           });
-          townInput.placeholder =
-            'Type to search ' + Cartographer.formatNumber(settlements.length) + ' settlements';
+          townInput.placeholder = items.length
+            ? 'Type to search ' + Cartographer.formatNumber(items.length) + ' ' + kind.of
+            : 'No ' + kind.of + ' yet';
           renderWithArt(
-            settlements.filter(function (s) {
-              return s.town && s.town.image;
+            items.filter(function (item) {
+              return item.image;
             })
           );
         })
         .catch(function (err) {
-          console.error('Failed to load settlements:', err);
-          townInput.placeholder = 'Could not load settlements';
+          console.error('Failed to load ' + kind.of + ':', err);
+          townInput.placeholder = 'Could not load ' + kind.of;
         });
     }
 
-    function renderWithArt(towns) {
+    function renderWithArt(items) {
       withArt.innerHTML = '';
-      if (!towns.length) {
-        withArt.appendChild(el('p', 'carto-meta', 'No town has art yet.'));
+      if (!items.length) {
+        withArt.appendChild(el('p', 'carto-meta', 'None of its ' + kind.of + ' has art yet.'));
         return;
       }
-      withArt.appendChild(el('p', 'carto-label', 'Towns with art'));
-      var list = el('ul', 'carto-town-art-rows');
-      towns.forEach(function (s) {
+      withArt.appendChild(el('p', 'carto-label', 'With art'));
+      var list = el('ul', 'carto-art-rows');
+      items.forEach(function (s) {
         var row = el('li');
         row.appendChild(
-          el('span', null, s.name + ' · ' + s.town.image.width + '×' + s.town.image.height + ' ')
+          el('span', null, s.name + ' · ' + s.image.width + '×' + s.image.height + ' ')
         );
         var remove = el('button', 'carto-link', 'Remove');
         remove.type = 'button';
         remove.addEventListener('click', function () {
           remove.disabled = true;
           say(error, '');
+          var data = { worldId: world.id, remove: true };
+          data[kind.idField] = s.id;
           state.functions
-            .httpsCallable('cartographerTownImage')({
-              worldId: world.id,
-              locationId: s.id,
-              remove: true,
-            })
+            .httpsCallable(kind.callable)(data)
             .then(function () {
               say(status, s.name + "'s art is removed.");
               return load();
@@ -158,7 +188,7 @@
       say(error, '');
       var settlement = byName[townInput.value.trim().toLowerCase()];
       var image = file.files[0];
-      if (!settlement) return say(error, 'Pick a settlement from the list.');
+      if (!settlement) return say(error, 'Pick one from the list.');
       if (!image) return say(error, 'Choose a PNG image.');
       if (image.size > Cartographer.MAX_PNG_BYTES) {
         return say(error, 'The image is larger than 30 MB.');
@@ -167,23 +197,21 @@
       var uploadId = Cartographer.upload.newUploadId();
       say(status, 'Uploading…');
       Cartographer.upload
-        .uploadFile(uploadId, 'town.png', image, 'image/png', function (f) {
+        .uploadFile(uploadId, kind.file, image, 'image/png', function (f) {
           say(status, 'Uploading… ' + Math.round(f * 100) + '%');
         })
         .then(function () {
           say(status, 'Checking the image…');
-          return state.functions.httpsCallable('cartographerTownImage')({
-            worldId: world.id,
-            locationId: settlement.id,
-            uploadId: uploadId,
-          });
+          var data = { worldId: world.id, uploadId: uploadId };
+          data[kind.idField] = settlement.id;
+          return state.functions.httpsCallable(kind.callable)(data);
         })
         .then(function (res) {
           var size = res.data.image;
           say(
             status,
             res.data.name +
-              ' has town art (' +
+              ' has art (' +
               size.width +
               '×' +
               size.height +
@@ -193,9 +221,9 @@
           return load();
         })
         .catch(function (err) {
-          console.error('Town art upload failed:', err);
+          console.error('Art upload failed:', err);
           say(status, '');
-          say(error, err.message || 'The town art could not be uploaded.');
+          say(error, err.message || 'The art could not be uploaded.');
         })
         .then(function () {
           submit.disabled = false;
@@ -206,5 +234,5 @@
     return form;
   }
 
-  Cartographer.townArt = { buildForm: buildForm };
+  Cartographer.art = { buildForm: buildForm };
 })();

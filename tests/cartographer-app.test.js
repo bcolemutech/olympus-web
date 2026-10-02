@@ -30,6 +30,7 @@ const {
   cartographerPublish,
   cartographerCompletion,
   cartographerTownImage,
+  cartographerMapImage,
   loomCreateSave,
 } = require('../functions/index');
 const fs = require('fs');
@@ -88,6 +89,7 @@ const importAs = (auth, data) => cartographerImport.run({ data, auth });
 const publishAs = (auth, data) => cartographerPublish.run({ data, auth });
 const completionAs = (auth, data) => cartographerCompletion.run({ data, auth });
 const townArtAs = (auth, data) => cartographerTownImage.run({ data, auth });
+const mapArtAs = (auth, data) => cartographerMapImage.run({ data, auth });
 
 beforeEach(async () => {
   loomCanon.clearWorldCache();
@@ -433,6 +435,105 @@ describe('cartographerTownImage (L-347)', () => {
     ).rejects.toMatchObject({
       code: 'failed-precondition',
       message: expect.stringMatching(/World not found/),
+    });
+  });
+});
+
+describe('cartographerMapImage (L-355)', () => {
+  let worldId;
+  const worldRef = () => db.collection('loom_worlds').doc(worldId);
+  const tavern = async () =>
+    (await worldRef().collection('battleMaps').doc('bm_tavern').get()).data();
+  async function uploadMapArt(png) {
+    seq += 1;
+    const uploadId = `map-up-${String(seq).padStart(4, '0')}`;
+    await bucket
+      .file(`cartographer/${BUILDER.uid}/${uploadId}/battlemap.png`)
+      .save(png, { contentType: 'image/png' });
+    return uploadId;
+  }
+
+  // A fresh import with one battle map, as set_battle_map would leave it.
+  beforeEach(async () => {
+    ({ worldId } = await importAs(BUILDER, { uploadId: await upload() }));
+    await worldRef()
+      .collection('battleMaps')
+      .doc('bm_tavern')
+      .set({
+        id: 'bm_tavern',
+        name: 'The Gull & Anchor',
+        width: 12,
+        height: 8,
+        image: null,
+        entries: [{ id: 'door', x: 1, y: 4 }],
+        exits: [{ id: 'front-door', name: 'the front door', x: 0, y: 4, to: 'out' }],
+        features: [],
+        generic: null,
+        sources: { map: 'mcp' },
+      });
+    await worldRef().update({ canonVersion: (await worldRef().get()).data().canonVersion + 1 });
+  });
+
+  test('attaches, replaces and removes a battle map’s art', async () => {
+    await expect(
+      mapArtAs(BUILDER, {
+        worldId,
+        mapId: 'bm_tavern',
+        uploadId: await uploadMapArt(tinyPng(1200, 800)),
+      })
+    ).resolves.toEqual({
+      worldId,
+      mapId: 'bm_tavern',
+      name: 'The Gull & Anchor',
+      image: { width: 1200, height: 800 },
+    });
+    const first = (await tavern()).image;
+    expect(first).toMatchObject({ width: 1200, height: 800 });
+    expect(first.path).toMatch(new RegExp(`^worlds/${worldId}/map-bm_tavern-[a-z0-9]+\\.png$`));
+    expect(await exists(first.path)).toBe(true);
+
+    await mapArtAs(BUILDER, {
+      worldId,
+      mapId: 'bm_tavern',
+      uploadId: await uploadMapArt(tinyPng(600, 400)),
+    });
+    const second = (await tavern()).image;
+    expect(second).toMatchObject({ width: 600, height: 400 });
+    expect(await exists(first.path)).toBe(false);
+
+    await expect(
+      mapArtAs(BUILDER, { worldId, mapId: 'bm_tavern', remove: true })
+    ).resolves.toMatchObject({
+      image: null,
+    });
+    expect((await tavern()).image).toBeNull();
+    expect(await exists(second.path)).toBe(false);
+  });
+
+  test('refuses an unknown or retired map, and needs the claim', async () => {
+    await expect(
+      mapArtAs(BUILDER, {
+        worldId,
+        mapId: 'bm_nowhere',
+        uploadId: await uploadMapArt(tinyPng(64, 64)),
+      })
+    ).rejects.toMatchObject({ code: 'not-found' });
+    const [left] = await bucket.getFiles({ prefix: `worlds/${worldId}/map-bm_nowhere` });
+    expect(left).toEqual([]);
+    await worldRef().collection('battleMaps').doc('bm_tavern').update({ retired: true });
+    await worldRef().update({ canonVersion: (await worldRef().get()).data().canonVersion + 1 });
+    await expect(
+      mapArtAs(BUILDER, { worldId, mapId: 'bm_tavern', remove: true })
+    ).rejects.toMatchObject({
+      code: 'not-found',
+    });
+    await expect(
+      mapArtAs(PLAYER, { worldId, mapId: 'bm_tavern', remove: true })
+    ).rejects.toMatchObject({
+      code: 'permission-denied',
+    });
+    await expect(mapArtAs(BUILDER, { worldId, mapId: 'bm_tavern' })).rejects.toMatchObject({
+      code: 'invalid-argument',
     });
   });
 });

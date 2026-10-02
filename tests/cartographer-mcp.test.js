@@ -261,6 +261,7 @@ describe('connector surface', () => {
       'list_battle_maps',
       'list_work',
       'list_worlds',
+      'view_image',
     ]);
 
     const { resources } = await client.listResources();

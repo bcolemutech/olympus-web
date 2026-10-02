@@ -219,17 +219,23 @@
       actions.appendChild(play);
     }
     if (status === 'draft' || status === 'published') {
-      var art = el('button', 'app-btn carto-town-art-btn', 'Town art…');
-      art.type = 'button';
-      art.addEventListener('click', function () {
-        art.disabled = true;
-        card.appendChild(
-          Cartographer.townArt.buildForm(world, function () {
-            art.disabled = false;
-          })
-        );
+      [
+        ['town', 'Town art…'],
+        ['battleMap', 'Battle-map art…'],
+      ].forEach(function (kind) {
+        var art = el('button', 'app-btn carto-art-btn', kind[1]);
+        art.type = 'button';
+        art.setAttribute('data-art', kind[0]);
+        art.addEventListener('click', function () {
+          art.disabled = true;
+          card.appendChild(
+            Cartographer.art.buildForm(world, kind[0], function () {
+              art.disabled = false;
+            })
+          );
+        });
+        actions.appendChild(art);
       });
-      actions.appendChild(art);
     }
     if (actions.children.length) card.appendChild(actions);
     return card;

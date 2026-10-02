@@ -34,6 +34,10 @@ const { ToolError } = require('../mcp/registry');
 //   layer (games see it on their next turn); then deletes the replaced image
 //   and the upload. `remove` takes the art away.
 //
+// mapImage(uid, { worldId, mapId, uploadId } | { worldId, mapId, remove })
+//   A battle map's art (L-355 / #417), the same way, from battlemap.png, as
+//   the map's `image: { path, width, height }` (stretched to its grid).
+//
 // worldCompletion({ worldIds })
 //   How built each world is, for the Cartographer page: its places by grade
 //   (planning/the-loom-layered-worlds.md §4, §6; L-323 / #392). Graded here
@@ -255,12 +259,19 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     return { worlds };
   }
 
-  async function townImage(uid, { worldId, locationId, uploadId, remove } = {}) {
+  // Attaches, replaces or removes a piece of art (L-347, L-355): checks the
+  // upload is a PNG, copies it beside the world's map image under a new name
+  // (so no browser shows an old one), records it through the write layer, and
+  // then deletes the replaced image and the upload. A refused attach leaves
+  // no copy behind.
+  //   kind: { file (upload name), label, name (for the path), place(e) → the
+  //           entity, apply(e, entity, image | null) → its previous image }
+  async function attachArt(uid, { worldId, uploadId, remove }, id, kind) {
     if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
       throw new HttpsError('invalid-argument', 'worldId is required.');
     }
-    if (typeof locationId !== 'string' || !ENTITY_ID.test(locationId)) {
-      throw new HttpsError('invalid-argument', 'locationId is required.');
+    if (typeof id !== 'string' || !ENTITY_ID.test(id)) {
+      throw new HttpsError('invalid-argument', `${kind.idField} is required.`);
     }
     if (!remove && (typeof uploadId !== 'string' || !UPLOAD_ID.test(uploadId))) {
       throw new HttpsError('invalid-argument', 'uploadId is required.');
@@ -268,37 +279,23 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
 
     let image = null;
     if (!remove) {
-      const upload = uploadFile(uid, uploadId, 'town.png');
+      const upload = uploadFile(uid, uploadId, kind.file);
       const [exists] = await upload.exists();
-      if (!exists) throw new HttpsError('not-found', 'Upload the town image first.');
+      if (!exists) throw new HttpsError('not-found', `Upload the ${kind.label} first.`);
       const [header] = await upload.download({ start: 0, end: 23 });
       const size = pngDimensions(header);
-      if (!size) throw new HttpsError('invalid-argument', 'The town image is not a valid PNG.');
+      if (!size) throw new HttpsError('invalid-argument', `The ${kind.label} is not a valid PNG.`);
       const stamp = now().toString(36) + crypto.randomBytes(3).toString('hex');
-      image = { path: `worlds/${worldId}/town-${locationId}-${stamp}.png`, ...size };
+      image = { path: `worlds/${worldId}/${kind.name}-${id}-${stamp}.png`, ...size };
       await upload.copy(bucket.file(image.path));
     }
 
     let result;
     try {
       result = await writer.edit(worldId, uid, (e) => {
-        const settlement = e.world.locations[locationId];
-        if (!settlement || settlement.retired) {
-          throw new HttpsError('not-found', 'No such place in this world.');
-        }
-        if ((settlement.geo || {}).kind !== 'settlement') {
-          throw new HttpsError(
-            'failed-precondition',
-            `${settlement.name} isn't a settlement, so it has no town.`
-          );
-        }
-        const previous = (settlement.town && settlement.town.image) || null;
-        if (image || previous) {
-          e.update(e.ref('locations', locationId), {
-            'town.image': image || FieldValue.delete(),
-          });
-        }
-        return { name: settlement.name, previous };
+        const entity = kind.place(e.world, id);
+        const previous = kind.apply(e, entity, image);
+        return { name: entity.name, previous };
       });
     } catch (err) {
       if (image)
@@ -323,13 +320,66 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     }
     return {
       worldId,
-      locationId,
+      [kind.idField]: id,
       name: result.name,
       image: image ? { width: image.width, height: image.height } : null,
     };
   }
 
-  return { importUpload, publishWorld, worldCompletion, townImage };
+  // A town's art, on its settlement as town.image (L-347).
+  const TOWN_ART = {
+    file: 'town.png',
+    label: 'town image',
+    name: 'town',
+    idField: 'locationId',
+    place(world, id) {
+      const settlement = world.locations[id];
+      if (!settlement || settlement.retired) {
+        throw new HttpsError('not-found', 'No such place in this world.');
+      }
+      if ((settlement.geo || {}).kind !== 'settlement') {
+        throw new HttpsError(
+          'failed-precondition',
+          `${settlement.name} isn't a settlement, so it has no town.`
+        );
+      }
+      return settlement;
+    },
+    apply(e, settlement, image) {
+      const previous = (settlement.town && settlement.town.image) || null;
+      if (image || previous) {
+        e.update(e.ref('locations', settlement.id), {
+          'town.image': image || FieldValue.delete(),
+        });
+      }
+      return previous;
+    },
+  };
+
+  // A battle map's art, on the map as image (L-355), stretched to its grid.
+  const MAP_ART = {
+    file: 'battlemap.png',
+    label: 'battle-map image',
+    name: 'map',
+    idField: 'mapId',
+    place(world, id) {
+      const map = (world.battleMaps || {})[id];
+      if (!map || map.retired) {
+        throw new HttpsError('not-found', 'No such battle map in this world.');
+      }
+      return map;
+    },
+    apply(e, map, image) {
+      const previous = map.image || null;
+      if (image || previous) e.update(e.ref('battleMaps', map.id), { image: image || null });
+      return previous;
+    },
+  };
+
+  const townImage = (uid, data = {}) => attachArt(uid, data, data.locationId, TOWN_ART);
+  const mapImage = (uid, data = {}) => attachArt(uid, data, data.mapId, MAP_ART);
+
+  return { importUpload, publishWorld, worldCompletion, townImage, mapImage };
 }
 
 function requireCartographer(request) {

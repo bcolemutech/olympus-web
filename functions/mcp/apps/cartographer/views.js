@@ -557,7 +557,7 @@ function battleMapDetail(world, map) {
     name: map.name,
     width: map.width,
     height: map.height,
-    image: map.image ? { width: map.imageWidth || null, height: map.imageHeight || null } : null,
+    image: map.image ? { width: map.image.width, height: map.image.height } : null,
     generic: map.generic || null,
     entries: map.entries || [],
     exits: (map.exits || []).map((exit) => ({ ...exit, to: exitTo(exit) })),

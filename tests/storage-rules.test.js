@@ -65,6 +65,9 @@ describe('Cartographer uploads', () => {
 
   test("a town's art (town.png) uploads to the same folder, as a PNG only (L-347)", async () => {
     await assertSucceeds(builder().ref(uploadPath('town.png')).put(bytes(1024), PNG_TYPE));
+    // A battle map's art (L-355) the same way.
+    await assertSucceeds(builder().ref(uploadPath('battlemap.png')).put(bytes(1024), PNG_TYPE));
+    await assertFails(builder().ref(uploadPath('battlemap.png')).put(bytes(64), JSON_TYPE));
     await assertFails(builder().ref(uploadPath('town.png')).put(bytes(64), JSON_TYPE));
     await assertFails(
       storageAs('someone-else', ['cartographer'])

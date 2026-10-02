@@ -20,7 +20,8 @@ service firebase.storage {
     // optionally its rendered image (map.png) into their own upload folder;
     // the cartographerImport function reads them with the Admin SDK and
     // removes them after a successful import. A town's art (town.png; L-347)
-    // is uploaded the same way, for cartographerTownImage to attach.
+    // and a battle map's (battlemap.png; L-355) are uploaded the same way, for
+    // cartographerTownImage and cartographerMapImage to attach.
 
     match /cartographer/{uid}/{uploadId}/{file} {
       allow read, delete: if isOwner(uid) && hasApp('cartographer');
@@ -32,14 +33,15 @@ service firebase.storage {
             (file == 'map.json'
               && request.resource.contentType == 'application/json'
               && request.resource.size <= 50 * 1024 * 1024)
-            || ((file == 'map.png' || file == 'town.png')
+            || ((file == 'map.png' || file == 'town.png' || file == 'battlemap.png')
               && request.resource.contentType == 'image/png'
               && request.resource.size <= 30 * 1024 * 1024)
           );
     }
 
     // ── World map images ──────────────────────────────────
-    // The world map (map.png) and towns' art (town-<settlement>-<n>.png),
+    // The world map (map.png), towns' art (town-<settlement>-<n>.png) and
+    // battle maps' art (map-<map>-<n>.png),
     // copied here by the Cartographer's functions. Readable by players and
     // world builders; written only by the server.
 

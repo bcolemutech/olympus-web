@@ -9,7 +9,8 @@
  *
  *   BattleMap
  *     id, name, width, height   — the grid, in cells (at most 64 each way)
- *     image                     — a Cloud Storage path, or null (drawn as a plain grid)
+ *     image                     — { path (Cloud Storage), width, height }, or null
+ *                                 (drawn as a plain grid); stretched to the grid
  *     entries:  [{ id, x, y }]  — where you arrive: the first, unless an exit names one
  *     exits:    [{ id, name, x, y, to }]
  *                               — to: 'out' (back to the town, or the world), or
