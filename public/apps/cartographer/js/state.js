@@ -38,6 +38,26 @@
     return Number(n || 0).toLocaleString('en-US');
   };
 
+  // A world's settlements, sorted by name (firestore.rules lets the
+  // cartographer claim read a world's locations).
+  Cartographer.loadSettlements = function (worldId) {
+    return Cartographer.state.db
+      .collection('loom_worlds')
+      .doc(worldId)
+      .collection('locations')
+      .where('geo.kind', '==', 'settlement')
+      .get()
+      .then(function (snap) {
+        return snap.docs
+          .map(function (d) {
+            return d.data();
+          })
+          .sort(function (a, b) {
+            return a.name.localeCompare(b.name);
+          });
+      });
+  };
+
   Cartographer.formatDate = function (ms) {
     return ms
       ? new Date(ms).toLocaleDateString(undefined, {

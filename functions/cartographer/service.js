@@ -1,11 +1,14 @@
 'use strict';
 
+const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { FieldValue } = require('firebase-admin/firestore');
 const loomCanon = require('../loom-canon');
 const { parseAzgaarExport, AzgaarFormatError } = require('./parse');
 const { mapToCanon } = require('./map');
 const { loadDraftWorld, newWorldId } = require('./load');
 const { gradeWorld, gradeLocation, isPlayable } = require('../loom-canon/grading');
+const { ToolError } = require('../mcp/registry');
 
 // The Cartographer's server side (design planning/the-cartographer-design.md
 // §3.1, §3.4; C-5 / #372), behind the cartographerImport and
@@ -22,6 +25,15 @@ const { gradeWorld, gradeLocation, isPlayable } = require('../loom-canon/grading
 //   world is playable (its starting location graded Playable, so players can
 //   enter it), and publishes it — the Loom then lists and plays it.
 //
+// townImage(uid, { worldId, locationId, uploadId } | { worldId, locationId, remove })
+//   A town's art (planning/the-loom-layered-worlds.md §8; L-347 / #416): reads
+//   cartographer/{uid}/{uploadId}/town.png, checks it is a PNG, copies it to
+//   worlds/{worldId}/town-{locationId}-{n}.png (a new name each time, so no
+//   browser shows an old one) and records it on the settlement as
+//   `town.image: { path, width, height }` through the shared, versioned write
+//   layer (games see it on their next turn); then deletes the replaced image
+//   and the upload. `remove` takes the art away.
+//
 // worldCompletion({ worldIds })
 //   How built each world is, for the Cartographer page: its places by grade
 //   (planning/the-loom-layered-worlds.md §4, §6; L-323 / #392). Graded here
@@ -30,6 +42,7 @@ const { gradeWorld, gradeLocation, isPlayable } = require('../loom-canon/grading
 //   and starting location at publish time.)
 
 const UPLOAD_ID = /^[A-Za-z0-9_-]{8,64}$/;
+const ENTITY_ID = /^[A-Za-z0-9_-]{1,80}$/;
 const WORLD_ID = /^[a-z0-9-]{1,64}$/;
 const MAX_NAME = 100;
 const MAX_HOOK = 2000;
@@ -63,7 +76,7 @@ function optionalText(value, max, field) {
   return text;
 }
 
-function createCartographerService({ db, bucket, now = () => Date.now() }) {
+function createCartographerService({ db, bucket, writer, now = () => Date.now() }) {
   const uploadFile = (uid, uploadId, file) =>
     bucket.file(`cartographer/${uid}/${uploadId}/${file}`);
 
@@ -242,7 +255,81 @@ function createCartographerService({ db, bucket, now = () => Date.now() }) {
     return { worlds };
   }
 
-  return { importUpload, publishWorld, worldCompletion };
+  async function townImage(uid, { worldId, locationId, uploadId, remove } = {}) {
+    if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
+      throw new HttpsError('invalid-argument', 'worldId is required.');
+    }
+    if (typeof locationId !== 'string' || !ENTITY_ID.test(locationId)) {
+      throw new HttpsError('invalid-argument', 'locationId is required.');
+    }
+    if (!remove && (typeof uploadId !== 'string' || !UPLOAD_ID.test(uploadId))) {
+      throw new HttpsError('invalid-argument', 'uploadId is required.');
+    }
+
+    let image = null;
+    if (!remove) {
+      const upload = uploadFile(uid, uploadId, 'town.png');
+      const [exists] = await upload.exists();
+      if (!exists) throw new HttpsError('not-found', 'Upload the town image first.');
+      const [header] = await upload.download({ start: 0, end: 23 });
+      const size = pngDimensions(header);
+      if (!size) throw new HttpsError('invalid-argument', 'The town image is not a valid PNG.');
+      const stamp = now().toString(36) + crypto.randomBytes(3).toString('hex');
+      image = { path: `worlds/${worldId}/town-${locationId}-${stamp}.png`, ...size };
+      await upload.copy(bucket.file(image.path));
+    }
+
+    let result;
+    try {
+      result = await writer.edit(worldId, uid, (e) => {
+        const settlement = e.world.locations[locationId];
+        if (!settlement || settlement.retired) {
+          throw new HttpsError('not-found', 'No such place in this world.');
+        }
+        if ((settlement.geo || {}).kind !== 'settlement') {
+          throw new HttpsError(
+            'failed-precondition',
+            `${settlement.name} isn't a settlement, so it has no town.`
+          );
+        }
+        const previous = (settlement.town && settlement.town.image) || null;
+        if (image || previous) {
+          e.update(e.ref('locations', locationId), {
+            'town.image': image || FieldValue.delete(),
+          });
+        }
+        return { name: settlement.name, previous };
+      });
+    } catch (err) {
+      if (image)
+        await bucket
+          .file(image.path)
+          .delete()
+          .catch(() => {});
+      if (err instanceof HttpsError) throw err;
+      // The write layer's own refusals (an unknown or uneditable world).
+      if (err instanceof ToolError) throw new HttpsError('failed-precondition', err.message);
+      throw err;
+    }
+
+    if (result.previous && (!image || result.previous.path !== image.path)) {
+      await bucket
+        .file(result.previous.path)
+        .delete()
+        .catch(() => {});
+    }
+    if (!remove) {
+      await bucket.deleteFiles({ prefix: `cartographer/${uid}/${uploadId}/` }).catch(() => {});
+    }
+    return {
+      worldId,
+      locationId,
+      name: result.name,
+      image: image ? { width: image.width, height: image.height } : null,
+    };
+  }
+
+  return { importUpload, publishWorld, worldCompletion, townImage };
 }
 
 function requireCartographer(request) {

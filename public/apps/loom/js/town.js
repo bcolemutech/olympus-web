@@ -30,6 +30,7 @@
     data: null, // loomGetMap's `town`
     positions: {}, // id → { x, y, auto }
     selected: null, // a place id
+    art: { path: null, url: null }, // the town's image (L-347), once its URL is known
   };
 
   // ── Helpers ───────────────────────────────────────
@@ -109,9 +110,32 @@
 
   // ── Data ──────────────────────────────────────────
 
+  // Fetches the town's image URL from Cloud Storage, then redraws.
+  function loadArt(image) {
+    if (!image) {
+      town.art = { path: null, url: null };
+      return;
+    }
+    if (image.path === town.art.path) return;
+    town.art = { path: image.path, url: null };
+    firebase
+      .storage()
+      .ref(image.path)
+      .getDownloadURL()
+      .then(function (url) {
+        if (town.art.path !== image.path) return; // the player moved on meanwhile
+        town.art.url = url;
+        Loom.map.render();
+      })
+      .catch(function (err) {
+        console.error('Could not load the town art:', err);
+      });
+  }
+
   /** Takes loomGetMap's `town` (or null), and places what has no position. */
   function setData(data) {
     town.data = data || null;
+    loadArt(data && data.image);
     var placed = data ? Loom.townLayout.layout(data.places, data.links) : {};
     town.positions = {};
     Object.keys(placed).forEach(function (id) {
@@ -165,6 +189,28 @@
         rx: 18,
       })
     );
+
+    // The town's art (L-347), fitted inside the town's square, behind the
+    // paths and places.
+    var image = town.data.image;
+    if (image && town.art.url && town.art.path === image.path) {
+      var aspect = image.width / image.height || 1;
+      var w = aspect >= 1 ? SPAN : SPAN * aspect;
+      var h = aspect >= 1 ? SPAN / aspect : SPAN;
+      var topLeft = M.toScreen(view, PAD + (SPAN - w) / 2, PAD + (SPAN - h) / 2);
+      var bottomRight = M.toScreen(view, PAD + (SPAN + w) / 2, PAD + (SPAN + h) / 2);
+      overlay.appendChild(
+        svg('image', {
+          class: 'loom-town-art',
+          href: town.art.url,
+          x: topLeft.x,
+          y: topLeft.y,
+          width: bottomRight.x - topLeft.x,
+          height: bottomRight.y - topLeft.y,
+          preserveAspectRatio: 'none',
+        })
+      );
+    }
 
     var at = function (id) {
       var p = town.positions[id];

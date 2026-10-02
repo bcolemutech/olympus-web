@@ -122,5 +122,7 @@
     init: function () {
       ref('carto-upload-form').addEventListener('submit', onSubmit);
     },
+    newUploadId: newUploadId,
+    uploadFile: uploadFile,
   };
 })();

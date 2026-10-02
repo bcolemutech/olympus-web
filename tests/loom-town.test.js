@@ -456,6 +456,7 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
       name: 'Burdendal',
       here: 'plc_1_gate',
       next: ['plc_1_market'],
+      image: null, // no art yet (L-347)
     });
     expect(view.places).toEqual([
       {
@@ -567,6 +568,15 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
       .collection('places')
       .doc('plc_1_tavern')
       .update({ retired: FieldValue.delete() });
+    await bump();
+  });
+
+  test("the town's art comes with it, for the view to draw (L-347)", async () => {
+    const art = { path: 'worlds/nisia-t0t0t0/town-loc_1-x.png', width: 1200, height: 900 };
+    await worldRef.collection('locations').doc('loc_1').update({ 'town.image': art });
+    await bump();
+    expect((await townOf()).image).toEqual(art);
+    await worldRef.collection('locations').doc('loc_1').update({ town: FieldValue.delete() });
     await bump();
   });
 
