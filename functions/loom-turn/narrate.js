@@ -4,6 +4,7 @@ const { callGemini } = require('../gemini');
 const loomCanon = require('../loom-canon');
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
+const maps = require('../loom-canon/maps');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
 
@@ -93,11 +94,60 @@ function positionAfter(save, resolution) {
     (resolution.mutations || []).find((m) => m.target === 'save' && m.path === path);
   const move = change('location');
   const step = change('placeId');
+  const onto = change('mapId');
+  const cell = change('cell');
   return {
     location: move ? move.value : save.location,
     // A move across the map leaves town unless it lands somewhere in the next.
     placeId: step ? step.value : move ? null : save.placeId,
+    // A battle map (L-351): a move between places leaves it unless it lands on one.
+    mapId: onto ? onto.value : move || step ? null : save.mapId || null,
+    cell: cell ? cell.value : onto || move || step ? null : save.cell || null,
   };
+}
+
+// Where the player stands on a battle map (L-351), and how they can leave it:
+// on a map, its exits are the only ways on.
+function buildMapSection(canonWorld, position) {
+  const { map, cell } = maps.positionOf(canonWorld, position);
+  const host = maps.hostOf(canonWorld, position);
+  const there = maps.at(map, cell);
+  const spot = (item) => item.name + ' (' + item.x + ', ' + item.y + ')';
+  const lines = [
+    'ON THE MAP OF ' +
+      (host ? host.name : map.name) +
+      ' (' +
+      map.name +
+      ', ' +
+      map.width +
+      ' × ' +
+      map.height +
+      ' cells): the player stands at (' +
+      cell.x +
+      ', ' +
+      cell.y +
+      ')' +
+      (there.feature ? ', at ' + there.feature.name : '') +
+      '.',
+  ];
+  if ((map.features || []).length) {
+    lines.push('Features: ' + map.features.map(spot).join('; ') + '.');
+  }
+  const exits = map.exits || [];
+  if (exits.length) {
+    lines.push('Ways out (the only ways on from here):');
+    exits.forEach((exit) => {
+      const to =
+        exit.to && typeof exit.to === 'object' ? (canonWorld.battleMaps || {})[exit.to.map] : null;
+      lines.push(
+        '- ' +
+          spot(exit) +
+          ': ' +
+          (to ? 'to ' + to.name : 'out of ' + (host ? host.name : map.name))
+      );
+    });
+  }
+  return lines.join('\n');
 }
 
 // The ways on from where the player ends up, each open or closed (the Layered
@@ -143,6 +193,8 @@ function buildExitsSection(canonWorld, position) {
   const locationId = position.location;
   const here = locationId && canonWorld.locations[locationId];
   if (!here) return '';
+  const onMap = maps.positionOf(canonWorld, position).map;
+  if (onMap && (onMap.exits || []).length) return buildMapSection(canonWorld, position);
   const place = town.positionOf(canonWorld, position).place;
   if (place) return buildTownExitsSection(canonWorld, here, place);
   const links = (here.geo && here.geo.links) || {};

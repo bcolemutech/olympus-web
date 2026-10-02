@@ -27,7 +27,10 @@
  * (L-342, switched on once the MCP town tools (L-343 / #397) had laid out
  * the start town and its open neighbours): a settlement needs a working town
  * layout (./town.js hasTownLayout) to be Playable. Battle maps aren't
- * required yet.
+ * required yet. When they are, LAYER_CHECKS.battleMap becomes ./maps.js
+ * kindOf, which says 'own', 'generic' or nothing: a point of interest or a
+ * place in town needs a map, its own or a generic one, to be Playable, and
+ * its own to be Rich (L-351; planning/the-loom-layered-worlds.md §9).
  *
  * Places in town (L-342) are graded too: Playable once written up, Rich with
  * someone there or lore about them. A settlement's Rich bar grows with its
@@ -152,6 +155,14 @@ function layerItem(layers, layer, world, entity) {
   };
 }
 
+// A generic battle map opens a place, but only its own map makes it Rich
+// (decision 2026-10-01): the work list keeps showing places still on one.
+function ownMapItem(layers, world, entity) {
+  const kindOf = layers.battleMap;
+  if (!kindOf || kindOf(world, entity) !== 'generic') return null;
+  return { need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' };
+}
+
 /**
  * How far a settlement is toward Rich: its size, and the residents and lore it
  * has against what its size needs (anyone or anything anywhere in its town
@@ -186,6 +197,7 @@ function gradeLocation(world, location, { layers = LAYER_CHECKS } = {}) {
     checklist.push(richItem('lore', lore.have, lore.want, tier));
   } else {
     checklist.push(richItem('lore', loreAbout(world, location.id), 1));
+    checklist.push(ownMapItem(layers, world, location));
   }
   const items = checklist.filter(Boolean);
   return { grade: gradeFrom(items), checklist: items };
@@ -209,6 +221,7 @@ function gradePlace(world, place, { layers = LAYER_CHECKS } = {}) {
       message: 'Nobody is found here and there is no lore about it: add either.',
     });
   }
+  checklist.push(ownMapItem(layers, world, place));
   const items = checklist.filter(Boolean);
   return { grade: gradeFrom(items), checklist: items };
 }

@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
+const maps = require('../loom-canon/maps');
 
 /**
  * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
@@ -70,9 +71,7 @@ function evaluateTownMove(target, characterState, canonWorld) {
     return blocked("You can't get there directly from here.");
   }
   const here = town.positionOf(canonWorld, characterState).place;
-  if (here && here.id === target.id) {
-    return { outcome: 'no_op', mutations: [], constraints: ["You're already there."] };
-  }
+  if (here && here.id === target.id) return enterOrStay(target, characterState, canonWorld);
   const reachable = here ? (here.connections || []).includes(target.id) : town.isEntrance(target);
   if (!reachable) return blocked("You can't get there directly from here.");
   if (target.retired) return blocked("That place can't be reached anymore.");
@@ -85,9 +84,113 @@ function evaluateTownMove(target, characterState, canonWorld) {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'placeId', value: target.id },
+      // A place with a battle map (L-351) is entered on it, at its entry.
+      ...maps.arrivalMutations(canonWorld, target, characterState),
       { op: 'increment', path: 'worldClock', value: 1 },
     ],
     constraints: ['You make your way to ' + target.name + '.'],
+  };
+}
+
+// A move to where the player already stands: back onto its battle map if it
+// has one and they've stepped off it (L-351), else nothing to do.
+function enterOrStay(place, characterState, canonWorld) {
+  if (maps.mapOf(canonWorld, place) && !characterState.mapId) {
+    return {
+      outcome: 'success',
+      mutations: [
+        ...maps.arrivalMutations(canonWorld, place, characterState),
+        { op: 'increment', path: 'worldClock', value: 1 },
+      ],
+      constraints: ['You go into ' + place.name + '.'],
+    };
+  }
+  return { outcome: 'no_op', mutations: [], constraints: ["You're already there."] };
+}
+
+// ── Battle maps (L-351) ─────────────────────────────
+
+const exitNames = (exits) => nameList(exits.map((e) => ({ name: e.name })));
+
+// A move while the player is on a battle map: to a cell (from the grid), to a
+// feature or an exit (typed: "feature:bar", "exit:front-door"), anywhere in the
+// grid (nothing blocks movement yet). Stepping onto an exit leaves by it, out
+// to the town or the world, or onto the map it leads to. Anything else waits
+// until the player has left the map, as leaving a town waits for a gate.
+function evaluateMapMove(proposedAction, characterState, canonWorld, here) {
+  const { map, cell: from } = here;
+  const host = maps.hostOf(canonWorld, characterState);
+  const hostName = host ? host.name : map.name;
+  const target = proposedAction.targets[0];
+  const named = (prefix, list) =>
+    typeof target === 'string' && target.indexOf(prefix) === 0
+      ? (list || []).find((item) => item.id === target.slice(prefix.length)) || false
+      : null;
+
+  let cell = proposedAction.params && proposedAction.params.cell;
+  let feature = named('feature:', map.features);
+  let exit = named('exit:', map.exits);
+  if (feature === false || exit === false) {
+    return {
+      outcome: 'invalid_target',
+      mutations: [],
+      constraints: ["There's no such place here."],
+    };
+  }
+  if (feature) cell = { x: feature.x, y: feature.y };
+  if (!cell && !exit) {
+    if (host && target === host.id) {
+      return { outcome: 'no_op', mutations: [], constraints: ["You're already there."] };
+    }
+    const out = maps.exitsOut(map);
+    const ways = out.length ? out : map.exits || [];
+    return blocked('To leave ' + hostName + ', go out by ' + exitNames(ways) + ' first.');
+  }
+  if (!exit) {
+    if (!maps.inBounds(map, cell)) return blocked("That's off the map.");
+    const there = maps.at(map, cell);
+    exit = there.exit;
+    feature = feature || there.feature;
+  }
+  if (exit) return leaveMapBy(exit, hostName, canonWorld);
+  if (maps.sameCell(cell, from)) {
+    return { outcome: 'no_op', mutations: [], constraints: ["You're already there."] };
+  }
+  return {
+    outcome: 'success',
+    mutations: [
+      { target: 'save', op: 'set-flag', path: 'cell', value: { x: cell.x, y: cell.y } },
+      { op: 'increment', path: 'worldClock', value: 1 },
+    ],
+    constraints: [
+      feature ? 'You move to ' + feature.name + '.' : 'You move across ' + map.name + '.',
+    ],
+  };
+}
+
+function leaveMapBy(exit, hostName, canonWorld) {
+  const to = exit.to && typeof exit.to === 'object' ? exit.to : null;
+  if (to) {
+    const next = (canonWorld.battleMaps || {})[to.map];
+    if (!next || next.retired) return blocked('The way by ' + exit.name + ' leads nowhere now.');
+    return {
+      outcome: 'success',
+      mutations: [
+        { target: 'save', op: 'set-flag', path: 'mapId', value: next.id },
+        { target: 'save', op: 'set-flag', path: 'cell', value: maps.entryCell(next, to.entry) },
+        { op: 'increment', path: 'worldClock', value: 1 },
+      ],
+      constraints: ['You go by ' + exit.name + ' to ' + next.name + '.'],
+    };
+  }
+  return {
+    outcome: 'success',
+    mutations: [
+      { target: 'save', op: 'set-flag', path: 'mapId', value: null },
+      { target: 'save', op: 'set-flag', path: 'cell', value: null },
+      { op: 'increment', path: 'worldClock', value: 1 },
+    ],
+    constraints: ['You leave ' + hostName + ' by ' + exit.name + '.'],
   };
 }
 
@@ -110,6 +213,16 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
     return blocked('You have nowhere established to move from yet.');
   }
 
+  // On a battle map (L-351), moves happen on the map until the player leaves
+  // it. A map with no exits holds nobody: it is passed over.
+  const onMap = maps.positionOf(canonWorld, characterState);
+  if (onMap.map && (onMap.map.exits || []).length) {
+    return evaluateMapMove(proposedAction, characterState, canonWorld, onMap);
+  }
+  if (proposedAction.params && proposedAction.params.cell) {
+    return blocked("There's no map here to move on.");
+  }
+
   const first = proposedAction.targets[0];
   const targetPlace = first && (canonWorld.places || {})[first];
   if (targetPlace && targetPlace.locationId === currentId) {
@@ -129,11 +242,7 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
   }
 
   if (targetId === currentId) {
-    return {
-      outcome: 'no_op',
-      mutations: [],
-      constraints: ["You're already there."],
-    };
+    return enterOrStay(canonWorld.locations[currentId], characterState, canonWorld);
   }
 
   const currentLocation = canonWorld.locations[currentId];
@@ -178,6 +287,9 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
       value: arrival ? arrival.id : null,
     });
   }
+  // Arriving where there is a battle map (L-351) lands on it, at its entry:
+  // the way in reached, or the point of interest itself.
+  mutations.push(...maps.arrivalMutations(canonWorld, arrival || targetLocation, characterState));
   mutations.push({ op: 'increment', path: 'worldClock', value: 1 });
   return {
     outcome: 'success',

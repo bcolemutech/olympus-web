@@ -170,6 +170,23 @@ function validateSave(data) {
   if (data.placeId !== undefined && data.placeId !== null && typeof data.placeId !== 'string') {
     errors.push('placeId must be a place id or null');
   }
+  // Where on a battle map (L-351), if on one.
+  if (data.mapId !== undefined && data.mapId !== null && typeof data.mapId !== 'string') {
+    errors.push('mapId must be a battle map id or null');
+  }
+  if (
+    data.cell !== undefined &&
+    data.cell !== null &&
+    !(
+      typeof data.cell === 'object' &&
+      Number.isInteger(data.cell.x) &&
+      Number.isInteger(data.cell.y) &&
+      data.cell.x >= 0 &&
+      data.cell.y >= 0
+    )
+  ) {
+    errors.push('cell must be { x, y } (whole numbers, 0 or more) or null');
+  }
   // Places the save has discovered (world map, L-331); older saves have none.
   if (
     data.discovered !== undefined &&
@@ -286,6 +303,8 @@ function makeSave(fields) {
     character: makeCharacter(fields.character),
     location: fields.location || null,
     placeId: fields.placeId || null, // where in town (L-342), or null
+    mapId: fields.mapId || null, // the battle map it is on (L-351), or null
+    cell: fields.cell || null, // where on that map: { x, y }, or null
     discovered: fields.discovered || [],
     privateFlags: fields.privateFlags || {},
     relationships: fields.relationships || {},
