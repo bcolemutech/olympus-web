@@ -23,7 +23,7 @@ jest.mock('../functions/gemini', () => ({
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
 const { layOutTowns } = require('./helpers/towns');
-const { loomCreateSave, loomPlayTurn } = require('../functions/index');
+const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
 
 const fs = require('fs');
 const path = require('path');
@@ -218,6 +218,13 @@ beforeAll(async () => {
       .doc(id)
       .set({ id, sources: WRITTEN, ...map });
   }
+  await worldRef.collection('characters').doc('chr_brannoch').set({
+    id: 'chr_brannoch',
+    name: 'Brannoch the Innkeeper',
+    description: 'Keeps the Gull & Anchor.',
+    locationId: 'loc_1',
+    placeId: 'plc_1_tavern',
+  });
   await worldRef
     .collection('locations')
     .doc('loc_1')
@@ -259,6 +266,40 @@ describe('a visit to the Gull & Anchor', () => {
     });
   });
 
+  test('loomGetMap gives the grid view the map, where the player stands, and who is there', async () => {
+    const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(view.battleMap).toEqual({
+      id: 'bm_tavern',
+      name: 'The Gull & Anchor, ground floor',
+      width: 12,
+      height: 8,
+      image: null,
+      here: { x: 1, y: 4 },
+      host: { id: 'plc_1_tavern', name: 'The Gull & Anchor' },
+      entries: [
+        { id: 'door', x: 1, y: 4 },
+        { id: 'stair-top', x: 10, y: 6 },
+      ],
+      exits: [
+        { id: 'front-door', name: 'the front door', x: 0, y: 4, to: 'out' },
+        {
+          id: 'cellar-stairs',
+          name: 'the cellar stairs',
+          x: 11,
+          y: 7,
+          to: { map: 'bm_cellar', name: 'The cellar' },
+        },
+      ],
+      features: [
+        { id: 'bar', name: 'the bar', x: 3, y: 2 },
+        { id: 'hearth', name: 'the hearth', x: 9, y: 1 },
+      ],
+      // Characters have no cells yet: listed, not placed.
+      people: [{ id: 'chr_brannoch', name: 'Brannoch the Innkeeper' }],
+    });
+    expect(view.town).toMatchObject({ locationId: 'loc_1', here: 'plc_1_tavern' });
+  });
+
   test('the narrator is told where on the map, the features, and the only ways on', async () => {
     playerMovesTo(null);
     await turn(saveId);
@@ -287,6 +328,9 @@ describe('a visit to the Gull & Anchor', () => {
       constraints: ['You move to the bar.'],
     });
     expect((await where(saveId)).cell).toEqual({ x: 3, y: 2 });
+    // The grid view follows: the player stands at the bar now.
+    const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(view.battleMap.here).toEqual({ x: 3, y: 2 });
     expect((await moveTo(saveId, 'feature:bar')).constraints).toEqual(["You're already there."]);
     expect((await moveTo(saveId, 'feature:piano')).outcome).toBe('invalid_target');
   });
@@ -342,6 +386,8 @@ describe('a visit to the Gull & Anchor', () => {
       mapId: null,
       cell: null,
     });
+    const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(view.battleMap).toBeNull();
     playerMovesTo(null);
     await turn(saveId);
     expect(prompts.narrate.at(-1)).toContain('WAYS ON FROM The Gull & Anchor, Burdendal:');
