@@ -225,26 +225,26 @@ textarea.carto-input {
 }
 
 .carto-publish-form,
-.carto-town-art-form {
+.carto-art-form {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Town art (L-347): the form's title, and the towns that have art. */
+/* Art (L-347, L-355): the form's title, and what already has art. */
 .carto-subtitle {
   margin: 0;
   color: #e0e0e0;
   font-size: 1rem;
 }
 
-.carto-town-art-rows {
+.carto-art-rows {
   margin: 0.4rem 0 0;
   padding: 0;
   list-style: none;
 }
 
-.carto-town-art-rows li {
+.carto-art-rows li {
   display: flex;
   align-items: center;
   gap: 0.6rem;

@@ -11,6 +11,8 @@ const { mapTools } = require('./map-tools');
 const { GRADES } = require('../../../loom-canon/grading');
 const { workList } = require('./work');
 const views = require('./views');
+const images = require('./images');
+const town = require('../../../loom-canon/town');
 
 // The Cartographer's MCP connector (design planning/the-cartographer-design.md
 // §4; C-6 / #373, C-7 / #374). Mounted at /mcp/cartographer and gated by the
@@ -36,7 +38,7 @@ const GRADE_HELP =
   'Grades: unbuilt (a layer it needs is missing), stub (import text only), playable ' +
   '(written up: players may enter), rich (playable, with residents and lore).';
 
-function cartographerApp({ reader, writer }) {
+function cartographerApp({ reader, writer, art }) {
   // Loads a world the tools can read, or explains why it can't.
   async function worldFor(id) {
     const loaded = await reader.loadWorld(id);
@@ -355,6 +357,96 @@ function cartographerApp({ reader, writer }) {
         },
       },
       {
+        name: 'view_image',
+        title: 'View an image',
+        description:
+          'See an image as players will: a battle map, a town, or the world map, returned as an ' +
+          'image you can look at (scaled to at most 1568 px on the long side). Use it to check ' +
+          'that what you place lines up with the art. Battle maps come with their grid (every ' +
+          'fifth line labelled) and numbered markers for entries, exits and features; towns with ' +
+          'numbered markers at their places’ positions, their links, and the 0–1000 grid. The ' +
+          'legend ties each number to its id, name and cell or position. Without art, a battle ' +
+          'map or town is drawn on a plain background, so its layout can still be checked. Art ' +
+          'is uploaded on the Cartographer page.',
+        inputSchema: {
+          worldId,
+          of: z.enum(['battleMap', 'town', 'world']).describe('What to see.'),
+          id: entityId('battle map or settlement', 'list_battle_maps or find_locations')
+            .optional()
+            .describe('The battle map, or the settlement (for its town). Not for the world map.'),
+        },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          const load = async (path) => {
+            try {
+              return await art.load(path);
+            } catch {
+              throw new ToolError('Its image could not be read from storage.');
+            }
+          };
+          const needId = () => {
+            if (!args.id)
+              throw new ToolError(
+                `Give the ${args.of === 'town' ? 'settlement' : 'battle map'} id.`
+              );
+          };
+          let rendered;
+          try {
+            if (args.of === 'battleMap') {
+              needId();
+              const map = entityFor(
+                world,
+                'battleMaps',
+                args.id,
+                'battle map',
+                'Use list_battle_maps to see them.'
+              );
+              rendered = images.renderBattleMap(map, map.image ? await load(map.image.path) : null);
+            } else if (args.of === 'town') {
+              needId();
+              const settlement = entityFor(
+                world,
+                'locations',
+                args.id,
+                'location',
+                'Use find_locations to look one up.'
+              );
+              if ((settlement.geo || {}).kind !== 'settlement') {
+                throw new ToolError(`${settlement.name} isn't a settlement, so it has no town.`);
+              }
+              const townArt = settlement.town && settlement.town.image;
+              rendered = images.renderTown(
+                world,
+                settlement,
+                town.placesOf(world, settlement.id),
+                townArt ? await load(townArt.path) : null
+              );
+            } else {
+              const path = world.map && world.map.imagePath;
+              if (!path)
+                throw new ToolError('This world has no map image: it was imported without one.');
+              rendered = images.renderWorld(world, await load(path));
+            }
+          } catch (err) {
+            if (err instanceof ToolError) throw err;
+            throw new ToolError(`The image can't be shown: ${err.message}.`);
+          }
+          const legend = { worldId: world.id, ...rendered.legend };
+          return {
+            content: [
+              {
+                type: 'image',
+                data: Buffer.from(rendered.jpeg).toString('base64'),
+                mimeType: 'image/jpeg',
+              },
+              { type: 'text', text: JSON.stringify(legend, null, 2) },
+            ],
+            structuredContent: legend,
+          };
+        },
+      },
+      {
         name: 'get_character',
         title: 'Get character',
         description: 'One character in full: description, faction, where they are found, and lore.',
@@ -418,6 +510,13 @@ function register(registry) {
     cartographerApp({
       reader: createFirestoreWorldReader(getFirestore),
       writer: createFirestoreWorldWriter(getFirestore),
+      // Art, read from Cloud Storage for view_image.
+      art: {
+        load: async (path) => {
+          const { getStorage } = require('firebase-admin/storage');
+          return (await getStorage().bucket().file(path).download())[0];
+        },
+      },
     })
   );
 }

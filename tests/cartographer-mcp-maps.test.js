@@ -24,6 +24,14 @@ const {
   StreamableHTTPClientTransport,
 } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
 const functionsDir = path.resolve(__dirname, '../functions');
+const { PNG } = require(require.resolve('pngjs', { paths: [functionsDir] }));
+const jpeg = require(require.resolve('jpeg-js', { paths: [functionsDir] }));
+const ARTS = {}; // Cloud Storage path → PNG, for view_image
+function solidPng(width, height) {
+  const img = new PNG({ width, height });
+  img.data.fill(170);
+  return PNG.sync.write(img);
+}
 const { initializeApp } = require(require.resolve('firebase-admin/app', { paths: [functionsDir] }));
 const { getFirestore } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
@@ -59,6 +67,13 @@ registry.registerApp(
   cartographerApp({
     reader: createFirestoreWorldReader(() => db),
     writer: createFirestoreWorldWriter(() => db),
+    // Art for view_image, from memory instead of Cloud Storage.
+    art: {
+      load: async (artPath) => {
+        if (!ARTS[artPath]) throw new Error('No such object.');
+        return ARTS[artPath];
+      },
+    },
   })
 );
 const oauthStore = createInMemoryStore();
@@ -299,7 +314,7 @@ describe('drawing maps', () => {
       .doc(W)
       .collection('battleMaps')
       .doc('bm_the-cellar')
-      .update({ image: `worlds/${W}/map-bm_the-cellar.png`, imageWidth: 600, imageHeight: 600 });
+      .update({ image: { path: `worlds/${W}/map-bm_the-cellar.png`, width: 600, height: 600 } });
     await worlds()
       .doc(W)
       .update({ canonVersion: (await worlds().doc(W).get()).data().canonVersion + 1 });
@@ -324,8 +339,7 @@ describe('drawing maps', () => {
       'The grid is smaller now: players standing beyond its edge are moved to its entry.',
     ]);
     expect(await mapDoc(W, 'bm_the-cellar')).toMatchObject({
-      image: `worlds/${W}/map-bm_the-cellar.png`,
-      imageWidth: 600,
+      image: { path: `worlds/${W}/map-bm_the-cellar.png`, width: 600, height: 600 },
       height: 5,
     });
     expect(result.map.hasImage).toBe(true);
@@ -518,5 +532,97 @@ describe('removing maps', () => {
       await ok('retire_entity', { worldId: DRAFT, type: 'battleMap', id: 'bm_a-hut' })
     ).toMatchObject({ deleted: { id: 'bm_a-hut' } });
     expect(await mapDoc(DRAFT, 'bm_a-hut')).toBeUndefined();
+  });
+});
+
+describe('view_image: what Claude sees', () => {
+  const W = LIVE;
+  const view = (args) => call('view_image', { worldId: W, ...args });
+  const pictureOf = (result) => {
+    const [image] = result.content;
+    expect(image).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+    return jpeg.decode(Buffer.from(image.data, 'base64'));
+  };
+
+  test('a battle map without art: drawn on a plain grid, with its markers in the legend', async () => {
+    const result = await view({ of: 'battleMap', id: 'bm_the-gull-anchor-ground-floor' });
+    expect(result.isError).toBeFalsy();
+    const picture = pictureOf(result);
+    expect(picture.width / picture.height).toBeCloseTo(12 / 8, 2);
+    expect(result.structuredContent).toMatchObject({
+      worldId: W,
+      of: 'battleMap',
+      art: false,
+      grid: { width: 12, height: 8 },
+    });
+    expect(result.structuredContent.markers.map((m) => [m.n, m.type, m.id])).toEqual([
+      [1, 'entry', 'door'],
+      [2, 'entry', 'stair-top'],
+      [3, 'exit', 'front-door'],
+      [4, 'exit', 'cellar-stairs'],
+      [5, 'feature', 'bar'],
+    ]);
+    // The legend is also there as text, for clients that only read text.
+    expect(JSON.parse(result.content[1].text).markers).toHaveLength(5);
+  });
+
+  test('with art: the art is drawn under the grid', async () => {
+    ARTS[`worlds/${W}/map-bm_the-cellar.png`] = solidPng(600, 500);
+    const result = await view({ of: 'battleMap', id: 'bm_the-cellar' });
+    expect(result.structuredContent).toMatchObject({
+      art: true,
+      image: { width: 600, height: 500 },
+    });
+    expect(pictureOf(result).width).toBe(600);
+  });
+
+  test('a town: its places at their positions, the rest listed as not positioned', async () => {
+    await ok('update_place', {
+      worldId: W,
+      placeId: 'plc_1_the-gull-anchor',
+      position: { x: 300, y: 700 },
+    });
+    const result = await view({ of: 'town', id: 'loc_1' });
+    expect(result.structuredContent).toMatchObject({
+      of: 'town',
+      name: 'Burdendal',
+      art: false,
+      markers: [{ n: 1, id: 'plc_1_the-gull-anchor', wayIn: true, position: { x: 300, y: 700 } }],
+    });
+    expect(pictureOf(result).width).toBe(1000);
+  });
+
+  test('the world map, once the world has one', async () => {
+    expect((await view({ of: 'world' })).content[0].text).toMatch(
+      /This world has no map image: it was imported without one/
+    );
+    const meta = (await worlds().doc(W).get()).data();
+    await worlds()
+      .doc(W)
+      .update({ 'map.imagePath': `worlds/${W}/map.png`, canonVersion: meta.canonVersion + 1 });
+    ARTS[`worlds/${W}/map.png`] = solidPng(1718, 1270);
+    const result = await view({ of: 'world' });
+    expect(result.structuredContent).toMatchObject({
+      of: 'world',
+      image: { width: 1568, height: 1159 },
+    });
+  });
+
+  test('refusals: no id, not a settlement, art missing from storage', async () => {
+    expect(await refused('view_image', { worldId: W, of: 'battleMap' })).toMatch(
+      /Give the battle map id/
+    );
+    expect(await refused('view_image', { worldId: W, of: 'town', id: 'poi_1' })).toMatch(
+      /isn't a settlement/
+    );
+    delete ARTS[`worlds/${W}/map-bm_the-cellar.png`];
+    expect(
+      await refused('view_image', { worldId: W, of: 'battleMap', id: 'bm_the-cellar' })
+    ).toMatch(/could not be read from storage/);
+  });
+
+  test('view_image only reads', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.find((t) => t.name === 'view_image').annotations.readOnlyHint).toBe(true);
   });
 });

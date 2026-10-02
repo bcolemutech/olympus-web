@@ -62,6 +62,12 @@ exports.cartographerTownImage = onCall(async (request) => {
   return cartographerService().townImage(uid, request.data || {});
 });
 
+// A battle map's art (Layered Worlds, L-355 / #417): attach, replace or remove it.
+exports.cartographerMapImage = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return cartographerService().mapImage(uid, request.data || {});
+});
+
 // Grand Hall "connected assistants" (phase 1i): the signed-in user lists and
 // revokes their own MCP connections. See functions/mcp/connections.js.
 const mcpConnections = require('./mcp/connections');

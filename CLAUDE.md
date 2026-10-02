@@ -226,6 +226,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `cartographerPublish` | `cartographer` claim | Publish a draft world to the Loom |
 | `cartographerCompletion` | `cartographer` claim | How built each world is (Playable places), for the Cartographer page |
 | `cartographerTownImage` | `cartographer` claim | Attach, replace or remove a town's art (an uploaded PNG drawn behind the town view) |
+| `cartographerMapImage` | `cartographer` claim | Attach, replace or remove a battle map's art (an uploaded PNG drawn under its grid) |
 | `mcpListConnections` / `mcpRevokeConnection` | Signed-in user (own connections) | Grand Hall "Manage connections" |
 | `mcpServer` | OAuth bearer token per connector | MCP connectors (Scriptorium, Cartographer) and the OAuth server |
 

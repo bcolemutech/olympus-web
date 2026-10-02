@@ -211,10 +211,6 @@ function mapTools({ writer }) {
               args.generic === undefined ? (before ? before.generic || null : null) : args.generic,
             sources: { map: 'mcp' },
           };
-          if (before && before.imageWidth) {
-            doc.imageWidth = before.imageWidth;
-            doc.imageHeight = before.imageHeight;
-          }
           e.set(e.ref('battleMaps', id), doc);
           const result = {
             map: views.battleMapRow(
