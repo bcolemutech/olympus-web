@@ -467,6 +467,8 @@ function requireLoomAuth(request) {
  *       move made on the world map (L-331 / #393), which skips INTERPRET
  *    or { worldId, saveId, action: { verb: 'move', cell: { x, y } } } — a step
  *       on a battle map (L-351), likewise
+ *    or { worldId, saveId, action: { verb: 'end-turn' } } — ends the turn,
+ *       refilling movement and the action, with no model call (L-611 / #441)
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
  */
 exports.loomPlayTurn = onCall(async (request) => {
@@ -489,14 +491,17 @@ exports.loomPlayTurn = onCall(async (request) => {
       typeof cell === 'object' &&
       [cell.x, cell.y].every((n) => Number.isInteger(n) && n >= 0 && n < maps.MAX_SIDE);
     const hasTarget = typeof action.target === 'string';
+    const endTurn = typeof action === 'object' && action.verb === 'end-turn';
     if (
-      typeof action !== 'object' ||
-      action.verb !== 'move' ||
-      (hasTarget ? !/^[A-Za-z0-9_-]{1,80}$/.test(action.target) : !isCell(action.cell))
+      !endTurn &&
+      (typeof action !== 'object' ||
+        action.verb !== 'move' ||
+        (hasTarget ? !/^[A-Za-z0-9_-]{1,80}$/.test(action.target) : !isCell(action.cell)))
     ) {
       throw new HttpsError(
         'invalid-argument',
-        'action must be { verb: "move", target: <place id> } or { verb: "move", cell: { x, y } }.'
+        'action must be { verb: "move", target: <place id> }, { verb: "move", cell: { x, y } } ' +
+          'or { verb: "end-turn" }.'
       );
     }
   } else {
@@ -517,9 +522,11 @@ exports.loomPlayTurn = onCall(async (request) => {
       ...(action
         ? {
             action:
-              typeof action.target === 'string'
-                ? { verb: 'move', target: action.target }
-                : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
+              action.verb === 'end-turn'
+                ? { verb: 'end-turn' }
+                : typeof action.target === 'string'
+                  ? { verb: 'move', target: action.target }
+                  : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
           }
         : { actionText: actionText.trim() }),
     });
@@ -542,6 +549,8 @@ exports.loomPlayTurn = onCall(async (request) => {
  * In a settlement with a town layout it also returns that town, for the town
  * view (L-345 / #399): its places, links, ways in and out, and routes out. On
  * a battle map it returns that map, for the grid view (L-354 / #403).
+ * Always, the save's turn: movement left, the action, the turn number
+ * (L-611 / #441).
  *
  * Data: { worldId: string, saveId: string }
  * Returns: { worldId, name, here, places[], links[], town, battleMap, map }

@@ -70,6 +70,10 @@ async function intake(params) {
  * no model to interpret it, so it skips INTERPRET's Gemini call, but it is
  * adjudicated, gated and narrated exactly like a typed one.
  *
+ * Ending the turn (`action: { verb: 'end-turn' }`; L-611 / #441) needs no
+ * model at all: it is adjudicated (movement and the action refilled) and
+ * recorded with a plain line in place of narration.
+ *
  * @param {{ db: FirebaseFirestore.Firestore, uid: string, worldId: string, saveId: string,
  *           actionText?: string, action?: { verb: 'move', target: string } }} params
  * @returns {Promise<{ narration: string, stateSummary: string, suggestedActions: string[] }>}
@@ -83,6 +87,24 @@ async function runTurnPipeline(params) {
     worldId,
     saveId,
   });
+
+  if (action && action.verb === 'end-turn') {
+    const proposedAction = { verb: 'end-turn', targets: [], params: {} };
+    const resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
+    return commitTurn({
+      db,
+      saveRef,
+      worldStateRef,
+      worldId,
+      actionText: 'end turn',
+      proposedAction,
+      resolution,
+      narration: resolution.constraints.join(' '),
+      entityRefs: [],
+      inventedEntities: [],
+      suggestedActions: [],
+    });
+  }
 
   let actionText = params.actionText;
   let proposedAction;

@@ -126,6 +126,56 @@ function validateWorldState(data) {
   return { valid: errors.length === 0, errors: errors };
 }
 
+// ── The turn (planning/the-loom-movement-and-vision.md §3; L-611 / #441) ──
+//
+// A character has a speed: movement points a turn (1 square on a battle map;
+// 20 m in town, later). A save has its turn: which turn it is, the movement
+// left, whether the turn's one action is used, and the plan (the rest of a
+// path, kept for the next turn). End turn refills movement and the action.
+// Older saves and characters have none: they read as a fresh turn and the
+// default speed. (A save's turn is not a turn record: see makeTurn.)
+
+const DEFAULT_SPEED = 20;
+const MAX_SPEED = 1000;
+
+/** A save's character's speed, or the default for older characters. */
+function speedOf(save) {
+  const speed = save && save.character && save.character.speed;
+  return Number.isInteger(speed) && speed > 0 && speed <= MAX_SPEED ? speed : DEFAULT_SPEED;
+}
+
+/** What's wrong with a save's turn, given its character's speed. */
+function validateTurnState(turn, speed) {
+  const errors = [];
+  if (!turn || typeof turn !== 'object' || Array.isArray(turn)) return ['turn must be an object'];
+  if (!Number.isInteger(turn.n) || turn.n < 1) errors.push('turn.n must be a whole number from 1');
+  if (!Number.isInteger(turn.movementLeft) || turn.movementLeft < 0 || turn.movementLeft > speed) {
+    errors.push('turn.movementLeft must be a whole number from 0 to the speed (' + speed + ')');
+  }
+  if (typeof turn.actionUsed !== 'boolean') errors.push('turn.actionUsed must be true or false');
+  if (turn.plan !== null && (typeof turn.plan !== 'object' || Array.isArray(turn.plan))) {
+    errors.push('turn.plan must be an object or null');
+  }
+  return errors;
+}
+
+/** A new turn `n`: full movement, the action unused, no plan. */
+function freshTurnState(save, n = 1) {
+  return { n, movementLeft: speedOf(save), actionUsed: false, plan: null };
+}
+
+/** A save's turn, or a fresh one for an older save (or one that doesn't check out). */
+function turnStateOf(save) {
+  const turn = save && save.turn;
+  return turn && !validateTurnState(turn, speedOf(save)).length ? turn : freshTurnState(save);
+}
+
+/** The turn after this one: movement and the action refilled, the plan kept. */
+function nextTurnState(save) {
+  const now = turnStateOf(save);
+  return { n: now.n + 1, movementLeft: speedOf(save), actionUsed: false, plan: now.plan };
+}
+
 function validateCharacter(character) {
   const errors = [];
   if (!character || typeof character !== 'object')
@@ -145,6 +195,13 @@ function validateCharacter(character) {
   }
   if (!Array.isArray(character.goals)) {
     errors.push('character.goals must be an array');
+  }
+  // Movement a turn (L-611); older characters have none and move at the default.
+  if (
+    character.speed !== undefined &&
+    !(Number.isInteger(character.speed) && character.speed > 0 && character.speed <= MAX_SPEED)
+  ) {
+    errors.push('character.speed must be a whole number from 1 to ' + MAX_SPEED);
   }
 
   return { valid: errors.length === 0, errors: errors };
@@ -213,6 +270,10 @@ function validateSave(data) {
   }
   if (typeof data.recentSummary !== 'string') {
     errors.push('recentSummary must be a string');
+  }
+  // The save's turn (L-611); older saves have none and start a fresh one.
+  if (data.turn !== undefined) {
+    errors.push.apply(errors, validateTurnState(data.turn, speedOf(data)));
   }
 
   return { valid: errors.length === 0, errors: errors };
@@ -291,16 +352,18 @@ function makeCharacter(fields) {
     inventory: fields.inventory || [],
     abilities: fields.abilities || [],
     goals: fields.goals || [],
+    speed: fields.speed === undefined ? DEFAULT_SPEED : fields.speed,
   };
 }
 
 function makeSave(fields) {
   fields = fields || {};
+  const character = makeCharacter(fields.character);
   const save = {
     ownerUid: fields.ownerUid,
     worldId: fields.worldId,
     name: fields.name,
-    character: makeCharacter(fields.character),
+    character,
     location: fields.location || null,
     placeId: fields.placeId || null, // where in town (L-342), or null
     mapId: fields.mapId || null, // the battle map it is on (L-351), or null
@@ -309,6 +372,7 @@ function makeSave(fields) {
     privateFlags: fields.privateFlags || {},
     relationships: fields.relationships || {},
     recentSummary: fields.recentSummary || '',
+    turn: fields.turn || freshTurnState({ character }),
     createdAt: fields.createdAt,
     updatedAt: fields.updatedAt,
   };
@@ -351,4 +415,10 @@ module.exports = {
   makeCharacter,
   makeSave,
   makeTurn,
+  DEFAULT_SPEED,
+  speedOf,
+  validateTurnState,
+  freshTurnState,
+  turnStateOf,
+  nextTurnState,
 };
