@@ -20,7 +20,7 @@ jest.mock('../functions/gemini', () => ({
 }));
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
-const { layOutTowns } = require('./helpers/towns');
+const { layOutTowns, offMap } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn } = require('../functions/index');
 
 const fs = require('fs');
@@ -94,8 +94,12 @@ function playerMovesTo(target) {
 
 const newGame = (worldId) =>
   loomCreateSave.run({ data: { worldId, name: 'Voyage', characterName: 'Tam' }, auth: PLAYER });
-const turn = (worldId, saveId) =>
-  loomPlayTurn.run({ data: { worldId, saveId, actionText: 'go on' }, auth: PLAYER });
+// Each turn here is world travel: arriving at a town lands on its gate's battle
+// map (every place has one, L-622), so the player has walked out of it first.
+const turn = async (worldId, saveId) => {
+  await offMap(db, saveId).catch(() => {});
+  return loomPlayTurn.run({ data: { worldId, saveId, actionText: 'go on' }, auth: PLAYER });
+};
 const saveOf = async (saveId) => (await db.collection('loom_saves').doc(saveId).get()).data();
 const lastTurn = async (saveId) =>
   (
@@ -194,7 +198,17 @@ describe('travel', () => {
     await turn(worldId, saveId);
     expect((await saveOf(saveId)).location).toBe('loc_631');
     expect((await lastTurn(saveId)).resolution.outcome).toBe('success');
-    // Narrated from where the player arrives: Burdendal is open behind them.
+    // They arrive on the gate's battle map (L-622). Walked out of it, the
+    // narrator is told the ways on from the gate: Burdendal is open behind them.
+    expect(prompts.at(-1)).toContain('ON THE MAP OF The Town Gate');
+    mockCallGemini.mockImplementation(async (options) => {
+      if (options.systemInstruction.includes('INTERPRET stage')) {
+        return { verb: 'look', targets: [], params: {} };
+      }
+      prompts.push(options.userMessage);
+      return { narration: 'Dust and stone.', inventedEntities: [], suggestedActions: [] };
+    });
+    await turn(worldId, saveId);
     expect(prompts.at(-1)).toContain('WAYS ON FROM The Town Gate, Dunsmouth:');
     expect(prompts.at(-1)).toContain('- Burdendal (loc_1), out of town by trail: open');
   });

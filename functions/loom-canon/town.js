@@ -209,7 +209,9 @@ function layoutReport(world, settlement) {
   if (!entrances.length) {
     problems.push('No place is a way in or out (give one entranceFor).');
   } else if (!entrances.some((place) => isPlaceOpen(world, place))) {
-    problems.push('No way in or out is written up yet, so nobody can enter.');
+    problems.push(
+      'No way in or out is open yet (written up, with a battle map), so nobody can enter.'
+    );
   }
   const seen = reachableFromEntrances(world, places);
   const stranded = places.filter((place) => !seen.has(place.id));

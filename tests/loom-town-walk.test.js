@@ -12,9 +12,11 @@
 const town = require('../functions/loom-canon/town');
 const { evaluate } = require('../functions/loom-turn/adjudicate');
 const { townView } = require('../functions/loom-turn/map-view');
+const { GATEWAY } = require('./helpers/towns');
 
 // Hollin: a gate, two ways to the square (the lane, the wharf), a temple off
-// the square, and a tower you must climb to reach the belfry.
+// the square, and a tower you must climb to reach the belfry. Every place has
+// a (generic) battle map, as the battle-map requirement asks (L-622).
 //
 //   gate ─ lane ─ square ─ temple
 //     └── wharf ──┘  └─ tower ─ belfry
@@ -31,6 +33,7 @@ function hollin(changes = {}) {
     entrance: null,
     npcIds: [],
     rules: {},
+    battleMap: { mapId: GATEWAY.id },
     ...extra,
     ...(changes[id] || {}),
   });
@@ -68,6 +71,7 @@ function hollin(changes = {}) {
     characters: {},
     factions: {},
     lore: {},
+    battleMaps: { [GATEWAY.id]: GATEWAY },
   };
 }
 const CLOSED = { sources: { description: 'import' } };
@@ -87,6 +91,9 @@ describe('a move to any place in town', () => {
       outcome: 'success',
       mutations: [
         { target: 'save', op: 'set-flag', path: 'placeId', value: 'plc_temple' },
+        // On to the temple's battle map, at its entry.
+        { target: 'save', op: 'set-flag', path: 'mapId', value: GATEWAY.id },
+        { target: 'save', op: 'set-flag', path: 'cell', value: { x: 1, y: 1 } },
         { op: 'increment', path: 'worldClock', value: 1 },
       ],
       constraints: ['You make your way from The Gate past The Lane and The Square to The Temple.'],

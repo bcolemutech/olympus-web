@@ -347,6 +347,8 @@ describe('drawing maps', () => {
     });
     expect(result.warnings).toEqual([
       'The grid is smaller now: players standing beyond its edge are moved to its entry.',
+      'It has no walls, doors or obstacles: players walk anywhere on it, and a place with it ' +
+        'as its own map falls short of Rich. Add them with set_map_layers.',
     ]);
     expect(await mapDoc(W, 'bm_the-cellar')).toMatchObject({
       image: { path: `worlds/${W}/map-bm_the-cellar.png`, width: 600, height: 600 },
@@ -470,20 +472,42 @@ describe('assigning maps', () => {
     );
   });
 
-  test('list_work need battleMap: places without their own map, Rich or not', async () => {
-    // The ruin, written up and with lore, is Rich while maps aren't required:
-    // it leaves the ordinary work list, but still lacks its own map.
+  test('list_work need battleMap: every place whose map is not finished (L-622, L-628)', async () => {
+    // The ruin, written up and with lore, is on a generic map: open, but short
+    // of Rich, so it stays on the ordinary work list too.
     await ok('update_location', { worldId: W, locationId: 'poi_1', description: 'Old towers.' });
     await ok('add_lore', { worldId: W, title: 'The Towers', text: 'Raised by…', about: ['poi_1'] });
-    expect((await ok('get_location', { worldId: W, locationId: 'poi_1' })).grade).toBe('rich');
+    const ruin = await ok('get_location', { worldId: W, locationId: 'poi_1' });
+    expect(ruin.grade).toBe('playable');
+    expect(ruin.missing).toEqual([expect.objectContaining({ need: 'battleMap', for: 'rich' })]);
     const ordinary = await ok('list_work', { worldId: W, kind: 'poi', limit: 100 });
-    expect(ordinary.items.some((i) => i.id === 'poi_1')).toBe(false);
+    expect(ordinary.items.some((i) => i.id === 'poi_1')).toBe(true);
     const work = await ok('list_work', { worldId: W, need: 'battleMap', limit: 100 });
     const byId = Object.fromEntries(work.items.map((i) => [i.id, i]));
-    expect(byId['plc_1_the-gull-anchor']).toBeUndefined(); // it has its own map
-    expect(byId.poi_1).toMatchObject({ kind: 'poi', grade: 'rich', battleMap: 'generic' });
-    expect(work.items.every((i) => ['none', 'generic'].includes(i.battleMap))).toBe(true);
+    expect(byId.poi_1).toMatchObject({ kind: 'poi', grade: 'playable', battleMap: 'generic' });
+    // The Gull & Anchor has its own map, but no walls yet: still listed.
+    expect(byId['plc_1_the-gull-anchor']).toMatchObject({ battleMap: 'own', layers: false });
+    expect(
+      work.items.every(
+        (i) => ['none', 'generic'].includes(i.battleMap) || (i.battleMap === 'own' && !i.layers)
+      )
+    ).toBe(true);
     expect(work.howTo.battleMap).toMatch(/set_battle_map/);
+    // Walled, it leaves the battle-map list.
+    await ok('set_map_layers', {
+      worldId: W,
+      mapId: 'bm_the-gull-anchor-ground-floor',
+      walls: [
+        {
+          points: [
+            { x: 6, y: 0 },
+            { x: 6, y: 2 },
+          ],
+        },
+      ],
+    });
+    const after = await ok('list_work', { worldId: W, need: 'battleMap', limit: 100 });
+    expect(after.items.some((i) => i.id === 'plc_1_the-gull-anchor')).toBe(false);
     // Without the filter, places still say where they stand.
     const all = await ok('list_work', { worldId: W, kind: 'poi', limit: 1 });
     expect(['none', 'generic', 'own']).toContain(all.items[0].battleMap);
@@ -743,5 +767,162 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
     ).toMatchObject({ art: null });
     expect((await tavernMap()).image).toBeNull();
     expect((await bucket.file(art).exists())[0]).toBe(false);
+  });
+});
+
+describe('walls, doors and obstacles (L-622)', () => {
+  const W = LIVE;
+  // A back room: a wall across it at x = 4 with a door in the gap at y 2–3,
+  // a table (low) and a pillar (solid); a chest to reach.
+  const ROOM = {
+    name: 'The back room',
+    width: 8,
+    height: 6,
+    entries: [{ id: 'in', x: 1, y: 3 }],
+    exits: [{ id: 'out', name: 'the hall door', x: 0, y: 3, to: 'out' }],
+    features: [{ id: 'chest', name: 'the chest', x: 6, y: 1 }],
+  };
+  const WALLS = [
+    {
+      points: [
+        { x: 4, y: 0 },
+        { x: 4, y: 2 },
+      ],
+    },
+    {
+      points: [
+        { x: 4, y: 3 },
+        { x: 4, y: 6 },
+      ],
+    },
+  ];
+  const DOORS = [{ id: 'inner', name: 'the inner door', from: { x: 4, y: 2 }, to: { x: 4, y: 3 } }];
+  const OBSTACLES = [
+    { id: 'table', name: 'a table', kind: 'low', x: 2, y: 1, w: 2 },
+    { id: 'pillar', name: 'a pillar', kind: 'solid', x: 6, y: 4 },
+  ];
+  let mapId;
+
+  test('a new map without layers is made, with a warning', async () => {
+    const result = await ok('set_battle_map', { worldId: W, ...ROOM });
+    mapId = result.map.id;
+    expect(result.map.hasLayers).toBe(false);
+    expect(result.warnings).toEqual([
+      expect.stringMatching(/^It has no walls, doors or obstacles: .*set_map_layers\.$/),
+    ]);
+  });
+
+  test('set_map_layers gives it walls, a door and obstacles; the reads show them', async () => {
+    const result = await ok('set_map_layers', {
+      worldId: W,
+      mapId,
+      walls: WALLS,
+      doors: DOORS,
+      obstacles: OBSTACLES,
+    });
+    expect(result).toMatchObject({
+      map: { id: mapId, hasLayers: true },
+      layers: { walls: 2, doors: 1, obstacles: 2 },
+      updated: ['walls', 'doors', 'obstacles'],
+    });
+    expect(result.warnings).toBeUndefined();
+    expect(await mapDoc(W, mapId)).toMatchObject({
+      walls: WALLS,
+      doors: DOORS,
+      obstacles: OBSTACLES,
+    });
+    const read = await ok('get_battle_map', { worldId: W, mapId });
+    expect(read).toMatchObject({ walls: WALLS, doors: DOORS, obstacles: OBSTACLES });
+    const listed = await ok('list_battle_maps', { worldId: W });
+    expect(listed.maps.find((m) => m.id === mapId)).toMatchObject({ hasLayers: true });
+  });
+
+  test('a list left out is kept; an empty list clears that one', async () => {
+    const result = await ok('set_map_layers', { worldId: W, mapId, obstacles: [] });
+    expect(result).toMatchObject({
+      layers: { walls: 2, doors: 1, obstacles: 0 },
+      updated: ['obstacles'],
+    });
+    expect(await mapDoc(W, mapId)).toMatchObject({ walls: WALLS, doors: DOORS, obstacles: [] });
+    await ok('set_map_layers', { worldId: W, mapId, obstacles: OBSTACLES });
+  });
+
+  test('the checks refuse what would break the map, and nothing is written', async () => {
+    const before = await mapDoc(W, mapId);
+    const cases = [
+      [
+        {
+          walls: [
+            {
+              points: [
+                { x: 1, y: 1 },
+                { x: 3, y: 2 },
+              ],
+            },
+          ],
+        },
+        /must run along the grid lines/,
+      ],
+      [{ doors: [{ ...DOORS[0], from: { x: 4, y: 1 }, to: { x: 4, y: 2 } }] }, /sits on a wall/],
+      [
+        { obstacles: [{ id: 'crate', name: 'a crate', kind: 'solid', x: 0, y: 3 }] },
+        /covers the exit "out"/,
+      ],
+      [
+        // Walled in: the entry boxed by walls all round it.
+        {
+          walls: [
+            ...WALLS,
+            {
+              points: [
+                { x: 1, y: 3 },
+                { x: 2, y: 3 },
+                { x: 2, y: 4 },
+                { x: 1, y: 4 },
+                { x: 1, y: 3 },
+              ],
+            },
+          ],
+        },
+        /The entry "in" at \(1, 3\) can't reach any exit/,
+      ],
+    ];
+    for (const [layers, message] of cases) {
+      expect(await refused('set_map_layers', { worldId: W, mapId, ...layers })).toMatch(message);
+    }
+    expect(await refused('set_map_layers', { worldId: W, mapId })).toMatch(
+      /Give walls, doors or obstacles/
+    );
+    expect(await mapDoc(W, mapId)).toEqual(before);
+  });
+
+  test('a feature walled in is warned about', async () => {
+    const boxed = [
+      ...WALLS,
+      {
+        points: [
+          { x: 5, y: 0 },
+          { x: 5, y: 3 },
+          { x: 8, y: 3 },
+        ],
+      },
+    ];
+    const result = await ok('set_map_layers', { worldId: W, mapId, walls: boxed });
+    expect(result.warnings).toEqual([
+      "Nobody can reach the chest at (6, 1) from an entry: it's walled in.",
+    ]);
+    await ok('set_map_layers', { worldId: W, mapId, walls: WALLS });
+  });
+
+  test('replacing the grid keeps the layers; a grid they no longer fit is refused', async () => {
+    const result = await ok('set_battle_map', { worldId: W, mapId, ...ROOM, width: 9 });
+    expect(result.map.hasLayers).toBe(true);
+    expect(await mapDoc(W, mapId)).toMatchObject({ width: 9, walls: WALLS, obstacles: OBSTACLES });
+    expect(await refused('set_battle_map', { worldId: W, mapId, ...ROOM, height: 5 })).toMatch(
+      /Wall 2: every point must be a whole-number corner on the grid/
+    );
+    // Layers given with the grid replace the ones it had.
+    await ok('set_battle_map', { worldId: W, mapId, ...ROOM, obstacles: [] });
+    expect((await mapDoc(W, mapId)).obstacles).toEqual([]);
   });
 });

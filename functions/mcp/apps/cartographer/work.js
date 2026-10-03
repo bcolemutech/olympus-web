@@ -9,6 +9,7 @@ const {
   rank,
 } = require('../../../loom-canon/grading');
 const maps = require('../../../loom-canon/maps');
+const layers = require('../../../loom-canon/layers');
 const { hopsFrom } = require('./views');
 
 // The build work list (planning/the-loom-layered-worlds.md §6; L-323 / #392):
@@ -46,7 +47,10 @@ const HOW_TO = {
   battleMap:
     'Give it a battle map: draw one with set_battle_map, or pick a generic one from ' +
     'list_battle_maps, then assign_battle_map. A generic map opens a place; only its own ' +
-    'map can make it Rich.',
+    'map, with walls, doors or obstacles, can make it Rich.',
+  layers:
+    'Give its battle map walls, doors and obstacles: set_map_layers (or with the grid, ' +
+    'set_battle_map). Check them against the art with view_image.',
 };
 
 const geoOf = (location) => location.geo || {};
@@ -78,11 +82,21 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
   const isOpen = (id) => grades.has(id) && rank(grades.get(id).grade) >= rank('playable');
 
   // Battle maps (L-352): every point of interest and place in town says
-  // whether it has a map ('own', 'generic' or 'none'). `need: 'battleMap'`
-  // lists the ones without their own map, Rich or not: their own map is what
-  // they lack (while maps aren't required yet, grading doesn't say so).
+  // whether it has a map ('own', 'generic' or 'none'), and an own map whether
+  // it has walls, doors or obstacles (`layers`, L-628). The requirement is on
+  // (L-622): no map is Unbuilt, a generic one or an own one without layers
+  // short of Rich. `need: 'battleMap'` lists every one not finished: no own
+  // map, or one without layers.
   const forMaps = need === 'battleMap';
   const mapStatus = (entity) => maps.kindOf(world, entity) || 'none';
+  const unlayered = (entity) =>
+    mapStatus(entity) === 'own' && !layers.hasLayers(maps.mapOf(world, entity));
+  const mapInfo = (entity) =>
+    mapStatus(entity) === 'own'
+      ? { battleMap: 'own', layers: !unlayered(entity) }
+      : { battleMap: mapStatus(entity) };
+  // Rich places leave the list, except from `need: 'battleMap'` while they
+  // lack their own map (an own map without layers is never Rich).
   const skip = (grade, entity) =>
     grade === 'rich' && !(forMaps && entity && mapStatus(entity) !== 'own');
 
@@ -109,7 +123,7 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       missing: checklist.map((item) => item.need),
       // Counts, so "missing residents" reads as "1 of 2", not "nobody".
       ...(geo.kind === 'settlement' ? { progress: progressOf(world, place) } : {}),
-      ...(mapped ? { battleMap: mapStatus(place) } : {}),
+      ...(mapped ? mapInfo(place) : {}),
     });
   }
   // Places inside towns (L-343), ordered by their town's distance.
@@ -128,7 +142,7 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       hops: hops.has(settlement.id) ? hops.get(settlement.id) : null,
       town: { id: settlement.id, name: settlement.name },
       missing: checklist.map((item) => item.need),
-      battleMap: mapStatus(place),
+      ...mapInfo(place),
     });
   }
   for (const [type, collection] of [
@@ -157,7 +171,7 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
         (!grade || item.grade === grade) &&
         (!need ||
           item.missing.includes(need) ||
-          (forMaps && item.battleMap && item.battleMap !== 'own'))
+          (forMaps && item.battleMap && (item.battleMap !== 'own' || item.layers === false)))
     )
     .sort(byTierThenNearest);
 

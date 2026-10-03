@@ -22,7 +22,7 @@ jest.mock('../functions/gemini', () => ({
 }));
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
-const { layOutTowns } = require('./helpers/towns');
+const { layOutTowns, mapPlaces, offMap, GATEWAY } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
 
 const fs = require('fs');
@@ -129,7 +129,10 @@ const lastResolution = async (saveId) =>
       .limit(1)
       .get()
   ).docs[0].data().resolution;
+// Each move here is a walk about town: the player has walked out of the
+// place's battle map first (every place has one, L-622).
 async function moveTo(saveId, target) {
+  await offMap(db, saveId);
   playerMovesTo(target);
   await turn(saveId);
   return lastResolution(saveId);
@@ -169,6 +172,8 @@ beforeAll(async () => {
         ...place,
       });
   }
+  // Every place needs a battle map to be open (L-622): a generic one.
+  await mapPlaces(worldRef, 'places', ...Object.keys(PLACES));
   await worldRef.collection('characters').doc('chr_brannoch').set({
     id: 'chr_brannoch',
     name: 'Brannoch the Innkeeper',
@@ -210,7 +215,13 @@ describe('a walk through Burdendal', () => {
       constraints: ['You arrive at Burdendal, at The Harbour.'],
     });
     expect(await saveOf(saveId)).toMatchObject({ location: 'loc_1', placeId: 'plc_1_harbour' });
-    // The narrator is told the ways on from the harbour: in town, and out by sea.
+    // Arriving lands on the harbour's battle map (L-622): the narrator is told
+    // the map. Walked out of it, it's told the ways on from the harbour: in
+    // town, and out by sea.
+    expect(prompts.narrate.at(-1)).toContain('ON THE MAP OF The Harbour');
+    await offMap(db, saveId);
+    playerMovesTo(null);
+    await turn(saveId);
     const exits = prompts.narrate.at(-1);
     expect(exits).toContain('WAYS ON FROM The Harbour, Burdendal:');
     expect(exits).toContain('- Market Square (plc_1_market): open');
@@ -234,6 +245,9 @@ describe('a walk through Burdendal', () => {
       outcome: 'success',
       mutations: [
         { target: 'save', op: 'set-flag', path: 'placeId', value: 'plc_1_market' },
+        // On to the market's battle map, at its entry (L-622).
+        { target: 'save', op: 'set-flag', path: 'mapId', value: GATEWAY.id },
+        { target: 'save', op: 'set-flag', path: 'cell', value: { x: 1, y: 1 } },
         { op: 'increment', path: 'worldClock', value: 1 },
       ],
       constraints: ['You make your way to Market Square.'],
@@ -320,6 +334,7 @@ describe('a walk through Burdendal', () => {
 test('an older save in a town (no place) stands at its default entrance and still plays', async () => {
   const { saveId } = await newGame();
   await db.collection('loom_saves').doc(saveId).update({ placeId: null });
+  await offMap(db, saveId);
   playerMovesTo(null);
   await expect(turn(saveId)).resolves.toMatchObject({ narration: 'You go on.' });
   expect(prompts.narrate.at(-1)).toContain('WAYS ON FROM The North Gate, Burdendal:');
@@ -343,17 +358,23 @@ describe('towns in grading', () => {
           for: 'rich',
           message: 'Nobody is found here and there is no lore about it: add either.',
         },
+        // A generic battle map stops it short of Rich (L-622).
+        { need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' },
       ],
     });
-    expect(grading.gradePlace(world, world.places.plc_1_tavern).grade).toBe('rich');
+    // Brannoch lives at the tavern, but its map is generic: Playable, not Rich.
+    expect(grading.gradePlace(world, world.places.plc_1_tavern)).toEqual({
+      grade: 'playable',
+      checklist: [{ need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' }],
+    });
     expect(grading.isPlaceOpen(world, world.places.plc_1_temple)).toBe(false);
     // Burdendal's five, and the gates of Wisin and Dunsmouth.
     expect(grading.gradeWorld(world).inTown).toEqual({
       total: 7,
       unbuilt: 0,
       stub: 1,
-      playable: 5,
-      rich: 1,
+      playable: 6,
+      rich: 0,
     });
   });
 
@@ -393,6 +414,7 @@ describe('town helpers', () => {
     description: 'Written.',
     sources: WRITTEN,
     connections: [],
+    battleMap: { mapId: GATEWAY.id }, // open places need maps (L-622)
     ...extra,
   });
   const world = (places) => ({
@@ -402,6 +424,7 @@ describe('town helpers', () => {
       loc_b: { id: 'loc_b' },
     },
     places: Object.fromEntries(places.map((p) => [p.id, p])),
+    battleMaps: { [GATEWAY.id]: GATEWAY },
     characters: {},
     lore: {},
   });
@@ -415,6 +438,14 @@ describe('town helpers', () => {
     const closedGate = { ...gate, sources: { description: 'import' } };
     expect(town.hasTownLayout(world([closedGate, square]), { id: 'loc_a' })).toBe(false);
     expect(town.hasTownLayout(world([square]), { id: 'loc_a' })).toBe(false);
+  });
+
+  test('a way in written up but with no battle map is not open, and the report says so', () => {
+    const gate = place('p_gate', { entrance: { via: ['road'] }, battleMap: null });
+    expect(town.hasTownLayout(world([gate]), { id: 'loc_a' })).toBe(false);
+    expect(town.layoutReport(world([gate]), { id: 'loc_a' }).problems).toEqual([
+      'No way in or out is open yet (written up, with a battle map), so nobody can enter.',
+    ]);
   });
 
   test('arrival picks an open entrance serving the route, then any open one', () => {
@@ -646,6 +677,7 @@ describe('choosing the way in (L-346)', () => {
           connections: ['plc_631_town-gate'],
           npcIds: [],
           rules: {},
+          battleMap: { mapId: GATEWAY.id }, // open places need maps (L-622)
           ...place,
         });
     }

@@ -47,6 +47,7 @@ const { parseAzgaarExport } = require('../functions/cartographer/parse');
 const { mapToCanon } = require('../functions/cartographer/map');
 const { loadDraftWorld } = require('../functions/cartographer/load');
 const loomCanon = require('../functions/loom-canon');
+const { GATEWAY } = require('./helpers/towns');
 const { cartographerApp } = require('../functions/mcp/apps/cartographer');
 const { createFirestoreWorldReader } = require('../functions/mcp/apps/cartographer/reader');
 const { createFirestoreWorldWriter } = require('../functions/mcp/apps/cartographer/writer');
@@ -84,8 +85,14 @@ let seq = 0;
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
+// Every place needs a battle map to be open (L-622): new places here get the
+// generic gateway, as Claude would give them a map.
 async function call(name, args) {
-  return client.callTool({ name, arguments: args });
+  const withMap =
+    name === 'add_place' && args && !('battleMap' in args)
+      ? { ...args, battleMap: GATEWAY.id }
+      : args;
+  return client.callTool({ name, arguments: withMap });
 }
 
 async function ok(name, args) {
@@ -112,6 +119,7 @@ async function freshWorld({ published = false } = {}) {
     uploadedBy: BUILDER,
     worldId,
   });
+  await worlds().doc(worldId).collection('battleMaps').doc(GATEWAY.id).set(GATEWAY);
   if (published) {
     await worlds()
       .doc(worldId)
@@ -193,6 +201,7 @@ test('exposes the write tools with honest hints', async () => {
     'retire_entity',
     'set_art',
     'set_battle_map',
+    'set_map_layers',
     'update_character',
     'update_faction',
     'update_location',

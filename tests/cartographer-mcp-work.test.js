@@ -31,6 +31,7 @@ const { getFirestore } = require(
 
 const { parseAzgaarExport } = require('../functions/cartographer/parse');
 const { mapToCanon } = require('../functions/cartographer/map');
+const { GATEWAY } = require('./helpers/towns');
 const { loadDraftWorld } = require('../functions/cartographer/load');
 const { cartographerApp } = require('../functions/mcp/apps/cartographer');
 const { createFirestoreWorldReader } = require('../functions/mcp/apps/cartographer/reader');
@@ -60,8 +61,14 @@ const oauthStore = createInMemoryStore();
 let server;
 let client;
 
+// Every place needs a battle map to be open (L-622): new places here get the
+// generic gateway, as Claude would give them a map.
 async function call(name, args) {
-  return client.callTool({ name, arguments: args });
+  const withMap =
+    name === 'add_place' && args && !('battleMap' in args)
+      ? { ...args, battleMap: GATEWAY.id }
+      : args;
+  return client.callTool({ name, arguments: withMap });
 }
 async function ok(name, args) {
   const result = await call(name, args);
@@ -91,6 +98,7 @@ beforeAll(async () => {
       rules: { startingLocationId: 'loc_1' },
       canonVersion: 2,
     });
+  await worlds().doc(WORLD).collection('battleMaps').doc(GATEWAY.id).set(GATEWAY);
 
   const app = express();
   app.use(express.json());
@@ -137,11 +145,12 @@ afterAll(async () => {
 
 test('a fresh import: nothing is open, and the start is the only frontier', async () => {
   const list = await work({ limit: 5 });
-  // No settlement has a town yet, so all are Unbuilt; points of interest are Stub.
+  // No settlement has a town yet, nor any point of interest a map: all Unbuilt.
   expect(list.completion).toMatchObject({
     total: 719,
-    unbuilt: 663,
-    stub: 56,
+    // Every settlement lacks a town, and every point of interest a map (L-622).
+    unbuilt: 719,
+    stub: 0,
     playable: 0,
     rich: 0,
     open: 0,
@@ -193,7 +202,7 @@ test('writing up the start and laying out its town opens it, moving the frontier
     entranceFor: ['sea', 'trail'],
   });
   const list = await work({ limit: 6 });
-  expect(list.completion).toMatchObject({ unbuilt: 662, playable: 1, open: 0.001 });
+  expect(list.completion).toMatchObject({ unbuilt: 718, playable: 1, open: 0.001 });
   expect(summary(list.items)).toEqual([
     ['frontier', 'loc_631', 'unbuilt', 1],
     ['frontier', 'loc_120', 'unbuilt', 1],
@@ -283,7 +292,7 @@ test('enough residents and lore for its size make it rich, and it leaves the wor
   const overview = await ok('get_world', { worldId: WORLD });
   expect(overview.completion).toMatchObject({
     graded: true,
-    places: { total: 719, rich: 1, unbuilt: 662, stub: 56 },
+    places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
     regions: { stub: 145 },
   });
