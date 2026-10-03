@@ -75,10 +75,11 @@ function planStep(canonWorld, save, target) {
   }
 
   // An exit is only stepped on to leave by it: it's never on the way.
+  const options = { avoid: map.exits || [] };
   const cost = (step, next) => (!maps.sameCell(next, to) && maps.at(map, next).exit ? Infinity : 1);
   const found =
     (plan && storedPath(map, from, plan, cost)) ||
-    gridPaths.pathTo(map, from, { x: to.x, y: to.y }, { cost });
+    gridPaths.pathTo(map, from, { x: to.x, y: to.y }, options);
   if (!found) return { refused: "There's no way there from here." };
 
   const { walked, spent, rest } = gridPaths.walk(found.path, turn.movementLeft);

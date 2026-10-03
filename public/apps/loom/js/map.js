@@ -660,11 +660,21 @@
     showTab('story');
   }
 
+  // Redraws only the grid view's overlay, for the token's walk (L-615): the
+  // card stays as it is.
+  function redrawOverlay() {
+    if (map.mode !== 'battle' || !map.data || !map.view) return;
+    var overlayEl = ref('loom-map-overlay');
+    overlayEl.innerHTML = '';
+    Loom.battle.draw(overlayEl, map.view);
+  }
+
   Loom.map = {
     init: init,
     load: load,
     reset: reset,
     render: render,
+    redrawOverlay: redrawOverlay,
     // On a phone, switches to the story (after a narrated move from the map).
     showStory: function () {
       if (isPhone()) showTab('story');
