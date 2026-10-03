@@ -24,6 +24,7 @@ jest.mock('../functions/gemini', () => ({
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
 const { layOutTowns } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
+const { OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
 
 const fs = require('fs');
 const path = require('path');
@@ -162,15 +163,25 @@ async function moveTo(saveId, target) {
   await turn(saveId);
   return lastResolution(saveId);
 }
-// A step on the grid, as the grid view sends it.
+// A step on the grid, as the grid view sends it: the callable's answer.
+// (Steps are worked out without the GM and aren't recorded, L-613.)
 async function stepTo(saveId, cell) {
   playerMovesTo(null);
-  await loomPlayTurn.run({
+  return loomPlayTurn.run({
     data: { worldId: WORLD, saveId, action: { verb: 'move', cell } },
     auth: PLAYER,
   });
-  return lastResolution(saveId);
 }
+const continueOn = (saveId) =>
+  loomPlayTurn.run({
+    data: { worldId: WORLD, saveId, action: { verb: 'continue' } },
+    auth: PLAYER,
+  });
+const endTurn = (saveId) =>
+  loomPlayTurn.run({
+    data: { worldId: WORLD, saveId, action: { verb: 'end-turn' } },
+    auth: PLAYER,
+  });
 const standAt = (saveId, placeId, mapId = null, cell = null) =>
   db.collection('loom_saves').doc(saveId).update({ location: 'loc_1', placeId, mapId, cell });
 const where = async (saveId) => {
@@ -336,16 +347,17 @@ describe('a visit to the Gull & Anchor', () => {
   });
 
   test('stepping to a cell, from the grid; nothing blocks movement, but the edges do', async () => {
-    expect(await stepTo(saveId, { x: 9, y: 1 })).toMatchObject({
-      outcome: 'success',
-      constraints: ['You move to the hearth.'],
+    expect((await stepTo(saveId, { x: 9, y: 1 })).step).toMatchObject({
+      cell: { x: 9, y: 1 },
+      lines: ["You're at the hearth."],
     });
-    expect(await stepTo(saveId, { x: 6, y: 5 })).toMatchObject({
-      outcome: 'success',
-      constraints: ['You move across The Gull & Anchor, ground floor.'],
+    expect((await stepTo(saveId, { x: 6, y: 5 })).step).toMatchObject({
+      cell: { x: 6, y: 5 },
+      lines: [],
     });
     expect((await where(saveId)).cell).toEqual({ x: 6, y: 5 });
-    expect((await stepTo(saveId, { x: 12, y: 0 })).constraints).toEqual(["That's off the map."]);
+    expect((await stepTo(saveId, { x: 12, y: 0 })).step.lines).toEqual(["That's off the map."]);
+    await endTurn(saveId);
   });
 
   test('anywhere else waits until they have left the map', async () => {
@@ -433,7 +445,7 @@ describe('nobody is stranded, and the turn request is checked', () => {
 
   test('a grid step off a map is refused; bad cells are refused before the turn', async () => {
     const { saveId } = await newGame();
-    expect((await stepTo(saveId, { x: 1, y: 1 })).constraints).toEqual([
+    expect((await stepTo(saveId, { x: 1, y: 1 })).step.lines).toEqual([
       "There's no map here to move on.",
     ]);
     for (const cell of [{ x: -1, y: 0 }, { x: 0, y: 64 }, { x: 1.5, y: 2 }, null]) {
@@ -658,5 +670,143 @@ describe('grading with battle maps (switched on in a test; off in play)', () => 
     expect(grading.gradeLocation(w, w.locations.ruin, { layers }).grade).toBe('rich');
     w.battleMaps.bm_own.retired = true;
     expect(grading.gradeLocation(w, w.locations.ruin, { layers }).grade).toBe('unbuilt');
+  });
+});
+
+describe('moving without the GM (L-613)', () => {
+  let saveId;
+  beforeEach(async () => {
+    ({ saveId } = await newGame());
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+    mockCallGemini.mockReset();
+    mockCallGemini.mockImplementation(async () => {
+      throw new Error('Gemini was called');
+    });
+  });
+  const turnOf = async () => (await saveOf(saveId)).turn;
+  const recorded = async () =>
+    (await db.collection('loom_saves').doc(saveId).collection('loom_turns').get()).size;
+
+  test('a move in reach: walked, movement spent, nothing narrated or recorded', async () => {
+    const before = await recorded();
+    const answer = await stepTo(saveId, { x: 9, y: 1 });
+    expect(answer).toEqual({
+      narration: "You're at the hearth.",
+      stateSummary: '',
+      suggestedActions: [],
+      step: {
+        cell: { x: 9, y: 1 },
+        movementLeft: 12,
+        plan: null,
+        lines: ["You're at the hearth."],
+      },
+    });
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 9, y: 1 } });
+    expect(await turnOf()).toEqual({ n: 1, movementLeft: 12, actionUsed: false, plan: null });
+    expect(await recorded()).toBe(before);
+    expect(mockCallGemini).not.toHaveBeenCalled();
+  });
+
+  test('a move past reach stops partway and keeps the rest as the plan', async () => {
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ turn: { n: 1, movementLeft: 3, actionUsed: false, plan: null } });
+    const { step } = await stepTo(saveId, { x: 9, y: 4 });
+    expect(step.cell).toEqual({ x: 4, y: 4 });
+    expect(step.movementLeft).toBe(0);
+    expect(step.lines).toEqual(["You're out of movement. End your turn to go on."]);
+    expect(step.plan).toMatchObject({ layer: 'battleMap', mapId: 'bm_tavern', to: { x: 9, y: 4 } });
+    expect(step.plan.path.map((s) => [s.x, s.cost])).toEqual([
+      [5, 1],
+      [6, 2],
+      [7, 3],
+      [8, 4],
+      [9, 5],
+    ]);
+    // With no movement left, a move goes nowhere but is planned.
+    const again = await stepTo(saveId, { x: 4, y: 1 });
+    expect(again.step).toMatchObject({ cell: { x: 4, y: 4 }, movementLeft: 0 });
+    expect(again.step.plan.to).toEqual({ x: 4, y: 1 });
+    expect(mockCallGemini).not.toHaveBeenCalled();
+  });
+
+  test('Continue next turn walks the plan; End turn says how far you went', async () => {
+    // A character with a speed of 4: the hearth (8 away) takes two turns.
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({
+        'character.speed': 4,
+        turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null },
+      });
+    await stepTo(saveId, { x: 9, y: 1 });
+    expect((await continueOn(saveId)).step.lines).toEqual([OUT_OF_MOVEMENT]);
+    expect((await endTurn(saveId)).narration).toBe('Turn 1 ends. You moved 4 squares.');
+    const { step } = await continueOn(saveId);
+    expect(step).toMatchObject({ cell: { x: 9, y: 1 }, movementLeft: 0, plan: null });
+    expect(step.lines).toEqual(["You're at the hearth."]);
+    expect((await endTurn(saveId)).narration).toBe(
+      'Turn 2 ends. You moved 4 squares, to the hearth.'
+    );
+    expect(await turnOf()).toEqual({ n: 3, movementLeft: 4, actionUsed: false, plan: null });
+    expect((await continueOn(saveId)).step.lines).toEqual([
+      'You have no way planned. Tap where to go.',
+    ]);
+    expect(mockCallGemini).not.toHaveBeenCalled();
+  });
+
+  test('loomGetMap shows the plan only while it is for the map you stand on', async () => {
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ turn: { n: 1, movementLeft: 1, actionUsed: false, plan: null } });
+    await stepTo(saveId, { x: 6, y: 4 });
+    const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(view.turn).toMatchObject({ movementLeft: 0, plan: { to: { x: 6, y: 4 } } });
+    await standAt(saveId, 'plc_1_tavern', 'bm_cellar', { x: 5, y: 5 });
+    const elsewhere = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(elsewhere.turn.plan).toBeNull();
+  });
+
+  test('a path that reaches an exit leaves by it, narrated, with the movement spent', async () => {
+    playerMovesTo(null);
+    const answer = await stepTo(saveId, { x: 11, y: 7 });
+    expect(answer.step).toBeUndefined();
+    expect(answer.narration).toBe('You go on.');
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_cellar', cell: { x: 5, y: 5 } });
+    expect((await turnOf()).movementLeft).toBe(10);
+    expect(await lastResolution(saveId)).toMatchObject({
+      outcome: 'success',
+      constraints: ['You go by the cellar stairs to The cellar.'],
+    });
+  });
+
+  test('an exit is never on the way somewhere else', async () => {
+    // Past the front door's square (0, 4), one square at a time: around it.
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 0, y: 3 });
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ turn: { n: 1, movementLeft: 1, actionUsed: false, plan: null } });
+    const { step } = await stepTo(saveId, { x: 0, y: 5 });
+    expect(step.cell).toEqual({ x: 1, y: 4 });
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 1, y: 4 } });
+  });
+
+  test('two moves at once cannot spend the same movement', async () => {
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ turn: { n: 1, movementLeft: 6, actionUsed: false, plan: null } });
+    const [a, b] = await Promise.all([
+      stepTo(saveId, { x: 6, y: 4 }),
+      stepTo(saveId, { x: 1, y: 0 }),
+    ]);
+    // The moves cost 5 and 4. Whichever went first, the other had only what
+    // was left (1 or 2) and stopped partway: all 6 spent, never 9.
+    expect((await turnOf()).movementLeft).toBe(0);
+    const stopped = [a, b].filter((r) => r.step.lines[0] === OUT_OF_MOVEMENT);
+    expect(stopped).toHaveLength(1);
   });
 });

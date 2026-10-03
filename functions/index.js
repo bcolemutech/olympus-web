@@ -469,6 +469,10 @@ function requireLoomAuth(request) {
  *       on a battle map (L-351), likewise
  *    or { worldId, saveId, action: { verb: 'end-turn' } } — ends the turn,
  *       refilling movement and the action, with no model call (L-611 / #441)
+ *    or { worldId, saveId, action: { verb: 'continue' } } — walks the plan
+ *       kept from an earlier move (L-613 / #443)
+ * A step on a battle map (a cell, or continue) is worked out without the
+ * model and also returns step: { cell, movementLeft, plan, lines }.
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
  */
 exports.loomPlayTurn = onCall(async (request) => {
@@ -491,17 +495,18 @@ exports.loomPlayTurn = onCall(async (request) => {
       typeof cell === 'object' &&
       [cell.x, cell.y].every((n) => Number.isInteger(n) && n >= 0 && n < maps.MAX_SIDE);
     const hasTarget = typeof action.target === 'string';
-    const endTurn = typeof action === 'object' && action.verb === 'end-turn';
+    const bare =
+      typeof action === 'object' && (action.verb === 'end-turn' || action.verb === 'continue');
     if (
-      !endTurn &&
+      !bare &&
       (typeof action !== 'object' ||
         action.verb !== 'move' ||
         (hasTarget ? !/^[A-Za-z0-9_-]{1,80}$/.test(action.target) : !isCell(action.cell)))
     ) {
       throw new HttpsError(
         'invalid-argument',
-        'action must be { verb: "move", target: <place id> }, { verb: "move", cell: { x, y } } ' +
-          'or { verb: "end-turn" }.'
+        'action must be { verb: "move", target: <place id> }, { verb: "move", cell: { x, y } }, ' +
+          '{ verb: "continue" } or { verb: "end-turn" }.'
       );
     }
   } else {
@@ -522,8 +527,8 @@ exports.loomPlayTurn = onCall(async (request) => {
       ...(action
         ? {
             action:
-              action.verb === 'end-turn'
-                ? { verb: 'end-turn' }
+              action.verb === 'end-turn' || action.verb === 'continue'
+                ? { verb: action.verb }
                 : typeof action.target === 'string'
                   ? { verb: 'move', target: action.target }
                   : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },

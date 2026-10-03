@@ -5,6 +5,7 @@ const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { discoveredBy } = require('./discovery');
 const { speedOf, turnStateOf } = require('../loom-models');
+const { planOn } = require('./steps');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -253,9 +254,10 @@ function battleView(canonWorld, save) {
   };
 }
 
+// The plan shows only while it's for the map the save stands on (L-613).
 function turnView(save) {
-  const { n, movementLeft, actionUsed, plan } = turnStateOf(save);
-  return { n, movementLeft, speed: speedOf(save), actionUsed, plan };
+  const { n, movementLeft, actionUsed } = turnStateOf(save);
+  return { n, movementLeft, speed: speedOf(save), actionUsed, plan: planOn(save) };
 }
 
 module.exports = { mapView, townView, battleView, turnView };

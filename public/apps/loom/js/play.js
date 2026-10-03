@@ -32,7 +32,10 @@
     }
   }
 
+  var suggestions = []; // the suggestions showing, kept across steps (L-613)
+
   function renderSuggestedActions(actions) {
+    suggestions = actions || [];
     var container = Loom.getRef('loom-suggested-actions');
     container.innerHTML = '';
 
@@ -69,9 +72,17 @@
    * move from the world map. The client only ever receives { narration,
    * stateSummary, suggestedActions } — no raw state authority, per the
    * design doc's turn pipeline contract. The map reloads after every turn.
+   *
+   * A step on a battle map (L-613 / #443) answers with `step` and no
+   * narration: only its plain lines ("You're out of movement…") join the
+   * story, and the suggestions stay. `options.fromMap` shows the story on a
+   * phone when a move from the map is narrated (an arrival); `options.keep`
+   * keeps the suggestions when none come back (ending the turn).
    */
-  function playTurn(turn, label) {
+  function playTurn(turn, label, options) {
     if (state.turnInProgress) return;
+    options = options || {};
+    var kept = suggestions.slice();
 
     state.turnInProgress = true;
     setLoading(true);
@@ -85,9 +96,17 @@
       .then(function (result) {
         state.turnInProgress = false;
         setLoading(false);
-        appendNarration(label, result.data.narration);
-        renderSummary(result.data.stateSummary);
-        renderSuggestedActions(result.data.suggestedActions);
+        var data = result.data;
+        var keep = options.keep && !(data.suggestedActions || []).length;
+        if (data.step) {
+          if (data.step.lines.length) appendNarration(label, data.step.lines.join(' '));
+          renderSuggestedActions(kept);
+        } else {
+          appendNarration(label, data.narration);
+          renderSuggestedActions(keep ? kept : data.suggestedActions);
+          if (options.fromMap) Loom.map.showStory();
+        }
+        renderSummary(data.stateSummary);
         Loom.map.load();
       })
       .catch(function (err) {
@@ -109,9 +128,24 @@
     playTurn({ action: { verb: 'move', target: locationId } }, 'travel to ' + name);
   }
 
-  /** Steps to a cell on a battle map, from the grid view (L-354 / #403). */
+  /**
+   * Steps to a cell on a battle map, from the grid view (L-354 / #403): as far
+   * as this turn's movement goes, keeping the rest as the plan (L-613).
+   */
   function moveToCell(cell, label) {
-    playTurn({ action: { verb: 'move', cell: { x: cell.x, y: cell.y } } }, label);
+    playTurn({ action: { verb: 'move', cell: { x: cell.x, y: cell.y } } }, label, {
+      fromMap: true,
+    });
+  }
+
+  /** Walks the plan kept from an earlier move (L-613 / #443). */
+  function continuePlan() {
+    playTurn({ action: { verb: 'continue' } }, 'continue', { fromMap: true });
+  }
+
+  /** Ends the turn: movement and the action refilled (L-611 / #441). */
+  function endTurn() {
+    playTurn({ action: { verb: 'end-turn' } }, 'end turn', { keep: true });
   }
 
   /** Resets the play view for a newly-selected save. */
@@ -131,5 +165,12 @@
     Loom.map.load();
   }
 
-  Loom.play = { init: init, submitTurn: submitTurn, travelTo: travelTo, moveToCell: moveToCell };
+  Loom.play = {
+    init: init,
+    submitTurn: submitTurn,
+    travelTo: travelTo,
+    moveToCell: moveToCell,
+    continuePlan: continuePlan,
+    endTurn: endTurn,
+  };
 })();

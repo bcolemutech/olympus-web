@@ -455,6 +455,18 @@
   color: #9ca3af;
 }
 
+/* Continue and End turn on the grid card (L-613). */
+.loom-map-turn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0.6rem;
+}
+
+.loom-map-turn .loom-map-travel {
+  margin-top: 0;
+}
+
 .loom-map-travel {
   margin-top: 0.6rem;
 }

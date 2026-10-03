@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
-const { turnStateOf, nextTurnState } = require('../loom-models');
+const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
 
 /**
  * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
@@ -389,15 +389,29 @@ function evaluateGeneric(proposedAction, dice) {
  */
 // Ending the turn (planning/the-loom-movement-and-vision.md §3; L-611 / #441):
 // movement and the action are refilled, the plan is kept, and the turn
-// counts. Always allowed, wherever the player is.
-function evaluateEndTurn(characterState) {
+// counts. Always allowed, wherever the player is. On a battle map, the record
+// says how far the player moved this turn, since steps aren't recorded
+// (L-613 / #443).
+function evaluateEndTurn(characterState, canonWorld) {
+  const spent = speedOf(characterState) - turnStateOf(characterState).movementLeft;
+  const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
+  let moved = '';
+  if (map && spent > 0) {
+    const feature = maps.at(map, cell).feature;
+    moved =
+      ' You moved ' +
+      spent +
+      (spent === 1 ? ' square' : ' squares') +
+      (feature ? ', to ' + feature.name : '') +
+      '.';
+  }
   return {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
       { op: 'increment', path: 'worldClock', value: 1 },
     ],
-    constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.'],
+    constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved],
   };
 }
 
@@ -406,7 +420,7 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld) 
   if (proposedAction.verb === 'move') {
     resolution = evaluateMove(proposedAction, worldState, characterState, canonWorld);
   } else if (proposedAction.verb === 'end-turn') {
-    resolution = evaluateEndTurn(characterState);
+    resolution = evaluateEndTurn(characterState, canonWorld);
   } else {
     resolution = evaluateGeneric(proposedAction, dice);
   }

@@ -238,7 +238,7 @@
         map.worldUsable = usable;
         if (usable) loadImage(data);
         Loom.town.setData(townData);
-        Loom.battle.setData(battleData);
+        Loom.battle.setData(battleData, data.turn);
 
         // Entering a battle map or a town shows it; leaving one goes back to
         // the layer above. Otherwise the layer the player chose stays.
@@ -466,9 +466,10 @@
   }
 
   // A step on a battle map, from the grid view's card.
+  // A step stays on the map; an arrival it leads to is narrated, and play.js
+  // shows the story then (showStory).
   function actCell(cell, label) {
     Loom.play.moveToCell(cell, label);
-    if (isPhone()) showTab('story');
   }
 
   // ── Gestures ──────────────────────────────────────
@@ -658,5 +659,14 @@
     showTab('story');
   }
 
-  Loom.map = { init: init, load: load, reset: reset, render: render };
+  Loom.map = {
+    init: init,
+    load: load,
+    reset: reset,
+    render: render,
+    // On a phone, switches to the story (after a narrated move from the map).
+    showStory: function () {
+      if (isPhone()) showTab('story');
+    },
+  };
 })();
