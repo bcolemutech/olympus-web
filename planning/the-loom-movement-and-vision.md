@@ -1,0 +1,163 @@
+# The Loom — Movement and Vision — Design Document v0.1
+
+**Status:** Planned (2026-10-02)
+**Project:** Olympus (`olympus-dfa00`)
+**Follows:** Loom Phase 3b "Layered Worlds" ([`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md))
+**Related:** [`the-loom-design.md`](./the-loom-design.md)
+
+---
+
+## 1. Purpose
+
+Layered Worlds gave the Loom towns and battle maps. This phase makes **moving through them** feel right:
+
+- **Walking a town is one trip along its streets.** Today you can only walk to a place linked to the one you're in, one turn per hop.
+- **Walls and doors stop you.** Today nothing on a battle map blocks movement or sight, so a player can walk through a wall and see past a closed door.
+- **Movement is limited per turn.** A character has a speed (20). A turn is that much movement plus one action, and it ends when the player ends it. Turns will grow (combat, reactions, other characters' turns), so they start now.
+- **Waypoints.** The player picks a destination, a path is found around whatever blocks it, and the token walks as far as this turn allows, then carries on next turn. It works on battle maps and in towns.
+- **Fog of war.** You see what your character can see. The GM does too.
+
+Moving no longer calls Gemini: steps are worked out by the rules, and the GM narrates what the player types, and arrivals.
+
+---
+
+## 2. Decisions (2026-10-02)
+
+Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
+
+- **A turn is movement plus one action** (A1). Your speed in movement, and one action (anything you type), in any order. You always end it yourself with **End turn** (A6), even with nothing left to do. Towns use the same turn (A7).
+- **Steps don't call the GM** (A2). Moving is instant. The GM narrates what you type, and arrivals: going into a place, onto a map, or out by an exit. A plain line covers what comes into view ("Old Mags is at the bar."), with no model call.
+- **Speed 20.** On a battle map, 1 point is 1 square, and a diagonal costs 1 like a straight step (A3). In town, 1 point is 20 m, so a turn covers 400 m, about 5 minutes' walk (E3).
+- **Waypoints everywhere** (A4, C4, F1). You can put one anywhere you can see or have been, on battle maps and in towns. A path only crosses ground you know (C5), so it never gives away a hidden wall or room. A path longer than this turn's movement is kept as your **plan**, and the next turn offers **Continue** (A5). The token walks the path, quickly, and a tap skips ahead (A8).
+- **Movement stops when someone comes into view** (C6). The plan is kept and you decide.
+- **In town, "Walk there"** (F2) plays out your turns until you arrive, stopping if someone comes into view or something happens. One turn at a time is still there.
+- **Walls run along the grid lines** (B1), between squares, with doors set in them. **Obstacles** fill squares (B2): **solid** blocks movement and sight (a pillar, a boulder); **low** blocks movement only (a table, the bar, a pit, deep water); **difficult** ground costs 2 movement a square (rubble, mud). Cover comes with combat.
+- **Doors** (B3, B4, B5). A path through a closed door opens it. **Opening costs 1 movement and stops you at the door**, with your plan kept, so you can change your mind once you see what's on the other side (B4). Tap a door to close it. A locked door stops you: a key you carry opens it, and picking or forcing it is something you type, ruled on by the GM with dice.
+- **Showing the layers** (B6). On a plain grid, walls and obstacles are drawn. On art, the art shows them. Doors are always marked.
+- **Claude builds the layers over MCP** (B7, E4), checking them against the art with `view_image`. No editor on the Cartographer page and no imports for now.
+- **Layers count toward Rich** (B8). A battle map with no walls or obstacles keeps its place short of Rich, as a generic map does.
+- **Fog on battle maps** (C1, the user's note). Never seen: **total darkness**. Seen before: dimmed, the layout remembered, nobody shown. In sight: clear.
+- **Fog in town** (C1 note, G1). The **whole town map shows, but dark** where you've never been. Your sight lights it up. Once you've moved on it darkens again, but not as dark as where you've never been.
+- **Places in town appear when seen** (G1, the user's note). A public place shows on the town map once you've seen its door, and stays. **Ways in and out are known from the start**, since the roads lead to them. Hidden places, and places you learn of from a map or a conversation, come later.
+- **Sight** (C2, G2). On battle maps, as far as walls allow: every room counts as lit. Light, darkness and darkvision come later. In town, about 100 m along the streets, with buildings blocking.
+- **Only what you can see leaves the server** (C3). People, features, exits and walls behind fog never reach the browser. Art downloads whole and fog covers it.
+- **The GM knows what you see** (C7). It won't describe what's behind fog, and actions aimed at something you can't see are turned down ("You don't see anyone like that here."). **Physical actions need reach** (C8): opening a chest, pulling a lever or picking a lock needs you on or beside its square. Talking only needs sight.
+- **Characters stand on squares** (D1). Claude places them over MCP, and they show as tokens when in sight. They don't move on their own yet. **You can pass through a character's square but not end a move on it** (D2, the user's note). Passing costs nothing extra; later it may give someone a reaction.
+- **A quick fix first** (E1). Before the bigger work, you can tap any place in town and walk there in one move, along the town's links.
+- **Towns get a real size** (E2): by size, adjustable. A village is about 300 m across, a town 600 m, a city 1.2 km and a great city 2.5 km, and Claude can set any town's size.
+- **What blocks you in town** (E5): buildings, water (bridges and fords cross it) and town walls (gates pass). Streets are **open ground** (E6): any route around the obstacles, the shortest wins.
+- **No more chains of places** (E7, the user's note). Once a town has its shapes, links are retired there and you walk the streets. Towns without shapes keep using links.
+- **A place's position is its door on the street** (E8). Reaching it takes you in, onto its battle map if it has one.
+- **Settlements keep their ways in and out** (the user's note). You still walk to a gate or the harbour before you can travel the world map.
+- **Order** (H1, H2, H3). The town quick fix comes first. Then battle maps: turns and movement, walls and doors, vision, characters. Then towns: their shapes, walking, vision. **Game time (L-370 / #421) follows this phase**, turning turns into seconds and minutes. The work is its own milestone, **The Loom — Phase 3c: Movement and Vision**.
+
+**Also decided** (no objection):
+
+- **The server decides.** Paths, movement left and what you can see are worked out on the server and checked on every move. The browser previews with the same rules (a shared module, kept identical by a test), so it can't cheat.
+- **Speed belongs to the character** (`character.speed`, default 20), so race, class, load or injuries can change it later.
+- **No cutting corners.** A diagonal step can't squeeze past the corner of a wall, or between two obstacles.
+- **Each save keeps its own doors and explored areas**, as it will keep its own clock. Shared state comes with multiplayer (Phase 4).
+- **Nobody is stranded.** A map is refused if an entry can't reach an exit, and a town if a place's door can't be reached from a way in.
+- **Nothing breaks.** Maps and towns without the new layers keep working, as open ground, until they're built out.
+- **Exits and features stay on squares.** Walking onto an exit still leaves by it. A feature may sit on an obstacle (the bar, the hearth): going to it walks to the nearest free square beside it, and that counts as reach.
+
+---
+
+## 3. The turn
+
+- **Data.** `character.speed` (default 20) and `save.turn: { n, movementLeft, actionUsed, plan }`. Older saves get a fresh turn on their next request. `plan` is the rest of a path: `{ layer, to, path }`.
+- **End turn** refills movement and the action, and counts the turn. Later it is where other characters act, and where game time passes (6 seconds a battle-map turn; about 5 minutes a town turn).
+- **The action.** Anything typed uses the turn's action. A second typed action in one turn is turned down ("You've acted this turn. End your turn first."). Typed moves ("go to the bar") follow a path and spend movement, like a tap.
+- **Moving without the GM.** A move is a structured request (a cell, a town point, or a feature) handled by the rules alone: it checks the path, spends movement, stops partway when movement runs out (keeping the plan), and stops at a door it opens or when someone comes into view. Exits and arrivals behave as today, and an arrival is narrated. Steps aren't written to the turn history; the turn's record is kept when it ends.
+- **The browser** shows what's in reach, previews the path (this turn's part solid, the rest dashed), and shows movement left, **End turn** and **Continue**.
+
+---
+
+## 4. Battle maps: walls, doors and obstacles
+
+- **Walls** (`walls`) are lines between grid points (integer corners, `0…width`, `0…height`), in the map's own coordinates, the same as SVG art's (one unit per square). They block movement and sight.
+- **Doors** (`doors: [{ id, name, from: [x, y], to: [x, y], locked, key }]`) are one square long, on a grid line. They start closed. A locked door names the `key` (an inventory item) that opens it. Each save keeps its doors' state (open, closed, locked).
+- **Obstacles** (`obstacles: [{ id, name, kind, x, y, w, h }]`) are rectangles of squares, `kind` one of `solid`, `low` or `difficult`.
+- **Movement:** 8 directions, 1 a step, 2 into difficult ground. A step can't cross a wall, a closed door, or enter a solid or low square. A diagonal is blocked if a wall touches the corner it passes, or either square beside it is solid or low. Opening a door on a path costs 1 and ends the move at the door. Closing an adjacent door costs 1.
+- **Checks:** the layers stay on the grid, doors don't overlap walls, nothing covers an entry or an exit, and every entry reaches an exit without passing a locked door.
+- **MCP:** `set_battle_map` takes the layers with the grid, and a layers-only tool changes them without resending it. `get_battle_map` shows them. `view_image` draws walls (white lines), doors (amber bars) and obstacles (hatched by kind) over the art, numbered in the legend.
+- **Grading:** a place with its own map but no walls or obstacles falls short of Rich ("Its battle map has no walls or obstacles"). Like the battle-map requirement itself, it applies once that requirement is switched on (Layered Worlds §4.4). `list_work` flags maps without layers.
+
+---
+
+## 5. Battle maps: vision and fog of war
+
+- **Line of sight:** a square is in sight when an unblocked line runs from the centre of yours to some part of it. Walls, closed doors and solid obstacles block. Low obstacles and difficult ground don't.
+- **Memory:** each save remembers the squares it has seen on each map.
+- **What's sent:** `loomGetMap` sends walls, doors and obstacles only where seen, features and exits only on seen squares, and people only in sight.
+- **Fog:** never seen is black; seen before is dimmed (layout only); in sight is clear.
+- **Moves:** destinations and paths only on seen squares. A move stops when someone new comes into view.
+- **The GM:** INTERPRET resolves targets among what you've seen. ADJUDICATE turns down targets out of sight, and physical actions out of reach. NARRATE's ON THE MAP lists only what's in sight.
+
+---
+
+## 6. Characters on battle maps
+
+- **Squares:** a character at a place with a map can have `cell: { x, y }` on it, set with `add_character` and `update_character` (or by naming a feature). It must be on the grid and not on a wall, an obstacle or an exit.
+- **Tokens** show when in sight. You can pass through their square but not end a move on it. A plan ending there stops on the last free square.
+- **The GM** knows who stands where, and who is next to you.
+
+---
+
+## 7. Towns: the ground
+
+- **Size:** `town.size` in metres across, by default from the settlement's size (the same village, town, city and great city as the Rich bar): 300 m, 600 m, 1.2 km, 2.5 km. Claude can set it.
+- **Shapes** (`town.ground`), in the town's 0–1000 square: `buildings` and `water` (polygons), `walls` (lines), and `crossings` (polygons over water, for bridges and fords). A gate is a gap in a wall with a way in or out standing in it.
+- **Doors:** a place's `position` is its door, on open ground. Reaching it takes you in.
+- **Checks:** no door inside a building or water, and every door reachable from a way in.
+- **MCP:** a tool to set a town's ground, `get_town` shows it, and `view_image` draws it over the art.
+- **Grading:** in a town with ground, the town requirement checks paths from the ways in, not links.
+
+---
+
+## 8. Towns: walking
+
+- **Paths:** a walking grid over the town square, built from the shapes, searched and then smoothed into straight runs. Lengths are in metres, from the town's size.
+- **Movement:** 1 point is 20 m. A waypoint can go anywhere on open ground: the town's layout is known from the start (§9). Reaching a place's door takes you in. Leaving for the world map is from a way out, as now.
+- **Typed moves** ("go to the market") follow paths.
+- **The town view:** tap a point to see the path (this turn solid, the rest dashed) and how many turns it takes, then **Walk** or **Walk there**, **End turn** and **Continue**.
+- **Links** are retired in towns with ground: paths replace them, and the tools say so.
+
+---
+
+## 9. Towns: vision
+
+- **Fog:** the whole town shows. Never seen is dark, seen before is less dark, in sight is clear.
+- **Sight:** about 100 m along the streets; buildings and walls block.
+- **Places:** a place appears on the map once its door has been in sight, and stays. Ways in and out are known from the start.
+- **What's sent:** only places you've found, and people in sight.
+
+---
+
+## 10. Epics and sub-issues
+
+One milestone, **The Loom — Phase 3c: Movement and Vision**. Each story is tested on its own: pure-module tests for rules, emulator tests for the server, a real MCP client for the tools, renderer pixel tests for `view_image`, and headless Chrome with real taps for the views.
+
+| Epic                                   | Sub-issues                                                                                                                                                                                    | Exit criterion                                                                                         |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **L-600 Town quick fix** (one story)   | Walk to any place in town in one move, along the links                                                                                                                                        | Crossing Hatham is one tap                                                                             |
+| **L-610 Turns and movement**           | L-611 the turn in saves · L-612 grid paths · L-613 moving without the GM · L-614 typed actions and the turn · L-615 the grid view                                                             | In The Lantern & Oar, a player walks 20 squares, ends their turn and continues                         |
+| **L-620 Walls, doors and obstacles**   | L-621 the layers in canon · L-622 MCP layer tools · L-623 `view_image` draws them · L-624 paths respect them · L-625 doors in play · L-626 locked doors · L-627 the grid view · L-628 grading | Claude walls The Lantern & Oar; a player can't walk through the cellar wall, and opens the cellar door |
+| **L-630 Vision and fog (battle maps)** | L-631 line of sight · L-632 explored memory · L-633 only what's seen is sent · L-634 fog in the grid view · L-635 moves on known ground · L-636 the GM sees what you see                      | Opening the cellar door reveals the cellar; the GM never mentions what's behind a closed door          |
+| **L-640 Characters on battle maps**    | L-641 characters get squares · L-642 tokens in sight, passing through · L-643 the GM knows who is where                                                                                       | Old Mags stands at the bar, unseen until you come round the corner                                     |
+| **L-650 Town ground**                  | L-651 town size and distance · L-652 shapes in canon · L-653 MCP ground tools · L-654 `view_image` draws ground · L-655 grading by paths                                                      | Claude gives Hatham its streets, river and wall                                                        |
+| **L-660 Walking in town**              | L-661 town paths · L-662 walking on the server · L-663 typed moves follow paths · L-664 the town view · L-665 links retired                                                                   | From The Quay a player walks around the market hall, over the bridge and into the temple               |
+| **L-670 Vision in town**               | L-671 sight and memory in town · L-672 fog in the town view · L-673 finding places, and the GM knows only those                                                                               | Arriving in Daldockley, the streets show dark, and its places are found by walking them                |
+
+**Order:** L-600 first, as a quick win. L-610 lays the turn everything else uses. L-620 adds what blocks. L-630 needs the walls, and L-640 needs sight. L-650 to L-670 bring the same to towns. Game time (L-370) then follows.
+
+---
+
+## 11. Later
+
+- **A cheaper model.** All three Gemini calls already use `gemini-2.5-flash` with thinking off. With steps no longer calling it, the saving here is in calls; Flash-Lite for INTERPRET could be tried separately, against recorded turns.
+- **Combat:** initiative, other characters' turns, reactions (passing through someone's square), cover.
+- **Light:** darkness, torches and darkvision.
+- **Hidden places,** and places learned of from a map or a conversation.
+- **Building tools:** a wall editor on the Cartographer page, walls from SVG art, and importing Watabou's City Generator JSON.
+- **Multiplayer:** shared doors and fog.
