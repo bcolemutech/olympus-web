@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
+const { turnStateOf, nextTurnState } = require('../loom-models');
 
 /**
  * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
@@ -386,10 +387,26 @@ function evaluateGeneric(proposedAction, dice) {
  * @param {object} canonWorld - read-only canon (L-103 / #296)
  * @returns {{ outcome: string, mutations: object[], constraints: string[] }}
  */
+// Ending the turn (planning/the-loom-movement-and-vision.md §3; L-611 / #441):
+// movement and the action are refilled, the plan is kept, and the turn
+// counts. Always allowed, wherever the player is.
+function evaluateEndTurn(characterState) {
+  return {
+    outcome: 'success',
+    mutations: [
+      { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
+      { op: 'increment', path: 'worldClock', value: 1 },
+    ],
+    constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.'],
+  };
+}
+
 function evaluate(proposedAction, worldState, characterState, dice, canonWorld) {
   let resolution;
   if (proposedAction.verb === 'move') {
     resolution = evaluateMove(proposedAction, worldState, characterState, canonWorld);
+  } else if (proposedAction.verb === 'end-turn') {
+    resolution = evaluateEndTurn(characterState);
   } else {
     resolution = evaluateGeneric(proposedAction, dice);
   }

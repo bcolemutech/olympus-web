@@ -4,6 +4,7 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { discoveredBy } = require('./discovery');
+const { speedOf, turnStateOf } = require('../loom-models');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -22,6 +23,8 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * In a settlement with a town layout, `town` is the town the save stands in,
  * for the town view (townView below); elsewhere it is null. On a battle map,
  * `battleMap` is that map, for the grid view (battleView below); else null.
+ * `turn` is the save's turn (L-611 / #441): `{ n, movementLeft, speed,
+ * actionUsed, plan }`, a fresh one for an older save.
  */
 function mapView(canonWorld, save) {
   const discovered = new Set(discoveredBy(canonWorld, save));
@@ -79,6 +82,9 @@ function mapView(canonWorld, save) {
     links,
     town: townView(canonWorld, save, discovered),
     battleMap: battleView(canonWorld, save),
+    // The turn (L-611 / #441): which it is, the movement left of the
+    // character's speed, whether its action is used, and any plan kept.
+    turn: turnView(save),
     map:
       map && map.width
         ? {
@@ -247,4 +253,9 @@ function battleView(canonWorld, save) {
   };
 }
 
-module.exports = { mapView, townView, battleView };
+function turnView(save) {
+  const { n, movementLeft, actionUsed, plan } = turnStateOf(save);
+  return { n, movementLeft, speed: speedOf(save), actionUsed, plan };
+}
+
+module.exports = { mapView, townView, battleView, turnView };

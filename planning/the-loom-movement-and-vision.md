@@ -66,7 +66,7 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 ## 3. The turn
 
 - **Data.** `character.speed` (default 20) and `save.turn: { n, movementLeft, actionUsed, plan }`. Older saves get a fresh turn on their next request. `plan` is the rest of a path: `{ layer, to, path }`.
-- **End turn** refills movement and the action, and counts the turn. Later it is where other characters act, and where game time passes (6 seconds a battle-map turn; about 5 minutes a town turn).
+- **End turn** (`action: { verb: 'end-turn' }`, L-611 / #441) refills movement and the action, and counts the turn, with no model call. It is recorded in the turn history as a plain line ("Turn 3 ends.") and advances the shared `worldClock`. `loomGetMap` carries the turn: `{ n, movementLeft, speed, actionUsed, plan }`. Later it is where other characters act, and where game time passes (6 seconds a battle-map turn; about 5 minutes a town turn).
 - **The action.** Anything typed uses the turn's action. A second typed action in one turn is turned down ("You've acted this turn. End your turn first."). Typed moves ("go to the bar") follow a path and spend movement, like a tap.
 - **Moving without the GM.** A move is a structured request (a cell, a town point, or a feature) handled by the rules alone: it checks the path, spends movement, stops partway when movement runs out (keeping the plan), and stops at a door it opens or when someone comes into view. Exits and arrivals behave as today, and an arrival is narrated. Steps aren't written to the turn history; the turn's record is kept when it ends.
 - **The browser** shows what's in reach, previews the path (this turn's part solid, the rest dashed), and shows movement left, **End turn** and **Continue**.

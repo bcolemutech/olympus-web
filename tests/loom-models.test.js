@@ -20,36 +20,59 @@ const {
   makeCharacter,
   makeSave,
   makeTurn,
+  speedOf,
+  turnStateOf,
+  nextTurnState,
 } = require('../functions/loom-models');
 
 describe('applyMutation', () => {
   it('add: pushes a value onto an array at path', () => {
     const state = { locations: { tavern: { presentEntities: [] } } };
-    applyMutation(state, { op: 'add', path: 'locations.tavern.presentEntities', value: 'npc-doral' });
+    applyMutation(state, {
+      op: 'add',
+      path: 'locations.tavern.presentEntities',
+      value: 'npc-doral',
+    });
     expect(state.locations.tavern.presentEntities).toEqual(['npc-doral']);
   });
 
   it('add: is idempotent for an already-present value', () => {
     const state = { locations: { tavern: { presentEntities: ['npc-doral'] } } };
-    applyMutation(state, { op: 'add', path: 'locations.tavern.presentEntities', value: 'npc-doral' });
+    applyMutation(state, {
+      op: 'add',
+      path: 'locations.tavern.presentEntities',
+      value: 'npc-doral',
+    });
     expect(state.locations.tavern.presentEntities).toEqual(['npc-doral']);
   });
 
   it('add: creates missing intermediate objects and the array itself', () => {
     const state = {};
-    applyMutation(state, { op: 'add', path: 'locations.tavern.presentEntities', value: 'npc-doral' });
+    applyMutation(state, {
+      op: 'add',
+      path: 'locations.tavern.presentEntities',
+      value: 'npc-doral',
+    });
     expect(state.locations.tavern.presentEntities).toEqual(['npc-doral']);
   });
 
   it('remove: removes a matching value from an array at path', () => {
     const state = { locations: { tavern: { presentEntities: ['npc-doral', 'npc-mara'] } } };
-    applyMutation(state, { op: 'remove', path: 'locations.tavern.presentEntities', value: 'npc-doral' });
+    applyMutation(state, {
+      op: 'remove',
+      path: 'locations.tavern.presentEntities',
+      value: 'npc-doral',
+    });
     expect(state.locations.tavern.presentEntities).toEqual(['npc-mara']);
   });
 
   it('remove: is a no-op when the value is not present', () => {
     const state = { locations: { tavern: { presentEntities: ['npc-mara'] } } };
-    applyMutation(state, { op: 'remove', path: 'locations.tavern.presentEntities', value: 'npc-doral' });
+    applyMutation(state, {
+      op: 'remove',
+      path: 'locations.tavern.presentEntities',
+      value: 'npc-doral',
+    });
     expect(state.locations.tavern.presentEntities).toEqual(['npc-mara']);
   });
 
@@ -72,9 +95,7 @@ describe('applyMutation', () => {
   });
 
   it('throws on an unknown op', () => {
-    expect(() => applyMutation({}, { op: 'overwrite', path: 'x', value: 1 })).toThrow(
-      /unknown op/
-    );
+    expect(() => applyMutation({}, { op: 'overwrite', path: 'x', value: 1 })).toThrow(/unknown op/);
   });
 
   it('throws on a missing path', () => {
@@ -253,6 +274,7 @@ describe('makeCharacter', () => {
       inventory: [],
       abilities: [],
       goals: [],
+      speed: 20,
     });
   });
 });
@@ -272,10 +294,12 @@ describe('makeSave', () => {
       inventory: [],
       abilities: [],
       goals: [],
+      speed: 20,
     });
     expect(save.privateFlags).toEqual({});
     expect(save.relationships).toEqual({});
     expect(save.recentSummary).toBe('');
+    expect(save.turn).toEqual({ n: 1, movementLeft: 20, actionUsed: false, plan: null });
   });
 
   it('throws when the character is missing a name', () => {
@@ -305,5 +329,61 @@ describe('makeTurn', () => {
 
   it('throws when index is missing', () => {
     expect(() => makeTurn({ actionText: 'look around' })).toThrow(/invalid turn/);
+  });
+});
+
+describe('the turn (L-611)', () => {
+  const save = (fields = {}) =>
+    makeSave({ ownerUid: 'u', worldId: 'w', name: 'n', character: { name: 'Tam' }, ...fields });
+
+  it("a fresh turn uses the character's speed", () => {
+    expect(save({ character: { name: 'Wren', speed: 30 } }).turn).toEqual({
+      n: 1,
+      movementLeft: 30,
+      actionUsed: false,
+      plan: null,
+    });
+  });
+
+  it.each([
+    ['n 0', { n: 0, movementLeft: 1, actionUsed: false, plan: null }, /turn\.n/],
+    ['n not whole', { n: 1.5, movementLeft: 1, actionUsed: false, plan: null }, /turn\.n/],
+    ['movement below 0', { n: 1, movementLeft: -1, actionUsed: false, plan: null }, /movementLeft/],
+    [
+      'movement over the speed',
+      { n: 1, movementLeft: 21, actionUsed: false, plan: null },
+      /movementLeft/,
+    ],
+    [
+      'the action not a flag',
+      { n: 1, movementLeft: 1, actionUsed: 'yes', plan: null },
+      /actionUsed/,
+    ],
+    ['the plan a list', { n: 1, movementLeft: 1, actionUsed: false, plan: [] }, /plan/],
+    ['no plan field', { n: 1, movementLeft: 1, actionUsed: false }, /plan/],
+  ])('refuses a turn with %s', (_label, turn, message) => {
+    expect(() => save({ turn })).toThrow(message);
+  });
+
+  it.each([[0], [-3], [2.5], [1001], ['fast']])('refuses a speed of %p', (speed) => {
+    expect(() => save({ character: { name: 'Tam', speed } })).toThrow(/character\.speed/);
+  });
+
+  it('an older save, with no turn or speed, is valid and reads as a fresh turn', () => {
+    const older = save();
+    delete older.turn;
+    delete older.character.speed;
+    expect(validateSave(older)).toEqual({ valid: true, errors: [] });
+    expect(speedOf(older)).toBe(20);
+    expect(turnStateOf(older)).toEqual({ n: 1, movementLeft: 20, actionUsed: false, plan: null });
+  });
+
+  it('the next turn refills movement and the action and keeps the plan', () => {
+    const plan = { layer: 'battleMap', to: { x: 2, y: 3 }, path: [] };
+    const now = save({
+      character: { name: 'Wren', speed: 30 },
+      turn: { n: 4, movementLeft: 0, actionUsed: true, plan },
+    });
+    expect(nextTurnState(now)).toEqual({ n: 5, movementLeft: 30, actionUsed: false, plan });
   });
 });
