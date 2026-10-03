@@ -153,13 +153,13 @@ function buildMapSection(canonWorld, position) {
 // The ways on from where the player ends up, each open or closed (the Layered
 // Worlds gate, L-322 / #391), so the narrator never describes the far side of
 // a place players can't enter.
-// In a town with a layout (L-342), the ways on are the town's own links and,
-// from an entrance, the routes out that it serves.
-function buildTownExitsSection(canonWorld, settlement, place) {
+// In a town with a layout (L-342), the ways on are every place the player can
+// walk to in one move (L-600 / #433), nearest first, and, from an entrance,
+// the routes out that it serves.
+function buildTownExitsSection(canonWorld, settlement, place, save) {
   const links = (settlement.geo && settlement.geo.links) || {};
-  const exits = (place.connections || [])
-    .map((id) => canonWorld.places[id])
-    .filter(Boolean)
+  const exits = town
+    .reachableFrom(canonWorld, settlement.id, place, town.passableFor(canonWorld, save))
     .map((to) => ({ label: to.name + ' (' + to.id + ')', open: isPlaceOpen(canonWorld, to) }));
   if (town.isEntrance(place)) {
     (settlement.connections || [])
@@ -189,14 +189,15 @@ function buildTownExitsSection(canonWorld, settlement, place) {
   );
 }
 
-function buildExitsSection(canonWorld, position) {
+// `save` gives the character, for what it may walk through in town.
+function buildExitsSection(canonWorld, position, save) {
   const locationId = position.location;
   const here = locationId && canonWorld.locations[locationId];
   if (!here) return '';
   const onMap = maps.positionOf(canonWorld, position).map;
   if (onMap && (onMap.exits || []).length) return buildMapSection(canonWorld, position);
   const place = town.positionOf(canonWorld, position).place;
-  if (place) return buildTownExitsSection(canonWorld, here, place);
+  if (place) return buildTownExitsSection(canonWorld, here, place, save);
   const links = (here.geo && here.geo.links) || {};
   const exits = (here.connections || [])
     .map((id) => canonWorld.locations[id])
@@ -333,7 +334,7 @@ async function narrateResolution(params) {
         canonWorld,
         entityContexts,
         recentSummary: save.recentSummary,
-        exitsSection: buildExitsSection(canonWorld, positionAfter(save, resolution)),
+        exitsSection: buildExitsSection(canonWorld, positionAfter(save, resolution), save),
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,

@@ -34,7 +34,9 @@ const maps = require('../loom-canon/maps');
  * so no save is stranded. Hand-authored static worlds are exempt.
  *
  * Towns (§8; L-342 / #396): inside a settlement with a town layout, moves
- * between places follow the town's own links and are gated the same way.
+ * between places follow the town's own links and are gated the same way. A
+ * move to any place in town walks the shortest open way there in one go
+ * (L-600 / #433).
  * Leaving town is only from an entrance that serves the route out (a harbour
  * for the sea, a gate for the roads), and arriving lands at the open entrance
  * serving the route in (../loom-canon/town.js).
@@ -49,11 +51,9 @@ function rollDie() {
 
 const blocked = (message) => ({ outcome: 'blocked', mutations: [], constraints: [message] });
 
-function missingAbility(place, characterState) {
-  const required = place.rules && place.rules.requiresAbility;
-  const abilities = characterState.abilities || [];
-  return required && abilities.indexOf(required) === -1 ? required : null;
-}
+// The ability a place requires that the character lacks (the save's
+// character, or a bare character state), or null.
+const missingAbility = town.missingAbility;
 
 // What to say when a traveller in town heads out from the wrong place.
 function leaveHint(target, exits, via) {
@@ -64,22 +64,24 @@ function leaveHint(target, exits, via) {
   );
 }
 
-// A move to a place inside the current town (L-342): along the town's own
-// links, gated like the world map.
+// A move to a place inside the current town (L-342): gated like the world
+// map, and walked in one go along the shortest way through the town's links
+// (L-600 / #433), passing only places the player may enter.
 function evaluateTownMove(target, characterState, canonWorld) {
   if (target.locationId !== characterState.location) {
     return blocked("You can't get there directly from here.");
   }
   const here = town.positionOf(canonWorld, characterState).place;
   if (here && here.id === target.id) return enterOrStay(target, characterState, canonWorld);
-  const reachable = here ? (here.connections || []).includes(target.id) : town.isEntrance(target);
-  if (!reachable) return blocked("You can't get there directly from here.");
   if (target.retired) return blocked("That place can't be reached anymore.");
   if (!isPlaceOpen(canonWorld, target)) {
     return blocked('The way to ' + target.name + ' is closed. Turn back.');
   }
   const required = missingAbility(target, characterState);
   if (required) return blocked('You lack what it takes to get in (requires: ' + required + ').');
+  const walk = town.walkTo(canonWorld, here, target, town.passableFor(canonWorld, characterState));
+  if (!walk) return blockedOnTheWay(here, target, characterState, canonWorld);
+  const passed = walk.slice(0, -1);
   return {
     outcome: 'success',
     mutations: [
@@ -88,8 +90,37 @@ function evaluateTownMove(target, characterState, canonWorld) {
       ...maps.arrivalMutations(canonWorld, target, characterState),
       { op: 'increment', path: 'worldClock', value: 1 },
     ],
-    constraints: ['You make your way to ' + target.name + '.'],
+    constraints: [
+      passed.length
+        ? 'You make your way ' +
+          (here ? 'from ' + here.name + ' ' : '') +
+          'past ' +
+          andList(passed) +
+          ' to ' +
+          target.name +
+          '.'
+        : 'You make your way to ' + target.name + '.',
+    ],
   };
+}
+
+// Why there's no open way to a place in town: the first place in the way on
+// the shortest walk (closed, or needing what the player lacks), or no walk.
+function blockedOnTheWay(here, target, characterState, canonWorld) {
+  const walk = town.walkTo(canonWorld, here, target);
+  const passable = town.passableFor(canonWorld, characterState);
+  const stop = walk && walk.slice(0, -1).find((place) => !passable(place));
+  if (!stop) return blocked("You can't get there from here.");
+  if (!isPlaceOpen(canonWorld, stop)) {
+    return blocked('The way to ' + stop.name + ' is closed. Turn back.');
+  }
+  return blocked(
+    'You lack what it takes to get past ' +
+      stop.name +
+      ' (requires: ' +
+      missingAbility(stop, characterState) +
+      ').'
+  );
 }
 
 // A move to where the player already stands: back onto its battle map if it
@@ -325,12 +356,14 @@ function refuseWayIn(wayIn, destination, via, characterState, canonWorld) {
   return null;
 }
 
-function nameList(places) {
+function nameList(places, last = 'or') {
   const names = places.map((p) => p.name);
   return names.length < 2
     ? names.join('')
-    : names.slice(0, -1).join(', ') + ' or ' + names[names.length - 1];
+    : names.slice(0, -1).join(', ') + ' ' + last + ' ' + names[names.length - 1];
 }
+
+const andList = (places) => nameList(places, 'and');
 
 function evaluateGeneric(proposedAction, dice) {
   const success = dice >= DEFAULT_DIFFICULTY_CLASS;

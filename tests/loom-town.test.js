@@ -211,6 +211,9 @@ describe('a walk through Burdendal', () => {
     const exits = prompts.narrate.at(-1);
     expect(exits).toContain('WAYS ON FROM The Harbour, Burdendal:');
     expect(exits).toContain('- Market Square (plc_1_market): open');
+    // Every place a move can walk to (L-600), not only the next one.
+    expect(exits).toContain('- The Gull & Anchor (plc_1_tavern): open');
+    expect(exits).toContain('- Temple of the Tides (plc_1_temple): CLOSED');
     expect(exits).toContain('- Wisin (loc_229), out of town by sea: open');
     expect(exits).toContain('- Dunscombe (loc_120), out of town by sea: CLOSED');
     expect(exits).not.toContain('Dunsmouth'); // a trail: not from the harbour
@@ -255,10 +258,16 @@ describe('a walk through Burdendal', () => {
     expect(prompts.narrate.at(-1)).not.toContain('Brannoch the Innkeeper');
   });
 
-  test('places not linked directly can’t be reached in one step', async () => {
+  test('a place further off is walked to in one move, past the places between (L-600)', async () => {
     await standAt(saveId, 'loc_1', 'plc_1_harbour');
-    expect((await moveTo(saveId, 'plc_1_tavern')).constraints).toEqual([
-      "You can't get there directly from here.",
+    expect(await moveTo(saveId, 'plc_1_tavern')).toMatchObject({
+      outcome: 'success',
+      constraints: ['You make your way from The Harbour past Market Square to The Gull & Anchor.'],
+    });
+    expect((await saveOf(saveId)).placeId).toBe('plc_1_tavern');
+    // So is a way out: from the tavern to the gate, and then out of town.
+    expect((await moveTo(saveId, 'plc_1_gate')).constraints).toEqual([
+      'You make your way from The Gull & Anchor past Market Square to The North Gate.',
     ]);
   });
 
@@ -455,7 +464,7 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
       locationId: 'loc_1',
       name: 'Burdendal',
       here: 'plc_1_gate',
-      next: ['plc_1_market'],
+      next: ['plc_1_market', 'plc_1_harbour', 'plc_1_tavern', 'plc_1_temple'],
       image: null, // no art yet (L-347)
     });
     expect(view.places).toEqual([
@@ -522,11 +531,18 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
     ]);
   });
 
-  test('`next` follows the save: from the market, everything linked to it', async () => {
+  test('`next` follows the save: every place it can walk to, nearest first (L-600)', async () => {
     await standAt(saveId, 'loc_1', 'plc_1_market');
     expect((await townOf()).next).toEqual([
       'plc_1_gate',
       'plc_1_harbour',
+      'plc_1_tavern',
+      'plc_1_temple',
+    ]);
+    await standAt(saveId, 'loc_1', 'plc_1_harbour');
+    expect((await townOf()).next).toEqual([
+      'plc_1_market',
+      'plc_1_gate',
       'plc_1_tavern',
       'plc_1_temple',
     ]);
@@ -562,8 +578,9 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
     const view = await townOf();
     expect(view.here).toBe('plc_1_tavern');
     expect(view.places.find((p) => p.id === 'plc_1_tavern')).toMatchObject({ retired: true });
-    // Nobody is stranded: its own way back to the market stays.
-    expect(view.next).toEqual(['plc_1_market']);
+    // Nobody is stranded: its own way back through the market stays, and on
+    // to the rest of the town (L-600).
+    expect(view.next).toEqual(['plc_1_market', 'plc_1_gate', 'plc_1_harbour', 'plc_1_temple']);
     await worldRef
       .collection('places')
       .doc('plc_1_tavern')

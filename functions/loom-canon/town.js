@@ -17,7 +17,9 @@
  *     npcIds: string[], rules: object, position: { x, y }   — town coordinates
  *
  * A save's position is its settlement (`save.location`) and, inside a town
- * with a layout, the place it stands in (`save.placeId`). Arriving lands at
+ * with a layout, the place it stands in (`save.placeId`). A move to any place
+ * in town walks there along the links in one go (L-600 / #433), passing only
+ * places the traveller may enter (walkTo). Arriving lands at
  * the open entrance that serves the route taken; leaving is only from an
  * entrance that serves the route out. A save with no place in a town that
  * has one (older saves, or a layout added later) stands at its default
@@ -101,6 +103,95 @@ function reachableFromEntrances(world, places) {
   return seen;
 }
 
+// The abilities a save's character has (`save.character.abilities`; a bare
+// character state carries them itself).
+function abilitiesOf(state) {
+  return (state && ((state.character && state.character.abilities) || state.abilities)) || [];
+}
+
+/** The ability a place requires that the traveller lacks, or null. */
+function missingAbility(place, state) {
+  const required = place && place.rules && place.rules.requiresAbility;
+  return required && !abilitiesOf(state).includes(required) ? required : null;
+}
+
+/**
+ * Whether a traveller may pass through a place in town: it is open (graded
+ * Playable) and they have what it requires.
+ */
+function passableFor(world, state) {
+  return (place) => isPlaceOpen(world, place) && !missingAbility(place, state);
+}
+
+// The live places of `from`'s town linked to `place`, by id.
+function linked(world, place, locationId) {
+  return (place.connections || [])
+    .slice()
+    .sort()
+    .map((id) => (world.places || {})[id])
+    .filter((next) => live(next) && next.locationId === locationId);
+}
+
+// Breadth-first through the town's links from `from` (or, standing nowhere
+// in town, from its ways in). `visit(place, path)` sees each place reached,
+// with the walk to it; returning true stops the search. Only places `canPass`
+// allows are walked through, though any linked place can be reached. Ties go
+// to the lower id, so the same walk is found every time.
+function search(world, locationId, from, canPass, visit) {
+  const seen = new Set(from ? [from.id] : []);
+  const queue = [];
+  const reach = (place, path) => {
+    if (seen.has(place.id)) return false;
+    seen.add(place.id);
+    if (visit(place, path)) return true;
+    if (canPass(place)) queue.push({ place, path });
+    return false;
+  };
+  if (from) {
+    queue.push({ place: from, path: [] });
+  } else {
+    for (const entrance of entrancesOf(world, locationId)) {
+      if (reach(entrance, [entrance])) return;
+    }
+  }
+  while (queue.length) {
+    const { place, path } = queue.shift();
+    for (const next of linked(world, place, locationId)) {
+      if (reach(next, path.concat(next))) return;
+    }
+  }
+}
+
+/**
+ * The shortest walk through a town from where a traveller stands (`from`, a
+ * place, or null for nowhere in particular) to `to`: the places passed and
+ * then `to`, or null if there is none. Places along the way must satisfy
+ * `canPass` (passableFor); `to` itself is checked by the caller.
+ */
+function walkTo(world, from, to, canPass = () => true) {
+  let walk = null;
+  search(world, to.locationId, from, canPass, (place, path) => {
+    if (place.id !== to.id) return false;
+    walk = path;
+    return true;
+  });
+  return walk;
+}
+
+/**
+ * Every place in town a traveller can walk to from `from` in one move,
+ * nearest first: through places `canPass` allows, to any place linked to
+ * them (closed ones included, so they can be shown as closed).
+ */
+function reachableFrom(world, locationId, from, canPass) {
+  const found = [];
+  search(world, locationId, from, canPass, (place) => {
+    found.push(place);
+    return false;
+  });
+  return found;
+}
+
 /**
  * What is wrong with a settlement's town, for the builders (get_town, and
  * the MCP town tools' warnings): `problems` make the layout invalid (no open
@@ -163,4 +254,8 @@ module.exports = {
   positionOf,
   hasTownLayout,
   layoutReport,
+  missingAbility,
+  passableFor,
+  walkTo,
+  reachableFrom,
 };

@@ -5,7 +5,8 @@
   // L-345 / #399): a drawn map of the town the player stands in, from
   // loomGetMap's `town`. Places are labelled and tappable, the paths between
   // them are drawn, and the place card offers the one move it allows: walk to
-  // a place one step away, or set out along a world route from a way out.
+  // any place there's an open way to, in one move (L-600 / #433), or set out
+  // along a world route from a way out.
   // Moves are structured moves (Loom.play.travelTo), adjudicated and gated on
   // the server like typed ones.
   //
@@ -69,36 +70,10 @@
     return words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1];
   }
 
+  // Whether the save can walk to a place in one move: loomGetMap's `next`,
+  // every place there's an open way to.
   function isNext(id) {
     return town.data.next.indexOf(id) !== -1;
-  }
-
-  // The first step on the shortest walk from here to `id`, through open
-  // places, for "go by … first" (null if there is no such walk).
-  function firstStep(id) {
-    var here = town.data.here;
-    if (!here || here === id) return null;
-    var neighbours = {};
-    town.data.links.forEach(function (l) {
-      (neighbours[l.from] = neighbours[l.from] || []).push(l.to);
-      (neighbours[l.to] = neighbours[l.to] || []).push(l.from);
-    });
-    var via = {};
-    via[here] = here;
-    var queue = [here];
-    while (queue.length) {
-      var at = queue.shift();
-      var nexts = (neighbours[at] || []).slice().sort();
-      for (var i = 0; i < nexts.length; i++) {
-        var next = nexts[i];
-        var place = placeById(next);
-        if (via[next] || !place || !place.open || place.retired) continue;
-        via[next] = at === here ? next : via[at];
-        if (next === id) return via[next];
-        queue.push(next);
-      }
-    }
-    return null;
   }
 
   // The world routes this way out serves: loomGetMap's exits.
@@ -415,19 +390,12 @@
     }
     if (isNext(place.id)) {
       info.appendChild(
-        button('Go here', function () {
+        button('Walk here', function () {
           act(place.id, place.name);
         })
       );
     } else {
-      var step = placeById(firstStep(place.id));
-      info.appendChild(
-        el(
-          'p',
-          'loom-map-info-status',
-          'Not directly reachable from here.' + (step ? ' Go by ' + step.name + ' first.' : '')
-        )
-      );
+      info.appendChild(el('p', 'loom-map-info-status', "There's no open way there from here."));
     }
     if (place.entranceFor) routesOut(info, place, act, false);
   }
