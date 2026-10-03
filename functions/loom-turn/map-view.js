@@ -158,9 +158,12 @@ function townView(canonWorld, save, discovered) {
     }
   }
 
-  const next = here
-    ? (here.connections || []).filter((id) => ids.has(id))
-    : inTown.filter(town.isEntrance).map((p) => p.id);
+  // Every place the save can walk to in one move (L-600 / #433), nearest
+  // first: through places it may enter, to any linked to them.
+  const next = town
+    .reachableFrom(canonWorld, location, here, town.passableFor(canonWorld, save))
+    .map((p) => p.id)
+    .filter((id) => ids.has(id));
 
   const settlement = canonWorld.locations[location];
   const entrances = inTown.filter((p) => town.isEntrance(p) && !p.retired);
