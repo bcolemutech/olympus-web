@@ -158,6 +158,7 @@ The Cloud Functions in `functions/index.js` manage these claims via `setAdminRol
 
 - **`public/js/components/app-header.js`** — Navigation header with back button, user menu, logout. All apps include this via `<script>`.
 - **`public/styles/app.css`** — Base stylesheet. All apps link this in addition to their own CSS.
+- **Shared with the server** — a rule both the Cloud Functions and the Loom page run (`grid-paths.js`, the Loom's grid paths) lives in `functions/loom-canon/` and `public/apps/loom/js/` with identical bytes, since `functions/` deploys on its own. A test fails if the copies differ: edit both.
 
 ---
 
