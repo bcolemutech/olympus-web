@@ -5,6 +5,10 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
+const { planStep, OUT_OF_MOVEMENT } = require('./steps');
+
+// Turned down before narration (L-614): the turn's one action is used.
+const ACTED = "You've acted this turn. End your turn first.";
 
 /**
  * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
@@ -184,19 +188,35 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here) {
     exit = there.exit;
     feature = feature || there.feature;
   }
-  if (exit) return leaveMapBy(exit, hostName, canonWorld);
-  if (maps.sameCell(cell, from)) {
+  if (!exit && maps.sameCell(cell, from)) {
     return { outcome: 'no_op', mutations: [], constraints: ["You're already there."] };
+  }
+  // The way there, on the turn's movement (L-614 / #444), as a tap would go
+  // (./steps.js): the rest kept as the plan.
+  const to = exit ? { x: exit.x, y: exit.y } : { x: cell.x, y: cell.y };
+  const step = planStep(canonWorld, characterState, { cell: to });
+  if (step.refused) return blocked(step.refused);
+  const spend = { target: 'save', op: 'set-flag', path: 'turn', value: step.turn };
+  if (step.exit) {
+    const left = leaveMapBy(exit, hostName, canonWorld);
+    return left.outcome === 'success' ? { ...left, mutations: [...left.mutations, spend] } : left;
+  }
+  const name = exit ? exit.name : feature ? feature.name : null;
+  const mutations = [{ target: 'save', op: 'set-flag', path: 'cell', value: step.cell }, spend];
+  if (step.turn.plan) {
+    return {
+      outcome: 'success',
+      mutations,
+      constraints: [
+        'You head ' + (name ? 'for ' + name : 'across ' + map.name) + '.',
+        OUT_OF_MOVEMENT,
+      ],
+    };
   }
   return {
     outcome: 'success',
-    mutations: [
-      { target: 'save', op: 'set-flag', path: 'cell', value: { x: cell.x, y: cell.y } },
-      { op: 'increment', path: 'worldClock', value: 1 },
-    ],
-    constraints: [
-      feature ? 'You move to ' + feature.name + '.' : 'You move across ' + map.name + '.',
-    ],
+    mutations,
+    constraints: [name ? 'You move to ' + name + '.' : 'You move across ' + map.name + '.'],
   };
 }
 
@@ -415,6 +435,21 @@ function evaluateEndTurn(characterState, canonWorld) {
   };
 }
 
+// Anything typed that isn't a move uses the turn's one action (L-614 /
+// #444), whether it succeeds or not; a second is turned down.
+function evaluateAction(proposedAction, characterState, dice) {
+  const turn = turnStateOf(characterState);
+  if (turn.actionUsed) return blocked(ACTED);
+  const resolution = evaluateGeneric(proposedAction, dice);
+  return {
+    ...resolution,
+    mutations: [
+      ...resolution.mutations,
+      { target: 'save', op: 'set-flag', path: 'turn', value: { ...turn, actionUsed: true } },
+    ],
+  };
+}
+
 function evaluate(proposedAction, worldState, characterState, dice, canonWorld) {
   let resolution;
   if (proposedAction.verb === 'move') {
@@ -422,7 +457,7 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld) 
   } else if (proposedAction.verb === 'end-turn') {
     resolution = evaluateEndTurn(characterState, canonWorld);
   } else {
-    resolution = evaluateGeneric(proposedAction, dice);
+    resolution = evaluateAction(proposedAction, characterState, dice);
   }
 
   // Resolution is immutable once produced — NARRATE (L-113) can color it, never change it.
@@ -444,4 +479,4 @@ async function adjudicateAction(params, rollFn = rollDie) {
   return evaluate(proposedAction, worldState, save, dice, canonWorld);
 }
 
-module.exports = { evaluate, adjudicateAction, rollDie, DEFAULT_DIFFICULTY_CLASS };
+module.exports = { evaluate, adjudicateAction, rollDie, DEFAULT_DIFFICULTY_CLASS, ACTED };

@@ -206,6 +206,26 @@
   opacity: 0.6;
 }
 
+/* The turn under the box, with End turn (L-614). */
+.loom-turn-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+}
+
+.loom-turn-state {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+.loom-turn-end {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+}
+
 /* ── World map (L-332 / #394) ─────────────────────── */
 
 .loom-root--wide {

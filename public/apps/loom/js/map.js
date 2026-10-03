@@ -231,6 +231,7 @@
         );
         var townData = (data && data.town) || null;
         var battleData = (data && data.battleMap) || null;
+        Loom.play.showTurn((data && data.turn) || null);
         setAvailable(usable || Boolean(townData) || Boolean(battleData));
         if (!usable && !townData && !battleData) return;
         var firstLoad = !map.data;

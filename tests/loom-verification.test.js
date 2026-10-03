@@ -60,7 +60,16 @@ function callCreate(data) {
   });
 }
 
-function callTurn(data) {
+// Each typed turn here stands for a new turn of play: the player ends their
+// turn between actions, so the turn's one action (L-614) is refilled first.
+async function refillAction(saveId) {
+  const ref = db.collection('loom_saves').doc(saveId);
+  const snap = await ref.get();
+  if (snap.exists && snap.data().turn) await ref.update({ 'turn.actionUsed': false });
+}
+
+async function callTurn(data) {
+  if (data && data.actionText && typeof data.saveId === 'string') await refillAction(data.saveId);
   return loomPlayTurn.run({
     data,
     auth: { uid: TEST_UID, token: { apps: ['loom'], admin: false } },

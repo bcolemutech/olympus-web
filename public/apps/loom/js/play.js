@@ -55,6 +55,27 @@
     Loom.getRef('loom-turn-loading').classList.toggle('hidden', !isLoading);
     Loom.getRef('loom-turn-submit').disabled = isLoading;
     Loom.getRef('loom-turn-input').disabled = isLoading;
+    Loom.getRef('loom-turn-end').disabled = isLoading;
+  }
+
+  /**
+   * The turn under the box (L-614 / #444): its number, the movement left,
+   * and whether the action is used, from loomGetMap's `turn`; End turn
+   * beside it, wherever the player is.
+   */
+  function showTurn(turn) {
+    var bar = Loom.getRef('loom-turn-bar');
+    bar.classList.toggle('hidden', !turn);
+    if (!turn) return;
+    Loom.getRef('loom-turn-state').textContent =
+      'Turn ' +
+      turn.n +
+      ' · movement ' +
+      turn.movementLeft +
+      ' of ' +
+      turn.speed +
+      ' · ' +
+      (turn.actionUsed ? 'you have acted' : 'your action is ready');
   }
 
   function showError(message) {
@@ -97,7 +118,8 @@
         state.turnInProgress = false;
         setLoading(false);
         var data = result.data;
-        var keep = options.keep && !(data.suggestedActions || []).length;
+        // A second action turned down (L-614) keeps the suggestions, too.
+        var keep = (options.keep || data.refused) && !(data.suggestedActions || []).length;
         if (data.step) {
           if (data.step.lines.length) appendNarration(label, data.step.lines.join(' '));
           renderSuggestedActions(kept);
@@ -161,6 +183,7 @@
     var inputEl = Loom.getRef('loom-turn-input');
     inputEl.value = '';
 
+    showTurn(null);
     Loom.map.reset();
     Loom.map.load();
   }
@@ -172,5 +195,6 @@
     moveToCell: moveToCell,
     continuePlan: continuePlan,
     endTurn: endTurn,
+    showTurn: showTurn,
   };
 })();

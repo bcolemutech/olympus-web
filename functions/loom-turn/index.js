@@ -3,7 +3,7 @@
 const loomCanon = require('../loom-canon');
 const { makeWorldState, turnStateOf } = require('../loom-models');
 const { interpretAction } = require('./interpret');
-const { adjudicateAction } = require('./adjudicate');
+const { adjudicateAction, ACTED } = require('./adjudicate');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
@@ -143,18 +143,17 @@ async function runTurnPipeline(params) {
         },
       };
     }
-    // The way out: walked there this turn, then left by, narrated.
+    // The way out: walked there this turn, then left by, narrated (ADJUDICATE
+    // spends the walk, L-614).
     return runTurnPipeline({
       ...params,
-      action: { verb: 'leave', exit: step.exit.id, name: step.exit.name, turn: step.turn },
+      action: { verb: 'leave', exit: step.exit.id, name: step.exit.name },
     });
   }
 
   let actionText = params.actionText;
   let proposedAction;
-  let leaving = null;
   if (action && action.verb === 'leave') {
-    leaving = action;
     actionText = 'go out by ' + action.name;
     proposedAction = { verb: 'move', targets: ['exit:' + action.exit], params: { from: 'map' } };
   } else if (action) {
@@ -164,16 +163,16 @@ async function runTurnPipeline(params) {
   } else {
     proposedAction = await interpretAction({ actionText, canonWorld, save, worldState });
   }
-  let resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
-  if (leaving && resolution.outcome === 'success') {
-    // The movement spent walking to the exit (L-613).
-    resolution = Object.freeze({
-      ...resolution,
-      mutations: Object.freeze([
-        ...resolution.mutations,
-        { target: 'save', op: 'set-flag', path: 'turn', value: leaving.turn },
-      ]),
-    });
+  const resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
+  // A second action in a turn is turned down plainly: not narrated, not
+  // recorded (L-614 / #444).
+  if (resolution.outcome === 'blocked' && resolution.constraints[0] === ACTED) {
+    return {
+      narration: ACTED,
+      stateSummary: save.recentSummary || '',
+      suggestedActions: [],
+      refused: true,
+    };
   }
   const { narration, entityRefs, inventedEntities, suggestedActions } = await narrateResolution({
     actionText,

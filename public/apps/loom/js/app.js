@@ -88,6 +88,10 @@
           });
       });
 
+      Loom.getRef('loom-turn-end').addEventListener('click', function () {
+        Loom.play.endTurn();
+      });
+
       Loom.getRef('loom-turn-form').addEventListener('submit', function (e) {
         e.preventDefault();
         var inputEl = Loom.getRef('loom-turn-input');

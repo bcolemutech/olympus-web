@@ -138,7 +138,7 @@ describe('evaluate — generic (dice) verbs', () => {
       CANON_WORLD
     );
     expect(resolution.outcome).toBe('success');
-    expect(resolution.mutations).toHaveLength(0);
+    expect(resolution.mutations).toHaveLength(1); // the turn's action, used (L-614)
   });
 
   it('fails when the roll is below the difficulty class', () => {
@@ -150,10 +150,10 @@ describe('evaluate — generic (dice) verbs', () => {
       CANON_WORLD
     );
     expect(resolution.outcome).toBe('failure');
-    expect(resolution.mutations).toHaveLength(0);
+    expect(resolution.mutations).toHaveLength(1); // tried, so used all the same
   });
 
-  it('never mutates state for a generic action, win or lose', () => {
+  it('a generic action changes nothing but the turn: its action is used, win or lose', () => {
     [1, 20].forEach((dice) => {
       const resolution = evaluate(
         makeProposedAction({ verb: 'attack', targets: ['commandant-de-alva'] }),
@@ -162,7 +162,29 @@ describe('evaluate — generic (dice) verbs', () => {
         dice,
         CANON_WORLD
       );
-      expect(resolution.mutations).toEqual([]);
+      expect(resolution.mutations).toEqual([
+        {
+          target: 'save',
+          op: 'set-flag',
+          path: 'turn',
+          value: { n: 1, movementLeft: 20, actionUsed: true, plan: null },
+        },
+      ]);
+    });
+  });
+
+  it('a second action in the turn is turned down (L-614)', () => {
+    const resolution = evaluate(
+      makeProposedAction({ verb: 'search' }),
+      {},
+      { ...makeCharacterState(), turn: { n: 2, movementLeft: 5, actionUsed: true, plan: null } },
+      20,
+      CANON_WORLD
+    );
+    expect(resolution).toEqual({
+      outcome: 'blocked',
+      mutations: [],
+      constraints: ["You've acted this turn. End your turn first."],
     });
   });
 });
