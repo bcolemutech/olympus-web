@@ -837,6 +837,19 @@ describe('walls, doors and obstacles (L-622)', () => {
     expect(listed.maps.find((m) => m.id === mapId)).toMatchObject({ hasLayers: true });
   });
 
+  test('view_image draws them, and its legend numbers the door and obstacles (L-623)', async () => {
+    const seen = await call('view_image', { worldId: W, of: 'battleMap', id: mapId });
+    expect(seen.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+    expect(seen.structuredContent.walls).toBe(2);
+    expect(
+      seen.structuredContent.markers.filter((m) => ['door', 'obstacle'].includes(m.type))
+    ).toEqual([
+      expect.objectContaining({ type: 'door', id: 'inner' }),
+      expect.objectContaining({ type: 'obstacle', id: 'table', kind: 'low' }),
+      expect.objectContaining({ type: 'obstacle', id: 'pillar', kind: 'solid' }),
+    ]);
+  });
+
   test('a list left out is kept; an empty list clears that one', async () => {
     const result = await ok('set_map_layers', { worldId: W, mapId, obstacles: [] });
     expect(result).toMatchObject({
