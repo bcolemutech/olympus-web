@@ -7,6 +7,7 @@ const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
+const { turnStateOf, speedOf } = require('../loom-models');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -222,9 +223,35 @@ function buildExitsSection(canonWorld, position, save) {
   return 'WAYS ON FROM ' + here.name + ':\n' + note + lines.join('\n');
 }
 
+// Where the player is in their turn once this resolves (L-614 / #444): the
+// movement left and whether they've acted, for pacing; the rules have
+// already decided what they may do.
+function buildTurnSection(save, resolution) {
+  const change = (resolution.mutations || []).find((m) => m.target === 'save' && m.path === 'turn');
+  const turn = change ? change.value : turnStateOf(save);
+  return (
+    'THE TURN (for pacing only; the rules have decided what happens):\n' +
+    'Turn ' +
+    turn.n +
+    '. Movement left: ' +
+    turn.movementLeft +
+    ' of ' +
+    speedOf(save) +
+    '. The player ' +
+    (turn.actionUsed ? 'has used their action this turn.' : "hasn't acted yet this turn.")
+  );
+}
+
 function buildUserMessage(params) {
-  const { actionText, resolution, canonWorld, entityContexts, recentSummary, exitsSection } =
-    params;
+  const {
+    actionText,
+    resolution,
+    canonWorld,
+    entityContexts,
+    recentSummary,
+    exitsSection,
+    turnSection,
+  } = params;
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
@@ -247,7 +274,8 @@ function buildUserMessage(params) {
     '\n\n' +
     'RELEVANT ENTITIES:\n' +
     entitySections +
-    (exitsSection ? '\n\n' + exitsSection : '')
+    (exitsSection ? '\n\n' + exitsSection : '') +
+    (turnSection ? '\n\n' + turnSection : '')
   );
 }
 
@@ -335,6 +363,7 @@ async function narrateResolution(params) {
         entityContexts,
         recentSummary: save.recentSummary,
         exitsSection: buildExitsSection(canonWorld, positionAfter(save, resolution), save),
+        turnSection: buildTurnSection(save, resolution),
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,

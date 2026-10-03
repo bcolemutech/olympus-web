@@ -113,8 +113,11 @@ const newGame = () =>
     data: { worldId: WORLD, name: 'Voyage', characterName: 'Tam' },
     auth: PLAYER,
   });
-const turn = (saveId) =>
-  loomPlayTurn.run({ data: { worldId: WORLD, saveId, actionText: 'go on' }, auth: PLAYER });
+// Each typed turn is a new turn of play: the action is refilled first (L-614).
+const turn = async (saveId) => {
+  await db.collection('loom_saves').doc(saveId).update({ 'turn.actionUsed': false });
+  return loomPlayTurn.run({ data: { worldId: WORLD, saveId, actionText: 'go on' }, auth: PLAYER });
+};
 const saveOf = async (saveId) => (await db.collection('loom_saves').doc(saveId).get()).data();
 const lastResolution = async (saveId) =>
   (

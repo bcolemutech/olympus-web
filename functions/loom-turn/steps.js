@@ -67,7 +67,12 @@ function planStep(canonWorld, save, target) {
     to = plan.to;
   }
   if (!maps.inBounds(map, to)) return { refused: "That's off the map." };
-  if (maps.sameCell(to, from)) return { refused: "You're already there." };
+  if (maps.sameCell(to, from)) {
+    // Standing on an exit (a map whose entry is its way out): leave by it.
+    const { exit } = maps.at(map, to);
+    if (exit) return { exit, spent: 0, turn: { ...turn, plan: null } };
+    return { refused: "You're already there." };
+  }
 
   // An exit is only stepped on to leave by it: it's never on the way.
   const cost = (step, next) => (!maps.sameCell(next, to) && maps.at(map, next).exit ? Infinity : 1);

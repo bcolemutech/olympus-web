@@ -810,8 +810,11 @@ describe('exit criterion: build with Claude, play, fix, keep playing', () => {
     });
   });
 
-  const turn = (worldId, saveId) =>
-    loomPlayTurn.run({ data: { worldId, saveId, actionText: 'look around' }, auth: PLAYER });
+  // Each look is a new turn of play: the action is refilled first (L-614).
+  const turn = async (worldId, saveId) => {
+    await db.collection('loom_saves').doc(saveId).update({ 'turn.actionUsed': false });
+    return loomPlayTurn.run({ data: { worldId, saveId, actionText: 'look around' }, auth: PLAYER });
+  };
 
   test('a draft built over MCP is published, played, fixed mid-game, and keeps working', async () => {
     const worldId = await freshWorld();

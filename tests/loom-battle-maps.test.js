@@ -810,3 +810,124 @@ describe('moving without the GM (L-613)', () => {
     expect(stopped).toHaveLength(1);
   });
 });
+
+describe('typed actions and the turn (L-614)', () => {
+  let saveId;
+  const calls = { interpret: 0, narrate: 0 };
+  // The player types something INTERPRET reads as `verb` (a move to `target`).
+  function playerTypes(verb, target) {
+    mockCallGemini.mockReset();
+    mockCallGemini.mockImplementation(async (options) => {
+      if (options.systemInstruction.includes('INTERPRET stage')) {
+        calls.interpret += 1;
+        return { verb, targets: target ? [target] : [], params: {} };
+      }
+      if (options.systemInstruction.includes('summarizer')) return 'A summary.';
+      calls.narrate += 1;
+      prompts.narrate.push(options.userMessage);
+      return { narration: 'You go on.', inventedEntities: [], suggestedActions: ['Look around'] };
+    });
+  }
+  const type = (text) =>
+    loomPlayTurn.run({ data: { worldId: WORLD, saveId, actionText: text }, auth: PLAYER });
+  const turnOf = async () => (await saveOf(saveId)).turn;
+  const recorded = async () =>
+    (await db.collection('loom_saves').doc(saveId).collection('loom_turns').get()).size;
+
+  beforeEach(async () => {
+    ({ saveId } = await newGame());
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+    calls.interpret = 0;
+    calls.narrate = 0;
+  });
+
+  test('acting uses the action; a second action is turned down plainly', async () => {
+    playerTypes('talk', 'chr_brannoch');
+    expect((await type('ask about rooms')).narration).toBe('You go on.');
+    expect((await turnOf()).actionUsed).toBe(true);
+    const before = await recorded();
+    expect(await type('ask about the cellar')).toEqual({
+      narration: "You've acted this turn. End your turn first.",
+      stateSummary: '',
+      suggestedActions: [],
+      refused: true,
+    });
+    expect(calls).toEqual({ interpret: 2, narrate: 1 }); // read, but not narrated
+    expect(await recorded()).toBe(before); // nor recorded
+  });
+
+  test('after acting, moving still works, and End turn gives the action back', async () => {
+    playerTypes('search');
+    await type('search the floor');
+    playerTypes('move', 'feature:bar');
+    expect((await type('go to the bar')).narration).toBe('You go on.');
+    expect(await where(saveId)).toMatchObject({ cell: { x: 3, y: 2 } });
+    expect(await turnOf()).toMatchObject({ actionUsed: true, movementLeft: 18 });
+    await endTurn(saveId);
+    playerTypes('search');
+    await type('search the bar');
+    expect(await turnOf()).toMatchObject({ n: 2, actionUsed: true });
+    expect(calls.narrate).toBe(3); // the search, the walk, and the next turn's search
+  });
+
+  test('a typed move follows the path and spends movement, like a tap', async () => {
+    playerTypes('move', 'feature:hearth');
+    await type('go to the hearth');
+    expect(await lastResolution(saveId)).toMatchObject({
+      outcome: 'success',
+      constraints: ['You move to the hearth.'],
+    });
+    expect(await where(saveId)).toMatchObject({ cell: { x: 9, y: 1 } });
+    expect(await turnOf()).toEqual({ n: 1, movementLeft: 12, actionUsed: false, plan: null });
+  });
+
+  test('past reach, a typed move heads that way and keeps the plan', async () => {
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ turn: { n: 1, movementLeft: 3, actionUsed: false, plan: null } });
+    playerTypes('move', 'feature:hearth');
+    await type('go to the hearth');
+    expect((await lastResolution(saveId)).constraints).toEqual([
+      'You head for the hearth.',
+      OUT_OF_MOVEMENT,
+    ]);
+    const turn = await turnOf();
+    expect(turn.movementLeft).toBe(0);
+    expect(turn.plan).toMatchObject({ mapId: 'bm_tavern', to: { x: 9, y: 1 } });
+  });
+
+  test('a typed exit beyond reach is headed for; next turn, Continue leaves by it', async () => {
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null } });
+    playerTypes('move', 'exit:cellar-stairs');
+    await type('take the cellar stairs');
+    expect((await lastResolution(saveId)).constraints[0]).toBe('You head for the cellar stairs.');
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern' });
+    await endTurn(saveId);
+    playerTypes('look');
+    await continueOn(saveId);
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_cellar', cell: { x: 5, y: 5 } });
+  });
+
+  test('the narrator is told the turn: movement left, and whether they have acted', async () => {
+    playerTypes('move', 'feature:bar');
+    await type('go to the bar');
+    expect(prompts.narrate.at(-1)).toContain(
+      "Turn 1. Movement left: 18 of 20. The player hasn't acted yet this turn."
+    );
+    playerTypes('talk', 'chr_brannoch');
+    await type('hail the innkeeper');
+    expect(prompts.narrate.at(-1)).toContain('The player has used their action this turn.');
+  });
+
+  test('standing on an exit, leaving by it costs nothing', async () => {
+    await standAt(saveId, 'plc_1_market', 'bm_stall', { x: 4, y: 7 });
+    playerTypes('move', 'exit:aisle-out');
+    await type('leave the stall');
+    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_market', mapId: null });
+    expect((await turnOf()).movementLeft).toBe(20);
+  });
+});

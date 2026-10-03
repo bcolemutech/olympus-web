@@ -50,7 +50,16 @@ const TEST_UID = 'player-001';
 const WORLD_ID = 'shattered-coast';
 const SAVE_ID = 'save-001';
 
-function callTurn(data, authOverride) {
+// Each typed turn here stands for a new turn of play: the player ends their
+// turn between actions, so the turn's one action (L-614) is refilled first.
+async function refillAction(saveId) {
+  const ref = db.collection('loom_saves').doc(saveId);
+  const snap = await ref.get();
+  if (snap.exists && snap.data().turn) await ref.update({ 'turn.actionUsed': false });
+}
+
+async function callTurn(data, authOverride) {
+  if (data && data.actionText && typeof data.saveId === 'string') await refillAction(data.saveId);
   return loomPlayTurn.run({
     data,
     auth:
