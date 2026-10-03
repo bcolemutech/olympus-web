@@ -33,6 +33,7 @@ const { parseAzgaarExport } = require('../functions/cartographer/parse');
 const { mapToCanon } = require('../functions/cartographer/map');
 const { loadDraftWorld } = require('../functions/cartographer/load');
 const loomCanon = require('../functions/loom-canon');
+const { GATEWAY } = require('./helpers/towns');
 const town = require('../functions/loom-canon/town');
 const { cartographerApp } = require('../functions/mcp/apps/cartographer');
 const { createFirestoreWorldReader } = require('../functions/mcp/apps/cartographer/reader');
@@ -65,8 +66,14 @@ const oauthStore = createInMemoryStore();
 let server;
 let client;
 
+// Every place needs a battle map to be open (L-622): new places here get the
+// generic gateway, as Claude would give them a map.
 async function call(name, args) {
-  return client.callTool({ name, arguments: args });
+  const withMap =
+    name === 'add_place' && args && !('battleMap' in args)
+      ? { ...args, battleMap: GATEWAY.id }
+      : args;
+  return client.callTool({ name, arguments: withMap });
 }
 async function ok(name, args) {
   const result = await call(name, args);
@@ -100,6 +107,9 @@ beforeAll(async () => {
   await db.recursiveDelete(worlds());
   await importNisia(LIVE, true);
   await importNisia(DRAFT, false);
+  for (const id of [LIVE, DRAFT]) {
+    await worlds().doc(id).collection('battleMaps').doc(GATEWAY.id).set(GATEWAY);
+  }
   const app = express();
   app.use(express.json());
   app.all('/mcp/:appId', (req, res) =>
@@ -183,6 +193,8 @@ describe('laying out Burdendal, place by place', () => {
       entranceFor: ['sea'],
     });
     expect(harbour).toMatchObject({ id: 'plc_1_the-harbour', entranceFor: ['sea'] });
+    // Given its battle map in the same call (L-622).
+    expect((await place(W, 'plc_1_the-harbour')).battleMap).toEqual({ mapId: GATEWAY.id });
     expect(layout).toEqual({
       valid: true,
       problems: [],
@@ -396,7 +408,7 @@ describe('characters in town', () => {
     const inTown = await ok('get_town', { worldId: W, locationId: 'loc_1' });
     expect(inTown.places.find((p) => p.id === 'plc_1_the-gull-anchor')).toMatchObject({
       residents: [{ id: 'chr_brannoch', name: 'Brannoch' }],
-      grade: 'rich',
+      grade: 'playable', // its generic map keeps it short of Rich (L-622)
     });
     expect(
       await refused('add_character', {
@@ -498,7 +510,7 @@ test('list_work puts the places of the nearest towns right after the frontier', 
     type: 'place',
     town: { id: 'loc_1', name: 'Burdendal' },
     hops: 0,
-    missing: ['residents'],
+    missing: ['residents', 'battleMap'], // and its own map: it's on a generic one (L-622)
   });
   expect(list.howTo.residents).toMatch(/placeId/);
   const all = await ok('list_work', { worldId: LIVE, limit: 100 });

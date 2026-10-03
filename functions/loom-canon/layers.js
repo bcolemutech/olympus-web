@@ -191,31 +191,44 @@
     );
   }
 
-  // Whether `entry` can walk to an exit: along steps canStep allows, never on
-  // through an exit (stepping on one leaves), locked doors shut.
-  function reachesExit(map, entry) {
+  /**
+   * The squares a walk from `starts` can reach, by "x,y": along steps canStep
+   * allows (locked doors shut), never on from an exit, since stepping on one
+   * leaves (an exit is reached, but not walked through).
+   */
+  function reachable(map, starts) {
     var exits = {};
     (map.exits || []).forEach(function (e) {
       exits[cellKey(e.x, e.y)] = true;
     });
-    if (exits[cellKey(entry.x, entry.y)]) return true;
     var seen = {};
-    seen[cellKey(entry.x, entry.y)] = true;
-    var queue = [{ x: entry.x, y: entry.y }];
+    var queue = [];
+    starts.forEach(function (start) {
+      seen[cellKey(start.x, start.y)] = true;
+      queue.push({ x: start.x, y: start.y, first: true });
+    });
     while (queue.length) {
       var at = queue.shift();
+      if (!at.first && exits[cellKey(at.x, at.y)]) continue;
       for (var dx = -1; dx <= 1; dx++) {
         for (var dy = -1; dy <= 1; dy++) {
           var next = { x: at.x + dx, y: at.y + dy };
           var key = cellKey(next.x, next.y);
           if ((!dx && !dy) || seen[key] || !canStep(map, at, next)) continue;
-          if (exits[key]) return true;
           seen[key] = true;
           queue.push(next);
         }
       }
     }
-    return false;
+    return seen;
+  }
+
+  // Whether `entry` can walk to an exit (or is one).
+  function reachesExit(map, entry) {
+    var reached = reachable(map, [entry]);
+    return (map.exits || []).some(function (e) {
+      return reached[cellKey(e.x, e.y)];
+    });
   }
 
   /**
@@ -387,6 +400,7 @@
     obstacleAt: obstacleAt,
     groundAt: groundAt,
     hasLayers: hasLayers,
+    reachable: reachable,
     check: check,
   };
 

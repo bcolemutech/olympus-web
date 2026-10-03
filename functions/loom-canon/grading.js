@@ -26,11 +26,13 @@
  * layer, and null while a layer isn't required. The town requirement is on
  * (L-342, switched on once the MCP town tools (L-343 / #397) had laid out
  * the start town and its open neighbours): a settlement needs a working town
- * layout (./town.js hasTownLayout) to be Playable. Battle maps aren't
- * required yet. When they are, LAYER_CHECKS.battleMap becomes ./maps.js
- * kindOf, which says 'own', 'generic' or nothing: a point of interest or a
+ * layout (./town.js hasTownLayout) to be Playable. The battle-map requirement
+ * is on too (L-622 / #447, 2026-10-03): LAYER_CHECKS.battleMap is ./maps.js
+ * kindOf, which says 'own', 'generic' or nothing. A point of interest or a
  * place in town needs a map, its own or a generic one, to be Playable, and
- * its own to be Rich (L-351; planning/the-loom-layered-worlds.md §9).
+ * its own, with walls, doors or obstacles (./layers.js), to be Rich (L-351,
+ * L-628; planning/the-loom-layered-worlds.md §9, the-loom-movement-and-
+ * vision.md §4).
  *
  * Places in town (L-342) are graded too: Playable once written up, Rich with
  * someone there or lore about them. A settlement's Rich bar grows with its
@@ -46,7 +48,7 @@ const GRADES = ['unbuilt', 'stub', 'playable', 'rich'];
 const LAYER_CHECKS = Object.freeze({
   // Required lazily: town.js reads isPlaceOpen from this module.
   town: (world, settlement) => require('./town').hasTownLayout(world, settlement),
-  battleMap: null,
+  battleMap: (world, entity) => require('./maps').kindOf(world, entity),
 });
 const IMPORT = 'import';
 
@@ -157,10 +159,17 @@ function layerItem(layers, layer, world, entity) {
 
 // A generic battle map opens a place, but only its own map makes it Rich
 // (decision 2026-10-01): the work list keeps showing places still on one.
+// Its own map needs walls, doors or obstacles too (L-628; decision B8).
 function ownMapItem(layers, world, entity) {
   const kindOf = layers.battleMap;
-  if (!kindOf || kindOf(world, entity) !== 'generic') return null;
-  return { need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' };
+  const kind = kindOf ? kindOf(world, entity) : null;
+  if (kind === 'generic') {
+    return { need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' };
+  }
+  if (kind === 'own' && !require('./layers').hasLayers(require('./maps').mapOf(world, entity))) {
+    return { need: 'layers', for: 'rich', message: 'Its battle map has no walls or obstacles.' };
+  }
+  return null;
 }
 
 /**

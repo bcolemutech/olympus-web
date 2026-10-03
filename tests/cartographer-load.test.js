@@ -27,7 +27,7 @@ const functionsTest = require('firebase-functions-test')(
 );
 // Requiring functions/index.js initializes the functions package's admin app,
 // which the loader and loom-canon below share.
-const { layOutTowns } = require('./helpers/towns');
+const { layOutTowns, offMap } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn } = require('../functions/index');
 const path = require('path');
 const fs = require('fs');
@@ -270,6 +270,8 @@ describe('the Loom and Firestore worlds', () => {
     const destination = (await loomCanon.loadWorld(worldId, { db })).locations.loc_1.connections[0];
     await writeUp(worldId, destination);
     const world = await loomCanon.loadWorld(worldId, { db });
+    // A new game starts on the town gate's battle map (L-622): walk out first.
+    await offMap(db, saveId);
 
     mockCallGemini.mockImplementation((options) => {
       if (options.systemInstruction.indexOf('INTERPRET stage') !== -1) {

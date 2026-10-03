@@ -4,6 +4,7 @@ const { z } = require('zod');
 const { FieldValue } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const maps = require('../../../loom-canon/maps');
+const layers = require('../../../loom-canon/layers');
 const { worldId, entityId } = require('./schemas');
 const { helpers } = require('./write-tools');
 const views = require('./views');
@@ -19,6 +20,10 @@ const views = require('./views');
 //   - An exit to another map names a live map, and an entry on it that exists;
 //     changing a map can't remove an entry another map's exit leads to.
 //   - Points of interest and places in town take maps; settlements have towns.
+//   - Walls, doors and obstacles (L-622 / #447; loom-canon/layers.js) pass its
+//     checks: on the grid and its lines, nothing blocking an entry or exit,
+//     every entry able to reach an exit. Given with the grid, or alone with
+//     set_map_layers; replacing a grid without them keeps them.
 //
 // Images can't be sent over MCP: they are uploaded on the Cartographer page.
 // Removing a map is retire_entity (type battleMap), in write-tools.js.
@@ -57,6 +62,82 @@ const exit = z.strictObject({
     ])
     .describe('"out" (back to the town, or the world), or { map, entry }: another map.'),
 });
+// Layers (L-622): corners are the grid points between squares, so square
+// (x, y) runs from corner (x, y) to (x + 1, y + 1), as in SVG art.
+const corner = z.number().int().min(0).max(maps.MAX_SIDE);
+const point = z.strictObject({ x: corner, y: corner });
+const wall = z
+  .strictObject({
+    points: z
+      .array(point)
+      .min(2)
+      .max(200)
+      .describe('Corners along the grid lines, each run straight across or down.'),
+  })
+  .describe('A wall: a line along the grid lines, between squares.');
+const door = z.strictObject({
+  id: cellId,
+  name: label.describe('As players would say it: "the cellar door".'),
+  from: point.describe('One end: a corner.'),
+  to: point.describe('The other end: the next corner along the grid line (one square long).'),
+  locked: z.boolean().optional().describe('Locked doors stop players until opened.'),
+  key: label.optional().describe('The inventory item that opens it when locked.'),
+});
+const obstacle = z.strictObject({
+  id: cellId,
+  name: label.describe('As players would say it: "the bar", "a pillar".'),
+  kind: z
+    .enum(layers.KINDS)
+    .describe(
+      'solid blocks movement and sight (a pillar); low blocks movement only (a table, the bar, ' +
+        'a pit); difficult costs 2 movement a square (rubble, mud).'
+    ),
+  x: coord,
+  y: coord,
+  w: z
+    .number()
+    .int()
+    .min(1)
+    .max(maps.MAX_SIDE)
+    .optional()
+    .describe('Squares across; 1 if left out.'),
+  h: z.number().int().min(1).max(maps.MAX_SIDE).optional().describe('Squares down; 1 if left out.'),
+});
+const LAYER_SHAPES = {
+  walls: z.array(wall).max(200),
+  doors: z.array(door).max(60),
+  obstacles: z.array(obstacle).max(200),
+};
+
+// The layers' checks (loom-canon/layers.js), as one tool error.
+function checkLayers(map) {
+  const problems = layers.check(map);
+  if (problems.length) throw new ToolError(problems.join(' '));
+}
+
+// What to warn about once a map's layers pass: none at all, and features
+// nobody can get to (on or beside them) from an entry.
+function layerWarnings(map) {
+  if (!layers.hasLayers(map)) {
+    return [
+      'It has no walls, doors or obstacles: players walk anywhere on it, and a place with it ' +
+        'as its own map falls short of Rich. Add them with set_map_layers.',
+    ];
+  }
+  const reached = layers.reachable(map, map.entries || []);
+  const near = (f) =>
+    [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => reached[`${f.x + dx},${f.y + dy}`]));
+  return (map.features || [])
+    .filter((f) => !near(f))
+    .map((f) => `Nobody can reach ${f.name} at (${f.x}, ${f.y}) from an entry: it's walled in.`);
+}
+
+const layerCounts = (map) => ({
+  walls: (map.walls || []).length,
+  doors: (map.doors || []).length,
+  obstacles: (map.obstacles || []).length,
+});
+
 const generic = z
   .strictObject({
     kind: z
@@ -169,8 +250,10 @@ function mapTools({ writer }) {
         'with entries (where players arrive: the first, unless an exit names one), exits ' +
         '(stepping onto one leaves by it: "out" to the town or the world, or to an entry on ' +
         'another map, for floors and wings) and features (named cells players can walk to: the ' +
-        'bar, the altar). Nothing blocks movement yet. Leave out mapId to make a new map; give ' +
-        'it to replace that map’s grid (its image is kept). `generic` makes it reusable for any ' +
+        'bar, the altar). Walls, doors and obstacles (see set_map_layers) can come with it; ' +
+        'replacing a grid without them keeps the ones it has. Leave out mapId to make a new ' +
+        'map; give it to replace that map’s grid (its image is kept). `generic` makes it ' +
+        'reusable for any ' +
         'number of places (a tavern, a forest clearing): it opens a place, but only a place’s ' +
         'own map can make it Rich. Assign maps with assign_battle_map. Images are uploaded on ' +
         'the Cartographer page. ' +
@@ -186,6 +269,9 @@ function mapTools({ writer }) {
         entries: z.array(entry).min(1).max(20),
         exits: z.array(exit).min(1).max(20),
         features: z.array(feature).max(60).optional(),
+        walls: LAYER_SHAPES.walls.optional(),
+        doors: LAYER_SHAPES.doors.optional(),
+        obstacles: LAYER_SHAPES.obstacles.optional(),
         generic: generic.nullable().optional(),
       },
       annotations: replacing,
@@ -203,6 +289,10 @@ function mapTools({ writer }) {
             features: args.features || [],
           };
           checkMap(world, id, def);
+          for (const layer of ['walls', 'doors', 'obstacles']) {
+            def[layer] = args[layer] || (before && before[layer]) || [];
+          }
+          checkLayers(def);
           const doc = {
             id,
             ...def,
@@ -219,11 +309,64 @@ function mapTools({ writer }) {
             ),
           };
           if (!before) result.created = true;
+          const warnings = layerWarnings(doc);
           if (before && (before.width > args.width || before.height > args.height)) {
-            result.warnings = [
-              'The grid is smaller now: players standing beyond its edge are moved to its entry.',
-            ];
+            warnings.unshift(
+              'The grid is smaller now: players standing beyond its edge are moved to its entry.'
+            );
           }
+          if (warnings.length) result.warnings = warnings;
+          return result;
+        }),
+    },
+    {
+      name: 'set_map_layers',
+      title: 'Set a battle map’s walls, doors and obstacles',
+      description:
+        'Give a battle map what blocks movement and sight, without resending its grid. ' +
+        'Coordinates: square (x, y) runs from corner (x, y) to corner (x + 1, y + 1), as in the ' +
+        'map’s SVG art (viewBox one unit per square). Walls are lines along the grid lines ' +
+        'between corners (each run straight across or down), e.g. the top of a 12-wide map is ' +
+        '{ points: [{ x: 0, y: 0 }, { x: 12, y: 0 }] }. Doors are one square long, in a gap ' +
+        'left in a wall (from one corner to the next), closed to start with; locked ones need ' +
+        'their key or a picked lock. Obstacles are rectangles of squares: solid (blocks movement ' +
+        'and sight: a pillar), low (blocks movement only: a table, the bar, a pit) or difficult ' +
+        '(costs 2 movement a square: rubble). A feature can sit on an obstacle (the bar on the ' +
+        'bar); players stand beside it. Nothing that blocks may cover an entry or exit, and every ' +
+        'entry must reach an exit without a locked door. Each list given replaces that list; an ' +
+        'empty list clears it; one left out is kept. A place with its own map needs these to be ' +
+        'Rich. Check them against the art with view_image. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        mapId: entityId('battle map', 'list_battle_maps'),
+        walls: LAYER_SHAPES.walls.optional(),
+        doors: LAYER_SHAPES.doors.optional(),
+        obstacles: LAYER_SHAPES.obstacles.optional(),
+      },
+      annotations: replacing,
+      handler: (ctx, args) =>
+        edit(ctx, args, (e) => {
+          const { world } = e;
+          const map = live(world, 'battleMap', args.mapId);
+          const given = ['walls', 'doors', 'obstacles'].filter((l) => args[l] !== undefined);
+          if (!given.length) {
+            throw new ToolError('Give walls, doors or obstacles (an empty list clears them).');
+          }
+          const fields = Object.fromEntries(given.map((l) => [l, args[l]]));
+          const next = { ...map, ...fields };
+          checkLayers(next);
+          e.update(e.ref('battleMaps', map.id), fields);
+          const result = {
+            map: views.battleMapRow(
+              { ...world, battleMaps: { ...world.battleMaps, [map.id]: next } },
+              next
+            ),
+            layers: layerCounts(next),
+            updated: given,
+          };
+          const warnings = layerWarnings(next);
+          if (warnings.length) result.warnings = warnings;
           return result;
         }),
     },

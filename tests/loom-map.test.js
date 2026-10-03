@@ -21,7 +21,7 @@ jest.mock('../functions/gemini', () => ({
 }));
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
-const { layOutTowns } = require('./helpers/towns');
+const { layOutTowns, offMap } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
 
 const fs = require('fs');
@@ -64,8 +64,15 @@ async function writeUp(...ids) {
 
 const newGame = (auth = PLAYER) =>
   loomCreateSave.run({ data: { worldId: WORLD, name: 'Voyage', characterName: 'Tam' }, auth });
-const clickTo = (saveId, target, auth = PLAYER) =>
-  loomPlayTurn.run({ data: { worldId: WORLD, saveId, action: { verb: 'move', target } }, auth });
+// A click on the world map. Arriving at a town lands on its gate's battle map
+// (every place has one, L-622): the player has walked out of it first.
+const clickTo = async (saveId, target, auth = PLAYER) => {
+  await offMap(db, saveId).catch(() => {});
+  return loomPlayTurn.run({
+    data: { worldId: WORLD, saveId, action: { verb: 'move', target } },
+    auth,
+  });
+};
 const getMap = (saveId, auth = PLAYER) =>
   loomGetMap.run({ data: { worldId: WORLD, saveId }, auth });
 const saveOf = async (saveId) => (await db.collection('loom_saves').doc(saveId).get()).data();

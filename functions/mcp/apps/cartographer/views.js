@@ -14,6 +14,7 @@ const {
 } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
+const layers = require('../../../loom-canon/layers');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -537,6 +538,8 @@ function battleMapRow(world, map) {
     size: { width: map.width, height: map.height },
     generic: map.generic || null,
     hasImage: Boolean(map.image),
+    // Walls, doors or obstacles (L-622): what a place's own map needs for Rich.
+    hasLayers: layers.hasLayers(map),
     usedBy: usersOf(world, map.id).length,
     ...(map.retired ? { retired: true } : {}),
   };
@@ -562,6 +565,9 @@ function battleMapDetail(world, map) {
     entries: map.entries || [],
     exits: (map.exits || []).map((exit) => ({ ...exit, to: exitTo(exit) })),
     features: map.features || [],
+    walls: map.walls || [],
+    doors: map.doors || [],
+    obstacles: map.obstacles || [],
     usedBy: usersOf(world, map.id),
     ...(map.retired ? { retired: true } : {}),
   };

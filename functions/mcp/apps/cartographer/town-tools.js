@@ -94,8 +94,10 @@ function townTools({ writer }) {
       description:
         'Add a place inside a settlement’s town: a harbour, gate, market, temple, tavern, ' +
         'district and so on. Give ways in and out entranceFor (the world routes they serve), ' +
-        'and link it to places already there with connectTo (links are two-way). The name ' +
-        'must be unique in the town. Returns the new id. ' +
+        'and link it to places already there with connectTo (links are two-way). Every place ' +
+        'needs a battle map to be open: give battleMap (its own map, or a generic one from ' +
+        'list_battle_maps) here, or later with assign_battle_map. The name must be unique in ' +
+        'the town. Returns the new id. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -112,6 +114,9 @@ function townTools({ writer }) {
           .optional()
           .describe('Places in the same town to link it to.'),
         position: position.optional(),
+        battleMap: entityId('battle map', 'list_battle_maps')
+          .optional()
+          .describe('The map it is walked on (L-622): needed for it to be open.'),
       },
       annotations: additive,
       handler: (ctx, args) =>
@@ -122,6 +127,7 @@ function townTools({ writer }) {
           const links = [...new Set(args.connectTo || [])].map((id) =>
             placeIn(world, settlement, id)
           );
+          const map = args.battleMap ? live(world, 'battleMap', args.battleMap) : null;
           const id = newId(world, 'place', `plc_${settlement.id.replace(/^loc_/, '')}`, args.name);
           const doc = {
             id,
@@ -135,6 +141,7 @@ function townTools({ writer }) {
             npcIds: [],
             rules: {},
             ...(args.position ? { position: args.position } : {}),
+            ...(map ? { battleMap: { mapId: map.id } } : {}),
           };
           e.create(e.ref('places', id), doc);
           const set = { [id]: doc };

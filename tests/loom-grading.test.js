@@ -16,6 +16,7 @@ const {
   isWritten,
   gradeLocation,
   gradeEntity,
+  gradePlace,
   gradeWorld,
   isPlayable,
 } = require('../functions/loom-canon/grading');
@@ -23,16 +24,40 @@ const { parseAzgaarExport } = require('../functions/cartographer/parse');
 const { mapToCanon } = require('../functions/cartographer/map');
 const { importStamp } = require('../functions/cartographer/sources');
 const loomCanon = require('../functions/loom-canon');
-const { withTowns } = require('./helpers/towns');
+const { withTowns, GATEWAY } = require('./helpers/towns');
 
 const WRITTEN = { description: 'mcp' };
 const IMPORTED = { description: 'import' };
 
 // A small Cartographer world: a written-up port with a resident and lore, a
 // stub town, a written ruin, and a realm and region. Both settlements have a
-// town layout (one gate each), as the town requirement asks.
+// town layout (one gate each), as the town requirement asks, and the ruin its
+// own walled battle map, as the battle-map requirement asks (L-622).
+const RUIN_MAP = {
+  id: 'bm_ruin',
+  name: 'The ruin',
+  width: 4,
+  height: 4,
+  entries: [{ id: 'gap', x: 0, y: 1 }],
+  exits: [{ id: 'out', name: 'the gap', x: 0, y: 0, to: 'out' }],
+  features: [],
+  walls: [
+    {
+      points: [
+        { x: 2, y: 0 },
+        { x: 2, y: 3 },
+      ],
+    },
+  ],
+  generic: null,
+};
 function world(overrides = {}) {
-  return withTowns(world.bare(overrides), 'port', 'town');
+  const w = withTowns(world.bare(overrides), 'port', 'town');
+  return {
+    ...w,
+    locations: { ...w.locations, ruin: { ...w.locations.ruin, battleMap: { mapId: 'bm_ruin' } } },
+    battleMaps: { ...w.battleMaps, bm_ruin: RUIN_MAP },
+  };
 }
 world.bare = (overrides = {}) => {
   return {
@@ -183,9 +208,9 @@ describe('residents in town', () => {
 });
 
 describe('layers switch on as they ship', () => {
-  test('towns are required; battle maps not yet', () => {
+  test('towns are required, and battle maps (L-622)', () => {
     expect(typeof LAYER_CHECKS.town).toBe('function');
-    expect(LAYER_CHECKS.battleMap).toBeNull();
+    expect(typeof LAYER_CHECKS.battleMap).toBe('function');
   });
 
   test('a written-up settlement without a town layout is Unbuilt, and closed', () => {
@@ -195,9 +220,15 @@ describe('layers switch on as they ship', () => {
       checklist: [{ need: 'town', for: 'playable', message: 'It has no town layout.' }],
     });
     expect(isPlayable(w, w.locations.port)).toBe(false);
-    // Points of interest need a battle map, not a town: not required yet.
-    expect(isPlayable(w, w.locations.ruin)).toBe(true);
+    // Points of interest need a battle map, not a town: without one, Unbuilt too.
+    expect(gradeLocation(w, w.locations.ruin).checklist[0]).toEqual({
+      need: 'battleMap',
+      for: 'playable',
+      message: 'It has no battle map.',
+    });
+    expect(isPlayable(w, w.locations.ruin)).toBe(false);
     expect(isPlayable(world(), world().locations.port)).toBe(true);
+    expect(isPlayable(world(), world().locations.ruin)).toBe(true);
   });
 
   test('a required layer that is missing makes a place Unbuilt, however well written', () => {
@@ -212,6 +243,56 @@ describe('layers switch on as they ship', () => {
     const noMaps = gradeLocation(w, w.locations.ruin, { layers: { battleMap: () => false } });
     expect(needs(noMaps)).toEqual(['playable:battleMap', 'rich:lore']);
     expect(isPlayable(w, w.locations.port, { layers })).toBe(false);
+  });
+});
+
+describe('battle maps and their layers (L-622, L-628)', () => {
+  const ruinWith = (battleMap, map) => {
+    const w = world();
+    const ruin = { ...w.locations.ruin, battleMap };
+    const lore = { l: { id: 'l', title: 'Towers', text: '…', entityRefs: ['ruin'] } };
+    const v = { ...w, lore, locations: { ...w.locations, ruin } };
+    if (map) v.battleMaps = { ...v.battleMaps, [map.id]: map };
+    return gradeLocation(v, ruin);
+  };
+
+  test('no map: Unbuilt, however well written', () => {
+    expect(ruinWith(undefined)).toMatchObject({ grade: 'unbuilt' });
+    expect(needs(ruinWith(undefined))).toEqual(['playable:battleMap']);
+  });
+
+  test('a generic map opens it, but stops it short of Rich', () => {
+    expect(ruinWith({ mapId: GATEWAY.id })).toEqual({
+      grade: 'playable',
+      checklist: [{ need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' }],
+    });
+  });
+
+  test('its own map without walls or obstacles stops it short of Rich too', () => {
+    const bare = { ...RUIN_MAP, id: 'bm_bare', walls: [] };
+    expect(ruinWith({ mapId: 'bm_bare' }, bare)).toEqual({
+      grade: 'playable',
+      checklist: [
+        { need: 'layers', for: 'rich', message: 'Its battle map has no walls or obstacles.' },
+      ],
+    });
+    const blocked = {
+      ...bare,
+      id: 'bm_rubble',
+      obstacles: [{ id: 'r', kind: 'difficult', x: 3, y: 3 }],
+    };
+    expect(ruinWith({ mapId: 'bm_rubble' }, blocked).grade).toBe('rich');
+  });
+
+  test('its own walled map, and lore: Rich', () => {
+    expect(ruinWith({ mapId: 'bm_ruin' })).toEqual({ grade: 'rich', checklist: [] });
+  });
+
+  test('places in town are graded the same way', () => {
+    const w = world();
+    const gate = Object.values(w.places)[0];
+    expect(needs(gradePlace(w, gate))).toEqual(['rich:residents', 'rich:battleMap']);
+    expect(gradePlace(w, { ...gate, battleMap: null }).grade).toBe('unbuilt');
   });
 });
 
@@ -268,10 +349,11 @@ describe('whole worlds', () => {
       factions: stamp(canon.factions),
     };
     const summary = gradeWorld(nisia);
-    // No settlement has a town yet: Unbuilt. Points of interest are Stub.
-    expect(summary.places).toMatchObject({ total: 719, unbuilt: 663, stub: 56, open: 0 });
+    // No settlement has a town yet, and no point of interest a battle map
+    // (L-622): all Unbuilt.
+    expect(summary.places).toMatchObject({ total: 719, unbuilt: 719, stub: 0, open: 0 });
     expect(summary.places.settlements.unbuilt).toBe(663);
-    expect(summary.places.pointsOfInterest.stub).toBe(56);
+    expect(summary.places.pointsOfInterest.unbuilt).toBe(56);
     expect(summary.factions.stub).toBe(23);
     expect(summary.regions.stub).toBe(145);
   });

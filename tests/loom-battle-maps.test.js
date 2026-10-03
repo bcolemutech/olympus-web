@@ -22,7 +22,7 @@ jest.mock('../functions/gemini', () => ({
 }));
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
-const { layOutTowns } = require('./helpers/towns');
+const { layOutTowns, mapPlaces, offMap, GATEWAY } = require('./helpers/towns');
 const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
 const { OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
 
@@ -49,7 +49,8 @@ const WRITTEN = { description: 'mcp' };
 
 // Burdendal (loc_1): a gate, a market and a tavern. The tavern, the Gull &
 // Anchor, has its own map, with stairs down to a cellar map; the market has a
-// generic market-stall map; the gate has none.
+// generic market-stall map; the gate the helpers' generic gateway (every open
+// place needs a map, L-622).
 const PLACES = {
   plc_1_gate: {
     name: 'The North Gate',
@@ -241,6 +242,7 @@ beforeAll(async () => {
     .doc('loc_1')
     .update({ description: 'Written up: Burdendal.', sources: WRITTEN });
   await layOutTowns(worldRef, 'loc_1');
+  await mapPlaces(worldRef, 'places', 'plc_1_gate');
   await bump();
 });
 
@@ -264,7 +266,9 @@ describe('a visit to the Gull & Anchor', () => {
   });
 
   test('walking into a place with a map lands on it, at its entry', async () => {
-    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_gate', mapId: null });
+    // A new game starts on the gate's map; the player walks out of it first.
+    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_gate', mapId: GATEWAY.id });
+    await offMap(db, saveId);
     expect(await moveTo(saveId, 'plc_1_tavern')).toMatchObject({
       outcome: 'success',
       constraints: ['You make your way to The Gull & Anchor.'],
@@ -413,7 +417,7 @@ describe('a visit to the Gull & Anchor', () => {
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 1, y: 4 } });
   });
 
-  test('a generic map works like any other; a place with none is entered off-map', async () => {
+  test('a generic map works like any other', async () => {
     await standAt(saveId, 'plc_1_tavern');
     await moveTo(saveId, 'plc_1_market');
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_stall', cell: { x: 4, y: 7 } });
@@ -422,20 +426,21 @@ describe('a visit to the Gull & Anchor', () => {
     expect(await where(saveId)).toEqual({
       location: 'loc_1',
       placeId: 'plc_1_gate',
-      mapId: null,
-      cell: null,
+      mapId: GATEWAY.id,
+      cell: { x: 1, y: 1 },
     });
   });
 });
 
 describe('nobody is stranded, and the turn request is checked', () => {
-  test('a retired map is not entered, but a save on one can still leave by its exits', async () => {
+  test('a retired map closes its place, but a save on it can still leave by its exits', async () => {
     const { saveId } = await newGame();
     await worldRef.collection('battleMaps').doc('bm_tavern').update({ retired: true });
     await bump();
     await standAt(saveId, 'plc_1_gate');
-    await moveTo(saveId, 'plc_1_tavern');
-    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_tavern', mapId: null });
+    expect((await moveTo(saveId, 'plc_1_tavern')).constraints).toEqual([
+      'The way to The Gull & Anchor is closed. Turn back.',
+    ]);
     await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 2, y: 2 });
     await moveTo(saveId, 'exit:front-door');
     expect(await where(saveId)).toMatchObject({ mapId: null, cell: null });
@@ -445,6 +450,7 @@ describe('nobody is stranded, and the turn request is checked', () => {
 
   test('a grid step off a map is refused; bad cells are refused before the turn', async () => {
     const { saveId } = await newGame();
+    await offMap(db, saveId);
     expect((await stepTo(saveId, { x: 1, y: 1 })).step.lines).toEqual([
       "There's no map here to move on.",
     ]);
@@ -470,7 +476,11 @@ describe('nobody is stranded, and the turn request is checked', () => {
       mapId: 'bm_stall',
       cell: { x: 4, y: 7 },
     });
-    await worldRef.collection('places').doc('plc_1_gate').update({ battleMap: null });
+    // Back to its gateway (a place with no map is closed now, L-622).
+    await worldRef
+      .collection('places')
+      .doc('plc_1_gate')
+      .update({ battleMap: { mapId: GATEWAY.id } });
     await bump();
   });
 });
@@ -509,9 +519,11 @@ describe('points of interest, and the rules engine (pure)', () => {
         sources: WRITTEN,
         entrance: { via: ['trail'] },
         connections: [],
+        battleMap: { mapId: GATEWAY.id }, // open places need maps (L-622)
       },
     },
     battleMaps: {
+      [GATEWAY.id]: GATEWAY,
       bm_ruin: {
         id: 'bm_ruin',
         name: 'The Ruin',
@@ -562,8 +574,12 @@ describe('points of interest, and the rules engine (pure)', () => {
   test('a map with no exits holds nobody: the move goes ahead, off the map', () => {
     const result = move({ location: 'ruin', mapId: 'bm_walled', cell: { x: 1, y: 1 } }, ['town']);
     expect(result.outcome).toBe('success');
+    // Off the walled map, and onto the town gate's (L-622).
     expect(result.mutations).toEqual(
-      expect.arrayContaining([{ target: 'save', op: 'set-flag', path: 'mapId', value: null }])
+      expect.arrayContaining([
+        { target: 'save', op: 'set-flag', path: 'location', value: 'town' },
+        { target: 'save', op: 'set-flag', path: 'mapId', value: GATEWAY.id },
+      ])
     );
   });
 
@@ -592,7 +608,7 @@ describe('points of interest, and the rules engine (pure)', () => {
   });
 });
 
-describe('grading with battle maps (switched on in a test; off in play)', () => {
+describe('grading with battle maps (on in play since L-622)', () => {
   const layers = { town: null, battleMap: maps.kindOf };
   const base = () => ({
     id: 'w',
@@ -618,7 +634,21 @@ describe('grading with battle maps (switched on in a test; off in play)', () => 
       },
     },
     battleMaps: {
-      bm_own: { id: 'bm_own', name: 'The Ruin', width: 4, height: 4, generic: null },
+      bm_own: {
+        id: 'bm_own',
+        name: 'The Ruin',
+        width: 4,
+        height: 4,
+        generic: null,
+        walls: [
+          {
+            points: [
+              { x: 2, y: 0 },
+              { x: 2, y: 3 },
+            ],
+          },
+        ],
+      },
       bm_generic: {
         id: 'bm_generic',
         name: 'An inn',
@@ -634,10 +664,10 @@ describe('grading with battle maps (switched on in a test; off in play)', () => 
     factions: {},
   });
 
-  test('battle maps are not required in play yet', () => {
-    expect(grading.LAYER_CHECKS.battleMap).toBeNull();
+  test('battle maps are required in play', () => {
+    expect(grading.LAYER_CHECKS.battleMap).toEqual(expect.any(Function));
     const w = base();
-    expect(grading.gradeLocation(w, w.locations.ruin).grade).toBe('rich');
+    expect(grading.gradeLocation(w, w.locations.ruin).grade).toBe('unbuilt');
   });
 
   test('no map: Unbuilt, and closed', () => {
@@ -668,6 +698,11 @@ describe('grading with battle maps (switched on in a test; off in play)', () => 
     const w = base();
     w.locations.ruin.battleMap = { mapId: 'bm_own' };
     expect(grading.gradeLocation(w, w.locations.ruin, { layers }).grade).toBe('rich');
+    // Its own map needs walls, doors or obstacles (L-628).
+    w.battleMaps.bm_own = { ...w.battleMaps.bm_own, walls: [] };
+    expect(grading.gradeLocation(w, w.locations.ruin, { layers }).checklist).toEqual([
+      { need: 'layers', for: 'rich', message: 'Its battle map has no walls or obstacles.' },
+    ]);
     w.battleMaps.bm_own.retired = true;
     expect(grading.gradeLocation(w, w.locations.ruin, { layers }).grade).toBe('unbuilt');
   });
