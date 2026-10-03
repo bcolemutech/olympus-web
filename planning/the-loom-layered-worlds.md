@@ -199,7 +199,7 @@ The Loom's play screen gains a **map** beside the story:
   - **Images** can't be sent over MCP: they are uploaded on the Cartographer page.
 - **Art** (L-355 / #417). The Cartographer page (**Battle-map art…** on a world) uploads a map's image, a PNG of up to 30 MB. `cartographerMapImage` checks it, copies it beside the world's map image under a new name each time, and records `image: { path, width, height }` on the map through the shared write layer; replacing or removing art deletes the old file. The image is stretched to the grid. A map without one is drawn as a plain grid. There is no art yet: generated art comes later with Imagen (L-500 / #318).
 - **Claude sees the images** (L-355 / #417; `functions/mcp/apps/cartographer/images.js`). `view_image` returns a battle map, a town, or the world map as an **image in the tool result**, so Claude looks at it directly. Images are scaled to at most 1568 px on the long side and sent as JPEG.
-  - **Battle maps:** the grid, every fifth line labelled, and numbered markers: green entries, red exits, amber features.
+  - **Battle maps:** the grid, every fifth line labelled, and numbered markers: green entries, red exits, amber features. Their layers too (L-623): white walls and amber doors on the grid lines, and obstacles shaded by kind, with doors and obstacles numbered in the legend.
   - **Towns:** numbered markers at the places' positions (squares for ways in and out), their links, and the 0–1000 grid.
   - **The legend:** it ties each number to its id, name and cell or position, and lists places with no position.
   - **The world map:** it comes with how map coordinates fall on the image.

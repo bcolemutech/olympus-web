@@ -113,6 +113,138 @@ describe('battle maps', () => {
   });
 });
 
+describe('battle-map layers (L-623)', () => {
+  // A back room: an inner wall at x = 4 with a locked door in its gap at
+  // y 2–3, a low table, a solid pillar and rubble.
+  const ROOM = {
+    id: 'bm_room',
+    name: 'The back room',
+    width: 8,
+    height: 6,
+    entries: [{ id: 'in', x: 1, y: 3 }],
+    exits: [{ id: 'out', name: 'the hall door', x: 0, y: 3, to: 'out' }],
+    features: [{ id: 'chest', name: 'the chest', x: 6, y: 1 }],
+    walls: [
+      {
+        points: [
+          { x: 4, y: 0 },
+          { x: 4, y: 2 },
+        ],
+      },
+      {
+        points: [
+          { x: 4, y: 3 },
+          { x: 4, y: 6 },
+        ],
+      },
+    ],
+    doors: [
+      {
+        id: 'inner',
+        name: 'the inner door',
+        from: { x: 4, y: 2 },
+        to: { x: 4, y: 3 },
+        locked: true,
+      },
+    ],
+    obstacles: [
+      { id: 'table', name: 'a table', kind: 'low', x: 2, y: 1, w: 2 },
+      { id: 'pillar', name: 'a pillar', kind: 'solid', x: 6, y: 4 },
+      { id: 'rubble', name: 'rubble', kind: 'difficult', x: 1, y: 5, w: 2 },
+    ],
+  };
+  // The share of a rectangle's pixels near a colour.
+  const share = (img, x0, y0, x1, y1, rgb, slack = 45) => {
+    let near_ = 0;
+    let all = 0;
+    for (let y = Math.ceil(y0); y < y1; y++) {
+      for (let x = Math.ceil(x0); x < x1; x++) {
+        all += 1;
+        if (near(pixel(img, x, y), rgb, slack)) near_ += 1;
+      }
+    }
+    return near_ / all;
+  };
+
+  test.each([
+    ['plain ground', null],
+    ['art', 'art'],
+  ])(
+    'on %s: walls white on their grid line, the door amber, obstacles shaded by kind',
+    (_l, art) => {
+      const { jpeg: jpg, legend } = images.renderBattleMap(ROOM, art ? png(800, 600) : null);
+      const img = decoded(jpg);
+      const cw = legend.cellSize.width;
+      const ch = legend.cellSize.height;
+      // The wall: on the line x = 4, white; a square to either side, not.
+      expect(near(pixel(img, 4 * cw, 0.5 * ch), [255, 255, 255])).toBe(true);
+      expect(near(pixel(img, 4 * cw, 4.5 * ch), [255, 255, 255])).toBe(true);
+      expect(near(pixel(img, 3.5 * cw, 4.5 * ch), [255, 255, 255])).toBe(false);
+      // The door: amber, in the wall's gap.
+      expect(near(pixel(img, 4 * cw, 2.7 * ch), [255, 183, 77])).toBe(true);
+      // The pillar: solid, filled dark.
+      expect(share(img, 6.2 * cw, 4.2 * ch, 6.8 * cw, 4.8 * ch, [12, 14, 20], 40)).toBeGreaterThan(
+        0.6
+      );
+      // The table: hatched, part tan and part ground.
+      const hatched = share(img, 2.2 * cw, 1.2 * ch, 3.8 * cw, 1.8 * ch, [205, 170, 125], 50);
+      expect(hatched).toBeGreaterThan(0.1);
+      expect(hatched).toBeLessThan(0.7);
+      // The rubble: dotted, mostly ground with light dots.
+      const dotted = share(img, 1.2 * cw, 5.2 * ch, 2.8 * cw, 5.8 * ch, [190, 190, 190], 50);
+      expect(dotted).toBeGreaterThan(0.01);
+      expect(dotted).toBeLessThan(0.35);
+    }
+  );
+
+  test('the legend numbers the door and each obstacle, after the rest', () => {
+    const { legend } = images.renderBattleMap(ROOM, null);
+    expect(legend.walls).toBe(2);
+    expect(legend.markers.slice(3)).toEqual([
+      {
+        n: 4,
+        type: 'door',
+        id: 'inner',
+        name: 'the inner door',
+        from: { x: 4, y: 2 },
+        to: { x: 4, y: 3 },
+        locked: true,
+      },
+      {
+        n: 5,
+        type: 'obstacle',
+        id: 'table',
+        name: 'a table',
+        kind: 'low',
+        cells: { x: 2, y: 1, w: 2, h: 1 },
+      },
+      {
+        n: 6,
+        type: 'obstacle',
+        id: 'pillar',
+        name: 'a pillar',
+        kind: 'solid',
+        cells: { x: 6, y: 4, w: 1, h: 1 },
+      },
+      {
+        n: 7,
+        type: 'obstacle',
+        id: 'rubble',
+        name: 'rubble',
+        kind: 'difficult',
+        cells: { x: 1, y: 5, w: 2, h: 1 },
+      },
+    ]);
+    expect(legend.reading).toMatch(/white lines are walls and amber bars doors/);
+  });
+
+  test('a map without layers draws as before, with none in the legend', () => {
+    const { legend } = images.renderBattleMap(TAVERN, null);
+    expect(legend.walls).toBe(0);
+    expect(legend.markers.every((m) => ['entry', 'exit', 'feature'].includes(m.type))).toBe(true);
+  });
+});
+
 describe('towns', () => {
   const PLACES = [
     {

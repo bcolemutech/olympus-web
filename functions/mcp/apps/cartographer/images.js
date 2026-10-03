@@ -34,6 +34,12 @@ const COLOURS = {
   wayIn: [128, 203, 196, 255],
   link: [255, 255, 255, 150],
   outline: [10, 14, 26, 255],
+  // Layers (L-623): walls, doors and obstacles.
+  wall: [255, 255, 255, 255],
+  door: [255, 183, 77, 255],
+  solid: [12, 14, 20, 215],
+  low: [205, 170, 125, 210],
+  difficult: [190, 190, 190, 190],
 };
 
 // ── A canvas of RGBA pixels ───────────────────────────────────────────────
@@ -234,10 +240,45 @@ function drawInto(c, img, x0, y0, w, h) {
 
 // ── What Claude sees ──────────────────────────────────────────────────────
 
+// An obstacle's squares, shaded by kind: solid filled dark, low hatched,
+// difficult dotted; each outlined in its colour.
+function obstacle(c, o, cw, ch) {
+  const x0 = o.x * cw;
+  const y0 = o.y * ch;
+  const w = (o.w || 1) * cw;
+  const h = (o.h || 1) * ch;
+  const colour = COLOURS[o.kind] || COLOURS.solid;
+  const gap = Math.max(4, Math.round(Math.min(cw, ch) / 5));
+  const dot = Math.max(2, Math.round(gap / 4));
+  for (let y = Math.floor(y0); y < Math.ceil(y0 + h); y++) {
+    for (let x = Math.floor(x0); x < Math.ceil(x0 + w); x++) {
+      const on =
+        o.kind === 'low'
+          ? (x + y) % gap < Math.max(1, gap / 3)
+          : o.kind === 'difficult'
+            ? x % gap < dot && y % gap < dot
+            : true;
+      if (on) blend(c, x, y, colour);
+    }
+  }
+  const edge = [colour[0], colour[1], colour[2], 255];
+  line(c, x0, y0, x0 + w - 1, y0, edge, 2);
+  line(c, x0, y0 + h - 1, x0 + w - 1, y0 + h - 1, edge, 2);
+  line(c, x0, y0, x0, y0 + h - 1, edge, 2);
+  line(c, x0 + w - 1, y0, x0 + w - 1, y0 + h - 1, edge, 2);
+}
+
+// A line along the grid between two corners: a dark edge under a bright core.
+function gridLine(c, a, b, cw, ch, colour, width) {
+  line(c, a.x * cw, a.y * ch, b.x * cw, b.y * ch, COLOURS.outline, width + 2);
+  line(c, a.x * cw, a.y * ch, b.x * cw, b.y * ch, colour, width);
+}
+
 /**
  * A battle map: its art (stretched to the grid, as the grid view draws it) or
- * a plain background, the grid with every fifth line labelled, and numbered
- * markers for entries, exits and features.
+ * a plain background, the grid with every fifth line labelled, its layers
+ * (L-623: obstacles shaded by kind, walls in white, doors in amber), and
+ * numbered markers for entries, exits, features, doors and obstacles.
  */
 function renderBattleMap(map, art) {
   let base;
@@ -261,6 +302,17 @@ function renderBattleMap(map, art) {
   for (let gx = 0; gx < map.width; gx += 5) number(base, gx, gx * cw + 2, 2, ls);
   for (let gy = 5; gy < map.height; gy += 5) number(base, gy, 2, gy * ch + 2, ls);
 
+  // The layers (L-623): obstacles under the walls, doors over them.
+  const thick = Math.max(3, Math.round(Math.min(cw, ch) / 8));
+  (map.obstacles || []).forEach((o) => obstacle(base, o, cw, ch));
+  (map.walls || []).forEach((wall) => {
+    const points = wall.points || [];
+    for (let i = 1; i < points.length; i++) {
+      gridLine(base, points[i - 1], points[i], cw, ch, COLOURS.wall, thick);
+    }
+  });
+  (map.doors || []).forEach((d) => gridLine(base, d.from, d.to, cw, ch, COLOURS.door, thick + 2));
+
   const markers = [];
   const add = (type, item, shape, colour) => {
     const n = markers.length + 1;
@@ -277,6 +329,32 @@ function renderBattleMap(map, art) {
   (map.entries || []).forEach((e) => add('entry', e, 'circle', COLOURS.entry));
   (map.exits || []).forEach((e) => add('exit', e, 'square', COLOURS.exit));
   (map.features || []).forEach((f) => add('feature', f, 'circle', COLOURS.feature));
+  // Doors are numbered at their middle, obstacles at their top-left corner.
+  (map.doors || []).forEach((d) => {
+    const n = markers.length + 1;
+    markers.push({
+      n,
+      type: 'door',
+      id: d.id,
+      ...(d.name ? { name: d.name } : {}),
+      from: d.from,
+      to: d.to,
+      ...(d.locked ? { locked: true } : {}),
+    });
+    number(base, n, ((d.from.x + d.to.x) / 2) * cw + 3, ((d.from.y + d.to.y) / 2) * ch + 3, ls);
+  });
+  (map.obstacles || []).forEach((o) => {
+    const n = markers.length + 1;
+    markers.push({
+      n,
+      type: 'obstacle',
+      id: o.id,
+      ...(o.name ? { name: o.name } : {}),
+      kind: o.kind,
+      cells: { x: o.x, y: o.y, w: o.w || 1, h: o.h || 1 },
+    });
+    number(base, n, o.x * cw + 3, o.y * ch + 3, ls);
+  });
 
   return {
     jpeg: encode(base),
@@ -291,7 +369,12 @@ function renderBattleMap(map, art) {
       reading:
         'Cells are { x, y } from the top-left, 0-based; every fifth grid line is brighter and ' +
         'labelled. Green circles are entries, red squares exits, amber circles features; each ' +
-        'marker is at the centre of its cell, numbered as below.',
+        'marker is at the centre of its cell, numbered as below. Layers: white lines are walls ' +
+        'and amber bars doors, both on the grid lines between squares (corner (x, y) is the ' +
+        'top-left of square (x, y)); obstacles are shaded by kind: solid filled dark, low ' +
+        'hatched, difficult dotted. Doors are numbered at their middle, obstacles at their ' +
+        'top-left square.',
+      walls: (map.walls || []).length,
       markers,
     },
   };
