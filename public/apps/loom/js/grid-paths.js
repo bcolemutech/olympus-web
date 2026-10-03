@@ -13,7 +13,10 @@
   // 8 squares around, and costs 1, diagonals included (D&D 5e's rule). The
   // `cost(from, to)` option prices a step instead: a number of 1 or more, or
   // Infinity where it's blocked (walls, obstacles and difficult ground come
-  // with L-624).
+  // with L-624). The `avoid` option lists squares that can be stepped onto but
+  // never through, such as exits, which leave the map when stepped on
+  // (L-615): a path may end on one, and reach includes them, but nothing goes
+  // on from one.
   //
   // Of the cheapest paths, the shortest on the ground wins (straight steps
   // over diagonals where they cost the same), then the one keeping closest to
@@ -106,6 +109,10 @@
   // early once `to` is settled. Returns the settled squares by index.
   function search(map, from, options, budget, to) {
     var price = stepCost(options);
+    var ends = {};
+    ((options && options.avoid) || []).forEach(function (square) {
+      if (inside(map, square.x, square.y)) ends[square.y * map.width + square.x] = true;
+    });
     var stray = strayFrom(from, to);
     var width = map.width;
     var target = to ? to.y * width + to.x : -1;
@@ -119,6 +126,7 @@
       if (settled[at.index]) continue;
       settled[at.index] = at;
       if (at.index === target) break;
+      if (ends[at.index] && at.index !== start) continue;
       for (var s = 0; s < STEPS.length; s++) {
         var x = at.x + STEPS[s][0];
         var y = at.y + STEPS[s][1];

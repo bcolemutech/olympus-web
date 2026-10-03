@@ -654,6 +654,31 @@
   stroke-width: 1.5;
 }
 
+/* The turn on the grid (L-615): this turn's reach, and the way a move takes. */
+.loom-grid-reach {
+  fill: rgba(255, 183, 77, 0.12);
+  stroke: none;
+  pointer-events: none;
+}
+
+.loom-grid-path {
+  fill: none;
+  stroke: #ffb74d;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.loom-grid-path.is-later {
+  stroke-dasharray: 2 7;
+  opacity: 0.85;
+}
+
+.loom-grid-path.is-plan {
+  opacity: 0.6;
+}
+
 .loom-grid-selected {
   fill: none;
   stroke: #ffffff;

@@ -178,6 +178,37 @@ describe('reach', () => {
   });
 });
 
+describe('avoid: squares stepped onto, never through (exits; L-615)', () => {
+  // A corridor of 5 with an exit in the middle, at (2, 0).
+  const corridor = { width: 5, height: 1 };
+  const exit = { avoid: [{ x: 2, y: 0 }] };
+
+  test('a path can end on one', () => {
+    expect(paths.pathTo(corridor, { x: 0, y: 0 }, { x: 2, y: 0 }, exit).cost).toBe(2);
+  });
+
+  test('but never goes through one', () => {
+    expect(paths.pathTo(corridor, { x: 0, y: 0 }, { x: 4, y: 0 }, exit)).toBeNull();
+    // With room around it, the path goes around.
+    const room = paths.pathTo(TAVERN, { x: 0, y: 3 }, { x: 0, y: 5 }, { avoid: [{ x: 0, y: 4 }] });
+    expect(squares(room.path)).toEqual([
+      [1, 4],
+      [0, 5],
+    ]);
+  });
+
+  test('reach includes it, and nothing beyond', () => {
+    expect(squares(paths.reach(corridor, { x: 0, y: 0 }, 4, exit))).toEqual([
+      [1, 0],
+      [2, 0],
+    ]);
+  });
+
+  test('standing on one, you can set out from it', () => {
+    expect(paths.pathTo(corridor, { x: 2, y: 0 }, { x: 4, y: 0 }, exit).cost).toBe(2);
+  });
+});
+
 describe('walk', () => {
   const { path: line } = paths.pathTo(TAVERN, { x: 0, y: 4 }, { x: 11, y: 4 });
 

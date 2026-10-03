@@ -9,6 +9,13 @@
   // leaves the map). Moves are structured moves on the grid
   // (Loom.play.moveToCell), adjudicated on the server like typed ones.
   //
+  // The turn (planning/the-loom-movement-and-vision.md §3; L-615 / #445): the
+  // squares in reach of this turn's movement are lit; tapping a square draws
+  // the path a move would take (grid-paths.js, the server's own rules), solid
+  // for this turn and dashed after, and the card says what it costs and in
+  // how many turns; a kept plan is drawn dashed. After a move the token walks
+  // its path (a tap skips ahead; reduced motion jumps).
+  //
   // map.js owns the panel, pan and zoom, and switches between this, the town
   // view and the world map; this module draws the map into the panel's SVG
   // overlay in screen space. Map coordinates are CELL units per cell, with
@@ -17,15 +24,21 @@
   var Loom = window.Loom;
   var state = Loom.state;
   var M = Loom.mapMath;
+  var P = Loom.gridPaths;
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var CELL = 40;
   var PAD = 60; // room for the labels of cells at the edge
+  var STEP_MS = 110; // the token's walk, a square at a time
 
   var battle = {
     data: null, // loomGetMap's `battleMap`
     turn: null, // loomGetMap's `turn` (L-611): movement left, the plan
     selected: null, // a cell { x, y }
     art: { path: null, url: null },
+    reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
+    preview: null, // the path to the selected cell: { path, walked, rest, cost, turns } or { none }
+    pending: null, // a move sent: { mapId, from, path }, for the walk when it lands
+    anim: null, // the token's walk: { cells, t0 }
   };
 
   // ── Helpers ───────────────────────────────────────
@@ -68,6 +81,24 @@
     return { x: PAD + (cell.x + 0.5) * CELL, y: PAD + (cell.y + 0.5) * CELL };
   }
 
+  // Exits are stepped onto, never through (stepping on one leaves): the
+  // server's own rule (steps.js).
+  function pathOptions() {
+    return { avoid: battle.data.exits };
+  }
+
+  function movementLeft() {
+    return battle.turn ? battle.turn.movementLeft : 0;
+  }
+
+  function reducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function now() {
+    return window.performance ? window.performance.now() : Date.now();
+  }
+
   function listOf(words) {
     if (words.length < 2) return words.join('');
     return words.slice(0, -1).join(', ') + ' or ' + words[words.length - 1];
@@ -101,8 +132,107 @@
     var moved = !battle.data || !data || battle.data.id !== data.id;
     battle.data = data || null;
     battle.turn = turn || null;
-    if (moved) battle.selected = null;
+    if (moved) {
+      battle.selected = null;
+      battle.anim = null;
+    }
+    walkIfMoved();
     loadArt(data && data.image);
+    computeReach();
+    computePreview();
+  }
+
+  // A move sent from here has landed: walk the token along the path it took,
+  // up to where it stands now (if that's on the path; else it simply jumps).
+  function walkIfMoved() {
+    var pending = battle.pending;
+    battle.pending = null;
+    var d = battle.data;
+    if (!pending || !d || pending.mapId !== d.id || reducedMotion()) return;
+    var i = -1;
+    pending.path.forEach(function (step, j) {
+      if (same(step, d.here)) i = j;
+    });
+    if (i < 0) return;
+    battle.anim = { cells: [pending.from].concat(pending.path.slice(0, i + 1)), t0: now() };
+    if (battle.selected && same(battle.selected, d.here)) battle.selected = null;
+    window.requestAnimationFrame(frame);
+  }
+
+  function frame() {
+    var anim = battle.anim;
+    if (!anim) return;
+    if ((now() - anim.t0) / STEP_MS >= anim.cells.length - 1) {
+      battle.anim = null;
+      Loom.map.render();
+      return;
+    }
+    Loom.map.redrawOverlay();
+    window.requestAnimationFrame(frame);
+  }
+
+  // Where the token is drawn: along its walk, or where it stands.
+  function tokenCentre() {
+    var anim = battle.anim;
+    if (!anim) return centre(battle.data.here);
+    var t = Math.max(0, (now() - anim.t0) / STEP_MS);
+    var i = Math.min(Math.floor(t), anim.cells.length - 2);
+    var f = Math.min(1, t - i);
+    var a = centre(anim.cells[i]);
+    var b = centre(anim.cells[i + 1]);
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+  }
+
+  // The squares this turn's movement reaches, as runs along each row.
+  function computeReach() {
+    var d = battle.data;
+    battle.reach = null;
+    if (!d || movementLeft() <= 0) return;
+    var runs = [];
+    P.reach(d, d.here, movementLeft(), pathOptions())
+      .sort(function (a, b) {
+        return a.y - b.y || a.x - b.x;
+      })
+      .forEach(function (cell) {
+        var last = runs[runs.length - 1];
+        if (last && last.y === cell.y && last.x1 === cell.x - 1) last.x1 = cell.x;
+        else runs.push({ y: cell.y, x0: cell.x, x1: cell.x });
+      });
+    battle.reach = { runs: runs };
+  }
+
+  // How many turns walking `path` takes at full speed, from the next turn.
+  function turnsFor(path) {
+    var speed = battle.turn ? battle.turn.speed : 20;
+    var turns = 0;
+    while (path.length) {
+      var w = P.walk(path, speed);
+      if (!w.walked.length) return Infinity;
+      path = w.rest;
+      turns += 1;
+    }
+    return turns;
+  }
+
+  // The path a move to the selected cell would take, as the server finds it.
+  function computePreview() {
+    var d = battle.data;
+    var cell = battle.selected;
+    battle.preview = null;
+    if (!d || !cell || same(cell, d.here)) return;
+    var found = P.pathTo(d, d.here, cell, pathOptions());
+    if (!found) {
+      battle.preview = { none: true };
+      return;
+    }
+    var w = P.walk(found.path, movementLeft());
+    battle.preview = {
+      path: found.path,
+      walked: w.walked,
+      rest: w.rest,
+      cost: found.cost,
+      turns: (w.walked.length ? 1 : 0) + turnsFor(w.rest),
+    };
   }
 
   function reset() {
@@ -170,6 +300,17 @@
     }
 
     var cellPx = (bottomRight.x - topLeft.x) / d.width;
+    if (battle.reach && !battle.anim) {
+      // This turn's reach, one shape of row runs (L-615).
+      var dPath = battle.reach.runs
+        .map(function (run) {
+          var a = s(PAD + run.x0 * CELL, PAD + run.y * CELL);
+          var b = s(PAD + (run.x1 + 1) * CELL, PAD + (run.y + 1) * CELL);
+          return 'M' + a.x + ' ' + a.y + 'H' + b.x + 'V' + b.y + 'H' + a.x + 'Z';
+        })
+        .join('');
+      overlay.appendChild(svg('path', { class: 'loom-grid-reach', d: dPath }));
+    }
     if (cellPx >= 6) {
       for (var gx = 0; gx <= d.width; gx++) {
         var x = s(PAD + gx * CELL, 0).x;
@@ -240,8 +381,39 @@
     });
     if (battle.selected) cellBox(battle.selected, 'loom-grid-selected');
 
-    // The player's token.
-    var me = centre(d.here);
+    // The way: the selected cell's path (this turn solid, the rest dashed), or
+    // else the plan kept from an earlier move (L-615).
+    var line = function (cells, className) {
+      if (cells.length < 2) return;
+      overlay.appendChild(
+        svg('polyline', {
+          class: className,
+          points: cells
+            .map(function (cell) {
+              var c = centre(cell);
+              var p = s(c.x, c.y);
+              return p.x + ',' + p.y;
+            })
+            .join(' '),
+        })
+      );
+    };
+    var preview = battle.preview;
+    var plan = battle.turn && battle.turn.plan;
+    if (!battle.anim && preview && preview.path) {
+      line([d.here].concat(preview.walked), 'loom-grid-path');
+      line(
+        [preview.walked.length ? preview.walked[preview.walked.length - 1] : d.here].concat(
+          preview.rest
+        ),
+        'loom-grid-path is-later'
+      );
+    } else if (!battle.anim && !battle.selected && plan) {
+      line([d.here].concat(plan.path), 'loom-grid-path is-later is-plan');
+    }
+
+    // The player's token: along its walk, or where it stands.
+    var me = tokenCentre();
     var mp = s(me.x, me.y);
     overlay.appendChild(
       svg('circle', { class: 'loom-map-ring', cx: mp.x, cy: mp.y, r: Math.max(7, cellPx * 0.45) })
@@ -253,11 +425,16 @@
 
   /** Selects the cell under a tap (screen point), if it is on the grid. */
   function pick(point, view) {
+    if (battle.anim) {
+      battle.anim = null; // a tap skips the walk ahead
+      return;
+    }
     var d = battle.data;
     var m = M.toMap(view, point.x, point.y);
     var cell = { x: Math.floor((m.x - PAD) / CELL), y: Math.floor((m.y - PAD) / CELL) };
     var inside = cell.x >= 0 && cell.y >= 0 && cell.x < d.width && cell.y < d.height;
     battle.selected = inside ? cell : null;
+    computePreview();
   }
 
   // ── The cell card ─────────────────────────────────
@@ -347,43 +524,63 @@
       info.appendChild(el('p', 'loom-map-info-status', 'You are here.'));
       return;
     }
+    var preview = battle.preview;
+    if (!preview || preview.none) {
+      info.appendChild(el('p', 'loom-map-info-status', "There's no way there from here."));
+      return;
+    }
+    info.appendChild(el('p', 'loom-map-info-facts', costLine(preview)));
+    // The move, remembered so the token can walk it when it lands.
+    var go = function (label) {
+      return function () {
+        battle.pending = { mapId: d.id, from: d.here, path: preview.path };
+        act(cell, label);
+      };
+    };
     if (there.exit) {
-      info.appendChild(
-        button('Go out by ' + there.exit.name, function () {
-          act(cell, 'go out by ' + there.exit.name);
-        })
-      );
+      info.appendChild(button('Go out by ' + there.exit.name, go('go out by ' + there.exit.name)));
     } else if (there.feature) {
-      info.appendChild(
-        button('Go to ' + there.feature.name, function () {
-          act(cell, 'go to ' + there.feature.name);
-        })
-      );
+      info.appendChild(button('Go to ' + there.feature.name, go('go to ' + there.feature.name)));
     } else {
-      info.appendChild(
-        button('Move here', function () {
-          act(cell, 'move to ' + coords);
-        })
-      );
+      info.appendChild(button('Move here', go('move to ' + coords)));
     }
   }
 
-  // The turn (L-613 / #443): movement left, Continue for a kept plan, and End
-  // turn. (The full turn display, with reach and the path, is L-615.)
+  // What a move costs, and when it gets there: "8 movement · this turn".
+  function costLine(preview) {
+    var when;
+    if (!preview.rest.length) when = 'this turn';
+    else if (preview.turns === Infinity) when = 'too far to walk';
+    else if (!preview.walked.length) {
+      when = preview.turns === 1 ? 'next turn' : preview.turns + ' turns, from next turn';
+    } else when = preview.turns + ' turns';
+    return preview.cost + ' movement · ' + when;
+  }
+
+  // The turn (L-613, L-615): the turn number, movement left, the action,
+  // Continue for a kept plan, and End turn.
   function renderTurn(info) {
     var turn = battle.turn;
     if (!turn) return;
     info.appendChild(
       el(
         'p',
-        'loom-map-info-facts',
-        'Turn ' + turn.n + ' · movement ' + turn.movementLeft + ' of ' + turn.speed + '.'
+        'loom-map-info-facts loom-map-turn-state',
+        'Turn ' +
+          turn.n +
+          ' · movement ' +
+          turn.movementLeft +
+          ' of ' +
+          turn.speed +
+          ' · ' +
+          (turn.actionUsed ? 'you have acted' : 'your action is ready')
       )
     );
     var row = el('div', 'loom-map-turn');
     if (turn.plan && turn.movementLeft > 0) {
       row.appendChild(
         button('Continue', function () {
+          battle.pending = { mapId: battle.data.id, from: battle.data.here, path: turn.plan.path };
           Loom.play.continuePlan();
         })
       );
