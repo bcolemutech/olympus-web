@@ -77,11 +77,12 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 
 ## 4. Battle maps: walls, doors and obstacles
 
-- **Walls** (`walls`) are lines between grid points (integer corners, `0…width`, `0…height`), in the map's own coordinates, the same as SVG art's (one unit per square). They block movement and sight.
+- **The data and the rules** live in `functions/loom-canon/layers.js` (L-621 / #446): `compile` (the layers by edge, corner and square), `between` and `canStep` (what a step crosses, and whether it can be taken), `groundAt`, and `check` (the checks below, as plain sentences for the builders). It is written so the Loom page can share it (L-624).
+- **Walls** (`walls: [{ points: [{ x, y }, …] }]`, since Firestore holds no lists of lists) are lines between grid points (integer corners, `0…width`, `0…height`), each run straight across or down, in the map's own coordinates, the same as SVG art's (one unit per square). They block movement and sight.
 - **Doors** (`doors: [{ id, name, from: [x, y], to: [x, y], locked, key }]`) are one square long, on a grid line. They start closed. A locked door names the `key` (an inventory item) that opens it. Each save keeps its doors' state (open, closed, locked).
 - **Obstacles** (`obstacles: [{ id, name, kind, x, y, w, h }]`) are rectangles of squares, `kind` one of `solid`, `low` or `difficult`.
 - **Movement:** 8 directions, 1 a step, 2 into difficult ground. A step can't cross a wall, a closed door, or enter a solid or low square. A diagonal is blocked if a wall touches the corner it passes, or either square beside it is solid or low. Opening a door on a path costs 1 and ends the move at the door. Closing an adjacent door costs 1.
-- **Checks:** the layers stay on the grid, doors don't overlap walls, nothing covers an entry or an exit, and every entry reaches an exit without passing a locked door.
+- **Checks:** the layers stay on the grid and on its lines, doors don't overlap walls or each other, ids are unique, obstacles are solid, low or difficult and don't overlap, nothing that blocks movement covers an entry or an exit (difficult ground may), and every entry reaches an exit without passing a locked door. A map without layers is open ground, and passes.
 - **MCP:** `set_battle_map` takes the layers with the grid, and a layers-only tool changes them without resending it. `get_battle_map` shows them. `view_image` draws walls (white lines), doors (amber bars) and obstacles (hatched by kind) over the art, numbered in the legend.
 - **Grading:** a place with its own map but no walls or obstacles falls short of Rich ("Its battle map has no walls or obstacles"). Like the battle-map requirement itself, it applies once that requirement is switched on (Layered Worlds §4.4). `list_work` flags maps without layers.
 

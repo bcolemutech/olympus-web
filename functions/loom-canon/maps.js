@@ -16,13 +16,15 @@
  *                               — to: 'out' (back to the town, or the world), or
  *                                 { map, entry } (onto another map: a floor, a wing)
  *     features: [{ id, name, x, y }]   — named cells: the bar, the altar, the well
+ *     walls, doors, obstacles   — what blocks movement and sight (L-621; ./layers.js):
+ *                                 walls along the grid lines, doors in them, and
+ *                                 solid, low or difficult squares; none is open ground
  *     generic: { kind, terrain } | null — reusable, assignable to any number of places
  *     sources, retired
  *
  * A place carries `battleMap: { mapId }`, its own map or a generic one. A save
  * on a map records `mapId` and `cell: { x, y }`; both are null off a map.
- * Movement is free inside the grid: nothing blocks it yet (object layers come
- * later). Pure helpers over a loaded world, shared by the rules engine, the
+ * Until L-624, paths ignore the layers; the checks keep a map walkable. Pure helpers over a loaded world, shared by the rules engine, the
  * narrator, the interpreter, new games and grading.
  */
 
