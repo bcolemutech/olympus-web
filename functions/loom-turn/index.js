@@ -1,12 +1,14 @@
 'use strict';
 
 const loomCanon = require('../loom-canon');
-const { makeWorldState } = require('../loom-models');
+const { makeWorldState, turnStateOf } = require('../loom-models');
 const { interpretAction } = require('./interpret');
 const { adjudicateAction } = require('./adjudicate');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
+const { planStep } = require('./steps');
+const { FieldValue } = require('firebase-admin/firestore');
 
 /**
  * Thrown by pipeline stages to signal a specific HttpsError code the
@@ -74,6 +76,13 @@ async function intake(params) {
  * model at all: it is adjudicated (movement and the action refilled) and
  * recorded with a plain line in place of narration.
  *
+ * A step on a battle map (`action: { verb: 'move', cell }`, or `{ verb:
+ * 'continue' }` to walk the plan; L-613 / #443) needs no model either: it is
+ * worked out by the rules (./steps.js) inside a transaction, spends movement,
+ * keeps the rest of the path as the plan, and answers with plain lines and
+ * `step: { cell, movementLeft, plan, lines }`. Only a step that reaches an
+ * exit goes on through the pipeline, to leave by it, narrated.
+ *
  * @param {{ db: FirebaseFirestore.Firestore, uid: string, worldId: string, saveId: string,
  *           actionText?: string, action?: { verb: 'move', target: string } }} params
  * @returns {Promise<{ narration: string, stateSummary: string, suggestedActions: string[] }>}
@@ -106,11 +115,48 @@ async function runTurnPipeline(params) {
     });
   }
 
+  if (action && (action.cell || action.verb === 'continue')) {
+    const target = action.cell ? { cell: action.cell } : { plan: true };
+    const step = await db.runTransaction(async (transaction) => {
+      const fresh = (await transaction.get(saveRef)).data();
+      const planned = planStep(canonWorld, fresh, target);
+      if (planned.cell) {
+        transaction.update(saveRef, {
+          cell: planned.cell,
+          turn: planned.turn,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      return { ...planned, summary: fresh.recentSummary || '' };
+    });
+    if (!step.exit) {
+      const lines = step.refused ? [step.refused] : step.lines;
+      return {
+        narration: lines.join(' '),
+        stateSummary: step.summary,
+        suggestedActions: [],
+        step: {
+          cell: step.cell || save.cell || null,
+          movementLeft: (step.turn || turnStateOf(save)).movementLeft,
+          plan: step.turn ? step.turn.plan : turnStateOf(save).plan,
+          lines,
+        },
+      };
+    }
+    // The way out: walked there this turn, then left by, narrated.
+    return runTurnPipeline({
+      ...params,
+      action: { verb: 'leave', exit: step.exit.id, name: step.exit.name, turn: step.turn },
+    });
+  }
+
   let actionText = params.actionText;
   let proposedAction;
-  if (action && action.cell) {
-    actionText = 'move to (' + action.cell.x + ', ' + action.cell.y + ')';
-    proposedAction = { verb: 'move', targets: [], params: { from: 'map', cell: action.cell } };
+  let leaving = null;
+  if (action && action.verb === 'leave') {
+    leaving = action;
+    actionText = 'go out by ' + action.name;
+    proposedAction = { verb: 'move', targets: ['exit:' + action.exit], params: { from: 'map' } };
   } else if (action) {
     const target = canonWorld.locations[action.target] || (canonWorld.places || {})[action.target];
     actionText = 'travel to ' + (target ? target.name : action.target);
@@ -118,7 +164,17 @@ async function runTurnPipeline(params) {
   } else {
     proposedAction = await interpretAction({ actionText, canonWorld, save, worldState });
   }
-  const resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
+  let resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
+  if (leaving && resolution.outcome === 'success') {
+    // The movement spent walking to the exit (L-613).
+    resolution = Object.freeze({
+      ...resolution,
+      mutations: Object.freeze([
+        ...resolution.mutations,
+        { target: 'save', op: 'set-flag', path: 'turn', value: leaving.turn },
+      ]),
+    });
+  }
   const { narration, entityRefs, inventedEntities, suggestedActions } = await narrateResolution({
     actionText,
     proposedAction,

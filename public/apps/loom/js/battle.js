@@ -23,6 +23,7 @@
 
   var battle = {
     data: null, // loomGetMap's `battleMap`
+    turn: null, // loomGetMap's `turn` (L-611): movement left, the plan
     selected: null, // a cell { x, y }
     art: { path: null, url: null },
   };
@@ -95,10 +96,11 @@
       });
   }
 
-  /** Takes loomGetMap's `battleMap` (or null). */
-  function setData(data) {
+  /** Takes loomGetMap's `battleMap` (or null), and its `turn`. */
+  function setData(data, turn) {
     var moved = !battle.data || !data || battle.data.id !== data.id;
     battle.data = data || null;
+    battle.turn = turn || null;
     if (moved) battle.selected = null;
     loadArt(data && data.image);
   }
@@ -275,12 +277,18 @@
   }
 
   /**
-   * Fills the card for the selected cell. `act(cell, label)` makes the move:
-   * a step on the grid, which leaves by an exit if the cell is one.
+   * Fills the card for the selected cell, and the turn under it (movement
+   * left, Continue, End turn). `act(cell, label)` makes the move: a step on
+   * the grid, which leaves by an exit if the cell is one.
    */
   function renderInfo(info, act) {
-    var d = battle.data;
     info.innerHTML = '';
+    renderCard(info, act);
+    renderTurn(info);
+  }
+
+  function renderCard(info, act) {
+    var d = battle.data;
     var cell = battle.selected;
     if (!cell) {
       var here = at(d.here);
@@ -358,6 +366,34 @@
         })
       );
     }
+  }
+
+  // The turn (L-613 / #443): movement left, Continue for a kept plan, and End
+  // turn. (The full turn display, with reach and the path, is L-615.)
+  function renderTurn(info) {
+    var turn = battle.turn;
+    if (!turn) return;
+    info.appendChild(
+      el(
+        'p',
+        'loom-map-info-facts',
+        'Turn ' + turn.n + ' · movement ' + turn.movementLeft + ' of ' + turn.speed + '.'
+      )
+    );
+    var row = el('div', 'loom-map-turn');
+    if (turn.plan && turn.movementLeft > 0) {
+      row.appendChild(
+        button('Continue', function () {
+          Loom.play.continuePlan();
+        })
+      );
+    }
+    row.appendChild(
+      button('End turn', function () {
+        Loom.play.endTurn();
+      })
+    );
+    info.appendChild(row);
   }
 
   function capitalise(text) {
