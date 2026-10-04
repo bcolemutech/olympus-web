@@ -5,7 +5,11 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
-const { planStep } = require('./steps');
+const { planStep, doorStatesOf, hasKey, besideDoor } = require('./steps');
+const layers = require('../loom-canon/layers');
+
+// A lock's difficulty when its door gives none (L-626).
+const DEFAULT_LOCK_DIFFICULTY = 15;
 
 // Turned down before narration (L-614): the turn's one action is used.
 const ACTED = "You've acted this turn. End your turn first.";
@@ -445,11 +449,19 @@ function evaluateEndTurn(characterState, canonWorld) {
 }
 
 // Anything typed that isn't a move uses the turn's one action (L-614 /
-// #444), whether it succeeds or not; a second is turned down.
-function evaluateAction(proposedAction, characterState, dice) {
+// #444), whether it succeeds or not; a second is turned down. What is turned
+// down before it's tried (no such door; not beside it; no lock to pick) uses
+// nothing.
+function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   const turn = turnStateOf(characterState);
   if (turn.actionUsed) return blocked(ACTED);
-  const resolution = evaluateGeneric(proposedAction, dice);
+  const doorTarget = (proposedAction.targets || []).find(
+    (t) => typeof t === 'string' && t.indexOf('door:') === 0
+  );
+  const resolution = doorTarget
+    ? evaluateDoorAttempt(proposedAction, doorTarget.slice(5), characterState, dice, canonWorld)
+    : evaluateGeneric(proposedAction, dice);
+  if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return resolution;
   return {
     ...resolution,
     mutations: [
@@ -459,6 +471,70 @@ function evaluateAction(proposedAction, characterState, dice) {
   };
 }
 
+// A typed attempt at a door beside the player (L-626 / #451): with its key, a
+// locked door unlocks and opens; picked or forced, it's rolled against the
+// lock's difficulty, and unlocked (for this save) on a success. An unlocked
+// door opens or closes as asked.
+function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canonWorld) {
+  const { map, cell } = maps.positionOf(canonWorld, characterState);
+  const door = map && (map.doors || []).find((d) => d.id === doorId);
+  if (!door) {
+    return {
+      outcome: 'invalid_target',
+      mutations: [],
+      constraints: ["There's no such door here."],
+    };
+  }
+  const name = door.name || 'the door';
+  if (!besideDoor(door, cell)) return blocked('You need to be beside ' + name + '.');
+  const state = layers.doorState(door, doorStatesOf(characterState, map.id));
+  const set = (value) => ({
+    target: 'save',
+    op: 'set-flag',
+    path: `doors.${map.id}.${door.id}`,
+    value,
+  });
+  const verb = String(proposedAction.verb || '');
+  const closing = /close|shut|lock$/.test(verb) && !/unlock/.test(verb);
+  if (state !== 'locked') {
+    if (closing && state === 'open') {
+      return {
+        outcome: 'success',
+        mutations: [set('closed')],
+        constraints: ['You close ' + name + '.'],
+      };
+    }
+    if (!closing && state === 'closed' && /^open/.test(verb)) {
+      return {
+        outcome: 'success',
+        mutations: [set('open')],
+        constraints: ['You open ' + name + '.'],
+      };
+    }
+    return {
+      outcome: 'no_op',
+      mutations: [],
+      constraints: [name.charAt(0).toUpperCase() + name.slice(1) + " isn't locked."],
+    };
+  }
+  if (hasKey(characterState, door)) {
+    return {
+      outcome: 'success',
+      mutations: [set('open')],
+      constraints: ['You unlock ' + name + ' with ' + door.key + ' and open it.'],
+    };
+  }
+  const difficulty = Number.isInteger(door.difficulty) ? door.difficulty : DEFAULT_LOCK_DIFFICULTY;
+  if (dice >= difficulty) {
+    return {
+      outcome: 'success',
+      mutations: [set('closed')],
+      constraints: ['The lock gives way: ' + name + ' is unlocked.'],
+    };
+  }
+  return { outcome: 'failure', mutations: [], constraints: ['The lock on ' + name + ' holds.'] };
+}
+
 function evaluate(proposedAction, worldState, characterState, dice, canonWorld) {
   let resolution;
   if (proposedAction.verb === 'move') {
@@ -466,7 +542,7 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld) 
   } else if (proposedAction.verb === 'end-turn') {
     resolution = evaluateEndTurn(characterState, canonWorld);
   } else {
-    resolution = evaluateAction(proposedAction, characterState, dice);
+    resolution = evaluateAction(proposedAction, characterState, dice, canonWorld);
   }
 
   // Resolution is immutable once produced — NARRATE (L-113) can color it, never change it.
@@ -488,4 +564,11 @@ async function adjudicateAction(params, rollFn = rollDie) {
   return evaluate(proposedAction, worldState, save, dice, canonWorld);
 }
 
-module.exports = { evaluate, adjudicateAction, rollDie, DEFAULT_DIFFICULTY_CLASS, ACTED };
+module.exports = {
+  evaluate,
+  adjudicateAction,
+  rollDie,
+  DEFAULT_DIFFICULTY_CLASS,
+  DEFAULT_LOCK_DIFFICULTY,
+  ACTED,
+};

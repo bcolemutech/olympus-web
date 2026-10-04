@@ -909,6 +909,22 @@ describe('walls, doors and obstacles (L-622)', () => {
     expect(await mapDoc(W, mapId)).toEqual(before);
   });
 
+  test('a locked door can name its key and its lock difficulty (L-626)', async () => {
+    const locked = [{ ...DOORS[0], locked: true, key: 'the brass key', difficulty: 18 }];
+    await ok('set_map_layers', { worldId: W, mapId, doors: locked });
+    expect((await mapDoc(W, mapId)).doors).toEqual(locked);
+    expect(
+      (
+        await call('set_map_layers', {
+          worldId: W,
+          mapId,
+          doors: [{ ...locked[0], difficulty: 40 }],
+        })
+      ).isError
+    ).toBe(true);
+    await ok('set_map_layers', { worldId: W, mapId, doors: DOORS });
+  });
+
   test('a feature walled in is warned about', async () => {
     const boxed = [
       ...WALLS,

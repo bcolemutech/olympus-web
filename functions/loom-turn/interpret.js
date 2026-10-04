@@ -62,6 +62,10 @@ function buildKnownEntities(canonWorld, save) {
     (onMap.exits || []).forEach((e) => {
       entities.push({ id: 'exit:' + e.id, name: e.name, kind: 'way out of here' });
     });
+    // Its doors (L-626), to open, close, unlock, pick or force.
+    (onMap.doors || []).forEach((d) => {
+      entities.push({ id: 'door:' + d.id, name: d.name || 'a door', kind: 'door here' });
+    });
   }
   // Retired entities (soft-removed from a published world) can't be targeted.
   const live = (entity) => !entity.retired;
