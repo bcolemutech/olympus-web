@@ -9,7 +9,7 @@
  * Run: cd tests && npx jest loom-steps --verbose
  */
 
-const { planStep, planOn, OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
+const { planStep, planDoor, planOn, OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
 
 const ROOM = {
   id: 'bm_room',
@@ -177,6 +177,56 @@ describe('walls and doors (L-624)', () => {
     const locked = { ...standing({ x: 3, y: 2 }), doors: { bm_room: { inner: 'locked' } } };
     expect(planStep(WALLED, locked, { cell: { x: 8, y: 1 } })).toEqual({
       refused: "There's no way there from here.",
+    });
+  });
+
+  describe('a door beside you, by a tap (L-625)', () => {
+    const at = (cell, doors, turn) => ({
+      ...standing(cell, turn),
+      ...(doors ? { doors: { bm_room: doors } } : {}),
+    });
+
+    test('opens from either side, for 1 movement', () => {
+      expect(planDoor(WALLED, at({ x: 4, y: 2 }), 'inner', true)).toEqual({
+        cell: { x: 4, y: 2 },
+        turn: { n: 1, movementLeft: 5, actionUsed: false, plan: null },
+        lines: ['You open the inner door.'],
+        door: { mapId: 'bm_room', doorId: 'inner', state: 'open' },
+      });
+      expect(planDoor(WALLED, at({ x: 5, y: 2 }), 'inner', true).door.state).toBe('open');
+    });
+
+    test('closes an open one', () => {
+      expect(planDoor(WALLED, at({ x: 4, y: 2 }, { inner: 'open' }), 'inner', false)).toMatchObject(
+        {
+          lines: ['You close the inner door.'],
+          door: { state: 'closed' },
+        }
+      );
+    });
+
+    test.each([
+      ['from across the room', at({ x: 2, y: 2 }), true, 'You need to be beside the inner door.'],
+      [
+        'already open',
+        at({ x: 4, y: 2 }, { inner: 'open' }),
+        true,
+        'The inner door is already open.',
+      ],
+      ['already shut', at({ x: 4, y: 2 }), false, 'The inner door is already shut.'],
+      ['locked', at({ x: 4, y: 2 }, { inner: 'locked' }), true, 'The inner door is locked.'],
+      ['out of movement', at({ x: 4, y: 2 }, null, { movementLeft: 0 }), true, OUT_OF_MOVEMENT],
+    ])('is refused %s', (_label, save, open, line) => {
+      expect(planDoor(WALLED, save, 'inner', open)).toEqual({ refused: line });
+    });
+
+    test('no such door, or no map', () => {
+      expect(planDoor(WALLED, at({ x: 4, y: 2 }), 'vault', true)).toEqual({
+        refused: "There's no such door here.",
+      });
+      expect(planDoor(WALLED, { ...at({ x: 4, y: 2 }), mapId: null }, 'inner', true)).toEqual({
+        refused: "There's no map here to move on.",
+      });
     });
   });
 });

@@ -7,7 +7,7 @@ const { adjudicateAction, ACTED } = require('./adjudicate');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
-const { planStep } = require('./steps');
+const { planStep, planDoor } = require('./steps');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -81,7 +81,9 @@ async function intake(params) {
  * worked out by the rules (./steps.js) inside a transaction, spends movement,
  * keeps the rest of the path as the plan, and answers with plain lines and
  * `step: { cell, movementLeft, plan, lines }`. Only a step that reaches an
- * exit goes on through the pipeline, to leave by it, narrated.
+ * exit goes on through the pipeline, to leave by it, narrated. Opening or
+ * closing a door beside the player (`{ verb: 'door', door, open }`; L-625 /
+ * #450) is answered the same way.
  *
  * @param {{ db: FirebaseFirestore.Firestore, uid: string, worldId: string, saveId: string,
  *           actionText?: string, action?: { verb: 'move', target: string } }} params
@@ -115,19 +117,22 @@ async function runTurnPipeline(params) {
     });
   }
 
-  if (action && (action.cell || action.verb === 'continue')) {
+  if (action && (action.cell || action.verb === 'continue' || action.verb === 'door')) {
     const target = action.cell ? { cell: action.cell } : { plan: true };
     const step = await db.runTransaction(async (transaction) => {
       const fresh = (await transaction.get(saveRef)).data();
-      const planned = planStep(canonWorld, fresh, target);
+      const planned =
+        action.verb === 'door'
+          ? planDoor(canonWorld, fresh, action.door, action.open)
+          : planStep(canonWorld, fresh, target);
+      // A door opened on the way (L-624), or opened or closed by a tap
+      // (L-625), stays so for this save.
+      const door = planned.door || (planned.opened && { ...planned.opened, state: 'open' });
       if (planned.cell) {
         transaction.update(saveRef, {
           cell: planned.cell,
           turn: planned.turn,
-          // A door opened on the way stays open for this save (L-624).
-          ...(planned.opened
-            ? { [`doors.${planned.opened.mapId}.${planned.opened.doorId}`]: 'open' }
-            : {}),
+          ...(door ? { [`doors.${door.mapId}.${door.doorId}`]: door.state } : {}),
           updatedAt: FieldValue.serverTimestamp(),
         });
       }

@@ -23,6 +23,9 @@ const { turnStateOf } = require('../loom-models');
  * the plan, so the player sees what's beyond before going on; the save
  * remembers the door open (`save.doors[mapId][doorId]`).
  *
+ * A door beside the player (on either side of it) opens or closes with a tap
+ * (planDoor; L-625 / #450), for 1 movement; a locked one stays shut.
+ *
  * Pure: planStep reads a save and the canon world and says what the step
  * does; the caller writes it inside a transaction, so two moves at once
  * can't spend the same movement.
@@ -124,4 +127,51 @@ function planStep(canonWorld, save, target) {
   };
 }
 
-module.exports = { planStep, planOn, doorStatesOf, OUT_OF_MOVEMENT };
+// The two squares a door stands between.
+function doorSides(door) {
+  const { from, to } = door;
+  if (from.x === to.x) {
+    const y = Math.min(from.y, to.y);
+    return [
+      { x: from.x - 1, y },
+      { x: from.x, y },
+    ];
+  }
+  const x = Math.min(from.x, to.x);
+  return [
+    { x, y: from.y - 1 },
+    { x, y: from.y },
+  ];
+}
+
+const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * Opening (`open` true) or closing a door beside the save, for 1 movement:
+ *   { refused: line }                          — nothing happens
+ *   { cell, turn, lines, door: { mapId, doorId, state } }
+ */
+function planDoor(canonWorld, save, doorId, open) {
+  const { map, cell } = maps.positionOf(canonWorld, save);
+  if (!map || !(map.exits || []).length) return { refused: "There's no map here to move on." };
+  const door = (map.doors || []).find((d) => d.id === doorId);
+  if (!door) return { refused: "There's no such door here." };
+  const name = door.name || 'the door';
+  if (!doorSides(door).some((side) => maps.sameCell(side, cell))) {
+    return { refused: 'You need to be beside ' + name + '.' };
+  }
+  const state = layers.doorState(door, doorStatesOf(save, map.id));
+  if (open && state === 'open') return { refused: capitalised(name) + ' is already open.' };
+  if (open && state === 'locked') return { refused: capitalised(name) + ' is locked.' };
+  if (!open && state !== 'open') return { refused: capitalised(name) + ' is already shut.' };
+  const turn = turnStateOf(save);
+  if (turn.movementLeft < 1) return { refused: OUT_OF_MOVEMENT };
+  return {
+    cell: { x: cell.x, y: cell.y },
+    turn: { ...turn, movementLeft: turn.movementLeft - 1 },
+    lines: [(open ? 'You open ' : 'You close ') + name + '.'],
+    door: { mapId: map.id, doorId: door.id, state: open ? 'open' : 'closed' },
+  };
+}
+
+module.exports = { planStep, planDoor, planOn, doorStatesOf, OUT_OF_MOVEMENT };
