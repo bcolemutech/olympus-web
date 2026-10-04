@@ -127,3 +127,56 @@ test('a map with no exits holds nobody: there is no moving on it', () => {
     refused: "There's no map here to move on.",
   });
 });
+
+describe('walls and doors (L-624)', () => {
+  // The room again, split by a wall at x = 5 with a door in the gap at y 2–3.
+  const WALLED = {
+    battleMaps: {
+      bm_room: {
+        ...ROOM,
+        walls: [
+          {
+            points: [
+              { x: 5, y: 0 },
+              { x: 5, y: 2 },
+            ],
+          },
+          {
+            points: [
+              { x: 5, y: 3 },
+              { x: 5, y: 6 },
+            ],
+          },
+        ],
+        doors: [{ id: 'inner', name: 'the inner door', from: { x: 5, y: 2 }, to: { x: 5, y: 3 } }],
+      },
+    },
+  };
+
+  test('a closed door on the way is opened (1), and the walk stops there', () => {
+    const step = planStep(WALLED, standing({ x: 3, y: 2 }), { cell: { x: 8, y: 1 } });
+    expect(step.cell).toEqual({ x: 4, y: 2 });
+    expect(step.turn.movementLeft).toBe(4); // 1 to (4, 2), 1 to open the door
+    expect(step.lines).toEqual(['You open the inner door.']);
+    expect(step.opened).toEqual({ mapId: 'bm_room', doorId: 'inner' });
+    expect(step.turn.plan.to).toEqual({ x: 8, y: 1 });
+  });
+
+  test('with the door open, Continue walks through it', () => {
+    const first = planStep(WALLED, standing({ x: 3, y: 2 }), { cell: { x: 8, y: 1 } });
+    const after = {
+      ...standing(first.cell, { ...first.turn, movementLeft: 6 }),
+      doors: { bm_room: { inner: 'open' } },
+    };
+    const next = planStep(WALLED, after, { plan: true });
+    expect(next.cell).toEqual({ x: 8, y: 1 });
+    expect(next.opened).toBeUndefined();
+  });
+
+  test('a locked door is no way through', () => {
+    const locked = { ...standing({ x: 3, y: 2 }), doors: { bm_room: { inner: 'locked' } } };
+    expect(planStep(WALLED, locked, { cell: { x: 8, y: 1 } })).toEqual({
+      refused: "There's no way there from here.",
+    });
+  });
+});

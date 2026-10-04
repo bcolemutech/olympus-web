@@ -310,6 +310,9 @@ describe('a visit to the Gull & Anchor', () => {
         { id: 'hearth', name: 'the hearth', x: 9, y: 1 },
       ],
       // Characters have no cells yet: listed, not placed.
+      walls: [],
+      doors: [],
+      obstacles: [],
       people: [{ id: 'chr_brannoch', name: 'Brannoch the Innkeeper' }],
     });
     expect(view.town).toMatchObject({ locationId: 'loc_1', here: 'plc_1_tavern' });
@@ -964,5 +967,114 @@ describe('typed actions and the turn (L-614)', () => {
     await type('leave the stall');
     expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_market', mapId: null });
     expect((await turnOf()).movementLeft).toBe(20);
+  });
+});
+
+describe('walls and doors on the way (L-624)', () => {
+  // The tavern gains a wall at x = 6 with the kitchen door in its gap at
+  // y 3–4: the hearth (9, 1) is through it.
+  const WALL = {
+    walls: [
+      {
+        points: [
+          { x: 6, y: 0 },
+          { x: 6, y: 3 },
+        ],
+      },
+      {
+        points: [
+          { x: 6, y: 4 },
+          { x: 6, y: 8 },
+        ],
+      },
+    ],
+    doors: [
+      { id: 'kitchen-door', name: 'the kitchen door', from: { x: 6, y: 3 }, to: { x: 6, y: 4 } },
+    ],
+  };
+  const tavernRef = () => worldRef.collection('battleMaps').doc('bm_tavern');
+  let saveId;
+  beforeAll(async () => {
+    await tavernRef().update(WALL);
+    await bump();
+  });
+  afterAll(async () => {
+    await tavernRef().update({ walls: [], doors: [] });
+    await bump();
+  });
+  beforeEach(async () => {
+    ({ saveId } = await newGame());
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+    mockCallGemini.mockReset();
+    playerMovesTo(null);
+  });
+
+  test('a step through the closed door opens it, stops there, and the save remembers', async () => {
+    const { step } = await stepTo(saveId, { x: 9, y: 1 });
+    expect(step.lines).toEqual(['You open the kitchen door.']);
+    expect(step.cell.x).toBe(5); // stopped before the door
+    expect(step.plan).toMatchObject({ to: { x: 9, y: 1 } });
+    const save = await saveOf(saveId);
+    expect(save.doors).toEqual({ bm_tavern: { 'kitchen-door': 'open' } });
+    // 4 squares to the door, and 1 to open it.
+    expect(save.turn.movementLeft).toBe(15);
+    const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(view.battleMap.doors).toEqual([
+      {
+        id: 'kitchen-door',
+        name: 'the kitchen door',
+        from: { x: 6, y: 3 },
+        to: { x: 6, y: 4 },
+        state: 'open',
+      },
+    ]);
+    expect(view.battleMap.walls).toEqual(WALL.walls);
+  });
+
+  test('Continue goes on through the open door', async () => {
+    await stepTo(saveId, { x: 9, y: 1 });
+    const { step } = await continueOn(saveId);
+    expect(step.cell).toEqual({ x: 9, y: 1 });
+    expect(step.lines).toEqual(["You're at the hearth."]);
+  });
+
+  test('another save finds the door shut', async () => {
+    await stepTo(saveId, { x: 9, y: 1 });
+    const other = (await newGame()).saveId;
+    await standAt(other, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+    expect((await stepTo(other, { x: 9, y: 1 })).step.lines).toEqual([
+      'You open the kitchen door.',
+    ]);
+    expect((await saveOf(other)).doors).toEqual({ bm_tavern: { 'kitchen-door': 'open' } });
+  });
+
+  test('a typed move opens it too, and says so', async () => {
+    playerMovesTo('feature:hearth');
+    await turn(saveId);
+    expect((await lastResolution(saveId)).constraints).toEqual([
+      'You head for the hearth.',
+      'You open the kitchen door.',
+    ]);
+    expect((await saveOf(saveId)).doors).toEqual({ bm_tavern: { 'kitchen-door': 'open' } });
+  });
+
+  test('the wall is never walked through: no door, no way', async () => {
+    await tavernRef().update({
+      doors: [],
+      walls: [
+        {
+          points: [
+            { x: 6, y: 0 },
+            { x: 6, y: 8 },
+          ],
+        },
+      ],
+    });
+    await bump();
+    expect((await stepTo(saveId, { x: 9, y: 1 })).step.lines).toEqual([
+      "There's no way there from here.",
+    ]);
+    await tavernRef().update(WALL);
+    await bump();
   });
 });

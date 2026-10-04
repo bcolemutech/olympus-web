@@ -5,7 +5,8 @@ const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { discoveredBy } = require('./discovery');
 const { speedOf, turnStateOf } = require('../loom-models');
-const { planOn } = require('./steps');
+const { planOn, doorStatesOf } = require('./steps');
+const layers = require('../loom-canon/layers');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -250,6 +251,25 @@ function battleView(canonWorld, save) {
       };
     }),
     features: (map.features || []).map((f) => ({ id: f.id, name: f.name, x: f.x, y: f.y })),
+    // Its layers (L-624), each door in this save's state, so the grid view's
+    // paths are the server's.
+    walls: (map.walls || []).map((w) => ({ points: w.points })),
+    doors: (map.doors || []).map((d) => ({
+      id: d.id,
+      name: d.name,
+      from: d.from,
+      to: d.to,
+      state: layers.doorState(d, doorStatesOf(save, map.id)),
+    })),
+    obstacles: (map.obstacles || []).map((o) => ({
+      id: o.id,
+      name: o.name,
+      kind: o.kind,
+      x: o.x,
+      y: o.y,
+      w: o.w || 1,
+      h: o.h || 1,
+    })),
     people,
   };
 }

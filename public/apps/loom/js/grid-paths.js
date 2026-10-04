@@ -16,7 +16,9 @@
   // with L-624). The `avoid` option lists squares that can be stepped onto but
   // never through, such as exits, which leave the map when stepped on
   // (L-615): a path may end on one, and reach includes them, but nothing goes
-  // on from one.
+  // on from one. The `opens(from, to)` option names what a step opens, such as
+  // a closed door (L-624): the step is marked `opens` in a path, a walk stops
+  // before it once it's opened, and reach doesn't go through it this turn.
   //
   // Of the cheapest paths, the shortest on the ground wins (straight steps
   // over diagonals where they cost the same), then the one keeping closest to
@@ -135,6 +137,9 @@
         if (settled[index]) continue;
         var c = price({ x: at.x, y: at.y }, { x: x, y: y });
         if (c === Infinity) continue;
+        var opens =
+          options && options.opens ? options.opens({ x: at.x, y: at.y }, { x: x, y: y }) : null;
+        if (opens && budget !== undefined) continue;
         var cost = at.cost + c;
         if (budget !== undefined && cost > budget) continue;
         var length = at.length + (STEPS[s][0] && STEPS[s][1] ? DIAGONAL : 1);
@@ -146,6 +151,7 @@
           x: x,
           y: y,
           via: at.index,
+          opens: opens || null,
         };
         var known = best[index];
         if (known && !before(entry, known)) continue;
@@ -168,7 +174,9 @@
     if (!end) return null;
     var path = [];
     for (var at = end; at.via !== -1; at = settled[at.via]) {
-      path.unshift({ x: at.x, y: at.y, cost: at.cost });
+      var step = { x: at.x, y: at.y, cost: at.cost };
+      if (at.opens) step.opens = at.opens;
+      path.unshift(step);
     }
     return { path: path, cost: end.cost };
   }
@@ -199,17 +207,35 @@
   /**
    * How far `budget` takes you along a path (pathTo's): the squares walked,
    * the cost spent, and the rest, its costs counted afresh from where you
-   * stop, as a plan for the next turn.
+   * stop, as a plan for the next turn. A step that `opens` something (a
+   * closed door) stops the walk before it: with 1 to spare it's opened
+   * (`opened`, and 1 spent), and the rest goes on through it from there.
    */
   function walk(path, budget) {
-    var walked = path.filter(function (step) {
-      return step.cost <= budget;
+    var walked = [];
+    var spent = 0;
+    var opened = null;
+    for (var i = 0; i < path.length; i++) {
+      var step = path[i];
+      if (step.opens) {
+        if (spent + 1 <= budget) {
+          opened = step.opens;
+          spent += 1;
+        }
+        break;
+      }
+      if (step.cost > budget) break;
+      walked.push(step);
+      spent = step.cost;
+    }
+    var rest = path.slice(walked.length).map(function (step, j) {
+      var next = { x: step.x, y: step.y, cost: step.cost - spent };
+      if (step.opens && !(opened && j === 0)) next.opens = step.opens;
+      return next;
     });
-    var spent = walked.length ? walked[walked.length - 1].cost : 0;
-    var rest = path.slice(walked.length).map(function (step) {
-      return { x: step.x, y: step.y, cost: step.cost - spent };
-    });
-    return { walked: walked, spent: spent, rest: rest };
+    var result = { walked: walked, spent: spent, rest: rest };
+    if (opened) result.opened = opened;
+    return result;
   }
 
   var api = { pathTo: pathTo, reach: reach, walk: walk };

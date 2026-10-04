@@ -387,3 +387,22 @@ describe('the turn (L-611)', () => {
     expect(nextTurnState(now)).toEqual({ n: 5, movementLeft: 30, actionUsed: false, plan });
   });
 });
+
+describe("a save's doors (L-624)", () => {
+  const save = (doors) =>
+    makeSave({ ownerUid: 'u', worldId: 'w', name: 'n', character: { name: 'Tam' }, doors });
+
+  it('records each map’s doors by state', () => {
+    expect(save({ bm_tavern: { cellar: 'open', vault: 'locked' } }).doors).toEqual({
+      bm_tavern: { cellar: 'open', vault: 'locked' },
+    });
+  });
+
+  it.each([
+    ['a list', []],
+    ['a state that is no state', { bm_tavern: { cellar: 'ajar' } }],
+    ['doors not by map', { cellar: 'open' }],
+  ])('refuses %s', (_label, doors) => {
+    expect(() => save(doors)).toThrow(/doors must be/);
+  });
+});

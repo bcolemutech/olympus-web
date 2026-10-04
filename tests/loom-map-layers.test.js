@@ -249,3 +249,139 @@ describe('the checks', () => {
     expect(layers.check(stall)).toEqual([]);
   });
 });
+
+describe('paths around the layers (L-624)', () => {
+  const paths = require('../functions/loom-canon/grid-paths');
+  // Two rooms, 6 × 3: a wall at x = 3 with a door in its gap at y 1–2.
+  const ROOMS = (extra = {}) => ({
+    id: 'bm_rooms',
+    width: 6,
+    height: 3,
+    entries: [{ id: 'in', x: 0, y: 1 }],
+    exits: [{ id: 'out', x: 0, y: 0, to: 'out' }],
+    walls: [{ points: [sq(3, 0), sq(3, 1)] }, { points: [sq(3, 2), sq(3, 3)] }],
+    doors: [{ id: 'd', name: 'the door', from: sq(3, 1), to: sq(3, 2) }],
+    ...extra,
+  });
+  const path = (map, from, to, states) =>
+    paths.pathTo(map, from, to, layers.pathOptions(map, states));
+
+  test('a closed door on the way costs 1 to open, and its step says so', () => {
+    const found = path(ROOMS(), sq(1, 1), sq(5, 1));
+    expect(found.cost).toBe(5);
+    expect(found.path).toEqual([
+      { x: 2, y: 1, cost: 1 },
+      { x: 3, y: 1, cost: 3, opens: 'd' },
+      { x: 4, y: 1, cost: 4 },
+      { x: 5, y: 1, cost: 5 },
+    ]);
+  });
+
+  test('a walk stops at the door, opening it with 1, and goes on through next time', () => {
+    const { path: route } = path(ROOMS(), sq(1, 1), sq(5, 1));
+    expect(paths.walk(route, 20)).toEqual({
+      walked: [{ x: 2, y: 1, cost: 1 }],
+      spent: 2,
+      opened: 'd',
+      rest: [
+        { x: 3, y: 1, cost: 1 },
+        { x: 4, y: 1, cost: 2 },
+        { x: 5, y: 1, cost: 3 },
+      ],
+    });
+    // Without 1 left to open it, the walk stops short and the door stays shut.
+    expect(paths.walk(route, 1)).toEqual({
+      walked: [{ x: 2, y: 1, cost: 1 }],
+      spent: 1,
+      rest: [
+        { x: 3, y: 1, cost: 2, opens: 'd' },
+        { x: 4, y: 1, cost: 3 },
+        { x: 5, y: 1, cost: 4 },
+      ],
+    });
+  });
+
+  test('an open door is walked through; a locked one is no way at all', () => {
+    expect(path(ROOMS(), sq(1, 1), sq(5, 1), { d: 'open' }).cost).toBe(4);
+    expect(path(ROOMS(), sq(1, 1), sq(5, 1), { d: 'locked' })).toBeNull();
+    const locked = ROOMS({ doors: [{ ...ROOMS().doors[0], locked: true }] });
+    expect(path(locked, sq(1, 1), sq(5, 1))).toBeNull();
+    expect(path(locked, sq(1, 1), sq(5, 1), { d: 'open' }).cost).toBe(4); // unlocked and opened
+  });
+
+  test('a wall with no door is gone around, or there is no way', () => {
+    const walled = ROOMS({ doors: [], walls: [{ points: [sq(3, 0), sq(3, 3)] }] });
+    expect(path(walled, sq(1, 1), sq(5, 1))).toBeNull();
+    const short = ROOMS({ doors: [], walls: [{ points: [sq(3, 0), sq(3, 2)] }] });
+    expect(path(short, sq(1, 1), sq(5, 1)).path.some((s) => s.y === 2)).toBe(true);
+  });
+
+  test('reach stops at a closed door this turn, and goes through an open one', () => {
+    const shut = paths.reach(ROOMS(), sq(1, 1), 10, layers.pathOptions(ROOMS(), {}));
+    expect(shut.some((s) => s.x >= 3)).toBe(false);
+    const open = paths.reach(ROOMS(), sq(1, 1), 10, layers.pathOptions(ROOMS(), { d: 'open' }));
+    expect(open).toContainEqual({ x: 5, y: 1, cost: 4 });
+  });
+
+  test('difficult ground costs 2 a square, and is gone around when that is cheaper', () => {
+    const muddy = ROOMS({
+      walls: [],
+      doors: [],
+      obstacles: [{ id: 'mud', kind: 'difficult', x: 2, y: 0, h: 3 }],
+    });
+    // A band of mud right across: crossed, at 2.
+    expect(path(muddy, sq(1, 1), sq(3, 1)).cost).toBe(3);
+    const puddle = ROOMS({
+      walls: [],
+      doors: [],
+      obstacles: [{ id: 'mud', kind: 'difficult', x: 2, y: 1 }],
+    });
+    expect(path(puddle, sq(1, 1), sq(3, 1)).path.some((s) => s.x === 2 && s.y === 1)).toBe(false);
+  });
+
+  test('no cutting corners: past a wall corner, or between blocked squares', () => {
+    // A pillar at (1, 0), beside the diagonal from (0, 0) to (1, 1): no squeezing past.
+    const pillar = ROOMS({
+      walls: [],
+      doors: [],
+      obstacles: [{ id: 'p', kind: 'solid', x: 1, y: 0 }],
+    });
+    expect(path(pillar, sq(0, 0), sq(1, 1)).cost).toBe(2);
+    // The wall's end at corner (3, 1) (touched by the door, too): no diagonal past it.
+    const found = path(
+      ROOMS({ doors: [], walls: [{ points: [sq(3, 0), sq(3, 1)] }] }),
+      sq(2, 0),
+      sq(3, 1)
+    );
+    expect(found.cost).toBe(2);
+  });
+
+  test('exits are still stepped onto, never through', () => {
+    const exitInWay = ROOMS({
+      walls: [],
+      doors: [],
+      exits: [{ id: 'out', x: 1, y: 1, to: 'out' }],
+    });
+    expect(path(exitInWay, sq(0, 1), sq(2, 1)).path.some((s) => s.x === 1 && s.y === 1)).toBe(
+      false
+    );
+  });
+});
+
+describe("the browser's copy (L-624)", () => {
+  const fs = require('fs');
+  const path = require('path');
+  const vm = require('vm');
+  const served = path.join(__dirname, '../public/apps/loom/js/layers.js');
+
+  test('is identical to the server’s, and loads as Loom.mapLayers', () => {
+    expect(fs.readFileSync(served, 'utf8')).toBe(
+      fs.readFileSync(path.join(__dirname, '../functions/loom-canon/layers.js'), 'utf8')
+    );
+    const page = { window: { Loom: {} } };
+    vm.runInNewContext(fs.readFileSync(served, 'utf8'), page);
+    expect(typeof page.window.Loom.mapLayers.pathOptions).toBe('function');
+    const html = fs.readFileSync(path.join(__dirname, '../public/apps/loom/index.html'), 'utf8');
+    expect(html).toContain('<script src="/apps/loom/js/layers.js"></script>');
+  });
+});
