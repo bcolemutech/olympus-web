@@ -24,7 +24,8 @@ const { turnStateOf } = require('../loom-models');
  * remembers the door open (`save.doors[mapId][doorId]`).
  *
  * A door beside the player (on either side of it) opens or closes with a tap
- * (planDoor; L-625 / #450), for 1 movement; a locked one stays shut.
+ * (planDoor; L-625 / #450), for 1 movement; a locked one opens only with its
+ * key in the character's inventory (L-626 / #451).
  *
  * Pure: planStep reads a save and the canon world and says what the step
  * does; the caller writes it inside a transaction, so two moves at once
@@ -146,6 +147,25 @@ function doorSides(door) {
 
 const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
+// "A brass key", "the Brass Key" and "brass key" are one item.
+const itemName = (item) =>
+  String((item && item.name) || item || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^(a|an|the)\s+/, '');
+
+/** Whether the save's character carries a door's key (L-626). */
+function hasKey(save, door) {
+  if (!door.key) return false;
+  const inventory = (save && save.character && save.character.inventory) || [];
+  return inventory.some((item) => itemName(item) === itemName(door.key));
+}
+
+/** Whether a square is beside a door: on either side of it. */
+function besideDoor(door, cell) {
+  return Boolean(cell) && doorSides(door).some((side) => maps.sameCell(side, cell));
+}
+
 /**
  * Opening (`open` true) or closing a door beside the save, for 1 movement:
  *   { refused: line }                          — nothing happens
@@ -157,21 +177,37 @@ function planDoor(canonWorld, save, doorId, open) {
   const door = (map.doors || []).find((d) => d.id === doorId);
   if (!door) return { refused: "There's no such door here." };
   const name = door.name || 'the door';
-  if (!doorSides(door).some((side) => maps.sameCell(side, cell))) {
+  if (!besideDoor(door, cell)) {
     return { refused: 'You need to be beside ' + name + '.' };
   }
   const state = layers.doorState(door, doorStatesOf(save, map.id));
+  // A locked door opens with its key, in one go (L-626 / #451).
+  const withKey = open && state === 'locked' && hasKey(save, door);
   if (open && state === 'open') return { refused: capitalised(name) + ' is already open.' };
-  if (open && state === 'locked') return { refused: capitalised(name) + ' is locked.' };
+  if (open && state === 'locked' && !withKey) {
+    return { refused: capitalised(name) + ' is locked.' };
+  }
   if (!open && state !== 'open') return { refused: capitalised(name) + ' is already shut.' };
   const turn = turnStateOf(save);
   if (turn.movementLeft < 1) return { refused: OUT_OF_MOVEMENT };
   return {
     cell: { x: cell.x, y: cell.y },
     turn: { ...turn, movementLeft: turn.movementLeft - 1 },
-    lines: [(open ? 'You open ' : 'You close ') + name + '.'],
+    lines: [
+      withKey
+        ? 'You unlock ' + name + ' with ' + door.key + ' and open it.'
+        : (open ? 'You open ' : 'You close ') + name + '.',
+    ],
     door: { mapId: map.id, doorId: door.id, state: open ? 'open' : 'closed' },
   };
 }
 
-module.exports = { planStep, planDoor, planOn, doorStatesOf, OUT_OF_MOVEMENT };
+module.exports = {
+  planStep,
+  planDoor,
+  planOn,
+  doorStatesOf,
+  hasKey,
+  besideDoor,
+  OUT_OF_MOVEMENT,
+};

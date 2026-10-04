@@ -336,6 +336,12 @@
       if (edges[keys[0]]) {
         problems.push(label + ' sits on a wall: leave a gap in the wall for it.');
       }
+      if (
+        door.difficulty !== undefined &&
+        !(whole(door.difficulty) && door.difficulty >= 5 && door.difficulty <= 30)
+      ) {
+        problems.push(label + "'s lock difficulty must be a whole number from 5 to 30.");
+      }
       if (doorAt[keys[0]]) {
         problems.push(
           'The doors "' + doorAt[keys[0]] + '" and "' + door.id + '" are in the same place.'

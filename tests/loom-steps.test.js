@@ -230,3 +230,155 @@ describe('walls and doors (L-624)', () => {
     });
   });
 });
+
+describe('locked doors: keys, and picking or forcing (L-626)', () => {
+  const { evaluate, DEFAULT_LOCK_DIFFICULTY } = require('../functions/loom-turn/adjudicate');
+  const { buildKnownEntities } = require('../functions/loom-turn/interpret');
+  // The room once more: the inner door at x = 5, y 2–3, locked, its key the
+  // brass key.
+  const LOCKED = (door = {}) => ({
+    battleMaps: {
+      bm_room: {
+        ...ROOM,
+        walls: [
+          {
+            points: [
+              { x: 5, y: 0 },
+              { x: 5, y: 2 },
+            ],
+          },
+          {
+            points: [
+              { x: 5, y: 3 },
+              { x: 5, y: 6 },
+            ],
+          },
+        ],
+        doors: [
+          {
+            id: 'inner',
+            name: 'the inner door',
+            from: { x: 5, y: 2 },
+            to: { x: 5, y: 3 },
+            locked: true,
+            key: 'the brass key',
+            ...door,
+          },
+        ],
+      },
+    },
+  });
+  const beside = (inventory = [], extra = {}) => ({
+    ...standing({ x: 4, y: 2 }),
+    character: { name: 'Tam', speed: 6, inventory },
+    ...extra,
+  });
+  const attempt = (verb, save, dice, world = LOCKED()) =>
+    evaluate({ verb, targets: ['door:inner'], params: {} }, {}, save, dice, world);
+  const doorTo = (value) => ({
+    target: 'save',
+    op: 'set-flag',
+    path: 'doors.bm_room.inner',
+    value,
+  });
+  const used = {
+    target: 'save',
+    op: 'set-flag',
+    path: 'turn',
+    value: expect.objectContaining({ actionUsed: true }),
+  };
+
+  test('a tap opens it with its key, for 1 movement; without, it stays locked', () => {
+    expect(planDoor(LOCKED(), beside(['A Brass Key']), 'inner', true)).toMatchObject({
+      lines: ['You unlock the inner door with the brass key and open it.'],
+      door: { state: 'open' },
+      turn: { movementLeft: 5 },
+    });
+    expect(planDoor(LOCKED(), beside(['a lantern']), 'inner', true)).toEqual({
+      refused: 'The inner door is locked.',
+    });
+  });
+
+  test('typed with the key: unlocked and opened, no roll; it uses the action', () => {
+    expect(attempt('unlock', beside(['brass key']), 1)).toEqual({
+      outcome: 'success',
+      mutations: [doorTo('open'), used],
+      constraints: ['You unlock the inner door with the brass key and open it.'],
+    });
+  });
+
+  test('picked or forced: a roll against the lock; a success unlocks it, either way the action is used', () => {
+    expect(DEFAULT_LOCK_DIFFICULTY).toBe(15);
+    expect(attempt('pick_lock', beside(), 15)).toEqual({
+      outcome: 'success',
+      mutations: [doorTo('closed'), used],
+      constraints: ['The lock gives way: the inner door is unlocked.'],
+    });
+    expect(attempt('force', beside(), 14)).toEqual({
+      outcome: 'failure',
+      mutations: [used],
+      constraints: ['The lock on the inner door holds.'],
+    });
+    // The lock's own difficulty, when it has one.
+    expect(attempt('pick_lock', beside(), 5, LOCKED({ difficulty: 5 })).outcome).toBe('success');
+    expect(attempt('pick_lock', beside(), 19, LOCKED({ difficulty: 20 })).outcome).toBe('failure');
+  });
+
+  test('unlocked in this save only: another still finds it locked', () => {
+    const unlocked = beside([], { doors: { bm_room: { inner: 'closed' } } });
+    expect(attempt('pick_lock', unlocked, 20)).toEqual({
+      outcome: 'no_op',
+      mutations: [],
+      constraints: ["The inner door isn't locked."],
+    });
+    expect(attempt('pick_lock', beside(), 1).outcome).toBe('failure');
+  });
+
+  test('typed open and close of an unlocked door', () => {
+    const unlocked = beside([], { doors: { bm_room: { inner: 'closed' } } });
+    expect(attempt('open', unlocked, 1)).toMatchObject({
+      outcome: 'success',
+      mutations: [doorTo('open'), used],
+      constraints: ['You open the inner door.'],
+    });
+    const open = beside([], { doors: { bm_room: { inner: 'open' } } });
+    expect(attempt('close', open, 1)).toMatchObject({
+      mutations: [doorTo('closed'), used],
+      constraints: ['You close the inner door.'],
+    });
+  });
+
+  test('not beside it, or no such door: turned down, and the action is not used', () => {
+    expect(attempt('pick_lock', { ...beside(), cell: { x: 1, y: 1 } }, 20)).toEqual({
+      outcome: 'blocked',
+      mutations: [],
+      constraints: ['You need to be beside the inner door.'],
+    });
+    expect(
+      evaluate(
+        { verb: 'pick_lock', targets: ['door:vault'], params: {} },
+        {},
+        beside(),
+        20,
+        LOCKED()
+      )
+    ).toMatchObject({ outcome: 'invalid_target', mutations: [] });
+  });
+
+  test('a second attempt in one turn is turned down', () => {
+    const acted = beside([], { turn: { n: 1, movementLeft: 6, actionUsed: true, plan: null } });
+    expect(attempt('pick_lock', acted, 20).constraints).toEqual([
+      "You've acted this turn. End your turn first.",
+    ]);
+  });
+
+  test('the interpreter knows the doors as targets', () => {
+    expect(
+      buildKnownEntities({ ...LOCKED(), locations: {}, factions: {}, characters: {} }, beside())
+    ).toContainEqual({
+      id: 'door:inner',
+      name: 'the inner door',
+      kind: 'door here',
+    });
+  });
+});

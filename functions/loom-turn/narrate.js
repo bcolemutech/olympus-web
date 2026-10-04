@@ -8,6 +8,8 @@ const maps = require('../loom-canon/maps');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
 const { turnStateOf, speedOf } = require('../loom-models');
+const { doorStatesOf } = require('./steps');
+const layers = require('../loom-canon/layers');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -109,7 +111,7 @@ function positionAfter(save, resolution) {
 
 // Where the player stands on a battle map (L-351), and how they can leave it:
 // on a map, its exits are the only ways on.
-function buildMapSection(canonWorld, position) {
+function buildMapSection(canonWorld, position, save, resolution) {
   const { map, cell } = maps.positionOf(canonWorld, position);
   const host = maps.hostOf(canonWorld, position);
   const there = maps.at(map, cell);
@@ -133,6 +135,23 @@ function buildMapSection(canonWorld, position) {
   ];
   if ((map.features || []).length) {
     lines.push('Features: ' + map.features.map(spot).join('; ') + '.');
+  }
+  // Its doors, as they stand once this resolves (L-626): this save's own.
+  if ((map.doors || []).length) {
+    const states = { ...doorStatesOf(save, map.id) };
+    for (const m of (resolution && resolution.mutations) || []) {
+      const prefix = 'doors.' + map.id + '.';
+      if (m.target === 'save' && m.path.indexOf(prefix) === 0) {
+        states[m.path.slice(prefix.length)] = m.value;
+      }
+    }
+    lines.push(
+      'Doors: ' +
+        map.doors
+          .map((d) => (d.name || 'a door') + ' (' + layers.doorState(d, states) + ')')
+          .join('; ') +
+        '.'
+    );
   }
   const exits = map.exits || [];
   if (exits.length) {
@@ -191,12 +210,14 @@ function buildTownExitsSection(canonWorld, settlement, place, save) {
 }
 
 // `save` gives the character, for what it may walk through in town.
-function buildExitsSection(canonWorld, position, save) {
+function buildExitsSection(canonWorld, position, save, resolution) {
   const locationId = position.location;
   const here = locationId && canonWorld.locations[locationId];
   if (!here) return '';
   const onMap = maps.positionOf(canonWorld, position).map;
-  if (onMap && (onMap.exits || []).length) return buildMapSection(canonWorld, position);
+  if (onMap && (onMap.exits || []).length) {
+    return buildMapSection(canonWorld, position, save, resolution);
+  }
   const place = town.positionOf(canonWorld, position).place;
   if (place) return buildTownExitsSection(canonWorld, here, place, save);
   const links = (here.geo && here.geo.links) || {};
@@ -362,7 +383,12 @@ async function narrateResolution(params) {
         canonWorld,
         entityContexts,
         recentSummary: save.recentSummary,
-        exitsSection: buildExitsSection(canonWorld, positionAfter(save, resolution), save),
+        exitsSection: buildExitsSection(
+          canonWorld,
+          positionAfter(save, resolution),
+          save,
+          resolution
+        ),
         turnSection: buildTurnSection(save, resolution),
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,

@@ -154,6 +154,11 @@ describe('the checks', () => {
       /whole-number corners/,
     ],
     [
+      'a lock difficulty out of range',
+      (m) => ({ doors: [{ ...m.doors[0], locked: true, difficulty: 3 }] }),
+      /lock difficulty must be a whole number from 5 to 30/,
+    ],
+    [
       'a door on a wall',
       (m) => ({ doors: [{ ...m.doors[0], from: sq(8, 1), to: sq(8, 2) }] }),
       /sits on a wall: leave a gap/,

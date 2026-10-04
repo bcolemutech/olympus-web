@@ -82,6 +82,13 @@ const door = z.strictObject({
   to: point.describe('The other end: the next corner along the grid line (one square long).'),
   locked: z.boolean().optional().describe('Locked doors stop players until opened.'),
   key: label.optional().describe('The inventory item that opens it when locked.'),
+  difficulty: z
+    .number()
+    .int()
+    .min(5)
+    .max(30)
+    .optional()
+    .describe('How hard its lock is to pick or force (a d20 roll must reach it); 15 if left out.'),
 });
 const obstacle = z.strictObject({
   id: cellId,

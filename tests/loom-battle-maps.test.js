@@ -1128,3 +1128,97 @@ describe('walls and doors on the way (L-624)', () => {
     await bump();
   });
 });
+
+describe('locked doors (L-626)', () => {
+  // The kitchen door, locked: the pantry key opens it.
+  const LOCKED = {
+    walls: [
+      {
+        points: [
+          { x: 6, y: 0 },
+          { x: 6, y: 3 },
+        ],
+      },
+      {
+        points: [
+          { x: 6, y: 4 },
+          { x: 6, y: 8 },
+        ],
+      },
+    ],
+    doors: [
+      {
+        id: 'kitchen-door',
+        name: 'the kitchen door',
+        from: { x: 6, y: 3 },
+        to: { x: 6, y: 4 },
+        locked: true,
+        key: 'the pantry key',
+      },
+    ],
+  };
+  const tavernRef = () => worldRef.collection('battleMaps').doc('bm_tavern');
+  const tap = (id) =>
+    loomPlayTurn.run({
+      data: {
+        worldId: WORLD,
+        saveId: id,
+        action: { verb: 'door', door: 'kitchen-door', open: true },
+      },
+      auth: PLAYER,
+    });
+  const besideTheDoor = async (inventory) => {
+    const { saveId } = await newGame();
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 3 });
+    await db.collection('loom_saves').doc(saveId).update({ 'character.inventory': inventory });
+    return saveId;
+  };
+  beforeAll(async () => {
+    await tavernRef().update(LOCKED);
+    await bump();
+  });
+  afterAll(async () => {
+    await tavernRef().update({ walls: [], doors: [] });
+    await bump();
+  });
+  beforeEach(() => {
+    mockCallGemini.mockReset();
+    playerMovesTo(null);
+  });
+
+  test('the key opens it, for this save only; without it, it stays locked and blocks the way', async () => {
+    const withKey = await besideTheDoor(['pantry key']);
+    expect((await tap(withKey)).step.lines).toEqual([
+      'You unlock the kitchen door with the pantry key and open it.',
+    ]);
+    expect((await saveOf(withKey)).doors).toEqual({ bm_tavern: { 'kitchen-door': 'open' } });
+    const without = await besideTheDoor([]);
+    expect((await tap(without)).step.lines).toEqual(['The kitchen door is locked.']);
+    expect((await stepTo(without, { x: 9, y: 1 })).step.lines).toEqual([
+      "There's no way there from here.",
+    ]);
+  });
+
+  test('a typed attempt targets the door, and the GM is told the doors as they stand', async () => {
+    const saveId = await besideTheDoor(['pantry key']);
+    mockCallGemini.mockImplementation(async (options) => {
+      if (options.systemInstruction.includes('INTERPRET stage')) {
+        prompts.interpret.push(options.systemInstruction);
+        return { verb: 'unlock', targets: ['door:kitchen-door'], params: {} };
+      }
+      prompts.narrate.push(options.userMessage);
+      return { narration: 'The key turns.', inventedEntities: [], suggestedActions: [] };
+    });
+    await loomPlayTurn.run({
+      data: { worldId: WORLD, saveId, actionText: 'unlock the kitchen door' },
+      auth: PLAYER,
+    });
+    expect(prompts.interpret.at(-1)).toContain('- door:kitchen-door (door here): the kitchen door');
+    expect(await lastResolution(saveId)).toMatchObject({
+      outcome: 'success',
+      constraints: ['You unlock the kitchen door with the pantry key and open it.'],
+    });
+    expect(prompts.narrate.at(-1)).toContain('Doors: the kitchen door (open).');
+    expect((await saveOf(saveId)).turn.actionUsed).toBe(true);
+  });
+});
