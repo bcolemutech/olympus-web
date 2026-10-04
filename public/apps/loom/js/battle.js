@@ -9,6 +9,12 @@
   // leaves the map). Moves are structured moves on the grid
   // (Loom.play.moveToCell), adjudicated on the server like typed ones.
   //
+  // The layers (§4; L-627 / #452): on a plain grid, walls and obstacles are
+  // drawn (solid dark, low hatched, difficult dotted); over art, the art shows
+  // them. Doors are always marked, by their state for this save (closed amber,
+  // open dashed, locked red); tapping one opens a card to open or close it
+  // from beside it (Loom.play.doorAction).
+  //
   // The turn (planning/the-loom-movement-and-vision.md §3; L-615 / #445): the
   // squares in reach of this turn's movement are lit; tapping a square draws
   // the path a move would take (grid-paths.js, the server's own rules), solid
@@ -35,6 +41,7 @@
     data: null, // loomGetMap's `battleMap`
     turn: null, // loomGetMap's `turn` (L-611): movement left, the plan
     selected: null, // a cell { x, y }
+    selectedDoor: null, // a door's id, when a door is tapped (L-627)
     art: { path: null, url: null },
     reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
     preview: null, // the path to the selected cell: { path, walked, rest, cost, turns } or { none }
@@ -94,6 +101,36 @@
     return L.pathOptions(battle.data, states);
   }
 
+  function doorById(id) {
+    return (
+      (battle.data.doors || []).filter(function (d) {
+        return d.id === id;
+      })[0] || null
+    );
+  }
+
+  // The two squares a door stands between (as the server's steps.js has it).
+  function doorSides(door) {
+    if (door.from.x === door.to.x) {
+      var y = Math.min(door.from.y, door.to.y);
+      return [
+        { x: door.from.x - 1, y: y },
+        { x: door.from.x, y: y },
+      ];
+    }
+    var x = Math.min(door.from.x, door.to.x);
+    return [
+      { x: x, y: door.from.y - 1 },
+      { x: x, y: door.from.y },
+    ];
+  }
+
+  function besideDoor(door) {
+    return doorSides(door).some(function (side) {
+      return same(side, battle.data.here);
+    });
+  }
+
   function doorName(id) {
     var door = (battle.data.doors || []).filter(function (d) {
       return d.id === id;
@@ -151,6 +188,9 @@
       battle.anim = null;
     }
     walkIfMoved();
+    if (battle.selectedDoor && (!battle.data || !doorById(battle.selectedDoor))) {
+      battle.selectedDoor = null;
+    }
     loadArt(data && data.image);
     computeReach();
     computePreview();
@@ -361,6 +401,74 @@
       }
     }
 
+    // The layers (L-627).
+    var corner = function (p) {
+      var c = s(PAD + p.x * CELL, PAD + p.y * CELL);
+      return c.x + ',' + c.y;
+    };
+    var wallWidth = Math.max(3, cellPx / 7);
+    if (!d.image) {
+      var defs = svg('defs');
+      var hatch = svg('pattern', {
+        id: 'loom-grid-hatch',
+        width: 8,
+        height: 8,
+        patternUnits: 'userSpaceOnUse',
+        patternTransform: 'rotate(45)',
+      });
+      hatch.appendChild(svg('rect', { class: 'loom-grid-hatch', width: 3, height: 8 }));
+      var dots = svg('pattern', {
+        id: 'loom-grid-dots',
+        width: 9,
+        height: 9,
+        patternUnits: 'userSpaceOnUse',
+      });
+      dots.appendChild(svg('circle', { class: 'loom-grid-dot', cx: 4.5, cy: 4.5, r: 1.6 }));
+      defs.appendChild(hatch);
+      defs.appendChild(dots);
+      overlay.appendChild(defs);
+      (d.obstacles || []).forEach(function (o) {
+        var a = s(PAD + o.x * CELL, PAD + o.y * CELL);
+        var b = s(PAD + (o.x + (o.w || 1)) * CELL, PAD + (o.y + (o.h || 1)) * CELL);
+        var attrs = {
+          class: 'loom-grid-obstacle is-' + o.kind,
+          x: a.x,
+          y: a.y,
+          width: b.x - a.x,
+          height: b.y - a.y,
+        };
+        if (o.kind === 'low') attrs.fill = 'url(#loom-grid-hatch)';
+        if (o.kind === 'difficult') attrs.fill = 'url(#loom-grid-dots)';
+        overlay.appendChild(svg('rect', attrs));
+      });
+      (d.walls || []).forEach(function (w) {
+        overlay.appendChild(
+          svg('polyline', {
+            class: 'loom-grid-wall',
+            points: (w.points || []).map(corner).join(' '),
+            'stroke-width': wallWidth,
+          })
+        );
+      });
+    }
+    (d.doors || []).forEach(function (door) {
+      var a = corner(door.from).split(',');
+      var b = corner(door.to).split(',');
+      overlay.appendChild(
+        svg('line', {
+          class:
+            'loom-grid-door is-' +
+            door.state +
+            (battle.selectedDoor === door.id ? ' is-selected' : ''),
+          x1: a[0],
+          y1: a[1],
+          x2: b[0],
+          y2: b[1],
+          'stroke-width': wallWidth + 2,
+        })
+      );
+    });
+
     var cellBox = function (cell, className) {
       var a = s(PAD + cell.x * CELL, PAD + cell.y * CELL);
       overlay.appendChild(
@@ -454,10 +562,59 @@
     }
     var d = battle.data;
     var m = M.toMap(view, point.x, point.y);
-    var cell = { x: Math.floor((m.x - PAD) / CELL), y: Math.floor((m.y - PAD) / CELL) };
+    // A door, if the tap is on one (within a fifth of a square of its line).
+    var gx = (m.x - PAD) / CELL;
+    var gy = (m.y - PAD) / CELL;
+    var door = (d.doors || []).filter(function (dr) {
+      var x0 = Math.min(dr.from.x, dr.to.x);
+      var x1 = Math.max(dr.from.x, dr.to.x);
+      var y0 = Math.min(dr.from.y, dr.to.y);
+      var y1 = Math.max(dr.from.y, dr.to.y);
+      var dx = Math.max(x0 - gx, 0, gx - x1);
+      var dy = Math.max(y0 - gy, 0, gy - y1);
+      return Math.sqrt(dx * dx + dy * dy) <= 0.2;
+    })[0];
+    if (door) {
+      battle.selectedDoor = door.id;
+      battle.selected = null;
+      battle.preview = null;
+      return;
+    }
+    battle.selectedDoor = null;
+    var cell = { x: Math.floor(gx), y: Math.floor(gy) };
     var inside = cell.x >= 0 && cell.y >= 0 && cell.x < d.width && cell.y < d.height;
     battle.selected = inside ? cell : null;
     computePreview();
+  }
+
+  // A tapped door's card (L-627): its state, and Open, Close or Try from
+  // beside it.
+  function renderDoorCard(info, door) {
+    var name = door.name || 'the door';
+    info.appendChild(el('h3', 'loom-map-info-name', capitalise(name)));
+    info.appendChild(
+      el(
+        'p',
+        'loom-map-info-facts',
+        'Door · ' + (door.state === 'open' ? 'open' : door.state === 'locked' ? 'locked' : 'closed')
+      )
+    );
+    if (!besideDoor(door)) {
+      info.appendChild(el('p', 'loom-map-info-status', 'Walk beside it to open or close it.'));
+      return;
+    }
+    var open = door.state !== 'open';
+    var text =
+      door.state === 'open'
+        ? 'Close ' + name
+        : door.state === 'locked'
+          ? 'Try ' + name + ' (locked)'
+          : 'Open ' + name;
+    info.appendChild(
+      button(capitalise(text), function () {
+        Loom.play.doorAction(door.id, open, (open ? 'open ' : 'close ') + name);
+      })
+    );
   }
 
   // ── The cell card ─────────────────────────────────
@@ -489,6 +646,11 @@
 
   function renderCard(info, act) {
     var d = battle.data;
+    var tapped = battle.selectedDoor && doorById(battle.selectedDoor);
+    if (tapped) {
+      renderDoorCard(info, tapped);
+      return;
+    }
     var cell = battle.selected;
     if (!cell) {
       var here = at(d.here);
