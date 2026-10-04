@@ -5,7 +5,7 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
-const { planStep, OUT_OF_MOVEMENT } = require('./steps');
+const { planStep } = require('./steps');
 
 // Turned down before narration (L-614): the turn's one action is used.
 const ACTED = "You've acted this turn. End your turn first.";
@@ -203,14 +203,23 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here) {
   }
   const name = exit ? exit.name : feature ? feature.name : null;
   const mutations = [{ target: 'save', op: 'set-flag', path: 'cell', value: step.cell }, spend];
+  if (step.opened) {
+    // A door opened on the way stays open for this save (L-624).
+    const { mapId, doorId } = step.opened;
+    mutations.push({
+      target: 'save',
+      op: 'set-flag',
+      path: `doors.${mapId}.${doorId}`,
+      value: 'open',
+    });
+  }
   if (step.turn.plan) {
     return {
       outcome: 'success',
       mutations,
-      constraints: [
-        'You head ' + (name ? 'for ' + name : 'across ' + map.name) + '.',
-        OUT_OF_MOVEMENT,
-      ],
+      constraints: ['You head ' + (name ? 'for ' + name : 'across ' + map.name) + '.'].concat(
+        step.lines
+      ),
     };
   }
   return {

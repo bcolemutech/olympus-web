@@ -124,6 +124,10 @@ async function runTurnPipeline(params) {
         transaction.update(saveRef, {
           cell: planned.cell,
           turn: planned.turn,
+          // A door opened on the way stays open for this save (L-624).
+          ...(planned.opened
+            ? { [`doors.${planned.opened.mapId}.${planned.opened.doorId}`]: 'open' }
+            : {}),
           updatedAt: FieldValue.serverTimestamp(),
         });
       }

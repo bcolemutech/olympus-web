@@ -2,6 +2,7 @@
 
 const gridPaths = require('../loom-canon/grid-paths');
 const maps = require('../loom-canon/maps');
+const layers = require('../loom-canon/layers');
 const { turnStateOf } = require('../loom-models');
 
 /**
@@ -16,12 +17,23 @@ const { turnStateOf } = require('../loom-models');
  * (the caller runs the rest of the pipeline). Paths never cross an exit on
  * the way somewhere else, since stepping onto one leaves.
  *
+ * Paths go around the map's walls, locked doors and obstacles, and pay 2
+ * for difficult ground (L-624 / #449; layers.pathOptions). A closed door on
+ * the way is opened (1 movement) and the walk stops there, the rest kept as
+ * the plan, so the player sees what's beyond before going on; the save
+ * remembers the door open (`save.doors[mapId][doorId]`).
+ *
  * Pure: planStep reads a save and the canon world and says what the step
  * does; the caller writes it inside a transaction, so two moves at once
  * can't spend the same movement.
  */
 
 const OUT_OF_MOVEMENT = "You're out of movement. End your turn to go on.";
+
+/** The states of a save's doors on a map, by door id (none: as the map has them). */
+function doorStatesOf(save, mapId) {
+  return ((save && save.doors) || {})[mapId] || {};
+}
 
 /** The save's plan, if it is a path on the battle map it stands on now. */
 function planOn(save) {
@@ -74,16 +86,19 @@ function planStep(canonWorld, save, target) {
     return { refused: "You're already there." };
   }
 
-  // An exit is only stepped on to leave by it: it's never on the way.
-  const options = { avoid: map.exits || [] };
-  const cost = (step, next) => (!maps.sameCell(next, to) && maps.at(map, next).exit ? Infinity : 1);
+  // The map's rules (layers.js), for this save's doors. An exit is only
+  // stepped on to leave by it: it's never on the way.
+  const options = layers.pathOptions(map, doorStatesOf(save, map.id));
+  const cost = (step, next) =>
+    !maps.sameCell(next, to) && maps.at(map, next).exit ? Infinity : options.cost(step, next);
   const found =
     (plan && storedPath(map, from, plan, cost)) ||
     gridPaths.pathTo(map, from, { x: to.x, y: to.y }, options);
   if (!found) return { refused: "There's no way there from here." };
 
-  const { walked, spent, rest } = gridPaths.walk(found.path, turn.movementLeft);
+  const { walked, spent, rest, opened } = gridPaths.walk(found.path, turn.movementLeft);
   const movementLeft = turn.movementLeft - spent;
+  const door = opened ? (map.doors || []).find((d) => d.id === opened) : null;
   if (!rest.length) {
     const { exit, feature } = maps.at(map, to);
     if (exit) return { exit, spent, turn: { ...turn, movementLeft, plan: null } };
@@ -94,6 +109,9 @@ function planStep(canonWorld, save, target) {
     };
   }
   const stop = walked.length ? walked[walked.length - 1] : from;
+  const lines = door
+    ? ['You open ' + (door.name || 'the door') + '.'].concat(movementLeft ? [] : [OUT_OF_MOVEMENT])
+    : [OUT_OF_MOVEMENT];
   return {
     cell: { x: stop.x, y: stop.y },
     turn: {
@@ -101,8 +119,9 @@ function planStep(canonWorld, save, target) {
       movementLeft,
       plan: { layer: 'battleMap', mapId: map.id, to: { x: to.x, y: to.y }, path: rest },
     },
-    lines: [OUT_OF_MOVEMENT],
+    lines,
+    ...(door ? { opened: { mapId: map.id, doorId: door.id } } : {}),
   };
 }
 
-module.exports = { planStep, planOn, OUT_OF_MOVEMENT };
+module.exports = { planStep, planOn, doorStatesOf, OUT_OF_MOVEMENT };

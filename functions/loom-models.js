@@ -207,6 +207,19 @@ function validateCharacter(character) {
   return { valid: errors.length === 0, errors: errors };
 }
 
+const DOOR_STATES = ['open', 'closed', 'locked'];
+const isPlainObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+function validDoors(doors) {
+  return (
+    isPlainObject(doors) &&
+    Object.values(doors).every(
+      (byDoor) =>
+        isPlainObject(byDoor) && Object.values(byDoor).every((s) => DOOR_STATES.includes(s))
+    )
+  );
+}
+
 function validateSave(data) {
   const errors = [];
   if (!data || typeof data !== 'object') return { valid: false, errors: ['not an object'] };
@@ -270,6 +283,10 @@ function validateSave(data) {
   }
   if (typeof data.recentSummary !== 'string') {
     errors.push('recentSummary must be a string');
+  }
+  // The save's doors on battle maps (L-624): { [mapId]: { [doorId]: state } }.
+  if (data.doors !== undefined && !validDoors(data.doors)) {
+    errors.push("doors must be { mapId: { doorId: 'open' | 'closed' | 'locked' } }");
   }
   // The save's turn (L-611); older saves have none and start a fresh one.
   if (data.turn !== undefined) {
@@ -373,6 +390,8 @@ function makeSave(fields) {
     relationships: fields.relationships || {},
     recentSummary: fields.recentSummary || '',
     turn: fields.turn || freshTurnState({ character }),
+    // Doors this save has opened, closed or unlocked on battle maps (L-624).
+    ...(fields.doors !== undefined ? { doors: fields.doors } : {}),
     createdAt: fields.createdAt,
     updatedAt: fields.updatedAt,
   };

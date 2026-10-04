@@ -25,6 +25,7 @@
   var state = Loom.state;
   var M = Loom.mapMath;
   var P = Loom.gridPaths;
+  var L = Loom.mapLayers;
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var CELL = 40;
   var PAD = 60; // room for the labels of cells at the edge
@@ -81,10 +82,23 @@
     return { x: PAD + (cell.x + 0.5) * CELL, y: PAD + (cell.y + 0.5) * CELL };
   }
 
-  // Exits are stepped onto, never through (stepping on one leaves): the
-  // server's own rule (steps.js).
+  // The server's own path rules (layers.js; L-624): around walls, locked
+  // doors and obstacles, 2 a square on difficult ground, 1 more to open a
+  // closed door (where a walk stops), and exits stepped onto, never through.
+  // Doors are as this save has them.
   function pathOptions() {
-    return { avoid: battle.data.exits };
+    var states = {};
+    (battle.data.doors || []).forEach(function (door) {
+      states[door.id] = door.state;
+    });
+    return L.pathOptions(battle.data, states);
+  }
+
+  function doorName(id) {
+    var door = (battle.data.doors || []).filter(function (d) {
+      return d.id === id;
+    })[0];
+    return door ? door.name || 'a door' : 'a door';
   }
 
   function movementLeft() {
@@ -201,13 +215,14 @@
     battle.reach = { runs: runs };
   }
 
-  // How many turns walking `path` takes at full speed, from the next turn.
+  // How many turns walking `path` takes at full speed, from the next turn
+  // (a door opened on the way ends a turn's walk).
   function turnsFor(path) {
     var speed = battle.turn ? battle.turn.speed : 20;
     var turns = 0;
     while (path.length) {
       var w = P.walk(path, speed);
-      if (!w.walked.length) return Infinity;
+      if (!w.walked.length && !w.opened) return Infinity;
       path = w.rest;
       turns += 1;
     }
@@ -226,12 +241,20 @@
       return;
     }
     var w = P.walk(found.path, movementLeft());
+    var doors = found.path
+      .filter(function (step) {
+        return step.opens;
+      })
+      .map(function (step) {
+        return doorName(step.opens);
+      });
     battle.preview = {
       path: found.path,
       walked: w.walked,
       rest: w.rest,
       cost: found.cost,
-      turns: (w.walked.length ? 1 : 0) + turnsFor(w.rest),
+      turns: (w.walked.length || w.opened ? 1 : 0) + turnsFor(w.rest),
+      doors: doors,
     };
   }
 
@@ -554,7 +577,12 @@
     else if (!preview.walked.length) {
       when = preview.turns === 1 ? 'next turn' : preview.turns + ' turns, from next turn';
     } else when = preview.turns + ' turns';
-    return preview.cost + ' movement · ' + when;
+    return (
+      preview.cost +
+      ' movement · ' +
+      when +
+      (preview.doors.length ? ' · opens ' + listOf(preview.doors).replace(/ or /, ' and ') : '')
+    );
   }
 
   // The turn (L-613, L-615): the turn number, movement left, the action,
