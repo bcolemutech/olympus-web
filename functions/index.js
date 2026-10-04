@@ -471,6 +471,8 @@ function requireLoomAuth(request) {
  *       refilling movement and the action, with no model call (L-611 / #441)
  *    or { worldId, saveId, action: { verb: 'continue' } } — walks the plan
  *       kept from an earlier move (L-613 / #443)
+ *    or { worldId, saveId, action: { verb: 'door', door, open } } — opens
+ *       (open true) or closes a door beside the player (L-625 / #450)
  * A step on a battle map (a cell, or continue) is worked out without the
  * model and also returns step: { cell, movementLeft, plan, lines }.
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
@@ -497,8 +499,15 @@ exports.loomPlayTurn = onCall(async (request) => {
     const hasTarget = typeof action.target === 'string';
     const bare =
       typeof action === 'object' && (action.verb === 'end-turn' || action.verb === 'continue');
+    const door =
+      typeof action === 'object' &&
+      action.verb === 'door' &&
+      typeof action.door === 'string' &&
+      /^[a-z0-9][a-z0-9-]{0,39}$/.test(action.door) &&
+      typeof action.open === 'boolean';
     if (
       !bare &&
+      !door &&
       (typeof action !== 'object' ||
         action.verb !== 'move' ||
         (hasTarget ? !/^[A-Za-z0-9_-]{1,80}$/.test(action.target) : !isCell(action.cell)))
@@ -506,7 +515,8 @@ exports.loomPlayTurn = onCall(async (request) => {
       throw new HttpsError(
         'invalid-argument',
         'action must be { verb: "move", target: <place id> }, { verb: "move", cell: { x, y } }, ' +
-          '{ verb: "continue" } or { verb: "end-turn" }.'
+          '{ verb: "continue" }, { verb: "door", door: <door id>, open: true | false } or ' +
+          '{ verb: "end-turn" }.'
       );
     }
   } else {
@@ -527,11 +537,13 @@ exports.loomPlayTurn = onCall(async (request) => {
       ...(action
         ? {
             action:
-              action.verb === 'end-turn' || action.verb === 'continue'
-                ? { verb: action.verb }
-                : typeof action.target === 'string'
-                  ? { verb: 'move', target: action.target }
-                  : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
+              action.verb === 'door'
+                ? { verb: 'door', door: action.door, open: action.open }
+                : action.verb === 'end-turn' || action.verb === 'continue'
+                  ? { verb: action.verb }
+                  : typeof action.target === 'string'
+                    ? { verb: 'move', target: action.target }
+                    : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
           }
         : { actionText: actionText.trim() }),
     });

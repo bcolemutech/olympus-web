@@ -1058,6 +1058,56 @@ describe('walls and doors on the way (L-624)', () => {
     expect((await saveOf(saveId)).doors).toEqual({ bm_tavern: { 'kitchen-door': 'open' } });
   });
 
+  const tapDoor = (id, open, door = 'kitchen-door') =>
+    loomPlayTurn.run({
+      data: { worldId: WORLD, saveId: id, action: { verb: 'door', door, open } },
+      auth: PLAYER,
+    });
+
+  test('a tap beside the door opens it (1 movement); the way through is then clear', async () => {
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 3 });
+    const { step } = await tapDoor(saveId, true);
+    expect(step).toMatchObject({ movementLeft: 19, lines: ['You open the kitchen door.'] });
+    expect((await saveOf(saveId)).doors).toEqual({ bm_tavern: { 'kitchen-door': 'open' } });
+    expect((await stepTo(saveId, { x: 9, y: 1 })).step.lines).toEqual(["You're at the hearth."]);
+  });
+
+  test('a tap closes it again; a path through stops there once more', async () => {
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 3 });
+    await tapDoor(saveId, true);
+    expect((await tapDoor(saveId, false)).step.lines).toEqual(['You close the kitchen door.']);
+    expect((await saveOf(saveId)).doors).toEqual({ bm_tavern: { 'kitchen-door': 'closed' } });
+    expect((await stepTo(saveId, { x: 9, y: 1 })).step.lines).toEqual([
+      'You open the kitchen door.',
+    ]);
+  });
+
+  test('a door is opened only from beside it, and only in this save', async () => {
+    expect((await tapDoor(saveId, true)).step.lines).toEqual([
+      'You need to be beside the kitchen door.',
+    ]);
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 6, y: 3 });
+    await tapDoor(saveId, true);
+    const other = (await newGame()).saveId;
+    await standAt(other, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 3 });
+    expect((await tapDoor(other, false)).step.lines).toEqual(['The kitchen door is already shut.']);
+    expect((await tapDoor(saveId, true, 'vault')).step.lines).toEqual([
+      "There's no such door here.",
+    ]);
+  });
+
+  test('a door action is checked before the turn', async () => {
+    for (const action of [
+      { verb: 'door', door: 'kitchen-door' },
+      { verb: 'door', door: 'Kitchen Door', open: true },
+      { verb: 'door', open: true },
+    ]) {
+      await expect(
+        loomPlayTurn.run({ data: { worldId: WORLD, saveId, action }, auth: PLAYER })
+      ).rejects.toMatchObject({ code: 'invalid-argument' });
+    }
+  });
+
   test('the wall is never walked through: no door, no way', async () => {
     await tavernRef().update({
       doors: [],
