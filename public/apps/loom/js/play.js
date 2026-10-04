@@ -165,6 +165,11 @@
     playTurn({ action: { verb: 'continue' } }, 'continue', { fromMap: true });
   }
 
+  /** Opens (open true) or closes a door beside the player, for 1 movement (L-625, L-627). */
+  function doorAction(doorId, open, label) {
+    playTurn({ action: { verb: 'door', door: doorId, open: open } }, label, { fromMap: true });
+  }
+
   /** Ends the turn: movement and the action refilled (L-611 / #441). */
   function endTurn() {
     playTurn({ action: { verb: 'end-turn' } }, 'end turn', { keep: true });
@@ -194,6 +199,7 @@
     travelTo: travelTo,
     moveToCell: moveToCell,
     continuePlan: continuePlan,
+    doorAction: doorAction,
     endTurn: endTurn,
     showTurn: showTurn,
   };

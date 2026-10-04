@@ -654,6 +654,61 @@
   stroke-width: 1.5;
 }
 
+/* The layers on the grid (L-627): walls and obstacles on a plain grid; doors always. */
+.loom-grid-wall {
+  fill: none;
+  stroke: #e9e4d8;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  pointer-events: none;
+}
+
+.loom-grid-obstacle {
+  pointer-events: none;
+  stroke-width: 1.5;
+}
+
+.loom-grid-obstacle.is-solid {
+  fill: rgba(8, 10, 16, 0.88);
+  stroke: #3a4050;
+}
+
+.loom-grid-obstacle.is-low {
+  stroke: #cdaa7d;
+}
+
+.loom-grid-obstacle.is-difficult {
+  stroke: #9aa0a6;
+  stroke-dasharray: 4 3;
+}
+
+.loom-grid-hatch {
+  fill: rgba(205, 170, 125, 0.75);
+}
+
+.loom-grid-dot {
+  fill: rgba(190, 190, 190, 0.8);
+}
+
+.loom-grid-door {
+  stroke: #ffb74d;
+  stroke-linecap: butt;
+  pointer-events: none;
+}
+
+.loom-grid-door.is-open {
+  stroke-dasharray: 3 4;
+  opacity: 0.85;
+}
+
+.loom-grid-door.is-locked {
+  stroke: #e57373;
+}
+
+.loom-grid-door.is-selected {
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.9));
+}
+
 /* The turn on the grid (L-615): this turn's reach, and the way a move takes. */
 .loom-grid-reach {
   fill: rgba(255, 183, 77, 0.12);
