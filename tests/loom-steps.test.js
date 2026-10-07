@@ -9,7 +9,13 @@
  * Run: cd tests && npx jest loom-steps --verbose
  */
 
-const { planStep, planDoor, planOn, OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
+const {
+  planStep,
+  planDoor,
+  planOn,
+  OUT_OF_MOVEMENT,
+  UNSEEN,
+} = require('../functions/loom-turn/steps');
 
 const ROOM = {
   id: 'bm_room',
@@ -125,6 +131,56 @@ test('reaching an exit leaves by it; an exit is never on the way', () => {
   });
   expect(around.cell).toEqual({ x: 1, y: 3 });
   expect(around.turn.plan.path.some((s) => s.x === 0 && s.y === 3)).toBe(false);
+});
+
+describe('only on ground the save knows (L-635)', () => {
+  // Every square of the room but those listed, as a save's known ground.
+  const knownBut = (...hidden) => {
+    const known = {};
+    for (let x = 0; x < ROOM.width; x++) {
+      for (let y = 0; y < ROOM.height; y++) known[x + ',' + y] = true;
+    }
+    hidden.forEach(([x, y]) => delete known[x + ',' + y]);
+    return known;
+  };
+  const column5 = (...rows) => rows.map((y) => [5, y]);
+  const across = { cell: { x: 8, y: 2 } };
+
+  test('a square not seen is no destination: "You haven\'t seen that."', () => {
+    expect(UNSEEN).toBe("You haven't seen that.");
+    expect(
+      planStep(WORLD, standing({ x: 2, y: 2 }), { cell: { x: 8, y: 1 } }, knownBut([8, 1]))
+    ).toEqual({ refused: UNSEEN });
+  });
+
+  test('a path goes around ground not seen, never over it', () => {
+    // Along row 2 is quickest, but column 5 is unknown down to row 4: the
+    // way round is through (5, 5), the one known square in it.
+    const open = planStep(WORLD, standing({ x: 2, y: 2 }), across);
+    expect(open.walked).toContainEqual({ x: 5, y: 2 });
+    const known = knownBut(...column5(0, 1, 2, 3, 4));
+    const step = planStep(WORLD, standing({ x: 2, y: 2 }), across, known);
+    expect(step.cell).toEqual({ x: 8, y: 2 });
+    expect(step.walked).toContainEqual({ x: 5, y: 5 });
+    expect(step.walked.every((s) => known[s.x + ',' + s.y])).toBe(true);
+    expect(step.turn.movementLeft).toBe(0); // round by (5, 5) is 6, as the straight way is
+  });
+
+  test('with no known way, there is no way', () => {
+    const known = knownBut(...column5(0, 1, 2, 3, 4, 5));
+    expect(planStep(WORLD, standing({ x: 2, y: 2 }), across, known)).toEqual({
+      refused: "There's no way there from here.",
+    });
+  });
+
+  test('Continue keeps to the known ground the plan was made on', () => {
+    const known = knownBut(...column5(0, 1, 2, 3, 4));
+    const first = planStep(WORLD, standing({ x: 2, y: 2 }, { movementLeft: 2 }), across, known);
+    const next = { ...standing(first.cell), turn: { ...first.turn, movementLeft: 6 } };
+    const step = planStep(WORLD, next, { plan: true }, known);
+    expect(step.cell).toEqual({ x: 8, y: 2 });
+    expect(step.walked).toContainEqual({ x: 5, y: 5 });
+  });
 });
 
 test('refusals: no map, off it, already there', () => {

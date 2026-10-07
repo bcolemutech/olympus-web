@@ -25,8 +25,10 @@ const functionsTest = require('firebase-functions-test')({ projectId: PROJECT },
 const { layOutTowns, mapPlaces, offMap, GATEWAY } = require('./helpers/towns');
 const { loomCreateSave, loomDeleteSave, loomPlayTurn, loomGetMap } = require('../functions/index');
 const { OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
-const { unpack } = require('../functions/loom-turn/seen');
+const { unpack, withSquares } = require('../functions/loom-turn/seen');
 const sight = require('../functions/loom-canon/sight');
+const gridPaths = require('../functions/loom-canon/grid-paths');
+const layers = require('../functions/loom-canon/layers');
 
 const fs = require('fs');
 const path = require('path');
@@ -191,6 +193,24 @@ const where = async (saveId) => {
   const { location, placeId, mapId, cell } = await saveOf(saveId);
   return { location, placeId, mapId, cell };
 };
+// A save that saw these squares of a map on an earlier visit (its L-632
+// record), keyed "x,y": every square when none are given. Moves go only over
+// ground the save knows (L-635).
+async function remember(saveId, mapId, squares) {
+  const map = (await worldRef.collection('battleMaps').doc(mapId).get()).data();
+  let all = squares;
+  if (!all) {
+    all = {};
+    for (let x = 0; x < map.width; x++)
+      for (let y = 0; y < map.height; y++) all[x + ',' + y] = true;
+  }
+  await db
+    .collection('loom_saves')
+    .doc(saveId)
+    .collection('seen')
+    .doc(mapId)
+    .set(withSquares(null, map, all));
+}
 
 beforeAll(async () => {
   await db.recursiveDelete(db.collection('loom_worlds'));
@@ -1009,6 +1029,7 @@ describe('walls and doors on the way (L-624)', () => {
   beforeEach(async () => {
     ({ saveId } = await newGame());
     await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+    await remember(saveId, 'bm_tavern'); // the kitchen, seen before (L-635)
     mockCallGemini.mockReset();
     playerMovesTo(null);
   });
@@ -1046,6 +1067,7 @@ describe('walls and doors on the way (L-624)', () => {
     await stepTo(saveId, { x: 9, y: 1 });
     const other = (await newGame()).saveId;
     await standAt(other, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+    await remember(other, 'bm_tavern');
     expect((await stepTo(other, { x: 9, y: 1 })).step.lines).toEqual([
       'You open the kitchen door.',
     ]);
@@ -1174,6 +1196,7 @@ describe('locked doors (L-626)', () => {
   const besideTheDoor = async (inventory) => {
     const { saveId } = await newGame();
     await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 3 });
+    await remember(saveId, 'bm_tavern'); // the kitchen, seen before (L-635)
     await db.collection('loom_saves').doc(saveId).update({ 'character.inventory': inventory });
     return saveId;
   };
@@ -1339,6 +1362,11 @@ describe('what a save has seen (L-632)', () => {
     expect(sight.inSight(tavern, { x: 5, y: 4 }, { 'kitchen-door': 'open' })['6,0']).toBe(true);
     const { saveId } = await newGame();
     await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 7 });
+    // Seen before, through the open door from (5, 3), so the hearth is known
+    // (L-635); (6, 0) wasn't in sight from there.
+    const before = sight.inSight(tavern, { x: 5, y: 3 }, { 'kitchen-door': 'open' });
+    expect(before['6,0']).toBeUndefined();
+    await remember(saveId, 'bm_tavern', before);
     const { step } = await stepTo(saveId, { x: 9, y: 1 });
     expect(step).toMatchObject({ cell: { x: 5, y: 3 }, lines: ['You open the kitchen door.'] });
     const seen = await seenOn(saveId, 'bm_tavern');
@@ -1360,6 +1388,80 @@ describe('what a save has seen (L-632)', () => {
     await loomDeleteSave.run({ data: { saveId }, auth: PLAYER });
     const left = await db.collection('loom_saves').doc(saveId).collection('seen').get();
     expect(left.empty).toBe(true);
+  });
+
+  describe('moves only on ground you know (L-635)', () => {
+    const pillar = (x, y) =>
+      tavernRef().update({ obstacles: [{ id: 'pillar', name: 'a pillar', kind: 'solid', x, y }] });
+    afterEach(async () => {
+      await tavernRef().update({ obstacles: [] });
+      await bump();
+    });
+
+    test('a tap into the dark is turned down, and nothing is spent', async () => {
+      const { saveId } = await newGame();
+      await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+      const { step } = await stepTo(saveId, { x: 9, y: 1 });
+      expect(step).toMatchObject({
+        cell: { x: 1, y: 4 },
+        movementLeft: 20,
+        lines: ["You haven't seen that."],
+      });
+    });
+
+    test('so is a typed move to somewhere not seen', async () => {
+      const { saveId } = await newGame();
+      await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+      expect(await moveTo(saveId, 'feature:hearth')).toMatchObject({
+        outcome: 'blocked',
+        constraints: ["You haven't seen that."],
+      });
+      expect(await where(saveId)).toMatchObject({ cell: { x: 1, y: 4 } });
+    });
+
+    test('a path that would cross unknown ground goes around it', async () => {
+      // From (1, 0), a pillar at (1, 2) hides (2, 5); the quickest way to
+      // (3, 7) crosses it. The way over known ground is just as quick.
+      await pillar(1, 2);
+      await bump();
+      const tavern = (await tavernRef().get()).data();
+      const from = { x: 1, y: 0 };
+      expect(sight.inSight(tavern, from, {})['2,5']).toBeUndefined();
+      const quickest = gridPaths.pathTo(
+        tavern,
+        from,
+        { x: 3, y: 7 },
+        layers.pathOptions(tavern, {})
+      );
+      expect(quickest.path).toContainEqual({ x: 2, y: 5, cost: 5 });
+
+      const { saveId } = await newGame();
+      await standAt(saveId, 'plc_1_tavern', 'bm_tavern', from);
+      await db
+        .collection('loom_saves')
+        .doc(saveId)
+        .update({ turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null } });
+      const { step } = await stepTo(saveId, { x: 3, y: 7 });
+      expect(step.cell).toEqual({ x: 2, y: 4 });
+      expect(step.plan.path.map(({ x, y }) => [x, y])).toEqual([
+        [3, 5],
+        [3, 6],
+        [3, 7],
+      ]);
+    });
+
+    test('with no known way round, it is turned down', async () => {
+      // From the front door's entry, (0, 3) is in sight past a pillar at
+      // (1, 3), but the only way there (the exit is never walked through, nor
+      // the pillar's corner squeezed past) runs behind the pillar, unseen.
+      await pillar(1, 3);
+      await bump();
+      const { saveId } = await newGame();
+      await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+      expect((await stepTo(saveId, { x: 0, y: 3 })).step.lines).toEqual([
+        "There's no way there from here.",
+      ]);
+    });
   });
 
   describe('only what is seen leaves the server (L-633)', () => {
