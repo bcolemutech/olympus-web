@@ -93,6 +93,7 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 ## 5. Battle maps: vision and fog of war
 
 - **Line of sight:** a square is in sight when an unblocked line runs from the centre of yours to some part of it. Walls, closed doors and solid obstacles block. Low obstacles and difficult ground don't.
+  - **Worked out** (L-631 / #454) by `functions/loom-canon/sight.js`: `inSight(map, from, doorStates)` gives the squares in sight, keyed `"x,y"`, your own included, for a save's doors (closed and locked block, open doesn't). A solid square is seen itself and hides what's behind it. It goes out from you in four quarters, a column of squares at a time, keeping the slopes of the lines still open, so it is exact: a square seen only along a single line (through the point where two walls meet, between solid squares touching at a corner, or grazing a wall's end) stays hidden. It is checked against a plain ray caster on random maps, takes about 3 ms for an open 64 × 64 map, and runs only on the server.
 - **Memory:** each save remembers the squares it has seen on each map.
 - **What's sent:** `loomGetMap` sends walls, doors and obstacles only where seen, features and exits only on seen squares, and people only in sight.
 - **Fog:** never seen is black; seen before is dimmed (layout only); in sight is clear.
