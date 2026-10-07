@@ -15,6 +15,14 @@
   // open dashed, locked red); tapping one opens a card to open or close it
   // from beside it (Loom.play.doorAction).
   //
+  // The fog (planning/the-loom-movement-and-vision.md §5; L-634 / #457), from
+  // loomGetMap's `fog` (L-633): squares never seen are dark, those seen before
+  // but not in sight now are dimmed, and those in sight are clear. The dark
+  // covers the art, the grid and what's on it; the dimming lies over the art
+  // but under the grid and the layers, so the layout remembered still reads,
+  // with what stands there faded. The token, the way and the names stay on
+  // top. Only what the server sent is drawn: it sends nothing unseen.
+  //
   // The turn (planning/the-loom-movement-and-vision.md §3; L-615 / #445): the
   // squares in reach of this turn's movement are lit; tapping a square draws
   // the path a move would take (grid-paths.js, the server's own rules), solid
@@ -44,6 +52,7 @@
     selectedDoor: null, // a door's id, when a door is tapped (L-627)
     art: { path: null, url: null },
     reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
+    fog: null, // the fog (L-634): { dark: runs, dim: runs }, as reach's runs
     preview: null, // the path to the selected cell: { path, walked, rest, cost, turns } or { none }
     pending: null, // a move sent: { mapId, from, path }, for the walk when it lands
     anim: null, // the token's walk: { cells, t0 }
@@ -192,8 +201,53 @@
       battle.selectedDoor = null;
     }
     loadArt(data && data.image);
+    computeFog();
     computeReach();
     computePreview();
+  }
+
+  // Whether bit `i` is set in squares packed as the server packs them (one bit
+  // a square, y × width + x, lowest bit first, in base64; L-632).
+  function unpacked(packed) {
+    var bytes = window.atob(packed || '');
+    return function (i) {
+      return Boolean(bytes.charCodeAt(i >> 3) & (1 << (i & 7)));
+    };
+  }
+
+  // The fog's dark and dim squares, as runs along each row (L-634).
+  function computeFog() {
+    var d = battle.data;
+    battle.fog = null;
+    if (!d || !d.fog) return;
+    var seen = unpacked(d.fog.seen);
+    var inSight = unpacked(d.fog.inSight);
+    var runs = { dark: [], dim: [] };
+    for (var y = 0; y < d.height; y++) {
+      var level = null;
+      var x0 = 0;
+      for (var x = 0; x <= d.width; x++) {
+        var i = y * d.width + x;
+        var here = x === d.width ? null : !seen(i) ? 'dark' : !inSight(i) ? 'dim' : null;
+        if (here === level) continue;
+        if (level) runs[level].push({ y: y, x0: x0, x1: x - 1 });
+        level = here;
+        x0 = x;
+      }
+    }
+    battle.fog = runs;
+  }
+
+  // Whether a square is in sight (anything not under the fog).
+  function inSightNow(cell) {
+    return !(
+      battle.fog &&
+      ['dark', 'dim'].some(function (level) {
+        return battle.fog[level].some(function (run) {
+          return run.y === cell.y && run.x0 <= cell.x && cell.x <= run.x1;
+        });
+      })
+    );
   }
 
   // A move sent from here has landed: walk the token along the path it took,
@@ -363,16 +417,31 @@
     }
 
     var cellPx = (bottomRight.x - topLeft.x) / d.width;
-    if (battle.reach && !battle.anim) {
-      // This turn's reach, one shape of row runs (L-615).
-      var dPath = battle.reach.runs
+    // Row runs of squares as one shape, so no seams show between them.
+    var runsPath = function (runs) {
+      return runs
         .map(function (run) {
           var a = s(PAD + run.x0 * CELL, PAD + run.y * CELL);
           var b = s(PAD + (run.x1 + 1) * CELL, PAD + (run.y + 1) * CELL);
           return 'M' + a.x + ' ' + a.y + 'H' + b.x + 'V' + b.y + 'H' + a.x + 'Z';
         })
         .join('');
-      overlay.appendChild(svg('path', { class: 'loom-grid-reach', d: dPath }));
+    };
+    // The fog's dimming (L-634) lies under the grid and the layers, so the
+    // layout of squares seen before still reads over their dimmed art.
+    var fog = function (level) {
+      if (battle.fog && battle.fog[level].length) {
+        overlay.appendChild(
+          svg('path', { class: 'loom-grid-fog is-' + level, d: runsPath(battle.fog[level]) })
+        );
+      }
+    };
+    fog('dim');
+    if (battle.reach && !battle.anim) {
+      // This turn's reach (L-615).
+      overlay.appendChild(
+        svg('path', { class: 'loom-grid-reach', d: runsPath(battle.reach.runs) })
+      );
     }
     if (cellPx >= 6) {
       for (var gx = 0; gx <= d.width; gx++) {
@@ -469,6 +538,10 @@
       );
     });
 
+    // What stands on a square seen before but not in sight now is faded.
+    var remembered = function (cell) {
+      return inSightNow(cell) ? '' : ' is-remembered';
+    };
     var cellBox = function (cell, className) {
       var a = s(PAD + cell.x * CELL, PAD + cell.y * CELL);
       overlay.appendChild(
@@ -482,19 +555,30 @@
         })
       );
     };
+    // Names are drawn after the fog, so one below a square at the fog's edge
+    // still reads; dimmed for a square seen before but not in sight now.
+    var labels = [];
     var label = function (cell, text, className) {
       var c = centre(cell);
       var p = s(c.x, c.y);
-      overlay.appendChild(
-        svg('text', { class: className, x: p.x, y: p.y + cellPx / 2 + 12 }, text)
+      labels.push(
+        svg(
+          'text',
+          {
+            class: className + remembered(cell),
+            x: p.x,
+            y: p.y + cellPx / 2 + 12,
+          },
+          text
+        )
       );
     };
 
     d.entries.forEach(function (e) {
-      cellBox(e, 'loom-grid-entry');
+      cellBox(e, 'loom-grid-entry' + remembered(e));
     });
     d.exits.forEach(function (e) {
-      cellBox(e, 'loom-grid-exit');
+      cellBox(e, 'loom-grid-exit' + remembered(e));
       label(e, e.name, 'loom-grid-label is-exit');
     });
     d.features.forEach(function (f) {
@@ -502,13 +586,19 @@
       var p = s(c.x, c.y);
       overlay.appendChild(
         svg('circle', {
-          class: 'loom-grid-feature',
+          class: 'loom-grid-feature' + remembered(f),
           cx: p.x,
           cy: p.y,
           r: Math.max(3, cellPx * 0.28),
         })
       );
       label(f, f.name, 'loom-grid-label');
+    });
+
+    // The fog's dark (L-634) covers everything never seen.
+    fog('dark');
+    labels.forEach(function (node) {
+      overlay.appendChild(node);
     });
     if (battle.selected) cellBox(battle.selected, 'loom-grid-selected');
 

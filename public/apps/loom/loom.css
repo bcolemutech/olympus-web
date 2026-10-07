@@ -709,6 +709,27 @@
   filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.9));
 }
 
+/* The fog (L-634): never seen is dark; seen before, dimmed; in sight, clear. */
+.loom-grid-fog {
+  stroke: none;
+  pointer-events: none;
+}
+
+.loom-grid-fog.is-dark {
+  fill: #000;
+}
+
+.loom-grid-fog.is-dim {
+  fill: rgba(0, 0, 0, 0.6);
+}
+
+.loom-grid-label.is-remembered,
+.loom-grid-feature.is-remembered,
+.loom-grid-exit.is-remembered,
+.loom-grid-entry.is-remembered {
+  opacity: 0.55;
+}
+
 /* The turn on the grid (L-615): this turn's reach, and the way a move takes. */
 .loom-grid-reach {
   fill: rgba(255, 183, 77, 0.12);
