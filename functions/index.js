@@ -12,7 +12,7 @@ const { withNeighbours } = require('./loom-turn/discovery');
 const { arrivalPlace } = require('./loom-canon/town');
 const maps = require('./loom-canon/maps');
 const { mapView } = require('./loom-turn/map-view');
-const { firstLook } = require('./loom-turn/seen');
+const { firstLook, seenRef } = require('./loom-turn/seen');
 const { makeSave } = require('./loom-models');
 
 initializeApp();
@@ -566,7 +566,8 @@ exports.loomPlayTurn = onCall(async (request) => {
  *
  * In a settlement with a town layout it also returns that town, for the town
  * view (L-345 / #399): its places, links, ways in and out, and routes out. On
- * a battle map it returns that map, for the grid view (L-354 / #403).
+ * a battle map it returns what the save has seen of that map, with the fog,
+ * for the grid view (L-354 / #403; L-633 / #456): nothing unseen is sent.
  * Always, the save's turn: movement left, the action, the turn number
  * (L-611 / #441).
  *
@@ -593,7 +594,9 @@ exports.loomGetMap = onCall(async (request) => {
   }
   const canonWorld = await loomCanon.loadWorld(worldId.trim(), { db });
   if (!canonWorld) throw new HttpsError('not-found', 'Unknown world.');
-  return mapView(canonWorld, save);
+  // On a battle map, only what the save has seen of it is sent (L-633).
+  const record = save.mapId ? await seenRef(snap.ref, save.mapId).get() : null;
+  return mapView(canonWorld, save, record && record.exists ? record.data() : null);
 });
 
 /**
