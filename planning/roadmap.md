@@ -48,10 +48,10 @@ Phases are numbered in the order they were planned, not the order they are built
 
 Both epics sit in the Phase 3b milestone today (#19) but were always planned for after it. The proposal is to move them into a milestone of their own.
 
-| Epic                                 | Issue | State                                                       | Depends on                                                                   |
-| ------------------------------------ | ----- | ----------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| L-370 Game time                      | #421  | Decisions made (2026-10-01, 2026-10-02); sub-issues to plan | Phase 3c: turns become time (6 s a battle-map turn, about 5 min a town turn) |
-| L-360 Off-road travel and wilderness | #418  | First sketch only                                           | L-370 (cross-country travel takes time); generic battle maps                 |
+| Epic                                 | Issue | State                                                                                                 | Depends on                                                                   |
+| ------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| L-370 Game time                      | #421  | Draft design and gap sheet in [`the-loom-game-time.md`](./the-loom-game-time.md); sub-issues proposed | Phase 3c: turns become time (6 s a battle-map turn, about 5 min a town turn) |
+| L-360 Off-road travel and wilderness | #418  | First sketch only                                                                                     | L-370 (cross-country travel takes time); generic battle maps                 |
 
 **Order:** L-370 first. Plan its sub-issues while Phase 3c finishes, so it is ready to start.
 
