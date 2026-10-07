@@ -1544,6 +1544,12 @@ describe('loom_* — Firestore Security Rules', function () {
       await setDoc(doc(db, 'loom_worlds', 'world-001'), { name: 'Test World', status: 'published' });
       await setDoc(doc(db, 'loom_worlds', 'draft-001'), { name: 'Draft World', status: 'draft' });
       await setDoc(doc(db, 'loom_worlds', 'world-001', 'locations', 'loc_1'), { name: 'Town' });
+      await setDoc(doc(db, 'loom_worlds', 'world-001', 'battleMaps', 'bm_cellar'), {
+        name: 'The cellar',
+        width: 6,
+        height: 6,
+        features: [{ id: 'casks', name: 'the casks', x: 1, y: 1 }],
+      });
       await setDoc(doc(db, 'loom_world_state', 'world-001'), { worldClock: 0 });
       await setDoc(doc(db, 'loom_saves', SAVE_ID), {
         ownerUid: OWNER_UID,
@@ -1610,6 +1616,19 @@ describe('loom_* — Firestore Security Rules', function () {
 
     it('denies a loom player reading entity subcollections', async function () {
       await assertFails(getDoc(doc(loomDb, 'loom_worlds', 'world-001', 'locations', 'loc_1')));
+    });
+
+    // A player sees a battle map only through loomGetMap, which sends what
+    // their character has seen of it (L-633): never the map document itself.
+    it('denies a loom player reading or listing battle maps, even of a published world', async function () {
+      await assertFails(
+        getDoc(doc(loomDb, 'loom_worlds', 'world-001', 'battleMaps', 'bm_cellar'))
+      );
+      await assertFails(getDocs(collection(loomDb, 'loom_worlds', 'world-001', 'battleMaps')));
+      var builderDb = testEnv.authenticatedContext('builder-001', { apps: ['cartographer'] }).firestore();
+      await assertSucceeds(
+        getDoc(doc(builderDb, 'loom_worlds', 'world-001', 'battleMaps', 'bm_cellar'))
+      );
     });
   });
 

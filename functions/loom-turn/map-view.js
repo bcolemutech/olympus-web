@@ -5,8 +5,9 @@ const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { discoveredBy } = require('./discovery');
 const { speedOf, turnStateOf } = require('../loom-models');
-const { planOn, doorStatesOf } = require('./steps');
+const { planOn, doorStatesOf, doorSides } = require('./steps');
 const layers = require('../loom-canon/layers');
+const seen = require('./seen');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -24,11 +25,12 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  *
  * In a settlement with a town layout, `town` is the town the save stands in,
  * for the town view (townView below); elsewhere it is null. On a battle map,
- * `battleMap` is that map, for the grid view (battleView below); else null.
- * `turn` is the save's turn (L-611 / #441): `{ n, movementLeft, speed,
- * actionUsed, plan }`, a fresh one for an older save.
+ * `battleMap` is what the save has seen of that map, for the grid view
+ * (battleView below; `record` is the save's seen record for it, ./seen.js);
+ * else null. `turn` is the save's turn (L-611 / #441): `{ n, movementLeft,
+ * speed, actionUsed, plan }`, a fresh one for an older save.
  */
-function mapView(canonWorld, save) {
+function mapView(canonWorld, save, record) {
   const discovered = new Set(discoveredBy(canonWorld, save));
   if (save.location) discovered.add(save.location);
 
@@ -83,7 +85,7 @@ function mapView(canonWorld, save) {
     places,
     links,
     town: townView(canonWorld, save, discovered),
-    battleMap: battleView(canonWorld, save),
+    battleMap: battleView(canonWorld, save, record),
     // The turn (L-611 / #441): which it is, the movement left of the
     // character's speed, whether its action is used, and any plan kept.
     turn: turnView(save),
@@ -210,13 +212,35 @@ function townView(canonWorld, save, discovered) {
 /**
  * The battle map a save stands on (planning/the-loom-layered-worlds.md §9;
  * L-354 / #403), for the grid view: its grid and art, where the save stands,
- * its entries, exits (and where each leads) and features, and the people
- * found at the place. Characters have no cells yet, so they are listed, not
- * placed. Null off a map.
+ * and what the save has seen of it (planning/the-loom-movement-and-vision.md
+ * §5; L-633 / #456). Nothing the character hasn't seen leaves the server:
+ *
+ *   - the walls and doors along the sides of squares it has seen, each door
+ *     in this save's state (L-624);
+ *   - the obstacles on squares it has seen, cut down to those squares;
+ *   - the entries, exits (and where each leads) and features on squares it
+ *     has seen;
+ *   - the people found at the place: those standing on a square (`cell`,
+ *     §6) only while it's in sight; the rest, who have no square yet, listed;
+ *   - `fog: { seen, inSight }`, the squares seen (ever, this one included)
+ *     and in sight now, packed as ./seen.js packs them (one bit a square,
+ *     y × width + x, lowest bit first, in base64), for the grid view's fog.
+ *
+ * Seen means the save's record for this map (`record`, ./seen.js) and
+ * whatever is in sight now, so a save with no record yet still sees where
+ * it stands. The art is sent whole: the fog covers it. Null off a map.
  */
-function battleView(canonWorld, save) {
+function battleView(canonWorld, save, record) {
   const { map, cell } = maps.positionOf(canonWorld, save);
   if (!map) return null;
+  const doors = doorStatesOf(save, map.id);
+  const inSight = seen.inSightNow(canonWorld, save).squares;
+  const known = Object.assign(
+    record ? seen.unpack(record.squares, record.width, record.height) : {},
+    inSight
+  );
+  const on = (square) => Boolean(known[square.x + ',' + square.y]);
+
   const host = maps.hostOf(canonWorld, save);
   const isPlace = host && Boolean((canonWorld.places || {})[host.id]);
   const people = host
@@ -227,6 +251,7 @@ function battleView(canonWorld, save) {
             ? c.placeId === host.id || (host.npcIds || []).includes(c.id)
             : c.locationId === host.id && !c.placeId
         )
+        .filter((c) => !c.cell || Boolean(inSight[c.cell.x + ',' + c.cell.y]))
         .map((c) => ({ id: c.id, name: c.name }))
     : [];
   return {
@@ -239,8 +264,8 @@ function battleView(canonWorld, save) {
       : null,
     here: { x: cell.x, y: cell.y },
     host: host ? { id: host.id, name: host.name } : null,
-    entries: (map.entries || []).map((e) => ({ id: e.id, x: e.x, y: e.y })),
-    exits: (map.exits || []).map((e) => {
+    entries: (map.entries || []).filter(on).map((e) => ({ id: e.id, x: e.x, y: e.y })),
+    exits: (map.exits || []).filter(on).map((e) => {
       const next = e.to && e.to !== 'out' ? (canonWorld.battleMaps || {})[e.to.map] : null;
       return {
         id: e.id,
@@ -250,28 +275,96 @@ function battleView(canonWorld, save) {
         to: next ? { map: next.id, name: next.name } : 'out',
       };
     }),
-    features: (map.features || []).map((f) => ({ id: f.id, name: f.name, x: f.x, y: f.y })),
-    // Its layers (L-624), each door in this save's state, so the grid view's
-    // paths are the server's.
-    walls: (map.walls || []).map((w) => ({ points: w.points })),
-    doors: (map.doors || []).map((d) => ({
-      id: d.id,
-      name: d.name,
-      from: d.from,
-      to: d.to,
-      state: layers.doorState(d, doorStatesOf(save, map.id)),
-    })),
-    obstacles: (map.obstacles || []).map((o) => ({
-      id: o.id,
-      name: o.name,
-      kind: o.kind,
-      x: o.x,
-      y: o.y,
-      w: o.w || 1,
-      h: o.h || 1,
-    })),
+    features: (map.features || [])
+      .filter(on)
+      .map((f) => ({ id: f.id, name: f.name, x: f.x, y: f.y })),
+    // Its layers (L-624), as far as they've been seen, each door in this
+    // save's state, so the grid view's paths are the server's.
+    walls: seenWalls(map, on),
+    doors: (map.doors || [])
+      .filter((d) => doorSides(d).some(on))
+      .map((d) => ({
+        id: d.id,
+        name: d.name,
+        from: d.from,
+        to: d.to,
+        state: layers.doorState(d, doors),
+      })),
+    obstacles: seenObstacles(map, on),
     people,
+    fog: {
+      seen: seen.pack(known, map.width, map.height),
+      inSight: seen.pack(inSight, map.width, map.height),
+    },
   };
+}
+
+// The runs of a map's walls along the sides of squares seen (`on`): each wall
+// is cut at the sides of squares not seen on either hand, every run kept
+// running the way its wall did.
+function seenWalls(map, on) {
+  const runs = [];
+  (map.walls || []).forEach((wall) => {
+    const points = wall.points || [];
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1];
+      const b = points[i];
+      const dx = Math.sign(b.x - a.x);
+      const dy = Math.sign(b.y - a.y);
+      if (Boolean(dx) === Boolean(dy)) continue; // not along a grid line
+      const length = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+      let start = null;
+      for (let k = 0; k <= length; k++) {
+        // The side from a + k to a + k + 1, between the squares either hand.
+        let seenSide = false;
+        if (k < length) {
+          const x = a.x + dx * k + Math.min(dx, 0);
+          const y = a.y + dy * k + Math.min(dy, 0);
+          seenSide = dx ? on({ x, y: y - 1 }) || on({ x, y }) : on({ x: x - 1, y }) || on({ x, y });
+        }
+        if (seenSide && start === null) start = k;
+        if (!seenSide && start !== null) {
+          runs.push({
+            points: [
+              { x: a.x + dx * start, y: a.y + dy * start },
+              { x: a.x + dx * k, y: a.y + dy * k },
+            ],
+          });
+          start = null;
+        }
+      }
+    }
+  });
+  return runs;
+}
+
+// A map's obstacles on squares seen (`on`): whole where all of it is seen,
+// else cut into its seen runs along each row.
+function seenObstacles(map, on) {
+  const pieces = [];
+  (map.obstacles || []).forEach((o) => {
+    const w = o.w || 1;
+    const h = o.h || 1;
+    const piece = (x, y, width) => ({ id: o.id, name: o.name, kind: o.kind, x, y, w: width, h: 1 });
+    const rows = [];
+    for (let y = o.y; y < o.y + h; y++) {
+      let start = null;
+      for (let x = o.x; x <= o.x + w; x++) {
+        const seenHere = x < o.x + w && on({ x, y });
+        if (seenHere && start === null) start = x;
+        if (!seenHere && start !== null) {
+          rows.push(piece(start, y, x - start));
+          start = null;
+        }
+      }
+    }
+    if (rows.length === h && rows.every((r) => r.w === w)) {
+      pieces.push({ id: o.id, name: o.name, kind: o.kind, x: o.x, y: o.y, w, h });
+    } else {
+      pieces.push(...rows);
+    }
+  });
+  return pieces;
 }
 
 // The plan shows only while it's for the map the save stands on (L-613).

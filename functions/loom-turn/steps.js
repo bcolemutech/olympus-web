@@ -133,7 +133,7 @@ function planStep(canonWorld, save, target) {
   };
 }
 
-// The two squares a door stands between.
+/** The two squares a door stands between. */
 function doorSides(door) {
   const { from, to } = door;
   if (from.x === to.x) {
@@ -212,6 +212,7 @@ module.exports = {
   planDoor,
   planOn,
   doorStatesOf,
+  doorSides,
   hasKey,
   besideDoor,
   OUT_OF_MOVEMENT,

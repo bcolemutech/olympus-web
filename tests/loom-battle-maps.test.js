@@ -316,6 +316,8 @@ describe('a visit to the Gull & Anchor', () => {
       doors: [],
       obstacles: [],
       people: [{ id: 'chr_brannoch', name: 'Brannoch the Innkeeper' }],
+      // Open ground, all in sight: 96 bits set, 12 bytes of 0xff (L-633).
+      fog: { seen: '/'.repeat(16), inSight: '/'.repeat(16) },
     });
     expect(view.town).toMatchObject({ locationId: 'loc_1', here: 'plc_1_tavern' });
   });
@@ -1358,5 +1360,60 @@ describe('what a save has seen (L-632)', () => {
     await loomDeleteSave.run({ data: { saveId }, auth: PLAYER });
     const left = await db.collection('loom_saves').doc(saveId).collection('seen').get();
     expect(left.empty).toBe(true);
+  });
+
+  describe('only what is seen leaves the server (L-633)', () => {
+    const gridOf = async (saveId) =>
+      (await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER })).battleMap;
+    const ids = (list) => list.map((item) => item.id);
+    const fogOf = (grid) => ({
+      seen: unpack(grid.fog.seen, grid.width, grid.height),
+      inSight: unpack(grid.fog.inSight, grid.width, grid.height),
+    });
+
+    test('a feature behind a closed door is absent, and appears once the door opens', async () => {
+      const { saveId } = await newGame();
+      await offMap(db, saveId);
+      await moveTo(saveId, 'plc_1_tavern');
+      let grid = await gridOf(saveId);
+      // From the front door: the front room only, with the bar and the stool.
+      // The hearth, the cellar stairs and the stair-top entry are all behind
+      // the kitchen wall.
+      expect(ids(grid.features)).toEqual(['bar', 'stool']);
+      expect(ids(grid.exits)).toEqual(['front-door']);
+      expect(ids(grid.entries)).toEqual(['door']);
+      expect(grid.walls).toEqual(KITCHEN.walls);
+      expect(grid.doors).toEqual([{ ...KITCHEN.doors[0], state: 'closed' }]);
+      expect(Object.keys(fogOf(grid).seen)).toHaveLength(48);
+
+      await stepTo(saveId, { x: 5, y: 3 });
+      await tapDoor(saveId, true);
+      grid = await gridOf(saveId);
+      expect(ids(grid.features)).toEqual(['bar', 'hearth', 'stool']);
+      expect(ids(grid.exits)).toEqual(['front-door', 'cellar-stairs']);
+      expect(fogOf(grid).inSight['9,1']).toBe(true);
+    });
+
+    test('shut again, the kitchen is still sent as seen, but not in sight', async () => {
+      const { saveId } = await newGame();
+      await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 3 });
+      await tapDoor(saveId, true);
+      await tapDoor(saveId, false);
+      const grid = await gridOf(saveId);
+      expect(ids(grid.features)).toEqual(['bar', 'hearth', 'stool']);
+      const fog = fogOf(grid);
+      expect(fog.seen['9,1']).toBe(true);
+      expect(fog.inSight['9,1']).toBeUndefined();
+      expect(fog.inSight['5,3']).toBe(true);
+    });
+
+    test('a save with no record yet is sent what is in sight now', async () => {
+      const { saveId } = await newGame();
+      await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+      expect(await seenOn(saveId, 'bm_tavern')).toBeNull();
+      const grid = await gridOf(saveId);
+      expect(ids(grid.features)).toEqual(['bar', 'stool']);
+      expect(grid.fog.seen).toBe(grid.fog.inSight);
+    });
   });
 });
