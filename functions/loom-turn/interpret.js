@@ -2,6 +2,7 @@
 
 const { callGemini } = require('../gemini');
 const maps = require('../loom-canon/maps');
+const { doorSides } = require('./steps');
 
 /**
  * Stage 2 — INTERPRET (design doc §5).
@@ -48,25 +49,44 @@ function buildSystemInstruction(knownEntities) {
   );
 }
 
+// The things on the battle map a save stands on (L-351), targeted as
+// "feature:<id>", "exit:<id>" and "door:<id>" (L-626): `seen` says whether
+// the save has seen each (`known`, keyed "x,y", L-635; a door, from either
+// side; without it, all have been).
+function mapEntities(canonWorld, save, known) {
+  const onMap = save ? maps.positionOf(canonWorld, save).map : null;
+  if (!onMap) return [];
+  const at = (square) => !known || Boolean(known[square.x + ',' + square.y]);
+  return [].concat(
+    (onMap.features || []).map((f) => ({
+      id: 'feature:' + f.id,
+      name: f.name,
+      kind: 'feature here',
+      seen: at(f),
+    })),
+    (onMap.exits || []).map((e) => ({
+      id: 'exit:' + e.id,
+      name: e.name,
+      kind: 'way out of here',
+      seen: at(e),
+    })),
+    (onMap.doors || []).map((d) => ({
+      id: 'door:' + d.id,
+      name: d.name || 'a door',
+      kind: 'door here',
+      seen: doorSides(d).some(at),
+    }))
+  );
+}
+
 // The world's places, realms and characters, plus the places of the town the
 // player is in (L-342), so "go to the market" resolves to that town's market.
-function buildKnownEntities(canonWorld, save) {
-  const entities = [];
-  // On a battle map (L-351): its features and ways out first, the nearest
-  // things there are. Targeted as "feature:<id>" and "exit:<id>".
-  const onMap = save ? maps.positionOf(canonWorld, save).map : null;
-  if (onMap) {
-    (onMap.features || []).forEach((f) => {
-      entities.push({ id: 'feature:' + f.id, name: f.name, kind: 'feature here' });
-    });
-    (onMap.exits || []).forEach((e) => {
-      entities.push({ id: 'exit:' + e.id, name: e.name, kind: 'way out of here' });
-    });
-    // Its doors (L-626), to open, close, unlock, pick or force.
-    (onMap.doors || []).forEach((d) => {
-      entities.push({ id: 'door:' + d.id, name: d.name || 'a door', kind: 'door here' });
-    });
-  }
+// On a battle map, first the things there the save has seen (L-636 / #459):
+// only those are named to the model.
+function buildKnownEntities(canonWorld, save, known) {
+  const entities = mapEntities(canonWorld, save, known)
+    .filter((e) => e.seen)
+    .map(({ id, name, kind }) => ({ id, name, kind }));
   // Retired entities (soft-removed from a published world) can't be targeted.
   const live = (entity) => !entity.retired;
   Object.values(canonWorld.locations)
@@ -149,12 +169,24 @@ function fallbackProposedAction(actionText) {
 }
 
 /**
- * @param {{ actionText: string, canonWorld: object, save: object, worldState: object }} params
+ * On a battle map, the model is told only what the save has seen there
+ * (`known`, L-636). A target it can't match to those is still matched to the
+ * map's unseen things, here and never in the prompt, so ADJUDICATE can turn
+ * it down as out of sight rather than treat it as made up.
+ *
+ * @param {{ actionText: string, canonWorld: object, save: object, worldState: object,
+ *           known?: object }} params
  * @returns {Promise<{ verb: string, targets: string[], params: object }>}
  */
 async function interpretAction(params) {
-  const { actionText, canonWorld, save } = params;
-  const knownEntities = buildKnownEntities(canonWorld, save);
+  const { actionText, canonWorld, save, known } = params;
+  const knownEntities = buildKnownEntities(canonWorld, save, known);
+  const unseen = mapEntities(canonWorld, save, known).filter((e) => !e.seen);
+  const resolve = (target) => {
+    const resolved = resolveTarget(target, knownEntities);
+    const matched = knownEntities.some((e) => e.id === resolved);
+    return matched || !unseen.length ? resolved : resolveTarget(target, unseen);
+  };
 
   let raw;
   try {
@@ -178,7 +210,7 @@ async function interpretAction(params) {
 
   return {
     verb: raw.verb.toLowerCase().slice(0, 50),
-    targets: raw.targets.map((t) => resolveTarget(t, knownEntities)),
+    targets: raw.targets.map(resolve),
     params: raw.params && typeof raw.params === 'object' ? raw.params : {},
   };
 }
