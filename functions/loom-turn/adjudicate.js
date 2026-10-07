@@ -153,11 +153,11 @@ function enterOrStay(place, characterState, canonWorld) {
 const exitNames = (exits) => nameList(exits.map((e) => ({ name: e.name })));
 
 // A move while the player is on a battle map: to a cell (from the grid), to a
-// feature or an exit (typed: "feature:bar", "exit:front-door"), anywhere in the
-// grid (nothing blocks movement yet). Stepping onto an exit leaves by it, out
+// feature or an exit (typed: "feature:bar", "exit:front-door"), along the
+// map's paths (L-624) over the ground the save knows (L-635). Stepping onto an exit leaves by it, out
 // to the town or the world, or onto the map it leads to. Anything else waits
 // until the player has left the map, as leaving a town waits for a gate.
-function evaluateMapMove(proposedAction, characterState, canonWorld, here) {
+function evaluateMapMove(proposedAction, characterState, canonWorld, here, known) {
   const { map, cell: from } = here;
   const host = maps.hostOf(canonWorld, characterState);
   const hostName = host ? host.name : map.name;
@@ -196,9 +196,10 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here) {
     return { outcome: 'no_op', mutations: [], constraints: ["You're already there."] };
   }
   // The way there, on the turn's movement (L-614 / #444), as a tap would go
-  // (./steps.js): the rest kept as the plan.
+  // (./steps.js), over the ground the save knows (L-635): the rest kept as
+  // the plan.
   const to = exit ? { x: exit.x, y: exit.y } : { x: cell.x, y: cell.y };
-  const step = planStep(canonWorld, characterState, { cell: to });
+  const step = planStep(canonWorld, characterState, { cell: to }, known);
   if (step.refused) return blocked(step.refused);
   const spend = { target: 'save', op: 'set-flag', path: 'turn', value: step.turn };
   if (step.exit) {
@@ -275,7 +276,7 @@ function chosenWayIn(proposedAction, canonWorld) {
   return asked;
 }
 
-function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
+function evaluateMove(proposedAction, worldState, characterState, canonWorld, known) {
   const currentId = characterState.location;
 
   if (!currentId || !canonWorld.locations[currentId]) {
@@ -286,7 +287,7 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld) {
   // it. A map with no exits holds nobody: it is passed over.
   const onMap = maps.positionOf(canonWorld, characterState);
   if (onMap.map && (onMap.map.exits || []).length) {
-    return evaluateMapMove(proposedAction, characterState, canonWorld, onMap);
+    return evaluateMapMove(proposedAction, characterState, canonWorld, onMap, known);
   }
   if (proposedAction.params && proposedAction.params.cell) {
     return blocked("There's no map here to move on.");
@@ -539,10 +540,10 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
   return { outcome: 'failure', mutations: [], constraints: ['The lock on ' + name + ' holds.'] };
 }
 
-function evaluate(proposedAction, worldState, characterState, dice, canonWorld) {
+function evaluate(proposedAction, worldState, characterState, dice, canonWorld, known) {
   let resolution;
   if (proposedAction.verb === 'move') {
-    resolution = evaluateMove(proposedAction, worldState, characterState, canonWorld);
+    resolution = evaluateMove(proposedAction, worldState, characterState, canonWorld, known);
   } else if (proposedAction.verb === 'end-turn') {
     resolution = evaluateEndTurn(characterState, canonWorld);
   } else {
@@ -561,14 +562,18 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld) 
 }
 
 /**
- * @param {{ proposedAction: object, canonWorld: object, save: object, worldState: object }} params
+ * `known` is the ground the save knows on its battle map, keyed "x,y" (L-635;
+ * ./seen.js knownTo): a move there heads only for and over it.
+ *
+ * @param {{ proposedAction: object, canonWorld: object, save: object, worldState: object,
+ *           known?: object }} params
  * @param {() => number} [rollFn] - override for tests; defaults to the real server-side die
  * @returns {Promise<{ outcome: string, mutations: object[], constraints: string[] }>}
  */
 async function adjudicateAction(params, rollFn = rollDie) {
-  const { proposedAction, canonWorld, save, worldState } = params;
+  const { proposedAction, canonWorld, save, worldState, known } = params;
   const dice = rollFn();
-  return evaluate(proposedAction, worldState, save, dice, canonWorld);
+  return evaluate(proposedAction, worldState, save, dice, canonWorld, known);
 }
 
 module.exports = {

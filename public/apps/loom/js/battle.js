@@ -28,7 +28,9 @@
   // the path a move would take (grid-paths.js, the server's own rules), solid
   // for this turn and dashed after, and the card says what it costs and in
   // how many turns; a kept plan is drawn dashed. After a move the token walks
-  // its path (a tap skips ahead; reduced motion jumps).
+  // its path (a tap skips ahead; reduced motion jumps). Reach and paths cover
+  // only squares seen, as on the server (L-635 / #458); a square in the dark
+  // says "You haven't seen that."
   //
   // map.js owns the panel, pan and zoom, and switches between this, the town
   // view and the world map; this module draws the map into the panel's SVG
@@ -53,6 +55,7 @@
     art: { path: null, url: null },
     reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
     fog: null, // the fog (L-634): { dark: runs, dim: runs }, as reach's runs
+    known: null, // whether a square (by y × width + x) has been seen (L-635)
     preview: null, // the path to the selected cell: { path, walked, rest, cost, turns } or { none }
     pending: null, // a move sent: { mapId, from, path }, for the walk when it lands
     anim: null, // the token's walk: { cells, t0 }
@@ -101,13 +104,27 @@
   // The server's own path rules (layers.js; L-624): around walls, locked
   // doors and obstacles, 2 a square on difficult ground, 1 more to open a
   // closed door (where a walk stops), and exits stepped onto, never through.
-  // Doors are as this save has them.
+  // Doors are as this save has them, and only ground it knows is walked
+  // (L-635): what it has seen, as the server does.
   function pathOptions() {
     var states = {};
     (battle.data.doors || []).forEach(function (door) {
       states[door.id] = door.state;
     });
-    return L.pathOptions(battle.data, states);
+    var rules = L.pathOptions(battle.data, states);
+    if (!battle.known) return rules;
+    return {
+      avoid: rules.avoid,
+      opens: rules.opens,
+      cost: function (from, to) {
+        return known(to) ? rules.cost(from, to) : Infinity;
+      },
+    };
+  }
+
+  // Whether the save has seen a square (L-635): everything, without a fog.
+  function known(cell) {
+    return !battle.known || battle.known(cell.y * battle.data.width + cell.x);
   }
 
   function doorById(id) {
@@ -219,8 +236,10 @@
   function computeFog() {
     var d = battle.data;
     battle.fog = null;
+    battle.known = null;
     if (!d || !d.fog) return;
     var seen = unpacked(d.fog.seen);
+    battle.known = seen;
     var inSight = unpacked(d.fog.inSight);
     var runs = { dark: [], dim: [] };
     for (var y = 0; y < d.height; y++) {
@@ -329,6 +348,10 @@
     var cell = battle.selected;
     battle.preview = null;
     if (!d || !cell || same(cell, d.here)) return;
+    if (!known(cell)) {
+      battle.preview = { unseen: true }; // (L-635)
+      return;
+    }
     var found = P.pathTo(d, d.here, cell, pathOptions());
     if (!found) {
       battle.preview = { none: true };
@@ -800,6 +823,10 @@
       return;
     }
     var preview = battle.preview;
+    if (preview && preview.unseen) {
+      info.appendChild(el('p', 'loom-map-info-status', "You haven't seen that."));
+      return;
+    }
     if (!preview || preview.none) {
       info.appendChild(el('p', 'loom-map-info-status', "There's no way there from here."));
       return;

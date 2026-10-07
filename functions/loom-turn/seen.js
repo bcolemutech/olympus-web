@@ -92,18 +92,52 @@ function withSquares(record, map, squares) {
 const seenRef = (saveRef, mapId) => saveRef.collection('seen').doc(mapId);
 
 /**
+ * A save's record for a map, read inside `transaction` (or directly, without
+ * one): `{ ref, record }`, the record null if there is none yet.
+ */
+async function recordOf(transaction, saveRef, mapId) {
+  const ref = seenRef(saveRef, mapId);
+  const snap = await (transaction ? transaction.get(ref) : ref.get());
+  return { ref, record: snap.exists ? snap.data() : null };
+}
+
+/**
+ * What a save knows of the map it stands on (L-635 / #458): the squares in
+ * its record and those in sight now, keyed "x,y". What its moves may head
+ * for and walk over.
+ */
+function knownTo(canonWorld, save, record) {
+  const { squares } = inSightNow(canonWorld, save);
+  return record
+    ? Object.assign(unpack(record.squares, record.width, record.height), squares)
+    : squares;
+}
+
+/**
+ * A record read (`found`, as recordOf gives it) with what the save, as it now
+ * stands, sees added: `{ ref, value }` to write, or null: off a map, or
+ * nothing new.
+ */
+function added(found, canonWorld, save, walked, doorsBefore) {
+  const { map, squares } = inSightNow(canonWorld, save, walked, doorsBefore);
+  if (!map) return null;
+  const value = withSquares(found.record, map, squares);
+  return value
+    ? { ref: found.ref, value: { ...value, updatedAt: FieldValue.serverTimestamp() } }
+    : null;
+}
+
+/**
  * Inside a transaction, before any of its writes: the record for the map the
  * save (as it now stands) is on, with what it sees added (inSightNow).
  * Returns `{ ref, value }` to write once the transaction's reads are done, or
  * null: off a map, or nothing new.
  */
 async function look(transaction, saveRef, canonWorld, save, walked, doorsBefore) {
-  const { map, squares } = inSightNow(canonWorld, save, walked, doorsBefore);
+  const { map } = maps.positionOf(canonWorld, save);
   if (!map) return null;
-  const ref = seenRef(saveRef, map.id);
-  const snap = await transaction.get(ref);
-  const value = withSquares(snap.exists ? snap.data() : null, map, squares);
-  return value ? { ref, value: { ...value, updatedAt: FieldValue.serverTimestamp() } } : null;
+  const found = await recordOf(transaction, saveRef, map.id);
+  return added(found, canonWorld, save, walked, doorsBefore);
 }
 
 /** A new save's first look, if it starts on a map: `{ ref, value }`, or null. */
@@ -117,4 +151,15 @@ function firstLook(saveRef, canonWorld, save) {
   };
 }
 
-module.exports = { pack, unpack, inSightNow, withSquares, seenRef, look, firstLook };
+module.exports = {
+  pack,
+  unpack,
+  inSightNow,
+  withSquares,
+  seenRef,
+  recordOf,
+  knownTo,
+  added,
+  look,
+  firstLook,
+};

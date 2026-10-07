@@ -23,6 +23,12 @@ const { turnStateOf } = require('../loom-models');
  * the plan, so the player sees what's beyond before going on; the save
  * remembers the door open (`save.doors[mapId][doorId]`).
  *
+ * Only ground the save knows is walked (planning/the-loom-movement-and-
+ * vision.md §5; L-635 / #458): what it has seen there, and what is in sight
+ * now (./seen.js knownTo). A move must be to a square it has seen ("You
+ * haven't seen that."), and its path treats unseen squares as blocked, so it
+ * never gives away a hidden wall: it goes around, or there's no way.
+ *
  * A door beside the player (on either side of it) opens or closes with a tap
  * (planDoor; L-625 / #450), for 1 movement; a locked one opens only with its
  * key in the character's inventory (L-626 / #451).
@@ -33,6 +39,7 @@ const { turnStateOf } = require('../loom-models');
  */
 
 const OUT_OF_MOVEMENT = "You're out of movement. End your turn to go on.";
+const UNSEEN = "You haven't seen that.";
 
 /** The states of a save's doors on a map, by door id (none: as the map has them). */
 function doorStatesOf(save, mapId) {
@@ -70,9 +77,11 @@ function storedPath(map, from, plan, cost) {
  * `target` is { cell } (a square) or { plan: true } (walk the plan). `turn` is
  * the save's turn after the move: movement spent, the plan set or cleared.
  * `walked` lists the squares stepped on, in order, for what is seen on the
- * way (./seen.js; L-632).
+ * way (./seen.js; L-632). `known` is the squares the save knows, keyed "x,y"
+ * (L-635): only those are headed for or walked over. Without it, every
+ * square is (for the rules alone, as in tests).
  */
-function planStep(canonWorld, save, target) {
+function planStep(canonWorld, save, target, known) {
   const { map, cell: from } = maps.positionOf(canonWorld, save);
   if (!map || !(map.exits || []).length) return { refused: "There's no map here to move on." };
   const turn = turnStateOf(save);
@@ -85,6 +94,8 @@ function planStep(canonWorld, save, target) {
     to = plan.to;
   }
   if (!maps.inBounds(map, to)) return { refused: "That's off the map." };
+  const seen = (cell) => !known || Boolean(known[cell.x + ',' + cell.y]);
+  if (!seen(to)) return { refused: UNSEEN };
   if (maps.sameCell(to, from)) {
     // Standing on an exit (a map whose entry is its way out): leave by it.
     const { exit } = maps.at(map, to);
@@ -92,9 +103,12 @@ function planStep(canonWorld, save, target) {
     return { refused: "You're already there." };
   }
 
-  // The map's rules (layers.js), for this save's doors. An exit is only
-  // stepped on to leave by it: it's never on the way.
-  const options = layers.pathOptions(map, doorStatesOf(save, map.id));
+  // The map's rules (layers.js), for this save's doors, on the ground it
+  // knows. An exit is only stepped on to leave by it: it's never on the way.
+  const rules = layers.pathOptions(map, doorStatesOf(save, map.id));
+  const options = known
+    ? { ...rules, cost: (step, next) => (seen(next) ? rules.cost(step, next) : Infinity) }
+    : rules;
   const cost = (step, next) =>
     !maps.sameCell(next, to) && maps.at(map, next).exit ? Infinity : options.cost(step, next);
   const found =
@@ -216,4 +230,5 @@ module.exports = {
   hasKey,
   besideDoor,
   OUT_OF_MOVEMENT,
+  UNSEEN,
 };

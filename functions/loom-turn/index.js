@@ -8,7 +8,7 @@ const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
 const { planStep, planDoor, doorStatesOf } = require('./steps');
-const { look } = require('./seen');
+const { recordOf, knownTo, added } = require('./seen');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -59,7 +59,13 @@ async function intake(params) {
   const worldStateSnap = await worldStateRef.get();
   const worldState = worldStateSnap.exists ? worldStateSnap.data() : makeWorldState({ worldId });
 
-  return { save, saveRef, worldState, worldStateRef, canonWorld };
+  // On a battle map, the ground the save knows (./seen.js; L-635): typed
+  // moves go only there.
+  const known = save.mapId
+    ? knownTo(canonWorld, save, (await recordOf(null, saveRef, save.mapId)).record)
+    : null;
+
+  return { save, saveRef, worldState, worldStateRef, canonWorld, known };
 }
 
 /**
@@ -84,9 +90,10 @@ async function intake(params) {
  * `step: { cell, movementLeft, plan, lines }`. Only a step that reaches an
  * exit goes on through the pipeline, to leave by it, narrated. Opening or
  * closing a door beside the player (`{ verb: 'door', door, open }`; L-625 /
- * #450) is answered the same way. What the save sees on the way, and from
- * where it stops, is added to what it has seen on the map (./seen.js; L-632 /
- * #455), in the same transaction.
+ * #450) is answered the same way. A step goes only to and over ground the
+ * save knows (L-635 / #458). What it sees on the way, and from where it
+ * stops, is added to what it has seen on the map (./seen.js; L-632 / #455),
+ * in the same transaction.
  *
  * @param {{ db: FirebaseFirestore.Firestore, uid: string, worldId: string, saveId: string,
  *           actionText?: string, action?: { verb: 'move', target: string } }} params
@@ -95,7 +102,7 @@ async function intake(params) {
 async function runTurnPipeline(params) {
   const { db, uid, worldId, saveId, action } = params;
 
-  const { save, saveRef, worldState, worldStateRef, canonWorld } = await intake({
+  const { save, saveRef, worldState, worldStateRef, canonWorld, known } = await intake({
     db,
     uid,
     worldId,
@@ -125,10 +132,13 @@ async function runTurnPipeline(params) {
     const target = action.cell ? { cell: action.cell } : { plan: true };
     const step = await db.runTransaction(async (transaction) => {
       const fresh = (await transaction.get(saveRef)).data();
+      // What the save has seen on its map: the ground it may walk (L-635),
+      // and the record its new sight is added to (L-632).
+      const found = fresh.mapId ? await recordOf(transaction, saveRef, fresh.mapId) : null;
       const planned =
         action.verb === 'door'
           ? planDoor(canonWorld, fresh, action.door, action.open)
-          : planStep(canonWorld, fresh, target);
+          : planStep(canonWorld, fresh, target, found && knownTo(canonWorld, fresh, found.record));
       // A door opened on the way (L-624), or opened or closed by a tap
       // (L-625), stays so for this save.
       const door = planned.door || (planned.opened && { ...planned.opened, state: 'open' });
@@ -139,9 +149,8 @@ async function runTurnPipeline(params) {
               [door.mapId]: { ...doorStatesOf(fresh, door.mapId), [door.doorId]: door.state },
             }
           : fresh.doors;
-        const seen = await look(
-          transaction,
-          saveRef,
+        const seen = added(
+          found,
           canonWorld,
           { ...fresh, cell: planned.cell, doors },
           planned.walked,
@@ -191,7 +200,13 @@ async function runTurnPipeline(params) {
   } else {
     proposedAction = await interpretAction({ actionText, canonWorld, save, worldState });
   }
-  const resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
+  const resolution = await adjudicateAction({
+    proposedAction,
+    canonWorld,
+    save,
+    worldState,
+    known,
+  });
   // A second action in a turn is turned down plainly: not narrated, not
   // recorded (L-614 / #444).
   if (resolution.outcome === 'blocked' && resolution.constraints[0] === ACTED) {
