@@ -4,6 +4,8 @@ const { FieldValue } = require('firebase-admin/firestore');
 const { makeTurn, applyStateMutations } = require('../loom-models');
 const { quarantineEntities } = require('./soft-canon');
 const { shouldRegenerateSummary, maybeRegenerateSummary } = require('./summary');
+const { doorStatesOf } = require('./steps');
+const { look } = require('./seen');
 
 /**
  * Stage 5 — COMMIT (design doc §5, §8).
@@ -24,11 +26,18 @@ const { shouldRegenerateSummary, maybeRegenerateSummary } = require('./summary')
  * State. This routing is COMMIT-only bookkeeping — applyStateMutations
  * itself (functions/loom-models.js) is state-shape agnostic.
  *
+ * A turn that moves the save on a battle map, puts it on one, or opens or
+ * closes a door adds what it now sees to what it has seen there (./seen.js;
+ * L-632 / #455): from each square a typed move walked through (the
+ * resolution's `walked`, which isn't kept in the turn record), and from
+ * where it stands.
+ *
  * @param {{
  *   db: FirebaseFirestore.Firestore,
  *   saveRef: FirebaseFirestore.DocumentReference,
  *   worldStateRef: FirebaseFirestore.DocumentReference,
  *   worldId: string,
+ *   canonWorld?: object,     — the world, for what the save sees on a map
  *   actionText: string,
  *   proposedAction: object,
  *   resolution: { outcome: string, mutations: object[], constraints: string[] },
@@ -46,6 +55,7 @@ async function commitTurn(params) {
     saveRef,
     worldStateRef,
     worldId,
+    canonWorld,
     actionText,
     proposedAction,
     resolution,
@@ -77,6 +87,8 @@ async function commitTurn(params) {
     const saveMutations = mutations.filter((m) => m.target === 'save');
     const worldMutations = mutations.filter((m) => m.target !== 'save');
 
+    const mapBefore = save.mapId;
+    const doorsBefore = { ...doorStatesOf(save, mapBefore) };
     applyStateMutations(save, saveMutations);
     applyStateMutations(
       save,
@@ -84,13 +96,30 @@ async function commitTurn(params) {
     );
     applyStateMutations(worldState, worldMutations);
 
+    // What the save now sees on its map, read before any write.
+    const looked = saveMutations.some((m) => /^(mapId|cell|doors)(\.|$)/.test(m.path));
+    const sameMap = save.mapId === mapBefore;
+    const seen =
+      canonWorld && looked
+        ? await look(
+            transaction,
+            saveRef,
+            canonWorld,
+            save,
+            sameMap ? resolution.walked : [],
+            sameMap ? doorsBefore : undefined
+          )
+        : null;
+
     const turnIndex = lastTurnSnap.empty ? 0 : lastTurnSnap.docs[0].data().index + 1;
 
+    const recorded = Object.assign({}, resolution);
+    delete recorded.walked;
     const turn = makeTurn({
       index: turnIndex,
       actionText,
       proposedAction,
-      resolution,
+      resolution: recorded,
       narration,
       entityRefs,
       createdAt: FieldValue.serverTimestamp(),
@@ -110,6 +139,7 @@ async function commitTurn(params) {
 
     transaction.set(saveRef.collection('loom_turns').doc(), turn);
     transaction.set(saveRef, Object.assign({}, save, { updatedAt: FieldValue.serverTimestamp() }));
+    if (seen) transaction.set(seen.ref, seen.value);
     transaction.set(
       worldStateRef,
       Object.assign({}, worldState, { updatedAt: FieldValue.serverTimestamp() })

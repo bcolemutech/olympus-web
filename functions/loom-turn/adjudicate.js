@@ -217,6 +217,8 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here) {
       value: 'open',
     });
   }
+  // The squares walked through, for what is seen on the way (L-632).
+  const walked = step.walked;
   if (step.turn.plan) {
     return {
       outcome: 'success',
@@ -224,12 +226,14 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here) {
       constraints: ['You head ' + (name ? 'for ' + name : 'across ' + map.name) + '.'].concat(
         step.lines
       ),
+      walked,
     };
   }
   return {
     outcome: 'success',
     mutations,
     constraints: [name ? 'You move to ' + name + '.' : 'You move across ' + map.name + '.'],
+    walked,
   };
 }
 
@@ -546,10 +550,13 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld) 
   }
 
   // Resolution is immutable once produced — NARRATE (L-113) can color it, never change it.
+  // A move on a battle map also says which squares it walked through, for
+  // what is seen on the way (COMMIT; L-632), not for the turn record.
   return Object.freeze({
     outcome: resolution.outcome,
     mutations: Object.freeze(resolution.mutations),
     constraints: Object.freeze(resolution.constraints),
+    ...(resolution.walked ? { walked: Object.freeze(resolution.walked) } : {}),
   });
 }
 

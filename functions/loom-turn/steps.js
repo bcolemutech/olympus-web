@@ -66,9 +66,11 @@ function storedPath(map, from, plan, cost) {
  * What a move on a battle map does, for a save as it stands now:
  *   { refused: line }                          — nothing happens
  *   { exit, spent, turn }                      — it reaches an exit and leaves by it
- *   { cell, turn, lines }                      — a quiet step (or none: out of movement)
+ *   { cell, turn, lines, walked }              — a quiet step (or none: out of movement)
  * `target` is { cell } (a square) or { plan: true } (walk the plan). `turn` is
  * the save's turn after the move: movement spent, the plan set or cleared.
+ * `walked` lists the squares stepped on, in order, for what is seen on the
+ * way (./seen.js; L-632).
  */
 function planStep(canonWorld, save, target) {
   const { map, cell: from } = maps.positionOf(canonWorld, save);
@@ -102,6 +104,7 @@ function planStep(canonWorld, save, target) {
 
   const { walked, spent, rest, opened } = gridPaths.walk(found.path, turn.movementLeft);
   const movementLeft = turn.movementLeft - spent;
+  const squares = walked.map((step) => ({ x: step.x, y: step.y }));
   const door = opened ? (map.doors || []).find((d) => d.id === opened) : null;
   if (!rest.length) {
     const { exit, feature } = maps.at(map, to);
@@ -110,6 +113,7 @@ function planStep(canonWorld, save, target) {
       cell: { x: to.x, y: to.y },
       turn: { ...turn, movementLeft, plan: null },
       lines: feature ? ["You're at " + feature.name + '.'] : [],
+      walked: squares,
     };
   }
   const stop = walked.length ? walked[walked.length - 1] : from;
@@ -124,6 +128,7 @@ function planStep(canonWorld, save, target) {
       plan: { layer: 'battleMap', mapId: map.id, to: { x: to.x, y: to.y }, path: rest },
     },
     lines,
+    walked: squares,
     ...(door ? { opened: { mapId: map.id, doorId: door.id } } : {}),
   };
 }

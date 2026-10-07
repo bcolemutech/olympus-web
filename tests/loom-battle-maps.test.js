@@ -23,8 +23,10 @@ jest.mock('../functions/gemini', () => ({
 
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
 const { layOutTowns, mapPlaces, offMap, GATEWAY } = require('./helpers/towns');
-const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
+const { loomCreateSave, loomDeleteSave, loomPlayTurn, loomGetMap } = require('../functions/index');
 const { OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
+const { unpack } = require('../functions/loom-turn/seen');
+const sight = require('../functions/loom-canon/sight');
 
 const fs = require('fs');
 const path = require('path');
@@ -1220,5 +1222,141 @@ describe('locked doors (L-626)', () => {
     });
     expect(prompts.narrate.at(-1)).toContain('Doors: the kitchen door (open).');
     expect((await saveOf(saveId)).turn.actionUsed).toBe(true);
+  });
+});
+
+describe('what a save has seen (L-632)', () => {
+  // The kitchen wall again, x = 6 with its door at y 3–4, and a stool in the
+  // front room's corner at (1, 7), for a typed walk down the west wall.
+  const KITCHEN = {
+    walls: [
+      {
+        points: [
+          { x: 6, y: 0 },
+          { x: 6, y: 3 },
+        ],
+      },
+      {
+        points: [
+          { x: 6, y: 4 },
+          { x: 6, y: 8 },
+        ],
+      },
+    ],
+    doors: [
+      { id: 'kitchen-door', name: 'the kitchen door', from: { x: 6, y: 3 }, to: { x: 6, y: 4 } },
+    ],
+    features: [...MAPS.bm_tavern.features, { id: 'stool', name: 'the stool', x: 1, y: 7 }],
+  };
+  const tavernRef = () => worldRef.collection('battleMaps').doc('bm_tavern');
+  const seenRef = (saveId, mapId) =>
+    db.collection('loom_saves').doc(saveId).collection('seen').doc(mapId);
+  // The squares a save has seen on a map, keyed "x,y", or null for none yet.
+  const seenOn = async (saveId, mapId) => {
+    const snap = await seenRef(saveId, mapId).get();
+    if (!snap.exists) return null;
+    const { width, height, squares } = snap.data();
+    return unpack(squares, width, height);
+  };
+  const tapDoor = (saveId, open) =>
+    loomPlayTurn.run({
+      data: { worldId: WORLD, saveId, action: { verb: 'door', door: 'kitchen-door', open } },
+      auth: PLAYER,
+    });
+  const kitchenOpen = (saveId) =>
+    db.collection('loom_saves').doc(saveId).update({ 'doors.bm_tavern.kitchen-door': 'open' });
+  beforeAll(async () => {
+    await tavernRef().update(KITCHEN);
+    await bump();
+  });
+  afterAll(async () => {
+    await tavernRef().update({ walls: [], doors: [], features: MAPS.bm_tavern.features });
+    await bump();
+  });
+  beforeEach(() => {
+    mockCallGemini.mockReset();
+    playerMovesTo(null);
+  });
+
+  test('a new game sees from where it starts; arriving at a place, from its entry', async () => {
+    const { saveId } = await newGame();
+    expect(Object.keys(await seenOn(saveId, GATEWAY.id))).toHaveLength(9);
+    await offMap(db, saveId);
+    await moveTo(saveId, 'plc_1_tavern');
+    const seen = await seenOn(saveId, 'bm_tavern');
+    // The front room, west of the kitchen wall; nothing behind its shut door.
+    expect(Object.keys(seen)).toHaveLength(48);
+    expect(seen['5,0']).toBe(true);
+    expect(seen['6,3']).toBeUndefined();
+    expect(seen['9,1']).toBeUndefined();
+  });
+
+  test('opening the door adds what is in sight through it; closing it forgets nothing', async () => {
+    const { saveId } = await newGame();
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 2 });
+    await stepTo(saveId, { x: 5, y: 3 });
+    expect((await seenOn(saveId, 'bm_tavern'))['9,1']).toBeUndefined();
+    expect((await tapDoor(saveId, true)).step.lines).toEqual(['You open the kitchen door.']);
+    expect((await seenOn(saveId, 'bm_tavern'))['9,1']).toBe(true);
+    await tapDoor(saveId, false);
+    expect((await seenOn(saveId, 'bm_tavern'))['9,1']).toBe(true);
+  });
+
+  test('a walk sees from every square on the way, and what it saw is kept', async () => {
+    // With the kitchen door open, (11, 3) is in sight through it from (1, 3)
+    // and (1, 4) on the way down the west wall, but from neither end.
+    const tavern = (await tavernRef().get()).data();
+    const open = { 'kitchen-door': 'open' };
+    expect(sight.inSight(tavern, { x: 1, y: 0 }, open)['11,3']).toBeUndefined();
+    expect(sight.inSight(tavern, { x: 1, y: 7 }, open)['11,3']).toBeUndefined();
+    const { saveId } = await newGame();
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 0 });
+    await kitchenOpen(saveId);
+    expect((await stepTo(saveId, { x: 1, y: 7 })).step.cell).toEqual({ x: 1, y: 7 });
+    expect((await seenOn(saveId, 'bm_tavern'))['11,3']).toBe(true);
+    // Walking on, out of sight of it, keeps it.
+    await stepTo(saveId, { x: 0, y: 7 });
+    expect((await seenOn(saveId, 'bm_tavern'))['11,3']).toBe(true);
+  });
+
+  test('a typed walk too; the squares walked are not kept in the turn record', async () => {
+    const { saveId } = await newGame();
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 0 });
+    await kitchenOpen(saveId);
+    const resolution = await moveTo(saveId, 'feature:stool');
+    expect(resolution.constraints).toEqual(['You move to the stool.']);
+    expect(resolution.walked).toBeUndefined();
+    expect((await seenOn(saveId, 'bm_tavern'))['11,3']).toBe(true);
+  });
+
+  test('squares walked before a door opens are seen with it shut', async () => {
+    // Up the kitchen wall from (5, 7): the walk opens the door and stops at
+    // (5, 3). (6, 0) would be in sight from (5, 4) with the door open, but
+    // not from (5, 3), where it opened.
+    const tavern = (await tavernRef().get()).data();
+    expect(sight.inSight(tavern, { x: 5, y: 4 }, { 'kitchen-door': 'open' })['6,0']).toBe(true);
+    const { saveId } = await newGame();
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 7 });
+    const { step } = await stepTo(saveId, { x: 9, y: 1 });
+    expect(step).toMatchObject({ cell: { x: 5, y: 3 }, lines: ['You open the kitchen door.'] });
+    const seen = await seenOn(saveId, 'bm_tavern');
+    expect(seen['9,1']).toBe(true);
+    expect(seen['6,0']).toBeUndefined();
+  });
+
+  test('down the cellar stairs, the cellar has its own record, from its entry', async () => {
+    const { saveId } = await newGame();
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 10, y: 6 });
+    await stepTo(saveId, { x: 11, y: 7 });
+    expect(await where(saveId)).toMatchObject({ mapId: 'bm_cellar', cell: { x: 5, y: 5 } });
+    expect(Object.keys(await seenOn(saveId, 'bm_cellar'))).toHaveLength(36);
+  });
+
+  test('deleting the save deletes what it has seen', async () => {
+    const { saveId } = await newGame();
+    expect(await seenOn(saveId, GATEWAY.id)).not.toBeNull();
+    await loomDeleteSave.run({ data: { saveId }, auth: PLAYER });
+    const left = await db.collection('loom_saves').doc(saveId).collection('seen').get();
+    expect(left.empty).toBe(true);
   });
 });

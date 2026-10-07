@@ -7,7 +7,8 @@ const { adjudicateAction, ACTED } = require('./adjudicate');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
-const { planStep, planDoor } = require('./steps');
+const { planStep, planDoor, doorStatesOf } = require('./steps');
+const { look } = require('./seen');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -83,7 +84,9 @@ async function intake(params) {
  * `step: { cell, movementLeft, plan, lines }`. Only a step that reaches an
  * exit goes on through the pipeline, to leave by it, narrated. Opening or
  * closing a door beside the player (`{ verb: 'door', door, open }`; L-625 /
- * #450) is answered the same way.
+ * #450) is answered the same way. What the save sees on the way, and from
+ * where it stops, is added to what it has seen on the map (./seen.js; L-632 /
+ * #455), in the same transaction.
  *
  * @param {{ db: FirebaseFirestore.Firestore, uid: string, worldId: string, saveId: string,
  *           actionText?: string, action?: { verb: 'move', target: string } }} params
@@ -107,6 +110,7 @@ async function runTurnPipeline(params) {
       saveRef,
       worldStateRef,
       worldId,
+      canonWorld,
       actionText: 'end turn',
       proposedAction,
       resolution,
@@ -129,12 +133,27 @@ async function runTurnPipeline(params) {
       // (L-625), stays so for this save.
       const door = planned.door || (planned.opened && { ...planned.opened, state: 'open' });
       if (planned.cell) {
+        const doors = door
+          ? {
+              ...fresh.doors,
+              [door.mapId]: { ...doorStatesOf(fresh, door.mapId), [door.doorId]: door.state },
+            }
+          : fresh.doors;
+        const seen = await look(
+          transaction,
+          saveRef,
+          canonWorld,
+          { ...fresh, cell: planned.cell, doors },
+          planned.walked,
+          doorStatesOf(fresh, fresh.mapId)
+        );
         transaction.update(saveRef, {
           cell: planned.cell,
           turn: planned.turn,
           ...(door ? { [`doors.${door.mapId}.${door.doorId}`]: door.state } : {}),
           updatedAt: FieldValue.serverTimestamp(),
         });
+        if (seen) transaction.set(seen.ref, seen.value);
       }
       return { ...planned, summary: fresh.recentSummary || '' };
     });
@@ -198,6 +217,7 @@ async function runTurnPipeline(params) {
     saveRef,
     worldStateRef,
     worldId,
+    canonWorld,
     actionText,
     proposedAction,
     resolution,

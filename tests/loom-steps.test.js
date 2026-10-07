@@ -28,12 +28,30 @@ const standing = (cell, turn = {}) => ({
   turn: { n: 1, movementLeft: 6, actionUsed: false, plan: null, ...turn },
 });
 
-test('a move in reach arrives; at a feature it says so', () => {
+test('a move in reach arrives; at a feature it says so; it lists the squares walked', () => {
   expect(planStep(WORLD, standing({ x: 2, y: 2 }), { cell: { x: 8, y: 1 } })).toEqual({
     cell: { x: 8, y: 1 },
     turn: { n: 1, movementLeft: 0, actionUsed: false, plan: null },
     lines: ["You're at the chest."],
+    walked: [
+      { x: 3, y: 2 },
+      { x: 4, y: 2 },
+      { x: 5, y: 2 },
+      { x: 6, y: 1 },
+      { x: 7, y: 1 },
+      { x: 8, y: 1 },
+    ],
   });
+});
+
+test('a move past reach lists only the squares walked this turn', () => {
+  const step = planStep(WORLD, standing({ x: 1, y: 5 }, { movementLeft: 2 }), {
+    cell: { x: 9, y: 5 },
+  });
+  expect(step.walked).toEqual([
+    { x: 2, y: 5 },
+    { x: 3, y: 5 },
+  ]);
 });
 
 test('a move past reach stops partway; the rest is the plan', () => {
