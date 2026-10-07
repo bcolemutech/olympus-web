@@ -1,6 +1,6 @@
 # The Loom — Layered Worlds — Design Document v0.1
 
-**Status:** Draft for review
+**Status:** Shipped (L-320 to L-350, 2026-10-02). L-370 and L-360 come after Phase 3c; see the [roadmap](./roadmap.md).
 **Project:** Olympus (`olympus-dfa00`)
 **Follows:** Loom Phase 3 "Rapid worlds" (the Cartographer, [`the-cartographer-design.md`](./the-cartographer-design.md))
 **Related:** [`the-loom-design.md`](./the-loom-design.md), [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)

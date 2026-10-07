@@ -1,6 +1,6 @@
 # The Loom — Issue Breakdown & Model Routing Plan
 
-**Status:** Living plan (companion to `the-loom-design.md`)
+**Status:** Historical. Phase 1 shipped; this is its issue plan, and the model-routing rubric still applies. The current milestones and order are in the [roadmap](./roadmap.md).
 **Created:** 2026-06-27
 **Scope:** GitHub milestones, issues, and per-issue model assignments for building The Loom
 
@@ -17,6 +17,8 @@ This document is the operational counterpart to [`the-loom-design.md`](./the-loo
 | 16  | The Loom — Phase 3: Rapid Worlds | #314     | 3             |
 | 17  | The Loom — Phase 4: Multiplayer  | #316–317 | 4             |
 | 18  | The Loom — Phase 5: Visuals      | #318     | 5             |
+
+Later milestones (#19 Phase 3b, #20 Phase 3c) are in the [roadmap](./roadmap.md).
 
 All issues carry the `loom` label and a `> Suggested model:` line in the body. They follow the repo's existing issue template (Overview, design-doc ref, Phase, Depends-on, Deliverables, Acceptance criteria) and reference the **Olympus Web System** project in the footer (add manually — the API token lacks Projects scope).
 
