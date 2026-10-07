@@ -12,6 +12,7 @@ const { withNeighbours } = require('./loom-turn/discovery');
 const { arrivalPlace } = require('./loom-canon/town');
 const maps = require('./loom-canon/maps');
 const { mapView } = require('./loom-turn/map-view');
+const { firstLook } = require('./loom-turn/seen');
 const { makeSave } = require('./loom-models');
 
 initializeApp();
@@ -663,8 +664,14 @@ exports.loomCreateSave = onCall(async (request) => {
     updatedAt: FieldValue.serverTimestamp(),
   });
 
+  // A start on a battle map sees what's in sight from its entry (L-632).
+  const seen = firstLook(saveRef, canonWorld, save);
+
   try {
-    await saveRef.set(save);
+    const batch = db.batch();
+    batch.set(saveRef, save);
+    if (seen) batch.set(seen.ref, seen.value);
+    await batch.commit();
   } catch (err) {
     console.error('loomCreateSave error:', err);
     throw new HttpsError('internal', 'Failed to create save.');
@@ -675,7 +682,8 @@ exports.loomCreateSave = onCall(async (request) => {
 
 /**
  * loomDeleteSave — deletes one of the caller's own saves, including its
- * loom_turns event log (Firestore does not cascade-delete subcollections).
+ * loom_turns event log and what it has seen on each map (`seen`; L-632)
+ * (Firestore does not cascade-delete subcollections).
  * Callable by any signed-in user with the `loom` app claim who owns the save.
  *
  * Data: { saveId: string }
@@ -701,9 +709,13 @@ exports.loomDeleteSave = onCall(async (request) => {
   }
 
   try {
-    const turnsSnap = await saveRef.collection('loom_turns').get();
+    const [turnsSnap, seenSnap] = await Promise.all([
+      saveRef.collection('loom_turns').get(),
+      saveRef.collection('seen').get(),
+    ]);
     const batch = db.batch();
     turnsSnap.docs.forEach((doc) => batch.delete(doc.ref));
+    seenSnap.docs.forEach((doc) => batch.delete(doc.ref));
     batch.delete(saveRef);
     await batch.commit();
   } catch (err) {

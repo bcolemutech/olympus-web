@@ -1553,6 +1553,12 @@ describe('loom_* — Firestore Security Rules', function () {
         index: 0,
         actionText: 'look around',
       });
+      await setDoc(doc(db, 'loom_saves', SAVE_ID, 'seen', 'bm_tavern'), {
+        mapId: 'bm_tavern',
+        width: 3,
+        height: 3,
+        squares: 'AQA=',
+      });
       await setDoc(doc(db, 'loom_softcanon', 'entity-001'), { name: 'Doral' });
     });
 
@@ -1669,6 +1675,25 @@ describe('loom_* — Firestore Security Rules', function () {
           setDoc(doc(loomDb, 'loom_saves', SAVE_ID, 'loom_turns', 'turn-002'), {
             index: 1,
             actionText: 'hack',
+          })
+        );
+      });
+    });
+
+    // What a save has seen on each map (L-632) is the server's alone: the
+    // browser is sent only what has been seen (L-633).
+    describe('seen subcollection', function () {
+      it('denies read even by the owner', async function () {
+        await assertFails(getDoc(doc(loomDb, 'loom_saves', SAVE_ID, 'seen', 'bm_tavern')));
+      });
+
+      it('denies client write even by the owner', async function () {
+        await assertFails(
+          setDoc(doc(loomDb, 'loom_saves', SAVE_ID, 'seen', 'bm_tavern'), {
+            mapId: 'bm_tavern',
+            width: 3,
+            height: 3,
+            squares: '//8=',
           })
         );
       });
