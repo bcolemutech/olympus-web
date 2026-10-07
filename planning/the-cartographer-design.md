@@ -1,6 +1,6 @@
 # The Cartographer — Design Document v0.2
 
-**Status:** Draft for review
+**Status:** Shipped (C-1 to C-7, 2026-09-27). Later Cartographer work lands inside Loom phases; see the [roadmap](./roadmap.md).
 **Project:** Olympus (`olympus-dfa00`)
 **Program:** MCP program **Initiative 2** ([`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)); fulfils Loom Phase 3 "Rapid worlds" (L-300 / #314)
 **Related:** [`the-loom-design.md`](./the-loom-design.md)

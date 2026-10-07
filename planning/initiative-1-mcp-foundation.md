@@ -1,6 +1,6 @@
 # Initiative 1 — MCP Foundation
 
-**Status:** Draft for review
+**Status:** Shipped (#347–357). See the [roadmap](./roadmap.md).
 **Project:** Olympus (`olympus-dfa00`)
 **Program:** two initiatives that build on each other — prove the MCP layer, then build worlds through it
 **This initiative:** prove inbound MCP works end to end, as a reusable per-app substrate
