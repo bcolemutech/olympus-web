@@ -41,6 +41,15 @@ jobs:
       - uses: w9jds/setup-firebase@v1.0.0
         with:
           gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+      - name: Firebase CLI version
+        id: firebase-cli
+        run: echo "version=$(firebase --version)" >> "$GITHUB_OUTPUT"
+      # Keyed on the CLI version, as in firestore-rules.yml.
+      - name: Cache Firebase emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ steps.firebase-cli.outputs.version }}
       - name: Install functions dependencies
         run: npm ci --prefix functions
       - name: Install test dependencies
