@@ -15,6 +15,15 @@ npm run format
   - Bad: `**https://example.com**`
   - Good: `https://example.com`
 
+## Planning and Roadmap
+
+- **Start at [`planning/roadmap.md`](planning/roadmap.md).** It says what has shipped, what is in progress and what comes next, with the issue numbers. Asked "what's next?", read it first, then the issue it points to.
+- **Each phase has a design doc** in `planning/` (listed in the roadmap) with dated **Decisions** and an **Epics and sub-issues** table. The doc and the issue are the spec: follow their decisions, and ask before departing from them.
+- **New work is designed before it is built.** A phase or epic not yet broken out gets a draft design doc first, with a **gap sheet**: the open questions, each with options and a recommendation, put to the user to answer (by asking them, not left in a file). Sub-issues are filed only once it's answered.
+- **Issues follow the existing format.** Epics are titled `L-x00 — [Epic] …` and stories `L-xxx · …`, with the `loom` label, the phase milestone, and the story attached to its epic as a sub-issue. The body has Overview, then design doc / Depends on / Suggested model lines, then Scope, Acceptance criteria, and a `Part of #… (L-…)` footer.
+- **One story, one PR**, titled `feat(loom): … (L-xxx, #issue)` (or `feat(cartographer)`), with the tests its acceptance criteria name.
+- **When an epic ships:** close it, tick its sub-issue checklist, and update its row in `roadmap.md` and the status line of its design doc, in the same PR or a small docs PR.
+
 ---
 
 ## Project Overview
@@ -90,7 +99,7 @@ olympus-web/
 │   └── mcp/                       # MCP host, OAuth server, registry, apps/ (scriptorium, cartographer)
 ├── tests/                         # Jest suites (rules, Loom, Cartographer, MCP) + fixtures/
 ├── scripts/                       # One-time admin utility scripts
-├── planning/                      # Architecture and design documentation
+├── planning/                      # Design docs per phase; roadmap.md orders the work
 ├── .github/workflows/             # CI/CD pipelines
 ├── firebase.json                  # Firebase configuration
 ├── firestore.rules                # Firestore security rules
