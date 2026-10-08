@@ -115,6 +115,7 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 - **Squares:** a character at a place with a map can have `cell: { x, y }` on it, set with `add_character` and `update_character` (or by naming a feature). It must be on the grid and not on a wall, an obstacle or an exit.
 - **Tokens** show when in sight. You can pass through their square but not end a move on it. A plan ending there stops on the last free square.
 - **The GM** knows who stands where, and who is next to you.
+- **Decided with the user (2026-10-08, L-641):** a character can stand on difficult ground (crossing it still costs 2 movement a square). A character can be placed on a walled-in square, with a warning; players can't walk there. Giving a place another battle map clears its characters' squares, and **replacing a map's grid is a new map to players**: what saves had seen of it is forgotten (the map's `revision` moves on). Changing only its walls, doors or obstacles keeps it.
 
 ---
 

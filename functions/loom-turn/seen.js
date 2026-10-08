@@ -12,6 +12,8 @@ const { doorStatesOf } = require('./steps');
  *
  *   loom_saves/{saveId}/seen/{mapId}
  *     mapId, width, height   — the grid the squares were packed for
+ *     revision               — the map's revision they were seen on (L-641);
+ *                              left out for a map never redrawn
  *     squares                — one bit a square, in base64: square (x, y) is
  *                              bit y × width + x, the lowest bit of each byte
  *                              first; 684 characters for a 64 × 64 map
@@ -24,8 +26,10 @@ const { doorStatesOf } = require('./steps');
  * save arrives on a map (a new game, a place, an exit onto another map), from
  * every square of a walk on it, and when a door opens or closes. Squares
  * walked through are looked from with the doors as they were; where the save
- * ends, with the doors as they are now. A map whose grid changes size keeps
- * the squares still on it.
+ * ends, with the doors as they are now. A map redrawn over MCP (its grid
+ * replaced, which bumps its `revision`) is forgotten: a record from an older
+ * revision counts as nothing seen, and is replaced on the next look.
+ * Otherwise, a grid of another size keeps the squares still on it.
  *
  * A walk that leaves by an exit isn't recorded: the save is off that map.
  */
@@ -53,6 +57,15 @@ function unpack(packed, width, height) {
 }
 
 /**
+ * The squares a record holds for a map, keyed "x,y": none without a record,
+ * or once the map has been redrawn since (its revision moved on; L-641).
+ */
+function squaresOf(record, map) {
+  if (!record || (record.revision || 0) !== (map.revision || 0)) return {};
+  return unpack(record.squares, record.width, record.height);
+}
+
+/**
  * What a save sees on the map it stands on: from where it stands, with its
  * doors as they are, and from each square walked through to get there, with
  * the doors as they were (`doorsBefore`). `{ map, squares }`, squares keyed
@@ -74,10 +87,14 @@ function inSightNow(canonWorld, save, walked, doorsBefore) {
  * null when the record already holds them all.
  */
 function withSquares(record, map, squares) {
-  const known = record ? unpack(record.squares, record.width, record.height) : {};
-  const resized = Boolean(record) && (record.width !== map.width || record.height !== map.height);
+  const known = squaresOf(record, map);
+  const changed =
+    Boolean(record) &&
+    (record.width !== map.width ||
+      record.height !== map.height ||
+      (record.revision || 0) !== (map.revision || 0));
   const added = Object.keys(squares).filter((key) => !known[key]);
-  if (record && !resized && !added.length) return null;
+  if (record && !changed && !added.length) return null;
   added.forEach((key) => {
     known[key] = true;
   });
@@ -86,6 +103,7 @@ function withSquares(record, map, squares) {
     width: map.width,
     height: map.height,
     squares: pack(known, map.width, map.height),
+    ...(map.revision ? { revision: map.revision } : {}),
   };
 }
 
@@ -107,10 +125,8 @@ async function recordOf(transaction, saveRef, mapId) {
  * for and walk over.
  */
 function knownTo(canonWorld, save, record) {
-  const { squares } = inSightNow(canonWorld, save);
-  return record
-    ? Object.assign(unpack(record.squares, record.width, record.height), squares)
-    : squares;
+  const { map, squares } = inSightNow(canonWorld, save);
+  return map ? Object.assign(squaresOf(record, map), squares) : squares;
 }
 
 /**
@@ -154,6 +170,7 @@ function firstLook(saveRef, canonWorld, save) {
 module.exports = {
   pack,
   unpack,
+  squaresOf,
   inSightNow,
   withSquares,
   seenRef,

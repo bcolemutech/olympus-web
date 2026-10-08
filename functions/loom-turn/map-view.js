@@ -235,10 +235,7 @@ function battleView(canonWorld, save, record) {
   if (!map) return null;
   const doors = doorStatesOf(save, map.id);
   const inSight = seen.inSightNow(canonWorld, save).squares;
-  const known = Object.assign(
-    record ? seen.unpack(record.squares, record.width, record.height) : {},
-    inSight
-  );
+  const known = Object.assign(seen.squaresOf(record, map), inSight);
   const on = (square) => Boolean(known[square.x + ',' + square.y]);
 
   const host = maps.hostOf(canonWorld, save);

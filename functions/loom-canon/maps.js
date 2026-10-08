@@ -20,6 +20,8 @@
  *                                 walls along the grid lines, doors in them, and
  *                                 solid, low or difficult squares; none is open ground
  *     generic: { kind, terrain } | null — reusable, assignable to any number of places
+ *     revision                  — counts the times its grid was replaced (L-641): what
+ *                                 saves had seen of an older one is forgotten
  *     sources, retired
  *
  * A place carries `battleMap: { mapId }`, its own map or a generic one. A save

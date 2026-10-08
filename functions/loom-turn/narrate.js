@@ -11,7 +11,7 @@ const { turnStateOf, speedOf } = require('../loom-models');
 const { doorStatesOf, doorSides } = require('./steps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
-const { recordOf, unpack } = require('./seen');
+const { recordOf, squaresOf } = require('./seen');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -139,7 +139,7 @@ async function mapSightAfter(canonWorld, save, position, resolution, known, save
   let before = known;
   if (position.mapId !== save.mapId) {
     const { record } = saveRef ? await recordOf(null, saveRef, map.id) : { record: null };
-    before = saveRef ? (record ? unpack(record.squares, record.width, record.height) : {}) : null;
+    before = saveRef ? squaresOf(record, map) : null;
   }
   return { inSight, known: before ? Object.assign({}, before, inSight) : null };
 }
