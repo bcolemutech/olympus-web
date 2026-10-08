@@ -121,7 +121,7 @@ Settled with the user (2026-10-08). T1, T8, T11 and T14 took the recommendation 
 
 **Order:** L-371 and L-372 can run side by side. L-373 is the spine. L-374 and L-375 follow it; L-376 needs only L-371.
 
-**Content, not code:** before the exit criterion is tried, Claude rewrites Nisia's "barely an hour's walk apart" in The Drowned Ledger of Hatham, over MCP (`update_lore`), to fit about 12 miles of rainforest trail, and checks the two towns' descriptions ("a short one") read right at that distance.
+**Content, not code:** ✅ Done (2026-10-08, canon version 323). The Drowned Ledger of Hatham now has the two towns "half a day's hard walk apart by the muddy trail that winds around the shore", in place of "barely an hour's walk apart". The two towns' descriptions keep "a short one": at about 12 miles it's still Hatham's shortest trail (Skipton and Brorough are about 30 and 45).
 
 Each story is tested on its own: pure-module tests for the clock and route lengths, emulator tests for the pipeline with Gemini stubbed, a real MCP client for `get_location`, and headless Chrome for the turn bar.
 
