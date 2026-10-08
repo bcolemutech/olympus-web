@@ -60,7 +60,7 @@ async function intake(params) {
   const worldState = worldStateSnap.exists ? worldStateSnap.data() : makeWorldState({ worldId });
 
   // On a battle map, the ground the save knows (./seen.js; L-635): typed
-  // moves go only there.
+  // moves go only there, and the GM is told only what's on it (L-636).
   const known = save.mapId
     ? knownTo(canonWorld, save, (await recordOf(null, saveRef, save.mapId)).record)
     : null;
@@ -198,7 +198,7 @@ async function runTurnPipeline(params) {
     actionText = 'travel to ' + (target ? target.name : action.target);
     proposedAction = { verb: 'move', targets: [action.target], params: { from: 'map' } };
   } else {
-    proposedAction = await interpretAction({ actionText, canonWorld, save, worldState });
+    proposedAction = await interpretAction({ actionText, canonWorld, save, worldState, known });
   }
   const resolution = await adjudicateAction({
     proposedAction,
@@ -225,6 +225,7 @@ async function runTurnPipeline(params) {
     save,
     worldState,
     saveRef,
+    known,
   });
 
   return commitTurn({

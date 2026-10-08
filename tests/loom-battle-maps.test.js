@@ -1390,6 +1390,62 @@ describe('what a save has seen (L-632)', () => {
     expect(left.empty).toBe(true);
   });
 
+  describe('the GM sees what you see (L-636)', () => {
+    // Every prompt the model is given, while the player looks about (or,
+    // typed, aims at `target`).
+    let told;
+    const playerLooks = (verb = 'look', target) => {
+      told = [];
+      mockCallGemini.mockReset();
+      mockCallGemini.mockImplementation(async (options) => {
+        told.push(options.systemInstruction + '\n' + options.userMessage);
+        if (options.systemInstruction.includes('INTERPRET stage')) {
+          return { verb, targets: target ? [target] : [], params: {} };
+        }
+        if (options.systemInstruction.includes('summarizer')) return 'A summary.';
+        return { narration: 'You look about.', inventedEntities: [], suggestedActions: [] };
+      });
+    };
+    const narrated = () => told[told.length - 1];
+
+    test('from the front room, the GM is never told of the kitchen', async () => {
+      const { saveId } = await newGame();
+      await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+      playerLooks('search', 'the hearth');
+      await turn(saveId);
+      expect(told.join('\n')).not.toMatch(/the hearth|feature:hearth|cellar stairs|cellar-stairs/);
+      // The hearth, named, is matched on the server and turned down unseen,
+      // without using the action.
+      expect(await lastResolution(saveId)).toMatchObject({
+        outcome: 'blocked',
+        constraints: ["You don't see that here."],
+      });
+      expect((await saveOf(saveId)).turn.actionUsed).toBe(false);
+    });
+
+    test('through the open door the kitchen is told; shut again, remembered', async () => {
+      const { saveId } = await newGame();
+      await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 3 });
+      await tapDoor(saveId, true);
+      playerLooks();
+      await turn(saveId);
+      expect(narrated()).toContain(
+        'Features: the bar (3, 2); the hearth (9, 1); the stool (1, 7).'
+      );
+      expect(narrated()).toContain('- the cellar stairs (11, 7): to The cellar\n');
+
+      await endTurn(saveId);
+      await tapDoor(saveId, false);
+      playerLooks();
+      await turn(saveId);
+      expect(narrated()).toContain('Features: the bar (3, 2); the stool (1, 7).');
+      expect(narrated()).toContain('Features remembered, out of sight now: the hearth (9, 1).');
+      expect(narrated()).toContain(
+        '- the cellar stairs (11, 7): to The cellar (remembered, out of sight now)'
+      );
+    });
+  });
+
   describe('moves only on ground you know (L-635)', () => {
     const pillar = (x, y) =>
       tavernRef().update({ obstacles: [{ id: 'pillar', name: 'a pillar', kind: 'solid', x, y }] });
