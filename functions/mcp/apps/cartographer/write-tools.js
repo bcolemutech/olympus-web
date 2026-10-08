@@ -8,6 +8,8 @@ const { worldId, entityId } = require('./schemas');
 const { SOURCES } = require('../../../cartographer/sources');
 const { isPlayable } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
+const maps = require('../../../loom-canon/maps');
+const layers = require('../../../loom-canon/layers');
 const { whyClosed } = require('../../../cartographer/service');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
@@ -26,6 +28,9 @@ const { whyClosed } = require('../../../cartographer/service');
 //     road, trail or sea link.
 //   - Realm relations stay symmetric (vassal ↔ suzerain mirror each other).
 //   - A character's home and the cast lists (npcIds) the Loom reads agree.
+//   - A character's square (L-641) is on their place's map, on nothing that
+//     blocks, on no entry or exit, and nobody else's; moving them to another
+//     place clears it.
 //   - A description set here is stamped `sources.description: 'mcp'`, which is
 //     what grading counts as written up (functions/loom-canon/grading.js).
 //     Sending the current text again stamps it too: an approval of it.
@@ -252,6 +257,89 @@ function keepsAWayIn(world, place, { removing = false, entranceAfter = null } = 
     `${place.name} is the town's only way in and out. Make another place a way in ` +
       '(update_place with entranceFor) first.'
   );
+}
+
+// A character's square (L-641): { x, y }, or a feature of the map.
+const square = z
+  .union([
+    z.strictObject({
+      x: z
+        .number()
+        .int()
+        .min(0)
+        .max(maps.MAX_SIDE - 1),
+      y: z
+        .number()
+        .int()
+        .min(0)
+        .max(maps.MAX_SIDE - 1),
+    }),
+    z.strictObject({
+      feature: z.string().trim().min(1).max(60).describe('A feature’s id or name: "bar".'),
+    }),
+  ])
+  .describe(
+    'Where they stand on the battle map of the place they are found at: { x, y } (0-based from ' +
+      'the top-left), or { feature } to stand at it, or beside it if it sits on an obstacle. ' +
+      'Not on a wall, an obstacle, an entry or an exit, and one character a square.'
+  );
+
+const NEIGHBOURS = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [-1, -1],
+  [1, -1],
+  [1, 1],
+  [-1, 1],
+];
+
+// Where a character asked to stand at a place stands: { map, cell, warning }.
+// A feature gives its own square, else the nearest free one beside it with
+// no wall or door between them.
+function squareFor(world, host, spec, selfId) {
+  const map = maps.mapOf(world, host);
+  if (!map) {
+    throw new ToolError(
+      `${host.name} has no battle map, so there is no square to stand on. Give it one with ` +
+        'assign_battle_map, or leave out cell.'
+    );
+  }
+  let cell;
+  if (spec.feature === undefined) {
+    const problem = maps.squareProblem(world, map, host, spec, selfId);
+    if (problem) throw new ToolError(`They can't stand there: ${problem}.`);
+    cell = { x: spec.x, y: spec.y };
+  } else {
+    const wanted = spec.feature.toLowerCase();
+    const feature = (map.features || []).find(
+      (f) => f.id === spec.feature || f.name.toLowerCase() === wanted
+    );
+    if (!feature) {
+      throw new ToolError(
+        `${map.name} has no feature "${spec.feature}". get_battle_map lists its features.`
+      );
+    }
+    const beside = NEIGHBOURS.map(([dx, dy]) => ({ x: feature.x + dx, y: feature.y + dy })).filter(
+      (c) => {
+        if (!maps.inBounds(map, c)) return false;
+        const edge = layers.between(map, c, feature);
+        return !edge.wall && !edge.door;
+      }
+    );
+    cell = [{ x: feature.x, y: feature.y }, ...beside].find(
+      (c) => !maps.squareProblem(world, map, host, c, selfId)
+    );
+    if (!cell) {
+      throw new ToolError(`Every square at and beside ${feature.name} is blocked or taken.`);
+    }
+  }
+  const reached = layers.reachable(map, map.entries || []);
+  const warning = reached[`${cell.x},${cell.y}`]
+    ? null
+    : `Nobody can reach (${cell.x}, ${cell.y}) from an entry of ${map.name}: it's walled in.`;
+  return { map, cell, warning };
 }
 
 function requireSome(args, fields) {
@@ -718,6 +806,7 @@ function writeTools({ writer }) {
           .optional()
           .describe('Where in that town they are found, if it has a layout.'),
         factionId: entityId('faction', 'get_world').optional().describe('Their realm or faction.'),
+        cell: square.optional(),
       },
       annotations: additive,
       handler: (ctx, args) =>
@@ -728,6 +817,7 @@ function writeTools({ writer }) {
           const place = args.placeId ? placeIn(world, home, args.placeId) : null;
           const faction = args.factionId ? live(world, 'faction', args.factionId) : null;
           const id = newId(world, 'character', 'chr', args.name);
+          const stand = args.cell ? squareFor(world, place || home, args.cell, id) : null;
           e.create(e.ref('characters', id), {
             id,
             name: args.name,
@@ -736,6 +826,7 @@ function writeTools({ writer }) {
             locationId: home.id,
             ...(place ? { placeId: place.id } : {}),
             ...(faction ? { factionId: faction.id } : {}),
+            ...(stand ? { cell: stand.cell } : {}),
           });
           e.update(e.ref('locations', home.id), 'npcIds', FieldValue.arrayUnion(id));
           return {
@@ -745,7 +836,9 @@ function writeTools({ writer }) {
               location: { id: home.id, name: home.name },
               ...(place ? { place: { id: place.id, name: place.name } } : {}),
               faction: faction ? { id: faction.id, name: faction.name } : null,
+              ...(stand ? { cell: stand.cell } : {}),
             },
+            ...(stand && stand.warning ? { warnings: [stand.warning] } : {}),
           };
         }),
     },
@@ -754,7 +847,9 @@ function writeTools({ writer }) {
       title: 'Update character',
       description:
         'Change a character’s name, description, where they are found (moves them), their ' +
-        'place in that town, or realm (null removes it). Fields you omit are left unchanged. ' +
+        'place in that town, their square on its battle map, or realm (null removes it). Moving ' +
+        'them to another place clears their square unless you give a new one. Fields you omit ' +
+        'are left unchanged. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -772,10 +867,11 @@ function writeTools({ writer }) {
           .nullable()
           .optional()
           .describe('Their realm or faction; null for none.'),
+        cell: square.nullable().optional(),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description', 'locationId', 'placeId', 'factionId']);
+        requireSome(args, ['name', 'description', 'locationId', 'placeId', 'factionId', 'cell']);
         return edit(ctx, args, (e) => {
           const { world } = e;
           const character = existing(world, 'character', args.characterId);
@@ -808,6 +904,19 @@ function writeTools({ writer }) {
           ) {
             fields.placeId = FieldValue.delete();
           }
+          // Their square (L-641), on the map of where they are found now.
+          let placeId = character.placeId;
+          if (typeof fields.placeId === 'string') placeId = fields.placeId;
+          else if (fields.placeId) placeId = null; // cleared
+          const host = placeId ? world.places[placeId] : world.locations[homeId];
+          const moved = host.id !== (maps.characterHost(world, character) || {}).id;
+          let stand = null;
+          if (args.cell) {
+            stand = squareFor(world, host, args.cell, id);
+            if (moved || !maps.sameCell(stand.cell, character.cell)) fields.cell = stand.cell;
+          } else if (character.cell && (args.cell === null || moved)) {
+            fields.cell = FieldValue.delete();
+          }
           if (args.factionId === null && character.factionId) {
             fields.factionId = FieldValue.delete();
           } else if (args.factionId && args.factionId !== character.factionId) {
@@ -815,10 +924,19 @@ function writeTools({ writer }) {
             fields.factionId = args.factionId;
           }
           if (Object.keys(fields).length) e.update(e.ref('characters', id), fields);
-          return {
-            character: { id, name: fields.name || character.name },
+          const result = {
+            character: {
+              id,
+              name: fields.name || character.name,
+              ...(stand ? { cell: stand.cell } : {}),
+            },
             updated: changedFields(fields),
           };
+          if (moved && character.cell && !args.cell) {
+            result.note = 'They are at another place now, so their square was cleared.';
+          }
+          if (stand && stand.warning) result.warnings = [stand.warning];
+          return result;
         });
       },
     },

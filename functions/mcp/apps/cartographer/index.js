@@ -341,7 +341,8 @@ function cartographerApp({ reader, writer, art }) {
           'One battle map in full: its grid size, entries (where players arrive), exits (each ' +
           'leading out to the town or the world, or to an entry on another map), features (named ' +
           'cells such as the bar), whether it is generic, whether it has an image (uploaded on ' +
-          'the Cartographer page) and which places use it. Cells are { x, y } from the top-left, ' +
+          'the Cartographer page), which places use it and which characters stand where (set ' +
+          'with add_character or update_character). Cells are { x, y } from the top-left, ' +
           '0-based.',
         inputSchema: { worldId, mapId: entityId('battle map', 'list_battle_maps') },
         annotations: readOnly,
