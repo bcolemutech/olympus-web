@@ -24,11 +24,14 @@
  *
  * A place carries `battleMap: { mapId }`, its own map or a generic one. A save
  * on a map records `mapId` and `cell: { x, y }`; both are null off a map.
+ * A character at a place with a map can stand on one of its squares,
+ * `character.cell: { x, y }` (L-641), placed over MCP.
  * Until L-624, paths ignore the layers; the checks keep a map walkable. Pure helpers over a loaded world, shared by the rules engine, the
  * narrator, the interpreter, new games and grading.
  */
 
 const town = require('./town');
+const layers = require('./layers');
 
 const MAX_SIDE = 64;
 
@@ -123,6 +126,60 @@ function exitsOut(map) {
   return (map.exits || []).filter((e) => e.to === 'out' || !e.to);
 }
 
+// ── Characters on squares (L-641) ──────────────────────────────────────
+
+/**
+ * The place a character is found at, whose map they stand on: their place in
+ * town, else their world place.
+ */
+function characterHost(world, character) {
+  if (character.placeId) return (world.places || {})[character.placeId] || null;
+  return world.locations[character.locationId] || null;
+}
+
+/**
+ * The live characters standing on a map: [{ character, host, cell }]. A
+ * generic map is shared, so each stands on the copy at their own place.
+ */
+function standingOn(world, map) {
+  const found = [];
+  for (const character of Object.values(world.characters || {})) {
+    if (!live(character) || !character.cell) continue;
+    const host = characterHost(world, character);
+    const hostMap = host && mapOf(world, host);
+    if (hostMap && hostMap.id === map.id) found.push({ character, host, cell: character.cell });
+  }
+  return found;
+}
+
+/**
+ * Why nobody can stand on a square of a place's map, or null: off the grid,
+ * on something that blocks (solid or low), on an entry or an exit, or on
+ * another character's square (`selfId` is the one being placed). `map` is
+ * the map to check against, which may be one about to be saved.
+ */
+function squareProblem(world, map, host, cell, selfId) {
+  const at = `(${cell.x}, ${cell.y})`;
+  if (!inBounds(map, cell)) return `${at} is off the ${map.width} × ${map.height} grid`;
+  const obstacle = layers.obstacleAt(map, cell);
+  if (obstacle && obstacle.kind !== 'difficult') {
+    return `${at} is ${obstacle.name} (${obstacle.kind})`;
+  }
+  const entry = (map.entries || []).find((e) => sameCell(e, cell));
+  if (entry) return `${at} is the entry "${entry.id}", where players arrive`;
+  const exit = (map.exits || []).find((e) => sameCell(e, cell));
+  if (exit) return `${at} is ${exit.name}, an exit`;
+  const other = Object.values(world.characters || {}).find(
+    (c) =>
+      live(c) &&
+      c.id !== selfId &&
+      sameCell(c.cell, cell) &&
+      (characterHost(world, c) || {}).id === host.id
+  );
+  if (other) return `${other.name} (${other.id}) already stands at ${at}`;
+  return null;
+}
+
 module.exports = {
   MAX_SIDE,
   mapOf,
@@ -135,4 +192,7 @@ module.exports = {
   sameCell,
   at,
   exitsOut,
+  characterHost,
+  standingOn,
+  squareProblem,
 };

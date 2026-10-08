@@ -24,6 +24,9 @@ const views = require('./views');
 //     checks: on the grid and its lines, nothing blocking an entry or exit,
 //     every entry able to reach an exit. Given with the grid, or alone with
 //     set_map_layers; replacing a grid without them keeps them.
+//   - Characters standing on a map (L-641) are warned about when a change
+//     leaves them off the grid or on something they can't stand on; giving a
+//     place another map clears its characters' squares.
 //
 // Images can't be sent over MCP: they are uploaded on the Cartographer page.
 // Removing a map is retire_entity (type battleMap), in write-tools.js.
@@ -137,6 +140,20 @@ function layerWarnings(map) {
   return (map.features || [])
     .filter((f) => !near(f))
     .map((f) => `Nobody can reach ${f.name} at (${f.x}, ${f.y}) from an entry: it's walled in.`);
+}
+
+// Characters a changed map leaves where nobody can stand (L-641).
+function standingWarnings(world, map) {
+  const after = { ...world, battleMaps: { ...world.battleMaps, [map.id]: map } };
+  return maps.standingOn(after, map).flatMap(({ character, host, cell }) => {
+    const problem = maps.squareProblem(after, map, host, cell, character.id);
+    return problem
+      ? [
+          `${character.name} (${character.id}) stands where they can't: ${problem}. Move them ` +
+            'with update_character (cell).',
+        ]
+      : [];
+  });
 }
 
 const layerCounts = (map) => ({
@@ -316,7 +333,7 @@ function mapTools({ writer }) {
             ),
           };
           if (!before) result.created = true;
-          const warnings = layerWarnings(doc);
+          const warnings = [...layerWarnings(doc), ...standingWarnings(world, doc)];
           if (before && (before.width > args.width || before.height > args.height)) {
             warnings.unshift(
               'The grid is smaller now: players standing beyond its edge are moved to its entry.'
@@ -372,7 +389,7 @@ function mapTools({ writer }) {
             layers: layerCounts(next),
             updated: given,
           };
-          const warnings = layerWarnings(next);
+          const warnings = [...layerWarnings(next), ...standingWarnings(world, next)];
           if (warnings.length) result.warnings = warnings;
           return result;
         }),
@@ -384,7 +401,7 @@ function mapTools({ writer }) {
         'Give a point of interest or a place in town a battle map, its own or a generic one ' +
         '(list_battle_maps). Arriving there in the Loom lands players on it, at its entry. ' +
         'Settlements have towns, not maps: give one of their places a map. mapId null takes ' +
-        'the map away. ' +
+        'the map away. Characters standing on the old map lose their squares. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -399,12 +416,21 @@ function mapTools({ writer }) {
           const current = (entity.battleMap && entity.battleMap.mapId) || null;
           const map = args.mapId ? live(world, 'battleMap', args.mapId) : null;
           const fields = {};
+          const cleared = [];
           if ((map ? map.id : null) !== current) {
             fields.battleMap = map ? { mapId: map.id } : FieldValue.delete();
             e.update(e.ref(collection, entity.id), fields);
+            // Squares on the old map mean nothing on the new one (L-641).
+            for (const character of Object.values(world.characters || {})) {
+              if (!character.cell) continue;
+              if ((maps.characterHost(world, character) || {}).id !== entity.id) continue;
+              e.update(e.ref('characters', character.id), 'cell', FieldValue.delete());
+              cleared.push({ id: character.id, name: character.name });
+            }
           }
           return {
             place: { id: entity.id, name: entity.name },
+            ...(cleared.length ? { squaresCleared: cleared } : {}),
             battleMap: map ? { id: map.id, name: map.name, generic: Boolean(map.generic) } : null,
             updated: changedFields(fields),
             ...(map && map.generic

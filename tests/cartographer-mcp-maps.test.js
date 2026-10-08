@@ -955,3 +955,263 @@ describe('walls, doors and obstacles (L-622)', () => {
     expect((await mapDoc(W, mapId)).obstacles).toEqual([]);
   });
 });
+
+describe('characters on squares (L-641)', () => {
+  const W = DRAFT;
+  // The Salt Cellar: a counter (low) under the bar, a wall along its far
+  // side, so the bar is reached from the room only.
+  const CELLAR = {
+    name: 'The Salt Cellar',
+    width: 10,
+    height: 6,
+    entries: [{ id: 'in', x: 1, y: 3 }],
+    exits: [{ id: 'out', name: 'the stairs up', x: 0, y: 3, to: 'out' }],
+    features: [{ id: 'bar', name: 'the bar', x: 5, y: 1 }],
+    walls: [
+      {
+        points: [
+          { x: 4, y: 1 },
+          { x: 7, y: 1 },
+        ],
+      },
+    ],
+    obstacles: [{ id: 'counter', name: 'the counter', kind: 'low', x: 4, y: 1, w: 3 }],
+  };
+  const character = async (id) =>
+    (await worlds().doc(W).collection('characters').doc(id).get()).data();
+  let mapId;
+  let cellar;
+  let market;
+
+  beforeAll(async () => {
+    mapId = (await ok('set_battle_map', { worldId: W, ...CELLAR })).map.id;
+    cellar = (
+      await ok('add_place', {
+        worldId: W,
+        locationId: 'loc_1',
+        name: 'The Salt Cellar',
+        kind: 'tavern',
+        description: 'Brine and pipe smoke.',
+        entranceFor: ['sea', 'trail'],
+        battleMap: mapId,
+      })
+    ).place.id;
+    market = (
+      await ok('add_place', {
+        worldId: W,
+        locationId: 'loc_1',
+        name: 'The Fishmarket',
+        kind: 'market',
+        description: 'Gulls and gutting knives.',
+        battleMap: mapId,
+      })
+    ).place.id;
+  });
+
+  const add = (name, args) =>
+    ok('add_character', {
+      worldId: W,
+      name,
+      description: 'A regular.',
+      locationId: 'loc_1',
+      placeId: cellar,
+      ...args,
+    });
+
+  test('add_character puts them on a square; the reads show who stands where', async () => {
+    const mags = await add('Old Mags', { cell: { x: 3, y: 4 } });
+    expect(mags.character).toMatchObject({ id: 'chr_old-mags', cell: { x: 3, y: 4 } });
+    expect(mags.warnings).toBeUndefined();
+    expect(await character('chr_old-mags')).toMatchObject({ cell: { x: 3, y: 4 } });
+    expect(await ok('get_character', { worldId: W, characterId: 'chr_old-mags' })).toMatchObject({
+      cell: { x: 3, y: 4 },
+    });
+    const map = await ok('get_battle_map', { worldId: W, mapId });
+    expect(map.characters).toEqual([
+      {
+        id: 'chr_old-mags',
+        name: 'Old Mags',
+        x: 3,
+        y: 4,
+        at: { id: cellar, name: 'The Salt Cellar' },
+      },
+    ]);
+  });
+
+  test('a feature: its square, else the nearest free one beside it, not through a wall', async () => {
+    // The bar sits on the counter; above it is the wall, so the first free
+    // square beside it is below.
+    const barkeep = await add('Tobin the Barkeep', { cell: { feature: 'bar' } });
+    expect(barkeep.character.cell).toEqual({ x: 5, y: 2 });
+    // By name, too; the square below is taken, and the diagonals above
+    // squeeze past the wall's corners.
+    const potboy = await add('Wim', { cell: { feature: 'The Bar' } });
+    expect(potboy.character.cell).toEqual({ x: 6, y: 2 });
+    expect(
+      await refused('add_character', {
+        worldId: W,
+        name: 'Nobody',
+        description: 'x',
+        locationId: 'loc_1',
+        placeId: cellar,
+        cell: { feature: 'hearth' },
+      })
+    ).toMatch(/The Salt Cellar has no feature "hearth"/);
+  });
+
+  test('bad squares are refused, and nothing is written', async () => {
+    const at = (cell, more = {}) =>
+      refused('add_character', {
+        worldId: W,
+        name: 'Stray',
+        description: 'x',
+        locationId: 'loc_1',
+        placeId: cellar,
+        cell,
+        ...more,
+      });
+    expect(await at({ x: 10, y: 0 })).toMatch(/\(10, 0\) is off the 10 × 6 grid/);
+    expect(await at({ x: 4, y: 1 })).toMatch(/\(4, 1\) is the counter \(low\)/);
+    expect(await at({ x: 1, y: 3 })).toMatch(/the entry "in", where players arrive/);
+    expect(await at({ x: 0, y: 3 })).toMatch(/\(0, 3\) is the stairs up, an exit/);
+    expect(await at({ x: 3, y: 4 })).toMatch(
+      /Old Mags \(chr_old-mags\) already stands at \(3, 4\)/
+    );
+    // A settlement itself has a town, not a map.
+    expect(await at({ x: 2, y: 2 }, { placeId: undefined })).toMatch(
+      /Burdendal has no battle map, so there is no square to stand on/
+    );
+    expect(await character('chr_stray')).toBeUndefined();
+    // The same square at another place on the same (shared) map is free.
+    const seller = await add('Fen the Fishwife', { placeId: market, cell: { x: 3, y: 4 } });
+    expect(seller.character.cell).toEqual({ x: 3, y: 4 });
+    const map = await ok('get_battle_map', { worldId: W, mapId });
+    expect(map.characters.find((c) => c.id === 'chr_fen-the-fishwife').at.id).toBe(market);
+  });
+
+  test('a walled-in square is allowed, with a warning', async () => {
+    await ok('set_map_layers', {
+      worldId: W,
+      mapId,
+      walls: [
+        ...CELLAR.walls,
+        {
+          points: [
+            { x: 8, y: 4 },
+            { x: 8, y: 6 },
+          ],
+        },
+        {
+          points: [
+            { x: 8, y: 4 },
+            { x: 10, y: 4 },
+          ],
+        },
+      ],
+    });
+    const hidden = await add('The Rat King', { cell: { x: 9, y: 5 } });
+    expect(hidden.warnings).toEqual([
+      "Nobody can reach (9, 5) from an entry of The Salt Cellar: it's walled in.",
+    ]);
+  });
+
+  test('update_character moves them, clears the square, and clears it with their place', async () => {
+    const moved = await ok('update_character', {
+      worldId: W,
+      characterId: 'chr_old-mags',
+      cell: { x: 2, y: 5 },
+    });
+    expect(moved).toMatchObject({ character: { cell: { x: 2, y: 5 } }, updated: ['cell'] });
+    // The same square again changes nothing.
+    expect(
+      (
+        await ok('update_character', {
+          worldId: W,
+          characterId: 'chr_old-mags',
+          cell: { x: 2, y: 5 },
+        })
+      ).updated
+    ).toEqual([]);
+    expect(
+      await refused('update_character', {
+        worldId: W,
+        characterId: 'chr_old-mags',
+        cell: { x: 5, y: 2 },
+      })
+    ).toMatch(/Tobin the Barkeep \(chr_tobin-the-barkeep\) already stands at \(5, 2\)/);
+    // null takes them off the map.
+    await ok('update_character', { worldId: W, characterId: 'chr_old-mags', cell: null });
+    expect((await character('chr_old-mags')).cell).toBeUndefined();
+
+    // Another place in town: the square goes, unless a new one comes with it.
+    const toMarket = await ok('update_character', {
+      worldId: W,
+      characterId: 'chr_wim',
+      placeId: market,
+    });
+    expect(toMarket.updated.sort()).toEqual(['cell', 'placeId']);
+    expect(toMarket.note).toMatch(/their square was cleared/);
+    expect((await character('chr_wim')).cell).toBeUndefined();
+    await ok('update_character', {
+      worldId: W,
+      characterId: 'chr_wim',
+      placeId: cellar,
+      cell: { x: 7, y: 3 },
+    });
+    expect(await character('chr_wim')).toMatchObject({ placeId: cellar, cell: { x: 7, y: 3 } });
+
+    // Another world place: the square and the place in town both go.
+    const away = await ok('update_character', {
+      worldId: W,
+      characterId: 'chr_wim',
+      locationId: 'poi_1',
+    });
+    expect(away.updated.sort()).toEqual(['cell', 'locationId', 'placeId']);
+    const wim = await character('chr_wim');
+    expect(wim.cell).toBeUndefined();
+    expect(wim.placeId).toBeUndefined();
+  });
+
+  test('changing the map warns about characters left where they can’t stand', async () => {
+    const shrunk = await ok('set_battle_map', {
+      worldId: W,
+      mapId,
+      ...CELLAR,
+      width: 8,
+      walls: CELLAR.walls,
+    });
+    expect(shrunk.warnings).toEqual(
+      expect.arrayContaining([
+        'The grid is smaller now: players standing beyond its edge are moved to its entry.',
+        "The Rat King (chr_the-rat-king) stands where they can't: (9, 5) is off the 8 × 6 grid. " +
+          'Move them with update_character (cell).',
+      ])
+    );
+    const covered = await ok('set_map_layers', {
+      worldId: W,
+      mapId,
+      obstacles: [
+        ...CELLAR.obstacles,
+        { id: 'barrels', name: 'some barrels', kind: 'solid', x: 3, y: 4 },
+      ],
+    });
+    expect(covered.warnings).toEqual([
+      "Fen the Fishwife (chr_fen-the-fishwife) stands where they can't: (3, 4) is some barrels " +
+        '(solid). Move them with update_character (cell).',
+      "The Rat King (chr_the-rat-king) stands where they can't: (9, 5) is off the 8 × 6 grid. " +
+        'Move them with update_character (cell).',
+    ]);
+  });
+
+  test('giving a place another map clears its characters’ squares', async () => {
+    const other = (await ok('set_battle_map', { worldId: W, ...CELLAR, name: 'A bare cellar' })).map
+      .id;
+    const result = await ok('assign_battle_map', { worldId: W, placeId: market, mapId: other });
+    expect(result.squaresCleared).toEqual([
+      { id: 'chr_fen-the-fishwife', name: 'Fen the Fishwife' },
+    ]);
+    expect((await character('chr_fen-the-fishwife')).cell).toBeUndefined();
+    // The cellar's characters keep theirs.
+    expect((await character('chr_tobin-the-barkeep')).cell).toEqual({ x: 5, y: 2 });
+  });
+});

@@ -476,6 +476,7 @@ function characterDetail(world, character) {
     faction: character.factionId ? ref(world.factions, character.factionId) : null,
     location: character.locationId ? ref(world.locations, character.locationId) : null,
     ...(character.placeId ? { place: ref(world.places || {}, character.placeId) } : {}),
+    ...(character.cell ? { cell: character.cell } : {}),
     lore: loreAbout(world, character.id),
   };
   if (character.retired) result.retired = true;
@@ -568,6 +569,14 @@ function battleMapDetail(world, map) {
     walls: map.walls || [],
     doors: map.doors || [],
     obstacles: map.obstacles || [],
+    // Who stands where (L-641); on a generic map, at which place.
+    characters: maps.standingOn(world, map).map(({ character, host, cell }) => ({
+      id: character.id,
+      name: character.name,
+      x: cell.x,
+      y: cell.y,
+      at: { id: host.id, name: host.name },
+    })),
     usedBy: usersOf(world, map.id),
     ...(map.retired ? { retired: true } : {}),
   };
