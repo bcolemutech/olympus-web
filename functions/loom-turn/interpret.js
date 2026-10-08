@@ -3,6 +3,7 @@
 const { callGemini } = require('../gemini');
 const maps = require('../loom-canon/maps');
 const { doorSides } = require('./steps');
+const { peopleInSight } = require('./seen');
 
 /**
  * Stage 2 — INTERPRET (design doc §5).
@@ -123,6 +124,28 @@ function buildKnownEntities(canonWorld, save, known) {
   return entities;
 }
 
+// On a battle map, the people in sight (L-643 / #462) come first, marked so,
+// and whether they are beside the player: "talk to her" and "grab the old
+// woman" find them. Everyone else stays a plain character, never placed.
+function withPeopleInSight(entities, canonWorld, save) {
+  const people = save ? peopleInSight(canonWorld, save) : [];
+  if (!people.length) return entities;
+  const ids = new Set(people.map((p) => p.character.id));
+  return people
+    .map(({ character, cell, beside }) => ({
+      id: character.id,
+      name: character.name,
+      kind:
+        'person in sight here, at (' +
+        cell.x +
+        ', ' +
+        cell.y +
+        ')' +
+        (beside ? ', beside the player' : ''),
+    }))
+    .concat(entities.filter((e) => !ids.has(e.id)));
+}
+
 function normalize(text) {
   return String(text)
     .trim()
@@ -180,7 +203,11 @@ function fallbackProposedAction(actionText) {
  */
 async function interpretAction(params) {
   const { actionText, canonWorld, save, known } = params;
-  const knownEntities = buildKnownEntities(canonWorld, save, known);
+  const knownEntities = withPeopleInSight(
+    buildKnownEntities(canonWorld, save, known),
+    canonWorld,
+    save
+  );
   const unseen = mapEntities(canonWorld, save, known).filter((e) => !e.seen);
   const resolve = (target) => {
     const resolved = resolveTarget(target, knownEntities);
