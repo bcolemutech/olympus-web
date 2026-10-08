@@ -11,7 +11,7 @@ const { turnStateOf, speedOf } = require('../loom-models');
 const { doorStatesOf, doorSides } = require('./steps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
-const { recordOf, squaresOf } = require('./seen');
+const { recordOf, squaresOf, peopleInSight } = require('./seen');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -185,6 +185,31 @@ function buildMapSection(canonWorld, position, save, resolution, view) {
   if (featuresThen.length) {
     lines.push('Features remembered' + AWAY + featuresThen.map(spot).join('; ') + '.');
   }
+  // Who stands in sight, and who is beside the player (L-643): talking needs
+  // sight, a hand on someone needs them beside. Nobody is remembered.
+  const people = peopleInSight(canonWorld, position, view ? view.inSight : null);
+  if (people.length) {
+    lines.push(
+      'People in sight: ' +
+        people
+          .map(
+            ({ character, cell: at, beside }) =>
+              character.name +
+              ' (' +
+              at.x +
+              ', ' +
+              at.y +
+              ')' +
+              (beside ? ', beside the player' : '')
+          )
+          .join('; ') +
+        '.'
+    );
+  }
+  lines.push(
+    'Nobody else on this map is in sight: never describe anyone else here as seen or heard ' +
+      'nearby.'
+  );
   // Its doors, as they stand once this resolves (L-626): this save's own. A
   // door is seen from either side of it.
   const states = doorsAfter(save, map, resolution);
@@ -251,6 +276,20 @@ function buildTownExitsSection(canonWorld, settlement, place, save) {
     ':\n' +
     note +
     exits.map(({ label, open }) => '- ' + label + ': ' + (open ? 'open' : 'CLOSED')).join('\n')
+  );
+}
+
+// The ids of those standing on the map where the player will be, but out of
+// their sight (L-643).
+function outOfSight(canonWorld, position, view) {
+  const seen = new Set(
+    peopleInSight(canonWorld, position, view.inSight).map((p) => p.character.id)
+  );
+  return new Set(
+    maps
+      .standingAt(canonWorld, maps.hostOf(canonWorld, position))
+      .map((c) => c.id)
+      .filter((id) => !seen.has(id))
   );
 }
 
@@ -370,8 +409,12 @@ function sanitizeStringArray(value) {
     : [];
 }
 
-/** Relevant entities for this scene: the location's default cast plus the action's resolved targets. */
-function resolveSceneEntityIds(canonWorld, save, proposedAction) {
+/**
+ * Relevant entities for this scene: the location's default cast plus the
+ * action's resolved targets, less `hidden` (people standing out of sight on
+ * a battle map, L-643: the narrator isn't told of them).
+ */
+function resolveSceneEntityIds(canonWorld, save, proposedAction, hidden) {
   const currentLocation = save.location && canonWorld.locations[save.location];
   const place = currentLocation && town.positionOf(canonWorld, save).place;
   let sceneEntityIds = currentLocation
@@ -389,6 +432,7 @@ function resolveSceneEntityIds(canonWorld, save, proposedAction) {
   // Works on the loaded world object (static or Firestore-backed); retired
   // entities are absent from the scene.
   return candidateIds.filter((id) => {
+    if (hidden && hidden.has(id)) return false;
     const resolved = loomCanon.findEntity(canonWorld, id);
     return Boolean(resolved) && !resolved.entity.retired;
   });
@@ -415,12 +459,14 @@ function resolveSceneEntityIds(canonWorld, save, proposedAction) {
 async function narrateResolution(params) {
   const { actionText, proposedAction, resolution, canonWorld, save, saveRef, known } = params;
 
-  const entityRefs = resolveSceneEntityIds(canonWorld, save, proposedAction);
-  const entityContexts = await retrieveContextForEntities({ saveRef, save, entityIds: entityRefs });
   // On a battle map, only what the player has seen there is named (L-636).
   const knownEntities = buildKnownEntities(canonWorld, save, known);
   const position = positionAfter(save, resolution);
   const view = await mapSightAfter(canonWorld, save, position, resolution, known, saveRef);
+  // People standing out of sight are left out of the scene (L-643).
+  const hidden = view ? outOfSight(canonWorld, position, view) : null;
+  const entityRefs = resolveSceneEntityIds(canonWorld, save, proposedAction, hidden);
+  const entityContexts = await retrieveContextForEntities({ saveRef, save, entityIds: entityRefs });
 
   let raw;
   try {

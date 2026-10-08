@@ -83,6 +83,25 @@ function inSightNow(canonWorld, save, walked, doorsBefore) {
 }
 
 /**
+ * Who stands in sight of a save on its map (planning/the-loom-movement-and-
+ * vision.md §6; L-643 / #462): `[{ character, cell, beside }]`, nearest
+ * first, `beside` when on a square next to the save's. `squares` is what is
+ * in sight, keyed "x,y" (by default, from where the save stands now). Those
+ * out of sight are left out: nobody is remembered on a square.
+ */
+function peopleInSight(canonWorld, save, squares) {
+  const { map, cell } = maps.positionOf(canonWorld, save);
+  if (!map) return [];
+  const inSight = squares || inSightNow(canonWorld, save).squares;
+  const far = (c) => Math.max(Math.abs(c.x - cell.x), Math.abs(c.y - cell.y));
+  return maps
+    .standingAt(canonWorld, maps.hostOf(canonWorld, save))
+    .filter((c) => inSight[c.cell.x + ',' + c.cell.y])
+    .map((c) => ({ character: c, cell: c.cell, beside: far(c.cell) === 1 }))
+    .sort((a, b) => far(a.cell) - far(b.cell) || a.character.name.localeCompare(b.character.name));
+}
+
+/**
  * A map's record with `squares` added: `{ mapId, width, height, squares }`, or
  * null when the record already holds them all.
  */
@@ -172,6 +191,7 @@ module.exports = {
   unpack,
   squaresOf,
   inSightNow,
+  peopleInSight,
   withSquares,
   seenRef,
   recordOf,

@@ -240,3 +240,82 @@ describe("NARRATE's ON THE MAP: what's in sight, what's remembered, nothing else
     expect(told).toContain('Doors: the iron door (open).');
   });
 });
+
+describe('the GM knows who is where (L-643)', () => {
+  let told;
+  beforeEach(() => {
+    told = '';
+    mockCallGemini.mockImplementation(async (options) => {
+      told += options.systemInstruction + '\n' + options.userMessage + '\n';
+      return options.systemInstruction.includes('INTERPRET stage')
+        ? { verb: 'talk', targets: ['the hermit'], params: {} }
+        : { narration: 'The vault is quiet.', inventedEntities: [], suggestedActions: [] };
+    });
+  });
+  const narrate = (save, targets = [], mutations = []) =>
+    narrateResolution({
+      actionText: 'talk',
+      proposedAction: { verb: 'talk', targets, params: {} },
+      resolution: { outcome: 'success', mutations, constraints: [] },
+      canonWorld: WORLD,
+      save,
+      worldState: {},
+      known: knownTo(WORLD, save, null),
+    });
+
+  test('INTERPRET is told who is in sight, and who is beside the player', async () => {
+    const beside = standing(sq(1, 3));
+    const proposed = await interpretAction({
+      actionText: 'talk to the hermit',
+      canonWorld: WORLD,
+      save: beside,
+      known: knownTo(WORLD, beside, null),
+    });
+    expect(proposed.targets).toEqual(['chr_hermit']);
+    expect(told).toContain(
+      '- chr_hermit (person in sight here, at (2, 4), beside the player): the hermit'
+    );
+    // The ghost behind the shut door is a name in the world, never placed.
+    expect(told).toContain('- chr_ghost (character): a ghost');
+    expect(told).not.toMatch(/chr_ghost \(person in sight/);
+
+    told = '';
+    const across = standing(sq(1, 1));
+    await interpretAction({
+      actionText: 'talk to the hermit',
+      canonWorld: WORLD,
+      save: across,
+      known: knownTo(WORLD, across, null),
+    });
+    expect(told).toContain('- chr_hermit (person in sight here, at (2, 4)): the hermit');
+  });
+
+  test("NARRATE's ON THE MAP names the people in sight, and who is beside the player", async () => {
+    await narrate(standing(sq(1, 3)));
+    expect(told).toContain('People in sight: the hermit (2, 4), beside the player.');
+    expect(told).toContain('Nobody else on this map is in sight');
+    expect(told).not.toMatch(/ghost \(8, 4\)/);
+  });
+
+  test('someone out of sight is left out of the scene, even when named', async () => {
+    const { entityRefs } = await narrate(standing(sq(1, 3)), ['chr_ghost', 'chr_hermit']);
+    expect(entityRefs).toEqual(['chr_hermit']);
+  });
+
+  test('a door opened this turn brings the ghost into sight, and into the scene', async () => {
+    const { entityRefs } = await narrate(
+      standing(sq(5, 2)),
+      ['chr_ghost'],
+      [{ target: 'save', op: 'set-flag', path: 'doors.bm_vault.iron-door', value: 'open' }]
+    );
+    expect(told).toMatch(/People in sight: .*a ghost \(8, 4\)/);
+    expect(entityRefs).toEqual(['chr_ghost']);
+  });
+
+  test('beside counts as reach for a hand on someone; across the room only talk', () => {
+    expect(act('shove', 'chr_hermit', standing(sq(1, 3))).outcome).toBe('success');
+    expect(act('shove', 'chr_hermit').constraints).toEqual(['You need to be beside the hermit.']);
+    expect(act('talk', 'chr_hermit').outcome).toBe('success');
+    expect(act('talk', 'chr_ghost', standing(sq(1, 3))).constraints).toEqual([NOBODY_SEEN]);
+  });
+});
