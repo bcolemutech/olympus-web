@@ -8,8 +8,10 @@ const maps = require('../loom-canon/maps');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
 const { turnStateOf, speedOf } = require('../loom-models');
-const { doorStatesOf } = require('./steps');
+const { doorStatesOf, doorSides } = require('./steps');
 const layers = require('../loom-canon/layers');
+const sight = require('../loom-canon/sight');
+const { recordOf, unpack } = require('./seen');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -109,13 +111,53 @@ function positionAfter(save, resolution) {
   };
 }
 
+// A battle map's doors as this resolution leaves them (L-626): this save's own.
+function doorsAfter(save, map, resolution) {
+  const states = { ...doorStatesOf(save, map.id) };
+  const prefix = 'doors.' + map.id + '.';
+  for (const m of (resolution && resolution.mutations) || []) {
+    if (m.target === 'save' && m.path.indexOf(prefix) === 0) {
+      states[m.path.slice(prefix.length)] = m.value;
+    }
+  }
+  return states;
+}
+
+/**
+ * What the player sees and remembers of the battle map they stand on once
+ * this resolves (planning/the-loom-movement-and-vision.md §5; L-636 / #459):
+ * `inSight` from where they stand, with the doors as this leaves them; and
+ * `known`, what they had seen there (`known` from intake, or for a map just
+ * stepped onto, its record, ./seen.js) and see now. Without `known` (the
+ * rules alone, as in tests) all of the map counts as known (`known` null).
+ * Null off a map.
+ */
+async function mapSightAfter(canonWorld, save, position, resolution, known, saveRef) {
+  const { map, cell } = maps.positionOf(canonWorld, position);
+  if (!map) return null;
+  const inSight = sight.inSight(map, cell, doorsAfter(save, map, resolution));
+  let before = known;
+  if (position.mapId !== save.mapId) {
+    const { record } = saveRef ? await recordOf(null, saveRef, map.id) : { record: null };
+    before = saveRef ? (record ? unpack(record.squares, record.width, record.height) : {}) : null;
+  }
+  return { inSight, known: before ? Object.assign({}, before, inSight) : null };
+}
+
 // Where the player stands on a battle map (L-351), and how they can leave it:
-// on a map, its exits are the only ways on.
-function buildMapSection(canonWorld, position, save, resolution) {
+// on a map, its exits are the only ways on. The narrator is told only what
+// the player sees there, and what they remember seeing (L-636): never what
+// they haven't seen.
+function buildMapSection(canonWorld, position, save, resolution, view) {
   const { map, cell } = maps.positionOf(canonWorld, position);
   const host = maps.hostOf(canonWorld, position);
   const there = maps.at(map, cell);
   const spot = (item) => item.name + ' (' + item.x + ', ' + item.y + ')';
+  const key = (square) => square.x + ',' + square.y;
+  const inSight = (square) => !view || Boolean(view.inSight[key(square)]);
+  const known = (square) => !view || !view.known || Boolean(view.known[key(square)]);
+  const remembered = (square) => known(square) && !inSight(square);
+  const AWAY = ', out of sight now: ';
   const lines = [
     'ON THE MAP OF ' +
       (host ? host.name : map.name) +
@@ -132,28 +174,30 @@ function buildMapSection(canonWorld, position, save, resolution) {
       ')' +
       (there.feature ? ', at ' + there.feature.name : '') +
       '.',
+    'The player knows only what is listed here: what is in sight, and what they remember ' +
+      "seeing that's out of sight now. Never describe anything else on this map, nor anything " +
+      'remembered as if it were in view.',
   ];
-  if ((map.features || []).length) {
-    lines.push('Features: ' + map.features.map(spot).join('; ') + '.');
+  const features = map.features || [];
+  const featuresNow = features.filter(inSight);
+  const featuresThen = features.filter(remembered);
+  if (featuresNow.length) lines.push('Features: ' + featuresNow.map(spot).join('; ') + '.');
+  if (featuresThen.length) {
+    lines.push('Features remembered' + AWAY + featuresThen.map(spot).join('; ') + '.');
   }
-  // Its doors, as they stand once this resolves (L-626): this save's own.
-  if ((map.doors || []).length) {
-    const states = { ...doorStatesOf(save, map.id) };
-    for (const m of (resolution && resolution.mutations) || []) {
-      const prefix = 'doors.' + map.id + '.';
-      if (m.target === 'save' && m.path.indexOf(prefix) === 0) {
-        states[m.path.slice(prefix.length)] = m.value;
-      }
-    }
-    lines.push(
-      'Doors: ' +
-        map.doors
-          .map((d) => (d.name || 'a door') + ' (' + layers.doorState(d, states) + ')')
-          .join('; ') +
-        '.'
-    );
+  // Its doors, as they stand once this resolves (L-626): this save's own. A
+  // door is seen from either side of it.
+  const states = doorsAfter(save, map, resolution);
+  const door = (d) => (d.name || 'a door') + ' (' + layers.doorState(d, states) + ')';
+  const doorsNow = (map.doors || []).filter((d) => doorSides(d).some(inSight));
+  const doorsThen = (map.doors || []).filter(
+    (d) => !doorSides(d).some(inSight) && doorSides(d).some(known)
+  );
+  if (doorsNow.length) lines.push('Doors: ' + doorsNow.map(door).join('; ') + '.');
+  if (doorsThen.length) {
+    lines.push('Doors remembered' + AWAY + doorsThen.map(door).join('; ') + '.');
   }
-  const exits = map.exits || [];
+  const exits = (map.exits || []).filter(known);
   if (exits.length) {
     lines.push('Ways out (the only ways on from here):');
     exits.forEach((exit) => {
@@ -163,7 +207,8 @@ function buildMapSection(canonWorld, position, save, resolution) {
         '- ' +
           spot(exit) +
           ': ' +
-          (to ? 'to ' + to.name : 'out of ' + (host ? host.name : map.name))
+          (to ? 'to ' + to.name : 'out of ' + (host ? host.name : map.name)) +
+          (inSight(exit) ? '' : ' (remembered, out of sight now)')
       );
     });
   }
@@ -209,14 +254,15 @@ function buildTownExitsSection(canonWorld, settlement, place, save) {
   );
 }
 
-// `save` gives the character, for what it may walk through in town.
-function buildExitsSection(canonWorld, position, save, resolution) {
+// `save` gives the character, for what it may walk through in town; `view`,
+// what they see and remember of a battle map (mapSightAfter).
+function buildExitsSection(canonWorld, position, save, resolution, view) {
   const locationId = position.location;
   const here = locationId && canonWorld.locations[locationId];
   if (!here) return '';
   const onMap = maps.positionOf(canonWorld, position).map;
   if (onMap && (onMap.exits || []).length) {
-    return buildMapSection(canonWorld, position, save, resolution);
+    return buildMapSection(canonWorld, position, save, resolution, view);
   }
   const place = town.positionOf(canonWorld, position).place;
   if (place) return buildTownExitsSection(canonWorld, here, place, save);
@@ -357,6 +403,7 @@ function resolveSceneEntityIds(canonWorld, save, proposedAction) {
  *   save: object,
  *   worldState: object,
  *   saveRef: FirebaseFirestore.DocumentReference,
+ *   known?: object,          — the ground the save knows on its battle map (L-635)
  * }} params
  * @returns {Promise<{
  *   narration: string,
@@ -366,11 +413,14 @@ function resolveSceneEntityIds(canonWorld, save, proposedAction) {
  * }>}
  */
 async function narrateResolution(params) {
-  const { actionText, proposedAction, resolution, canonWorld, save, saveRef } = params;
+  const { actionText, proposedAction, resolution, canonWorld, save, saveRef, known } = params;
 
   const entityRefs = resolveSceneEntityIds(canonWorld, save, proposedAction);
   const entityContexts = await retrieveContextForEntities({ saveRef, save, entityIds: entityRefs });
-  const knownEntities = buildKnownEntities(canonWorld, save);
+  // On a battle map, only what the player has seen there is named (L-636).
+  const knownEntities = buildKnownEntities(canonWorld, save, known);
+  const position = positionAfter(save, resolution);
+  const view = await mapSightAfter(canonWorld, save, position, resolution, known, saveRef);
 
   let raw;
   try {
@@ -383,12 +433,7 @@ async function narrateResolution(params) {
         canonWorld,
         entityContexts,
         recentSummary: save.recentSummary,
-        exitsSection: buildExitsSection(
-          canonWorld,
-          positionAfter(save, resolution),
-          save,
-          resolution
-        ),
+        exitsSection: buildExitsSection(canonWorld, position, save, resolution, view),
         turnSection: buildTurnSection(save, resolution),
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,

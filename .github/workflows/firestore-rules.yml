@@ -27,15 +27,19 @@ jobs:
         with:
           node-version: "22" # match the Functions runtime (firebase.json nodejs22)
 
+      - name: Install Firebase CLI
+        id: firebase-cli
+        run: |
+          npm install -g firebase-tools
+          echo "version=$(firebase --version)" >> "$GITHUB_OUTPUT"
+
+      # Keyed on the CLI version, since each CLI release pins its own emulator
+      # versions: a new CLI misses the cache, downloads once, and saves it.
       - name: Cache Firebase emulators
         uses: actions/cache@v4
         with:
           path: ~/.cache/firebase/emulators
-          key: firebase-emulators-${{ hashFiles('package.json') }}
-          restore-keys: firebase-emulators-
-
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
+          key: firebase-emulators-${{ runner.os }}-${{ steps.firebase-cli.outputs.version }}
 
       - name: Install functions dependencies
         run: cd functions && npm ci

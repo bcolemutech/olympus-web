@@ -5,14 +5,25 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
-const { planStep, doorStatesOf, hasKey, besideDoor } = require('./steps');
+const { planStep, doorStatesOf, doorSides, hasKey, besideDoor } = require('./steps');
 const layers = require('../loom-canon/layers');
+const sight = require('../loom-canon/sight');
 
 // A lock's difficulty when its door gives none (L-626).
 const DEFAULT_LOCK_DIFFICULTY = 15;
 
 // Turned down before narration (L-614): the turn's one action is used.
 const ACTED = "You've acted this turn. End your turn first.";
+
+// Turned down without using the action (L-636): aimed at something out of
+// sight, a thing or a person.
+const NOT_SEEN = "You don't see that here.";
+const NOBODY_SEEN = "You don't see anyone like that here.";
+
+// Actions that need only sight (L-636): looking and talking. Anything else
+// aimed at something on a battle map is physical, and needs reach.
+const SIGHT_ONLY =
+  /^(look|examine|inspect|study|watch|observe|read|peer|glance|talk|speak|ask|tell|say|greet|call|shout|whisper|listen|wave|signal|point|nod)/;
 
 /**
  * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
@@ -453,13 +464,66 @@ function evaluateEndTurn(characterState, canonWorld) {
   };
 }
 
+// What an action aims at on the battle map the player stands on: its name,
+// the squares it stands on (a door, either side of it), and whether it's a
+// person (someone placed on a square, §6), or null if it isn't there.
+function mapTarget(canonWorld, characterState, map, target) {
+  const named = (prefix, list) =>
+    typeof target === 'string' && target.indexOf(prefix) === 0
+      ? (list || []).find((item) => item.id === target.slice(prefix.length))
+      : null;
+  const spot = named('feature:', map.features) || named('exit:', map.exits);
+  if (spot) return { name: spot.name, squares: [spot] };
+  const door = named('door:', map.doors);
+  if (door) return { name: door.name || 'the door', squares: doorSides(door), door: true };
+  // Someone here (as the grid view lists them: at this place in town, or at
+  // this point of interest), standing on a square.
+  const person = (canonWorld.characters || {})[target];
+  if (!person) return null;
+  const host = maps.hostOf(canonWorld, characterState);
+  const isPlace = host && Boolean((canonWorld.places || {})[host.id]);
+  const here =
+    person &&
+    host &&
+    (isPlace ? person.placeId === host.id : person.locationId === host.id && !person.placeId);
+  if (here && !person.retired && person.cell) {
+    return { name: person.name, squares: [person.cell], person: true };
+  }
+  return null;
+}
+
+// On a battle map (planning/the-loom-movement-and-vision.md §5; L-636 /
+// #459): an action aimed at something out of sight is turned down, and a
+// physical one at something out of reach (you must be on or beside its
+// square; a feature on an obstacle counts from beside it). Doors keep their
+// own reach rule (evaluateDoorAttempt). A line to say, or null.
+function outOfSightOrReach(proposedAction, characterState, canonWorld) {
+  const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
+  if (!map) return null;
+  const inSight = sight.inSight(map, cell, doorStatesOf(characterState, map.id));
+  const seen = (square) => Boolean(inSight[square.x + ',' + square.y]);
+  const near = (square) => Math.max(Math.abs(square.x - cell.x), Math.abs(square.y - cell.y)) <= 1;
+  const physical = !SIGHT_ONLY.test(String(proposedAction.verb || ''));
+  for (const target of proposedAction.targets || []) {
+    const thing = mapTarget(canonWorld, characterState, map, target);
+    if (!thing) continue;
+    if (!thing.squares.some(seen)) return thing.person ? NOBODY_SEEN : NOT_SEEN;
+    if (physical && !thing.door && !thing.squares.some(near)) {
+      return 'You need to be beside ' + thing.name + '.';
+    }
+  }
+  return null;
+}
+
 // Anything typed that isn't a move uses the turn's one action (L-614 /
 // #444), whether it succeeds or not; a second is turned down. What is turned
-// down before it's tried (no such door; not beside it; no lock to pick) uses
-// nothing.
+// down before it's tried (out of sight or reach; no such door; not beside it;
+// no lock to pick) uses nothing.
 function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   const turn = turnStateOf(characterState);
   if (turn.actionUsed) return blocked(ACTED);
+  const unreached = outOfSightOrReach(proposedAction, characterState, canonWorld);
+  if (unreached) return blocked(unreached);
   const doorTarget = (proposedAction.targets || []).find(
     (t) => typeof t === 'string' && t.indexOf('door:') === 0
   );
@@ -583,4 +647,6 @@ module.exports = {
   DEFAULT_DIFFICULTY_CLASS,
   DEFAULT_LOCK_DIFFICULTY,
   ACTED,
+  NOT_SEEN,
+  NOBODY_SEEN,
 };
