@@ -36,7 +36,7 @@ Phases are numbered in the order they were planned, not the order they are built
 | L-620 Walls, doors and obstacles   | #435 (L-621 to L-628) | ✅ Shipped |
 | L-630 Vision and fog (battle maps) | #436 (L-631 to L-636) | ✅ Shipped |
 | L-640 Characters on battle maps    | #437 (#460–462)       | ✅ Shipped |
-| L-680 Everyone has a place         | #512 (#513–517)       | **Next**   |
+| L-680 Everyone has a place         | #512 (#513–517, #519) | **Next**   |
 | L-650 Town ground                  | #438 (#463–467)       | Planned    |
 | L-660 Walking in town              | #439 (#468–472)       | Planned    |
 | L-670 Vision in town               | #440 (#473–475)       | Planned    |
