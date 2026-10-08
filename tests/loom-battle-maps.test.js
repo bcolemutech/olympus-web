@@ -1575,3 +1575,105 @@ describe('what a save has seen (L-632)', () => {
     });
   });
 });
+
+describe('people on the map (L-642)', () => {
+  // The tavern gains a wall at x = 6 from the top down to y = 3, leaving the
+  // way into the kitchen open below it. Old Mags stands in the kitchen by the
+  // hearth (9, 1), out of sight of the bar side; Wim stands in the room.
+  const tavernRef = () => worldRef.collection('battleMaps').doc('bm_tavern');
+  const characters = () => worldRef.collection('characters');
+  const PEOPLE = {
+    chr_old_mags: { name: 'Old Mags', cell: { x: 9, y: 2 } },
+    chr_wim: { name: 'Wim', cell: { x: 3, y: 4 } },
+  };
+  let saveId;
+  beforeAll(async () => {
+    await tavernRef().update({
+      walls: [
+        {
+          points: [
+            { x: 6, y: 0 },
+            { x: 6, y: 3 },
+          ],
+        },
+      ],
+    });
+    for (const [id, person] of Object.entries(PEOPLE)) {
+      await characters()
+        .doc(id)
+        .set({
+          id,
+          description: 'A regular.',
+          locationId: 'loc_1',
+          placeId: 'plc_1_tavern',
+          ...person,
+        });
+    }
+    await bump();
+  });
+  afterAll(async () => {
+    await tavernRef().update({ walls: [] });
+    for (const id of Object.keys(PEOPLE)) await characters().doc(id).delete();
+    await bump();
+  });
+  beforeEach(async () => {
+    ({ saveId } = await newGame());
+    await remember(saveId, 'bm_tavern');
+    mockCallGemini.mockReset();
+    playerMovesTo(null);
+  });
+  const peopleOn = async () =>
+    (await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER })).battleMap.people;
+
+  test('a step passes through someone, at the normal cost', async () => {
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
+    const { step } = await stepTo(saveId, { x: 5, y: 4 });
+    expect(step.cell).toEqual({ x: 5, y: 4 });
+    expect(step.movementLeft).toBe(16);
+  });
+
+  test("but can't stop on them: a way to Wim ends beside him", async () => {
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 6 });
+    const { step } = await stepTo(saveId, { x: 3, y: 4 });
+    expect(step.lines).toEqual(["You're beside Wim."]);
+    expect(step.plan).toBeNull();
+    expect(Math.max(Math.abs(step.cell.x - 3), Math.abs(step.cell.y - 4))).toBe(1);
+    const next = await stepTo(saveId, { x: 3, y: 4 });
+    expect(next.narration).toBe("You're beside Wim.");
+  });
+
+  test('the grid view gets the squares of those in sight only', async () => {
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 1 });
+    expect(await peopleOn()).toEqual(
+      expect.arrayContaining([{ id: 'chr_wim', name: 'Wim', x: 3, y: 4 }])
+    );
+    expect((await peopleOn()).map((p) => p.id)).not.toContain('chr_old_mags');
+  });
+
+  test('walking stops when Old Mags comes into view; the plan is kept, and Continue goes on', async () => {
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 1 });
+    const { step } = await stepTo(saveId, { x: 10, y: 6 });
+    expect(step.lines).toEqual(['Old Mags is at the hearth.']);
+    expect(step.plan).toMatchObject({ to: { x: 10, y: 6 } });
+    expect(step.movementLeft).toBeGreaterThan(0);
+    const sees = sight.inSight((await tavernRef().get()).data(), step.cell, {});
+    expect(sees['9,2']).toBe(true);
+    expect(await peopleOn()).toEqual(
+      expect.arrayContaining([{ id: 'chr_old_mags', name: 'Old Mags', x: 9, y: 2 }])
+    );
+    const on = await continueOn(saveId);
+    expect(on.step.cell).toEqual({ x: 10, y: 6 });
+    expect(on.step.plan).toBeNull();
+  });
+
+  test('"go to Old Mags", typed: over to her, ending beside her; out of sight, nobody', async () => {
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 1 });
+    const unseen = await moveTo(saveId, 'chr_old_mags');
+    expect(unseen.constraints).toEqual(["You don't see anyone like that here."]);
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 7, y: 5 });
+    const resolution = await moveTo(saveId, 'chr_old_mags');
+    expect(resolution.constraints[0]).toBe('You go over to Old Mags.');
+    const { cell } = await where(saveId);
+    expect(Math.max(Math.abs(cell.x - 9), Math.abs(cell.y - 2))).toBe(1);
+  });
+});

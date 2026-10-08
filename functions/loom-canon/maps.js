@@ -154,6 +154,14 @@ function standingOn(world, map) {
   return found;
 }
 
+/** The live characters standing on squares at a place (L-642): its map's people. */
+function standingAt(world, host) {
+  if (!host) return [];
+  return Object.values(world.characters || {}).filter(
+    (c) => live(c) && c.cell && (characterHost(world, c) || {}).id === host.id
+  );
+}
+
 /**
  * Why nobody can stand on a square of a place's map, or null: off the grid,
  * on something that blocks (solid or low), on an entry or an exit, or on
@@ -196,5 +204,6 @@ module.exports = {
   exitsOut,
   characterHost,
   standingOn,
+  standingAt,
   squareProblem,
 };

@@ -32,6 +32,11 @@
   // only squares seen, as on the server (L-635 / #458); a square in the dark
   // says "You haven't seen that."
   //
+  // People (planning/the-loom-movement-and-vision.md §6; L-642 / #461): those
+  // standing on a square in sight are drawn as tokens (the server sends no
+  // one else). A path goes through their square but never ends on it: a way
+  // to someone ends beside them, and a walk ends on the last free square.
+  //
   // map.js owns the panel, pan and zoom, and switches between this, the town
   // view and the world map; this module draws the map into the panel's SVG
   // overlay in screen space. Map coordinates are CELL units per cell, with
@@ -94,6 +99,15 @@
       );
     };
     return { exit: find(d.exits), feature: find(d.features) };
+  }
+
+  // Who stands on a cell, of the people in sight (L-642), or null.
+  function personAt(cell) {
+    return (
+      (battle.data.people || []).filter(function (p) {
+        return p.x !== undefined && same(p, cell);
+      })[0] || null
+    );
   }
 
   // A cell's middle, in map coordinates.
@@ -357,8 +371,22 @@
       battle.preview = { none: true };
       return;
     }
-    var w = P.walk(found.path, movementLeft());
-    var doors = found.path
+    // A way to someone ends on the last free square before them (L-642).
+    var path = found.path;
+    var meeting = personAt(cell);
+    if (meeting) {
+      while (path.length && personAt(path[path.length - 1])) path = path.slice(0, -1);
+      if (!path.length) {
+        battle.preview = { beside: meeting };
+        return;
+      }
+    }
+    var w = P.walk(path, movementLeft(), {
+      stand: function (step) {
+        return !personAt(step);
+      },
+    });
+    var doors = path
       .filter(function (step) {
         return step.opens;
       })
@@ -366,10 +394,10 @@
         return doorName(step.opens);
       });
     battle.preview = {
-      path: found.path,
+      path: path,
       walked: w.walked,
       rest: w.rest,
-      cost: found.cost,
+      cost: path[path.length - 1].cost,
       turns: (w.walked.length || w.opened ? 1 : 0) + turnsFor(w.rest),
       doors: doors,
     };
@@ -618,6 +646,28 @@
       label(f, f.name, 'loom-grid-label');
     });
 
+    // People in sight (L-642): a token with their initial, and their name.
+    (d.people || []).forEach(function (person) {
+      if (person.x === undefined) return;
+      var c = centre(person);
+      var p = s(c.x, c.y);
+      var r = Math.max(5, cellPx * 0.32);
+      overlay.appendChild(svg('circle', { class: 'loom-grid-person', cx: p.x, cy: p.y, r: r }));
+      overlay.appendChild(
+        svg(
+          'text',
+          {
+            class: 'loom-grid-person-initial',
+            x: p.x,
+            y: p.y,
+            'font-size': Math.max(8, Math.round(r * 1.1)),
+          },
+          person.name.charAt(0)
+        )
+      );
+      label(person, person.name, 'loom-grid-label is-person');
+    });
+
     // The fog's dark (L-634) covers everything never seen.
     fog('dark');
     labels.forEach(function (node) {
@@ -805,8 +855,18 @@
     }
 
     var there = at(cell);
+    var person = personAt(cell);
     var coords = '(' + cell.x + ', ' + cell.y + ')';
-    if (there.exit) {
+    if (person) {
+      info.appendChild(el('h3', 'loom-map-info-name', person.name));
+      info.appendChild(
+        el(
+          'p',
+          'loom-map-info-facts',
+          (there.feature ? 'At ' + there.feature.name + ' · ' : '') + coords
+        )
+      );
+    } else if (there.exit) {
       info.appendChild(el('h3', 'loom-map-info-name', capitalise(there.exit.name)));
       info.appendChild(
         el('p', 'loom-map-info-facts', 'Way out, ' + whereTo(there.exit) + ' · ' + coords)
@@ -827,6 +887,12 @@
       info.appendChild(el('p', 'loom-map-info-status', "You haven't seen that."));
       return;
     }
+    if (preview && preview.beside) {
+      info.appendChild(
+        el('p', 'loom-map-info-status', "You're beside " + preview.beside.name + '.')
+      );
+      return;
+    }
     if (!preview || preview.none) {
       info.appendChild(el('p', 'loom-map-info-status', "There's no way there from here."));
       return;
@@ -839,7 +905,9 @@
         act(cell, label);
       };
     };
-    if (there.exit) {
+    if (person) {
+      info.appendChild(button('Go to ' + person.name, go('go to ' + person.name)));
+    } else if (there.exit) {
       info.appendChild(button('Go out by ' + there.exit.name, go('go out by ' + there.exit.name)));
     } else if (there.feature) {
       info.appendChild(button('Go to ' + there.feature.name, go('go to ' + there.feature.name)));

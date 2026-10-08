@@ -231,10 +231,10 @@ describe('what the grid view is sent (L-633)', () => {
     ]);
   });
 
-  test('people on a square only while it is in sight; those with none, listed', () => {
+  test('people on a square only while it is in sight, with it (L-642); those with none, listed', () => {
     expect(view.people).toEqual([
       { id: 'chr_hermit', name: 'The hermit' },
-      { id: 'chr_guard', name: 'A guard' },
+      { id: 'chr_guard', name: 'A guard', x: 1, y: 1 },
     ]);
   });
 

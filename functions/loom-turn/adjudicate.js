@@ -165,7 +165,8 @@ const exitNames = (exits) => nameList(exits.map((e) => ({ name: e.name })));
 
 // A move while the player is on a battle map: to a cell (from the grid), to a
 // feature or an exit (typed: "feature:bar", "exit:front-door"), along the
-// map's paths (L-624) over the ground the save knows (L-635). Stepping onto an exit leaves by it, out
+// map's paths (L-624) over the ground the save knows (L-635), or to someone
+// standing there in sight (L-642: the walk ends beside them). Stepping onto an exit leaves by it, out
 // to the town or the world, or onto the map it leads to. Anything else waits
 // until the player has left the map, as leaving a town waits for a gate.
 function evaluateMapMove(proposedAction, characterState, canonWorld, here, known) {
@@ -189,6 +190,16 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
     };
   }
   if (feature) cell = { x: feature.x, y: feature.y };
+  // Someone standing here (L-642): only if in sight now.
+  const person =
+    !cell && !exit && typeof target === 'string'
+      ? mapTarget(canonWorld, characterState, map, target)
+      : null;
+  if (person && person.person) {
+    const inSight = sight.inSight(map, from, doorStatesOf(characterState, map.id));
+    if (!inSight[person.squares[0].x + ',' + person.squares[0].y]) return blocked(NOBODY_SEEN);
+    cell = person.squares[0];
+  }
   if (!cell && !exit) {
     if (host && target === host.id) {
       return { outcome: 'no_op', mutations: [], constraints: ["You're already there."] };
@@ -217,7 +228,13 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
     const left = leaveMapBy(exit, hostName, canonWorld);
     return left.outcome === 'success' ? { ...left, mutations: [...left.mutations, spend] } : left;
   }
-  const name = exit ? exit.name : feature ? feature.name : null;
+  const name = exit
+    ? exit.name
+    : feature
+      ? feature.name
+      : person && person.person
+        ? person.name
+        : null;
   const mutations = [{ target: 'save', op: 'set-flag', path: 'cell', value: step.cell }, spend];
   if (step.opened) {
     // A door opened on the way stays open for this save (L-624).
@@ -241,10 +258,17 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
       walked,
     };
   }
+  const arrived =
+    person && person.person
+      ? 'You go over to ' + name + '.'
+      : name
+        ? 'You move to ' + name + '.'
+        : 'You move across ' + map.name + '.';
   return {
     outcome: 'success',
     mutations,
-    constraints: [name ? 'You move to ' + name + '.' : 'You move across ' + map.name + '.'],
+    // Anyone who came into view on the way (L-642).
+    constraints: [arrived].concat(step.seenLines || []),
     walked,
   };
 }
