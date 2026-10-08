@@ -347,6 +347,7 @@ describe('drawing maps', () => {
     });
     expect(result.warnings).toEqual([
       'The grid is smaller now: players standing beyond its edge are moved to its entry.',
+      'Players who had explored it start over: what they had seen of it is forgotten.',
       'It has no walls, doors or obstacles: players walk anywhere on it, and a place with it ' +
         'as its own map falls short of Rich. Add them with set_map_layers.',
     ]);
@@ -1170,6 +1171,18 @@ describe('characters on squares (L-641)', () => {
     const wim = await character('chr_wim');
     expect(wim.cell).toBeUndefined();
     expect(wim.placeId).toBeUndefined();
+  });
+
+  test('replacing the grid is a new map to players: its revision moves on', async () => {
+    expect((await mapDoc(W, mapId)).revision).toBeUndefined();
+    const redrawn = await ok('set_battle_map', { worldId: W, mapId, ...CELLAR });
+    expect(redrawn.warnings).toContain(
+      'Players who had explored it start over: what they had seen of it is forgotten.'
+    );
+    expect((await mapDoc(W, mapId)).revision).toBe(1);
+    // Its layers alone are not a new map.
+    await ok('set_map_layers', { worldId: W, mapId, walls: CELLAR.walls });
+    expect((await mapDoc(W, mapId)).revision).toBe(1);
   });
 
   test('changing the map warns about characters left where they can’t stand', async () => {

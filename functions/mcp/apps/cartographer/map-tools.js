@@ -276,7 +276,8 @@ function mapTools({ writer }) {
         'another map, for floors and wings) and features (named cells players can walk to: the ' +
         'bar, the altar). Walls, doors and obstacles (see set_map_layers) can come with it; ' +
         'replacing a grid without them keeps the ones it has. Leave out mapId to make a new ' +
-        'map; give it to replace that map’s grid (its image is kept). `generic` makes it ' +
+        'map; give it to replace that map’s grid (its image is kept, but players forget what ' +
+        'they had seen of it). `generic` makes it ' +
         'reusable for any ' +
         'number of places (a tavern, a forest clearing): it opens a place, but only a place’s ' +
         'own map can make it Rich. Assign maps with assign_battle_map. Images are uploaded on ' +
@@ -324,6 +325,9 @@ function mapTools({ writer }) {
             generic:
               args.generic === undefined ? (before ? before.generic || null : null) : args.generic,
             sources: { map: 'mcp' },
+            // A replaced grid is a new map to players: what they had seen of
+            // it is forgotten (loom-turn/seen.js; L-641).
+            ...(before ? { revision: (before.revision || 0) + 1 } : {}),
           };
           e.set(e.ref('battleMaps', id), doc);
           const result = {
@@ -334,6 +338,11 @@ function mapTools({ writer }) {
           };
           if (!before) result.created = true;
           const warnings = [...layerWarnings(doc), ...standingWarnings(world, doc)];
+          if (before) {
+            warnings.unshift(
+              'Players who had explored it start over: what they had seen of it is forgotten.'
+            );
+          }
           if (before && (before.width > args.width || before.height > args.height)) {
             warnings.unshift(
               'The grid is smaller now: players standing beyond its edge are moved to its entry.'

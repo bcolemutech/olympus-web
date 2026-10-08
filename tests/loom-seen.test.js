@@ -12,7 +12,7 @@
  * Run: cd tests && npx jest loom-seen --verbose
  */
 
-const { pack, unpack, inSightNow, withSquares } = require('../functions/loom-turn/seen');
+const { pack, unpack, squaresOf, inSightNow, withSquares } = require('../functions/loom-turn/seen');
 const { battleView } = require('../functions/loom-turn/map-view');
 
 const keys = (...squares) => Object.fromEntries(squares.map(([x, y]) => [x + ',' + y, true]));
@@ -66,6 +66,20 @@ describe('the record', () => {
     const repacked = withSquares(record, smaller, keys([0, 0]));
     expect(repacked).toMatchObject({ width: 3, height: 3 });
     expect(unpack(repacked.squares, 3, 3)).toEqual(keys([0, 0]));
+  });
+
+  test('a redrawn map is forgotten: an older revision counts as nothing seen (L-641)', () => {
+    const record = withSquares(null, map, keys([0, 0], [3, 2]));
+    expect(squaresOf(record, map)).toEqual(keys([0, 0], [3, 2]));
+    const redrawn = { ...map, revision: 1 };
+    expect(squaresOf(record, redrawn)).toEqual({});
+    expect(squaresOf(null, redrawn)).toEqual({});
+    // The next look starts over, and is written even with nothing new in it.
+    const fresh = withSquares(record, redrawn, keys([0, 0]));
+    expect(fresh).toMatchObject({ revision: 1 });
+    expect(unpack(fresh.squares, 4, 3)).toEqual(keys([0, 0]));
+    expect(squaresOf(fresh, redrawn)).toEqual(keys([0, 0]));
+    expect(withSquares(fresh, redrawn, keys([0, 0]))).toBeNull();
   });
 });
 
