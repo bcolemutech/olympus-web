@@ -53,4 +53,17 @@ echo "Installing scripts dependencies..."
 cd "$PROJECT_DIR/scripts"
 npm install
 
+##
+# 5. Install functions/ and tests/ dependencies (the Jest suite runs the
+#    functions' code against the emulators, as in firestore-rules.yml).
+#    npm ci, as CI does: it installs the lockfiles exactly and never edits them.
+##
+echo "Installing functions dependencies..."
+cd "$PROJECT_DIR/functions"
+npm ci
+
+echo "Installing test dependencies..."
+cd "$PROJECT_DIR/tests"
+npm ci
+
 echo "Session environment ready."
