@@ -183,6 +183,108 @@ describe('only on ground the save knows (L-635)', () => {
   });
 });
 
+describe('people on squares (L-642)', () => {
+  // The room at the Ruin, a wall at x = 5 from the top down to y = 4: Old
+  // Mags stands behind it at (7, 3), out of sight from the west side, and
+  // Wim in the open at (3, 4).
+  const PEOPLE = {
+    locations: { poi_ruin: { id: 'poi_ruin', name: 'The Ruin', battleMap: { mapId: 'bm_room' } } },
+    battleMaps: {
+      bm_room: {
+        ...ROOM,
+        walls: [
+          {
+            points: [
+              { x: 5, y: 0 },
+              { x: 5, y: 4 },
+            ],
+          },
+        ],
+      },
+    },
+    characters: {
+      chr_mags: { id: 'chr_mags', name: 'Old Mags', locationId: 'poi_ruin', cell: { x: 7, y: 3 } },
+      chr_wim: { id: 'chr_wim', name: 'Wim', locationId: 'poi_ruin', cell: { x: 3, y: 4 } },
+      chr_away: {
+        id: 'chr_away',
+        name: 'Elsewhere',
+        locationId: 'poi_other',
+        cell: { x: 2, y: 4 },
+      },
+    },
+  };
+  const at = (cell, turn) => ({ ...standing(cell, turn), location: 'poi_ruin' });
+
+  test('a path passes through someone at the normal cost', () => {
+    const step = planStep(PEOPLE, at({ x: 1, y: 4 }), { cell: { x: 4, y: 4 } });
+    expect(step.cell).toEqual({ x: 4, y: 4 });
+    expect(step.walked).toEqual([
+      { x: 2, y: 4 },
+      { x: 3, y: 4 },
+      { x: 4, y: 4 },
+    ]);
+    expect(step.turn.movementLeft).toBe(3);
+  });
+
+  test("a way to someone's square ends on the last free square before it, beside them", () => {
+    const step = planStep(PEOPLE, at({ x: 0, y: 2 }), { cell: { x: 3, y: 4 } });
+    expect(step.cell).toEqual({ x: 2, y: 3 });
+    expect(step.turn.plan).toBeNull();
+    expect(step.lines).toEqual(["You're beside Wim."]);
+    expect(planStep(PEOPLE, at({ x: 2, y: 4 }), { cell: { x: 3, y: 4 } }).refused).toBe(
+      "You're beside Wim."
+    );
+  });
+
+  test("a walk whose movement runs out on someone's square backs off; the plan goes on", () => {
+    const step = planStep(PEOPLE, at({ x: 1, y: 4 }, { movementLeft: 2 }), {
+      cell: { x: 4, y: 4 },
+    });
+    expect(step.cell).toEqual({ x: 2, y: 4 });
+    expect(step.turn.movementLeft).toBe(1);
+    expect(step.turn.plan.path).toEqual([
+      { x: 3, y: 4, cost: 1 },
+      { x: 4, y: 4, cost: 2 },
+    ]);
+  });
+
+  test('walking stops where someone comes into view, with a line and the plan kept', () => {
+    // Round the end of the wall: Old Mags comes into view at (4, 4).
+    const step = planStep(PEOPLE, at({ x: 3, y: 1 }, { movementLeft: 20 }), {
+      cell: { x: 8, y: 5 },
+    });
+    expect(step.cell).toEqual({ x: 4, y: 4 });
+    expect(step.lines).toEqual(['You see Old Mags.']);
+    expect(step.seenLines).toEqual(['You see Old Mags.']);
+    expect(step.turn.movementLeft).toBeGreaterThan(0);
+    expect(step.turn.plan).toMatchObject({ to: { x: 8, y: 5 } });
+    // Next turn, Continue goes on: she is in sight already, so nothing stops it.
+    const on = planStep(
+      PEOPLE,
+      { ...at(step.cell), turn: { ...step.turn, movementLeft: 6 } },
+      { plan: true }
+    );
+    expect(on.cell).toEqual({ x: 8, y: 5 });
+    expect(on.lines).toEqual([]);
+  });
+
+  test('beside a feature, the line says where they are', () => {
+    const world = {
+      ...PEOPLE,
+      characters: { chr_mags: { ...PEOPLE.characters.chr_mags, cell: { x: 7, y: 2 } } },
+    };
+    const step = planStep(world, at({ x: 3, y: 1 }, { movementLeft: 20 }), {
+      cell: { x: 8, y: 5 },
+    });
+    expect(step.lines).toEqual(['Old Mags is at the chest.']);
+  });
+
+  test('someone at another place is no one here', () => {
+    const step = planStep(PEOPLE, at({ x: 1, y: 4 }), { cell: { x: 2, y: 4 } });
+    expect(step.cell).toEqual({ x: 2, y: 4 });
+  });
+});
+
 test('refusals: no map, off it, already there', () => {
   expect(
     planStep(WORLD, { ...standing({ x: 1, y: 1 }), mapId: null }, { cell: { x: 2, y: 2 } })

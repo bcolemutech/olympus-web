@@ -221,7 +221,8 @@ function townView(canonWorld, save, discovered) {
  *   - the entries, exits (and where each leads) and features on squares it
  *     has seen;
  *   - the people found at the place: those standing on a square (`cell`,
- *     §6) only while it's in sight; the rest, who have no square yet, listed;
+ *     §6) only while it's in sight, with their square (`x`, `y`) for their
+ *     token (L-642); the rest, who have no square yet, listed;
  *   - `fog: { seen, inSight }`, the squares seen (ever, this one included)
  *     and in sight now, packed as ./seen.js packs them (one bit a square,
  *     y × width + x, lowest bit first, in base64), for the grid view's fog.
@@ -249,7 +250,8 @@ function battleView(canonWorld, save, record) {
             : c.locationId === host.id && !c.placeId
         )
         .filter((c) => !c.cell || Boolean(inSight[c.cell.x + ',' + c.cell.y]))
-        .map((c) => ({ id: c.id, name: c.name }))
+        // Their square, for their token (L-642); none for those without one.
+        .map((c) => ({ id: c.id, name: c.name, ...(c.cell ? { x: c.cell.x, y: c.cell.y } : {}) }))
     : [];
   return {
     id: map.id,

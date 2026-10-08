@@ -761,6 +761,21 @@
   stroke-width: 2;
 }
 
+/* People in sight (L-642): a teal token with their initial, apart from you and the features. */
+.loom-grid-person {
+  fill: #4db6ac;
+  stroke: #0a0e1a;
+  stroke-width: 2;
+}
+
+.loom-grid-person-initial {
+  fill: #0a0e1a;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
 /* You: white, in the amber "you are here" ring, apart from the amber features. */
 .loom-grid-you {
   fill: #ffffff;

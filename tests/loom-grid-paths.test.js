@@ -245,6 +245,31 @@ describe('walk', () => {
     expect(spent).toBe(2);
     expect(rest[0]).toEqual({ x: 3, y: 0, cost: 2 });
   });
+
+  test('stop ends the walk on the step it names (L-642)', () => {
+    const { walked, spent, rest } = paths.walk(line, 20, { stop: (step) => step.x === 3 });
+    expect(squares(walked)).toEqual([
+      [1, 4],
+      [2, 4],
+      [3, 4],
+    ]);
+    expect(spent).toBe(3);
+    expect(rest[0]).toEqual({ x: 4, y: 4, cost: 1 });
+  });
+
+  test('a walk never ends where it may not stand: it backs off (L-642)', () => {
+    const { walked, spent, rest } = paths.walk(line, 4, {
+      stand: (step) => step.x !== 4 && step.x !== 3,
+    });
+    expect(squares(walked)).toEqual([
+      [1, 4],
+      [2, 4],
+    ]);
+    expect(spent).toBe(2);
+    expect(rest[0]).toEqual({ x: 3, y: 4, cost: 1 });
+    // Passing through such squares is fine.
+    expect(paths.walk(line, 20, { stand: (step) => step.x !== 4 }).walked).toEqual(line);
+  });
 });
 
 describe("the browser's copy", () => {

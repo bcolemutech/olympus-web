@@ -210,8 +210,13 @@
    * stop, as a plan for the next turn. A step that `opens` something (a
    * closed door) stops the walk before it: with 1 to spare it's opened
    * (`opened`, and 1 spent), and the rest goes on through it from there.
+   *
+   * Options (L-642): `stop(step)` ends the walk on a step once it's taken
+   * (someone came into view there); `stand(step)` says whether a walk may end
+   * on a step (not on someone else's square): one that can't backs off to
+   * the last it can, and opens nothing.
    */
-  function walk(path, budget) {
+  function walk(path, budget, options) {
     var walked = [];
     var spent = 0;
     var opened = null;
@@ -227,6 +232,13 @@
       if (step.cost > budget) break;
       walked.push(step);
       spent = step.cost;
+      if (options && options.stop && options.stop(step)) break;
+    }
+    var stand = options && options.stand;
+    if (stand && walked.length && !stand(walked[walked.length - 1])) {
+      while (walked.length && !stand(walked[walked.length - 1])) walked.pop();
+      spent = walked.length ? walked[walked.length - 1].cost : 0;
+      opened = null;
     }
     var rest = path.slice(walked.length).map(function (step, j) {
       var next = { x: step.x, y: step.y, cost: step.cost - spent };
