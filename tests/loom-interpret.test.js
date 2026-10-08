@@ -19,9 +19,9 @@ const {
   resolveTarget,
   buildKnownEntities,
 } = require('../functions/loom-turn/interpret');
-const { getWorld } = require('../functions/loom-canon');
+const { COAST } = require('./helpers/coast');
 
-const CANON_WORLD = getWorld('shattered-coast');
+const CANON_WORLD = COAST;
 
 const MINI_WORLD = {
   locations: {

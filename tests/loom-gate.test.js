@@ -137,12 +137,13 @@ describe('new games', () => {
     expect((await saveOf(saveId)).location).toBe('loc_1');
   });
 
-  test('static, hand-authored worlds are never gated', async () => {
-    const { saveId } = await loomCreateSave.run({
-      data: { worldId: 'shattered-coast', name: 'Coast', characterName: 'Tam' },
-      auth: PLAYER,
-    });
-    expect(saveId).toEqual(expect.any(String));
+  test('the old built-in world is gone: a new game there is refused (L-686)', async () => {
+    await expect(
+      loomCreateSave.run({
+        data: { worldId: 'shattered-coast', name: 'Coast', characterName: 'Tam' },
+        auth: PLAYER,
+      })
+    ).rejects.toMatchObject({ code: 'not-found' });
   });
 });
 

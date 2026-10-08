@@ -266,24 +266,10 @@ describe('loomGetMap', () => {
     const { saveId } = await newGame();
     await expect(getMap(saveId, OTHER)).rejects.toMatchObject({ code: 'permission-denied' });
     await expect(
-      loomGetMap.run({ data: { worldId: 'shattered-coast', saveId }, auth: PLAYER })
+      loomGetMap.run({ data: { worldId: 'another-world', saveId }, auth: PLAYER })
     ).rejects.toMatchObject({ code: 'failed-precondition' });
     await expect(
       loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: { uid: 'x', token: {} } })
     ).rejects.toMatchObject({ code: 'permission-denied' });
-  });
-
-  test('static worlds have no map image or coordinates', async () => {
-    const { saveId } = await loomCreateSave.run({
-      data: { worldId: 'shattered-coast', name: 'Coast', characterName: 'Tam' },
-      auth: PLAYER,
-    });
-    const map = await loomGetMap.run({
-      data: { worldId: 'shattered-coast', saveId },
-      auth: PLAYER,
-    });
-    expect(map.map).toBeNull();
-    expect(map.places.length).toBeGreaterThan(0);
-    expect(map.places.every((p) => p.x === undefined && p.open === true)).toBe(true);
   });
 });

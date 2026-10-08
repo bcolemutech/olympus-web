@@ -12,6 +12,9 @@
 process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080';
 process.env.GCLOUD_PROJECT = 'demo-loom-test';
 
+// The Shattered Coast is a test fixture now, not a built-in world (L-686).
+jest.mock('../functions/loom-canon', () => require('./helpers/coast').canonWithCoast());
+
 const functionsTest = require('firebase-functions-test')({ projectId: 'demo-loom-test' }, null);
 
 // Requiring functions/index.js triggers its single initializeApp() call.
@@ -88,9 +91,9 @@ describe('loomCreateSave', () => {
   });
 
   it('rejects a missing name', async () => {
-    await expect(
-      callCreate({ worldId: WORLD_ID, characterName: 'Ishmael' })
-    ).rejects.toThrow(/name/);
+    await expect(callCreate({ worldId: WORLD_ID, characterName: 'Ishmael' })).rejects.toThrow(
+      /name/
+    );
   });
 
   it('rejects a missing characterName', async () => {
@@ -176,11 +179,7 @@ describe('loomDeleteSave', () => {
     const saveSnap = await db.collection('loom_saves').doc(saveId).get();
     expect(saveSnap.exists).toBe(false);
 
-    const turnsSnap = await db
-      .collection('loom_saves')
-      .doc(saveId)
-      .collection('loom_turns')
-      .get();
+    const turnsSnap = await db.collection('loom_saves').doc(saveId).collection('loom_turns').get();
     expect(turnsSnap.empty).toBe(true);
   });
 });

@@ -183,10 +183,8 @@ describe('the Loom and Firestore worlds', () => {
     expect(world.rules.startingLocationId).toBe('loc_1');
   });
 
-  test('static worlds are unchanged', async () => {
-    expect(await loomCanon.loadWorld('shattered-coast', { db })).toBe(
-      loomCanon.getWorld('shattered-coast')
-    );
+  test('there are no built-in worlds: the old one loads nothing (L-686)', async () => {
+    expect(await loomCanon.loadWorld('shattered-coast', { db })).toBeNull();
   });
 
   test('canon is cached until canonVersion changes, then the next load sees the edit', async () => {

@@ -203,6 +203,15 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
       // Players can only enter Playable places (Layered Worlds §5; L-322).
       problems.push(`a starting location players can enter (${whyClosed(world, start)})`);
     }
+    // No text-only worlds (L-686): a world map, and every live location on it.
+    const size = world.map || {};
+    if (!(size.width > 0 && size.height > 0)) problems.push('a world map');
+    const unmapped = Object.values(world.locations).filter(
+      (l) => !l.retired && !(l.geo && Number.isFinite(l.geo.x) && Number.isFinite(l.geo.y))
+    );
+    if (unmapped.length) {
+      problems.push(`coordinates for every location (${unmapped.length} without)`);
+    }
     const broken = Object.values(world.locations).filter((l) =>
       (l.connections || []).some((id) => !world.locations[id])
     );

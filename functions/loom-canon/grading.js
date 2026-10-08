@@ -38,9 +38,9 @@
  * someone there or lore about them. A settlement's Rich bar grows with its
  * size (SIZE_TIERS).
  *
- * Only Cartographer worlds, which carry a draft or published status, are
- * graded. Hand-authored static worlds are authored by definition: exempt, and
- * always playable.
+ * Every world is a Cartographer world, with a draft or published status, and
+ * is graded (there are no built-in worlds since L-686 / #519). A world object
+ * with no status, which only tests build, is exempt and always playable.
  */
 
 const RUBRIC_VERSION = 2; // 2: the Rich bar scales with a settlement's size

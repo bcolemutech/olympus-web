@@ -25,7 +25,7 @@
  * has one (older saves, or a layout added later) stands at its default
  * entrance.
  *
- * Pure helpers over a loaded world (static worlds have no places), shared by
+ * Pure helpers over a loaded world (one may have no places), shared by
  * grading, the rules engine, the narrator, the interpreter and new games.
  */
 

@@ -16,9 +16,9 @@ const {
   rollDie,
   DEFAULT_DIFFICULTY_CLASS,
 } = require('../functions/loom-turn/adjudicate');
-const { getWorld } = require('../functions/loom-canon');
+const { COAST } = require('./helpers/coast');
 
-const CANON_WORLD = getWorld('shattered-coast');
+const CANON_WORLD = COAST;
 
 function makeProposedAction(overrides) {
   return Object.assign({ verb: 'look', targets: [], params: {} }, overrides);

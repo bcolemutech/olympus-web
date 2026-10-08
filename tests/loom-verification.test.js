@@ -30,6 +30,8 @@ process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || 'lo
 process.env.GCLOUD_PROJECT = 'demo-loom-test';
 
 const mockCallGemini = jest.fn();
+// The Shattered Coast is a test fixture now, not a built-in world (L-686).
+jest.mock('../functions/loom-canon', () => require('./helpers/coast').canonWithCoast());
 jest.mock('../functions/gemini', () => ({
   callGemini: (...args) => mockCallGemini(...args),
 }));
@@ -44,6 +46,7 @@ const db = admin.firestore();
 
 const { loomPlayTurn, loomCreateSave, loomDeleteSave } = require('../functions/index');
 const loomCanon = require('../functions/loom-canon');
+const { COAST } = require('./helpers/coast');
 const { normalizeEntityName, softCanonDocId } = require('../functions/loom-turn/soft-canon');
 const { makePlayerAction, makeAiResponse } = require('./fixtures/loom');
 
@@ -124,7 +127,7 @@ afterAll(async () => {
 describe('Phase 1 exit criterion — hard state, seeded rules, canon integrity, and resume', () => {
   // Snapshotted once, before the scenario runs, so the final check can prove
   // nothing in the frozen canon module moved even by reference.
-  const canonBefore = JSON.stringify(loomCanon.getWorld(WORLD_ID));
+  const canonBefore = JSON.stringify(COAST);
 
   it('Session 1 — establishes hard state and a first, unpromoted entity mention', async () => {
     const created = await callCreate({
@@ -230,11 +233,9 @@ describe('Phase 1 exit criterion — hard state, seeded rules, canon integrity, 
 
     // Promotion happened in World State only — the frozen canon module was
     // never touched, and still has no idea Bramwell exists.
-    const canonAfter = JSON.stringify(loomCanon.getWorld(WORLD_ID));
+    const canonAfter = JSON.stringify(COAST);
     expect(canonAfter).toBe(canonBefore);
-    expect(
-      Object.values(loomCanon.getWorld(WORLD_ID).characters).some((c) => c.name === 'Bramwell')
-    ).toBe(false);
+    expect(Object.values(COAST.characters).some((c) => c.name === 'Bramwell')).toBe(false);
   });
 
   it('cleans up the run', async () => {

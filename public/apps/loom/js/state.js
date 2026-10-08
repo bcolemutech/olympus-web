@@ -15,16 +15,10 @@
     turnInProgress: false,
   };
 
-  // Static worlds shipped with the app (display metadata only; canon lives
-  // server-side in functions/loom-canon/). worlds.js adds published
-  // Cartographer worlds from Firestore at runtime.
-  Loom.WORLDS = [
-    {
-      id: 'shattered-coast',
-      name: 'The Shattered Coast',
-      tagline: 'Where hidden coves and old scores meet the tide.',
-    },
-  ];
+  // The worlds a player can enter: the published Cartographer worlds, which
+  // worlds.js reads from Firestore at runtime. There are no built-in worlds
+  // (L-686 / #519).
+  Loom.WORLDS = [];
 
   // ── Lazy-cached DOM ref helper ──────────────────
   var refCache = {};

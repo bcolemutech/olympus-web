@@ -1,141 +1,93 @@
 'use strict';
 
 /**
- * Unit tests for functions/loom-canon/ (L-103).
+ * Unit tests for functions/loom-canon/ (L-103): resolving entities and their
+ * snippets on a world object, and that there are no built-in worlds (L-686 /
+ * #519): every world is a Cartographer world, loaded from Firestore. The
+ * Shattered Coast survives only as a test fixture (tests/fixtures/coast-world.js).
  *
  * Pure module — no Firestore emulator required.
  *
  * Run: cd tests && npx jest loom-canon --verbose
  */
 
-const {
-  listWorldIds,
-  getWorld,
-  getLocation,
-  getFaction,
-  getCharacter,
-  getLoreEntry,
-  getEntity,
-  getEntitySnippet,
-} = require('../functions/loom-canon');
+const loomCanon = require('../functions/loom-canon');
+const { findEntity, entitySnippet, loadWorld } = loomCanon;
+const { COAST } = require('./helpers/coast');
 
-describe('listWorldIds', () => {
-  it('includes the Phase 1 seed world', () => {
-    expect(listWorldIds()).toContain('shattered-coast');
+describe('no built-in worlds (L-686)', () => {
+  it('the canon module has no static worlds to list or get', () => {
+    for (const helper of [
+      'listWorldIds',
+      'getWorld',
+      'getLocation',
+      'getFaction',
+      'getCharacter',
+      'getLoreEntry',
+      'getEntity',
+      'getEntitySnippet',
+    ]) {
+      expect(loomCanon[helper]).toBeUndefined();
+    }
+  });
+
+  it('the old built-in world id loads nothing without Firestore', async () => {
+    expect(await loadWorld('shattered-coast')).toBeNull();
+    expect(await loadWorld('shattered-coast', {})).toBeNull();
   });
 });
 
-describe('getWorld', () => {
-  it('returns the world for a known id', () => {
-    const world = getWorld('shattered-coast');
-    expect(world).not.toBeNull();
-    expect(world.id).toBe('shattered-coast');
-    expect(world.name).toBe('The Shattered Coast');
-  });
-
-  it('returns null for an unknown world id', () => {
-    expect(getWorld('nonexistent-world')).toBeNull();
-  });
-
-  it('is frozen — canon cannot be mutated at play time', () => {
-    const world = getWorld('shattered-coast');
-    expect(Object.isFrozen(world)).toBe(true);
-    expect(Object.isFrozen(world.locations)).toBe(true);
-    expect(Object.isFrozen(world.locations['widows-reach'])).toBe(true);
-
-    expect(() => {
-      'use strict';
-      world.name = 'Hacked';
-    }).toThrow();
-    expect(getWorld('shattered-coast').name).toBe('The Shattered Coast');
-  });
-});
-
-describe('getLocation / getFaction / getCharacter / getLoreEntry', () => {
-  it('resolves a known location', () => {
-    const location = getLocation('shattered-coast', 'widows-reach');
-    expect(location).not.toBeNull();
-    expect(location.name).toBe("Widow's Reach");
-  });
-
-  it('returns null for an unknown location', () => {
-    expect(getLocation('shattered-coast', 'nonexistent')).toBeNull();
-  });
-
-  it('resolves a known faction', () => {
-    const faction = getFaction('shattered-coast', 'pirate-brethren');
-    expect(faction).not.toBeNull();
-    expect(faction.disposition).toBe('friendly');
-  });
-
-  it('resolves a known character', () => {
-    const character = getCharacter('shattered-coast', 'captain-orla-vance');
-    expect(character).not.toBeNull();
-    expect(character.locationId).toBe('widows-reach');
-  });
-
-  it('resolves a known lore entry', () => {
-    const lore = getLoreEntry('shattered-coast', 'founding-of-widows-reach');
-    expect(lore).not.toBeNull();
-    expect(lore.entityRefs).toContain('widows-reach');
-  });
-
-  it('returns null for any lookup against an unknown world', () => {
-    expect(getLocation('nope', 'widows-reach')).toBeNull();
-    expect(getFaction('nope', 'pirate-brethren')).toBeNull();
-    expect(getCharacter('nope', 'captain-orla-vance')).toBeNull();
-    expect(getLoreEntry('nope', 'founding-of-widows-reach')).toBeNull();
-  });
-});
-
-describe('getEntity', () => {
+describe('findEntity', () => {
   it('resolves a location id with type "location"', () => {
-    const result = getEntity('shattered-coast', 'widows-reach');
-    expect(result).toEqual({ type: 'location', entity: getLocation('shattered-coast', 'widows-reach') });
+    expect(findEntity(COAST, 'widows-reach')).toEqual({
+      type: 'location',
+      entity: COAST.locations['widows-reach'],
+    });
   });
 
   it('resolves a faction id with type "faction"', () => {
-    const result = getEntity('shattered-coast', 'spanish-crown');
-    expect(result.type).toBe('faction');
+    expect(findEntity(COAST, 'spanish-crown').type).toBe('faction');
   });
 
   it('resolves a character id with type "character"', () => {
-    const result = getEntity('shattered-coast', 'commandant-de-alva');
-    expect(result.type).toBe('character');
+    expect(findEntity(COAST, 'commandant-de-alva').type).toBe('character');
   });
 
-  it('returns null for an id that matches nothing', () => {
-    expect(getEntity('shattered-coast', 'nonexistent-entity')).toBeNull();
-  });
-
-  it('returns null for an unknown world', () => {
-    expect(getEntity('nope', 'widows-reach')).toBeNull();
+  it('returns null for an id that matches nothing, or no world', () => {
+    expect(findEntity(COAST, 'nonexistent-entity')).toBeNull();
+    expect(findEntity(null, 'widows-reach')).toBeNull();
   });
 });
 
-describe('getEntitySnippet', () => {
+describe('entitySnippet', () => {
   it('includes the entity description and any lore entries that reference it', () => {
-    const snippet = getEntitySnippet('shattered-coast', 'skeleton-cove');
+    const snippet = entitySnippet(COAST, 'skeleton-cove');
     expect(snippet).toContain('Skeleton Cove');
     expect(snippet).toContain('The Sunken Warship');
   });
 
   it('still returns a snippet for an entity with no referencing lore', () => {
-    const snippet = getEntitySnippet('shattered-coast', 'quartermaster-doone');
-    expect(snippet).toContain('Quartermaster Doone');
+    expect(entitySnippet(COAST, 'quartermaster-doone')).toContain('Quartermaster Doone');
   });
 
   it('returns null for an entity that does not exist', () => {
-    expect(getEntitySnippet('shattered-coast', 'nonexistent-entity')).toBeNull();
-  });
-
-  it('returns null for an unknown world', () => {
-    expect(getEntitySnippet('nope', 'widows-reach')).toBeNull();
+    expect(entitySnippet(COAST, 'nonexistent-entity')).toBeNull();
   });
 });
 
-describe('shattered-coast world content — structural integrity', () => {
-  const world = getWorld('shattered-coast');
+describe('the coast fixture — structural integrity', () => {
+  const world = COAST;
+
+  it('is a world with geometry: a world map, and every location on it', () => {
+    expect(world.map.width).toBeGreaterThan(0);
+    expect(world.map.height).toBeGreaterThan(0);
+    Object.values(world.locations).forEach(function (location) {
+      expect(location.geo.x).toBeGreaterThanOrEqual(0);
+      expect(location.geo.x).toBeLessThanOrEqual(world.map.width);
+      expect(location.geo.y).toBeGreaterThanOrEqual(0);
+      expect(location.geo.y).toBeLessThanOrEqual(world.map.height);
+    });
+  });
 
   it('every location connection points at another location that exists', () => {
     Object.values(world.locations).forEach(function (location) {

@@ -636,7 +636,7 @@ exports.loomCreateSave = onCall(async (request) => {
     throw new HttpsError('not-found', 'Unknown world.');
   }
   // New games begin at the starting location, so it must be open to players
-  // (Layered Worlds gate, L-322 / #391); static worlds are exempt.
+  // (Layered Worlds gate, L-322 / #391).
   const start = canonWorld.rules && canonWorld.locations[canonWorld.rules.startingLocationId];
   if (!start || start.retired || !isPlayable(canonWorld, start)) {
     throw new HttpsError('failed-precondition', "This world isn't ready to play yet.");
