@@ -25,7 +25,9 @@
  *
  * GOOGLE_APPLICATION_CREDENTIALS=key.json works in place of
  * FIREBASE_SERVICE_ACCOUNT. --apply asks you to type the world id (or "all")
- * to confirm. With FIRESTORE_EMULATOR_HOST set, it runs against the emulator.
+ * to confirm; with BACKFILL_CONFIRM set, its value is taken as what you typed
+ * (the Backfill Character Positions workflow passes its `confirm` input). With
+ * FIRESTORE_EMULATOR_HOST set, it runs against the emulator.
  */
 
 import { createRequire } from 'module';
@@ -123,8 +125,15 @@ async function main() {
     );
   }
   const word = worldId || 'all';
-  const typed = await ask(`Type ${word === 'all' ? '"all"' : `the world id (${word})`} to write: `);
-  if (typed !== word) return console.log('Not confirmed. Nothing written.');
+  const typed =
+    process.env.BACKFILL_CONFIRM !== undefined
+      ? process.env.BACKFILL_CONFIRM.trim()
+      : await ask(`Type ${word === 'all' ? '"all"' : `the world id (${word})`} to write: `);
+  if (typed !== word) {
+    console.error(`Not confirmed (expected "${word}"). Nothing written.`);
+    process.exitCode = 1;
+    return;
+  }
   for (const { id, plan } of plans) {
     const result = await applyBackfill(db, id, { writes: plan.writes });
     console.log(
