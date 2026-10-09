@@ -1,0 +1,79 @@
+name: Backfill Character Positions
+
+# Gives every character made before positions were required a position
+# (L-683 / #515; planning/the-loom-movement-and-vision.md §6a), by running
+# scripts/backfill-character-positions.js against production.
+#
+# Run it with apply off first: the run's summary shows who would be placed
+# where, and who can't be (for Claude to place over MCP). Then run it again
+# with apply on and confirm set to "all" (or the world id, if you gave one).
+# Characters already placed are left alone, so running it twice is safe.
+
+on:
+  workflow_dispatch:
+    inputs:
+      world:
+        description: 'One world id (e.g. nisia-3f9a2c); leave empty for every world'
+        required: false
+        type: string
+        default: ''
+      apply:
+        description: 'Write the positions (off: a dry run that only shows the plan)'
+        required: true
+        type: boolean
+        default: false
+      confirm:
+        description: 'With apply: type "all", or the world id given above'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Validate the world id
+        env:
+          WORLD: ${{ inputs.world }}
+        run: |
+          if [[ -n "$WORLD" && ! "$WORLD" =~ ^[a-z0-9][a-z0-9-]{0,79}$ ]]; then
+            echo "::error::Not a world id: $WORLD"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Install script dependencies
+        run: npm install --prefix scripts
+
+      - name: Backfill character positions
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          WORLD: ${{ inputs.world }}
+          APPLY: ${{ inputs.apply }}
+          BACKFILL_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          args=()
+          if [[ -n "$WORLD" ]]; then args+=("$WORLD"); else args+=(--all); fi
+          if [[ "$APPLY" == "true" ]]; then args+=(--apply); fi
+          set -o pipefail
+          node scripts/backfill-character-positions.js "${args[@]}" 2>&1 | tee backfill.log
+
+      - name: Summary
+        if: always()
+        env:
+          APPLY: ${{ inputs.apply }}
+        run: |
+          if [[ "$APPLY" == "true" ]]; then
+            echo "## Character positions: applied" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Character positions: dry run (nothing written)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat backfill.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
