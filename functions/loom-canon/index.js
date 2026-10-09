@@ -3,12 +3,15 @@
 /**
  * The Loom — Canon layer (design doc §4, §7, §8; L-103 / #296).
  *
- * Canon is read-only at play time: places, factions, characters, and lore for
- * a hand-authored world, expressed as static JS config. There is no runtime
- * write path into canon, client or server (L-141 / #310) — world content
- * changes only through an authoring commit.
+ * Canon is read-only at play time: places, factions, characters, and lore.
+ * There is no write path into canon from play, client or server (L-141 /
+ * #310): worlds change only through the Cartographer (its page and its MCP
+ * tools). Every world is a Cartographer world in Firestore: the hand-authored
+ * static worlds, text-only, are gone (L-686 / #519), since every world needs
+ * geometry for its characters to have a place (planning/the-loom-movement-
+ * and-vision.md §6a).
  *
- * Schema (one entry per world, keyed by world id):
+ * Schema:
  *
  *   CanonWorld
  *     id, name, tagline, openingHook
@@ -44,8 +47,8 @@
  *
  * Firestore-backed worlds (the Cartographer; C-4 / #371, design
  * planning/the-cartographer-design.md §3.3, §4.2). loadWorld(worldId, { db })
- * returns a static world from WORLDS, or assembles one from `loom_worlds/
- * {worldId}` and its entity subcollections — the same CanonWorld shape,
+ * assembles one from `loom_worlds/{worldId}` and its entity subcollections —
+ * the CanonWorld shape,
  * extended with optional `geo` / `politics` / `regions` / `map`, `places` (the
  * town layer: places inside settlements, ./town.js; L-342 / #396), and the world's
  * `status` and `canonVersion`. Only `published` worlds are playable.
@@ -60,14 +63,9 @@
  * location's connections and default cast: nobody can travel to a retired
  * place or meet a retired character.
  *
- * The turn pipeline loads a world once per turn and then works on the object;
- * the object-based helpers (findEntity, entitySnippet) serve both kinds of
- * world. getWorld / getEntity / getEntitySnippet remain for static worlds.
+ * The turn pipeline loads a world once per turn and then works on the object
+ * (findEntity, entitySnippet).
  */
-
-const WORLDS = {
-  'shattered-coast': require('./worlds/shattered-coast'),
-};
 
 /** Recursively freezes an object graph so canon can never be mutated at play time. */
 function deepFreeze(value) {
@@ -78,48 +76,10 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-Object.keys(WORLDS).forEach(function (worldId) {
-  deepFreeze(WORLDS[worldId]);
-});
-
-/** Returns the ids of all statically-defined worlds. */
-function listWorldIds() {
-  return Object.keys(WORLDS);
-}
-
-/** Returns the full CanonWorld for worldId, or null if unknown. Read-only (frozen). */
-function getWorld(worldId) {
-  return WORLDS[worldId] || null;
-}
-
-function getLocation(worldId, locationId) {
-  const world = getWorld(worldId);
-  if (!world) return null;
-  return world.locations[locationId] || null;
-}
-
-function getFaction(worldId, factionId) {
-  const world = getWorld(worldId);
-  if (!world) return null;
-  return world.factions[factionId] || null;
-}
-
-function getCharacter(worldId, characterId) {
-  const world = getWorld(worldId);
-  if (!world) return null;
-  return world.characters[characterId] || null;
-}
-
-function getLoreEntry(worldId, loreId) {
-  const world = getWorld(worldId);
-  if (!world) return null;
-  return world.lore[loreId] || null;
-}
-
 /**
  * Resolves an entity id of unknown kind against a world object's locations,
  * factions, characters, and places in town (checked in that order). Returns
- * { type, entity } or null. Works for static and Firestore-backed worlds alike.
+ * { type, entity } or null.
  */
 function findEntity(world, entityId) {
   if (!world) return null;
@@ -132,11 +92,6 @@ function findEntity(world, entityId) {
     return { type: 'place', entity: world.places[entityId] };
   }
   return null;
-}
-
-/** findEntity for a static world, by id. */
-function getEntity(worldId, entityId) {
-  return findEntity(getWorld(worldId), entityId);
 }
 
 /**
@@ -158,11 +113,6 @@ function entitySnippet(world, entityId) {
   });
 
   return lines.join('\n\n');
-}
-
-/** entitySnippet for a static world, by id. */
-function getEntitySnippet(worldId, entityId) {
-  return entitySnippet(getWorld(worldId), entityId);
 }
 
 // ── Firestore-backed worlds ──────────────────────────────────────────────
@@ -235,13 +185,11 @@ async function readFirestoreWorld(db, worldId, meta) {
 
 /**
  * Loads a world for play — or, with playableOnly: false, for authoring tools.
- * Static worlds come from WORLDS; anything else from Firestore via `db`.
+ * Worlds come from Firestore via `db`.
  * Returns the frozen CanonWorld, or null if it doesn't exist, isn't fully
  * loaded, or (when playableOnly) isn't published yet.
  */
 async function loadWorld(worldId, { db, playableOnly = true } = {}) {
-  const staticWorld = getWorld(worldId);
-  if (staticWorld) return staticWorld;
   if (!db || typeof worldId !== 'string' || !worldId) return null;
 
   const snap = await db.collection(WORLDS_COLLECTION).doc(worldId).get();
@@ -266,14 +214,6 @@ function clearWorldCache() {
 }
 
 module.exports = {
-  listWorldIds,
-  getWorld,
-  getLocation,
-  getFaction,
-  getCharacter,
-  getLoreEntry,
-  getEntity,
-  getEntitySnippet,
   findEntity,
   entitySnippet,
   loadWorld,

@@ -3,9 +3,8 @@
 
   var Loom = window.Loom;
 
-  // Static worlds ship with the app; published Cartographer worlds are read
-  // from Firestore (rules only let players see `published` ones).
-  var STATIC_WORLDS = Loom.WORLDS.slice();
+  // The published Cartographer worlds, read from Firestore (rules only let
+  // players see `published` ones). There are no built-in worlds (L-686).
 
   function loadPublishedWorlds() {
     return Loom.state.db
@@ -28,18 +27,9 @@
       });
   }
 
-  // Renders the static worlds at once, then again with published worlds added.
   function renderWorldList() {
-    renderWorlds(STATIC_WORLDS);
     return loadPublishedWorlds().then(function (published) {
-      var staticIds = STATIC_WORLDS.map(function (w) {
-        return w.id;
-      });
-      Loom.WORLDS = STATIC_WORLDS.concat(
-        published.filter(function (w) {
-          return staticIds.indexOf(w.id) === -1;
-        })
-      );
+      Loom.WORLDS = published;
       renderWorlds(Loom.WORLDS);
     });
   }

@@ -1,12 +1,15 @@
 'use strict';
 
 /**
- * The Shattered Coast — Phase 1 MVP seed world.
+ * A test fixture: the Shattered Coast, once the Loom's built-in Phase 1
+ * world. Text-only worlds are gone from the game (L-686 / #519), so it lives
+ * here now, for the pipeline tests that grew up on it, with a small world map
+ * and coordinates for its locations so that it is a valid world. Pure tests
+ * use it as a world object; emulator tests seed it into Firestore
+ * (tests/helpers/coast.js).
  *
- * A compact pirate-age Caribbean scenario, hand-authored and shaped to the
- * canon schema in functions/loom-canon/index.js. This is a deliberately small
- * world sized for one multi-session single-player adventure (Phase 1 exit
- * criterion).
+ * A compact pirate-age Caribbean scenario, shaped to the canon schema in
+ * functions/loom-canon/index.js.
  */
 
 module.exports = {
@@ -18,9 +21,13 @@ module.exports = {
     "hold half-empty. Captain Orla Vance is waiting on the dock — she has a job, and it isn't " +
     'the last one that went bad.',
 
+  // Its world map, in the map's own units, and where each location lies on it.
+  map: { width: 1000, height: 600 },
+
   locations: {
     'widows-reach': {
       id: 'widows-reach',
+      geo: { x: 220, y: 300 },
       name: "Widow's Reach",
       description:
         'A hidden cove behind a wall of black rock, deep enough for a keel and narrow enough ' +
@@ -33,6 +40,7 @@ module.exports = {
     },
     'skeleton-cove': {
       id: 'skeleton-cove',
+      geo: { x: 140, y: 180 },
       name: 'Skeleton Cove',
       description:
         'A shallow bay choked with the ribs of wrecked hulls, some centuries old. The locals ' +
@@ -45,6 +53,7 @@ module.exports = {
     },
     'the-drowned-shoals': {
       id: 'the-drowned-shoals',
+      geo: { x: 420, y: 260 },
       name: 'The Drowned Shoals',
       description:
         'Open water threading between reefs sharp enough to gut a hull in a swell. Every ' +
@@ -56,6 +65,7 @@ module.exports = {
     },
     'free-city-of-marabel': {
       id: 'free-city-of-marabel',
+      geo: { x: 640, y: 320 },
       name: 'The Free City of Marabel',
       description:
         'A crowded, lawless trading port that answers to no crown. Every flag flies here for ' +
@@ -67,6 +77,7 @@ module.exports = {
     },
     'fort-augustine': {
       id: 'fort-augustine',
+      geo: { x: 820, y: 180 },
       name: 'Fort Augustine',
       description:
         'A stone garrison town flying the Spanish Crown’s colors, its harbor guarded by a ' +

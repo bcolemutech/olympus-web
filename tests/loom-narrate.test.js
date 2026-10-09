@@ -22,9 +22,9 @@ jest.mock('../functions/loom-turn/retrieval', () => ({
 }));
 
 const { narrateResolution, resolveSceneEntityIds } = require('../functions/loom-turn/narrate');
-const { getWorld } = require('../functions/loom-canon');
+const { COAST } = require('./helpers/coast');
 
-const CANON_WORLD = getWorld('shattered-coast');
+const CANON_WORLD = COAST;
 
 function makeParams(overrides) {
   return Object.assign(
@@ -150,7 +150,11 @@ describe('narrateResolution', () => {
     mockCallGemini.mockResolvedValueOnce({ inventedEntities: [] }); // missing narration
     const result = await narrateResolution(
       makeParams({
-        resolution: { outcome: 'failure', mutations: [], constraints: ['The lock does not budge.'] },
+        resolution: {
+          outcome: 'failure',
+          mutations: [],
+          constraints: ['The lock does not budge.'],
+        },
       })
     );
     expect(result.narration).toContain('The lock does not budge.');

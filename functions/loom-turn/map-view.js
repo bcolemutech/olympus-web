@@ -20,8 +20,8 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * stands. Nothing undiscovered is ever included, and no descriptions: the
  * story still comes through turns.
  *
- * Static worlds have no coordinates, so their places come without x/y and
- * the map is null.
+ * A place without coordinates comes without x/y, and a world without a map
+ * gets `map` null (every world has both since L-686 / #519; tests may not).
  *
  * In a settlement with a town layout, `town` is the town the save stands in,
  * for the town view (townView below); elsewhere it is null. On a battle map,

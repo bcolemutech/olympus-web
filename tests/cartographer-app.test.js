@@ -247,6 +247,32 @@ describe('cartographerPublish', () => {
     expect((await db.collection('loom_saves').doc(saveId).get()).data().location).toBe('loc_1');
   });
 
+  test('no text-only worlds: refused without a world map, or a location without coordinates (L-686)', async () => {
+    await writeUp(worldId, 'loc_1');
+    const worldRef = db.collection('loom_worlds').doc(worldId);
+    const bump = async (fields) =>
+      worldRef.update({
+        ...fields,
+        canonVersion: (await worldRef.get()).data().canonVersion + 1,
+      });
+    const { map } = (await worldRef.get()).data();
+    await bump({ map: null });
+    await worldRef.collection('locations').doc('loc_2').update({ geo: null });
+    await expect(
+      publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' })
+    ).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message:
+        'Not ready to publish. It needs a world map, coordinates for every location ' +
+        '(1 without).',
+    });
+    await bump({ map });
+    await expect(
+      publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' })
+    ).rejects.toMatchObject({ message: expect.stringMatching(/coordinates for every location/) });
+    expect((await worldRef.get()).data().status).toBe('draft');
+  });
+
   test('only a draft can be published', async () => {
     await writeUp(worldId, 'loc_1');
     await publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' });

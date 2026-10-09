@@ -22,6 +22,8 @@ process.env.GCLOUD_PROJECT = 'demo-loom-test';
 // summary-regen call in the pipeline goes through this mock, never the
 // network.
 const mockCallGemini = jest.fn();
+// The Shattered Coast is a test fixture now, not a built-in world (L-686).
+jest.mock('../functions/loom-canon', () => require('./helpers/coast').canonWithCoast());
 jest.mock('../functions/gemini', () => ({
   callGemini: (...args) => mockCallGemini(...args),
 }));

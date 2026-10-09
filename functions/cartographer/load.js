@@ -36,13 +36,9 @@ function slugify(name) {
   return slug || 'world';
 }
 
-// Readable, unique, and never a static world's id: "nisia-3f9a2c".
+// Readable and unique: "nisia-3f9a2c".
 function newWorldId(name, random = () => crypto.randomBytes(3).toString('hex')) {
-  let id;
-  do {
-    id = `${slugify(name)}-${random()}`;
-  } while (loomCanon.getWorld(id));
-  return id;
+  return `${slugify(name)}-${random()}`;
 }
 
 async function writeEntities(worldRef, canon) {

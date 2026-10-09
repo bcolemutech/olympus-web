@@ -19,6 +19,8 @@ process.env.GCLOUD_PROJECT = PROJECT;
 const mockCallGemini = jest.fn(async () => {
   throw new Error('Gemini was called');
 });
+// The Shattered Coast is a test fixture now, not a built-in world (L-686).
+jest.mock('../functions/loom-canon', () => require('./helpers/coast').canonWithCoast());
 jest.mock('../functions/gemini', () => ({
   callGemini: (...args) => mockCallGemini(...args),
 }));

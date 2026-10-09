@@ -24,6 +24,7 @@ const { parseAzgaarExport } = require('../functions/cartographer/parse');
 const { mapToCanon } = require('../functions/cartographer/map');
 const { importStamp } = require('../functions/cartographer/sources');
 const loomCanon = require('../functions/loom-canon');
+const { COAST } = require('./helpers/coast');
 const { withTowns, GATEWAY } = require('./helpers/towns');
 
 const WRITTEN = { description: 'mcp' };
@@ -359,8 +360,8 @@ describe('whole worlds', () => {
   });
 });
 
-test('static, hand-authored worlds are exempt and always playable', () => {
-  const coast = loomCanon.getWorld('shattered-coast');
+test('a world object with no status (a test fixture) is exempt and always playable', () => {
+  const coast = COAST;
   const place = Object.values(coast.locations)[0];
   expect(gradeLocation(coast, place)).toMatchObject({ grade: 'playable', exempt: true });
   expect(isPlayable(coast, place, { layers: { town: () => false, battleMap: () => false } })).toBe(

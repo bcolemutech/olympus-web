@@ -51,7 +51,8 @@ const SIGHT_ONLY =
  * The Layered Worlds gate (planning/the-loom-layered-worlds.md §5; L-322 /
  * #391): a place that isn't graded Playable (functions/loom-canon/grading.js)
  * is closed, and a move into it is blocked. Leaving a closed place never is,
- * so no save is stranded. Hand-authored static worlds are exempt.
+ * so no save is stranded. A world object with no status (only tests build
+ * one) is exempt.
  *
  * Towns (§8; L-342 / #396): inside a settlement with a town layout, moves
  * between places follow the town's own links and are gated the same way. A
