@@ -14,6 +14,24 @@ const views = require('./views');
 const images = require('./images');
 const { MAX_SVG_BYTES } = require('../../../cartographer/svg');
 const town = require('../../../loom-canon/town');
+const maps = require('../../../loom-canon/maps');
+const positions = require('../../../loom-canon/positions');
+
+// The live characters whose position is at `level` and passes `keep`, as
+// view_image draws them (L-684): [{ id, name, x, y, place? }].
+function peopleAt(world, level, keep) {
+  return Object.values(world.characters || {})
+    .filter((character) => !character.retired)
+    .map((character) => ({ character, at: positions.positionOf(world, character) }))
+    .filter(({ at }) => at.level === level && keep(at))
+    .map(({ character, at }) => ({
+      id: character.id,
+      name: character.name,
+      x: at.point.x,
+      y: at.point.y,
+      ...(at.place ? { place: { id: at.place.id, name: at.place.name } } : {}),
+    }));
+}
 
 // The Cartographer's MCP connector (design planning/the-cartographer-design.md
 // §4; C-6 / #373, C-7 / #374). Mounted at /mcp/cartographer and gated by the
@@ -368,8 +386,10 @@ function cartographerApp({ reader, writer, art }) {
           'See an image as players will: a battle map, a town, or the world map, returned as an ' +
           'image you can look at (scaled to at most 1568 px on the long side). Use it to check ' +
           'that what you place lines up with the art. Battle maps come with their grid (every ' +
-          'fifth line labelled) and numbered markers for entries, exits and features; towns with ' +
-          'numbered markers at their places’ positions, their links, and the 0–1000 grid. The ' +
+          'fifth line labelled) and numbered markers for entries, exits, features and the people ' +
+          'standing on it; towns with numbered markers at their places’ positions, the people ' +
+          'about town at their town points, their links, and the 0–1000 grid; the world map with ' +
+          'the people in the wilderness at their world points. People are teal diamonds. The ' +
           'legend ties each number to its id, name and cell or position. Without art, a battle ' +
           'map or town is drawn on a plain background, so its layout can still be checked. Art ' +
           'is uploaded on the Cartographer page.',
@@ -407,7 +427,19 @@ function cartographerApp({ reader, writer, art }) {
                 'battle map',
                 'Use list_battle_maps to see them.'
               );
-              rendered = images.renderBattleMap(map, map.image ? await load(map.image.path) : null);
+              // Who stands on it (L-684), at whichever place's copy.
+              const people = maps.standingOn(world, map).map(({ character, host, cell }) => ({
+                id: character.id,
+                name: character.name,
+                x: cell.x,
+                y: cell.y,
+                at: { id: host.id, name: host.name },
+              }));
+              rendered = images.renderBattleMap(
+                map,
+                map.image ? await load(map.image.path) : null,
+                people
+              );
             } else if (args.of === 'town') {
               needId();
               const settlement = entityFor(
@@ -425,13 +457,18 @@ function cartographerApp({ reader, writer, art }) {
                 world,
                 settlement,
                 town.placesOf(world, settlement.id),
-                townArt ? await load(townArt.path) : null
+                townArt ? await load(townArt.path) : null,
+                peopleAt(world, 'town', (at) => at.settlement.id === settlement.id)
               );
             } else {
               const path = world.map && world.map.imagePath;
               if (!path)
                 throw new ToolError('This world has no map image: it was imported without one.');
-              rendered = images.renderWorld(world, await load(path));
+              rendered = images.renderWorld(
+                world,
+                await load(path),
+                peopleAt(world, 'world', (at) => !at.location)
+              );
             }
           } catch (err) {
             if (err instanceof ToolError) throw err;

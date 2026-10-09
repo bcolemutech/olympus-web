@@ -336,3 +336,82 @@ test('what is not a PNG, or too large to decode, is refused', () => {
   huge.writeUInt32BE(9000, 20); // IHDR height
   expect(() => images.renderBattleMap(TAVERN, huge)).toThrow(/too large to view \(9000 × 9000\)/);
 });
+
+describe('people (L-684): teal diamonds, numbered in the legend', () => {
+  const TEAL = [77, 182, 172];
+
+  test('on a battle map: at the centre of their square, with the place they stand at', () => {
+    const { jpeg: jpg, legend } = images.renderBattleMap(TAVERN, null, [
+      { id: 'chr_mags', name: 'Old Mags', x: 7, y: 5, at: { id: 'plc_inn', name: 'The inn' } },
+    ]);
+    const img = decoded(jpg);
+    expect(legend.markers.at(-1)).toEqual({
+      n: 4,
+      type: 'person',
+      id: 'chr_mags',
+      name: 'Old Mags',
+      cell: { x: 7, y: 5 },
+      at: { id: 'plc_inn', name: 'The inn' },
+    });
+    const cell = legend.cellSize.width;
+    expect(near(pixel(img, 7.5 * cell, 5.5 * cell), TEAL)).toBe(true);
+    // A diamond: its corners are bare ground.
+    expect(near(pixel(img, 7.5 * cell + cell / 3, 5.5 * cell + cell / 3), TEAL)).toBe(false);
+    expect(legend.reading).toMatch(/teal diamonds people/);
+  });
+
+  test('in a town: at their town points, after the places', () => {
+    const { jpeg: jpg, legend } = images.renderTown(
+      {},
+      { id: 'loc_450', name: 'Hatham' },
+      [{ id: 'plc_gate', name: 'The gate', entrance: {}, position: { x: 900, y: 100 } }],
+      null,
+      [
+        { id: 'chr_ada', name: 'Ada Brine', x: 300, y: 700 },
+        {
+          id: 'chr_wim',
+          name: 'Wim',
+          x: 600,
+          y: 200,
+          place: { id: 'plc_market', name: 'Market Square' },
+        },
+      ]
+    );
+    const img = decoded(jpg);
+    const k = img.width / 1000;
+    expect(legend.markers.slice(1)).toEqual([
+      { n: 2, type: 'person', id: 'chr_ada', name: 'Ada Brine', position: { x: 300, y: 700 } },
+      {
+        n: 3,
+        type: 'person',
+        id: 'chr_wim',
+        name: 'Wim',
+        position: { x: 600, y: 200 },
+        place: { id: 'plc_market', name: 'Market Square' },
+      },
+    ]);
+    expect(near(pixel(img, 300 * k, 700 * k), TEAL)).toBe(true);
+    expect(near(pixel(img, 600 * k, 200 * k), TEAL)).toBe(true);
+    expect(legend.reading).toMatch(/Teal diamonds are people about town/);
+  });
+
+  test('on the world map: the wilderness, at their world points scaled to the image', () => {
+    const { jpeg: jpg, legend } = images.renderWorld(
+      { name: 'Nisia', map: { width: 1718, height: 1270 } },
+      png(1718, 1270, [60, 60, 60]),
+      [{ id: 'chr_wanderer', name: 'Wanderer', x: 812, y: 400 }]
+    );
+    const img = decoded(jpg);
+    const k = img.width / 1718;
+    expect(legend.markers).toEqual([
+      { n: 1, type: 'person', id: 'chr_wanderer', name: 'Wanderer', position: { x: 812, y: 400 } },
+    ]);
+    expect(near(pixel(img, 812 * k, 400 * k), TEAL)).toBe(true);
+    expect(legend.reading).toMatch(/people in the wilderness/);
+    // Nobody in the wilderness: no markers.
+    expect(
+      images.renderWorld({ name: 'Nisia', map: { width: 1718, height: 1270 } }, png(20, 15)).legend
+        .markers
+    ).toBeUndefined();
+  });
+});

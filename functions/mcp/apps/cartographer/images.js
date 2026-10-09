@@ -33,6 +33,8 @@ const COLOURS = {
   place: [129, 212, 250, 255],
   wayIn: [128, 203, 196, 255],
   link: [255, 255, 255, 150],
+  // People (L-684): the grid view's teal, as diamonds, apart from every place.
+  person: [77, 182, 172, 255],
   outline: [10, 14, 26, 255],
   // Layers (L-623): walls, doors and obstacles.
   wall: [255, 255, 255, 255],
@@ -135,10 +137,22 @@ function number(c, value, x, y, scale = 2) {
 // Digits large enough to read at the image's size.
 const labelScale = (c) => Math.max(2, Math.round(Math.min(c.width, c.height) / 300));
 
+// A filled diamond of half-width r about (cx, cy).
+function fillDiamond(c, cx, cy, r, colour) {
+  for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++) {
+    const half = r - Math.abs(dy);
+    if (half < 0) continue;
+    fillRect(c, cx - half, cy + dy, 2 * half + 1, 1, colour);
+  }
+}
+
 // A numbered marker: a shape at (x, y), its number beside it.
 function marker(c, x, y, n, shape, colour, size) {
   const r = Math.max(4, size);
-  if (shape === 'square') {
+  if (shape === 'diamond') {
+    fillDiamond(c, x, y, r + 2, COLOURS.outline);
+    fillDiamond(c, x, y, r, colour);
+  } else if (shape === 'square') {
     fillRect(c, x - r - 1, y - r - 1, 2 * r + 2, 2 * r + 2, COLOURS.outline);
     fillRect(c, x - r, y - r, 2 * r, 2 * r, colour);
   } else {
@@ -278,9 +292,11 @@ function gridLine(c, a, b, cw, ch, colour, width) {
  * A battle map: its art (stretched to the grid, as the grid view draws it) or
  * a plain background, the grid with every fifth line labelled, its layers
  * (L-623: obstacles shaded by kind, walls in white, doors in amber), and
- * numbered markers for entries, exits, features, doors and obstacles.
+ * numbered markers for entries, exits, features, doors, obstacles and the
+ * people standing on it (L-684: `people`, [{ id, name, x, y, at }], `at` the
+ * place whose copy of the map they stand on).
  */
-function renderBattleMap(map, art) {
+function renderBattleMap(map, art, people = []) {
   let base;
   if (art) {
     base = scaleDown(decode(art));
@@ -329,6 +345,10 @@ function renderBattleMap(map, art) {
   (map.entries || []).forEach((e) => add('entry', e, 'circle', COLOURS.entry));
   (map.exits || []).forEach((e) => add('exit', e, 'square', COLOURS.exit));
   (map.features || []).forEach((f) => add('feature', f, 'circle', COLOURS.feature));
+  people.forEach((p) => {
+    add('person', p, 'diamond', COLOURS.person);
+    if (p.at) markers[markers.length - 1].at = p.at;
+  });
   // Doors are numbered at their middle, obstacles at their top-left corner.
   (map.doors || []).forEach((d) => {
     const n = markers.length + 1;
@@ -368,8 +388,9 @@ function renderBattleMap(map, art) {
       cellSize: { width: round(cw), height: round(ch) },
       reading:
         'Cells are { x, y } from the top-left, 0-based; every fifth grid line is brighter and ' +
-        'labelled. Green circles are entries, red squares exits, amber circles features; each ' +
-        'marker is at the centre of its cell, numbered as below. Layers: white lines are walls ' +
+        'labelled. Green circles are entries, red squares exits, amber circles features, teal ' +
+        'diamonds people (at: the place they stand at); each marker is at the centre of its ' +
+        'cell, numbered as below. Layers: white lines are walls ' +
         'and amber bars doors, both on the grid lines between squares (corner (x, y) is the ' +
         'top-left of square (x, y)); obstacles are shaded by kind: solid filled dark, low ' +
         'hatched, difficult dotted. Doors are numbered at their middle, obstacles at their ' +
@@ -383,9 +404,11 @@ function renderBattleMap(map, art) {
 /**
  * A town: its art fitted inside the town's 0–1000 square (as the town view
  * draws it) or a plain square, a grid every 100 units (labelled every 200),
- * the links between places, and numbered markers at the places' positions.
+ * the links between places, numbered markers at the places' positions, and
+ * the people about town at their town points (L-684: `people`, [{ id, name,
+ * x, y, place }]).
  */
-function renderTown(world, settlement, places, artBytes) {
+function renderTown(world, settlement, places, artBytes, people = []) {
   const art = artBytes ? scaleDown(decode(artBytes)) : null;
   const side = art ? Math.max(art.width, art.height) : 1000;
   const base = canvas(side, side, COLOURS.plain);
@@ -437,6 +460,18 @@ function renderTown(world, settlement, places, artBytes) {
       Math.max(6, side / 120)
     );
   }
+  for (const p of people) {
+    const n = markers.length + 1;
+    markers.push({
+      n,
+      type: 'person',
+      id: p.id,
+      name: p.name,
+      position: { x: p.x, y: p.y },
+      ...(p.place ? { place: p.place } : {}),
+    });
+    marker(base, p.x * k, p.y * k, n, 'diamond', COLOURS.person, Math.max(6, side / 140));
+  }
 
   return {
     jpeg: encode(base),
@@ -450,17 +485,32 @@ function renderTown(world, settlement, places, artBytes) {
         'The town’s 0–1000 square fills the image (the art fitted inside it, centred, as the ' +
         'town view draws it). Grid lines every 100 units, labelled every 200, from the ' +
         'top-left. Squares are ways in and out, circles other places, lines their links; each ' +
-        'marker sits at the place’s position, numbered as below.',
+        'marker sits at the place’s position, numbered as below. Teal diamonds are people ' +
+        'about town, at their town points (type person).',
       markers,
       ...(unplaced.length ? { notPositioned: unplaced } : {}),
     },
   };
 }
 
-/** The world map, scaled down, with how its coordinates map onto the image. */
-function renderWorld(world, art) {
+/**
+ * The world map, scaled down, with how its coordinates map onto the image,
+ * and the people in the wilderness at their world points (L-684: `people`,
+ * [{ id, name, x, y }]), numbered.
+ */
+function renderWorld(world, art, people = []) {
   const img = scaleDown(decode(art));
   const map = world.map || {};
+  const markers = [];
+  if (map.width && map.height) {
+    const kx = img.width / map.width;
+    const ky = img.height / map.height;
+    for (const p of people) {
+      const n = markers.length + 1;
+      markers.push({ n, type: 'person', id: p.id, name: p.name, position: { x: p.x, y: p.y } });
+      marker(img, p.x * kx, p.y * ky, n, 'diamond', COLOURS.person, Math.max(6, img.width / 150));
+    }
+  }
   return {
     jpeg: encode(img),
     legend: {
@@ -473,9 +523,11 @@ function renderWorld(world, art) {
             reading:
               "A place at (x, y) in map coordinates (get_location's position) is at " +
               `(x × ${round(img.width / map.width)}, y × ${round(img.height / map.height)}) ` +
-              'in this image.',
+              'in this image. Teal diamonds are people in the wilderness, at their world ' +
+              'points, numbered as below.',
           }
         : {}),
+      ...(markers.length ? { markers } : {}),
     },
   };
 }

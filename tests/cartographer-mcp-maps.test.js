@@ -1255,4 +1255,29 @@ describe('characters on squares (L-641)', () => {
     expect(stored.cell).toBeUndefined();
     expect(stored.townPoint).toEqual({ x: expect.any(Number), y: expect.any(Number) });
   });
+
+  test('view_image draws them: on the map they stand on, and about town (L-684)', async () => {
+    const legendOf = async (args) =>
+      JSON.parse((await call('view_image', { worldId: W, ...args })).content[1].text);
+    const map = await legendOf({ of: 'battleMap', id: mapId });
+    expect(map.markers.filter((m) => m.type === 'person')).toContainEqual({
+      n: expect.any(Number),
+      type: 'person',
+      id: 'chr_tobin-the-barkeep',
+      name: 'Tobin the Barkeep',
+      cell: { x: 5, y: 2 },
+      at: { id: cellar, name: 'The Salt Cellar' },
+    });
+    // Fen, moved to a town point when the market lost its map.
+    const fen = await character('chr_fen-the-fishwife');
+    const inTown = await legendOf({ of: 'town', id: 'loc_1' });
+    expect(inTown.markers).toContainEqual({
+      n: expect.any(Number),
+      type: 'person',
+      id: 'chr_fen-the-fishwife',
+      name: 'Fen the Fishwife',
+      position: fen.townPoint,
+      place: { id: market, name: 'The Fishmarket' },
+    });
+  });
 });
