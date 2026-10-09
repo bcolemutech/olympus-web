@@ -11,7 +11,12 @@
  * Run: cd tests && npx jest loom-positions --verbose
  */
 
-const { positionOf, levelFor } = require('../functions/loom-canon/positions');
+const {
+  positionOf,
+  levelFor,
+  defaultPosition,
+  positionView,
+} = require('../functions/loom-canon/positions');
 
 const INN = {
   id: 'bm_inn',
@@ -218,5 +223,78 @@ describe('every way a position can be wrong', () => {
     expect(problemOf({ locationId: 'loc_1', placeId: 'plc_404' })).toBe(
       'their place "plc_404" does not exist'
     );
+  });
+});
+
+describe('a default position, and how the tools show one (L-682)', () => {
+  test('at a map: the free square nearest its entry, never the entry, an exit or taken', () => {
+    const fallback = defaultPosition(WORLD, someone({ locationId: 'loc_1', placeId: 'plc_inn' }));
+    expect(Math.max(Math.abs(fallback.cell.x - 1), Math.abs(fallback.cell.y - 3))).toBe(1);
+    expect(
+      positionOf(WORLD, someone({ locationId: 'loc_1', placeId: 'plc_inn', ...fallback })).level
+    ).toBe('square');
+  });
+
+  test("in town: their place's door, else a way in, else the middle", () => {
+    const world = {
+      ...WORLD,
+      places: {
+        ...WORLD.places,
+        plc_market: { ...WORLD.places.plc_market, position: { x: 300, y: 200 } },
+        plc_gate: {
+          id: 'plc_gate',
+          locationId: 'loc_1',
+          name: 'The gate',
+          entrance: { via: ['road'] },
+          position: { x: 50, y: 900 },
+        },
+      },
+    };
+    expect(defaultPosition(world, someone({ locationId: 'loc_1', placeId: 'plc_market' }))).toEqual(
+      {
+        townPoint: { x: 300, y: 200 },
+      }
+    );
+    expect(defaultPosition(world, someone({ locationId: 'loc_1' }))).toEqual({
+      townPoint: { x: 50, y: 900 },
+    });
+    expect(defaultPosition(WORLD, someone({ locationId: 'loc_1' }))).toEqual({
+      townPoint: { x: 500, y: 500 },
+    });
+  });
+
+  test('a point of interest without a map needs nothing; the wilderness has no default', () => {
+    expect(defaultPosition(WORLD, someone({ locationId: 'poi_well' }))).toEqual({});
+    expect(defaultPosition(WORLD, someone({}))).toBeNull();
+  });
+
+  test('the view: a square at its place, a town point in its town, a world point', () => {
+    expect(positionView(WORLD, WORLD.characters.chr_mags)).toEqual({
+      level: 'square',
+      at: { id: 'plc_inn', name: 'The Gull & Anchor' },
+      x: 3,
+      y: 4,
+    });
+    expect(
+      positionView(
+        WORLD,
+        someone({ locationId: 'loc_1', placeId: 'plc_market', townPoint: { x: 1, y: 2 } })
+      )
+    ).toEqual({
+      level: 'town',
+      town: { id: 'loc_1', name: 'Burdendal' },
+      place: { id: 'plc_market', name: 'Market Square' },
+      x: 1,
+      y: 2,
+    });
+    expect(positionView(WORLD, someone({ locationId: 'poi_well' }))).toEqual({
+      level: 'world',
+      x: 400,
+      y: 250,
+      at: { id: 'poi_well', name: 'The old well' },
+    });
+    expect(positionView(WORLD, someone({}))).toEqual({
+      problem: 'they are in the wilderness: they need a world point (worldPoint)',
+    });
   });
 });

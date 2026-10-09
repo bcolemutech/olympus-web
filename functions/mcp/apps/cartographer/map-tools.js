@@ -4,6 +4,7 @@ const { z } = require('zod');
 const { FieldValue } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const maps = require('../../../loom-canon/maps');
+const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const { worldId, entityId } = require('./schemas');
 const { helpers } = require('./write-tools');
@@ -25,8 +26,10 @@ const views = require('./views');
 //     every entry able to reach an exit. Given with the grid, or alone with
 //     set_map_layers; replacing a grid without them keeps them.
 //   - Characters standing on a map (L-641) are warned about when a change
-//     leaves them off the grid or on something they can't stand on; giving a
-//     place another map clears its characters' squares.
+//     leaves them off the grid or on something they can't stand on. Giving a
+//     place another map, or none, moves its characters to a position there
+//     (L-682): a free square near the new map's entry, or the place's door in
+//     town; a point of interest without a map needs none.
 //
 // Images can't be sent over MCP: they are uploaded on the Cartographer page.
 // Removing a map is retire_entity (type battleMap), in write-tools.js.
@@ -258,6 +261,43 @@ function mappable(world, id) {
   );
 }
 
+// Everyone at a place whose map changes is given a position that fits the
+// new one (L-682): squares on the old map mean nothing on the new. Each is
+// placed in turn, so two never share a square. Returns [{ id, name, position }].
+function movePeople(e, world, collection, entity, map) {
+  const host = { ...entity };
+  if (map) host.battleMap = { mapId: map.id };
+  else delete host.battleMap;
+  const after = {
+    ...world,
+    [collection]: { ...world[collection], [entity.id]: host },
+    characters: { ...(world.characters || {}) },
+  };
+  const moved = [];
+  for (const character of Object.values(world.characters || {})) {
+    if (character.retired) continue;
+    if ((maps.characterHost(after, character) || {}).id !== entity.id) continue;
+    const bare = { ...character };
+    for (const field of positions.FIELDS) delete bare[field];
+    const fallback = positions.defaultPosition(after, bare) || {};
+    const fields = {};
+    for (const field of positions.FIELDS) {
+      if (fallback[field]) fields[field] = fallback[field];
+      else if (character[field] != null) fields[field] = FieldValue.delete();
+    }
+    if (!Object.keys(fields).length) continue;
+    e.update(e.ref('characters', character.id), fields);
+    const placed = { ...bare, ...fallback };
+    after.characters[character.id] = placed;
+    moved.push({
+      id: character.id,
+      name: character.name,
+      position: positions.positionView(after, placed),
+    });
+  }
+  return moved;
+}
+
 function mapTools({ writer }) {
   const edit = (ctx, args, change) => writer.edit(args.worldId, ctx.uid, change);
   const replacing = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
@@ -410,7 +450,9 @@ function mapTools({ writer }) {
         'Give a point of interest or a place in town a battle map, its own or a generic one ' +
         '(list_battle_maps). Arriving there in the Loom lands players on it, at its entry. ' +
         'Settlements have towns, not maps: give one of their places a map. mapId null takes ' +
-        'the map away. Characters standing on the old map lose their squares. ' +
+        'the map away. Characters there are moved to a position that fits: a free square near ' +
+        'the new map’s entry, or, with no map, the place’s door in town (a point of interest ' +
+        'without a map needs none). The result lists who moved where. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -425,21 +467,15 @@ function mapTools({ writer }) {
           const current = (entity.battleMap && entity.battleMap.mapId) || null;
           const map = args.mapId ? live(world, 'battleMap', args.mapId) : null;
           const fields = {};
-          const cleared = [];
+          const moved = [];
           if ((map ? map.id : null) !== current) {
             fields.battleMap = map ? { mapId: map.id } : FieldValue.delete();
             e.update(e.ref(collection, entity.id), fields);
-            // Squares on the old map mean nothing on the new one (L-641).
-            for (const character of Object.values(world.characters || {})) {
-              if (!character.cell) continue;
-              if ((maps.characterHost(world, character) || {}).id !== entity.id) continue;
-              e.update(e.ref('characters', character.id), 'cell', FieldValue.delete());
-              cleared.push({ id: character.id, name: character.name });
-            }
+            moved.push(...movePeople(e, world, collection, entity, map));
           }
           return {
             place: { id: entity.id, name: entity.name },
-            ...(cleared.length ? { squaresCleared: cleared } : {}),
+            ...(moved.length ? { moved } : {}),
             battleMap: map ? { id: map.id, name: map.name, generic: Boolean(map.generic) } : null,
             updated: changedFields(fields),
             ...(map && map.generic

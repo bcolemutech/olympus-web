@@ -258,6 +258,7 @@ test('enough residents and lore for its size make it rich, and it leaves the wor
       name,
       description: `A Burdendal local, one of ${i + 1}.`,
       locationId: 'loc_1',
+      townPoint: { x: 500, y: 500 },
     });
     // One resident short of a great city's six: still only playable.
     if (i === 4) {

@@ -304,6 +304,7 @@ describe('names stay unique among places, realms and characters', () => {
         name: 'Kingdom of Pendonia',
         description: 'A pretender.',
         locationId: 'loc_1',
+        townPoint: { x: 500, y: 500 },
       })
     ).toMatch(/faction "Kingdom of Pendonia" \(fac_1\)/);
     expect(
@@ -326,6 +327,7 @@ describe('names stay unique among places, realms and characters', () => {
       name: 'Mara Quill',
       description: 'Harbourmaster.',
       locationId: 'loc_1',
+      townPoint: { x: 500, y: 500 },
     });
     expect(first.character.id).toBe('chr_mara-quill');
     await ok('retire_entity', { worldId, type: 'character', id: 'chr_mara-quill' });
@@ -334,6 +336,7 @@ describe('names stay unique among places, realms and characters', () => {
       name: 'Mara Quill',
       description: 'Her daughter, harbourmaster now.',
       locationId: 'loc_1',
+      townPoint: { x: 500, y: 500 },
     });
     expect(second.character.id).toBe('chr_mara-quill-2');
   });
@@ -416,6 +419,7 @@ describe('descriptions written over MCP are stamped as written (L-321)', () => {
       name: 'Mara Quill',
       description: 'Harbourmaster.',
       locationId: 'loc_1',
+      townPoint: { x: 500, y: 500 },
     });
     expect((await raw(worldId, 'characters', 'chr_mara-quill')).sources).toEqual({
       description: 'mcp',
@@ -542,6 +546,7 @@ describe('characters', () => {
       name: 'Mara Quill',
       description: 'Harbourmaster of Burdendal.',
       locationId: 'loc_1',
+      townPoint: { x: 500, y: 500 },
       factionId: 'fac_1',
     });
     expect(character).toEqual({
@@ -549,6 +554,7 @@ describe('characters', () => {
       name: 'Mara Quill',
       location: { id: 'loc_1', name: 'Burdendal' },
       faction: { id: 'fac_1', name: 'Kingdom of Pendonia' },
+      position: { level: 'town', town: { id: 'loc_1', name: 'Burdendal' }, x: 500, y: 500 },
     });
     expect((await raw(worldId, 'locations', 'loc_1')).npcIds).toEqual(['chr_mara-quill']);
 
@@ -556,12 +562,14 @@ describe('characters', () => {
       worldId,
       characterId: 'chr_mara-quill',
       locationId: 'loc_631',
+      townPoint: { x: 400, y: 300 },
       factionId: null,
     });
     expect((await raw(worldId, 'locations', 'loc_1')).npcIds).toEqual([]);
     expect((await raw(worldId, 'locations', 'loc_631')).npcIds).toEqual(['chr_mara-quill']);
     const stored = await raw(worldId, 'characters', 'chr_mara-quill');
     expect(stored.locationId).toBe('loc_631');
+    expect(stored.townPoint).toEqual({ x: 400, y: 300 });
     expect(stored).not.toHaveProperty('factionId');
     const place = await ok('get_location', { worldId, locationId: 'loc_631' });
     expect(place.characters).toEqual([{ id: 'chr_mara-quill', name: 'Mara Quill' }]);
@@ -574,8 +582,163 @@ describe('characters', () => {
         name: 'Nobody',
         description: 'Lost.',
         locationId: 'loc_0',
+        townPoint: { x: 500, y: 500 },
       })
     ).toMatch(/No location/);
+  });
+});
+
+describe('every character has a position (L-682)', () => {
+  let worldId;
+  beforeAll(async () => {
+    worldId = await freshWorld();
+  });
+  const add = (name, fields) =>
+    call('add_character', { worldId, name, description: 'Someone.', ...fields });
+  const textOf = (result) => (result.isError ? result.content[0].text : null);
+
+  test('about a settlement: a town point, read back by get_character and get_town', async () => {
+    const result = await add('Ada Brine', { locationId: 'loc_1', townPoint: { x: 420, y: 615.5 } });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent.character.position).toEqual({
+      level: 'town',
+      town: { id: 'loc_1', name: 'Burdendal' },
+      x: 420,
+      y: 615.5,
+    });
+    expect(await raw(worldId, 'characters', 'chr_ada-brine')).toMatchObject({
+      townPoint: { x: 420, y: 615.5 },
+    });
+    expect(
+      (await ok('get_character', { worldId, characterId: 'chr_ada-brine' })).position
+    ).toMatchObject({ level: 'town', x: 420, y: 615.5 });
+    expect((await ok('get_town', { worldId, locationId: 'loc_1' })).people).toContainEqual({
+      id: 'chr_ada-brine',
+      name: 'Ada Brine',
+      position: { level: 'town', town: { id: 'loc_1', name: 'Burdendal' }, x: 420, y: 615.5 },
+    });
+  });
+
+  test('no position, or two, is refused, with a default offered; nothing is written', async () => {
+    expect(textOf(await add('Nobody', { locationId: 'loc_1' }))).toBe(
+      'Nobody needs a position: Burdendal is a town: they need a town point (townPoint). ' +
+        'For example townPoint: { x: 500, y: 500 }.'
+    );
+    expect(
+      textOf(
+        await add('Nobody', {
+          locationId: 'loc_1',
+          townPoint: { x: 1, y: 1 },
+          worldPoint: { x: 1, y: 1 },
+        })
+      )
+    ).toBe('Give one position, not both townPoint and worldPoint.');
+    // Outside the town's square: the schema says so.
+    expect(
+      (await add('Nobody', { locationId: 'loc_1', townPoint: { x: 1001, y: 1 } })).isError
+    ).toBe(true);
+    expect(await raw(worldId, 'characters', 'chr_nobody')).toBeUndefined();
+  });
+
+  test('at a point of interest without a map: none needed, its own position counts', async () => {
+    const result = await add('The Hermit', { locationId: 'poi_1' });
+    expect(result.isError).toBeFalsy();
+    const poi = await raw(worldId, 'locations', 'poi_1');
+    expect(result.structuredContent.character.position).toEqual({
+      level: 'world',
+      x: poi.geo.x,
+      y: poi.geo.y,
+      at: { id: 'poi_1', name: poi.name },
+    });
+    expect(
+      textOf(await add('Another Hermit', { locationId: 'poi_1', townPoint: { x: 1, y: 1 } }))
+    ).toBe(
+      `Another Hermit needs a position: ${poi.name} has no battle map, so its own position ` +
+        'counts; drop their townPoint.'
+    );
+  });
+
+  test('in the wilderness: no settlement, a world point on the world map', async () => {
+    expect(textOf(await add('Wanderer', {}))).toBe(
+      'Wanderer needs a position: they are in the wilderness: they need a world point (worldPoint).'
+    );
+    expect(textOf(await add('Wanderer', { worldPoint: { x: 5000, y: 10 } }))).toBe(
+      'Wanderer needs a position: their world point (5000, 10) must be on the 1718 × 1270 ' +
+        'world map.'
+    );
+    expect(textOf(await add('Wanderer', { placeId: 'plc_1_x', worldPoint: { x: 1, y: 1 } }))).toBe(
+      'A place in town needs its settlement: give locationId too.'
+    );
+    const result = await add('Wanderer', { worldPoint: { x: 812, y: 400 } });
+    expect(result.structuredContent.character).toMatchObject({
+      location: null,
+      position: { level: 'world', x: 812, y: 400 },
+    });
+    const stored = await raw(worldId, 'characters', 'chr_wanderer');
+    expect(stored).toMatchObject({ worldPoint: { x: 812, y: 400 } });
+    expect(stored).not.toHaveProperty('locationId');
+    // In no cast list, and listed by get_world with where they are.
+    const casts = (await worlds().doc(worldId).collection('locations').get()).docs.flatMap(
+      (d) => d.data().npcIds || []
+    );
+    expect(casts).not.toContain('chr_wanderer');
+    const world = await ok('get_world', { worldId });
+    expect(world.characters).toContainEqual(
+      expect.objectContaining({
+        id: 'chr_wanderer',
+        location: null,
+        position: { level: 'world', x: 812, y: 400 },
+      })
+    );
+  });
+
+  test('moving needs a new position; staying keeps theirs; out of the wilderness too', async () => {
+    expect(
+      textOf(
+        await call('update_character', {
+          worldId,
+          characterId: 'chr_ada-brine',
+          locationId: 'loc_631',
+        })
+      )
+    ).toMatch(/^Ada Brine needs a position: .* is a town: they need a town point \(townPoint\)\./);
+    // A description alone leaves the position be.
+    await ok('update_character', { worldId, characterId: 'chr_ada-brine', description: 'Brine.' });
+    expect(await raw(worldId, 'characters', 'chr_ada-brine')).toMatchObject({
+      townPoint: { x: 420, y: 615.5 },
+    });
+    // Into town from the wilderness: the world point goes.
+    const into = await ok('update_character', {
+      worldId,
+      characterId: 'chr_wanderer',
+      locationId: 'loc_1',
+      townPoint: { x: 10, y: 20 },
+    });
+    expect(into.updated.sort()).toEqual(['locationId', 'townPoint', 'worldPoint']);
+    const stored = await raw(worldId, 'characters', 'chr_wanderer');
+    expect(stored).toMatchObject({ locationId: 'loc_1', townPoint: { x: 10, y: 20 } });
+    expect(stored).not.toHaveProperty('worldPoint');
+    expect((await raw(worldId, 'locations', 'loc_1')).npcIds).toContain('chr_wanderer');
+  });
+
+  test('someone made before positions were required is warned about on any change', async () => {
+    await worlds()
+      .doc(worldId)
+      .collection('characters')
+      .doc('chr_old-timer')
+      .set({ id: 'chr_old-timer', name: 'Old Timer', description: 'Old.', locationId: 'loc_1' });
+    await worlds()
+      .doc(worldId)
+      .update({ canonVersion: (await version(worldId)) + 1 });
+    const result = await ok('update_character', {
+      worldId,
+      characterId: 'chr_old-timer',
+      description: 'Older.',
+    });
+    expect(result.warnings).toEqual([
+      'Old Timer has no position yet: Burdendal is a town: they need a town point (townPoint). ' +
+        'For example townPoint: { x: 500, y: 500 }.',
+    ]);
   });
 });
 
@@ -656,6 +819,7 @@ describe('retire_entity in a draft deletes, with every reference', () => {
       name: 'Mara Quill',
       description: 'Harbourmaster.',
       locationId: 'loc_631',
+      townPoint: { x: 500, y: 500 },
       factionId: 'fac_1',
     });
     await ok('add_lore', {
@@ -736,6 +900,7 @@ describe('edits to one world are serialized', () => {
         name: 'Twin',
         description: 'One of two.',
         locationId: 'loc_1',
+        townPoint: { x: 500, y: 500 },
       });
     const results = await Promise.all([attempt(), attempt()]);
     expect(results.filter((r) => !r.isError)).toHaveLength(1);
@@ -839,6 +1004,7 @@ describe('exit criterion: build with Claude, play, fix, keep playing', () => {
       name: 'Mara Quill',
       description: 'Harbourmaster of Burdendal, weathered and wary.',
       locationId: 'loc_1',
+      townPoint: { x: 500, y: 500 },
     });
     await ok('add_lore', {
       worldId,

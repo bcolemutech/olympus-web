@@ -9,6 +9,7 @@ const { SOURCES } = require('../../../cartographer/sources');
 const { isPlayable } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
+const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const { whyClosed } = require('../../../cartographer/service');
 
@@ -28,9 +29,11 @@ const { whyClosed } = require('../../../cartographer/service');
 //     road, trail or sea link.
 //   - Realm relations stay symmetric (vassal ↔ suzerain mirror each other).
 //   - A character's home and the cast lists (npcIds) the Loom reads agree.
-//   - A character's square (L-641) is on their place's map, on nothing that
-//     blocks, on no entry or exit, and nobody else's; moving them to another
-//     place clears it.
+//   - Every character has a position (L-680; loom-canon/positions.js): a
+//     square on their place's map (on nothing that blocks, on no entry or
+//     exit, nobody else's), a town point, or a world point in the
+//     wilderness. Adding someone, or changing where they are, needs a valid
+//     one; a refusal suggests a default.
 //   - A description set here is stamped `sources.description: 'mcp'`, which is
 //     what grading counts as written up (functions/loom-canon/grading.js).
 //     Sending the current text again stamps it too: an approval of it.
@@ -284,6 +287,25 @@ const square = z
       'Not on a wall, an obstacle, an entry or an exit, and one character a square.'
   );
 
+// A town point (L-682): in the settlement's 0–1000 square.
+const townPoint = z
+  .strictObject({
+    x: z.number().min(0).max(positions.TOWN_SIDE),
+    y: z.number().min(0).max(positions.TOWN_SIDE),
+  })
+  .describe(
+    'Where they are about a settlement, in its town’s 0–1000 square (as places’ positions): ' +
+      'for someone in town but not at a place with a battle map.'
+  );
+// A world point (L-682): in the world map's own units, for the wilderness.
+const worldPoint = z
+  .strictObject({ x: z.number().min(0), y: z.number().min(0) })
+  .describe(
+    'Where they are in the wilderness, in the world map’s units (as locations’ geo x, y): ' +
+      'for someone in no settlement or point of interest (no locationId).'
+  );
+const POSITIONS = positions.FIELDS;
+
 const NEIGHBOURS = [
   [0, -1],
   [1, 0],
@@ -341,6 +363,53 @@ function squareFor(world, host, spec, selfId) {
     : `Nobody can reach (${cell.x}, ${cell.y}) from an entry of ${map.name}: it's walled in.`;
   return { map, cell, warning };
 }
+
+// The suggestion a refusal offers (L-682): a default position there.
+function suggestion(world, at) {
+  const fallback = positions.defaultPosition(world, at);
+  const [field, point] = Object.entries(fallback || {})[0] || [];
+  return field ? ` For example ${field}: { x: ${point.x}, y: ${point.y} }.` : '';
+}
+
+// The position a character will have where `at` (the character as they will
+// be, without a position) is found, from the cell, townPoint or worldPoint
+// given in `args` (at most one; none at a point of interest without a map),
+// checked by loom-canon/positions.js. Returns { fields, warning, view }.
+function positionFor(world, at, args) {
+  const given = POSITIONS.filter((field) => args[field] != null);
+  if (given.length > 1) {
+    throw new ToolError(`Give one position, not both ${given.join(' and ')}.`);
+  }
+  const fields = {};
+  let warning = null;
+  if (given[0] === 'cell') {
+    const host = maps.characterHost(world, at);
+    if (host && maps.mapOf(world, host)) {
+      const stand = squareFor(world, host, args.cell, at.id);
+      fields.cell = stand.cell;
+      warning = stand.warning;
+    } else {
+      fields.cell = args.cell; // the wrong level: positionOf says so
+    }
+  } else if (given.length) {
+    fields[given[0]] = { x: args[given[0]].x, y: args[given[0]].y };
+  }
+  const placed = { ...at, ...fields };
+  const position = positions.positionOf(world, placed);
+  if (position.problem) {
+    throw new ToolError(
+      `${at.name} needs a position: ${position.problem}.${suggestion(world, at)}`
+    );
+  }
+  return { fields, warning, view: positions.positionView(world, placed) };
+}
+
+// A character as they are found, without their position.
+const unplaced = (character) => {
+  const rest = { ...character };
+  for (const field of POSITIONS) delete rest[field];
+  return rest;
+};
 
 function requireSome(args, fields) {
   if (!fields.some((field) => args[field] !== undefined)) {
@@ -792,8 +861,13 @@ function writeTools({ writer }) {
       name: 'add_character',
       title: 'Add character',
       description:
-        'Add a character who lives at a place — players meet them there — optionally belonging ' +
-        'to a realm or faction. The name must be unique in the world. Returns the new id. ' +
+        'Add a character, optionally belonging to a realm or faction. Every character has a ' +
+        'position, exactly one, at the most precise level that applies: at a place in town or ' +
+        'a point of interest with a battle map, a square on it (cell, or a feature to stand ' +
+        'at); about a settlement, or at a place in town without a map, a townPoint in the ' +
+        'town’s 0–1000 square; at a point of interest without a map, none (its own position ' +
+        'counts); in the wilderness (no locationId), a worldPoint on the world map. The name ' +
+        'must be unique in the world. Returns the new id and the position. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -801,44 +875,56 @@ function writeTools({ writer }) {
         description: text(MAX_DESCRIPTION, 'description').describe(
           'Who they are: appearance, manner, what they want.'
         ),
-        locationId: entityId('location', 'find_locations').describe('Where they are found.'),
+        locationId: entityId('location', 'find_locations')
+          .optional()
+          .describe(
+            'The settlement or point of interest they are found at; leave out for the wilderness.'
+          ),
         placeId: entityId('place', 'get_town')
           .optional()
           .describe('Where in that town they are found, if it has a layout.'),
         factionId: entityId('faction', 'get_world').optional().describe('Their realm or faction.'),
         cell: square.optional(),
+        townPoint: townPoint.optional(),
+        worldPoint: worldPoint.optional(),
       },
       annotations: additive,
       handler: (ctx, args) =>
         edit(ctx, args, (e) => {
           const { world } = e;
           checkName(world, args.name);
-          const home = live(world, 'location', args.locationId);
+          const home = args.locationId ? live(world, 'location', args.locationId) : null;
+          if (!home && args.placeId) {
+            throw new ToolError('A place in town needs its settlement: give locationId too.');
+          }
           const place = args.placeId ? placeIn(world, home, args.placeId) : null;
           const faction = args.factionId ? live(world, 'faction', args.factionId) : null;
           const id = newId(world, 'character', 'chr', args.name);
-          const stand = args.cell ? squareFor(world, place || home, args.cell, id) : null;
-          e.create(e.ref('characters', id), {
+          const at = {
             id,
             name: args.name,
+            ...(home ? { locationId: home.id } : {}),
+            ...(place ? { placeId: place.id } : {}),
+          };
+          const { fields, warning, view } = positionFor(world, at, args);
+          e.create(e.ref('characters', id), {
+            ...at,
             description: args.description,
             sources: { description: SOURCES.MCP },
-            locationId: home.id,
-            ...(place ? { placeId: place.id } : {}),
             ...(faction ? { factionId: faction.id } : {}),
-            ...(stand ? { cell: stand.cell } : {}),
+            ...fields,
           });
-          e.update(e.ref('locations', home.id), 'npcIds', FieldValue.arrayUnion(id));
+          if (home) e.update(e.ref('locations', home.id), 'npcIds', FieldValue.arrayUnion(id));
           return {
             character: {
               id,
               name: args.name,
-              location: { id: home.id, name: home.name },
+              location: home ? { id: home.id, name: home.name } : null,
               ...(place ? { place: { id: place.id, name: place.name } } : {}),
               faction: faction ? { id: faction.id, name: faction.name } : null,
-              ...(stand ? { cell: stand.cell } : {}),
+              position: view,
             },
-            ...(stand && stand.warning ? { warnings: [stand.warning] } : {}),
+            ...(warning ? { warnings: [warning] } : {}),
           };
         }),
     },
@@ -846,10 +932,11 @@ function writeTools({ writer }) {
       name: 'update_character',
       title: 'Update character',
       description:
-        'Change a character’s name, description, where they are found (moves them), their ' +
-        'place in that town, their square on its battle map, or realm (null removes it). Moving ' +
-        'them to another place clears their square unless you give a new one. Fields you omit ' +
-        'are left unchanged. ' +
+        'Change a character’s name, description, where they are found (moves them: locationId, ' +
+        'or null for the wilderness; placeId in their town, or null for about town), their ' +
+        'position there (cell, townPoint or worldPoint, as add_character), or realm (null ' +
+        'removes it). Moving them needs a position where they go, unless a point of interest ' +
+        'without a map; a refusal suggests one. Fields you omit are left unchanged. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -857,8 +944,9 @@ function writeTools({ writer }) {
         name: name.optional().describe('New name.'),
         description: text(MAX_DESCRIPTION, 'description').optional().describe('New description.'),
         locationId: entityId('location', 'find_locations')
+          .nullable()
           .optional()
-          .describe('Move them to this place.'),
+          .describe('Move them to this settlement or point of interest; null for the wilderness.'),
         placeId: entityId('place', 'get_town')
           .nullable()
           .optional()
@@ -868,10 +956,19 @@ function writeTools({ writer }) {
           .optional()
           .describe('Their realm or faction; null for none.'),
         cell: square.nullable().optional(),
+        townPoint: townPoint.nullable().optional(),
+        worldPoint: worldPoint.nullable().optional(),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description', 'locationId', 'placeId', 'factionId', 'cell']);
+        requireSome(args, [
+          'name',
+          'description',
+          'locationId',
+          'placeId',
+          'factionId',
+          ...POSITIONS,
+        ]);
         return edit(ctx, args, (e) => {
           const { world } = e;
           const character = existing(world, 'character', args.characterId);
@@ -881,42 +978,64 @@ function writeTools({ writer }) {
             fields.name = checkName(world, args.name, id);
           }
           Object.assign(fields, describe(character, args.description));
-          if (args.locationId !== undefined && args.locationId !== character.locationId) {
-            live(world, 'location', args.locationId);
-            fields.locationId = args.locationId;
-            for (const place of Object.values(world.locations)) {
-              if (place.id === args.locationId) continue;
-              if (place.id === character.locationId || (place.npcIds || []).includes(id)) {
-                e.update(e.ref('locations', place.id), 'npcIds', FieldValue.arrayRemove(id));
+
+          // Where they are found: a settlement or point of interest, or the
+          // wilderness (null), and the cast lists that follow it.
+          let homeId = character.locationId || null;
+          if (args.locationId !== undefined && (args.locationId || null) !== homeId) {
+            if (args.locationId) live(world, 'location', args.locationId);
+            homeId = args.locationId || null;
+            fields.locationId = homeId || FieldValue.delete();
+            for (const location of Object.values(world.locations)) {
+              if (location.id === homeId) continue;
+              if (location.id === character.locationId || (location.npcIds || []).includes(id)) {
+                e.update(e.ref('locations', location.id), 'npcIds', FieldValue.arrayRemove(id));
               }
             }
-            e.update(e.ref('locations', args.locationId), 'npcIds', FieldValue.arrayUnion(id));
+            if (homeId) e.update(e.ref('locations', homeId), 'npcIds', FieldValue.arrayUnion(id));
           }
           // Their place in town (L-343): in their (new) settlement, or cleared
           // when they move to another one without a new place.
-          const homeId = fields.locationId || character.locationId;
+          let placeId = character.placeId || null;
           if (args.placeId) {
+            if (!homeId) throw new ToolError('The wilderness has no places in town.');
             const place = placeIn(world, world.locations[homeId], args.placeId);
+            placeId = place.id;
             if (place.id !== character.placeId) fields.placeId = place.id;
           } else if (
             character.placeId &&
             (args.placeId === null || fields.locationId !== undefined)
           ) {
+            placeId = null;
             fields.placeId = FieldValue.delete();
           }
-          // Their square (L-641), on the map of where they are found now.
-          let placeId = character.placeId;
-          if (typeof fields.placeId === 'string') placeId = fields.placeId;
-          else if (fields.placeId) placeId = null; // cleared
-          const host = placeId ? world.places[placeId] : world.locations[homeId];
-          const moved = host.id !== (maps.characterHost(world, character) || {}).id;
-          let stand = null;
-          if (args.cell) {
-            stand = squareFor(world, host, args.cell, id);
-            if (moved || !maps.sameCell(stand.cell, character.cell)) fields.cell = stand.cell;
-          } else if (character.cell && (args.cell === null || moved)) {
-            fields.cell = FieldValue.delete();
+
+          // Their position (L-682): kept while they stay where they are and
+          // none is given; otherwise checked where they now are.
+          const moved =
+            homeId !== (character.locationId || null) || placeId !== (character.placeId || null);
+          const given = POSITIONS.some((field) => args[field] !== undefined);
+          let view = null;
+          let warning = null;
+          if (moved || given) {
+            const at = {
+              ...unplaced(character),
+              ...(homeId ? { locationId: homeId } : { locationId: undefined }),
+              ...(placeId ? { placeId } : { placeId: undefined }),
+            };
+            const placed = positionFor(world, at, args);
+            warning = placed.warning;
+            view = placed.view;
+            for (const field of POSITIONS) {
+              const next = placed.fields[field];
+              if (next && !(character[field] && maps.sameCell(next, character[field]))) {
+                fields[field] = next;
+              } else if (!next && character[field] != null) {
+                fields[field] = FieldValue.delete();
+              }
+            }
           }
+
           if (args.factionId === null && character.factionId) {
             fields.factionId = FieldValue.delete();
           } else if (args.factionId && args.factionId !== character.factionId) {
@@ -928,14 +1047,21 @@ function writeTools({ writer }) {
             character: {
               id,
               name: fields.name || character.name,
-              ...(stand ? { cell: stand.cell } : {}),
+              ...(view ? { position: view } : {}),
             },
             updated: changedFields(fields),
           };
-          if (moved && character.cell && !args.cell) {
-            result.note = 'They are at another place now, so their square was cleared.';
+          if (warning) result.warnings = [warning];
+          // Someone made before positions were required (L-683 places them).
+          if (!view) {
+            const now = positions.positionOf(world, character);
+            if (now.problem) {
+              result.warnings = [
+                `${character.name} has no position yet: ${now.problem}.` +
+                  suggestion(world, unplaced(character)),
+              ];
+            }
           }
-          if (stand && stand.warning) result.warnings = [stand.warning];
           return result;
         });
       },
