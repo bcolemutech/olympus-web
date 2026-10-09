@@ -32,17 +32,17 @@ Phases are numbered in the order they were planned, not the order they are built
 
 ## 2. Now: Phase 3c — Movement and vision
 
-| Epic                               | Issues                | State                                         |
-| ---------------------------------- | --------------------- | --------------------------------------------- |
-| L-600 Town quick fix               | #433                  | ✅ Shipped                                    |
-| L-610 Turns and movement           | #434 (L-611 to L-615) | ✅ Shipped                                    |
-| L-620 Walls, doors and obstacles   | #435 (L-621 to L-628) | ✅ Shipped                                    |
-| L-630 Vision and fog (battle maps) | #436 (L-631 to L-636) | ✅ Shipped                                    |
-| L-640 Characters on battle maps    | #437 (#460–462)       | ✅ Shipped                                    |
-| L-680 Everyone has a place         | #512 (#513–517, #519) | **In progress** (L-681, L-682, L-686 shipped) |
-| L-650 Town ground                  | #438 (#463–467)       | Planned                                       |
-| L-660 Walking in town              | #439 (#468–472)       | Planned                                       |
-| L-670 Vision in town               | #440 (#473–475)       | Planned                                       |
+| Epic                               | Issues                | State      |
+| ---------------------------------- | --------------------- | ---------- |
+| L-600 Town quick fix               | #433                  | ✅ Shipped |
+| L-610 Turns and movement           | #434 (L-611 to L-615) | ✅ Shipped |
+| L-620 Walls, doors and obstacles   | #435 (L-621 to L-628) | ✅ Shipped |
+| L-630 Vision and fog (battle maps) | #436 (L-631 to L-636) | ✅ Shipped |
+| L-640 Characters on battle maps    | #437 (#460–462)       | ✅ Shipped |
+| L-680 Everyone has a place         | #512 (#513–517, #519) | ✅ Shipped |
+| L-650 Town ground                  | #438 (#463–467)       | **Next**   |
+| L-660 Walking in town              | #439 (#468–472)       | Planned    |
+| L-670 Vision in town               | #440 (#473–475)       | Planned    |
 
 **Order:** L-640 needs sight (L-630). L-680 gives every character a position (§6a of the design doc; decided 2026-10-08) and comes before the town epics. L-650 to L-670 bring the same to towns, in that order. L-650's MCP tools and `view_image` work (L-653, L-654) are the Cartographer's part of this phase.
 

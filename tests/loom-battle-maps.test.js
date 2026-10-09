@@ -1677,3 +1677,55 @@ describe('people on the map (L-642)', () => {
     expect(Math.max(Math.abs(cell.x - 9), Math.abs(cell.y - 2))).toBe(1);
   });
 });
+
+describe('people anywhere (L-685): a town walker and a wanderer in the wilds', () => {
+  const characters = () => worldRef.collection('characters');
+  beforeAll(async () => {
+    await characters()
+      .doc('chr_crier')
+      .set({
+        id: 'chr_crier',
+        name: 'The town crier',
+        description: 'Bellows the news in every square.',
+        locationId: 'loc_1',
+        townPoint: { x: 500, y: 500 },
+      });
+    await characters()
+      .doc('chr_wanderer')
+      .set({
+        id: 'chr_wanderer',
+        name: 'The Wanderer',
+        description: 'A grey cloak on the moor road, never seen in town.',
+        worldPoint: { x: 812, y: 400 },
+      });
+    await bump();
+  });
+  afterAll(async () => {
+    await characters().doc('chr_crier').delete();
+    await characters().doc('chr_wanderer').delete();
+    await bump();
+  });
+
+  test('a new game, a turn naming the wanderer, and the map: nothing breaks', async () => {
+    const { saveId } = await newGame();
+    mockCallGemini.mockImplementation(async (options) => {
+      if (options.systemInstruction.includes('INTERPRET stage')) {
+        return { verb: 'talk', targets: ['chr_wanderer'], params: {} };
+      }
+      if (options.systemInstruction.includes('summarizer')) return 'A summary.';
+      prompts.narrate.push(options.userMessage);
+      return { narration: 'Nobody answers.', inventedEntities: [], suggestedActions: [] };
+    });
+    const result = await loomPlayTurn.run({
+      data: { worldId: WORLD, saveId, actionText: 'call out to the wanderer' },
+      auth: PLAYER,
+    });
+    expect(result.narration).toBe('Nobody answers.');
+    const told = prompts.narrate.at(-1);
+    // The crier is about town; the wanderer, in the wilds, is not told of.
+    expect(told).toContain('Bellows the news in every square.');
+    expect(told).not.toContain('A grey cloak on the moor road');
+    const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(view.places.length).toBeGreaterThan(0);
+  });
+});

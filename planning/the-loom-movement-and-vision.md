@@ -1,6 +1,6 @@
 # The Loom — Movement and Vision — Design Document v0.1
 
-**Status:** In progress (planned 2026-10-02). L-600 to L-640 shipped, L-680 next; see the [roadmap](./roadmap.md).
+**Status:** In progress (planned 2026-10-02). L-600 to L-640 and L-680 shipped, L-650 next; see the [roadmap](./roadmap.md).
 **Project:** Olympus (`olympus-dfa00`)
 **Follows:** Loom Phase 3b "Layered Worlds" ([`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md))
 **Related:** [`the-loom-design.md`](./the-loom-design.md)
