@@ -1,6 +1,6 @@
 # The Loom — Movement and Vision — Design Document v0.1
 
-**Status:** In progress (planned 2026-10-02). L-600 to L-640 shipped, L-650 next; see the [roadmap](./roadmap.md).
+**Status:** In progress (planned 2026-10-02). L-600 to L-640 shipped, L-680 next; see the [roadmap](./roadmap.md).
 **Project:** Olympus (`olympus-dfa00`)
 **Follows:** Loom Phase 3b "Layered Worlds" ([`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md))
 **Related:** [`the-loom-design.md`](./the-loom-design.md)
@@ -119,6 +119,22 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 
 ---
 
+## 6a. Everyone has a place (L-680)
+
+**Decided with the user (2026-10-08):** every character in the game has a physical position in the world: a requirement checked on every change and at publish, not a grading criterion. This epic comes next, before L-650.
+
+- **One position, at the most precise level** the character is at, exactly one of:
+  - **a square** on the battle map of the place they're at (a place in town, or a point of interest), as L-641 set it (`cell`);
+  - **a town point**, `{ x, y }` in the settlement's 0–1000 square, for someone walking about a settlement and not inside a place with a map;
+  - **a world point**, `{ x, y }` in the world map's own units (`world.map`, as locations' `geo`), for someone in the wilderness: not in any settlement or point of interest, so with no `locationId`.
+  - At a point of interest without a battle map, the point of interest's own world position counts.
+- **Required.** `add_character` and `update_character` refuse a character with no position. Moving someone to another place asks for a new one (a default is offered: a free square near the map's entry, or the place's door in town). `publish_world` refuses a world with anyone unplaced, and `list_work` lists them.
+- **Backfill.** Characters made before this are placed once, automatically: at a place or point of interest with a map, a free square near its entry; in a settlement, a town point beside their place's door, or a way in.
+- **No text-only worlds** (decided with the user, 2026-10-08; L-686, built first). The Shattered Coast goes, and static worlds with it: only Cartographer worlds exist, and publishing refuses a world without a world map and coordinates for its locations. Its games in production are deleted by hand. So the backfill below needs no case for a world without geometry.
+- **Stored now, seen later.** Positions are checked and shown to Claude now (`get_character`, `get_town`, `view_image` for maps, towns and the world). In play, someone at a town point stays "about town" for the GM until towns can be walked and seen (L-660, L-670); someone in the wilderness isn't met until wilderness travel (L-360).
+
+---
+
 ## 7. Towns: the ground
 
 - **Size:** `town.size` in metres across, by default from the settlement's size (the same village, town, city and great city as the Rich bar): 300 m, 600 m, 1.2 km, 2.5 km. Claude can set it.
@@ -153,18 +169,19 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 
 One milestone, **The Loom — Phase 3c: Movement and Vision**. Each story is tested on its own: pure-module tests for rules, emulator tests for the server, a real MCP client for the tools, renderer pixel tests for `view_image`, and headless Chrome with real taps for the views.
 
-| Epic                                   | Sub-issues                                                                                                                                                                                    | Exit criterion                                                                                         |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **L-600 Town quick fix** (one story)   | Walk to any place in town in one move, along the links                                                                                                                                        | Crossing Hatham is one tap                                                                             |
-| **L-610 Turns and movement**           | L-611 the turn in saves · L-612 grid paths · L-613 moving without the GM · L-614 typed actions and the turn · L-615 the grid view                                                             | In The Lantern & Oar, a player walks 20 squares, ends their turn and continues                         |
-| **L-620 Walls, doors and obstacles**   | L-621 the layers in canon · L-622 MCP layer tools · L-623 `view_image` draws them · L-624 paths respect them · L-625 doors in play · L-626 locked doors · L-627 the grid view · L-628 grading | Claude walls The Lantern & Oar; a player can't walk through the cellar wall, and opens the cellar door |
-| **L-630 Vision and fog (battle maps)** | L-631 line of sight · L-632 explored memory · L-633 only what's seen is sent · L-634 fog in the grid view · L-635 moves on known ground · L-636 the GM sees what you see                      | Opening the cellar door reveals the cellar; the GM never mentions what's behind a closed door          |
-| **L-640 Characters on battle maps**    | L-641 characters get squares · L-642 tokens in sight, passing through · L-643 the GM knows who is where                                                                                       | Old Mags stands at the bar, unseen until you come round the corner                                     |
-| **L-650 Town ground**                  | L-651 town size and distance · L-652 shapes in canon · L-653 MCP ground tools · L-654 `view_image` draws ground · L-655 grading by paths                                                      | Claude gives Hatham its streets, river and wall                                                        |
-| **L-660 Walking in town**              | L-661 town paths · L-662 walking on the server · L-663 typed moves follow paths · L-664 the town view · L-665 links retired                                                                   | From The Quay a player walks around the market hall, over the bridge and into the temple               |
-| **L-670 Vision in town**               | L-671 sight and memory in town · L-672 fog in the town view · L-673 finding places, and the GM knows only those                                                                               | Arriving in Daldockley, the streets show dark, and its places are found by walking them                |
+| Epic                                   | Sub-issues                                                                                                                                                                                                                    | Exit criterion                                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **L-600 Town quick fix** (one story)   | Walk to any place in town in one move, along the links                                                                                                                                                                        | Crossing Hatham is one tap                                                                             |
+| **L-610 Turns and movement**           | L-611 the turn in saves · L-612 grid paths · L-613 moving without the GM · L-614 typed actions and the turn · L-615 the grid view                                                                                             | In The Lantern & Oar, a player walks 20 squares, ends their turn and continues                         |
+| **L-620 Walls, doors and obstacles**   | L-621 the layers in canon · L-622 MCP layer tools · L-623 `view_image` draws them · L-624 paths respect them · L-625 doors in play · L-626 locked doors · L-627 the grid view · L-628 grading                                 | Claude walls The Lantern & Oar; a player can't walk through the cellar wall, and opens the cellar door |
+| **L-630 Vision and fog (battle maps)** | L-631 line of sight · L-632 explored memory · L-633 only what's seen is sent · L-634 fog in the grid view · L-635 moves on known ground · L-636 the GM sees what you see                                                      | Opening the cellar door reveals the cellar; the GM never mentions what's behind a closed door          |
+| **L-640 Characters on battle maps**    | L-641 characters get squares · L-642 tokens in sight, passing through · L-643 the GM knows who is where                                                                                                                       | Old Mags stands at the bar, unseen until you come round the corner                                     |
+| **L-680 Everyone has a place**         | L-686 no text-only worlds (first) · L-681 one position for everyone, in canon · L-682 MCP positions at every level · L-683 backfill and the publish check · L-684 `view_image` draws people · L-685 play with people anywhere | Every character in Nisia has a square, a town point or a world point; publishing refuses one without   |
+| **L-650 Town ground**                  | L-651 town size and distance · L-652 shapes in canon · L-653 MCP ground tools · L-654 `view_image` draws ground · L-655 grading by paths                                                                                      | Claude gives Hatham its streets, river and wall                                                        |
+| **L-660 Walking in town**              | L-661 town paths · L-662 walking on the server · L-663 typed moves follow paths · L-664 the town view · L-665 links retired                                                                                                   | From The Quay a player walks around the market hall, over the bridge and into the temple               |
+| **L-670 Vision in town**               | L-671 sight and memory in town · L-672 fog in the town view · L-673 finding places, and the GM knows only those                                                                                                               | Arriving in Daldockley, the streets show dark, and its places are found by walking them                |
 
-**Order:** L-600 first, as a quick win. L-610 lays the turn everything else uses. L-620 adds what blocks. L-630 needs the walls, and L-640 needs sight. L-650 to L-670 bring the same to towns. Game time (L-370) then follows.
+**Order:** L-600 first, as a quick win. L-610 lays the turn everything else uses. L-620 adds what blocks. L-630 needs the walls, and L-640 needs sight. L-680 then gives everyone a place (decided 2026-10-08), before L-650 to L-670 bring the same to towns. Game time (L-370) then follows.
 
 ---
 
