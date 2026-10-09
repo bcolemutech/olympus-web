@@ -412,7 +412,11 @@ function sanitizeStringArray(value) {
 /**
  * Relevant entities for this scene: the location's default cast plus the
  * action's resolved targets, less `hidden` (people standing out of sight on
- * a battle map, L-643: the narrator isn't told of them).
+ * a battle map, L-643: the narrator isn't told of them), and less anyone in
+ * the wilderness (no locationId; L-685), who isn't met until wilderness
+ * travel (L-360), even when named. Someone about a settlement at a town point
+ * is "about town": in the scene at any place in their town, unless they keep
+ * to a place of their own.
  */
 function resolveSceneEntityIds(canonWorld, save, proposedAction, hidden) {
   const currentLocation = save.location && canonWorld.locations[save.location];
@@ -434,7 +438,8 @@ function resolveSceneEntityIds(canonWorld, save, proposedAction, hidden) {
   return candidateIds.filter((id) => {
     if (hidden && hidden.has(id)) return false;
     const resolved = loomCanon.findEntity(canonWorld, id);
-    return Boolean(resolved) && !resolved.entity.retired;
+    if (!resolved || resolved.entity.retired) return false;
+    return !(resolved.type === 'character' && !resolved.entity.locationId);
   });
 }
 
