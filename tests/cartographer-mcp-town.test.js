@@ -403,6 +403,7 @@ describe('characters in town', () => {
       description: 'Keeps the tavern.',
       locationId: 'loc_1',
       placeId: 'plc_1_the-gull-anchor',
+      cell: { x: 0, y: 0 },
     });
     expect(character.place).toEqual({ id: 'plc_1_the-gull-anchor', name: 'The Gull and Anchor' });
     const inTown = await ok('get_town', { worldId: W, locationId: 'loc_1' });
@@ -426,6 +427,7 @@ describe('characters in town', () => {
       worldId: W,
       characterId: 'chr_brannoch',
       locationId: 'loc_631',
+      townPoint: { x: 500, y: 500 },
     });
     let stored = (await worlds().doc(W).collection('characters').doc('chr_brannoch').get()).data();
     expect(stored.locationId).toBe('loc_631');
@@ -435,10 +437,16 @@ describe('characters in town', () => {
       characterId: 'chr_brannoch',
       locationId: 'loc_1',
       placeId: 'plc_1_market-square',
+      cell: { x: 0, y: 0 },
     });
     stored = (await worlds().doc(W).collection('characters').doc('chr_brannoch').get()).data();
     expect(stored).toMatchObject({ locationId: 'loc_1', placeId: 'plc_1_market-square' });
-    await ok('update_character', { worldId: W, characterId: 'chr_brannoch', placeId: null });
+    await ok('update_character', {
+      worldId: W,
+      characterId: 'chr_brannoch',
+      placeId: null,
+      townPoint: { x: 500, y: 500 },
+    });
     stored = (await worlds().doc(W).collection('characters').doc('chr_brannoch').get()).data();
     expect(stored).not.toHaveProperty('placeId');
   });
@@ -486,6 +494,7 @@ describe('removing places', () => {
       description: 'Mends nets.',
       locationId: 'loc_1',
       placeId: 'plc_1_net-sheds',
+      cell: { x: 0, y: 0 },
     });
     expect(
       await refused('retire_entity', { worldId: W, type: 'place', id: 'plc_1_net-sheds' })
@@ -494,7 +503,12 @@ describe('removing places', () => {
       /It has a town of 3 place\(s\)/
     );
 
-    await ok('update_character', { worldId: W, characterId: 'chr_old-wick', placeId: null });
+    await ok('update_character', {
+      worldId: W,
+      characterId: 'chr_old-wick',
+      placeId: null,
+      townPoint: { x: 500, y: 500 },
+    });
     const result = await ok('retire_entity', { worldId: W, type: 'place', id: 'plc_1_net-sheds' });
     expect(result.deleted).toMatchObject({ id: 'plc_1_net-sheds' });
     expect(await place(W, 'plc_1_net-sheds')).toBeUndefined();

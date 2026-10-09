@@ -22,6 +22,8 @@
  */
 
 const maps = require('./maps');
+const town = require('./town');
+const layers = require('./layers');
 
 const TOWN_SIDE = 1000; // a town's square, as places' positions use it (./town.js)
 const FIELDS = ['cell', 'townPoint', 'worldPoint'];
@@ -145,4 +147,75 @@ function reason(expected) {
   return 'they are in the wilderness';
 }
 
-module.exports = { positionOf, levelFor, TOWN_SIDE, FIELDS };
+/**
+ * A position a character could take where they are found (L-682), as the
+ * fields to give them: at a map, the free square nearest its entry (one
+ * reachable from an entry first); in a town, their place's door, else the
+ * first way in, else the middle of the town; at a point of interest without
+ * a map, nothing (`{}`). Null in the wilderness, which has no default, or
+ * when no square is free.
+ */
+function defaultPosition(world, character) {
+  const expected = levelFor(world, character);
+  if (expected.problem || expected.level === 'world') return null;
+  if (expected.level === 'here') return {};
+  if (expected.level === 'town') {
+    const way = town.entrancesOf(world, expected.settlement.id).find((p) => isPoint(p.position));
+    const door = expected.place && isPoint(expected.place.position) ? expected.place : way;
+    const point = door ? door.position : { x: TOWN_SIDE / 2, y: TOWN_SIDE / 2 };
+    return { townPoint: { x: point.x, y: point.y } };
+  }
+  const { map, host } = expected;
+  const entry = maps.entryCell(map);
+  const reached = layers.reachable(map, map.entries || []);
+  let best = null;
+  let bestRank = null;
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      const cell = { x, y };
+      if (maps.squareProblem(world, map, host, cell, character.id)) continue;
+      const rank = [
+        reached[x + ',' + y] ? 0 : 1,
+        Math.max(Math.abs(x - entry.x), Math.abs(y - entry.y)),
+      ];
+      if (!best || rank[0] < bestRank[0] || (rank[0] === bestRank[0] && rank[1] < bestRank[1])) {
+        best = cell;
+        bestRank = rank;
+      }
+    }
+  }
+  return best ? { cell: best } : null;
+}
+
+/**
+ * A character's position as the Cartographer's tools show it (L-682):
+ *   { level: 'square', at: { id, name }, x, y }
+ *   { level: 'town', town: { id, name }, place?: { id, name }, x, y }
+ *   { level: 'world', x, y, at?: { id, name } }   — at: the point of interest
+ *   { problem }                                  — none yet, and why
+ */
+function positionView(world, character) {
+  const position = positionOf(world, character);
+  const ref = (entity) => ({ id: entity.id, name: entity.name });
+  if (position.problem) return { problem: position.problem };
+  if (position.level === 'square') {
+    return { level: 'square', at: ref(position.host), x: position.cell.x, y: position.cell.y };
+  }
+  if (position.level === 'town') {
+    return {
+      level: 'town',
+      town: ref(position.settlement),
+      ...(position.place ? { place: ref(position.place) } : {}),
+      x: position.point.x,
+      y: position.point.y,
+    };
+  }
+  return {
+    level: 'world',
+    x: position.point.x,
+    y: position.point.y,
+    ...(position.location ? { at: ref(position.location) } : {}),
+  };
+}
+
+module.exports = { positionOf, levelFor, defaultPosition, positionView, TOWN_SIDE, FIELDS };

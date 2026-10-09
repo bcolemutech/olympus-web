@@ -369,8 +369,13 @@ describe('get_world', () => {
     expect(world).not.toHaveProperty('missing');
     expect(world.characters).toEqual(
       expect.arrayContaining([
-        { id: 'chr_mara', name: 'Mara Quill', location: 'Burdendal' },
-        { id: 'chr_ghost', name: 'The Grey Pilot', location: 'Burdendal', retired: true },
+        expect.objectContaining({ id: 'chr_mara', name: 'Mara Quill', location: 'Burdendal' }),
+        expect.objectContaining({
+          id: 'chr_ghost',
+          name: 'The Grey Pilot',
+          location: 'Burdendal',
+          retired: true,
+        }),
       ])
     );
     expect(world.lore).toEqual(
@@ -643,6 +648,8 @@ describe('get_character and get_lore', () => {
       description: 'Harbourmaster of Burdendal.',
       faction: { id: 'fac_1', name: 'Kingdom of Pendonia' },
       location: { id: 'loc_1', name: 'Burdendal' },
+      // Seeded before positions were required (L-683 places them).
+      position: { problem: 'Burdendal is a town: they need a town point (townPoint)' },
       lore: [],
     });
     expect(await read('get_character', { worldId: LIVE, characterId: 'chr_ghost' })).toMatchObject({

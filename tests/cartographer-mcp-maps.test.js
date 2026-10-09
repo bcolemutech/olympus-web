@@ -1021,11 +1021,14 @@ describe('characters on squares (L-641)', () => {
 
   test('add_character puts them on a square; the reads show who stands where', async () => {
     const mags = await add('Old Mags', { cell: { x: 3, y: 4 } });
-    expect(mags.character).toMatchObject({ id: 'chr_old-mags', cell: { x: 3, y: 4 } });
+    expect(mags.character).toMatchObject({
+      id: 'chr_old-mags',
+      position: { level: 'square', x: 3, y: 4 },
+    });
     expect(mags.warnings).toBeUndefined();
     expect(await character('chr_old-mags')).toMatchObject({ cell: { x: 3, y: 4 } });
     expect(await ok('get_character', { worldId: W, characterId: 'chr_old-mags' })).toMatchObject({
-      cell: { x: 3, y: 4 },
+      position: { level: 'square', at: { id: cellar, name: 'The Salt Cellar' }, x: 3, y: 4 },
     });
     const map = await ok('get_battle_map', { worldId: W, mapId });
     expect(map.characters).toEqual([
@@ -1043,11 +1046,11 @@ describe('characters on squares (L-641)', () => {
     // The bar sits on the counter; above it is the wall, so the first free
     // square beside it is below.
     const barkeep = await add('Tobin the Barkeep', { cell: { feature: 'bar' } });
-    expect(barkeep.character.cell).toEqual({ x: 5, y: 2 });
+    expect(barkeep.character.position).toMatchObject({ x: 5, y: 2 });
     // By name, too; the square below is taken, and the diagonals above
     // squeeze past the wall's corners.
     const potboy = await add('Wim', { cell: { feature: 'The Bar' } });
-    expect(potboy.character.cell).toEqual({ x: 6, y: 2 });
+    expect(potboy.character.position).toMatchObject({ x: 6, y: 2 });
     expect(
       await refused('add_character', {
         worldId: W,
@@ -1080,12 +1083,12 @@ describe('characters on squares (L-641)', () => {
     );
     // A settlement itself has a town, not a map.
     expect(await at({ x: 2, y: 2 }, { placeId: undefined })).toMatch(
-      /Burdendal has no battle map, so there is no square to stand on/
+      /^Stray needs a position: Burdendal is a town, so they need a townPoint, not a cell\./
     );
     expect(await character('chr_stray')).toBeUndefined();
     // The same square at another place on the same (shared) map is free.
     const seller = await add('Fen the Fishwife', { placeId: market, cell: { x: 3, y: 4 } });
-    expect(seller.character.cell).toEqual({ x: 3, y: 4 });
+    expect(seller.character.position).toMatchObject({ x: 3, y: 4 });
     const map = await ok('get_battle_map', { worldId: W, mapId });
     expect(map.characters.find((c) => c.id === 'chr_fen-the-fishwife').at.id).toBe(market);
   });
@@ -1116,13 +1119,16 @@ describe('characters on squares (L-641)', () => {
     ]);
   });
 
-  test('update_character moves them, clears the square, and clears it with their place', async () => {
+  test('update_character moves them; a move or a cleared square needs a position (L-682)', async () => {
     const moved = await ok('update_character', {
       worldId: W,
       characterId: 'chr_old-mags',
       cell: { x: 2, y: 5 },
     });
-    expect(moved).toMatchObject({ character: { cell: { x: 2, y: 5 } }, updated: ['cell'] });
+    expect(moved).toMatchObject({
+      character: { position: { level: 'square', at: { id: cellar }, x: 2, y: 5 } },
+      updated: ['cell'],
+    });
     // The same square again changes nothing.
     expect(
       (
@@ -1140,37 +1146,45 @@ describe('characters on squares (L-641)', () => {
         cell: { x: 5, y: 2 },
       })
     ).toMatch(/Tobin the Barkeep \(chr_tobin-the-barkeep\) already stands at \(5, 2\)/);
-    // null takes them off the map.
-    await ok('update_character', { worldId: W, characterId: 'chr_old-mags', cell: null });
-    expect((await character('chr_old-mags')).cell).toBeUndefined();
+    // Nobody is left without a position: null is refused, with a square offered.
+    expect(
+      await refused('update_character', { worldId: W, characterId: 'chr_old-mags', cell: null })
+    ).toMatch(
+      /^Old Mags needs a position: The Salt Cellar has a battle map: they need a square \(cell\)\. For example cell: \{ x: \d+, y: \d+ \}\.$/
+    );
+    expect((await character('chr_old-mags')).cell).toEqual({ x: 2, y: 5 });
 
-    // Another place in town: the square goes, unless a new one comes with it.
-    const toMarket = await ok('update_character', {
-      worldId: W,
-      characterId: 'chr_wim',
-      placeId: market,
-    });
-    expect(toMarket.updated.sort()).toEqual(['cell', 'placeId']);
-    expect(toMarket.note).toMatch(/their square was cleared/);
-    expect((await character('chr_wim')).cell).toBeUndefined();
+    // Another place in town needs a square there.
+    expect(
+      await refused('update_character', { worldId: W, characterId: 'chr_wim', placeId: market })
+    ).toMatch(/^Wim needs a position: The Fishmarket has a battle map/);
     await ok('update_character', {
       worldId: W,
       characterId: 'chr_wim',
-      placeId: cellar,
+      placeId: market,
       cell: { x: 7, y: 3 },
     });
-    expect(await character('chr_wim')).toMatchObject({ placeId: cellar, cell: { x: 7, y: 3 } });
+    expect(await character('chr_wim')).toMatchObject({ placeId: market, cell: { x: 7, y: 3 } });
 
-    // Another world place: the square and the place in town both go.
+    // The wilderness: no settlement, no place, a world point.
+    expect(
+      await refused('update_character', { worldId: W, characterId: 'chr_wim', locationId: null })
+    ).toBe(
+      'Wim needs a position: they are in the wilderness: they need a world point (worldPoint).'
+    );
     const away = await ok('update_character', {
       worldId: W,
       characterId: 'chr_wim',
-      locationId: 'poi_1',
+      locationId: null,
+      worldPoint: { x: 10, y: 20 },
     });
-    expect(away.updated.sort()).toEqual(['cell', 'locationId', 'placeId']);
+    expect(away.updated.sort()).toEqual(['cell', 'locationId', 'placeId', 'worldPoint']);
+    expect(away.character.position).toEqual({ level: 'world', x: 10, y: 20 });
     const wim = await character('chr_wim');
+    expect(wim).toMatchObject({ worldPoint: { x: 10, y: 20 } });
     expect(wim.cell).toBeUndefined();
     expect(wim.placeId).toBeUndefined();
+    expect(wim.locationId).toBeUndefined();
   });
 
   test('replacing the grid is a new map to players: its revision moves on', async () => {
@@ -1216,15 +1230,29 @@ describe('characters on squares (L-641)', () => {
     ]);
   });
 
-  test('giving a place another map clears its characters’ squares', async () => {
+  test('giving a place another map, or none, moves its characters to fit (L-682)', async () => {
     const other = (await ok('set_battle_map', { worldId: W, ...CELLAR, name: 'A bare cellar' })).map
       .id;
     const result = await ok('assign_battle_map', { worldId: W, placeId: market, mapId: other });
-    expect(result.squaresCleared).toEqual([
-      { id: 'chr_fen-the-fishwife', name: 'Fen the Fishwife' },
-    ]);
-    expect((await character('chr_fen-the-fishwife')).cell).toBeUndefined();
+    const fen = result.moved.find((m) => m.id === 'chr_fen-the-fishwife');
+    expect(fen.position).toMatchObject({ level: 'square', at: { id: market } });
+    expect((await character('chr_fen-the-fishwife')).cell).toEqual({
+      x: fen.position.x,
+      y: fen.position.y,
+    });
+    // Near the new map's entry (1, 3), never on it.
+    expect(Math.max(Math.abs(fen.position.x - 1), Math.abs(fen.position.y - 3))).toBe(1);
     // The cellar's characters keep theirs.
     expect((await character('chr_tobin-the-barkeep')).cell).toEqual({ x: 5, y: 2 });
+
+    // No map at all: a place in town with no map needs a town point.
+    const none = await ok('assign_battle_map', { worldId: W, placeId: market, mapId: null });
+    expect(none.moved.find((m) => m.id === 'chr_fen-the-fishwife').position).toMatchObject({
+      level: 'town',
+      place: { id: market },
+    });
+    const stored = await character('chr_fen-the-fishwife');
+    expect(stored.cell).toBeUndefined();
+    expect(stored.townPoint).toEqual({ x: expect.any(Number), y: expect.any(Number) });
   });
 });

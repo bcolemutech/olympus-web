@@ -14,6 +14,7 @@ const {
 } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
+const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 
 const LIST_CAP = 200;
@@ -175,6 +176,8 @@ function worldOverview(meta, world) {
       id: c.id,
       name: c.name,
       location: c.locationId ? ref(world.locations, c.locationId).name : null,
+      // Where they are (L-682): a square, a town point or a world point.
+      position: positions.positionView(world, c),
       ...(c.retired ? { retired: true } : {}),
     }))
   );
@@ -435,6 +438,11 @@ function townDetail(world, settlement) {
         ? { width: settlement.town.image.width, height: settlement.town.image.height }
         : null,
     layout: report,
+    // Everyone found in this town, and where (L-682).
+    people: Object.values(world.characters || {})
+      .filter((c) => !c.retired && c.locationId === settlement.id)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((c) => ({ id: c.id, name: c.name, position: positions.positionView(world, c) })),
     routes: (settlement.connections || []).map((id) => ({
       ...ref(world.locations, id),
       via: links[id] || null,
@@ -476,7 +484,9 @@ function characterDetail(world, character) {
     faction: character.factionId ? ref(world.factions, character.factionId) : null,
     location: character.locationId ? ref(world.locations, character.locationId) : null,
     ...(character.placeId ? { place: ref(world.places || {}, character.placeId) } : {}),
-    ...(character.cell ? { cell: character.cell } : {}),
+    // Where they are (L-682): a square, a town point or a world point, or why
+    // they have none yet.
+    position: positions.positionView(world, character),
     lore: loreAbout(world, character.id),
   };
   if (character.retired) result.retired = true;
