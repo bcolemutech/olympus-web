@@ -348,3 +348,34 @@ test('update_region writes a description at last, and grades the region', async 
   expect(region.locations[0]).toMatchObject({ id: 'loc_1', grade: 'rich' });
   expect((await call('update_region', { worldId: WORLD, regionId: 'reg_1' })).isError).toBe(true);
 });
+
+test('unplaced: the characters still without a position, each with a suggestion (L-683)', async () => {
+  const characters = worlds().doc(WORLD).collection('characters');
+  await characters.doc('chr_old-timer').set({
+    id: 'chr_old-timer',
+    name: 'Old Timer',
+    description: 'Made before positions.',
+    locationId: 'loc_1',
+  });
+  const bump = async () =>
+    worlds()
+      .doc(WORLD)
+      .update({ canonVersion: (await worlds().doc(WORLD).get()).data().canonVersion + 1 });
+  await bump();
+  const listed = await work();
+  expect(listed.unplaced).toMatchObject({
+    total: 1,
+    characters: [
+      {
+        id: 'chr_old-timer',
+        name: 'Old Timer',
+        problem: expect.stringMatching(/they need a town point \(townPoint\)$/),
+        suggested: { townPoint: { x: expect.any(Number), y: expect.any(Number) } },
+      },
+    ],
+    howTo: expect.stringMatching(/update_character/),
+  });
+  await characters.doc('chr_old-timer').delete();
+  await bump();
+  expect(await work()).not.toHaveProperty('unplaced');
+});

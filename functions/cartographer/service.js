@@ -8,8 +8,12 @@ const { parseAzgaarExport, AzgaarFormatError } = require('./parse');
 const { mapToCanon } = require('./map');
 const { loadDraftWorld, newWorldId } = require('./load');
 const { gradeWorld, gradeLocation, isPlayable } = require('../loom-canon/grading');
+const { unplacedCharacters } = require('../loom-canon/positions');
 const { ToolError } = require('../mcp/registry');
 const { checkSvg } = require('./svg');
+
+// Unplaced characters a publish refusal names before "and N more" (L-683).
+const UNPLACED_SHOWN = 3;
 
 // The Cartographer's server side (design planning/the-cartographer-design.md
 // §3.1, §3.4; C-5 / #372), behind the cartographerImport and
@@ -211,6 +215,18 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     );
     if (unmapped.length) {
       problems.push(`coordinates for every location (${unmapped.length} without)`);
+    }
+    // Everyone has a place (L-683): a square, a town point or a world point.
+    const unplaced = unplacedCharacters(world);
+    if (unplaced.length) {
+      const shown = unplaced
+        .slice(0, UNPLACED_SHOWN)
+        .map(({ character, problem }) => `${character.name}: ${problem}`);
+      const more = unplaced.length - shown.length;
+      problems.push(
+        `a position for every character (${shown.join('; ')}` +
+          `${more ? `; and ${more} more` : ''})`
+      );
     }
     const broken = Object.values(world.locations).filter((l) =>
       (l.connections || []).some((id) => !world.locations[id])

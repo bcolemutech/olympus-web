@@ -44,6 +44,8 @@ const { getStorage } = require(
 );
 const { layOutTowns } = require('./helpers/towns');
 const loomCanon = require('../functions/loom-canon');
+const { planPositionBackfill } = require('../functions/cartographer/placing');
+const { applyBackfill } = require('../functions/cartographer/backfill');
 
 const db = getFirestore();
 const bucket = getStorage().bucket(BUCKET);
@@ -271,6 +273,72 @@ describe('cartographerPublish', () => {
       publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' })
     ).rejects.toMatchObject({ message: expect.stringMatching(/coordinates for every location/) });
     expect((await worldRef.get()).data().status).toBe('draft');
+  });
+
+  test('everyone has a place: refused naming the unplaced; the backfill places them (L-683)', async () => {
+    await writeUp(worldId, 'loc_1');
+    const worldRef = db.collection('loom_worlds').doc(worldId);
+    const seed = (id, fields) =>
+      worldRef
+        .collection('characters')
+        .doc(id)
+        .set({
+          id,
+          description: 'Made before positions.',
+          sources: { description: 'mcp' },
+          ...fields,
+        });
+    // Made before positions were required: one about town, one at a point of
+    // interest (no map: its own position counts), one already placed.
+    await seed('chr_mara', { name: 'Mara Quill', locationId: 'loc_1' });
+    await seed('chr_hermit', { name: 'The Hermit', locationId: 'poi_1' });
+    await seed('chr_ada', { name: 'Ada Brine', locationId: 'loc_1', townPoint: { x: 7, y: 8 } });
+    await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+
+    await expect(
+      publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' })
+    ).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message:
+        'Not ready to publish. It needs a position for every character (Mara Quill: Burdendal ' +
+        'is a town: they need a town point (townPoint)).',
+    });
+
+    // The backfill, as scripts/backfill-character-positions.js runs it.
+    const before = await loomCanon.loadWorld(worldId, { db, playableOnly: false });
+    const plan = planPositionBackfill(before);
+    expect(plan.placed.map((p) => p.id)).toEqual(['chr_mara']);
+    expect(plan.alreadyPlaced).toBe(2);
+    await applyBackfill(db, worldId, { writes: plan.writes });
+    const mara = (await worldRef.collection('characters').doc('chr_mara').get()).data();
+    expect(mara.townPoint).toEqual({ x: expect.any(Number), y: expect.any(Number) });
+    expect((await worldRef.collection('characters').doc('chr_ada').get()).data().townPoint).toEqual(
+      { x: 7, y: 8 }
+    );
+    // Run again: nothing left to do.
+    const after = await loomCanon.loadWorld(worldId, { db, playableOnly: false });
+    expect(planPositionBackfill(after).writes).toEqual([]);
+
+    await expect(
+      publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' })
+    ).resolves.toEqual({ worldId, status: 'published' });
+  });
+
+  test('a long list of the unplaced is cut short', async () => {
+    await writeUp(worldId, 'loc_1');
+    const worldRef = db.collection('loom_worlds').doc(worldId);
+    for (const name of ['Ann', 'Bo', 'Cy', 'Di', 'Ed']) {
+      await worldRef
+        .collection('characters')
+        .doc(`chr_${name.toLowerCase()}`)
+        .set({ id: `chr_${name.toLowerCase()}`, name, description: 'x', locationId: 'loc_1' });
+    }
+    await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+    await expect(
+      publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' })
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/\(Ann: .*; Bo: .*; Cy: .*; and 2 more\)\.$/),
+    });
   });
 
   test('only a draft can be published', async () => {
