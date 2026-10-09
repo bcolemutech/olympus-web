@@ -10,6 +10,7 @@ const {
 } = require('../../../loom-canon/grading');
 const maps = require('../../../loom-canon/maps');
 const layers = require('../../../loom-canon/layers');
+const positions = require('../../../loom-canon/positions');
 const { hopsFrom } = require('./views');
 
 // The build work list (planning/the-loom-layered-worlds.md §6; L-323 / #392):
@@ -24,6 +25,11 @@ const { hopsFrom } = require('./views');
 //   closed    every other closed place
 //   enrich    open places that could be Rich (residents, lore)
 //   describe  realms and regions to write up (never gated)
+//
+//
+// Apart from the tiers, `unplaced` lists the characters without a valid
+// position (L-683): a requirement, not a grade, so publishing refuses the
+// world until each has one. Each comes with the default the tools suggest.
 //
 // Places within a tier come nearest first (travel steps from `near`, or the
 // start), then largest, then by name. Grades are computed on every call
@@ -52,6 +58,32 @@ const HOW_TO = {
     'Give its battle map walls, doors and obstacles: set_map_layers (or with the grid, ' +
     'set_battle_map). Check them against the art with view_image.',
 };
+
+const UNPLACED_SHOWN = 20;
+
+// The characters still to place (L-683), each with a suggested position.
+function unplacedOf(world) {
+  const unplaced = positions.unplacedCharacters(world);
+  if (!unplaced.length) return null;
+  return {
+    total: unplaced.length,
+    characters: unplaced.slice(0, UNPLACED_SHOWN).map(({ character, problem }) => {
+      const bare = { ...character };
+      for (const field of positions.FIELDS) delete bare[field];
+      const suggested = positions.defaultPosition(world, bare);
+      return {
+        id: character.id,
+        name: character.name,
+        problem,
+        ...(suggested && Object.keys(suggested).length ? { suggested } : {}),
+      };
+    }),
+    howTo:
+      'Give each a position with update_character: cell, townPoint or worldPoint, as the ' +
+      'problem says (suggested is a default that fits). Publishing refuses the world until ' +
+      'everyone has one.',
+  };
+}
 
 const geoOf = (location) => location.geo || {};
 
@@ -193,6 +225,8 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
     ),
   };
   if (offset + page.length < matching.length) result.nextOffset = offset + page.length;
+  const unplaced = unplacedOf(world);
+  if (unplaced) result.unplaced = unplaced;
   return result;
 }
 

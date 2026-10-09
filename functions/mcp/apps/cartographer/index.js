@@ -170,6 +170,9 @@ function cartographerApp({ reader, writer, art }) {
           'and regions to describe. Write a place ' +
           'up with update_location (setting a description marks it written), add residents ' +
           'with add_character and lore with add_lore. Paged: pass nextOffset back as offset. ' +
+          'unplaced lists the characters still without a position (a square, a town point or a ' +
+          'world point), each with a suggested one: publishing refuses the world until ' +
+          'everyone has one. ' +
           GRADE_HELP,
         inputSchema: {
           worldId,

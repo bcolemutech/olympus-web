@@ -218,4 +218,25 @@ function positionView(world, character) {
   };
 }
 
-module.exports = { positionOf, levelFor, defaultPosition, positionView, TOWN_SIDE, FIELDS };
+/**
+ * The live characters without a valid position (L-683): `[{ character,
+ * problem }]`, by name. Publishing refuses a world with any; list_work lists
+ * them.
+ */
+function unplacedCharacters(world) {
+  return Object.values(world.characters || {})
+    .filter((character) => !character.retired)
+    .map((character) => ({ character, problem: positionOf(world, character).problem }))
+    .filter((entry) => entry.problem)
+    .sort((a, b) => a.character.name.localeCompare(b.character.name));
+}
+
+module.exports = {
+  positionOf,
+  levelFor,
+  defaultPosition,
+  positionView,
+  unplacedCharacters,
+  TOWN_SIDE,
+  FIELDS,
+};
