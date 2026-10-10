@@ -143,6 +143,8 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 - **Checks:** no door inside a building or water, and every door reachable from a way in.
 - **MCP:** a tool to set a town's ground, `get_town` shows it, and `view_image` draws it over the art.
 - **Grading:** in a town with ground, the town requirement checks paths from the ways in, not links.
+- **Size, done** (L-651 / #463): `town.townSize` and `townMetres` in `functions/loom-canon/town.js`; Claude sets it with `update_location` `townSize`, and `get_town` shows it.
+- **Shapes and checks, done** (L-652 / #464), in `functions/loom-canon/ground.js`: each shape is `{ points, name? }` (a crossing also `kind`: `bridge` or `ford`), a polygon closing back on its own. `shapeProblems` keeps them closed, simple and on the square, crossings over water, and their number within `LIMITS` (400 buildings, 30 waters, 60 walls, 40 crossings, 200 points a shape, 8,000 in all). `check` adds the doors: none inside a building, in water or on a wall, and every door walkable from a way in. Walking is worked out on a grid of 5-unit squares (`compile`): a square is blocked when its centre is in a building or in uncrossed water, or a wall or a water's edge runs through it, so neither is ever slipped through; a diagonal can't cut a blocked corner. A town without ground is unaffected. The tools that set it come with L-653.
 
 ---
 
