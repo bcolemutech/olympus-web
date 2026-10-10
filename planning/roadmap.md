@@ -48,10 +48,10 @@ Phases are numbered in the order they were planned, not the order they are built
 
 ### Alongside Phase 3c
 
-| Epic                             | Issue | State                                                                                                                                                                                 |
-| -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| L-690 Grading that asks for more | #551  | **Designed** in [`the-loom-grading.md`](./the-loom-grading.md) (decided 2026-10-10); sub-issues L-691 to L-694. A 0–100 score above the gate, criteria added by every content feature |
-| L-700 Image studio (Phase 6)     | #523  | **Designed**; sub-issues #537–545 (§4)                                                                                                                                                |
+| Epic                             | Issue | State                                                                                                                                                                                            |
+| -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| L-690 Grading that asks for more | #551  | **Designed** in [`the-loom-grading.md`](./the-loom-grading.md) (decided 2026-10-10); sub-issues L-691 to L-694 (#552–555). A 0–100 score above the gate, criteria added by every content feature |
+| L-700 Image studio (Phase 6)     | #523  | **Designed**; sub-issues #537–545 (§4)                                                                                                                                                           |
 
 **Order:** L-690 runs now, so the content features that follow add their criteria to it from the start. L-700 runs in its own sessions.
 

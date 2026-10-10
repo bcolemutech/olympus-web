@@ -151,12 +151,12 @@ On Nisia, the Cartographer page shows the world's score and band, and Hatham's s
 
 ## 6. Sub-issues
 
-| ID    | Story                                                                                                                                                                                                | Depends on | Model  |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
-| L-691 | **The score:** the criteria registry, today's criteria and weights (§4.3), quality checks, rollup, bands, the world's score; `grade` gains `score` and `band`; rubric version 3; calibrated on Nisia | —          | Opus   |
-| L-692 | **Reads and the work list:** score, band and weighted checklists in the MCP reads; `list_work` by score gained, grouped, with tools; `find_locations` by band                                        | L-691      | Sonnet |
-| L-693 | **The Cartographer page:** world score and band, counts by band per kind, biggest gaps                                                                                                               | L-691      | Sonnet |
-| L-694 | **Players see the rating:** a world's band on the Loom's world list                                                                                                                                  | L-691      | Sonnet |
+| ID           | Story                                                                                                                                                                                                | Depends on | Model  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
+| L-691 (#552) | **The score:** the criteria registry, today's criteria and weights (§4.3), quality checks, rollup, bands, the world's score; `grade` gains `score` and `band`; rubric version 3; calibrated on Nisia | —          | Opus   |
+| L-692 (#553) | **Reads and the work list:** score, band and weighted checklists in the MCP reads; `list_work` by score gained, grouped, with tools; `find_locations` by band                                        | L-691      | Sonnet |
+| L-693 (#554) | **The Cartographer page:** world score and band, counts by band per kind, biggest gaps                                                                                                               | L-691      | Sonnet |
+| L-694 (#555) | **Players see the rating:** a world's band on the Loom's world list                                                                                                                                  | L-691      | Sonnet |
 
 **Order:** L-691 first; the other three can run side by side after it.
 
