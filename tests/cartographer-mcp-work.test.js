@@ -169,6 +169,8 @@ test('a fresh import: nothing is open, and the start is the only frontier', asyn
     missing: ['town', 'description', 'residents', 'lore'],
     // How far it is toward Rich, so "missing residents" isn't read as "nobody".
     progress: { size: 'great city', residents: '0 of 6', lore: '0 of 3' },
+    // Whether its town has ground yet (L-653).
+    ground: false,
   });
   // Then the closed places nearest the start.
   expect(list.items.slice(1).every((i) => i.priority === 'closed' && i.hops === 1)).toBe(true);

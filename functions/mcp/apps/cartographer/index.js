@@ -52,7 +52,7 @@ const APP_ID = 'cartographer';
 const MAX_WORLDS = 100;
 const DEFAULT_FIND_LIMIT = 20;
 const MAX_FIND_LIMIT = 100;
-const NEEDS = ['description', 'residents', 'lore', 'town', 'battleMap'];
+const NEEDS = ['description', 'residents', 'lore', 'town', 'battleMap', 'ground'];
 const GRADE_HELP =
   'Grades: unbuilt (a layer it needs is missing), stub (import text only), playable ' +
   '(written up: players may enter), rich (playable, with residents and lore).';
@@ -304,9 +304,18 @@ function cartographerApp({ reader, writer, art }) {
           'up way in). Build towns with add_place, update_place, connect_places and ' +
           'disconnect_places. `art` is the size of the town’s image, if it has one (uploaded on ' +
           'the Cartographer page): the town view draws it fitted to the town’s 0–1000 square, ' +
-          'so set place positions to line up with it. ' +
+          'so set place positions to line up with it. `ground` sums up its buildings, water, ' +
+          'walls and crossings (set_town_ground) and what is wrong with the town on them; ' +
+          'groundShapes: true adds the shapes themselves, to change a list and send it back. ' +
           GRADE_HELP,
-        inputSchema: { worldId, locationId: entityId('location', 'find_locations') },
+        inputSchema: {
+          worldId,
+          locationId: entityId('location', 'find_locations'),
+          groundShapes: z
+            .boolean()
+            .optional()
+            .describe('Include the ground’s shapes in full (default false: counts and names).'),
+        },
         annotations: readOnly,
         handler: async (ctx, args) => {
           const { world } = await worldFor(args.worldId);
@@ -320,7 +329,10 @@ function cartographerApp({ reader, writer, art }) {
           if ((settlement.geo || {}).kind !== 'settlement') {
             throw new ToolError(`${settlement.name} isn't a settlement, so it has no town.`);
           }
-          return { worldId: world.id, ...views.townDetail(world, settlement) };
+          return {
+            worldId: world.id,
+            ...views.townDetail(world, settlement, { groundShapes: Boolean(args.groundShapes) }),
+          };
         },
       },
       {
