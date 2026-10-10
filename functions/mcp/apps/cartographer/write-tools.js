@@ -11,6 +11,7 @@ const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
+const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
@@ -248,6 +249,25 @@ function layoutAfter(world, settlement, { set = {}, remove = [] } = {}) {
   for (const id of remove) delete places[id];
   Object.assign(places, set);
   return town.layoutReport({ ...world, places }, settlement);
+}
+
+// In a town with ground (L-653), a change to its places mustn't add a
+// ground problem: a door off open ground, a place nobody can walk to. Any it
+// had already are left to set_town_ground and the places' own fixes.
+function keepsGround(world, settlement, { set = {}, remove = [] } = {}) {
+  if (!settlement || !ground.hasGround(settlement)) return;
+  const before = new Set(ground.check(world, settlement));
+  const places = { ...(world.places || {}) };
+  for (const id of remove) delete places[id];
+  Object.assign(places, set);
+  const added = ground.check({ ...world, places }, settlement).filter((p) => !before.has(p));
+  if (added.length) {
+    throw new ToolError(
+      `${settlement.name}'s town has ground (set_town_ground), so its doors must be on open ` +
+        'ground and walkable from a way in. ' +
+        added.join(' ')
+    );
+  }
 }
 
 // A town with places keeps at least one way in and out (L-343).
@@ -1186,7 +1206,10 @@ function writeTools({ writer }) {
           const { world } = e;
           const entity = existing(world, args.type, args.id);
           const subject = { type: args.type, id: entity.id, name: labelOf(entity) };
-          if (args.type === 'place') keepsAWayIn(world, entity, { removing: true });
+          if (args.type === 'place') {
+            keepsAWayIn(world, entity, { removing: true });
+            keepsGround(world, world.locations[entity.locationId], { remove: [entity.id] });
+          }
           if (args.type === 'battleMap') mapStillNeeded(world, entity);
           const warnings =
             args.type === 'location'
@@ -1278,6 +1301,7 @@ const helpers = {
   requireSome,
   placeIn,
   keepsAWayIn,
+  keepsGround,
   layoutAfter,
   MAX_DESCRIPTION,
 };

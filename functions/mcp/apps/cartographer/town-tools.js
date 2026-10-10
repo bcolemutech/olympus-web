@@ -5,8 +5,10 @@ const { FieldValue } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const { normalizeName } = require('../../../loom-turn/interpret');
 const town = require('../../../loom-canon/town');
+const ground = require('../../../loom-canon/ground');
 const { SOURCES } = require('../../../cartographer/sources');
 const { worldId, entityId } = require('./schemas');
+const views = require('./views');
 const { helpers } = require('./write-tools');
 
 // The Cartographer's MCP town tools (planning/the-loom-layered-worlds.md §8;
@@ -20,6 +22,11 @@ const { helpers } = require('./write-tools');
 //   - A town with places keeps at least one way in and out (an entrance).
 //   - Descriptions set here are stamped as written up (sources.description).
 //
+// set_town_ground (L-653) gives a town its ground: buildings, water, walls and
+// crossings (loom-canon/ground.js), refused with the reasons when a door
+// would be off open ground or out of reach of a way in. Once it has ground,
+// adding, moving and removing its places keeps that so (keepsGround).
+//
 // Every result carries the town's layout report after the edit (town.js
 // layoutReport): what still keeps the layout from working, if anything.
 // Removing places is retire_entity (type 'place'), in write-tools.js.
@@ -28,6 +35,7 @@ const { existing, live, checkName, newId, describe, changedFields, requireSome, 
 const ROUTES = ['road', 'trail', 'sea'];
 const MAX_LINKS = 12;
 const TOWN_SPAN = 1000;
+const GROUND_PROBLEMS_SHOWN = 10;
 
 const kind = z
   .string()
@@ -72,6 +80,57 @@ function checkPlaceName(world, settlement, wanted, selfId) {
 }
 
 const entranceOf = (via) => ({ via: ROUTES.filter((r) => via.includes(r)) });
+
+// A town's ground (L-653; loom-canon/ground.js), as set_town_ground takes it.
+const groundPoint = z.strictObject({
+  x: z.number().min(0).max(TOWN_SPAN),
+  y: z.number().min(0).max(TOWN_SPAN),
+});
+const shapeName = z.string().trim().min(1).max(ground.LIMITS.name).optional();
+const polygon = (what) =>
+  z
+    .strictObject({
+      name: shapeName.describe(`Its name, if it has one, e.g. ${what}.`),
+      points: z
+        .array(groundPoint)
+        .min(3)
+        .max(ground.LIMITS.points)
+        .describe('Its corners, once round the edge; it closes back to the first on its own.'),
+    })
+    .describe('A polygon in the town square.');
+const GROUND_SHAPES = {
+  buildings: z
+    .array(polygon('"the Gull & Anchor"'))
+    .max(ground.LIMITS.buildings)
+    .describe('Buildings and blocks of them: nobody walks through them.'),
+  water: z
+    .array(polygon('"the River Dal"'))
+    .max(ground.LIMITS.water)
+    .describe('Rivers, harbours, ponds: walkable only where a crossing covers them.'),
+  walls: z
+    .array(
+      z.strictObject({
+        name: shapeName.describe('Its name, if it has one, e.g. "the town wall".'),
+        points: z
+          .array(groundPoint)
+          .min(2)
+          .max(ground.LIMITS.points)
+          .describe('A line through these points; repeat the first to close a ring.'),
+      })
+    )
+    .max(ground.LIMITS.walls)
+    .describe('Town walls, fences: never crossed. A gate is a gap left in one.'),
+  crossings: z
+    .array(
+      z.strictObject({
+        name: shapeName.describe('Its name, if it has one, e.g. "the old bridge".'),
+        kind: z.enum(['bridge', 'ford']).optional().describe('A bridge (the default) or a ford.'),
+        points: polygon('').shape.points,
+      })
+    )
+    .max(ground.LIMITS.crossings)
+    .describe('Bridges and fords: polygons over water, reaching both banks.'),
+};
 
 function townTools({ writer }) {
   const edit = (ctx, args, change) => writer.edit(args.worldId, ctx.uid, change);
@@ -143,6 +202,7 @@ function townTools({ writer }) {
             ...(args.position ? { position: args.position } : {}),
             ...(map ? { battleMap: { mapId: map.id } } : {}),
           };
+          helpers.keepsGround(world, settlement, { set: { [id]: doc } });
           e.create(e.ref('places', id), doc);
           const set = { [id]: doc };
           for (const other of links) {
@@ -232,6 +292,11 @@ function townTools({ writer }) {
               : {}),
             entrance,
           };
+          if (args.position !== undefined) {
+            if (args.position) after.position = args.position;
+            else delete after.position;
+          }
+          helpers.keepsGround(world, settlement, { set: { [place.id]: after } });
           return {
             place: summary(after, entrance),
             updated: changedFields(fields).map((f) => f.replace('rules.', '')),
@@ -321,7 +386,76 @@ function townTools({ writer }) {
           };
         }),
     },
+    {
+      name: 'set_town_ground',
+      title: 'Set a town’s ground',
+      description:
+        'Give a settlement’s town its ground, in the town’s 0–1000 square (the same as place ' +
+        'positions, with x across and y down, and the town art fitted to it): buildings and ' +
+        'water as polygons, walls as lines, and crossings (bridges and fords) as polygons ' +
+        'over water. Streets are the open ground left between them. A gate is a gap in a wall ' +
+        'with a way in or out standing in it. Every place’s position is its door: it must be ' +
+        'on open ground (not inside a building or water, nor on a wall), and every door must ' +
+        'be walkable from a way in, or the ground is refused with the reasons. Each list given ' +
+        'replaces that list; an empty list clears it; one left out is kept (get_town with ' +
+        'groundShapes shows them). Once a town has ground, moving or adding places must keep ' +
+        'their doors so. Check it against the art with view_image. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        locationId: entityId('location', 'find_locations').describe('The settlement.'),
+        buildings: GROUND_SHAPES.buildings.optional(),
+        water: GROUND_SHAPES.water.optional(),
+        walls: GROUND_SHAPES.walls.optional(),
+        crossings: GROUND_SHAPES.crossings.optional(),
+      },
+      annotations: replacing,
+      handler: (ctx, args) =>
+        edit(ctx, args, (e) => {
+          const { world } = e;
+          const settlement = settlementFor(world, args.locationId);
+          const given = ground.KINDS.filter((kind) => args[kind] !== undefined);
+          if (!given.length) {
+            throw new ToolError(
+              'Give buildings, water, walls or crossings (an empty list clears them).'
+            );
+          }
+          const before = ground.groundOf(settlement) || {};
+          const next = {};
+          for (const kind of ground.KINDS) {
+            const list = args[kind] !== undefined ? args[kind] : before[kind] || [];
+            next[kind] = list.map((shape) => withoutBlanks(shape));
+          }
+          const after = { ...settlement, town: { ...(settlement.town || {}), ground: next } };
+          const empty = !ground.hasGround(after);
+          const problems = empty ? [] : ground.check(world, after, next);
+          if (problems.length) {
+            const shown = problems.slice(0, GROUND_PROBLEMS_SHOWN);
+            throw new ToolError(
+              `That ground won’t do for ${settlement.name}: ` +
+                shown.join(' ') +
+                (problems.length > shown.length
+                  ? ` (and ${problems.length - shown.length} more)`
+                  : '')
+            );
+          }
+          e.update(e.ref('locations', settlement.id), {
+            'town.ground': empty ? FieldValue.delete() : next,
+          });
+          return {
+            town: { id: settlement.id, name: settlement.name },
+            updated: given,
+            ground: empty ? null : views.groundSummary(world, after),
+            layout: town.layoutReport(world, settlement),
+          };
+        }),
+    },
   ];
+}
+
+// A shape as stored: no undefined fields (Firestore refuses them).
+function withoutBlanks(shape) {
+  return Object.fromEntries(Object.entries(shape).filter(([, value]) => value !== undefined));
 }
 
 module.exports = { townTools };

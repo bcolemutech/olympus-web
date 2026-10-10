@@ -11,6 +11,7 @@ const {
 const maps = require('../../../loom-canon/maps');
 const layers = require('../../../loom-canon/layers');
 const positions = require('../../../loom-canon/positions');
+const ground = require('../../../loom-canon/ground');
 const { hopsFrom } = require('./views');
 
 // The build work list (planning/the-loom-layered-worlds.md §6; L-323 / #392):
@@ -25,6 +26,9 @@ const { hopsFrom } = require('./views');
 //   closed    every other closed place
 //   enrich    open places that could be Rich (residents, lore)
 //   describe  realms and regions to write up (never gated)
+//
+// Settlements also say whether their town has ground (`ground`, L-653), and
+// `need: 'ground'` lists those without; ground is not graded (yet: L-655).
 //
 //
 // Apart from the tiers, `unplaced` lists the characters without a valid
@@ -54,6 +58,11 @@ const HOW_TO = {
     'Give it a battle map: draw one with set_battle_map, or pick a generic one from ' +
     'list_battle_maps, then assign_battle_map. A generic map opens a place; only its own ' +
     'map, with walls, doors or obstacles, can make it Rich.',
+  ground:
+    'Give the town its ground: set_town_ground, with its buildings, water, walls and ' +
+    'crossings (bridges and fords) in the town’s 0–1000 square, lined up with its art. ' +
+    'Doors (place positions) must be on open ground and walkable from a way in; get_town ' +
+    'shows what is wrong.',
   layers:
     'Give its battle map walls, doors and obstacles: set_map_layers (or with the grid, ' +
     'set_battle_map). Check them against the art with view_image.',
@@ -120,6 +129,9 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
   // short of Rich. `need: 'battleMap'` lists every one not finished: no own
   // map, or one without layers.
   const forMaps = need === 'battleMap';
+  // Town ground (L-653): every settlement says whether its town has ground;
+  // `need: 'ground'` lists every one without, Rich or not.
+  const forGround = need === 'ground';
   const mapStatus = (entity) => maps.kindOf(world, entity) || 'none';
   const unlayered = (entity) =>
     mapStatus(entity) === 'own' && !layers.hasLayers(maps.mapOf(world, entity));
@@ -135,8 +147,10 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
   const items = [];
   for (const place of places) {
     const { grade: placeGrade, checklist } = grades.get(place.id);
-    const mapped = geoOf(place).kind !== 'settlement' ? place : null;
-    if (skip(placeGrade, mapped)) continue;
+    const settled = geoOf(place).kind === 'settlement';
+    const mapped = settled ? null : place;
+    const grounded = settled && ground.hasGround(place);
+    if (skip(placeGrade, mapped) && !(forGround && settled && !grounded)) continue;
     let priority = 'enrich';
     if (!isOpen(place.id)) {
       const nextToOpen = (place.connections || []).some(isOpen);
@@ -156,6 +170,7 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       // Counts, so "missing residents" reads as "1 of 2", not "nobody".
       ...(geo.kind === 'settlement' ? { progress: progressOf(world, place) } : {}),
       ...(mapped ? mapInfo(place) : {}),
+      ...(settled ? { ground: grounded } : {}),
     });
   }
   // Places inside towns (L-343), ordered by their town's distance.
@@ -203,7 +218,8 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
         (!grade || item.grade === grade) &&
         (!need ||
           item.missing.includes(need) ||
-          (forMaps && item.battleMap && (item.battleMap !== 'own' || item.layers === false)))
+          (forMaps && item.battleMap && (item.battleMap !== 'own' || item.layers === false)) ||
+          (forGround && item.ground === false))
     )
     .sort(byTierThenNearest);
 
@@ -219,9 +235,13 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
     count: page.length,
     items: page,
     howTo: Object.fromEntries(
-      [...new Set(page.flatMap((item) => item.missing).concat(forMaps ? ['battleMap'] : []))].map(
-        (n) => [n, HOW_TO[n] || n]
-      )
+      [
+        ...new Set(
+          page
+            .flatMap((item) => item.missing)
+            .concat(forMaps ? ['battleMap'] : [], forGround ? ['ground'] : [])
+        ),
+      ].map((n) => [n, HOW_TO[n] || n])
     ),
   };
   if (offset + page.length < matching.length) result.nextOffset = offset + page.length;
