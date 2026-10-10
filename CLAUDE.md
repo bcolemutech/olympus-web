@@ -21,6 +21,7 @@ npm run format
 - **Each phase has a design doc** in `planning/` (listed in the roadmap) with dated **Decisions** and an **Epics and sub-issues** table. The doc and the issue are the spec: follow their decisions, and ask before departing from them.
 - **New work is designed before it is built.** A phase or epic not yet broken out gets a draft design doc first, with a **gap sheet**: the open questions, each with options and a recommendation, put to the user to answer (by asking them, not left in a file). Sub-issues are filed only once it's answered.
 - **Issues follow the existing format.** Epics are titled `L-x00 — [Epic] …` and stories `L-xxx · …`, with the `loom` label, the phase milestone, and the story attached to its epic as a sub-issue. The body has Overview, then design doc / Depends on / Suggested model lines, then Scope, Acceptance criteria, and a `Part of #… (L-…)` footer.
+- **Content features add to grading.** An epic that adds content to the game (art, people, items, places, layers) adds its criteria and weights to the grading rubric (`functions/loom-canon/grading.js`, design in `planning/the-loom-grading.md`) in one of its stories, and isn't closed until they are in.
 - **One story, one PR**, titled `feat(loom): … (L-xxx, #issue)` (or `feat(cartographer)`), with the tests its acceptance criteria name.
 - **When an epic ships:** close it, tick its sub-issue checklist, and update its row in `roadmap.md` and the status line of its design doc, in the same PR or a small docs PR.
 

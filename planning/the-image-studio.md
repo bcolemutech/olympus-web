@@ -3,7 +3,7 @@
 **Status:** Decided (2026-10-09). The gap sheet (§3) is answered; sub-issues are ready to file (§5).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
-**Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Runs alongside Phases 3c and 3d.
+**Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
 **Related:** [`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md) §8–9 (town and battle-map art, `view_image`), [`the-cartographer-design.md`](./the-cartographer-design.md) (the connector), L-710 (#524, worlds from map images), L-730 (#526, portraits)
 
 ---
