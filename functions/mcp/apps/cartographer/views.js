@@ -16,6 +16,7 @@ const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
+const ground = require('../../../loom-canon/ground');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -417,9 +418,30 @@ function regionDetail(world, region) {
   return result;
 }
 
+// A town's ground at a glance (L-653): how many of each shape, the named
+// ones, and what is wrong with the town on it (ground.js check). Null for a
+// town without ground; `shapes` adds the shapes themselves.
+function groundSummary(world, settlement, { shapes = false } = {}) {
+  if (!ground.hasGround(settlement)) return null;
+  const given = ground.groundOf(settlement);
+  const summary = {};
+  for (const kind of ground.KINDS) {
+    const list = given[kind] || [];
+    summary[kind] = {
+      count: list.length,
+      named: list.map((shape) => shape.name).filter(Boolean),
+    };
+  }
+  summary.problems = ground.check(world, settlement);
+  if (shapes) {
+    summary.shapes = Object.fromEntries(ground.KINDS.map((kind) => [kind, given[kind] || []]));
+  }
+  return summary;
+}
+
 // A settlement's town in full (L-343 / #397): its places, the world routes and
 // which ways out serve them, and what is wrong with the layout, if anything.
-function townDetail(world, settlement) {
+function townDetail(world, settlement, { groundShapes = false } = {}) {
   const links = (settlement.geo && settlement.geo.links) || {};
   const places = Object.values(world.places || {})
     .filter((place) => place.locationId === settlement.id)
@@ -440,6 +462,8 @@ function townDetail(world, settlement) {
     // Its real size (L-651): metres across its 0–1000 square, and whether
     // Claude set it (update_location townSize) or it is the default by size.
     size: town.townSize(settlement),
+    // Its ground (L-653): buildings, water, walls and crossings, or null.
+    ground: groundSummary(world, settlement, { shapes: groundShapes }),
     layout: report,
     // Everyone found in this town, and where (L-682).
     people: Object.values(world.characters || {})
@@ -607,6 +631,7 @@ module.exports = {
   factionDetail,
   regionDetail,
   townDetail,
+  groundSummary,
   characterDetail,
   loreDetail,
   bearing,
