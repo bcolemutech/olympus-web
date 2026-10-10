@@ -3,7 +3,7 @@
 **Status:** Decided (2026-10-10). The gap sheet (§3) is answered; sub-issues are ready to file (§6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-690 (#551)
-**Runs:** now, alongside Phase 3c, 3d and L-700, so every new content feature adds to it from the start ([`roadmap.md`](./roadmap.md))
+**Runs:** right after Phase 3c, before L-700 and L-720, so every new content feature adds to it from the start (Build order in [`roadmap.md`](./roadmap.md))
 **Replaces:** the Rich grade in [`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md) §4. The gate (Unbuilt, Stub, Playable) is unchanged.
 
 ---

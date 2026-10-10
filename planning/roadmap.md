@@ -11,22 +11,35 @@ This is the one place that says what has shipped, what is in progress, and what 
 
 ## 1. Phases
 
-| Phase                         | Milestone    | Design doc                                                             | State                                         | Exit criterion                                                                                                                                                                                                                   |
-| ----------------------------- | ------------ | ---------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1 — MVP**                   | #14          | [`the-loom-design.md`](./the-loom-design.md)                           | ✅ Shipped ([sign-off](./phase-1-signoff.md)) | Across a session gap, never forgets hard state, never breaks the seeded rules, never silently contradicts canon. Resume works                                                                                                    |
-| **MCP Initiative 1**          | —            | [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)   | ✅ Shipped (#347–357)                         | An MCP connector works end to end from Claude on iOS (Scriptorium)                                                                                                                                                               |
-| **3 — Rapid worlds**          | #16          | [`the-cartographer-design.md`](./the-cartographer-design.md)           | ✅ Shipped (L-300 / #314, C-1 to C-7)         | An uploaded Azgaar map becomes a published, playable world; a later MCP fix reaches games on their next turn                                                                                                                     |
-| **3b — Layered worlds**       | #19          | [`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md)           | ✅ Shipped (L-320 to L-350)                   | Travel to an unbuilt place is turned back, and opens once built; a player walks from the world map into a town and across a battle map                                                                                           |
-| **3c — Movement and vision**  | #20          | [`the-loom-movement-and-vision.md`](./the-loom-movement-and-vision.md) | 🔨 In progress (§2)                           | Each epic's own exit criterion (§2)                                                                                                                                                                                              |
-| **3d — Time**                 | _(proposed)_ | [`the-loom-game-time.md`](./the-loom-game-time.md), #421               | 📋 Next (§3)                                  | Hatham to Daldockley by trail takes about 2½ hours and the play view shows "Day 1, evening"                                                                                                                                      |
-| **6 — Studio and new worlds** | _(proposed)_ | _(to write, one per epic)_                                             | 📋 Planned (§4); L-700 starts alongside 3c/3d | A world begun from a studio-made map image, its places pinned and its regions painted over MCP, is published and played with no Azgaar in the loop. A cross-country trip is stopped by an event in a painted forest, and goes on |
-| **7 — Map-first Loom**        | _(proposed)_ | _(to write, one per epic)_                                             | 📋 Planned (§4)                               | A game is played from a full-window map: narration and rolls in a side panel, characters as round portrait tokens, and a click on ground, a place or a person offers what can be done there                                      |
-| **8 — People and trade**      | _(proposed)_ | _(to write, one per epic)_                                             | 📋 Planned (§4)                               | A player buys a sword from the smith in the world's own coin; it lands in their inventory, and the shop's stock drops. A companion follows them out and speaks in a voice of their own                                           |
-| **2 — Living world**          | #15          | [`the-loom-design.md`](./the-loom-design.md) §9                        | 💤 Later (§5)                                 | The off-screen world visibly changes between sessions without raising the per-turn cost                                                                                                                                          |
-| **4 — Multiplayer**           | #17          | [`the-loom-design.md`](./the-loom-design.md) §9                        | 💤 Later (§5)                                 | Shared World State is consistent across two concurrent players                                                                                                                                                                   |
-| **5 — Visuals**               | #18          | [`the-loom-design.md`](./the-loom-design.md) §9                        | 💤 Later (§5)                                 | Images generated within the batch budget                                                                                                                                                                                         |
+| Phase                         | Milestone    | Design doc                                                             | State                                                  | Exit criterion                                                                                                                                                                                                                   |
+| ----------------------------- | ------------ | ---------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 — MVP**                   | #14          | [`the-loom-design.md`](./the-loom-design.md)                           | ✅ Shipped ([sign-off](./phase-1-signoff.md))          | Across a session gap, never forgets hard state, never breaks the seeded rules, never silently contradicts canon. Resume works                                                                                                    |
+| **MCP Initiative 1**          | —            | [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)   | ✅ Shipped (#347–357)                                  | An MCP connector works end to end from Claude on iOS (Scriptorium)                                                                                                                                                               |
+| **3 — Rapid worlds**          | #16          | [`the-cartographer-design.md`](./the-cartographer-design.md)           | ✅ Shipped (L-300 / #314, C-1 to C-7)                  | An uploaded Azgaar map becomes a published, playable world; a later MCP fix reaches games on their next turn                                                                                                                     |
+| **3b — Layered worlds**       | #19          | [`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md)           | ✅ Shipped (L-320 to L-350)                            | Travel to an unbuilt place is turned back, and opens once built; a player walks from the world map into a town and across a battle map                                                                                           |
+| **3c — Movement and vision**  | #20          | [`the-loom-movement-and-vision.md`](./the-loom-movement-and-vision.md) | 🔨 In progress (§2)                                    | Each epic's own exit criterion (§2)                                                                                                                                                                                              |
+| **3d — Time**                 | _(proposed)_ | [`the-loom-game-time.md`](./the-loom-game-time.md), #421               | 📋 Next (§3)                                           | Hatham to Daldockley by trail takes about 2½ hours and the play view shows "Day 1, evening"                                                                                                                                      |
+| **6 — Studio and new worlds** | _(proposed)_ | _(to write, one per epic)_                                             | 📋 Planned (§4); L-700 comes after L-690 (Build order) | A world begun from a studio-made map image, its places pinned and its regions painted over MCP, is published and played with no Azgaar in the loop. A cross-country trip is stopped by an event in a painted forest, and goes on |
+| **7 — Map-first Loom**        | _(proposed)_ | _(to write, one per epic)_                                             | 📋 Planned (§4)                                        | A game is played from a full-window map: narration and rolls in a side panel, characters as round portrait tokens, and a click on ground, a place or a person offers what can be done there                                      |
+| **8 — People and trade**      | _(proposed)_ | _(to write, one per epic)_                                             | 📋 Planned (§4)                                        | A player buys a sword from the smith in the world's own coin; it lands in their inventory, and the shop's stock drops. A companion follows them out and speaks in a voice of their own                                           |
+| **2 — Living world**          | #15          | [`the-loom-design.md`](./the-loom-design.md) §9                        | 💤 Later (§5)                                          | The off-screen world visibly changes between sessions without raising the per-turn cost                                                                                                                                          |
+| **4 — Multiplayer**           | #17          | [`the-loom-design.md`](./the-loom-design.md) §9                        | 💤 Later (§5)                                          | Shared World State is consistent across two concurrent players                                                                                                                                                                   |
+| **5 — Visuals**               | #18          | [`the-loom-design.md`](./the-loom-design.md) §9                        | 💤 Later (§5)                                          | Images generated within the batch budget                                                                                                                                                                                         |
 
 Phases are numbered in the order they were planned, not the order they are built. Phase 2 was deferred once the Cartographer made worlds large enough that building them out, and moving through them, came first.
+
+---
+
+## Build order (decided 2026-10-10)
+
+1. **Finish Phase 3c:** L-650 Town ground (in progress), L-660 Walking in town, L-670 Vision in town.
+2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria.
+3. **L-700 Image studio** (#523).
+4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views.
+5. **Phase 3d:** L-370 Game time (#421).
+6. **L-710 Worlds without Azgaar** (#524), then L-360 off-road travel (#418), then the rest of Phases 7 and 8 in their order (§4).
+
+Phases are planned groups. This list, not the phase numbers, says what is built next.
 
 ---
 
@@ -46,14 +59,14 @@ Phases are numbered in the order they were planned, not the order they are built
 
 **Order:** L-640 needs sight (L-630). L-680 gives every character a position (§6a of the design doc; decided 2026-10-08) and comes before the town epics. L-650 to L-670 bring the same to towns, in that order. L-650's MCP tools and `view_image` work (L-653, L-654) are the Cartographer's part of this phase.
 
-### Alongside Phase 3c
+### After Phase 3c
 
 | Epic                             | Issue | State                                                                                                                                                                                            |
 | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | L-690 Grading that asks for more | #551  | **Designed** in [`the-loom-grading.md`](./the-loom-grading.md) (decided 2026-10-10); sub-issues L-691 to L-694 (#552–555). A 0–100 score above the gate, criteria added by every content feature |
 | L-700 Image studio (Phase 6)     | #523  | **Designed**; sub-issues #537–545 (§4)                                                                                                                                                           |
 
-**Order:** L-690 runs now, so the content features that follow add their criteria to it from the start. L-700 runs in its own sessions.
+**Order:** L-690 comes first, once Phase 3c is done, so the content features that follow add their criteria to it from the start. L-700 follows it, then L-720 (§4).
 
 ---
 
@@ -65,7 +78,7 @@ L-370 sits in the Phase 3b milestone today (#19) but was always planned for afte
 | --------------- | ----- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | L-370 Game time | #421  | Designed in [`the-loom-game-time.md`](./the-loom-game-time.md) (decided 2026-10-08); sub-issues L-371 to L-376 | Phase 3c: turns become time (6 s a battle-map turn, about 5 min a town turn) |
 
-**Order:** plan L-370's sub-issues while Phase 3c finishes, so it is ready to start.
+**Order:** Phase 3d follows L-690, L-700 and L-720 (Build order, above). Plan L-370's sub-issues before it starts.
 
 **L-360 off-road travel (#418) moved to Phase 6** (decided 2026-10-09). Its terrain was to come from Azgaar's cells; it now comes from the region layer that replaces Azgaar (L-710).
 
@@ -75,7 +88,7 @@ L-370 sits in the Phase 3b milestone today (#19) but was always planned for afte
 
 Ten enhancements, placed through an intake questionnaire on 2026-10-09. Each epic below has an issue with a short story list. **Sub-issues are not filed until the epic is next**: each epic gets its own design doc and gap sheet first, since the plan may change a lot before then. The answers recorded here are a starting point for those design docs, not settled decisions.
 
-**Order:** the phases follow the ranking, and come after Phase 3d, so game time exists for opening hours, restocking and schedules. The exception is **L-700 Image studio**, which is its own app and touches no play code: it runs alongside 3c and 3d in its own sessions. The UI rewrite comes after Phase 3c, so the town views (L-650 to L-670) are built once on the old base and then carried over.
+**Order** (revised 2026-10-10; see Build order, above): **L-700** and **L-720** come before Phase 3d, right after L-690: the UI rewrite follows the studio to show its artwork well, and carries over the finished town views (L-650 to L-670). Everything else here comes after Phase 3d, so game time exists for opening hours, restocking and schedules: L-710 first, then L-360, then Phases 7 and 8.
 
 ### Phase 6 — Studio and new worlds
 
