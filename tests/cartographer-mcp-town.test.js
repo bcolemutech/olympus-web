@@ -550,3 +550,38 @@ test('get_town says whether a town has art, and its size (L-347)', async () => {
     height: 900,
   });
 });
+
+describe('a town’s real size (L-651)', () => {
+  const getTown = () => ok('get_town', { worldId: DRAFT, locationId: 'loc_1' });
+  const loc1 = async () =>
+    (await worlds().doc(DRAFT).collection('locations').doc('loc_1').get()).data();
+
+  test('get_town shows the default for its size until Claude sets one', async () => {
+    const settlement = await loc1();
+    expect((await getTown()).size).toEqual(town.townSize(settlement));
+    expect((await getTown()).size.set).toBe(false);
+  });
+
+  test('update_location sets it, and null puts back the default', async () => {
+    const defaultSize = (await getTown()).size;
+    await ok('update_location', { worldId: DRAFT, locationId: 'loc_1', townSize: 800 });
+    expect((await loc1()).town.size).toBe(800);
+    expect((await getTown()).size).toEqual({ metres: 800, set: true });
+
+    await ok('update_location', { worldId: DRAFT, locationId: 'loc_1', townSize: null });
+    expect(((await loc1()).town || {}).size).toBeUndefined();
+    expect((await getTown()).size).toEqual(defaultSize);
+  });
+
+  test('only a settlement has a town to size, within bounds', async () => {
+    expect(
+      await refused('update_location', { worldId: DRAFT, locationId: 'poi_1', townSize: 500 })
+    ).toMatch(/isn't a settlement/);
+    const tooSmall = await call('update_location', {
+      worldId: DRAFT,
+      locationId: 'loc_1',
+      townSize: 10,
+    });
+    expect(tooSmall.isError).toBe(true);
+  });
+});

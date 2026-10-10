@@ -25,11 +25,29 @@
  * has one (older saves, or a layout added later) stands at its default
  * entrance.
  *
+ * A town's 0–1000 square has a real size (planning/the-loom-movement-and-
+ * vision.md §7; L-651 / #463): `settlement.town.size`, in metres across, set
+ * by Claude, or by default from the settlement's size as the Rich bar sizes
+ * it (grading.js sizeTier: a capital one size larger): a village 300 m, a
+ * town 600 m, a city 1.2 km, a great city 2.5 km. townMetres turns a distance
+ * between two town points into metres.
+ *
  * Pure helpers over a loaded world (one may have no places), shared by
  * grading, the rules engine, the narrator, the interpreter and new games.
  */
 
-const { isPlaceOpen } = require('./grading');
+const { isPlaceOpen, sizeTier } = require('./grading');
+
+// A town's width in metres, by the settlement's size (L-651).
+const TOWN_SIZES = Object.freeze({
+  village: 300,
+  town: 600,
+  city: 1200,
+  'great city': 2500,
+});
+const TOWN_SIDE = 1000; // the town square's units, as places' positions use them
+const MIN_TOWN_SIZE = 50;
+const MAX_TOWN_SIZE = 20000;
 
 const live = (entity) => Boolean(entity) && !entity.retired;
 const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -246,7 +264,29 @@ function hasTownLayout(world, settlement) {
   return reachableFromEntrances(world, places).size === places.length;
 }
 
+/**
+ * A town's size in metres across (L-651): `{ metres, set }`, `set` when Claude
+ * gave it (settlement.town.size), else the default for the settlement's size.
+ */
+function townSize(settlement) {
+  const given = settlement && settlement.town && settlement.town.size;
+  if (Number.isFinite(given) && given > 0) return { metres: given, set: true };
+  return { metres: TOWN_SIZES[sizeTier(settlement || {}).name], set: false };
+}
+
+/** Metres between two points in a settlement's town square (L-651). */
+function townMetres(settlement, a, b) {
+  const units = Math.hypot(b.x - a.x, b.y - a.y);
+  return (units * townSize(settlement).metres) / TOWN_SIDE;
+}
+
 module.exports = {
+  TOWN_SIZES,
+  TOWN_SIDE,
+  MIN_TOWN_SIZE,
+  MAX_TOWN_SIZE,
+  townSize,
+  townMetres,
   placesOf,
   entrancesOf,
   isEntrance,
