@@ -42,6 +42,15 @@ const COLOURS = {
   solid: [12, 14, 20, 215],
   low: [205, 170, 125, 210],
   difficult: [190, 190, 190, 190],
+  // Town ground (L-654): see-through over the art, so it can be lined up.
+  building: [176, 112, 72, 170],
+  buildingEdge: [240, 190, 150, 255],
+  water: [40, 110, 230, 150],
+  waterEdge: [120, 180, 255, 255],
+  bridge: [222, 184, 110, 220],
+  ford: [190, 235, 255, 190],
+  crossingEdge: [255, 236, 179, 255],
+  townWall: [235, 235, 235, 255],
 };
 
 // ── A canvas of RGBA pixels ───────────────────────────────────────────────
@@ -93,6 +102,69 @@ function line(c, x0, y0, x1, y1, colour, width = 1) {
     const y = y0 + ((y1 - y0) * s) / steps;
     fillRect(c, x - half, y - half, width, width, colour);
   }
+}
+
+// Fills a polygon ([{ x, y }] in pixels), a row at a time: pixels whose
+// centres are inside it (even-odd).
+function fillPolygon(c, points, colour) {
+  const ys = points.map((p) => p.y);
+  const y0 = Math.max(0, Math.floor(Math.min(...ys)));
+  const y1 = Math.min(c.height - 1, Math.ceil(Math.max(...ys)));
+  for (let y = y0; y <= y1; y++) {
+    const cy = y + 0.5;
+    const xs = [];
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const a = points[i];
+      const b = points[j];
+      if (a.y > cy !== b.y > cy) xs.push(a.x + ((cy - a.y) * (b.x - a.x)) / (b.y - a.y));
+    }
+    xs.sort((p, q) => p - q);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const from = Math.max(0, Math.ceil(xs[k] - 0.5));
+      const to = Math.min(c.width - 1, Math.floor(xs[k + 1] - 0.5));
+      for (let x = from; x <= to; x++) blend(c, x, y, colour);
+    }
+  }
+}
+
+function outline(c, points, colour, width, closed = true) {
+  const count = closed ? points.length : points.length - 1;
+  for (let i = 0; i < count; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    line(c, a.x, a.y, b.x, b.y, colour, width);
+  }
+}
+
+// A town's ground (L-654; loom-canon/ground.js) drawn on the town square at
+// k pixels a unit: water, then crossings over it, then buildings, then walls
+// as thick lines on top. Returns how many of each were drawn.
+function drawGround(c, given, k) {
+  const scaled = (shape) => (shape.points || []).map((p) => ({ x: p.x * k, y: p.y * k }));
+  const edge = Math.max(1, Math.round(c.width / 800));
+  const counts = {};
+  const polygons = (kind, fill, rim) => {
+    const list = given[kind] || [];
+    for (const shape of list) {
+      const points = scaled(shape);
+      if (points.length < 3) continue;
+      fillPolygon(c, points, typeof fill === 'function' ? fill(shape) : fill);
+      outline(c, points, rim, edge);
+    }
+    counts[kind] = list.length;
+  };
+  polygons('water', COLOURS.water, COLOURS.waterEdge);
+  polygons(
+    'crossings',
+    (shape) => (shape.kind === 'ford' ? COLOURS.ford : COLOURS.bridge),
+    COLOURS.crossingEdge
+  );
+  polygons('buildings', COLOURS.building, COLOURS.buildingEdge);
+  const walls = given.walls || [];
+  const thick = Math.max(3, Math.round(c.width / 200));
+  for (const shape of walls) outline(c, scaled(shape), COLOURS.townWall, thick, false);
+  counts.walls = walls.length;
+  return counts;
 }
 
 // Digits, 3 × 5, one string of bits per row.
@@ -406,7 +478,8 @@ function renderBattleMap(map, art, people = []) {
  * draws it) or a plain square, a grid every 100 units (labelled every 200),
  * the links between places, numbered markers at the places' positions, and
  * the people about town at their town points (L-684: `people`, [{ id, name,
- * x, y, place }]).
+ * x, y, place }]). A town with ground (L-654) has it drawn over the art,
+ * under the grid and markers.
  */
 function renderTown(world, settlement, places, artBytes, people = []) {
   const art = artBytes ? scaleDown(decode(artBytes)) : null;
@@ -415,6 +488,8 @@ function renderTown(world, settlement, places, artBytes, people = []) {
   if (art)
     drawInto(base, art, (side - art.width) / 2, (side - art.height) / 2, art.width, art.height);
   const k = side / 1000;
+  const given = settlement.town && settlement.town.ground;
+  const ground = given ? drawGround(base, given, k) : null;
   for (let u = 0; u <= 1000; u += 100) {
     const colour = u % 500 === 0 ? COLOURS.gridMajor : COLOURS.gridLine;
     line(base, u * k, 0, u * k, side - 1, colour);
@@ -486,7 +561,13 @@ function renderTown(world, settlement, places, artBytes, people = []) {
         'town view draws it). Grid lines every 100 units, labelled every 200, from the ' +
         'top-left. Squares are ways in and out, circles other places, lines their links; each ' +
         'marker sits at the place’s position, numbered as below. Teal diamonds are people ' +
-        'about town, at their town points (type person).',
+        'about town, at their town points (type person).' +
+        (ground
+          ? ' Its ground (set_town_ground) is drawn see-through over the art: buildings ' +
+            'brown, water blue, bridges tan and fords pale blue over it, walls as thick white ' +
+            'lines; open ground is left as it is.'
+          : ''),
+      ...(ground ? { ground } : {}),
       markers,
       ...(unplaced.length ? { notPositioned: unplaced } : {}),
     },

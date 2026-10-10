@@ -400,7 +400,9 @@ function cartographerApp({ reader, writer, art }) {
           'that what you place lines up with the art. Battle maps come with their grid (every ' +
           'fifth line labelled) and numbered markers for entries, exits, features and the people ' +
           'standing on it; towns with numbered markers at their places’ positions, the people ' +
-          'about town at their town points, their links, and the 0–1000 grid; the world map with ' +
+          'about town at their town points, their links, the 0–1000 grid, and their ground ' +
+          '(set_town_ground: buildings, water, walls and crossings, see-through over the art); ' +
+          'the world map with ' +
           'the people in the wilderness at their world points. People are teal diamonds. The ' +
           'legend ties each number to its id, name and cell or position. Without art, a battle ' +
           'map or town is drawn on a plain background, so its layout can still be checked. Art ' +

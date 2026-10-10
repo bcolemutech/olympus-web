@@ -301,6 +301,85 @@ describe('towns', () => {
   });
 });
 
+describe('a town’s ground (L-654)', () => {
+  const rect = (x0, y0, x1, y1) => [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ];
+  // Hatham: a river across the middle with a bridge and a ford, a block of
+  // houses, and a wall down the west side.
+  const GROUND = {
+    water: [{ name: 'the Hath', points: rect(0, 440, 1000, 560) }],
+    crossings: [
+      { name: 'the bridge', points: rect(620, 420, 680, 580) },
+      { name: 'the ford', kind: 'ford', points: rect(820, 420, 880, 580) },
+    ],
+    buildings: [{ name: 'the tannery', points: rect(220, 220, 380, 380) }],
+    walls: [
+      {
+        name: 'the west wall',
+        points: [
+          { x: 60, y: 30 },
+          { x: 60, y: 970 },
+        ],
+      },
+    ],
+  };
+  const HATHAM = { id: 'loc_450', name: 'Hatham', town: { ground: GROUND } };
+  const PLAIN = [26, 31, 44];
+  const BROWN = [126, 83, 63]; // the building's brown over the plain ground
+  const BLUE = [34, 78, 153]; // water over the plain ground
+  const TAN = [196, 168, 116]; // a bridge over the water
+  const PALE = [150, 195, 229]; // a ford over the water
+
+  test('plain: buildings filled, water blue, crossings over it, walls thick', () => {
+    const { jpeg: jpg, legend } = images.renderTown({}, HATHAM, [], null);
+    const img = decoded(jpg);
+    const k = img.width / 1000;
+    expect(legend.ground).toEqual({ water: 1, crossings: 2, buildings: 1, walls: 1 });
+    expect(legend.reading).toMatch(/buildings brown, water blue/);
+    expect(near(pixel(img, 330 * k, 330 * k), BROWN, 25)).toBe(true);
+    expect(near(pixel(img, 350 * k, 520 * k), BLUE, 25)).toBe(true);
+    expect(near(pixel(img, 650 * k, 520 * k), TAN, 25)).toBe(true);
+    expect(near(pixel(img, 850 * k, 520 * k), PALE, 25)).toBe(true);
+    expect(near(pixel(img, 60 * k, 750 * k), [235, 235, 235], 25)).toBe(true); // the wall
+    // A few pixels off the wall is open ground again; so is the street.
+    expect(near(pixel(img, 75 * k, 750 * k), PLAIN, 25)).toBe(true);
+    expect(near(pixel(img, 450 * k, 750 * k), PLAIN, 25)).toBe(true);
+    // A crossing reaches past the river's banks.
+    expect(near(pixel(img, 650 * k, 430 * k), [195, 162, 101], 25)).toBe(true);
+  });
+
+  test('over art: see-through, so the art still shows beneath', () => {
+    const { jpeg: jpg } = images.renderTown({}, HATHAM, [], png(1000, 1000, [90, 160, 90]));
+    const img = decoded(jpg);
+    const k = img.width / 1000;
+    const water = pixel(img, 350 * k, 520 * k);
+    // Blue, but tinted by the green art: neither the art nor plain water.
+    expect(near(water, [61, 131, 172], 25)).toBe(true);
+    expect(near(water, BLUE, 25)).toBe(false);
+    expect(near(pixel(img, 450 * k, 750 * k), [90, 160, 90], 25)).toBe(true); // open ground: art
+  });
+
+  test('markers and the grid are drawn over the ground', () => {
+    const places = [
+      { id: 'plc_tan', name: 'The Tannery Yard', position: { x: 300, y: 300 }, connections: [] },
+    ];
+    const { jpeg: jpg } = images.renderTown({}, HATHAM, places, null);
+    const img = decoded(jpg);
+    const k = img.width / 1000;
+    expect(near(pixel(img, 300 * k, 300 * k), [129, 212, 250])).toBe(true);
+  });
+
+  test('a town without ground is drawn as before, with no ground in the legend', () => {
+    const { legend } = images.renderTown({}, { id: 'loc_450', name: 'Hatham' }, [], null);
+    expect(legend.ground).toBeUndefined();
+    expect(legend.reading).not.toMatch(/ground/);
+  });
+});
+
 test('on art, a place still sits at its position, scaled to the image', () => {
   const places = [
     { id: 'plc_well', name: 'The Well', position: { x: 250, y: 600 }, connections: [] },
