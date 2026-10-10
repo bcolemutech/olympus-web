@@ -604,7 +604,10 @@ function writeTools({ writer }) {
         'Change a place’s name, description, the realms present there (factionIds, replacing ' +
         'the list), or its rules: requiresAbility (an ability a traveller needs to get in) and ' +
         'hostileToFactionId. A rule set to null is removed. Names stay unique in the world. ' +
-        'Setting a description, even the current text, marks the place as written up. ' +
+        'Setting a description, even the current text, marks the place as written up. For a ' +
+        'settlement, townSize sets how many metres its town’s 0–1000 square spans (null goes ' +
+        'back to the default for its size: village 300, town 600, city 1200, great city 2500; ' +
+        'a capital one size larger); get_town shows it. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -635,10 +638,20 @@ function writeTools({ writer }) {
           })
           .optional()
           .describe('Rule hooks to set or (with null) remove; others are left unchanged.'),
+        townSize: z
+          .number()
+          .int()
+          .min(town.MIN_TOWN_SIZE)
+          .max(town.MAX_TOWN_SIZE)
+          .nullable()
+          .optional()
+          .describe(
+            'A settlement only: its town’s width in metres (L-651); null for the default by size.'
+          ),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description', 'factionIds', 'rules']);
+        requireSome(args, ['name', 'description', 'factionIds', 'rules', 'townSize']);
         return edit(ctx, args, (e) => {
           const { world } = e;
           const place = existing(world, 'location', args.locationId);
@@ -661,6 +674,18 @@ function writeTools({ writer }) {
             }
             if (key === 'hostileToFactionId') live(world, 'faction', value);
             if (rules[key] !== value) fields[`rules.${key}`] = value;
+          }
+          // A town's real size (L-651), on the settlement beside its art.
+          if (args.townSize !== undefined) {
+            if ((place.geo || {}).kind !== 'settlement') {
+              throw new ToolError(`${place.name} isn't a settlement, so it has no town to size.`);
+            }
+            const current = place.town && place.town.size;
+            if (args.townSize === null) {
+              if (current) fields['town.size'] = FieldValue.delete();
+            } else if (args.townSize !== current) {
+              fields['town.size'] = args.townSize;
+            }
           }
           if (Object.keys(fields).length) {
             e.update(e.ref('locations', place.id), fields);

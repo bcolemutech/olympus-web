@@ -437,6 +437,9 @@ function townDetail(world, settlement) {
       settlement.town && settlement.town.image
         ? { width: settlement.town.image.width, height: settlement.town.image.height }
         : null,
+    // Its real size (L-651): metres across its 0–1000 square, and whether
+    // Claude set it (update_location townSize) or it is the default by size.
+    size: town.townSize(settlement),
     layout: report,
     // Everyone found in this town, and where (L-682).
     people: Object.values(world.characters || {})
