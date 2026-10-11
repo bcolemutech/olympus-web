@@ -222,9 +222,8 @@ function reachableFrom(world, locationId, from, canPass) {
  * entrance, places that can't be reached); `warnings` don't (a world route
  * that no way out serves, so travellers can't leave that way). In a town with
  * ground (L-655) the problems are its ground's (ground.js check: doors off
- * open ground, places that can't be walked to), and places not linked from a
- * way in are a warning, since play still moves along links until walking in
- * town (L-660).
+ * open ground, places that can't be walked to); its links aren't used
+ * (L-665).
  */
 function layoutReport(world, settlement) {
   const places = placesOf(world, settlement.id);
@@ -241,23 +240,16 @@ function layoutReport(world, settlement) {
       'No way in or out is open yet (written up, with a battle map), so nobody can enter.'
     );
   }
-  const linked = reachableFromEntrances(world, places);
   const strandedBy = (seen) => places.filter((place) => !seen.has(place.id));
   const list = (stranded) =>
     stranded.map((place) => place.name + ' (' + place.id + ')').join(', ') + '.';
   if (ground().hasGround(settlement)) {
     // A town with ground (L-655) is walked from its ways in: its streets,
     // not its links, decide what can be reached.
+    // Its links aren't used (L-665): players walk its streets.
     if (entrances.length) problems.push(...ground().check(world, settlement));
-    const unlinked = strandedBy(linked);
-    if (entrances.length && unlinked.length) {
-      warnings.push(
-        'Until walking in town comes, players move along links: not linked from a way in: ' +
-          list(unlinked)
-      );
-    }
   } else {
-    const stranded = strandedBy(linked);
+    const stranded = strandedBy(reachableFromEntrances(world, places));
     if (entrances.length && stranded.length) {
       problems.push('Not reachable from a way in: ' + list(stranded));
     }

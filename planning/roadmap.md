@@ -32,7 +32,7 @@ Phases are numbered in the order they were planned, not the order they are built
 
 ## Build order (decided 2026-10-10)
 
-1. **Finish Phase 3c:** L-650 Town ground (shipped), L-660 Walking in town (next), L-670 Vision in town.
+1. **Finish Phase 3c:** L-650 Town ground (shipped), L-660 Walking in town (shipped), L-670 Vision in town (next).
 2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria.
 3. **L-700 Image studio** (#523).
 4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views.
@@ -54,8 +54,8 @@ Phases are planned groups. This list, not the phase numbers, says what is built 
 | L-640 Characters on battle maps    | #437 (#460–462)       | ✅ Shipped |
 | L-680 Everyone has a place         | #512 (#513–517, #519) | ✅ Shipped |
 | L-650 Town ground                  | #438 (#463–467)       | ✅ Shipped |
-| L-660 Walking in town              | #439 (#468–472)       | **Next**   |
-| L-670 Vision in town               | #440 (#473–475)       | Planned    |
+| L-660 Walking in town              | #439 (#468–472)       | ✅ Shipped |
+| L-670 Vision in town               | #440 (#473–475)       | **Next**   |
 
 **Order:** L-640 needs sight (L-630). L-680 gives every character a position (§6a of the design doc; decided 2026-10-08) and comes before the town epics. L-650 to L-670 bring the same to towns, in that order. L-650's MCP tools and `view_image` work (L-653, L-654) are the Cartographer's part of this phase.
 

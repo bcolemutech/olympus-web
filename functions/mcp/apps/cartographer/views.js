@@ -464,6 +464,14 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
     size: town.townSize(settlement),
     // Its ground (L-653): buildings, water, walls and crossings, or null.
     ground: groundSummary(world, settlement, { shapes: groundShapes }),
+    // In a town with ground, players walk its streets (L-665).
+    ...(ground.hasGround(settlement)
+      ? {
+          walking:
+            'Players walk this town’s ground to each place’s door (its position); links ' +
+            'between places aren’t used.',
+        }
+      : {}),
     layout: report,
     // Everyone found in this town, and where (L-682).
     people: Object.values(world.characters || {})

@@ -76,7 +76,8 @@ const PLACES = {
     kind: 'gate',
     entrance: { via: ['road', 'trail', 'sea'] },
   }),
-  plc_1_quay: place('plc_1_quay', 'The Quay', pt(500, 820)),
+  // Linked to the gate from before the town had ground (L-665: unused).
+  plc_1_quay: place('plc_1_quay', 'The Quay', pt(500, 820), { connections: ['plc_1_gate'] }),
   plc_1_temple: place('plc_1_temple', 'The Temple', pt(500, 150)),
   plc_1_well: place('plc_1_well', 'The Well', pt(820, 300)),
 };
@@ -235,6 +236,9 @@ describe('walking to the temple: partway, Continue, arrive and go in', () => {
       walks: true,
     });
     expect(map.turn.plan).toMatchObject({ layer: 'town', placeId: 'plc_1_temple' });
+    // Its links aren't drawn or walked (L-665).
+    expect(map.town.links).toEqual([]);
+    expect(map.town.next).toEqual([]);
   });
 
   test('out of movement, Continue says so; after the turn ends it walks on', async () => {
@@ -428,5 +432,40 @@ describe('typed moves follow the streets (L-663)', () => {
     }
     expect(answer.step.left).toBe('loc_631');
     expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
+  });
+});
+
+describe('older saves in a town with ground (L-665)', () => {
+  test('one with no place and no point stands at the way in’s door, and walks from there', async () => {
+    const saveId = await newGame();
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ placeId: null, mapId: null, cell: null, turn: null });
+    const answer = await play(saveId, { verb: 'move', point: pt(400, 900) });
+    // 112 units from the gate's door: 280 m.
+    expect(answer.narration).toBe('You walk 280 m.');
+    expect(answer.step.townPoint).toEqual(pt(400, 900));
+  });
+
+  test('one at a place, off its map, stands at its door', async () => {
+    const saveId = await newGame();
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ placeId: 'plc_1_quay', mapId: null, cell: null });
+    const map = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(map.town).toMatchObject({ here: 'plc_1_quay', at: null, walks: true });
+    const answer = await play(saveId, { verb: 'move', point: pt(500, 900) });
+    // From the quay's door, 80 units: 200 m.
+    expect(answer.narration).toBe('You walk 200 m.');
+  });
+
+  test('a move to a place goes by the streets, not the old link', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    // The gate is linked to the quay only; the temple is walked to anyway.
+    const answer = await play(saveId, { verb: 'move', target: 'plc_1_temple' });
+    expect(answer.step.plan).toMatchObject({ layer: 'town', placeId: 'plc_1_temple' });
   });
 });

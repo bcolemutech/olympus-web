@@ -159,9 +159,13 @@ function townView(canonWorld, save, discovered) {
     return row;
   });
 
+  // A town with ground is walked on its streets (L-665): its links are
+  // neither drawn nor walked.
+  const settled = canonWorld.locations[location];
+  const byGround = ground.hasGround(settled);
   const links = [];
   const seen = new Set();
-  for (const place of inTown) {
+  for (const place of byGround ? [] : inTown) {
     for (const other of place.connections || []) {
       const key = [place.id, other].sort().join('|');
       if (!ids.has(other) || seen.has(key)) continue;
@@ -172,10 +176,12 @@ function townView(canonWorld, save, discovered) {
 
   // Every place the save can walk to in one move (L-600 / #433), nearest
   // first: through places it may enter, to any linked to them.
-  const next = town
-    .reachableFrom(canonWorld, location, here, town.passableFor(canonWorld, save))
-    .map((p) => p.id)
-    .filter((id) => ids.has(id));
+  const next = byGround
+    ? []
+    : town
+        .reachableFrom(canonWorld, location, here, town.passableFor(canonWorld, save))
+        .map((p) => p.id)
+        .filter((id) => ids.has(id));
 
   const settlement = canonWorld.locations[location];
   const entrances = inTown.filter((p) => town.isEntrance(p) && !p.retired);
