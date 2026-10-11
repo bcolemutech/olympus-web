@@ -214,7 +214,11 @@ function reachableFrom(world, locationId, from, canPass) {
  * What is wrong with a settlement's town, for the builders (get_town, and
  * the MCP town tools' warnings): `problems` make the layout invalid (no open
  * entrance, places that can't be reached); `warnings` don't (a world route
- * that no way out serves, so travellers can't leave that way).
+ * that no way out serves, so travellers can't leave that way). In a town with
+ * ground (L-655) the problems are its ground's (ground.js check: doors off
+ * open ground, places that can't be walked to), and places not linked from a
+ * way in are a warning, since play still moves along links until walking in
+ * town (L-660).
  */
 function layoutReport(world, settlement) {
   const places = placesOf(world, settlement.id);
@@ -231,14 +235,26 @@ function layoutReport(world, settlement) {
       'No way in or out is open yet (written up, with a battle map), so nobody can enter.'
     );
   }
-  const seen = reachableFromEntrances(world, places);
-  const stranded = places.filter((place) => !seen.has(place.id));
-  if (entrances.length && stranded.length) {
-    problems.push(
-      'Not reachable from a way in: ' +
-        stranded.map((place) => place.name + ' (' + place.id + ')').join(', ') +
-        '.'
-    );
+  const linked = reachableFromEntrances(world, places);
+  const strandedBy = (seen) => places.filter((place) => !seen.has(place.id));
+  const list = (stranded) =>
+    stranded.map((place) => place.name + ' (' + place.id + ')').join(', ') + '.';
+  if (ground().hasGround(settlement)) {
+    // A town with ground (L-655) is walked from its ways in: its streets,
+    // not its links, decide what can be reached.
+    if (entrances.length) problems.push(...ground().check(world, settlement));
+    const unlinked = strandedBy(linked);
+    if (entrances.length && unlinked.length) {
+      warnings.push(
+        'Until walking in town comes, players move along links: not linked from a way in: ' +
+          list(unlinked)
+      );
+    }
+  } else {
+    const stranded = strandedBy(linked);
+    if (entrances.length && stranded.length) {
+      problems.push('Not reachable from a way in: ' + list(stranded));
+    }
   }
   const links = (settlement.geo && settlement.geo.links) || {};
   for (const id of settlement.connections || []) {
@@ -255,14 +271,21 @@ function layoutReport(world, settlement) {
 
 /**
  * Whether a settlement has a usable town layout: at least one open entrance,
- * and every place reachable from the entrances. This is the town requirement
- * grading applies to every settlement (grading.LAYER_CHECKS.town).
+ * and every place reachable from the entrances: along its links, or, in a
+ * town with ground (L-655), on foot from the ways in's doors (ground.js). This
+ * is the town requirement grading applies to every settlement
+ * (grading.LAYER_CHECKS.town).
  */
 function hasTownLayout(world, settlement) {
   const places = placesOf(world, settlement.id);
   if (!places.filter(isEntrance).some((place) => isPlaceOpen(world, place))) return false;
-  return reachableFromEntrances(world, places).size === places.length;
+  const walkable = ground().walkablePlaces(world, settlement);
+  const reached = walkable || reachableFromEntrances(world, places);
+  return places.every((place) => reached.has(place.id));
 }
+
+// Required lazily: ./ground.js reads this module's helpers.
+const ground = () => require('./ground');
 
 /**
  * A town's size in metres across (L-651): `{ metres, set }`, `set` when Claude

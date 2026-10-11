@@ -449,17 +449,12 @@ function reachableSquares(ground, from) {
 
 const named = (place) => place.name + ' (' + place.id + ')';
 
-/**
- * What's wrong with a settlement's ground and its places on it, as plain
- * sentences: the shapes' own problems; a place with no door (position); a
- * door inside a building, in water or on a wall; and doors that can't be
- * walked to from a way in. Empty for a town without ground, or when all is
- * well. `ground` checks proposed shapes in place of the settlement's own.
- */
-function check(world, settlement, ground = groundOf(settlement)) {
-  if (!ground) return [];
+// Walks a town's ground from its ways in: `{ problems, walkable }`, the
+// problems as `check` reports them and the ids of the places whose doors can
+// be walked to from a way in (the ways in among them).
+function walk(world, settlement, ground) {
   const problems = shapeProblems(ground);
-  if (problems.length) return problems;
+  if (problems.length) return { problems, walkable: new Set() };
   const places = town.placesOf(world, settlement.id);
   const doors = [];
   for (const place of places) {
@@ -487,13 +482,18 @@ function check(world, settlement, ground = groundOf(settlement)) {
     if (places.some(town.isEntrance)) {
       problems.push('No way in or out has a door on open ground, so nobody can walk in.');
     }
-    return problems;
+    return { problems, walkable: new Set() };
   }
   const reached = reachableSquares(
     ground,
     ways.map((door) => door.square)
   );
-  const stranded = doors.filter((door) => !reached[door.square.y * N + door.square.x]);
+  const walkable = new Set();
+  const stranded = [];
+  for (const door of doors) {
+    if (reached[door.square.y * N + door.square.x]) walkable.add(door.place.id);
+    else stranded.push(door);
+  }
   if (stranded.length) {
     problems.push(
       'Can’t be walked to from a way in: ' +
@@ -501,7 +501,29 @@ function check(world, settlement, ground = groundOf(settlement)) {
         '.'
     );
   }
-  return problems;
+  return { problems, walkable };
+}
+
+/**
+ * What's wrong with a settlement's ground and its places on it, as plain
+ * sentences: the shapes' own problems; a place with no door (position); a
+ * door inside a building, in water or on a wall; and doors that can't be
+ * walked to from a way in. Empty for a town without ground, or when all is
+ * well. `ground` checks proposed shapes in place of the settlement's own.
+ */
+function check(world, settlement, ground = groundOf(settlement)) {
+  if (!ground) return [];
+  return walk(world, settlement, ground).problems;
+}
+
+/**
+ * The ids of a town's places whose doors can be walked to from a way in, on
+ * its ground (L-655): the town requirement's reach in a town with ground.
+ * Null for a town without ground, which goes by its links.
+ */
+function walkablePlaces(world, settlement) {
+  if (!hasGround(settlement)) return null;
+  return walk(world, settlement, groundOf(settlement)).walkable;
 }
 
 module.exports = {
@@ -516,4 +538,5 @@ module.exports = {
   squareFor,
   reachableSquares,
   check,
+  walkablePlaces,
 };

@@ -1,6 +1,6 @@
 # The Loom — Movement and Vision — Design Document v0.1
 
-**Status:** In progress (planned 2026-10-02). L-600 to L-640 and L-680 shipped, L-650 next; see the [roadmap](./roadmap.md).
+**Status:** In progress (planned 2026-10-02). L-600 to L-650 and L-680 shipped, L-660 next; see the [roadmap](./roadmap.md).
 **Project:** Olympus (`olympus-dfa00`)
 **Follows:** Loom Phase 3b "Layered Worlds" ([`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md))
 **Related:** [`the-loom-design.md`](./the-loom-design.md)
@@ -147,6 +147,7 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 - **Shapes and checks, done** (L-652 / #464), in `functions/loom-canon/ground.js`: each shape is `{ points, name? }` (a crossing also `kind`: `bridge` or `ford`), a polygon closing back on its own. `shapeProblems` keeps them closed, simple and on the square, crossings over water, and their number within `LIMITS` (400 buildings, 30 waters, 60 walls, 40 crossings, 200 points a shape, 8,000 in all). `check` adds the doors: none inside a building, in water or on a wall, and every door walkable from a way in. Walking is worked out on a grid of 5-unit squares (`compile`): a square is blocked when its centre is in a building or in uncrossed water, or a wall or a water's edge runs through it, so neither is ever slipped through; a diagonal can't cut a blocked corner. A town without ground is unaffected. The tools that set it come with L-653.
 - **MCP, done** (L-653 / #465): `set_town_ground` sets a town's buildings, water, walls and crossings (each list given replaces that list, an empty one clears it, one left out is kept), refused with `check`'s reasons. `get_town` shows `ground`: each kind's count and names, and its problems (`groundShapes: true` adds the shapes). Once a town has ground, `add_place`, `update_place` and `retire_entity` refuse a change that adds a ground problem (a door off open ground, a place nobody can walk to). `list_work` says whether each settlement has ground, and `need: 'ground'` lists those without.
 - **`view_image`, done** (L-654 / #466): a town with ground has it drawn see-through over its art (or the plain square), under the grid and markers: water blue, bridges tan and fords pale blue over it, buildings brown, walls as thick white lines. The legend counts each kind (`ground`).
+- **Grading by paths, done** (L-655 / #467): in a town with ground, the town requirement (`town.hasTownLayout`, `layoutReport`) counts a place as reached when its door can be walked to from a way in (`ground.walkablePlaces`), whatever its links; the report's problems are the ground's. Places not linked from a way in are a warning, since play moves along links until L-660. Towns without ground keep going by their links: Nisia's twelve open towns had none, and stayed open.
 
 ---
 
