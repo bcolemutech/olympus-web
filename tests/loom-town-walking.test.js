@@ -469,3 +469,65 @@ describe('older saves in a town with ground (L-665)', () => {
     expect(answer.step.plan).toMatchObject({ layer: 'town', placeId: 'plc_1_temple' });
   });
 });
+
+describe('what a save has seen of the town (L-671)', () => {
+  const { unpack } = require('../functions/loom-turn/town-seen');
+  const square = (grid, p) => grid[Math.floor(p.y / 5) * 200 + Math.floor(p.x / 5)];
+  const record = async (saveId) =>
+    (
+      await db.collection('loom_saves').doc(saveId).collection('seenTowns').doc('loc_1').get()
+    ).data();
+
+  test('a walk records what it saw along the way; a second walk adds to it, and it keeps', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    // In a 2.5 km city, 100 m of sight is 40 units.
+    await play(saveId, { verb: 'move', point: pt(400, 900) });
+    const first = await record(saveId);
+    expect(first).toMatchObject({ locationId: 'loc_1', side: 200 });
+    const after1 = unpack(first.squares);
+    expect(square(after1, pt(450, 925))).toBe(1); // on the way
+    expect(square(after1, pt(400, 860))).toBe(1); // 40 units from where it stands
+    expect(square(after1, pt(400, 820))).toBe(0); // beyond sight
+    expect(square(after1, pt(500, 150))).toBe(0); // the temple, far off
+
+    await play(saveId, { verb: 'end-turn' });
+    await play(saveId, { verb: 'move', point: pt(300, 850) });
+    const after2 = unpack((await record(saveId)).squares);
+    expect(square(after2, pt(300, 830))).toBe(1); // newly seen
+    for (let i = 0; i < after1.length; i++) if (after1[i]) expect(after2[i]).toBe(1);
+
+    // A fresh read, as on the next session: the same record.
+    const reloaded = await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .collection('seenTowns')
+      .doc('loc_1')
+      .get();
+    expect(reloaded.data().squares).toBe((await record(saveId)).squares);
+  });
+
+  test('standing at a door off its map looks from there; so does stepping out of a place', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId); // at the gate, off its map: looks from its door
+    const atGate = unpack((await record(saveId)).squares);
+    expect(square(atGate, pt(500, 930))).toBe(1);
+    expect(square(atGate, pt(500, 820))).toBe(0); // the quay, 130 units off
+    await play(saveId, { verb: 'move', target: 'plc_1_quay' }); // in, onto its map
+    await db.collection('loom_saves').doc(saveId).collection('seenTowns').doc('loc_1').delete();
+    await stepOffMap(saveId); // out of the quay, onto the street at its door
+    const atQuay = unpack((await record(saveId)).squares);
+    expect(square(atQuay, pt(500, 800))).toBe(1);
+    expect(square(atQuay, pt(500, 950))).toBe(0);
+  });
+
+  test('a typed walk records the way it went', async () => {
+    const saveId = await newGame();
+    await standOnStreet(saveId, pt(500, 150));
+    await typed(saveId, 'go to the well', ['plc_1_well']);
+    const way = unpack((await record(saveId)).squares);
+    expect(square(way, pt(520, 160))).toBe(1); // where it set out
+    const save = await saveOf(saveId);
+    expect(square(way, save.townPoint)).toBe(1); // where it stopped
+  });
+});

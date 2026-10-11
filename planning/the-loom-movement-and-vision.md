@@ -172,6 +172,7 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 - **Sight:** about 100 m along the streets; buildings and walls block.
 - **Places:** a place appears on the map once its door has been in sight, and stays. Ways in and out are known from the start.
 - **What's sent:** only places you've found, and people in sight.
+- **Sight and memory, done** (L-671 / #473): `town-paths.js` `inSight(ground, from, radius)` (shared with the town view) lights the walking grid's squares within about 100 m (`sightRadius`: 100 m across the town's width, so 40 units in a 2.5 km city, 333 in a 300 m village), along straight lines; buildings and walls block, and their front square is seen; water doesn't block. What each save has seen of each town is kept beside it, one document a town (`loom_saves/{id}/seenTowns/{locationId}`: one bit a 5-unit square, 6,668 base64 characters; `functions/loom-turn/town-seen.js`), and only grows: from along every walk on the street (looked at every half radius), and wherever the turn leaves the save standing there (stepping out of a place, a typed walk, the door of a place it's at).
 
 ---
 
