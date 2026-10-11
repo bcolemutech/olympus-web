@@ -531,3 +531,33 @@ describe('what a save has seen of the town (L-671)', () => {
     expect(square(way, save.townPoint)).toBe(1); // where it stopped
   });
 });
+
+describe('the town view’s fog (L-672)', () => {
+  const { unpack } = require('../functions/loom-turn/town-seen');
+  const square = (grid, p) => grid[Math.floor(p.y / 5) * 200 + Math.floor(p.x / 5)];
+  const mapOf = (saveId) => loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+
+  test('on the street: what is in sight now, and what has been seen, which includes it', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    await play(saveId, { verb: 'move', point: pt(400, 900) });
+    const { fog } = (await mapOf(saveId)).town;
+    expect(fog.side).toBe(200);
+    const seen = unpack(fog.seen);
+    const now = unpack(fog.inSight);
+    expect(square(now, pt(400, 880))).toBe(1); // 20 units off: in sight
+    expect(square(now, pt(480, 935))).toBe(0); // by the gate: out of sight now
+    expect(square(seen, pt(480, 935))).toBe(1); // but seen on the way
+    expect(square(seen, pt(500, 150))).toBe(0); // the temple: never seen
+    for (let i = 0; i < now.length; i++) if (now[i]) expect(seen[i]).toBe(1);
+  });
+
+  test('in a place, nothing is in sight in town, and what was seen stays', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    await play(saveId, { verb: 'move', target: 'plc_1_quay' }); // in, onto its map
+    const { fog } = (await mapOf(saveId)).town;
+    expect(unpack(fog.inSight).every((v) => !v)).toBe(true);
+    expect(square(unpack(fog.seen), pt(500, 930))).toBe(1); // from the gate's door
+  });
+});

@@ -16,7 +16,8 @@
   // this turn's part solid and the rest dashed, with how far and how many
   // turns; Walk goes as far as this turn's movement allows, Walk there plays
   // out the turns, Continue walks a kept plan, and the token walks the way.
-  // Without art, the town's shapes are drawn.
+  // Without art, the town's shapes are drawn. Over the town lies its fog
+  // (L-672): dark where never seen, less dark where seen, clear in sight.
   //
   // map.js owns the panel, pan and zoom, and switches between the world map
   // and this view; this module draws the town into the panel's SVG overlay in
@@ -317,6 +318,78 @@
     return pts[pts.length - 1];
   }
 
+  // ── Fog (L-672) ───────────────────────────────────
+
+  var FOG_UNSEEN = 0.72; // never seen: dark, the town still showing through
+  var FOG_SEEN = 0.38; // seen before, out of sight now: less dark
+  var fogCache = { key: null, url: null };
+
+  function bitsOf(packed, size) {
+    var bytes = window.atob(packed || '');
+    var bits = new Uint8Array(size);
+    for (var i = 0; i < size; i++) {
+      if (bytes.charCodeAt(i >> 3) & (1 << (i & 7))) bits[i] = 1;
+    }
+    return bits;
+  }
+
+  // The fog as an image the size of the walking grid (a pixel a square),
+  // stretched over the town: dark where never seen, less dark where seen
+  // before, clear where in sight.
+  function fogImage(fog) {
+    var key = fog.side + '|' + fog.seen + '|' + fog.inSight;
+    if (fogCache.key === key) return fogCache.url;
+    var side = fog.side;
+    var seen = bitsOf(fog.seen, side * side);
+    var now = bitsOf(fog.inSight, side * side);
+    var canvas = document.createElement('canvas');
+    canvas.width = side;
+    canvas.height = side;
+    var context = canvas.getContext('2d');
+    var image = context.createImageData(side, side);
+    for (var i = 0; i < side * side; i++) {
+      var alpha = now[i] ? 0 : seen[i] ? FOG_SEEN : FOG_UNSEEN;
+      image.data[i * 4] = 6;
+      image.data[i * 4 + 1] = 9;
+      image.data[i * 4 + 2] = 18;
+      image.data[i * 4 + 3] = Math.round(alpha * 255);
+    }
+    context.putImageData(image, 0, 0);
+    fogCache = { key: key, url: canvas.toDataURL() };
+    return fogCache.url;
+  }
+
+  function drawFog(overlay, view) {
+    var fog = town.data.fog;
+    if (!fog) return;
+    var corner = M.toScreen(view, PAD, PAD);
+    var far = M.toScreen(view, PAD + SPAN, PAD + SPAN);
+    // Clipped to the town's ground, rounded as it is.
+    var clip = svg('clipPath', { id: 'loom-town-fog-clip' });
+    clip.appendChild(
+      svg('rect', {
+        x: corner.x,
+        y: corner.y,
+        width: far.x - corner.x,
+        height: far.y - corner.y,
+        rx: 18,
+      })
+    );
+    overlay.appendChild(clip);
+    overlay.appendChild(
+      svg('image', {
+        class: 'loom-town-fog',
+        'clip-path': 'url(#loom-town-fog-clip)',
+        href: fogImage(fog),
+        x: corner.x,
+        y: corner.y,
+        width: far.x - corner.x,
+        height: far.y - corner.y,
+        preserveAspectRatio: 'none',
+      })
+    );
+  }
+
   // The town's shapes, for a town without art.
   function drawGround(overlay, view) {
     var g = town.data.ground;
@@ -552,8 +625,9 @@
       );
     }
 
-    // Without art, the town's shapes (L-664).
+    // Without art, the town's shapes (L-664); over them, the fog (L-672).
     if (town.data.ground && !(image && town.art.url)) drawGround(overlay, view);
+    drawFog(overlay, view);
 
     var at = function (id) {
       var p = town.positions[id];
