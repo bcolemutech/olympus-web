@@ -13,6 +13,7 @@ const { arrivalPlace } = require('./loom-canon/town');
 const maps = require('./loom-canon/maps');
 const { mapView } = require('./loom-turn/map-view');
 const { firstLook, seenRef } = require('./loom-turn/seen');
+const { seenTownRef } = require('./loom-turn/town-seen');
 const { makeSave } = require('./loom-models');
 
 initializeApp();
@@ -616,7 +617,14 @@ exports.loomGetMap = onCall(async (request) => {
   if (!canonWorld) throw new HttpsError('not-found', 'Unknown world.');
   // On a battle map, only what the save has seen of it is sent (L-633).
   const record = save.mapId ? await seenRef(snap.ref, save.mapId).get() : null;
-  return mapView(canonWorld, save, record && record.exists ? record.data() : null);
+  // In a town, what the save has seen of it, for its fog (L-672).
+  const townRecord = save.location ? await seenTownRef(snap.ref, save.location).get() : null;
+  return mapView(
+    canonWorld,
+    save,
+    record && record.exists ? record.data() : null,
+    townRecord && townRecord.exists ? townRecord.data() : null
+  );
 });
 
 /**

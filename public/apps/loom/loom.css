@@ -582,6 +582,12 @@
   pointer-events: none;
 }
 
+/* Fog in town (L-672): a pixel a walking square, smoothed as it's stretched over the town. */
+.loom-town-fog {
+  pointer-events: none;
+  image-rendering: auto;
+}
+
 /* Walking in town (L-664): the way, as on the grid (L-615); the spot chosen; you. */
 .loom-town-walk {
   fill: none;

@@ -6,8 +6,10 @@ const maps = require('../loom-canon/maps');
 const { discoveredBy } = require('./discovery');
 const { speedOf, turnStateOf } = require('../loom-models');
 const { planOn, doorStatesOf, doorSides } = require('./steps');
-const { walksTown, townPlanOf } = require('./town-steps');
+const { walksTown, townPlanOf, streetOf } = require('./town-steps');
 const ground = require('../loom-canon/ground');
+const townSeen = require('./town-seen');
+const townPaths = require('../loom-canon/town-paths');
 const layers = require('../loom-canon/layers');
 const seen = require('./seen');
 
@@ -32,7 +34,7 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * else null. `turn` is the save's turn (L-611 / #441): `{ n, movementLeft,
  * speed, actionUsed, plan }`, a fresh one for an older save.
  */
-function mapView(canonWorld, save, record) {
+function mapView(canonWorld, save, record, townRecord) {
   const discovered = new Set(discoveredBy(canonWorld, save));
   if (save.location) discovered.add(save.location);
 
@@ -86,7 +88,7 @@ function mapView(canonWorld, save, record) {
     here: save.location || null,
     places,
     links,
-    town: townView(canonWorld, save, discovered),
+    town: townView(canonWorld, save, discovered, townRecord),
     battleMap: battleView(canonWorld, save, record),
     // The turn (L-611 / #441): which it is, the movement left of the
     // character's speed, whether its action is used, and any plan kept.
@@ -136,7 +138,7 @@ function positionIn(place) {
  * (`exits`, discovered places only).
  * Like the world map: no descriptions, and nothing outside the town.
  */
-function townView(canonWorld, save, discovered) {
+function townView(canonWorld, save, discovered, townRecord) {
   const { location, place: here, point } = town.positionOf(canonWorld, save);
   if (!location) return null;
   const inTown = town.placesOf(canonWorld, location);
@@ -207,11 +209,13 @@ function townView(canonWorld, save, discovered) {
   // width in metres, and whether the save walks its streets now (off any
   // map). The town's paths are found in the page with the server's own rules
   // (town-paths.js).
+  const walks = ground.hasGround(settlement) && walksTown(canonWorld, save);
   const walking = ground.hasGround(settlement)
     ? {
         ground: ground.groundOf(settlement),
         size: town.townSize(settlement).metres,
-        walks: walksTown(canonWorld, save),
+        walks,
+        fog: fogOf(canonWorld, save, settlement, townRecord, walks),
       }
     : {};
   return {
@@ -229,6 +233,24 @@ function townView(canonWorld, save, discovered) {
     image: art ? { path: art.path, width: art.width, height: art.height } : null,
     ...walking,
   };
+}
+
+/**
+ * A town's fog (L-672), for the town view: what the save has seen of it (its
+ * record, ./town-seen.js, with what is in sight now) and what is in sight
+ * now, from where it stands on the street (nothing while it's in a place).
+ * Each is the town's walking grid packed one bit a square, in base64, as the
+ * record keeps it: `{ side, seen, inSight }`.
+ */
+function fogOf(canonWorld, save, settlement, record, walks) {
+  const seen = townSeen.squaresOf(record);
+  let now = new Uint8Array(seen.length);
+  if (walks) {
+    const from = streetOf(canonWorld, save).from;
+    now = townPaths.inSight(ground.groundOf(settlement), from, townSeen.radiusIn(settlement));
+    for (let i = 0; i < now.length; i++) if (now[i]) seen[i] = 1;
+  }
+  return { side: townSeen.SIDE, seen: townSeen.pack(seen), inSight: townSeen.pack(now) };
 }
 
 /**
