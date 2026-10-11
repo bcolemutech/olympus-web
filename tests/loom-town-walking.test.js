@@ -81,16 +81,32 @@ const PLACES = {
   plc_1_well: place('plc_1_well', 'The Well', pt(820, 300)),
 };
 
+// What the interpreter makes of the next typed line (Gemini stubbed).
+let typedTargets = null;
 function narrator() {
   mockCallGemini.mockImplementation(async (options) => {
     if (options.systemInstruction.includes('INTERPRET stage')) {
-      return { verb: 'look', targets: [], params: {} };
+      return typedTargets
+        ? { verb: 'move', targets: typedTargets, params: {} }
+        : { verb: 'look', targets: [], params: {} };
     }
     if (options.systemInstruction.includes('summarizer')) return 'A summary.';
     return { narration: 'You go on.', inventedEntities: [], suggestedActions: [] };
   });
 }
 
+// A typed line the interpreter reads as a move to these targets.
+async function typed(saveId, text, targets) {
+  typedTargets = targets;
+  try {
+    return await loomPlayTurn.run({
+      data: { worldId: WORLD, saveId, actionText: text },
+      auth: PLAYER,
+    });
+  } finally {
+    typedTargets = null;
+  }
+}
 const play = (saveId, action) =>
   loomPlayTurn.run({ data: { worldId: WORLD, saveId, action }, auth: PLAYER });
 const lastResolution = async (saveId) =>
@@ -308,14 +324,101 @@ describe('leaving for the world map', () => {
     expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
   });
 
-  test('from the street, only at a way out’s door', async () => {
+  test('from the street at a way out’s door: you travel', async () => {
     const saveId = await newGame();
-    await standOnStreet(saveId, pt(300, 850));
-    await play(saveId, { verb: 'move', target: 'loc_631' });
-    expect((await lastResolution(saveId)).constraints[0]).toMatch(/go to The South Gate first/);
-    expect(await where(saveId)).toMatchObject({ location: 'loc_1', townPoint: pt(300, 850) });
     await standOnStreet(saveId, pt(500, 950));
     await play(saveId, { verb: 'move', target: 'loc_631' });
+    expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
+  });
+});
+
+describe('typed moves follow the streets (L-663)', () => {
+  test('"go to the temple": the first turn walks 400 m, narrated, the rest kept as the plan', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    await typed(saveId, 'go to the temple', ['plc_1_temple']);
+    const resolution = await lastResolution(saveId);
+    expect(resolution.outcome).toBe('success');
+    expect(resolution.constraints).toEqual([
+      'You head for The Temple.',
+      'You walk 400 m.',
+      OUT_OF_MOVEMENT,
+    ]);
+    const save = await saveOf(saveId);
+    expect(save).toMatchObject({ placeId: null, mapId: null });
+    expect(save.townPoint.y).toBeLessThan(950);
+    expect(save.turn).toMatchObject({
+      movementLeft: 0,
+      plan: { layer: 'town', placeId: 'plc_1_temple', to: pt(500, 150) },
+    });
+    // Continue picks it up, as from a tap.
+    await play(saveId, { verb: 'end-turn' });
+    expect((await play(saveId, { verb: 'continue' })).step.lines[0]).toBe('You walk 400 m.');
+  });
+
+  test('a place within reach: walked to and gone into in one turn, movement spent', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    // The quay is 130 units (325 m) up the street from the gate.
+    await typed(saveId, 'go to the quay', ['plc_1_quay']);
+    expect((await lastResolution(saveId)).constraints).toEqual(['You make your way to The Quay.']);
+    expect(await where(saveId)).toMatchObject({
+      placeId: 'plc_1_quay',
+      mapId: GATEWAY.id,
+      townPoint: null,
+    });
+    expect((await saveOf(saveId)).turn.movementLeft).toBe(20 - 17); // 325 m: 17 points of 20 m
+  });
+
+  test('a place across the river with no way over is refused', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    await worldRef
+      .collection('locations')
+      .doc('loc_1')
+      .update({ 'town.ground': { ...GROUND, crossings: [] } });
+    await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+    try {
+      await typed(saveId, 'go to the temple', ['plc_1_temple']);
+      expect((await lastResolution(saveId)).constraints).toEqual([
+        "There's no way there from here.",
+      ]);
+    } finally {
+      await worldRef.collection('locations').doc('loc_1').update({ 'town.ground': GROUND });
+      await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+    }
+  });
+
+  test('"leave for the market town" from near the gate: walks to it and sets out', async () => {
+    const saveId = await newGame();
+    await standOnStreet(saveId, pt(400, 900));
+    await typed(saveId, 'set out for the market town', ['loc_631']);
+    const resolution = await lastResolution(saveId);
+    expect(resolution.constraints[0]).toBe('You make your way to The South Gate.');
+    expect(resolution.constraints[1]).toMatch(/^You arrive at /);
+    expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
+  });
+
+  test('from across town: walks toward the gate, and Continue sets out on arrival', async () => {
+    const saveId = await newGame();
+    await standOnStreet(saveId, pt(500, 150));
+    await typed(saveId, 'set out for the market town', ['loc_631']);
+    expect((await lastResolution(saveId)).constraints[0]).toMatch(
+      /^You head for The South Gate, on your way to /
+    );
+    expect((await saveOf(saveId)).turn.plan).toMatchObject({
+      layer: 'town',
+      leaveFor: 'loc_631',
+      to: pt(500, 950),
+    });
+    // "Walk there" along the plan: turn by turn to the gate, then out.
+    let answer;
+    for (let i = 0; i < 10; i++) {
+      await play(saveId, { verb: 'end-turn' });
+      answer = await play(saveId, { verb: 'continue' });
+      if (answer.step.left) break;
+    }
+    expect(answer.step.left).toBe('loc_631');
     expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
   });
 });

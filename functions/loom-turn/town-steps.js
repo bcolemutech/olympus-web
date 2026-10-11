@@ -61,7 +61,10 @@ const walkedLine = (metres) => 'You walk ' + Math.round(metres) + ' m.';
  *   { point, turn, lines, enter? }             — it walks, to the point
  *                                                reached; `enter` is the
  *                                                place whose door it reached
- * `target` is { point }, { placeId } or { plan: true } (walk the plan).
+ * `target` is { point }, { placeId } or { plan: true } (walk the plan). A
+ * point may carry `leaveFor`, a world place to set out for from it (a typed
+ * move out of town walks to a way out first; L-663): the plan keeps it, and
+ * arriving says `leave`.
  */
 function planTownStep(canonWorld, save, target) {
   const street = streetOf(canonWorld, save);
@@ -71,12 +74,15 @@ function planTownStep(canonWorld, save, target) {
 
   let placeId = target.placeId || null;
   let to = target.point || null;
+  let leaveFor = target.leaveFor || null;
   if (target.plan) {
     const plan = townPlanOf(save);
     if (!plan) return { refused: 'You have no way planned. Tap where to go.' };
     placeId = plan.placeId || null;
+    leaveFor = plan.leaveFor || null;
     to = plan.to;
   }
+  const leaving = leaveFor ? { leave: leaveFor } : {};
   let place = null;
   if (placeId) {
     place = (canonWorld.places || {})[placeId];
@@ -100,6 +106,8 @@ function planTownStep(canonWorld, save, target) {
     return { refused: "That's outside the town." };
   }
   if (near(from, to)) {
+    if (!place && leaveFor)
+      return { point: { x: to.x, y: to.y }, turn: { ...turn, plan: null }, lines: [], ...leaving };
     if (!place) return { refused: "You're already there." };
     // At its door already: in you go.
     return { point: { x: to.x, y: to.y }, turn: { ...turn, plan: null }, lines: [], enter: place };
@@ -123,6 +131,7 @@ function planTownStep(canonWorld, save, target) {
       turn: { ...turn, movementLeft, plan: null },
       lines,
       ...(place ? { enter: place } : {}),
+      ...leaving,
     };
   }
   return {
@@ -135,6 +144,7 @@ function planTownStep(canonWorld, save, target) {
         locationId: settlement.id,
         to: { x: to.x, y: to.y },
         placeId: place ? place.id : null,
+        ...(leaveFor ? { leaveFor } : {}),
         metres: Math.round(step.rest.metres),
       },
     },
@@ -150,4 +160,37 @@ function atDoorOf(save, place) {
   );
 }
 
-module.exports = { planTownStep, walksTown, streetOf, townPlanOf, atDoorOf, METRES_PER_POINT };
+/**
+ * The way out of town a walk to leave by heads for (L-663): of the open ways
+ * out serving the route, the nearest on foot (then by id). Null when none
+ * can be walked to.
+ */
+function nearestWayOut(canonWorld, save, ways) {
+  const street = streetOf(canonWorld, save);
+  if (!street) return null;
+  const size = town.townSize(street.settlement).metres;
+  let best = null;
+  for (const way of ways) {
+    if (way.retired || !isPlaceOpen(canonWorld, way) || !isPoint(way.position)) continue;
+    const path = townPaths.pathTo(street.ground, street.from, way.position, { size });
+    if (!path) continue;
+    if (
+      !best ||
+      path.units < best.units - 1e-9 ||
+      (Math.abs(path.units - best.units) < 1e-9 && way.id < best.way.id)
+    ) {
+      best = { way, units: path.units };
+    }
+  }
+  return best ? best.way : null;
+}
+
+module.exports = {
+  planTownStep,
+  walksTown,
+  streetOf,
+  townPlanOf,
+  atDoorOf,
+  nearestWayOut,
+  METRES_PER_POINT,
+};
