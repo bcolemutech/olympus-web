@@ -29,16 +29,18 @@
  * (`compile`): a square is blocked when its centre is in a building, or in
  * water outside every crossing, and whenever a wall or a water's edge passes
  * through it, so a wall or a narrow river is never slipped through. Steps go
- * 8 ways, and a diagonal can't cut the corner of a blocked square. Paths in
- * town (§8) build on this.
+ * 8 ways, and a diagonal can't cut the corner of a blocked square. The grid
+ * is the town's paths' own (./town-paths.js, L-661), shared with the town
+ * view, so the checks walk the ground players walk.
  *
  * Pure helpers over plain objects.
  */
 
 const town = require('./town');
+const paths = require('./town-paths');
 
 const SIDE = 1000; // the town square, as town.TOWN_SIDE
-const CELL = 5; // the walking grid's squares, in town units
+const CELL = paths.CELL; // the walking grid's squares, in town units
 const N = SIDE / CELL;
 const LIMITS = Object.freeze({
   buildings: 400,
@@ -55,8 +57,6 @@ const KINDS_OF = { building: 'buildings', water: 'water', wall: 'walls' };
 const CROSSING_KINDS = ['bridge', 'ford'];
 const EPS = 1e-9;
 
-const compiled = new WeakMap();
-
 const isPoint = (p) => Boolean(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
 const at = (p) => '(' + p.x + ', ' + p.y + ')';
 
@@ -72,67 +72,9 @@ function hasGround(settlement) {
   return Boolean(ground) && KINDS.some((kind) => (ground[kind] || []).length > 0);
 }
 
-// ── Geometry ───────────────────────────────────────────────────────────────
+// ── Geometry (shared with the town's paths: ./town-paths.js) ─────────────
 
-function cross(o, a, b) {
-  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-}
-
-function onSegment(p, a, b) {
-  return (
-    Math.abs(cross(a, b, p)) < EPS &&
-    p.x >= Math.min(a.x, b.x) - EPS &&
-    p.x <= Math.max(a.x, b.x) + EPS &&
-    p.y >= Math.min(a.y, b.y) - EPS &&
-    p.y <= Math.max(a.y, b.y) + EPS
-  );
-}
-
-// Whether segments ab and cd touch at all (crossing, touching or overlapping).
-function segmentsMeet(a, b, c, d) {
-  const d1 = cross(c, d, a);
-  const d2 = cross(c, d, b);
-  const d3 = cross(a, b, c);
-  const d4 = cross(a, b, d);
-  if (
-    ((d1 > EPS && d2 < -EPS) || (d1 < -EPS && d2 > EPS)) &&
-    ((d3 > EPS && d4 < -EPS) || (d3 < -EPS && d4 > EPS))
-  ) {
-    return true;
-  }
-  return onSegment(a, c, d) || onSegment(b, c, d) || onSegment(c, a, b) || onSegment(d, a, b);
-}
-
-function distanceToSegment(p, a, b) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const length = dx * dx + dy * dy;
-  const t = length ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length)) : 0;
-  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
-}
-
-// Even-odd point in polygon; a point on the edge counts as outside.
-function inside(points, p) {
-  let result = false;
-  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-    const a = points[i];
-    const b = points[j];
-    if (onSegment(p, a, b)) return false;
-    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
-      result = !result;
-    }
-  }
-  return result;
-}
-
-// A polygon's edges as [a, b] pairs, closing back to the first point; a
-// line's (`closed` false) without the closing edge.
-function edges(points, closed) {
-  const list = [];
-  const count = closed ? points.length : points.length - 1;
-  for (let i = 0; i < count; i++) list.push([points[i], points[(i + 1) % points.length]]);
-  return list;
-}
+const { segmentsMeet, distanceToSegment, inside, edges, closedRing } = paths.geometry;
 
 // Whether a polygon's edges cross themselves (other than neighbours meeting).
 function selfIntersects(points) {
@@ -261,15 +203,6 @@ function shapeProblems(ground) {
   return problems;
 }
 
-// A polygon's points without a repeated closing point.
-function closedRing(points) {
-  const last = points[points.length - 1];
-  if (points.length > 1 && last.x === points[0].x && last.y === points[0].y) {
-    return points.slice(0, -1);
-  }
-  return points;
-}
-
 function hasRepeat(points, closed) {
   return edges(points, closed).some(([a, b]) => a.x === b.x && a.y === b.y);
 }
@@ -302,148 +235,12 @@ function blockedAt(ground, point) {
 }
 
 // ── The walking grid ───────────────────────────────────────────────────────
+//
+// compile, squareFor and reachableSquares are the town's paths' own
+// (./town-paths.js, shared with the town view): the checks walk the grid
+// players walk.
 
-/**
- * The ground as a walking grid: `{ cell, n, blocked }`, `blocked` a
- * Uint8Array of n × n squares (index y * n + x), 1 where blocked. Compiled
- * once per ground object.
- */
-function compile(ground) {
-  if (ground && compiled.has(ground)) return compiled.get(ground);
-  const blocked = new Uint8Array(N * N);
-  const grid = { cell: CELL, n: N, blocked };
-  if (!ground) return grid;
-  const water = new Uint8Array(N * N);
-  const crossing = new Uint8Array(N * N);
-  for (const shape of ground.buildings || []) fill(closedRing(shape.points), blocked);
-  for (const shape of ground.water || []) {
-    const ring = closedRing(shape.points);
-    fill(ring, water);
-    for (const [a, b] of edges(ring, true)) trace(a, b, water);
-  }
-  for (const shape of ground.crossings || []) fill(closedRing(shape.points), crossing);
-  for (let i = 0; i < blocked.length; i++) if (water[i] && !crossing[i]) blocked[i] = 1;
-  for (const shape of ground.walls || []) {
-    for (const [a, b] of edges(shape.points, false)) trace(a, b, blocked);
-  }
-  compiled.set(ground, grid);
-  return grid;
-}
-
-// Marks the squares whose centres are inside a polygon, a row at a time:
-// where the row's centre line crosses the edges, filled between pairs.
-function fill(ring, marks) {
-  const ys = ring.map((p) => p.y);
-  const y0 = Math.max(0, Math.floor(Math.min(...ys) / CELL));
-  const y1 = Math.min(N - 1, Math.floor(Math.max(...ys) / CELL));
-  const sides = edges(ring, true);
-  for (let y = y0; y <= y1; y++) {
-    const cy = (y + 0.5) * CELL;
-    const xs = [];
-    for (const [a, b] of sides) {
-      if (a.y > cy !== b.y > cy) xs.push(a.x + ((cy - a.y) * (b.x - a.x)) / (b.y - a.y));
-    }
-    xs.sort((p, q) => p - q);
-    for (let k = 0; k + 1 < xs.length; k += 2) {
-      // Squares whose centres lie strictly between the two crossings.
-      const from = Math.max(0, Math.floor(xs[k] / CELL - 0.5) + 1);
-      const to = Math.min(N - 1, Math.ceil(xs[k + 1] / CELL - 0.5) - 1);
-      for (let x = from; x <= to; x++) marks[y * N + x] = 1;
-    }
-  }
-}
-
-// Marks every square a segment passes through.
-function trace(a, b, marks) {
-  const steps = Math.max(1, Math.ceil((Math.hypot(b.x - a.x, b.y - a.y) / CELL) * 8));
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const x = Math.min(N - 1, Math.floor((a.x + (b.x - a.x) * t) / CELL));
-    const y = Math.min(N - 1, Math.floor((a.y + (b.y - a.y) * t) / CELL));
-    marks[y * N + x] = 1;
-  }
-}
-
-// The square a point is in.
-function squareAt(point) {
-  return {
-    x: Math.min(N - 1, Math.max(0, Math.floor(point.x / CELL))),
-    y: Math.min(N - 1, Math.max(0, Math.floor(point.y / CELL))),
-  };
-}
-
-/**
- * The open square a point on open ground walks from: its own, or, when its
- * own is blocked (a door on a building's edge, beside a wall), the nearest
- * open one around it that isn't across a wall. Null when there is none.
- */
-function squareFor(ground, point) {
-  const grid = compile(ground);
-  const own = squareAt(point);
-  if (!grid.blocked[own.y * N + own.x]) return own;
-  let best = null;
-  let bestDistance = Infinity;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const x = own.x + dx;
-      const y = own.y + dy;
-      if (x < 0 || y < 0 || x >= N || y >= N || grid.blocked[y * N + x]) continue;
-      const centre = { x: (x + 0.5) * CELL, y: (y + 0.5) * CELL };
-      if (acrossAWall(ground, point, centre)) continue;
-      const distance = Math.hypot(centre.x - point.x, centre.y - point.y);
-      if (distance < bestDistance) {
-        best = { x, y };
-        bestDistance = distance;
-      }
-    }
-  }
-  return best;
-}
-
-function acrossAWall(ground, a, b) {
-  return (ground.walls || []).some((shape) =>
-    edges(shape.points, false).some(([p, q]) => segmentsMeet(a, b, p, q))
-  );
-}
-
-/**
- * The squares reachable on foot from the given squares: a Uint8Array over the
- * grid, 1 where reached. Steps go 8 ways; a diagonal can't cut the corner of
- * a blocked square.
- */
-function reachableSquares(ground, from) {
-  const { blocked } = compile(ground);
-  const seen = new Uint8Array(N * N);
-  const queue = new Int32Array(N * N);
-  let head = 0;
-  let tail = 0;
-  for (const square of from) {
-    const i = square.y * N + square.x;
-    if (!blocked[i] && !seen[i]) {
-      seen[i] = 1;
-      queue[tail++] = i;
-    }
-  }
-  while (head < tail) {
-    const i = queue[head++];
-    const x = i % N;
-    const y = (i - x) / N;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-        const j = ny * N + nx;
-        if (seen[j] || blocked[j]) continue;
-        if (dx && dy && (blocked[y * N + nx] || blocked[ny * N + x])) continue;
-        seen[j] = 1;
-        queue[tail++] = j;
-      }
-    }
-  }
-  return seen;
-}
+const { compile, squareFor, reachableSquares } = paths;
 
 // ── The town's checks ──────────────────────────────────────────────────────
 

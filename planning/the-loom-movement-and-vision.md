@@ -158,6 +158,7 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 - **Typed moves** ("go to the market") follow paths.
 - **The town view:** tap a point to see the path (this turn solid, the rest dashed) and how many turns it takes, then **Walk** or **Walk there**, **End turn** and **Continue**.
 - **Links** are retired in towns with ground: paths replace them, and the tools say so.
+- **Paths, done** (L-661 / #468): `town-paths.js`, shared by the server and the Loom page (`Loom.townPaths`, identical bytes, as `grid-paths.js`). It holds the walking grid (moved from `ground.js`, so the checks and players walk the same ground): 5-unit squares, 8-way steps, a diagonal costing √2 and never cutting a blocked corner. `pathTo(ground, from, to, { size })` searches it (A*, ties broken in a fixed order, so the same path every time), then pulls the path straight: from each corner on along the path while a straight line still reaches, walking the squares it crosses exactly. It gives `{ points, units, metres }`, or null when an end is off open ground or there is no way; a town without ground is a straight line. `walk(path, metres)` goes as far as the budget allows and keeps the rest. A long way round a crowded great city takes about 35 ms in Node.
 
 ---
 
