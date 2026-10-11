@@ -1,6 +1,6 @@
 # The Loom — Movement and Vision — Design Document v0.1
 
-**Status:** In progress (planned 2026-10-02). L-600 to L-660 and L-680 shipped, L-670 next; see the [roadmap](./roadmap.md).
+**Status:** Shipped (planned 2026-10-02): L-600 to L-680; next is L-690 grading; see the [roadmap](./roadmap.md).
 **Project:** Olympus (`olympus-dfa00`)
 **Follows:** Loom Phase 3b "Layered Worlds" ([`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md))
 **Related:** [`the-loom-design.md`](./the-loom-design.md)
@@ -174,6 +174,7 @@ Settled with the user through a gap sheet of 41 questions (the IDs in brackets).
 - **What's sent:** only places you've found, and people in sight.
 - **Sight and memory, done** (L-671 / #473): `town-paths.js` `inSight(ground, from, radius)` (shared with the town view) lights the walking grid's squares within about 100 m (`sightRadius`: 100 m across the town's width, so 40 units in a 2.5 km city, 333 in a 300 m village), along straight lines; buildings and walls block, and their front square is seen; water doesn't block. What each save has seen of each town is kept beside it, one document a town (`loom_saves/{id}/seenTowns/{locationId}`: one bit a 5-unit square, 6,668 base64 characters; `functions/loom-turn/town-seen.js`), and only grows: from along every walk on the street (looked at every half radius), and wherever the turn leaves the save standing there (stepping out of a place, a typed walk, the door of a place it's at).
 - **Fog in the town view, done** (L-672 / #474): `loomGetMap`'s town (with ground) carries `fog: { side, seen, inSight }`, the walking grid packed one bit a square in base64: what the save has seen of the town (with what's in sight now) and what's in sight now from where it stands on the street (nothing while it's in a place). The town view paints them into one 200 × 200 image stretched over the town, clipped to its ground: never seen dark (the map still shows through), seen before less dark, in sight clear; places, the walk and the token are drawn over it. Checked in headless Chrome: brightness in sight > seen before > never seen.
+- **Finding places, done** (L-673 / #475): in a town with ground, a place is found once its door's square is in the save's record of the town (`functions/loom-turn/town-found.js`), and stays found; the ways in and out, and the place it's at, are known from the start. `loomGetMap` sends only found places; INTERPRET and NARRATE are given the world without the others (`knownWorld`); a move to one, tapped or typed, is turned down: "You don't know where that is." Hidden places and places learned of (§11) will join the ways a place is known there.
 
 ---
 

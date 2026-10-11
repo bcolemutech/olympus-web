@@ -17,7 +17,7 @@ This is the one place that says what has shipped, what is in progress, and what 
 | **MCP Initiative 1**          | —            | [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)   | ✅ Shipped (#347–357)                                  | An MCP connector works end to end from Claude on iOS (Scriptorium)                                                                                                                                                               |
 | **3 — Rapid worlds**          | #16          | [`the-cartographer-design.md`](./the-cartographer-design.md)           | ✅ Shipped (L-300 / #314, C-1 to C-7)                  | An uploaded Azgaar map becomes a published, playable world; a later MCP fix reaches games on their next turn                                                                                                                     |
 | **3b — Layered worlds**       | #19          | [`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md)           | ✅ Shipped (L-320 to L-350)                            | Travel to an unbuilt place is turned back, and opens once built; a player walks from the world map into a town and across a battle map                                                                                           |
-| **3c — Movement and vision**  | #20          | [`the-loom-movement-and-vision.md`](./the-loom-movement-and-vision.md) | 🔨 In progress (§2)                                    | Each epic's own exit criterion (§2)                                                                                                                                                                                              |
+| **3c — Movement and vision**  | #20          | [`the-loom-movement-and-vision.md`](./the-loom-movement-and-vision.md) | ✅ Shipped (L-600 to L-680, §2)                        | Each epic's own exit criterion (§2)                                                                                                                                                                                              |
 | **3d — Time**                 | _(proposed)_ | [`the-loom-game-time.md`](./the-loom-game-time.md), #421               | 📋 Next (§3)                                           | Hatham to Daldockley by trail takes about 2½ hours and the play view shows "Day 1, evening"                                                                                                                                      |
 | **6 — Studio and new worlds** | _(proposed)_ | _(to write, one per epic)_                                             | 📋 Planned (§4); L-700 comes after L-690 (Build order) | A world begun from a studio-made map image, its places pinned and its regions painted over MCP, is published and played with no Azgaar in the loop. A cross-country trip is stopped by an event in a painted forest, and goes on |
 | **7 — Map-first Loom**        | _(proposed)_ | _(to write, one per epic)_                                             | 📋 Planned (§4)                                        | A game is played from a full-window map: narration and rolls in a side panel, characters as round portrait tokens, and a click on ground, a place or a person offers what can be done there                                      |
@@ -32,8 +32,8 @@ Phases are numbered in the order they were planned, not the order they are built
 
 ## Build order (decided 2026-10-10)
 
-1. **Finish Phase 3c:** L-650 Town ground (shipped), L-660 Walking in town (shipped), L-670 Vision in town (next).
-2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria.
+1. **Finish Phase 3c:** L-650 Town ground, L-660 Walking in town, L-670 Vision in town (all shipped).
+2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria. **Next.**
 3. **L-700 Image studio** (#523).
 4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views.
 5. **Phase 3d:** L-370 Game time (#421).
@@ -43,7 +43,7 @@ Phases are planned groups. This list, not the phase numbers, says what is built 
 
 ---
 
-## 2. Now: Phase 3c — Movement and vision
+## 2. Shipped: Phase 3c — Movement and vision
 
 | Epic                               | Issues                | State      |
 | ---------------------------------- | --------------------- | ---------- |
@@ -55,7 +55,7 @@ Phases are planned groups. This list, not the phase numbers, says what is built 
 | L-680 Everyone has a place         | #512 (#513–517, #519) | ✅ Shipped |
 | L-650 Town ground                  | #438 (#463–467)       | ✅ Shipped |
 | L-660 Walking in town              | #439 (#468–472)       | ✅ Shipped |
-| L-670 Vision in town               | #440 (#473–475)       | **Next**   |
+| L-670 Vision in town               | #440 (#473–475)       | ✅ Shipped |
 
 **Order:** L-640 needs sight (L-630). L-680 gives every character a position (§6a of the design doc; decided 2026-10-08) and comes before the town epics. L-650 to L-670 bring the same to towns, in that order. L-650's MCP tools and `view_image` work (L-653, L-654) are the Cartographer's part of this phase.
 
