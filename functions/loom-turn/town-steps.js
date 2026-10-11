@@ -58,9 +58,11 @@ const walkedLine = (metres) => 'You walk ' + Math.round(metres) + ' m.';
 /**
  * What a walk in town does, for a save as it stands now:
  *   { refused: line }                          — nothing happens
- *   { point, turn, lines, enter? }             — it walks, to the point
- *                                                reached; `enter` is the
- *                                                place whose door it reached
+ *   { point, turn, lines, walked, enter? }     — it walks, to the point
+ *                                                reached; `walked` is the way
+ *                                                it went (town points);
+ *                                                `enter` is the place whose
+ *                                                door it reached
  * `target` is { point }, { placeId } or { plan: true } (walk the plan). A
  * point may carry `leaveFor`, a world place to set out for from it (a typed
  * move out of town walks to a way out first; L-663): the plan keeps it, and
@@ -107,10 +109,22 @@ function planTownStep(canonWorld, save, target) {
   }
   if (near(from, to)) {
     if (!place && leaveFor)
-      return { point: { x: to.x, y: to.y }, turn: { ...turn, plan: null }, lines: [], ...leaving };
+      return {
+        point: { x: to.x, y: to.y },
+        turn: { ...turn, plan: null },
+        lines: [],
+        walked: [from, to],
+        ...leaving,
+      };
     if (!place) return { refused: "You're already there." };
     // At its door already: in you go.
-    return { point: { x: to.x, y: to.y }, turn: { ...turn, plan: null }, lines: [], enter: place };
+    return {
+      point: { x: to.x, y: to.y },
+      turn: { ...turn, plan: null },
+      lines: [],
+      walked: [from, to],
+      enter: place,
+    };
   }
   if (!place && ground.blockedAt(street.ground, to)) return { refused: "You can't stand there." };
   const path = townPaths.pathTo(street.ground, from, to, {
@@ -130,6 +144,7 @@ function planTownStep(canonWorld, save, target) {
       point: { x: to.x, y: to.y },
       turn: { ...turn, movementLeft, plan: null },
       lines,
+      walked: path.points,
       ...(place ? { enter: place } : {}),
       ...leaving,
     };
@@ -149,6 +164,10 @@ function planTownStep(canonWorld, save, target) {
       },
     },
     lines: lines.concat([OUT_OF_MOVEMENT]),
+    // The way walked, for what is seen on it (L-671).
+    walked: path.points
+      .slice(0, path.points.length - step.rest.points.length + 1)
+      .concat([step.to]),
   };
 }
 

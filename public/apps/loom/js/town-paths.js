@@ -22,7 +22,8 @@
   // each corner it goes as far as a straight line stays on open ground, so a
   // path is a few straight runs between the points it turns at. Its length is
   // in town units and, from the town's size, in metres. walk(path, metres)
-  // goes as far along it as a budget allows, and keeps the rest.
+  // goes as far along it as a budget allows, and keeps the rest. inSight says
+  // what a player can see from a point (L-671): buildings and walls block.
 
   var SIDE = 1000; // the town square, as places' positions use it
   var CELL = 5; // the walking grid's squares, in town units
@@ -543,6 +544,87 @@
     return { to: point(last), walked: path.metres, arrived: true, rest: null };
   }
 
+  // ── Sight (L-671) ────────────────────────────────────────────────────────
+  //
+  // What a player on the street can see (planning/the-loom-movement-and-
+  // vision.md §9): the walking grid's squares within a radius of where they
+  // stand, along straight lines that no building or wall cuts. Water doesn't
+  // block sight. A building's or wall's own square, where a line meets it,
+  // is seen (its front), but nothing behind it.
+
+  var sightCompiled = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+  /** The squares that block sight: buildings and walls (a Uint8Array, 1 where blocked). */
+  function sightGrid(ground) {
+    if (ground && sightCompiled && sightCompiled.has(ground)) return sightCompiled.get(ground);
+    var blocks = new Uint8Array(N * N);
+    if (ground) {
+      (ground.buildings || []).forEach(function (shape) {
+        fill(closedRing(shape.points), blocks);
+      });
+      (ground.walls || []).forEach(function (shape) {
+        edges(shape.points, false).forEach(function (side) {
+          trace(side[0], side[1], blocks);
+        });
+      });
+      if (sightCompiled) sightCompiled.set(ground, blocks);
+    }
+    return blocks;
+  }
+
+  /**
+   * The squares in sight from a town point, out to `radius` town units: a
+   * Uint8Array over the walking grid, 1 where seen. Lines are cast to every
+   * square on the edge of the circle, close enough together that none is
+   * missed, and each stops at the first square that blocks sight.
+   */
+  function inSight(ground, from, radius) {
+    var blocks = sightGrid(ground);
+    var seen = new Uint8Array(N * N);
+    var start = squareAt(from);
+    seen[start.y * N + start.x] = 1;
+    var r = Math.max(0, radius) / CELL; // in squares
+    if (!r) return seen;
+    var rays = Math.max(8, Math.ceil(2 * Math.PI * r * 2));
+    var ox = from.x / CELL;
+    var oy = from.y / CELL;
+    for (var k = 0; k < rays; k++) {
+      var angle = (2 * Math.PI * k) / rays;
+      var dx = Math.cos(angle);
+      var dy = Math.sin(angle);
+      // Walks the squares the line crosses, one edge at a time.
+      var x = start.x;
+      var y = start.y;
+      var stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+      var stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+      var nextX = stepX ? (stepX > 0 ? x + 1 - ox : ox - x) / Math.abs(dx) : Infinity;
+      var nextY = stepY ? (stepY > 0 ? y + 1 - oy : oy - y) / Math.abs(dy) : Infinity;
+      var deltaX = stepX ? 1 / Math.abs(dx) : Infinity;
+      var deltaY = stepY ? 1 / Math.abs(dy) : Infinity;
+      for (;;) {
+        var t = Math.min(nextX, nextY);
+        if (t > r) break;
+        if (nextX < nextY) {
+          x += stepX;
+          nextX += deltaX;
+        } else {
+          y += stepY;
+          nextY += deltaY;
+        }
+        if (!inGrid(x, y)) break;
+        var i = y * N + x;
+        seen[i] = 1;
+        if (blocks[i]) break;
+      }
+    }
+    return seen;
+  }
+
+  /** The radius of sight in a town's units: `metres` (about 100) across a town `size` metres wide. */
+  function sightRadius(size, metres) {
+    return ((metres || 100) * SIDE) / (size || SIDE);
+  }
+
   var api = {
     CELL: CELL,
     SIDE: SIDE,
@@ -561,6 +643,9 @@
     reachableSquares: reachableSquares,
     pathTo: pathTo,
     walk: walk,
+    sightGrid: sightGrid,
+    inSight: inSight,
+    sightRadius: sightRadius,
   };
 
   if (typeof window === 'object' && window) {

@@ -6,6 +6,7 @@ const { quarantineEntities } = require('./soft-canon');
 const { shouldRegenerateSummary, maybeRegenerateSummary } = require('./summary');
 const { doorStatesOf } = require('./steps');
 const { look } = require('./seen');
+const { lookInTown } = require('./town-seen');
 
 /**
  * Stage 5 — COMMIT (design doc §5, §8).
@@ -111,10 +112,21 @@ async function commitTurn(params) {
           )
         : null;
 
+    // What it sees in a town with ground, when the turn leaves it on the
+    // street (L-671): along a typed walk, or from where it now stands.
+    const townMoved = saveMutations.some((m) =>
+      /^(townPoint|placeId|mapId|location)$/.test(m.path)
+    );
+    const townSeen =
+      canonWorld && townMoved
+        ? await lookInTown(transaction, saveRef, canonWorld, save, resolution.walkedTown)
+        : null;
+
     const turnIndex = lastTurnSnap.empty ? 0 : lastTurnSnap.docs[0].data().index + 1;
 
     const recorded = Object.assign({}, resolution);
     delete recorded.walked;
+    delete recorded.walkedTown;
     const turn = makeTurn({
       index: turnIndex,
       actionText,
@@ -140,6 +152,7 @@ async function commitTurn(params) {
     transaction.set(saveRef.collection('loom_turns').doc(), turn);
     transaction.set(saveRef, Object.assign({}, save, { updatedAt: FieldValue.serverTimestamp() }));
     if (seen) transaction.set(seen.ref, seen.value);
+    if (townSeen) transaction.set(townSeen.ref, townSeen.value);
     transaction.set(
       worldStateRef,
       Object.assign({}, worldState, { updatedAt: FieldValue.serverTimestamp() })

@@ -10,6 +10,7 @@ const { newlyDiscovered } = require('./discovery');
 const { planStep, planDoor, doorStatesOf, OUT_OF_MOVEMENT } = require('./steps');
 const { recordOf, knownTo, added } = require('./seen');
 const { planTownStep, walksTown, townPlanOf } = require('./town-steps');
+const { lookInTown } = require('./town-seen');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -291,7 +292,19 @@ async function townStep(params, target) {
   const step = await db.runTransaction(async (transaction) => {
     const fresh = (await transaction.get(saveRef)).data();
     const planned = planTownStep(canonWorld, fresh, target);
+    // What it sees along the way, added to what it has seen of the town
+    // (L-671), read before the transaction's writes.
+    const seen = planned.point
+      ? await lookInTown(
+          transaction,
+          saveRef,
+          canonWorld,
+          { ...fresh, townPoint: planned.point, placeId: null },
+          planned.walked
+        )
+      : null;
     if (planned.point) {
+      if (seen) transaction.set(seen.ref, seen.value);
       transaction.update(saveRef, {
         townPoint: planned.point,
         placeId: null,

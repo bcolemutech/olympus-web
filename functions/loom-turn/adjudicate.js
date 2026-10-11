@@ -152,6 +152,8 @@ function evaluateStreetMove(target, characterState, canonWorld) {
         spend,
       ],
       constraints: ['You head for ' + target.name + '.'].concat(step.lines),
+      // The way walked, for what is seen on it (L-671).
+      walkedTown: step.walked,
     };
   }
   const walkedThere = step.lines.length > 0;
@@ -744,13 +746,15 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
   }
 
   // Resolution is immutable once produced — NARRATE (L-113) can color it, never change it.
-  // A move on a battle map also says which squares it walked through, for
-  // what is seen on the way (COMMIT; L-632), not for the turn record.
+  // A move on a battle map also says which squares it walked through, and a
+  // walk in town the way it went, for what is seen on the way (COMMIT; L-632,
+  // L-671), not for the turn record.
   return Object.freeze({
     outcome: resolution.outcome,
     mutations: Object.freeze(resolution.mutations),
     constraints: Object.freeze(resolution.constraints),
     ...(resolution.walked ? { walked: Object.freeze(resolution.walked) } : {}),
+    ...(resolution.walkedTown ? { walkedTown: Object.freeze(resolution.walkedTown) } : {}),
   });
 }
 
