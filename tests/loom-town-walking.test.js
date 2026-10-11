@@ -224,9 +224,17 @@ describe('walking to the temple: partway, Continue, arrive and go in', () => {
     ).toBe(1);
   });
 
-  test('the town view shows where on the street', async () => {
+  test('the town view shows where on the street, the ground to walk, and the plan', async () => {
     const map = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
-    expect(map.town).toMatchObject({ here: null, at: (await where(saveId)).townPoint });
+    expect(map.town).toMatchObject({
+      here: null,
+      at: (await where(saveId)).townPoint,
+      // For the town view's paths (L-664).
+      ground: GROUND,
+      size: 2500,
+      walks: true,
+    });
+    expect(map.turn.plan).toMatchObject({ layer: 'town', placeId: 'plc_1_temple' });
   });
 
   test('out of movement, Continue says so; after the turn ends it walks on', async () => {

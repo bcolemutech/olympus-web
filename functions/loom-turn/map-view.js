@@ -6,6 +6,8 @@ const maps = require('../loom-canon/maps');
 const { discoveredBy } = require('./discovery');
 const { speedOf, turnStateOf } = require('../loom-models');
 const { planOn, doorStatesOf, doorSides } = require('./steps');
+const { walksTown, townPlanOf } = require('./town-steps');
+const ground = require('../loom-canon/ground');
 const layers = require('../loom-canon/layers');
 const seen = require('./seen');
 
@@ -195,6 +197,17 @@ function townView(canonWorld, save, discovered) {
   }
 
   const art = settlement.town && settlement.town.image;
+  // Its ground (L-664), for walking it in the town view: the shapes, its
+  // width in metres, and whether the save walks its streets now (off any
+  // map). The town's paths are found in the page with the server's own rules
+  // (town-paths.js).
+  const walking = ground.hasGround(settlement)
+    ? {
+        ground: ground.groundOf(settlement),
+        size: town.townSize(settlement).metres,
+        walks: walksTown(canonWorld, save),
+      }
+    : {};
   return {
     locationId: location,
     name: settlement.name,
@@ -208,6 +221,7 @@ function townView(canonWorld, save, discovered) {
     // The town's art (L-347), drawn behind the places, fitted to the town's
     // 0–1000 square: { path (Cloud Storage), width, height }, or null.
     image: art ? { path: art.path, width: art.width, height: art.height } : null,
+    ...walking,
   };
 }
 
@@ -368,10 +382,17 @@ function seenObstacles(map, on) {
   return pieces;
 }
 
-// The plan shows only while it's for the map the save stands on (L-613).
+// The plan shows only while it's for the map the save stands on (L-613), or
+// the town it walks (L-664).
 function turnView(save) {
   const { n, movementLeft, actionUsed } = turnStateOf(save);
-  return { n, movementLeft, speed: speedOf(save), actionUsed, plan: planOn(save) };
+  return {
+    n,
+    movementLeft,
+    speed: speedOf(save),
+    actionUsed,
+    plan: planOn(save) || townPlanOf(save),
+  };
 }
 
 module.exports = { mapView, townView, battleView, turnView };

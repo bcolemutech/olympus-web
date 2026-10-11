@@ -120,7 +120,8 @@
         var data = result.data;
         // A second action turned down (L-614) keeps the suggestions, too.
         var keep = (options.keep || data.refused) && !(data.suggestedActions || []).length;
-        if (data.step) {
+        // A walk that ends by going in or setting out (L-664) is narrated.
+        if (data.step && !data.step.entered && !data.step.left) {
           if (data.step.lines.length) appendNarration(label, data.step.lines.join(' '));
           renderSuggestedActions(kept);
         } else {
@@ -158,6 +159,19 @@
     playTurn({ action: { verb: 'move', cell: { x: cell.x, y: cell.y } } }, label, {
       fromMap: true,
     });
+  }
+
+  /**
+   * Walks in a town with ground (L-664), to `target`: { point: { x, y } } or
+   * { target: <place id> }, as far as this turn's movement goes.
+   */
+  function walkTo(target, label) {
+    playTurn({ action: Object.assign({ verb: 'move' }, target) }, label, { fromMap: true });
+  }
+
+  /** "Walk there" (L-664): walks on, turn after turn, until it arrives. */
+  function walkThere(target, label) {
+    playTurn({ action: Object.assign({ verb: 'walk-there' }, target) }, label, { fromMap: true });
   }
 
   /** Walks the plan kept from an earlier move (L-613 / #443). */
@@ -199,6 +213,8 @@
     travelTo: travelTo,
     moveToCell: moveToCell,
     continuePlan: continuePlan,
+    walkTo: walkTo,
+    walkThere: walkThere,
     doorAction: doorAction,
     endTurn: endTurn,
     showTurn: showTurn,
