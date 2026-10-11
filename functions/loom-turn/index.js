@@ -7,8 +7,9 @@ const { adjudicateAction, ACTED } = require('./adjudicate');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
-const { planStep, planDoor, doorStatesOf } = require('./steps');
+const { planStep, planDoor, doorStatesOf, OUT_OF_MOVEMENT } = require('./steps');
 const { recordOf, knownTo, added } = require('./seen');
+const { planTownStep, walksTown, townPlanOf } = require('./town-steps');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -128,6 +129,18 @@ async function runTurnPipeline(params) {
     });
   }
 
+  // Walking in a town with ground (L-662): to a point on the street, to a
+  // place's door, or on along the plan, by the rules alone; reaching a door
+  // goes in, narrated. "Walk there" plays out turns until it arrives.
+  if (action && !action.enter && walksTown(canonWorld, save)) {
+    const target = townTargetOf(action, canonWorld, save);
+    if (target && action.verb === 'walk-there') return walkThere(params, target);
+    if (target) return townStep(params, target);
+  }
+  if (action && action.verb === 'walk-there') {
+    return refusal(save, 'There are no streets to walk here.');
+  }
+
   if (action && (action.cell || action.verb === 'continue' || action.verb === 'door')) {
     const target = action.cell ? { cell: action.cell } : { plan: true };
     const step = await db.runTransaction(async (transaction) => {
@@ -243,6 +256,105 @@ async function runTurnPipeline(params) {
     suggestedActions,
     discovered: newlyDiscovered(canonWorld, save, resolution),
   });
+}
+
+// What a town move heads for (L-662): a point, a place in this town, or the
+// plan; null when the action isn't a walk in town.
+function townTargetOf(action, canonWorld, save) {
+  if (action.point) return { point: action.point };
+  if (action.verb === 'continue') return townPlanOf(save) ? { plan: true } : null;
+  const place = action.target && (canonWorld.places || {})[action.target];
+  if (place && place.locationId === save.location) return { placeId: place.id };
+  return null;
+}
+
+// A plain answer that changes nothing.
+function refusal(save, line) {
+  return {
+    narration: line,
+    stateSummary: save.recentSummary || '',
+    suggestedActions: [],
+    step: {
+      townPoint: save.townPoint || null,
+      movementLeft: turnStateOf(save).movementLeft,
+      plan: turnStateOf(save).plan,
+      lines: [line],
+    },
+  };
+}
+
+// One walk in town (./town-steps.js), written in a transaction so two moves
+// can't spend the same movement. Reaching a place's door goes in, narrated.
+async function townStep(params, target) {
+  const { db, uid, worldId, saveId } = params;
+  const { saveRef, canonWorld } = await intake({ db, uid, worldId, saveId });
+  const step = await db.runTransaction(async (transaction) => {
+    const fresh = (await transaction.get(saveRef)).data();
+    const planned = planTownStep(canonWorld, fresh, target);
+    if (planned.point) {
+      transaction.update(saveRef, {
+        townPoint: planned.point,
+        placeId: null,
+        turn: planned.turn,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    return { ...planned, before: fresh };
+  });
+  const lines = step.refused ? [step.refused] : step.lines;
+  const answer = {
+    narration: lines.join(' '),
+    stateSummary: step.before.recentSummary || '',
+    suggestedActions: [],
+    step: {
+      townPoint: step.point || step.before.townPoint || null,
+      movementLeft: (step.turn || turnStateOf(step.before)).movementLeft,
+      plan: step.turn ? step.turn.plan : turnStateOf(step.before).plan,
+      lines,
+    },
+    ...(step.refused ? { refused: true } : {}),
+  };
+  if (!step.enter) return answer;
+  // At the door: in you go, onto its battle map if it has one.
+  const entered = await runTurnPipeline({
+    ...params,
+    action: { verb: 'move', target: step.enter.id, enter: true },
+  });
+  return {
+    ...entered,
+    narration: [lines.join(' '), entered.narration].filter(Boolean).join(' '),
+    step: { ...answer.step, townPoint: null, entered: step.enter.id },
+  };
+}
+
+// The most turns "Walk there" plays out in one request: far more than the
+// widest great city needs (2.5 km across is about 7 turns at 400 m).
+const WALK_THERE_TURNS = 20;
+
+/**
+ * "Walk there" (L-662): walks, ends the turn, and walks on, until it
+ * arrives (going in at a door), or something stops it: a refusal, or a
+ * walk that ends with movement left but no arrival.
+ */
+async function walkThere(params, target) {
+  const lines = [];
+  let turns = 0;
+  let answer = null;
+  let next = target;
+  for (; turns < WALK_THERE_TURNS; turns++) {
+    answer = await townStep(params, next);
+    lines.push(...answer.step.lines.filter((line) => line !== OUT_OF_MOVEMENT));
+    const { plan, movementLeft } = answer.step;
+    const walking = plan && plan.layer === 'town';
+    if (answer.refused || answer.step.entered || !walking || movementLeft > 0) break;
+    await runTurnPipeline({ ...params, action: { verb: 'end-turn' } });
+    next = { plan: true };
+  }
+  return {
+    ...answer,
+    narration: answer.step.entered ? answer.narration : lines.join(' ') || answer.narration,
+    step: { ...answer.step, turns: turns + 1 },
+  };
 }
 
 module.exports = { LoomTurnError, intake, runTurnPipeline };

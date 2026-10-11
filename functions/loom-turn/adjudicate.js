@@ -8,6 +8,8 @@ const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
 const { planStep, doorStatesOf, doorSides, hasKey, besideDoor } = require('./steps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
+const ground = require('../loom-canon/ground');
+const townPaths = require('../loom-canon/town-paths');
 
 // A lock's difficulty when its door gives none (L-626).
 const DEFAULT_LOCK_DIFFICULTY = 15;
@@ -100,6 +102,10 @@ function evaluateTownMove(target, characterState, canonWorld) {
   }
   const required = missingAbility(target, characterState);
   if (required) return blocked('You lack what it takes to get in (requires: ' + required + ').');
+  const settlement = canonWorld.locations[target.locationId];
+  if (settlement && ground.hasGround(settlement)) {
+    return evaluateStreetMove(target, characterState, canonWorld, settlement, here);
+  }
   const walk = town.walkTo(canonWorld, here, target, town.passableFor(canonWorld, characterState));
   if (!walk) return blockedOnTheWay(here, target, characterState, canonWorld);
   const passed = walk.slice(0, -1);
@@ -121,6 +127,36 @@ function evaluateTownMove(target, characterState, canonWorld) {
           target.name +
           '.'
         : 'You make your way to ' + target.name + '.',
+    ],
+  };
+}
+
+// A move to a place in a town with ground (L-662): its streets, not its links,
+// are the way. Walked from the street, or from the door of the place you're
+// at; arriving at the door (a walk on the street, ./town-steps.js) or
+// finding a way there takes you in, onto its battle map.
+function evaluateStreetMove(target, characterState, canonWorld, settlement, here) {
+  const point = town.positionOf(canonWorld, characterState).point;
+  const from = point || (here && here.position);
+  if (!from || !target.position) return blocked("You can't find the way to " + target.name + '.');
+  const atDoor = Math.hypot(from.x - target.position.x, from.y - target.position.y) < 0.5;
+  if (!atDoor) {
+    const way = townPaths.pathTo(ground.groundOf(settlement), from, target.position);
+    if (!way) return blocked("There's no way there from here.");
+  }
+  return {
+    outcome: 'success',
+    mutations: [
+      { target: 'save', op: 'set-flag', path: 'placeId', value: target.id },
+      ...(characterState.townPoint
+        ? [{ target: 'save', op: 'set-flag', path: 'townPoint', value: null }]
+        : []),
+      // A place with a battle map (L-351) is entered on it, at its entry.
+      ...maps.arrivalMutations(canonWorld, target, characterState),
+      { op: 'increment', path: 'worldClock', value: 1 },
+    ],
+    constraints: [
+      atDoor ? 'You go into ' + target.name + '.' : 'You make your way to ' + target.name + '.',
     ],
   };
 }
@@ -226,7 +262,7 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
   if (step.refused) return blocked(step.refused);
   const spend = { target: 'save', op: 'set-flag', path: 'turn', value: step.turn };
   if (step.exit) {
-    const left = leaveMapBy(exit, hostName, canonWorld);
+    const left = leaveMapBy(exit, host, hostName, canonWorld);
     return left.outcome === 'success' ? { ...left, mutations: [...left.mutations, spend] } : left;
   }
   const name = exit
@@ -274,7 +310,7 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
   };
 }
 
-function leaveMapBy(exit, hostName, canonWorld) {
+function leaveMapBy(exit, host, hostName, canonWorld) {
   const to = exit.to && typeof exit.to === 'object' ? exit.to : null;
   if (to) {
     const next = (canonWorld.battleMaps || {})[to.map];
@@ -289,11 +325,27 @@ function leaveMapBy(exit, hostName, canonWorld) {
       constraints: ['You go by ' + exit.name + ' to ' + next.name + '.'],
     };
   }
+  // Out of a place in a town with ground (L-662), onto the street at its
+  // door; a way out of town keeps you there, ready to leave, as before.
+  const settlement = host && host.locationId && canonWorld.locations[host.locationId];
+  const street =
+    settlement && ground.hasGround(settlement) && !town.isEntrance(host) && host.position;
   return {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'mapId', value: null },
       { target: 'save', op: 'set-flag', path: 'cell', value: null },
+      ...(street
+        ? [
+            { target: 'save', op: 'set-flag', path: 'placeId', value: null },
+            {
+              target: 'save',
+              op: 'set-flag',
+              path: 'townPoint',
+              value: { x: host.position.x, y: host.position.y },
+            },
+          ]
+        : []),
       { op: 'increment', path: 'worldClock', value: 1 },
     ],
     constraints: ['You leave ' + hostName + ' by ' + exit.name + '.'],
@@ -371,9 +423,16 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
   // Leaving a town (L-342): only from a way out that serves the route — a
   // harbour for the sea, a gate for the roads and trails.
   const via = town.routeBetween(canonWorld, currentId, targetId);
-  const here = town.positionOf(canonWorld, characterState).place;
+  const { place: here, point } = town.positionOf(canonWorld, characterState);
+  const exits = town.entrancesOf(canonWorld, currentId).filter((p) => town.serves(p, via));
   if (here && !(town.isEntrance(here) && town.serves(here, via))) {
-    const exits = town.entrancesOf(canonWorld, currentId).filter((p) => town.serves(p, via));
+    return blocked(leaveHint(targetLocation, exits, via));
+  }
+  // On the street (L-662): only from the door of a way out that serves the
+  // route.
+  const atAWayOut = (p) =>
+    p.position && Math.hypot(point.x - p.position.x, point.y - p.position.y) < 0.5;
+  if (!here && point && !exits.some(atAWayOut)) {
     return blocked(leaveHint(targetLocation, exits, via));
   }
 
@@ -385,6 +444,9 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
   }
   const arrival = wayIn || town.arrivalPlace(canonWorld, targetId, via);
   const mutations = [{ target: 'save', op: 'set-flag', path: 'location', value: targetId }];
+  if (characterState.townPoint) {
+    mutations.push({ target: 'save', op: 'set-flag', path: 'townPoint', value: null });
+  }
   if (arrival || characterState.placeId) {
     mutations.push({
       target: 'save',

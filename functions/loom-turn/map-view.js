@@ -135,7 +135,7 @@ function positionIn(place) {
  * Like the world map: no descriptions, and nothing outside the town.
  */
 function townView(canonWorld, save, discovered) {
-  const { location, place: here } = town.positionOf(canonWorld, save);
+  const { location, place: here, point } = town.positionOf(canonWorld, save);
   if (!location) return null;
   const inTown = town.placesOf(canonWorld, location);
   // A retired place stays in view only while the save stands in it.
@@ -199,6 +199,8 @@ function townView(canonWorld, save, discovered) {
     locationId: location,
     name: settlement.name,
     here: here ? here.id : null,
+    // On the street of a town with ground (L-662): the point it stands at.
+    at: point || null,
     next,
     places,
     links,
