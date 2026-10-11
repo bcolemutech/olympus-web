@@ -81,6 +81,15 @@ function checkPlaceName(world, settlement, wanted, selfId) {
 
 const entranceOf = (via) => ({ via: ROUTES.filter((r) => via.includes(r)) });
 
+// A town with ground is walked on its streets (L-665): links aren't used.
+const WALKED_BY_GROUND = (settlement) =>
+  `${settlement.name} is walked on its ground (set_town_ground): players walk its streets ` +
+  'to each place’s door, and links between places aren’t used. Set place positions (their ' +
+  'doors) instead.';
+function refuseLinksIn(settlement) {
+  if (ground.hasGround(settlement)) throw new ToolError(WALKED_BY_GROUND(settlement));
+}
+
 // A town's ground (L-653; loom-canon/ground.js), as set_town_ground takes it.
 const groundPoint = z.strictObject({
   x: z.number().min(0).max(TOWN_SPAN),
@@ -153,7 +162,8 @@ function townTools({ writer }) {
       description:
         'Add a place inside a settlement’s town: a harbour, gate, market, temple, tavern, ' +
         'district and so on. Give ways in and out entranceFor (the world routes they serve), ' +
-        'and link it to places already there with connectTo (links are two-way). Every place ' +
+        'and link it to places already there with connectTo (links are two-way; a town with ' +
+        'ground is walked on its streets, so give it a position, its door, instead). Every place ' +
         'needs a battle map to be open: give battleMap (its own map, or a generic one from ' +
         'list_battle_maps) here, or later with assign_battle_map. The name must be unique in ' +
         'the town. Returns the new id. ' +
@@ -183,6 +193,7 @@ function townTools({ writer }) {
           const { world } = e;
           const settlement = settlementFor(world, args.locationId);
           checkPlaceName(world, settlement, args.name);
+          if ((args.connectTo || []).length) refuseLinksIn(settlement);
           const links = [...new Set(args.connectTo || [])].map((id) =>
             placeIn(world, settlement, id)
           );
@@ -310,7 +321,8 @@ function townTools({ writer }) {
       title: 'Connect places in town',
       description:
         'Link two places in the same town so a visitor can walk directly between them. Links ' +
-        'are two-way. ' +
+        'are two-way. A town with ground (set_town_ground) is walked on its streets instead, ' +
+        'and refuses links. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -324,6 +336,7 @@ function townTools({ writer }) {
           if (args.fromId === args.toId) throw new ToolError('A place can’t link to itself.');
           const a = live(world, 'place', args.fromId);
           const settlement = world.locations[a.locationId];
+          refuseLinksIn(settlement);
           const b = placeIn(world, settlement, args.toId);
           const linked = (x, y) => (x.connections || []).includes(y.id);
           const set = {};
@@ -368,7 +381,9 @@ function townTools({ writer }) {
             (a.connections || []).includes(b.id) || (b.connections || []).includes(a.id);
           if (!connected && !a.retired && !b.retired) {
             return {
-              note: `${a.name} and ${b.name} are not linked.`,
+              note:
+                `${a.name} and ${b.name} are not linked.` +
+                (ground.hasGround(settlement) ? ' ' + WALKED_BY_GROUND(settlement) : ''),
               layout: town.layoutReport(world, settlement),
             };
           }
@@ -382,6 +397,7 @@ function townTools({ writer }) {
           }
           return {
             disconnected: { from: { id: a.id, name: a.name }, to: { id: b.id, name: b.name } },
+            ...(ground.hasGround(settlement) ? { note: WALKED_BY_GROUND(settlement) } : {}),
             layout: helpers.layoutAfter(world, settlement, { set }),
           };
         }),

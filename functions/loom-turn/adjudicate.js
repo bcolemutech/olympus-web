@@ -103,7 +103,10 @@ function evaluateTownMove(target, characterState, canonWorld) {
   const required = missingAbility(target, characterState);
   if (required) return blocked('You lack what it takes to get in (requires: ' + required + ').');
   const settlement = canonWorld.locations[target.locationId];
-  if (settlement && ground.hasGround(settlement) && walksTown(canonWorld, characterState)) {
+  // A town with ground is walked on its streets (L-662, L-663); its links
+  // aren't used (L-665), so the walk through them (L-600) is for towns
+  // without ground only.
+  if (settlement && ground.hasGround(settlement)) {
     return evaluateStreetMove(target, characterState, canonWorld);
   }
   const walk = town.walkTo(canonWorld, here, target, town.passableFor(canonWorld, characterState));
