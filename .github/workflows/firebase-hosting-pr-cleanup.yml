@@ -1,0 +1,44 @@
+# Deletes a pull request's Firebase Hosting preview channel when the pull
+# request closes, merged or not. Each PR gets its own channel (pr<number>-
+# <branch>, made by firebase-hosting-pull-request.yml) that otherwise lives
+# out its 7 days, and the site's channel quota runs out when many PRs land
+# in a week.
+
+name: Clean up Firebase preview on PR close
+on:
+  pull_request:
+    types: [closed]
+permissions:
+  contents: read
+concurrency:
+  group: preview-cleanup-${{ github.event.pull_request.number }}
+jobs:
+  delete_preview_channel:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.16.0 # as the preview deploy (see its note on v24.17.0)
+      - uses: w9jds/setup-firebase@v1.0.0
+        with:
+          gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+      # The channel id is pr<number>- and the branch name, cut short by the
+      # deploy action, so match on the prefix. No channel (a deploy that never
+      # ran, or one already expired) is fine.
+      - name: Delete the PR's preview channels
+        env:
+          PREFIX: pr${{ github.event.pull_request.number }}-
+        run: |
+          set -euo pipefail
+          channels=$(firebase hosting:channel:list --project olympus-dfa00 --json \
+            | jq -r '.result.channels[]?.name | sub(".*/channels/"; "")' \
+            | grep "^${PREFIX}" || true)
+          if [ -z "$channels" ]; then
+            echo "No preview channel for ${PREFIX%-}."
+            exit 0
+          fi
+          for channel in $channels; do
+            echo "Deleting $channel"
+            firebase hosting:channel:delete "$channel" --project olympus-dfa00 --force
+          done
