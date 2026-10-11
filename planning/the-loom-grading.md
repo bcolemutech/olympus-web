@@ -18,10 +18,10 @@ This rework keeps the gate as it is and replaces Rich with a **score from 0 to 1
 
 ## 2. What there is today
 
-- **`functions/loom-canon/grading.js`** (rubric version 2) is the one definition of "built". The gate (ADJUDICATE, `loomCreateSave`, publish), the MCP tools (`list_work`, the read tools) and the Cartographer page (`cartographerCompletion`) all use it. Grades are computed, never stored.
+- **`functions/loom-canon/grading.js`** (rubric version 3) is the one definition of "built". The gate (ADJUDICATE, `loomCreateSave`, publish), the MCP tools (`list_work`, the read tools) and the Cartographer page (`cartographerCompletion`) all use it. Grades are computed, never stored.
 - **Grades:** Unbuilt (a required layer is missing), Stub (description is still the import text), Playable (players may enter), Rich.
 - **Rich today:**
-  - **Settlements:** residents and lore by size. A village needs 1 resident and 1 lore entry, a town 2 and 1, a city 4 and 2, a great city 6 and 3; a capital counts one size up.
+  - **Settlements:** residents and lore by size. A village needs 1 resident and 1 lore entry, a town 2 and 1, a city 4 and 2, a great city 6 and 3; a capital counts one size up. Their town needs ground too (L-655, rubric version 3; decided 2026-10-11, so L-650 carries its criterion before L-691's registry exists).
   - **Points of interest:** 1 lore entry and their own battle map with walls, doors or obstacles.
   - **Places in town:** someone there or 1 lore entry, plus their own battle map.
   - **Realms and regions:** a description and 1 lore entry. They are never gated.
@@ -110,7 +110,7 @@ Criteria that today's content can meet go in with this epic. The rest are listed
 
 | Kind                         | Now (L-690)                                                                                             | Added later                                                                                                                                             |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Settlement**               | Residents for size 20 · lore for size 15 · town art 10 · description long enough 10 · lore that links 5 | Town ground 10 (L-655) · NPC types spread 10 (L-750) · businesses for size 10 (L-780) · residents' portraits 10 (L-730) · in a painted region 5 (L-710) |
+| **Settlement**               | Residents for size 20 · lore for size 15 · town art 10 · description long enough 10 · lore that links 5 · town ground 10 (a Rich requirement since L-655) | NPC types spread 10 (L-750) · businesses for size 10 (L-780) · residents' portraits 10 (L-730) · in a painted region 5 (L-710) |
 | **Point of interest, place** | Own battle map with walls 20 · map art 15 · someone there 10 · lore 10 · description long enough 10     | Items to find 10 (L-770) · a business where its kind suggests one 10 (L-780)                                                                            |
 | **Character**                | Description long enough 25 · lore about them 15 · a faction 10                                          | Portrait 20 (L-730) · NPC types 15 (L-750) · carries or sells 10 (L-770, L-780) · voice and goals 10 (L-790)                                            |
 | **Battle map**               | Walls or obstacles 30 · art 30 · features 20 · exits placed 20                                          | Items on the map (L-770)                                                                                                                                |
@@ -153,7 +153,7 @@ On Nisia, the Cartographer page shows the world's score and band, and Hatham's s
 
 | ID           | Story                                                                                                                                                                                                | Depends on | Model  |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
-| L-691 (#552) | **The score:** the criteria registry, today's criteria and weights (§4.3), quality checks, rollup, bands, the world's score; `grade` gains `score` and `band`; rubric version 3; calibrated on Nisia | —          | Opus   |
+| L-691 (#552) | **The score:** the criteria registry, today's criteria and weights (§4.3), quality checks, rollup, bands, the world's score; `grade` gains `score` and `band`; rubric version 4; calibrated on Nisia | —          | Opus   |
 | L-692 (#553) | **Reads and the work list:** score, band and weighted checklists in the MCP reads; `list_work` by score gained, grouped, with tools; `find_locations` by band                                        | L-691      | Sonnet |
 | L-693 (#554) | **The Cartographer page:** world score and band, counts by band per kind, biggest gaps                                                                                                               | L-691      | Sonnet |
 | L-694 (#555) | **Players see the rating:** a world's band on the Loom's world list                                                                                                                                  | L-691      | Sonnet |

@@ -25,7 +25,7 @@ const { mapToCanon } = require('../functions/cartographer/map');
 const { importStamp } = require('../functions/cartographer/sources');
 const loomCanon = require('../functions/loom-canon');
 const { COAST } = require('./helpers/coast');
-const { withTowns, GATEWAY } = require('./helpers/towns');
+const { withTowns, gateId, GATEWAY } = require('./helpers/towns');
 
 const WRITTEN = { description: 'mcp' };
 const IMPORTED = { description: 'import' };
@@ -33,7 +33,22 @@ const IMPORTED = { description: 'import' };
 // A small Cartographer world: a written-up port with a resident and lore, a
 // stub town, a written ruin, and a realm and region. Both settlements have a
 // town layout (one gate each), as the town requirement asks, and the ruin its
-// own walled battle map, as the battle-map requirement asks (L-622).
+// own walled battle map, as the battle-map requirement asks (L-622). The
+// port's town has ground (L-655), as Rich asks: one building, its gate's door
+// on the open ground beside it.
+const PORT_GROUND = {
+  buildings: [
+    {
+      name: 'the harbour master’s',
+      points: [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+        { x: 200, y: 200 },
+        { x: 100, y: 200 },
+      ],
+    },
+  ],
+};
 const RUIN_MAP = {
   id: 'bm_ruin',
   name: 'The ruin',
@@ -54,8 +69,10 @@ const RUIN_MAP = {
 };
 function world(overrides = {}) {
   const w = withTowns(world.bare(overrides), 'port', 'town');
+  const gate = w.places[gateId('port')];
   return {
     ...w,
+    places: { ...w.places, [gate.id]: { ...gate, position: { x: 500, y: 900 } } },
     locations: { ...w.locations, ruin: { ...w.locations.ruin, battleMap: { mapId: 'bm_ruin' } } },
     battleMaps: { ...w.battleMaps, bm_ruin: RUIN_MAP },
   };
@@ -73,6 +90,7 @@ world.bare = (overrides = {}) => {
         connections: ['town', 'ruin'],
         npcIds: ['chr_mara'],
         geo: { kind: 'settlement' },
+        town: { ground: PORT_GROUND },
       },
       town: {
         id: 'town',
@@ -129,7 +147,20 @@ describe('places', () => {
       },
       { need: 'residents', for: 'rich', message: 'Nobody lives here yet.' },
       { need: 'lore', for: 'rich', message: 'There is no lore about it.' },
+      { need: 'ground', for: 'rich', message: 'Its town has no ground yet.' },
     ]);
+  });
+
+  test('a settlement with the people and lore for its size, but no town ground, is not Rich (L-655)', () => {
+    const w = world();
+    const bare = { ...w.locations.port, town: {} };
+    expect(gradeLocation(w, bare)).toEqual({
+      grade: 'playable',
+      checklist: [{ need: 'ground', for: 'rich', message: 'Its town has no ground yet.' }],
+    });
+    // Ground with no shapes left is none.
+    const emptied = { ...w.locations.port, town: { ground: { buildings: [] } } };
+    expect(needs(gradeLocation(w, emptied))).toEqual(['rich:ground']);
   });
 
   test('written but bare is Playable; a point of interest needs only lore to be Rich', () => {
@@ -187,6 +218,7 @@ describe('residents in town', () => {
       sources: WRITTEN,
       connections: [],
       entrance: { via: ['sea'] }, // its own way in, so the layout stays valid
+      position: { x: 800, y: 300 }, // its door, on the port's open ground (L-655)
     };
     const unplaced = { ...base, locations: { ...base.locations, port } };
     const placed = {
@@ -316,7 +348,7 @@ describe('whole worlds', () => {
     w.locations.gone = { id: 'gone', name: 'Gone', retired: true, geo: { kind: 'poi' } };
     expect(gradeWorld(w)).toEqual({
       graded: true,
-      rubricVersion: 2,
+      rubricVersion: 3,
       inTown: { total: 2, unbuilt: 0, stub: 0, playable: 2, rich: 0 },
       places: {
         total: 3,
