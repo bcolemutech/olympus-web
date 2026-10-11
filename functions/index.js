@@ -474,6 +474,14 @@ function requireLoomAuth(request) {
  *       kept from an earlier move (L-613 / #443)
  *    or { worldId, saveId, action: { verb: 'door', door, open } } — opens
  *       (open true) or closes a door beside the player (L-625 / #450)
+ *    or { worldId, saveId, action: { verb: 'move', point: { x, y } } } — a walk
+ *       to a point on the street of a town with ground (L-662 / #469); there,
+ *       a move to a place walks to its door and goes in
+ *    or { worldId, saveId, action: { verb: 'walk-there', point | target } } —
+ *       walks, ending each turn, until it arrives (L-662)
+ * A walk in town is worked out without the model too, and returns step:
+ * { townPoint, movementLeft, plan, lines } (plus `entered`, and `turns` for
+ * walk-there).
  * A step on a battle map (a cell, or continue) is worked out without the
  * model and also returns step: { cell, movementLeft, plan, lines }.
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
@@ -498,6 +506,12 @@ exports.loomPlayTurn = onCall(async (request) => {
       typeof cell === 'object' &&
       [cell.x, cell.y].every((n) => Number.isInteger(n) && n >= 0 && n < maps.MAX_SIDE);
     const hasTarget = typeof action.target === 'string';
+    // A point in a town's 0–1000 square (L-662).
+    const isPoint = (point) =>
+      Boolean(point) &&
+      typeof point === 'object' &&
+      [point.x, point.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1000);
+    const hasPoint = action.point !== undefined;
     const bare =
       typeof action === 'object' && (action.verb === 'end-turn' || action.verb === 'continue');
     const door =
@@ -506,16 +520,20 @@ exports.loomPlayTurn = onCall(async (request) => {
       typeof action.door === 'string' &&
       /^[a-z0-9][a-z0-9-]{0,39}$/.test(action.door) &&
       typeof action.open === 'boolean';
-    if (
-      !bare &&
-      !door &&
-      (typeof action !== 'object' ||
-        action.verb !== 'move' ||
-        (hasTarget ? !/^[A-Za-z0-9_-]{1,80}$/.test(action.target) : !isCell(action.cell)))
-    ) {
+    const goodTarget = hasTarget && /^[A-Za-z0-9_-]{1,80}$/.test(action.target);
+    const moving =
+      typeof action === 'object' &&
+      (action.verb === 'move' || action.verb === 'walk-there') &&
+      (hasPoint
+        ? isPoint(action.point)
+        : hasTarget
+          ? goodTarget
+          : action.verb === 'move' && isCell(action.cell));
+    if (!bare && !door && !moving) {
       throw new HttpsError(
         'invalid-argument',
         'action must be { verb: "move", target: <place id> }, { verb: "move", cell: { x, y } }, ' +
+          '{ verb: "move", point: { x, y } }, { verb: "walk-there", point | target }, ' +
           '{ verb: "continue" }, { verb: "door", door: <door id>, open: true | false } or ' +
           '{ verb: "end-turn" }.'
       );
@@ -542,9 +560,11 @@ exports.loomPlayTurn = onCall(async (request) => {
                 ? { verb: 'door', door: action.door, open: action.open }
                 : action.verb === 'end-turn' || action.verb === 'continue'
                   ? { verb: action.verb }
-                  : typeof action.target === 'string'
-                    ? { verb: 'move', target: action.target }
-                    : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
+                  : action.point !== undefined
+                    ? { verb: action.verb, point: { x: action.point.x, y: action.point.y } }
+                    : typeof action.target === 'string'
+                      ? { verb: action.verb, target: action.target }
+                      : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
           }
         : { actionText: actionText.trim() }),
     });

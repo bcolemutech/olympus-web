@@ -92,13 +92,19 @@ function arrivalPlace(world, locationId, via) {
 
 /**
  * Where a save stands: its settlement, and its place in town (or null). A
- * recorded place is kept even if retired, so nobody is stranded.
+ * recorded place is kept even if retired, so nobody is stranded. On the
+ * street of a town with ground (L-662), it is at a point, in no place:
+ * `{ location, place: null, point }`.
  */
 function positionOf(world, save) {
   const location = save.location && world.locations[save.location] ? save.location : null;
   if (!location) return { location: null, place: null };
   const recorded = save.placeId && (world.places || {})[save.placeId];
   if (recorded && recorded.locationId === location) return { location, place: recorded };
+  const point = save.townPoint;
+  if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+    return { location, place: null, point: { x: point.x, y: point.y } };
+  }
   const entrances = entrancesOf(world, location);
   const fallback = entrances.find((place) => isPlaceOpen(world, place)) || entrances[0] || null;
   return { location, place: fallback };

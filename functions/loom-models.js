@@ -257,6 +257,17 @@ function validateSave(data) {
   ) {
     errors.push('cell must be { x, y } (whole numbers, 0 or more) or null');
   }
+  // On the street in a town with ground (L-662).
+  if (
+    data.townPoint !== undefined &&
+    data.townPoint !== null &&
+    !(
+      typeof data.townPoint === 'object' &&
+      [data.townPoint.x, data.townPoint.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1000)
+    )
+  ) {
+    errors.push('townPoint must be { x, y } (0 to 1000 each way) or null');
+  }
   // Places the save has discovered (world map, L-331); older saves have none.
   if (
     data.discovered !== undefined &&
@@ -385,6 +396,9 @@ function makeSave(fields) {
     placeId: fields.placeId || null, // where in town (L-342), or null
     mapId: fields.mapId || null, // the battle map it is on (L-351), or null
     cell: fields.cell || null, // where on that map: { x, y }, or null
+    // On the street in a town with ground (L-662): a point in its 0–1000
+    // square, with no place (placeId null) and no map.
+    ...(fields.townPoint ? { townPoint: fields.townPoint } : {}),
     discovered: fields.discovered || [],
     privateFlags: fields.privateFlags || {},
     relationships: fields.relationships || {},
