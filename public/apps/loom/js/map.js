@@ -238,7 +238,7 @@
         map.data = data;
         map.worldUsable = usable;
         if (usable) loadImage(data);
-        Loom.town.setData(townData);
+        Loom.town.setData(townData, data.turn);
         Loom.battle.setData(battleData, data.turn);
 
         // Entering a battle map or a town shows it; leaving one goes back to
@@ -660,13 +660,14 @@
     showTab('story');
   }
 
-  // Redraws only the grid view's overlay, for the token's walk (L-615): the
-  // card stays as it is.
+  // Redraws only the overlay, for the token's walk on a battle map (L-615)
+  // or in town (L-664): the card stays as it is.
   function redrawOverlay() {
-    if (map.mode !== 'battle' || !map.data || !map.view) return;
+    if ((map.mode !== 'battle' && map.mode !== 'town') || !map.data || !map.view) return;
     var overlayEl = ref('loom-map-overlay');
     overlayEl.innerHTML = '';
-    Loom.battle.draw(overlayEl, map.view);
+    if (map.mode === 'battle') Loom.battle.draw(overlayEl, map.view);
+    else Loom.town.draw(overlayEl, map.view);
   }
 
   Loom.map = {

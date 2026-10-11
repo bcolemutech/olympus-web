@@ -547,6 +547,74 @@
   opacity: 0.9;
 }
 
+/* A town's ground, drawn when it has no art (L-664): water, bridges and fords, buildings, walls. */
+.loom-town-water {
+  fill: rgba(40, 110, 230, 0.45);
+  stroke: rgba(120, 180, 255, 0.8);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.loom-town-crossing {
+  fill: rgba(222, 184, 110, 0.85);
+  stroke: rgba(255, 236, 179, 0.9);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.loom-town-crossing.is-ford {
+  fill: rgba(190, 235, 255, 0.6);
+}
+
+.loom-town-building {
+  fill: rgba(176, 112, 72, 0.7);
+  stroke: rgba(240, 190, 150, 0.85);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.loom-town-wall {
+  fill: none;
+  stroke: #ebebeb;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* Walking in town (L-664): the way, as on the grid (L-615); the spot chosen; you. */
+.loom-town-walk {
+  fill: none;
+  stroke: #ffb74d;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.loom-town-walk.is-later {
+  stroke-dasharray: 2 7;
+  opacity: 0.85;
+}
+
+.loom-town-walk.is-plan {
+  opacity: 0.6;
+}
+
+.loom-town-target {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.loom-town-you {
+  fill: #ffffff;
+  stroke: #0a0e1a;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
 .loom-town-path-casing {
   stroke: rgba(10, 14, 26, 0.6);
   stroke-width: 8;
