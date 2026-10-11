@@ -166,7 +166,7 @@ test('a fresh import: nothing is open, and the start is the only frontier', asyn
     grade: 'unbuilt',
     hops: 0,
     population: 28473,
-    missing: ['town', 'description', 'residents', 'lore'],
+    missing: ['town', 'description', 'residents', 'lore', 'ground'],
     // How far it is toward Rich, so "missing residents" isn't read as "nobody".
     progress: { size: 'great city', residents: '0 of 6', lore: '0 of 3' },
     // Whether its town has ground yet (L-653).
@@ -174,7 +174,7 @@ test('a fresh import: nothing is open, and the start is the only frontier', asyn
   });
   // Then the closed places nearest the start.
   expect(list.items.slice(1).every((i) => i.priority === 'closed' && i.hops === 1)).toBe(true);
-  expect(Object.keys(list.howTo)).toEqual(['town', 'description', 'residents', 'lore']);
+  expect(Object.keys(list.howTo)).toEqual(['town', 'description', 'residents', 'lore', 'ground']);
   expect(list.howTo.town).toMatch(/add_place/);
   expect(list.howTo.description).toMatch(/update_location/);
   expect(list).toMatchObject({ total: 887, offset: 0, count: 5, nextOffset: 5 });
@@ -191,7 +191,7 @@ test('writing up the start and laying out its town opens it, moving the frontier
   expect(written.items[0]).toMatchObject({
     id: 'loc_1',
     grade: 'unbuilt',
-    missing: ['town', 'residents', 'lore'],
+    missing: ['town', 'residents', 'lore', 'ground'],
   });
   expect(written.items[0].progress).toMatchObject({ residents: '0 of 6' });
 
@@ -219,7 +219,11 @@ test('writing up the start and laying out its town opens it, moving the frontier
   const start = await work({ grade: 'playable' });
   expect(start.items).toEqual([
     expect.objectContaining({ priority: 'town', id: 'plc_1_the-harbour' }),
-    expect.objectContaining({ priority: 'enrich', id: 'loc_1', missing: ['residents', 'lore'] }),
+    expect.objectContaining({
+      priority: 'enrich',
+      id: 'loc_1',
+      missing: ['residents', 'lore', 'ground'],
+    }),
   ]);
 });
 
@@ -231,6 +235,8 @@ test('get_location shows the grade, the checklist, and which neighbours are open
     missing: [
       { need: 'residents', for: 'rich', message: 'A great city needs 6 residents (it has 0).' },
       { need: 'lore', for: 'rich', message: 'A great city needs 3 lore entries (it has 0).' },
+      // Its town needs ground to be Rich too (L-655).
+      { need: 'ground', for: 'rich', message: 'Its town has no ground yet.' },
     ],
   });
   expect(place.connections.map((c) => c.grade)).toEqual([
@@ -252,7 +258,7 @@ test('get_location shows the grade, the checklist, and which neighbours are open
   ]);
 });
 
-test('enough residents and lore for its size make it rich, and it leaves the work list', async () => {
+test('enough residents and lore for its size, and town ground, make it rich, and it leaves the work list', async () => {
   const people = ['Mara Quill', 'Tobin Reed', 'Elsa Varne', 'Corin Hale', 'Isa Wren', 'Pell Marr'];
   for (const [i, name] of people.entries()) {
     await ok('add_character', {
@@ -267,7 +273,7 @@ test('enough residents and lore for its size make it rich, and it leaves the wor
       const enrich = await work({ grade: 'playable', kind: 'settlement' });
       expect(enrich.items[0]).toMatchObject({
         id: 'loc_1',
-        missing: ['residents', 'lore'],
+        missing: ['residents', 'lore', 'ground'],
         progress: { residents: '5 of 6', lore: '0 of 3' },
       });
       expect(
@@ -282,6 +288,31 @@ test('enough residents and lore for its size make it rich, and it leaves the wor
   for (const title of ['The Founding', 'The Drowned Bells', 'The Salt Tithe']) {
     await ok('add_lore', { worldId: WORLD, title, text: `${title}, retold.`, about: ['loc_1'] });
   }
+  // People and lore enough, but its town has no ground yet (L-655).
+  expect(await ok('get_location', { worldId: WORLD, locationId: 'loc_1' })).toMatchObject({
+    grade: 'playable',
+    missing: [{ need: 'ground', for: 'rich', message: 'Its town has no ground yet.' }],
+  });
+  await ok('update_place', {
+    worldId: WORLD,
+    placeId: 'plc_1_the-harbour',
+    position: { x: 500, y: 950 },
+  });
+  await ok('set_town_ground', {
+    worldId: WORLD,
+    locationId: 'loc_1',
+    water: [
+      {
+        name: 'the bay',
+        points: [
+          { x: 0, y: 960 },
+          { x: 1000, y: 960 },
+          { x: 1000, y: 1000 },
+          { x: 0, y: 1000 },
+        ],
+      },
+    ],
+  });
   expect((await ok('get_location', { worldId: WORLD, locationId: 'loc_1' })).grade).toBe('rich');
   const list = await work({ limit: 100 });
   expect(list.completion).toMatchObject({ playable: 0, rich: 1 });

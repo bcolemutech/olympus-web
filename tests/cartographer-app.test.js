@@ -42,7 +42,7 @@ const { getFirestore } = require(
 const { getStorage } = require(
   require.resolve('firebase-admin/storage', { paths: [functionsDir] })
 );
-const { layOutTowns } = require('./helpers/towns');
+const { layOutTowns, gateId } = require('./helpers/towns');
 const loomCanon = require('../functions/loom-canon');
 const { planPositionBackfill } = require('../functions/cartographer/placing');
 const { applyBackfill } = require('../functions/cartographer/backfill');
@@ -386,8 +386,9 @@ describe('cartographerCompletion (L-323)', () => {
       worlds: { [worldId]: { total: 719, playable: 1, rich: 0, share: 0.001 } },
     });
 
-    // Enough residents and lore for a great city (a capital of 28,473) make
-    // it rich: still one playable place, now rich too.
+    // Enough residents and lore for a great city (a capital of 28,473), and
+    // its town's ground (L-655), make it rich: still one playable place, now
+    // rich too.
     for (let i = 1; i <= 6; i += 1) {
       await worldRef
         .collection('characters')
@@ -400,6 +401,26 @@ describe('cartographerCompletion (L-323)', () => {
         .doc(`lore_${i}`)
         .set({ id: `lore_${i}`, title: `Tale ${i}`, text: '…', entityRefs: ['loc_1'] });
     }
+    await worldRef
+      .collection('places')
+      .doc(gateId('loc_1'))
+      .update({ position: { x: 500, y: 900 } });
+    await worldRef
+      .collection('locations')
+      .doc('loc_1')
+      .update({
+        'town.ground': {
+          buildings: [
+            {
+              points: [
+                { x: 100, y: 100 },
+                { x: 200, y: 100 },
+                { x: 200, y: 200 },
+              ],
+            },
+          ],
+        },
+      });
     await worldRef.update({ canonVersion: 3 });
     await expect(completionAs(BUILDER, { worldIds: [worldId] })).resolves.toEqual({
       worlds: { [worldId]: { total: 719, playable: 1, rich: 1, share: 0.001 } },

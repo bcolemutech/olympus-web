@@ -36,19 +36,24 @@
  *
  * Places in town (L-342) are graded too: Playable once written up, Rich with
  * someone there or lore about them. A settlement's Rich bar grows with its
- * size (SIZE_TIERS).
+ * size (SIZE_TIERS), and asks for town ground (L-655: LAYER_CHECKS.ground,
+ * ./ground.js).
  *
  * Every world is a Cartographer world, with a draft or published status, and
  * is graded (there are no built-in worlds since L-686 / #519). A world object
  * with no status, which only tests build, is exempt and always playable.
  */
 
-const RUBRIC_VERSION = 2; // 2: the Rich bar scales with a settlement's size
+// 2: the Rich bar scales with a settlement's size; 3: a Rich settlement's town
+// has ground (L-655).
+const RUBRIC_VERSION = 3;
 const GRADES = ['unbuilt', 'stub', 'playable', 'rich'];
 const LAYER_CHECKS = Object.freeze({
   // Required lazily: town.js reads isPlaceOpen from this module.
   town: (world, settlement) => require('./town').hasTownLayout(world, settlement),
   battleMap: (world, entity) => require('./maps').kindOf(world, entity),
+  // Town ground (L-655): a settlement's town needs it to be Rich.
+  ground: (world, settlement) => require('./ground').hasGround(settlement),
 });
 const IMPORT = 'import';
 
@@ -172,6 +177,14 @@ function ownMapItem(layers, world, entity) {
   return null;
 }
 
+// A Rich settlement's town has ground (L-655; decided 2026-10-11): its
+// buildings, water, walls and crossings, so it can be walked.
+function groundItem(layers, world, settlement) {
+  const hasGround = layers.ground;
+  if (!hasGround || hasGround(world, settlement)) return null;
+  return { need: 'ground', for: 'rich', message: 'Its town has no ground yet.' };
+}
+
 /**
  * How far a settlement is toward Rich: its size, and the residents and lore it
  * has against what its size needs (anyone or anything anywhere in its town
@@ -204,6 +217,7 @@ function gradeLocation(world, location, { layers = LAYER_CHECKS } = {}) {
     const { residents, lore } = settlementProgress(world, location);
     checklist.push(richItem('residents', residents.have, residents.want, tier));
     checklist.push(richItem('lore', lore.have, lore.want, tier));
+    checklist.push(groundItem(layers, world, location));
   } else {
     checklist.push(richItem('lore', loreAbout(world, location.id), 1));
     checklist.push(ownMapItem(layers, world, location));
