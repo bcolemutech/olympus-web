@@ -314,6 +314,18 @@ async function townStep(params, target) {
     },
     ...(step.refused ? { refused: true } : {}),
   };
+  if (step.leave) {
+    // At the way out of a walk to leave town (L-663): set out.
+    const left = await runTurnPipeline({
+      ...params,
+      action: { verb: 'move', target: step.leave, enter: true },
+    });
+    return {
+      ...left,
+      narration: [lines.join(' '), left.narration].filter(Boolean).join(' '),
+      step: { ...answer.step, townPoint: null, left: step.leave },
+    };
+  }
   if (!step.enter) return answer;
   // At the door: in you go, onto its battle map if it has one.
   const entered = await runTurnPipeline({
@@ -346,13 +358,18 @@ async function walkThere(params, target) {
     lines.push(...answer.step.lines.filter((line) => line !== OUT_OF_MOVEMENT));
     const { plan, movementLeft } = answer.step;
     const walking = plan && plan.layer === 'town';
-    if (answer.refused || answer.step.entered || !walking || movementLeft > 0) break;
+    if (answer.refused || answer.step.entered || answer.step.left || !walking || movementLeft > 0) {
+      break;
+    }
     await runTurnPipeline({ ...params, action: { verb: 'end-turn' } });
     next = { plan: true };
   }
   return {
     ...answer,
-    narration: answer.step.entered ? answer.narration : lines.join(' ') || answer.narration,
+    narration:
+      answer.step.entered || answer.step.left
+        ? answer.narration
+        : lines.join(' ') || answer.narration,
     step: { ...answer.step, turns: turns + 1 },
   };
 }
