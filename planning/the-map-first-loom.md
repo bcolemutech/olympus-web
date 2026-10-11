@@ -123,7 +123,7 @@ Settled with the user through a questionnaire (2026-10-10), with two follow-ups 
   - **battle:** art, grid, walls, doors, obstacles, features, exits, tokens, reach and paths.
 - **Fog** sits over the town and battle layers.
 - **Moving between levels** (L6) is a zoom that cross-fades into the layer below, and back out.
-- **Clicks:** every thing on the map can be hit-tested. A click opens a small menu (I2) of Move and Look for now. Today's actions (travel, move, open a door, plan a path) become menu entries or stay one-tap where they are one-tap today.
+- **Clicks:** every thing on the map can be hit-tested. A click opens a small menu (I2) of Move and Look for now. Today's actions (travel, move, open a door, plan a path) become menu entries: **every click opens the menu**, with no one-tap shortcuts (decided 2026-10-11 for L-740, C7: the menu will grow, so every action stays explicit).
 - **Art (A1):** the engine loads a screen-sized copy of a layer's art first, and the full image once the camera zooms past it. The studio makes the screen-sized copy when it stores a version (see L-727 below). Markers stay quiet (A2).
 - **Fog (A3):** a render texture, feathered at its edges. Seen, remembered and unseen are kept as today; only how they are drawn changes.
 - **Motion (K3):**
