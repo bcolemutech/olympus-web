@@ -306,7 +306,6 @@ describe('places in a town with ground', () => {
       locationId: 'loc_1',
       kind: 'tavern',
       description: 'Low beams.',
-      connectTo: [ids.market],
     };
     expect(await refused('add_place', { ...base, name: 'The Gull' })).toMatch(
       /The Gull \(plc_[a-z0-9_-]+\) has no door \(position\) in town/
@@ -315,6 +314,36 @@ describe('places in a town with ground', () => {
       await refused('add_place', { ...base, name: 'The Gull', position: pt(650, 620) })
     ).toMatch(/inside the building 1 "the Gull"/);
     await ok('add_place', { ...base, name: 'The Gull', position: pt(650, 650) });
+  });
+
+  test('links are refused: the town is walked on its ground (L-665)', async () => {
+    expect(
+      await refused('connect_places', { worldId: W, fromId: ids.gate, toId: ids.mill })
+    ).toMatch(/is walked on its ground \(set_town_ground\).*links between places aren’t used/);
+    expect(
+      await refused('add_place', {
+        worldId: W,
+        locationId: 'loc_1',
+        name: 'The Ropewalk',
+        kind: 'district',
+        description: 'Long and narrow.',
+        position: pt(700, 750),
+        connectTo: [ids.market],
+      })
+    ).toMatch(/is walked on its ground/);
+    // Old links can still be cleared, with a note.
+    const cleared = await ok('disconnect_places', {
+      worldId: W,
+      fromId: ids.market,
+      toId: ids.mill,
+    });
+    expect(cleared.note).toMatch(/is walked on its ground/);
+  });
+
+  test('get_town says the town is walked, with no warnings about links', async () => {
+    const view = await getTown();
+    expect(view.walking).toMatch(/links between places aren’t used/);
+    expect(view.layout.warnings.filter((w) => /link/i.test(w))).toEqual([]);
   });
 
   test('ground that strands a place is refused after the fact too', async () => {

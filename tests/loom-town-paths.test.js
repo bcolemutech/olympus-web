@@ -107,17 +107,14 @@ describe('a town without ground goes by its links, as before', () => {
 });
 
 describe('a town with ground goes by its streets', () => {
-  test('no links at all, but every door walkable: a working layout', () => {
+  test('no links at all, but every door walkable: a working layout, and no word of links', () => {
     const b = burdendal({ ground: GROUND });
     expect(town.hasTownLayout(b.world, b.settlement)).toBe(true);
     const report = town.layoutReport(b.world, b.settlement);
     expect(report.valid).toBe(true);
     expect(report.problems).toEqual([]);
-    // Play still walks the links until walking in town, so it says so.
-    expect(report.warnings).toEqual([
-      'Until walking in town comes, players move along links: not linked from a way in: ' +
-        'Market Square (plc_market), The Mill (plc_mill).',
-    ]);
+    // Its links aren't used (L-665), so nothing is said of them.
+    expect(report.warnings).toEqual([]);
     expect(needsTown(b)).toBe(false);
   });
 
