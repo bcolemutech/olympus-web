@@ -349,7 +349,7 @@ describe('drawing maps', () => {
       'The grid is smaller now: players standing beyond its edge are moved to its entry.',
       'Players who had explored it start over: what they had seen of it is forgotten.',
       'It has no walls, doors or obstacles: players walk anywhere on it, and a place with it ' +
-        'as its own map falls short of Rich. Add them with set_map_layers.',
+        'as its own map earns only half its score for a map. Add them with set_map_layers.',
     ]);
     expect(await mapDoc(W, 'bm_the-cellar')).toMatchObject({
       image: { path: `worlds/${W}/map-bm_the-cellar.png`, width: 600, height: 600 },
@@ -424,7 +424,7 @@ describe('assigning maps', () => {
       placeId: 'poi_1',
       mapId: 'bm_a-forest-clearing',
     });
-    expect(ruin.note).toMatch(/only its own map can make it Rich/);
+    expect(ruin.note).toMatch(/only its own map adds to its score/);
     expect(
       await refused('assign_battle_map', { worldId: W, placeId: 'loc_1', mapId: 'bm_the-cellar' })
     ).toMatch(/Burdendal is a settlement: it has a town, not a battle map/);
@@ -480,7 +480,13 @@ describe('assigning maps', () => {
     await ok('add_lore', { worldId: W, title: 'The Towers', text: 'Raised by…', about: ['poi_1'] });
     const ruin = await ok('get_location', { worldId: W, locationId: 'poi_1' });
     expect(ruin.grade).toBe('playable');
-    expect(ruin.missing).toEqual([expect.objectContaining({ need: 'battleMap', for: 'rich' })]);
+    expect(ruin.missing).toContainEqual(
+      expect.objectContaining({
+        need: 'battleMap',
+        criterion: 'place.ownMap',
+        message: 'It uses a generic battle map.',
+      })
+    );
     const ordinary = await ok('list_work', { worldId: W, kind: 'poi', limit: 100 });
     expect(ordinary.items.some((i) => i.id === 'poi_1')).toBe(true);
     const work = await ok('list_work', { worldId: W, need: 'battleMap', limit: 100 });

@@ -7,6 +7,7 @@ const {
   gradeWorld,
   settlementProgress,
   rank,
+  bandRank,
 } = require('../../../loom-canon/grading');
 const maps = require('../../../loom-canon/maps');
 const layers = require('../../../loom-canon/layers');
@@ -24,11 +25,12 @@ const { hopsFrom } = require('./views');
 //   town      places inside towns that aren't Rich yet (L-343), nearest
 //             town first: a town you can reach is worth building out
 //   closed    every other closed place
-//   enrich    open places that could be Rich (residents, lore)
+//   enrich    open places that could be Rich (scoring under 40; L-691)
 //   describe  realms and regions to write up (never gated)
 //
-// Settlements also say whether their town has ground (`ground`, L-653), and
-// `need: 'ground'` lists those without; ground is not graded (yet: L-655).
+// Every item has its grade (the gate), its score and band (L-691), and the
+// needs of what it is missing. Settlements also say whether their town has
+// ground (`ground`, L-653), and `need: 'ground'` lists those without.
 //
 //
 // Apart from the tiers, `unplaced` lists the characters without a valid
@@ -57,7 +59,7 @@ const HOW_TO = {
   battleMap:
     'Give it a battle map: draw one with set_battle_map, or pick a generic one from ' +
     'list_battle_maps, then assign_battle_map. A generic map opens a place; only its own ' +
-    'map, with walls, doors or obstacles, can make it Rich.',
+    'map, with walls, doors or obstacles, counts in full toward its score.',
   ground:
     'Give the town its ground: set_town_ground, with its buildings, water, walls and ' +
     'crossings (bridges and fords) in the town’s 0–1000 square, lined up with its art. ' +
@@ -66,6 +68,14 @@ const HOW_TO = {
   layers:
     'Give its battle map walls, doors and obstacles: set_map_layers (or with the grid, ' +
     'set_battle_map). Check them against the art with view_image.',
+  townArt: 'Upload the town’s art on the Cartographer page (its town view).',
+  mapArt:
+    'Upload its battle map’s art on the Cartographer page, then line the grid up with ' +
+    'view_image.',
+  features: 'Name the features on its battle map (the bar, the altar): set_battle_map.',
+  exits: 'Place its battle map’s exits: set_battle_map.',
+  faction: 'Give them a realm: update_character with factionId.',
+  people: 'Add notable people: add_character (with factionId for a realm).',
 };
 
 const UNPLACED_SHOWN = 20;
@@ -139,18 +149,20 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
     mapStatus(entity) === 'own'
       ? { battleMap: 'own', layers: !unlayered(entity) }
       : { battleMap: mapStatus(entity) };
-  // Rich places leave the list, except from `need: 'battleMap'` while they
-  // lack their own map (an own map without layers is never Rich).
-  const skip = (grade, entity) =>
-    grade === 'rich' && !(forMaps && entity && mapStatus(entity) !== 'own');
+  // Places Rich or better leave the list, except from `need: 'battleMap'`
+  // while they lack their own map, or its walls.
+  const skip = (band, entity) =>
+    bandRank(band) >= bandRank('rich') &&
+    !(forMaps && entity && (mapStatus(entity) !== 'own' || unlayered(entity)));
+  const needsOf = (checklist) => [...new Set(checklist.map((item) => item.need))];
 
   const items = [];
   for (const place of places) {
-    const { grade: placeGrade, checklist } = grades.get(place.id);
+    const { grade: placeGrade, band, score, checklist } = grades.get(place.id);
     const settled = geoOf(place).kind === 'settlement';
     const mapped = settled ? null : place;
     const grounded = settled && ground.hasGround(place);
-    if (skip(placeGrade, mapped) && !(forGround && settled && !grounded)) continue;
+    if (skip(band, mapped) && !(forGround && settled && !grounded)) continue;
     let priority = 'enrich';
     if (!isOpen(place.id)) {
       const nextToOpen = (place.connections || []).some(isOpen);
@@ -164,9 +176,11 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       name: place.name,
       kind: geo.kind || 'place',
       grade: placeGrade,
+      band,
+      score,
       hops: hops.has(place.id) ? hops.get(place.id) : null,
       ...(geo.kind === 'settlement' ? { population: Math.round(geo.population || 0) } : {}),
-      missing: checklist.map((item) => item.need),
+      missing: needsOf(checklist),
       // Counts, so "missing residents" reads as "1 of 2", not "nobody".
       ...(geo.kind === 'settlement' ? { progress: progressOf(world, place) } : {}),
       ...(mapped ? mapInfo(place) : {}),
@@ -177,8 +191,8 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
   for (const place of Object.values(world.places || {}).filter((p) => !p.retired)) {
     const settlement = world.locations[place.locationId];
     if (!settlement || settlement.retired) continue;
-    const { grade: placeGrade, checklist } = gradePlace(world, place);
-    if (skip(placeGrade, place)) continue;
+    const { grade: placeGrade, band, score, checklist } = gradePlace(world, place);
+    if (skip(band, place)) continue;
     items.push({
       priority: 'town',
       type: 'place',
@@ -186,9 +200,11 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
       name: place.name,
       kind: 'place',
       grade: placeGrade,
+      band,
+      score,
       hops: hops.has(settlement.id) ? hops.get(settlement.id) : null,
       town: { id: settlement.id, name: settlement.name },
-      missing: checklist.map((item) => item.need),
+      missing: needsOf(checklist),
       ...mapInfo(place),
     });
   }
@@ -197,8 +213,8 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
     ['region', world.regions || {}],
   ]) {
     for (const entity of Object.values(collection).filter((e) => !e.retired)) {
-      const { grade: entityGrade, checklist } = gradeEntity(world, type, entity);
-      if (entityGrade === 'rich') continue;
+      const { grade: entityGrade, band, score, checklist } = gradeEntity(world, type, entity);
+      if (bandRank(band) >= bandRank('rich')) continue;
       items.push({
         priority: 'describe',
         type,
@@ -206,7 +222,9 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
         name: entity.name,
         kind: type,
         grade: entityGrade,
-        missing: checklist.map((item) => item.need),
+        band,
+        score,
+        missing: needsOf(checklist),
       });
     }
   }
@@ -215,7 +233,7 @@ function workList(world, { kind, grade, need, near, limit, offset }) {
     .filter(
       (item) =>
         (!kind || item.kind === kind) &&
-        (!grade || item.grade === grade) &&
+        (!grade || item.band === grade) &&
         (!need ||
           item.missing.includes(need) ||
           (forMaps && item.battleMap && (item.battleMap !== 'own' || item.layers === false)) ||

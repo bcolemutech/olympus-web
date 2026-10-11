@@ -8,7 +8,7 @@ const { worldId, entityId } = require('./schemas');
 const { writeTools } = require('./write-tools');
 const { townTools } = require('./town-tools');
 const { mapTools } = require('./map-tools');
-const { GRADES } = require('../../../loom-canon/grading');
+const { BANDS } = require('../../../loom-canon/grading');
 const { workList } = require('./work');
 const views = require('./views');
 const images = require('./images');
@@ -44,18 +44,31 @@ function peopleAt(world, level, keep) {
 // entities (soft-removed from a published world) still resolve by id and are
 // marked `retired`; find_locations leaves them out unless asked.
 //
-// Places, realms and regions carry their grade (Unbuilt, Stub, Playable,
-// Rich) and what they are missing (planning/the-loom-layered-worlds.md §4),
+// Places, realms and regions carry their grade (Unbuilt, Stub, Playable),
+// their score and band (Playable, Rich, Vivid, Legendary; L-691) and what
+// they are missing (planning/the-loom-layered-worlds.md §4, the-loom-
+// grading.md),
 // and list_work says what to build next (§6; L-323 / #392).
 
 const APP_ID = 'cartographer';
 const MAX_WORLDS = 100;
 const DEFAULT_FIND_LIMIT = 20;
 const MAX_FIND_LIMIT = 100;
-const NEEDS = ['description', 'residents', 'lore', 'town', 'battleMap', 'ground'];
+const NEEDS = [
+  'description',
+  'residents',
+  'lore',
+  'town',
+  'battleMap',
+  'ground',
+  'layers',
+  'townArt',
+  'mapArt',
+];
 const GRADE_HELP =
   'Grades: unbuilt (a layer it needs is missing), stub (import text only), playable ' +
-  '(written up: players may enter), rich (playable, with residents and lore).';
+  '(written up: players may enter). Past the gate, a score from 0 to 100 from weighted ' +
+  'criteria puts it in a band: playable (under 40), rich (40), vivid (70), legendary (90).';
 
 function cartographerApp({ reader, writer, art }) {
   // Loads a world the tools can read, or explains why it can't.
@@ -140,7 +153,10 @@ function cartographerApp({ reader, writer, art }) {
             .enum(['settlement', 'poi'])
             .optional()
             .describe('Only settlements, or only points of interest (poi).'),
-          grade: z.enum(GRADES).optional().describe('Only places with this grade.'),
+          grade: z
+            .enum(BANDS)
+            .optional()
+            .describe('Only places in this band (unbuilt and stub are below the gate).'),
           includeRetired: z
             .boolean()
             .optional()
@@ -198,7 +214,10 @@ function cartographerApp({ reader, writer, art }) {
             .enum(['settlement', 'poi', 'place', 'faction', 'region'])
             .optional()
             .describe('Only this kind of thing (place: a place in town).'),
-          grade: z.enum(GRADES).optional().describe('Only items with this grade.'),
+          grade: z
+            .enum(BANDS)
+            .optional()
+            .describe('Only items in this band (unbuilt and stub are below the gate).'),
           need: z
             .enum(NEEDS)
             .optional()
@@ -343,7 +362,7 @@ function cartographerApp({ reader, writer, art }) {
           'walked on in the Loom. Each with its size, whether it is generic (kind and terrain: ' +
           'reusable, for any number of places) and how many places use it. Filter to generic ' +
           'maps, and by kind or terrain, to find one to assign. A generic map opens a place, but ' +
-          'only its own map can make it Rich. Make maps with set_battle_map; assign them with ' +
+          'only its own map adds to its score. Make maps with set_battle_map; assign them with ' +
           'assign_battle_map.',
         inputSchema: {
           worldId,

@@ -416,6 +416,7 @@ describe('find_locations', () => {
       region: 'Burdendal County',
       realm: 'Kingdom of Pendonia',
       grade: 'unbuilt', // no town yet
+      band: 'unbuilt', // below the gate, its band is its grade (L-691)
     });
 
     // Exact, then prefix, then anywhere in the name — each largest first,
@@ -623,6 +624,7 @@ describe('get_location, get_faction, get_region', () => {
       capital: true,
       port: true,
       grade: 'unbuilt',
+      band: 'unbuilt',
     });
   });
 

@@ -212,10 +212,11 @@ describe('grading: residents are those in town, never the wilderness', () => {
 
   test('a place in town is peopled by whoever keeps to it', () => {
     const graded = { ...WORLD, status: 'published' };
-    const missing = (placeId) =>
-      gradePlace(graded, graded.places[placeId]).checklist.map((item) => item.need);
-    expect(missing('plc_market')).not.toContain('residents');
-    expect(missing('plc_gate')).toContain('residents');
+    // How many people each is found to have (a place wants two; L-691).
+    const people = (placeId) =>
+      gradePlace(graded, graded.places[placeId]).criteria.find((c) => c.id === 'place.someone');
+    expect(people('plc_market')).toMatchObject({ have: 1, want: 2 });
+    expect(people('plc_gate')).toMatchObject({ have: 0, want: 2 });
   });
 
   test('the wanderer counts for no settlement', () => {

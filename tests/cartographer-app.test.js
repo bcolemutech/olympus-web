@@ -386,20 +386,22 @@ describe('cartographerCompletion (L-323)', () => {
       worlds: { [worldId]: { total: 719, playable: 1, rich: 0, share: 0.001 } },
     });
 
-    // Enough residents and lore for a great city (a capital of 28,473), and
-    // its town's ground (L-655), make it rich: still one playable place, now
-    // rich too.
-    for (let i = 1; i <= 6; i += 1) {
+    // A long description, and enough residents and lore for a great city (a
+    // capital of 28,473), with its town's ground (L-655), make it Rich (a
+    // score of 40 or more; L-691): still one playable place, now rich too.
+    const long = Array(60).fill('salt').join(' ');
+    await worldRef.collection('locations').doc('loc_1').update({ description: long });
+    for (let i = 1; i <= 12; i += 1) {
       await worldRef
         .collection('characters')
         .doc(`chr_${i}`)
         .set({ id: `chr_${i}`, name: `Local ${i}`, description: 'A local.', locationId: 'loc_1' });
     }
-    for (let i = 1; i <= 3; i += 1) {
+    for (let i = 1; i <= 8; i += 1) {
       await worldRef
         .collection('lore')
         .doc(`lore_${i}`)
-        .set({ id: `lore_${i}`, title: `Tale ${i}`, text: '…', entityRefs: ['loc_1'] });
+        .set({ id: `lore_${i}`, title: `Tale ${i}`, text: long, entityRefs: ['loc_1', 'chr_1'] });
     }
     await worldRef
       .collection('places')

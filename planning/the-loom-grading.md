@@ -1,6 +1,6 @@
 # The Loom — Grading That Asks for More — Design Document v0.1
 
-**Status:** Decided (2026-10-10). The gap sheet (§3) is answered; sub-issues are ready to file (§6).
+**Status:** In progress. Decided 2026-10-10. L-691, the score, has shipped (rubric version 4, calibrated on Nisia; §4.3). L-692 to L-694 are next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-690 (#551)
 **Runs:** right after Phase 3c, before L-700 and L-720, so every new content feature adds to it from the start (Build order in [`roadmap.md`](./roadmap.md))
@@ -110,8 +110,8 @@ Criteria that today's content can meet go in with this epic. The rest are listed
 
 | Kind                         | Now (L-690)                                                                                                                                               | Added later                                                                                                                                                                                                         |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Settlement**               | Residents for size 20 · lore for size 15 · town art 10 · description long enough 10 · lore that links 5 · town ground 10 (a Rich requirement since L-655) | NPC types spread 10 (L-750) · businesses for size 10 (L-780) · residents' portraits 10 (L-730) · in a painted region 5 (L-710)                                                                                      |
-| **Point of interest, place** | Own battle map with walls 20 · map art 15 · someone there 10 · lore 10 · description long enough 10                                                       | Items to find 10 (L-770) · a business where its kind suggests one 10 (L-780) · Something to do there (a custom action) 5 (L-740)                                                                                    |
+| **Settlement**               | Residents for size 15 · lore for size 10 · town art 15 · description long enough 20 · lore that links 5 · town ground 10 | NPC types spread 10 (L-750) · businesses for size 10 (L-780) · residents' portraits 10 (L-730) · in a painted region 5 (L-710)                                                                                      |
+| **Point of interest, place** | Own battle map with walls 15 (half without walls) · map art 10 · people there 15 (2 wanted) · lore 30 (2 entries wanted) · description long enough 10      | Items to find 10 (L-770) · a business where its kind suggests one 10 (L-780) · Something to do there (a custom action) 5 (L-740)                                                                                    |
 | **Character**                | Description long enough 25 · lore about them 15 · a faction 10                                                                                            | Portrait 20 (L-730) · NPC types 15 (L-750) · carries or sells 10 (L-770, L-780) · voice 5, goals 5, a behaviour 5 (L-790)                                                                                           |
 | **Battle map**               | Walls or obstacles 30 · art 30 · features 20 · exits placed 20                                                                                            | Items on the map (L-770) · Features with actions 10 (L-740)                                                                                                                                                         |
 | **Realm, region**            | Description long enough 30 · lore for its size 30 · notable people 20                                                                                     | Painted shape 20 (L-710) · A danger level, regions only 5 (L-360)                                                                                                                                                   |
@@ -123,7 +123,12 @@ Criteria that today's content can meet go in with this epic. The rest are listed
   - **Lengths:** at least 60 words for a place's description, 40 for a character's, 80 for a realm's or region's, and 60 for a lore entry to count anywhere.
   - **Variety:** a settlement's lore counts fully only if it touches more than one of its places or people. Once L-750 ships, its residents must span types.
   - **Links:** "lore that links" means an entry naming two or more entities.
-- **Calibration:** the weights are tuned on Nisia's real content in L-691, so that a place that met rubric 2's Rich bar lands at about 40, which is Rich. Its checklist then shows what Vivid needs. The tuned weights replace the ones above in this doc.
+- **Counts** (L-691): a realm or region wants 1 lore entry and 1 notable person, plus 1 of each per 25 settlements, up to 4. A battle map wants 2 named features. The world wants 3 lore entries about its realms and regions.
+- **Calibration** (L-691, 2026-10-11): the weights were tuned on a copy of Nisia's built content (`tests/fixtures/nisia-built.json`: its 12 written-up towns, 83 places, 44 people and 19 lore entries, read over MCP), so that a place that met rubric 2's Rich bar lands at Rich. The table above shows the tuned weights.
+  - **Settlements:** all 12 met rubric 2's bar, and they score 40 to 68. Hatham is highest because it has ground. Every one lacks town art.
+  - **Places in town:** the 18 that met the bar score 54 to 67. Each has its own map with art, someone there and a written description. Under the first weights they reached Vivid (74 to 89): today's criteria ask for little that a well-built place lacks.
+  - **What changed in tuning:** places now want 2 people and 2 lore entries, and lore weighs most. No Nisia place has lore of its own yet, so lore is what each place's checklist shows first on the way to Vivid.
+  - **Places that didn't meet the bar** (generic maps, nobody there) score 0 to 61, averaging 15.
 
 ### 4.4 The world's score
 

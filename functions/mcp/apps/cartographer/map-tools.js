@@ -134,7 +134,7 @@ function layerWarnings(map) {
   if (!layers.hasLayers(map)) {
     return [
       'It has no walls, doors or obstacles: players walk anywhere on it, and a place with it ' +
-        'as its own map falls short of Rich. Add them with set_map_layers.',
+        'as its own map earns only half its score for a map. Add them with set_map_layers.',
     ];
   }
   const reached = layers.reachable(map, map.entries || []);
@@ -320,7 +320,7 @@ function mapTools({ writer }) {
         'they had seen of it). `generic` makes it ' +
         'reusable for any ' +
         'number of places (a tavern, a forest clearing): it opens a place, but only a place’s ' +
-        'own map can make it Rich. Assign maps with assign_battle_map. Images are uploaded on ' +
+        'own map adds to its score. Assign maps with assign_battle_map. Images are uploaded on ' +
         'the Cartographer page. ' +
         editNote,
       inputSchema: {
@@ -407,8 +407,8 @@ function mapTools({ writer }) {
         '(costs 2 movement a square: rubble). A feature can sit on an obstacle (the bar on the ' +
         'bar); players stand beside it. Nothing that blocks may cover an entry or exit, and every ' +
         'entry must reach an exit without a locked door. Each list given replaces that list; an ' +
-        'empty list clears it; one left out is kept. A place with its own map needs these to be ' +
-        'Rich. Check them against the art with view_image. ' +
+        'empty list clears it; one left out is kept. A place’s own map needs these to count in ' +
+        'full toward its score. Check them against the art with view_image. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -481,7 +481,7 @@ function mapTools({ writer }) {
             ...(map && map.generic
               ? {
                   note:
-                    'A generic map opens the place, but only its own map can make it Rich ' +
+                    'A generic map opens the place, but only its own map adds to its score ' +
                     '(set_battle_map, then assign it).',
                 }
               : {}),

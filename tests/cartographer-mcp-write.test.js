@@ -771,7 +771,7 @@ describe('lore', () => {
       entityRefs: ['loc_631'],
     });
     expect(await refused('add_lore', { worldId, title: 'x', text: 'y', about: ['loc_0'] })).toMatch(
-      /No place, realm, region or character "loc_0"/
+      /No place, place in town, realm, region or character "loc_0"/
     );
     await refused('add_lore', { worldId, title: 'x', text: 'y', about: [] });
   });

@@ -112,9 +112,10 @@ function live(world, kind, id) {
   return entity;
 }
 
-// The kind of an entity id that lore can be about, or null.
+// The kind of an entity id that lore can be about, or null: places in town
+// too (L-691), whose score asks for lore about them.
 function subjectKind(world, id) {
-  return ['location', 'faction', 'region', 'character'].find((kind) =>
+  return ['location', 'place', 'faction', 'region', 'character'].find((kind) =>
     Boolean((world[COLLECTION[kind]] || {})[id])
   );
 }
@@ -122,7 +123,11 @@ function subjectKind(world, id) {
 function liveSubjects(world, ids) {
   return [...new Set(ids)].map((id) => {
     const kind = subjectKind(world, id);
-    if (!kind) throw new ToolError(`No place, realm, region or character "${id}" in this world.`);
+    if (!kind) {
+      throw new ToolError(
+        `No place, place in town, realm, region or character "${id}" in this world.`
+      );
+    }
     const entity = live(world, kind, id);
     return { id, type: kind, name: entity.name };
   });
@@ -1116,7 +1121,7 @@ function writeTools({ writer }) {
       title: 'Add lore',
       description:
         'Add a piece of lore — history, legend, custom, rumour — about one or more places, ' +
-        'realms, regions or characters. The Loom’s narrator draws on it whenever those come ' +
+        'places in town, realms, regions or characters. The Loom’s narrator draws on it whenever those come ' +
         'up in play. Returns the new id. ' +
         editNote,
       inputSchema: {
@@ -1127,7 +1132,9 @@ function writeTools({ writer }) {
           .array(entityId('entity', 'find_locations or get_world'))
           .min(1)
           .max(MAX_REFS)
-          .describe('Ids of the places, realms, regions or characters it is about.'),
+          .describe(
+            'Ids of the places, places in town, realms, regions or characters it is about.'
+          ),
       },
       annotations: additive,
       handler: (ctx, args) =>

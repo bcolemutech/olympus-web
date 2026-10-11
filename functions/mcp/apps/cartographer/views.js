@@ -107,8 +107,9 @@ function charactersAt(world, location) {
 const byPopulationThenName = (a, b) =>
   populationOf(b) - populationOf(a) || a.name.localeCompare(b.name);
 
-// A grade and what it is missing (functions/loom-canon/grading.js).
-const graded = ({ grade, checklist }) => ({ grade, missing: checklist });
+// A grade, its score and band, and what it is missing
+// (functions/loom-canon/grading.js; the score: L-691).
+const graded = ({ grade, band, score, checklist }) => ({ grade, band, score, missing: checklist });
 
 // ── Rows ───────────────────────────────────────────────────────────────
 
@@ -124,7 +125,9 @@ function locationRow(world, location, within = {}) {
   if (region && !within.region) row.region = region.name;
   const faction = world.factions[(location.factionIds || [])[0]];
   if (faction && !within.realm) row.realm = faction.name;
-  row.grade = gradeLocation(world, location).grade;
+  const { grade, band } = gradeLocation(world, location);
+  row.grade = grade;
+  row.band = band;
   if (location.retired) row.retired = true;
   return row;
 }
@@ -261,7 +264,7 @@ function findLocations(world, query) {
       (!regionId || geoOf(location).regionId === regionId) &&
       (!factionId || (location.factionIds || []).includes(factionId)) &&
       (!needle || fold(location.name).includes(needle)) &&
-      (!grade || gradeLocation(world, location).grade === grade)
+      (!grade || gradeLocation(world, location).band === grade)
   );
 
   // Exact name matches first, then prefixes; then nearest (with `near`) or
@@ -451,7 +454,7 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
   return {
     id: settlement.id,
     name: settlement.name,
-    grade: gradeLocation(world, settlement).grade,
+    ...(({ grade, band, score }) => ({ grade, band, score }))(gradeLocation(world, settlement)),
     ...(settlement.geo && settlement.geo.seeds ? { seeds: settlement.geo.seeds } : {}),
     // Its art (L-347), uploaded on the Cartographer page: the image's size,
     // drawn fitted to the town's 0–1000 square, or null.
@@ -494,6 +497,8 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
         description: place.description || '',
         entranceFor: place.entrance ? (place.entrance.via || []).slice() : null,
         grade: graded.grade,
+        band: graded.band,
+        score: graded.score,
         missing: graded.checklist,
         connections: (place.connections || []).map((id) => ref(world.places, id)),
         residents: Object.values(world.characters || {})
