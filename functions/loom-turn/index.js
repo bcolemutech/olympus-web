@@ -10,7 +10,8 @@ const { newlyDiscovered } = require('./discovery');
 const { planStep, planDoor, doorStatesOf, OUT_OF_MOVEMENT } = require('./steps');
 const { recordOf, knownTo, added } = require('./seen');
 const { planTownStep, walksTown, townPlanOf } = require('./town-steps');
-const { lookInTown } = require('./town-seen');
+const { lookInTown, townRecordOf } = require('./town-seen');
+const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -67,7 +68,13 @@ async function intake(params) {
     ? knownTo(canonWorld, save, (await recordOf(null, saveRef, save.mapId)).record)
     : null;
 
-  return { save, saveRef, worldState, worldStateRef, canonWorld, known };
+  // In a town with ground, the places the save has found there (L-673):
+  // the GM knows only those, and moves go only to them.
+  const found = save.location
+    ? foundIn(canonWorld, save, (await townRecordOf(null, saveRef, save.location)).record)
+    : null;
+
+  return { save, saveRef, worldState, worldStateRef, canonWorld, known, found };
 }
 
 /**
@@ -104,7 +111,7 @@ async function intake(params) {
 async function runTurnPipeline(params) {
   const { db, uid, worldId, saveId, action } = params;
 
-  const { save, saveRef, worldState, worldStateRef, canonWorld, known } = await intake({
+  const { save, saveRef, worldState, worldStateRef, canonWorld, known, found } = await intake({
     db,
     uid,
     worldId,
@@ -135,6 +142,9 @@ async function runTurnPipeline(params) {
   // goes in, narrated. "Walk there" plays out turns until it arrives.
   if (action && !action.enter && walksTown(canonWorld, save)) {
     const target = townTargetOf(action, canonWorld, save);
+    if (target && target.placeId && found && !found.has(target.placeId)) {
+      return refusal(save, UNKNOWN);
+    }
     if (target && action.verb === 'walk-there') return walkThere(params, target);
     if (target) return townStep(params, target);
   }
@@ -212,7 +222,13 @@ async function runTurnPipeline(params) {
     actionText = 'travel to ' + (target ? target.name : action.target);
     proposedAction = { verb: 'move', targets: [action.target], params: { from: 'map' } };
   } else {
-    proposedAction = await interpretAction({ actionText, canonWorld, save, worldState, known });
+    proposedAction = await interpretAction({
+      actionText,
+      canonWorld: knownWorld(canonWorld, save, found),
+      save,
+      worldState,
+      known,
+    });
   }
   const resolution = await adjudicateAction({
     proposedAction,
@@ -220,6 +236,7 @@ async function runTurnPipeline(params) {
     save,
     worldState,
     known,
+    found,
   });
   // A second action in a turn is turned down plainly: not narrated, not
   // recorded (L-614 / #444).
@@ -235,7 +252,7 @@ async function runTurnPipeline(params) {
     actionText,
     proposedAction,
     resolution,
-    canonWorld,
+    canonWorld: knownWorld(canonWorld, save, found),
     save,
     worldState,
     saveRef,

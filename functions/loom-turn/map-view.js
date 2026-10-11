@@ -9,6 +9,7 @@ const { planOn, doorStatesOf, doorSides } = require('./steps');
 const { walksTown, townPlanOf, streetOf } = require('./town-steps');
 const ground = require('../loom-canon/ground');
 const townSeen = require('./town-seen');
+const { foundIn } = require('./town-found');
 const townPaths = require('../loom-canon/town-paths');
 const layers = require('../loom-canon/layers');
 const seen = require('./seen');
@@ -141,7 +142,11 @@ function positionIn(place) {
 function townView(canonWorld, save, discovered, townRecord) {
   const { location, place: here, point } = town.positionOf(canonWorld, save);
   if (!location) return null;
-  const inTown = town.placesOf(canonWorld, location);
+  // In a town with ground, only the places it has found (L-673).
+  const found = foundIn(canonWorld, save, townRecord);
+  const inTown = town
+    .placesOf(canonWorld, location)
+    .filter((p) => !found || found.has(p.id) || (here && here.id === p.id));
   // A retired place stays in view only while the save stands in it.
   if (here && !inTown.some((p) => p.id === here.id)) inTown.push(here);
   if (!inTown.length) return null;

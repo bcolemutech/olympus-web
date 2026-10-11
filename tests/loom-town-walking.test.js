@@ -125,11 +125,22 @@ const where = async (saveId) => {
   const { location, placeId, mapId, townPoint } = await saveOf(saveId);
   return { location, placeId, mapId, townPoint: townPoint || null };
 };
-async function newGame() {
+// A new game. Unless told otherwise, it already knows the whole town (every
+// square seen, so every place found: L-673), for the tests of walking.
+async function newGame({ reveal = true } = {}) {
   const { saveId } = await loomCreateSave.run({
     data: { worldId: WORLD, name: 'Walk', characterName: 'Tam' },
     auth: PLAYER,
   });
+  if (reveal) {
+    const { pack } = require('../functions/loom-turn/town-seen');
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .collection('seenTowns')
+      .doc('loc_1')
+      .set({ locationId: 'loc_1', side: 200, squares: pack(new Uint8Array(40000).fill(1)) });
+  }
   return saveId;
 }
 // Off the gate's map (its entry is its way out), standing at the gate.
@@ -479,7 +490,7 @@ describe('what a save has seen of the town (L-671)', () => {
     ).data();
 
   test('a walk records what it saw along the way; a second walk adds to it, and it keeps', async () => {
-    const saveId = await newGame();
+    const saveId = await newGame({ reveal: false });
     await stepOffMap(saveId);
     // In a 2.5 km city, 100 m of sight is 40 units.
     await play(saveId, { verb: 'move', point: pt(400, 900) });
@@ -508,11 +519,12 @@ describe('what a save has seen of the town (L-671)', () => {
   });
 
   test('standing at a door off its map looks from there; so does stepping out of a place', async () => {
-    const saveId = await newGame();
+    const saveId = await newGame({ reveal: false });
     await stepOffMap(saveId); // at the gate, off its map: looks from its door
     const atGate = unpack((await record(saveId)).squares);
     expect(square(atGate, pt(500, 930))).toBe(1);
     expect(square(atGate, pt(500, 820))).toBe(0); // the quay, 130 units off
+    await play(saveId, { verb: 'move', point: pt(500, 850) }); // within sight of its door
     await play(saveId, { verb: 'move', target: 'plc_1_quay' }); // in, onto its map
     await db.collection('loom_saves').doc(saveId).collection('seenTowns').doc('loc_1').delete();
     await stepOffMap(saveId); // out of the quay, onto the street at its door
@@ -522,8 +534,18 @@ describe('what a save has seen of the town (L-671)', () => {
   });
 
   test('a typed walk records the way it went', async () => {
-    const saveId = await newGame();
+    const saveId = await newGame({ reveal: false });
     await standOnStreet(saveId, pt(500, 150));
+    // It has found the well: only its door's square is in the record.
+    const { pack } = require('../functions/loom-turn/town-seen');
+    const door = new Uint8Array(40000);
+    door[Math.floor(300 / 5) * 200 + Math.floor(820 / 5)] = 1;
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .collection('seenTowns')
+      .doc('loc_1')
+      .set({ locationId: 'loc_1', side: 200, squares: pack(door) });
     await typed(saveId, 'go to the well', ['plc_1_well']);
     const way = unpack((await record(saveId)).squares);
     expect(square(way, pt(520, 160))).toBe(1); // where it set out
@@ -538,7 +560,7 @@ describe('the town view’s fog (L-672)', () => {
   const mapOf = (saveId) => loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
 
   test('on the street: what is in sight now, and what has been seen, which includes it', async () => {
-    const saveId = await newGame();
+    const saveId = await newGame({ reveal: false });
     await stepOffMap(saveId);
     await play(saveId, { verb: 'move', point: pt(400, 900) });
     const { fog } = (await mapOf(saveId)).town;
@@ -553,11 +575,64 @@ describe('the town view’s fog (L-672)', () => {
   });
 
   test('in a place, nothing is in sight in town, and what was seen stays', async () => {
-    const saveId = await newGame();
+    const saveId = await newGame({ reveal: false });
     await stepOffMap(saveId);
+    await play(saveId, { verb: 'move', point: pt(500, 850) }); // within sight of the quay's door
     await play(saveId, { verb: 'move', target: 'plc_1_quay' }); // in, onto its map
     const { fog } = (await mapOf(saveId)).town;
     expect(unpack(fog.inSight).every((v) => !v)).toBe(true);
     expect(square(unpack(fog.seen), pt(500, 930))).toBe(1); // from the gate's door
+  });
+});
+
+describe('finding places (L-673)', () => {
+  const placesOf = async (saveId) =>
+    (await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER })).town.places.map(
+      (p) => p.id
+    );
+
+  test('at the start: the ways in and out, and where it stands; nothing else', async () => {
+    const saveId = await newGame({ reveal: false });
+    expect(await placesOf(saveId)).toEqual(['plc_1_gate']);
+    await stepOffMap(saveId); // at the gate's door, looking about: the quay is 130 units off
+    expect(await placesOf(saveId)).toEqual(['plc_1_gate']);
+  });
+
+  test('walking past a door finds the place, and it stays found', async () => {
+    const saveId = await newGame({ reveal: false });
+    await stepOffMap(saveId);
+    // Up the street to within sight (40 units) of the quay's door.
+    await play(saveId, { verb: 'move', point: pt(470, 850) });
+    expect(await placesOf(saveId)).toEqual(['plc_1_gate', 'plc_1_quay']);
+    await play(saveId, { verb: 'end-turn' });
+    await play(saveId, { verb: 'move', point: pt(400, 900) }); // away again
+    expect(await placesOf(saveId)).toEqual(['plc_1_gate', 'plc_1_quay']);
+  });
+
+  test('a move to a place not found is turned down, tapped or typed; the GM isn’t told of it', async () => {
+    const saveId = await newGame({ reveal: false });
+    await stepOffMap(saveId);
+    const tapped = await play(saveId, { verb: 'move', target: 'plc_1_temple' });
+    expect(tapped.narration).toBe("You don't know where that is.");
+    mockCallGemini.mockClear();
+    await typed(saveId, 'go to the temple', ['plc_1_temple']);
+    expect((await lastResolution(saveId)).constraints).toEqual(["You don't know where that is."]);
+    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_gate', townPoint: null });
+    // Neither INTERPRET nor NARRATE heard of the temple.
+    const told = mockCallGemini.mock.calls
+      .map(([options]) => options.systemInstruction + options.userMessage)
+      .join('\n');
+    expect(told).toMatch(/The South Gate/);
+    expect(told).not.toMatch(/The Temple/);
+  });
+
+  test('once found, it can be walked to', async () => {
+    const saveId = await newGame({ reveal: false });
+    await standOnStreet(saveId, pt(500, 190)); // 40 units from the temple's door
+    await play(saveId, { verb: 'end-turn' }); // a turn ends: it looks about
+    await play(saveId, { verb: 'move', point: pt(500, 185) });
+    expect(await placesOf(saveId)).toContain('plc_1_temple');
+    const answer = await play(saveId, { verb: 'move', target: 'plc_1_temple' });
+    expect(answer.step.entered).toBe('plc_1_temple');
   });
 });

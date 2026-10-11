@@ -10,6 +10,7 @@ const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
 const ground = require('../loom-canon/ground');
 const { planTownStep, walksTown, nearestWayOut } = require('./town-steps');
+const { UNKNOWN } = require('./town-found');
 
 // A lock's difficulty when its door gives none (L-626).
 const DEFAULT_LOCK_DIFFICULTY = 15;
@@ -380,7 +381,7 @@ function chosenWayIn(proposedAction, canonWorld) {
   return asked;
 }
 
-function evaluateMove(proposedAction, worldState, characterState, canonWorld, known) {
+function evaluateMove(proposedAction, worldState, characterState, canonWorld, known, found) {
   const currentId = characterState.location;
 
   if (!currentId || !canonWorld.locations[currentId]) {
@@ -400,6 +401,8 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
   const first = proposedAction.targets[0];
   const targetPlace = first && (canonWorld.places || {})[first];
   if (targetPlace && targetPlace.locationId === currentId) {
+    // A place in town it hasn't found yet (L-673).
+    if (found && !found.has(targetPlace.id)) return blocked(UNKNOWN);
     return evaluateTownMove(targetPlace, characterState, canonWorld);
   }
   // A place in another town can only be reached as its way in, travelling there.
@@ -735,10 +738,10 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
   return { outcome: 'failure', mutations: [], constraints: ['The lock on ' + name + ' holds.'] };
 }
 
-function evaluate(proposedAction, worldState, characterState, dice, canonWorld, known) {
+function evaluate(proposedAction, worldState, characterState, dice, canonWorld, known, found) {
   let resolution;
   if (proposedAction.verb === 'move') {
-    resolution = evaluateMove(proposedAction, worldState, characterState, canonWorld, known);
+    resolution = evaluateMove(proposedAction, worldState, characterState, canonWorld, known, found);
   } else if (proposedAction.verb === 'end-turn') {
     resolution = evaluateEndTurn(characterState, canonWorld);
   } else {
@@ -768,9 +771,9 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
  * @returns {Promise<{ outcome: string, mutations: object[], constraints: string[] }>}
  */
 async function adjudicateAction(params, rollFn = rollDie) {
-  const { proposedAction, canonWorld, save, worldState, known } = params;
+  const { proposedAction, canonWorld, save, worldState, known, found } = params;
   const dice = rollFn();
-  return evaluate(proposedAction, worldState, save, dice, canonWorld, known);
+  return evaluate(proposedAction, worldState, save, dice, canonWorld, known, found);
 }
 
 module.exports = {
