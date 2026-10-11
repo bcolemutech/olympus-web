@@ -1,0 +1,321 @@
+'use strict';
+
+/**
+ * Walking in a town with ground (planning/the-loom-movement-and-vision.md §8;
+ * L-662 / #469): a move to a point on the street or to a place walks its
+ * paths, 20 m a point, stopping when movement runs out with the plan kept;
+ * Continue goes on; reaching a door goes in, onto its map; "Walk there" plays
+ * out turns until it arrives; and leaving for the world map is from a way
+ * out. Played through the Loom's callables on a Nisia world in the Firestore
+ * emulator (Gemini mocked).
+ *
+ * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
+ *        "cd tests && npx jest loom-town-walking --verbose"
+ */
+
+const PROJECT = 'demo-loom-town-walking';
+process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+process.env.GCLOUD_PROJECT = PROJECT;
+
+const mockCallGemini = jest.fn();
+jest.mock('../functions/gemini', () => ({
+  callGemini: (...args) => mockCallGemini(...args),
+}));
+
+const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
+const { layOutTowns, GATEWAY } = require('./helpers/towns');
+const { loomCreateSave, loomPlayTurn, loomGetMap } = require('../functions/index');
+const { OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
+const { validateSave } = require('../functions/loom-models');
+
+const fs = require('fs');
+const path = require('path');
+const functionsDir = path.resolve(__dirname, '../functions');
+const { getFirestore } = require(
+  require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
+);
+const { parseAzgaarExport } = require('../functions/cartographer/parse');
+const { mapToCanon } = require('../functions/cartographer/map');
+const { loadDraftWorld } = require('../functions/cartographer/load');
+
+const db = getFirestore();
+const PLAYER = { uid: 'player-001', token: { apps: ['loom'] } };
+const WORLD = 'nisia-t0t0t0';
+const worldRef = db.collection('loom_worlds').doc(WORLD);
+const WRITTEN = { description: 'mcp' };
+
+const pt = (x, y) => ({ x, y });
+const rect = (x0, y0, x1, y1) => [pt(x0, y0), pt(x1, y0), pt(x1, y1), pt(x0, y1)];
+
+// Burdendal (a capital great city: 2.5 km across, so 100 units is 250 m): a
+// south gate, the market hall in the middle, a river with one bridge, and
+// the temple and a well beyond it.
+const GROUND = {
+  buildings: [{ name: 'the market hall', points: rect(400, 600, 600, 700) }],
+  water: [{ name: 'the Burd', points: rect(0, 450, 1000, 500) }],
+  walls: [],
+  crossings: [{ name: 'the Burd bridge', points: rect(780, 440, 840, 510) }],
+};
+const place = (id, name, position, extra = {}) => ({
+  id,
+  locationId: 'loc_1',
+  name,
+  kind: 'district',
+  description: `${name}, as the locals know it.`,
+  sources: WRITTEN,
+  connections: [],
+  npcIds: [],
+  rules: {},
+  entrance: null,
+  position,
+  battleMap: { mapId: GATEWAY.id },
+  ...extra,
+});
+const PLACES = {
+  plc_1_gate: place('plc_1_gate', 'The South Gate', pt(500, 950), {
+    kind: 'gate',
+    entrance: { via: ['road', 'trail', 'sea'] },
+  }),
+  plc_1_quay: place('plc_1_quay', 'The Quay', pt(500, 820)),
+  plc_1_temple: place('plc_1_temple', 'The Temple', pt(500, 150)),
+  plc_1_well: place('plc_1_well', 'The Well', pt(820, 300)),
+};
+
+function narrator() {
+  mockCallGemini.mockImplementation(async (options) => {
+    if (options.systemInstruction.includes('INTERPRET stage')) {
+      return { verb: 'look', targets: [], params: {} };
+    }
+    if (options.systemInstruction.includes('summarizer')) return 'A summary.';
+    return { narration: 'You go on.', inventedEntities: [], suggestedActions: [] };
+  });
+}
+
+const play = (saveId, action) =>
+  loomPlayTurn.run({ data: { worldId: WORLD, saveId, action }, auth: PLAYER });
+const lastResolution = async (saveId) =>
+  (
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .collection('loom_turns')
+      .orderBy('index', 'desc')
+      .limit(1)
+      .get()
+  ).docs[0].data().resolution;
+const saveOf = async (saveId) => (await db.collection('loom_saves').doc(saveId).get()).data();
+const where = async (saveId) => {
+  const { location, placeId, mapId, townPoint } = await saveOf(saveId);
+  return { location, placeId, mapId, townPoint: townPoint || null };
+};
+async function newGame() {
+  const { saveId } = await loomCreateSave.run({
+    data: { worldId: WORLD, name: 'Walk', characterName: 'Tam' },
+    auth: PLAYER,
+  });
+  return saveId;
+}
+// Off the gate's map (its entry is its way out), standing at the gate.
+const stepOffMap = (saveId) => play(saveId, { verb: 'move', cell: { x: 1, y: 1 } });
+// On the street at a point, as if walked there.
+const standOnStreet = (saveId, point) =>
+  db
+    .collection('loom_saves')
+    .doc(saveId)
+    .update({ placeId: null, mapId: null, cell: null, townPoint: point });
+
+beforeAll(async () => {
+  await db.recursiveDelete(db.collection('loom_worlds'));
+  await db.recursiveDelete(db.collection('loom_saves'));
+  const parsed = parseAzgaarExport(
+    fs.readFileSync(path.join(__dirname, 'fixtures/azgaar/nisia.json'))
+  );
+  await loadDraftWorld({
+    db,
+    mapped: mapToCanon(parsed),
+    source: parsed.source,
+    uploadedBy: 'builder-001',
+    worldId: WORLD,
+  });
+  await worldRef.update({
+    status: 'published',
+    openingHook: 'You come to Burdendal by the south road.',
+    rules: { startingLocationId: 'loc_1' },
+    canonVersion: 2,
+  });
+  await worldRef.collection('battleMaps').doc(GATEWAY.id).set(GATEWAY);
+  for (const [id, doc] of Object.entries(PLACES)) {
+    await worldRef.collection('places').doc(id).set(doc);
+  }
+  await worldRef.collection('locations').doc('loc_1').update({
+    description: 'A great walled port.',
+    'sources.description': 'mcp',
+    'town.ground': GROUND,
+  });
+  // A neighbour to travel to, open.
+  await worldRef
+    .collection('locations')
+    .doc('loc_631')
+    .update({ description: 'A market town.', 'sources.description': 'mcp' });
+  await layOutTowns(worldRef, 'loc_631');
+  await worldRef.update({ canonVersion: 3 });
+  narrator();
+}, 60000);
+
+afterAll(async () => {
+  await functionsTest.cleanup();
+});
+
+describe('a new game starts at the gate, and steps off its map there', () => {
+  test('the gate keeps you, ready to leave or walk', async () => {
+    const saveId = await newGame();
+    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_gate', mapId: GATEWAY.id });
+    await stepOffMap(saveId);
+    expect(await where(saveId)).toEqual({
+      location: 'loc_1',
+      placeId: 'plc_1_gate',
+      mapId: null,
+      townPoint: null,
+    });
+  });
+});
+
+describe('walking to the temple: partway, Continue, arrive and go in', () => {
+  let saveId;
+  beforeAll(async () => {
+    saveId = await newGame();
+    await stepOffMap(saveId);
+  });
+
+  test('the first turn walks 400 m and stops on the street, the rest kept as the plan', async () => {
+    const answer = await play(saveId, { verb: 'move', target: 'plc_1_temple' });
+    expect(answer.narration).toBe('You walk 400 m. ' + OUT_OF_MOVEMENT);
+    expect(answer.step).toMatchObject({
+      movementLeft: 0,
+      plan: { layer: 'town', locationId: 'loc_1', placeId: 'plc_1_temple', to: pt(500, 150) },
+      lines: ['You walk 400 m.', OUT_OF_MOVEMENT],
+    });
+    const now = await where(saveId);
+    expect(now).toMatchObject({ location: 'loc_1', placeId: null, mapId: null });
+    expect(now.townPoint).toEqual(answer.step.townPoint);
+    // 400 m is 160 units from the gate, round the market hall.
+    expect(now.townPoint.y).toBeLessThan(950);
+    expect(validateSave(await saveOf(saveId)).valid).toBe(true);
+    // Nothing was narrated, or recorded: the one turn is stepping off the
+    // gate's map.
+    expect(
+      (await db.collection('loom_saves').doc(saveId).collection('loom_turns').get()).size
+    ).toBe(1);
+  });
+
+  test('the town view shows where on the street', async () => {
+    const map = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+    expect(map.town).toMatchObject({ here: null, at: (await where(saveId)).townPoint });
+  });
+
+  test('out of movement, Continue says so; after the turn ends it walks on', async () => {
+    expect((await play(saveId, { verb: 'continue' })).narration).toBe(OUT_OF_MOVEMENT);
+    await play(saveId, { verb: 'end-turn' });
+    const first = (await saveOf(saveId)).turn.plan.metres;
+    const on = await play(saveId, { verb: 'continue' });
+    expect(on.step.lines[0]).toBe('You walk 400 m.');
+    expect(on.step.plan.metres).toBeCloseTo(first - 400, -1);
+  });
+
+  test('turn by turn it reaches the temple door, and goes in onto its map', async () => {
+    let answer;
+    for (let i = 0; i < 10; i++) {
+      await play(saveId, { verb: 'end-turn' });
+      answer = await play(saveId, { verb: 'continue' });
+      if (answer.step.entered) break;
+    }
+    expect(answer.step.entered).toBe('plc_1_temple');
+    expect(answer.narration).toMatch(/^You walk \d+ m\. You go on\.$/);
+    expect(await where(saveId)).toEqual({
+      location: 'loc_1',
+      placeId: 'plc_1_temple',
+      mapId: GATEWAY.id,
+      townPoint: null,
+    });
+  });
+
+  test('stepping off the temple’s map puts you on the street at its door', async () => {
+    await stepOffMap(saveId);
+    expect(await where(saveId)).toEqual({
+      location: 'loc_1',
+      placeId: null,
+      mapId: null,
+      townPoint: pt(500, 150),
+    });
+  });
+});
+
+describe('walking to a point', () => {
+  test('a point on open ground is walked to; a building or the river is refused', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    // 112 units from the gate: 280 m, inside a turn's 400.
+    const near = await play(saveId, { verb: 'move', point: pt(400, 900) });
+    expect(near.step).toMatchObject({ townPoint: pt(400, 900), plan: null, movementLeft: 6 });
+    expect((await play(saveId, { verb: 'move', point: pt(500, 650) })).narration).toBe(
+      "You can't stand there."
+    );
+    expect((await play(saveId, { verb: 'move', point: pt(300, 470) })).narration).toBe(
+      "You can't stand there."
+    );
+    expect(await where(saveId)).toMatchObject({ townPoint: pt(400, 900) });
+  });
+});
+
+describe('"Walk there"', () => {
+  test('across the city in one request: several turns, then in at the door', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    const before = (await saveOf(saveId)).turn.n;
+    const answer = await play(saveId, { verb: 'walk-there', target: 'plc_1_well' });
+    expect(answer.step.entered).toBe('plc_1_well');
+    expect(answer.step.turns).toBeGreaterThan(2);
+    expect((await saveOf(saveId)).turn.n).toBe(before + answer.step.turns - 1);
+    expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_well', mapId: GATEWAY.id });
+    // Recorded: stepping off the gate's map, each turn it ended, and going
+    // in; the walking itself isn't narrated.
+    const turns = await db.collection('loom_saves').doc(saveId).collection('loom_turns').get();
+    expect(turns.size).toBe(1 + (answer.step.turns - 1) + 1);
+  });
+
+  test('to a point: stops there, over as many turns as it takes', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    // About 910 m: three turns of 400.
+    const answer = await play(saveId, { verb: 'walk-there', point: pt(150, 850) });
+    expect(answer.step).toMatchObject({ townPoint: pt(150, 850), plan: null, turns: 3 });
+    expect(answer.narration).toMatch(/^You walk 400 m\. You walk 400 m\. You walk 1[01]\d m\.$/);
+  });
+
+  test('a refusal stops it at once', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    const answer = await play(saveId, { verb: 'walk-there', point: pt(500, 650) });
+    expect(answer).toMatchObject({ narration: "You can't stand there.", refused: true });
+  });
+});
+
+describe('leaving for the world map', () => {
+  test('from the gate, off its map: you travel', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    await play(saveId, { verb: 'move', target: 'loc_631' });
+    expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
+  });
+
+  test('from the street, only at a way out’s door', async () => {
+    const saveId = await newGame();
+    await standOnStreet(saveId, pt(300, 850));
+    await play(saveId, { verb: 'move', target: 'loc_631' });
+    expect((await lastResolution(saveId)).constraints[0]).toMatch(/go to The South Gate first/);
+    expect(await where(saveId)).toMatchObject({ location: 'loc_1', townPoint: pt(300, 850) });
+    await standOnStreet(saveId, pt(500, 950));
+    await play(saveId, { verb: 'move', target: 'loc_631' });
+    expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
+  });
+});
