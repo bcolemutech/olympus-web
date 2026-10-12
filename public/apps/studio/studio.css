@@ -52,6 +52,110 @@
   font-size: 0.9rem;
 }
 
+/* ── Costs (L-706) ─────────────────────────────── */
+
+.studio-costbar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.6rem 1rem;
+  background: rgba(20, 20, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+}
+
+.studio-costbar-label {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.studio-costbar-total {
+  color: #e0e0e0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-costbar-figure {
+  flex: 1;
+  color: #90a4ae;
+  font-size: 0.85rem;
+}
+
+.studio-costbar-over {
+  border-color: rgba(248, 113, 113, 0.6);
+}
+
+.studio-costbar-over .studio-costbar-total {
+  color: #fca5a5;
+}
+
+.studio-banner {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  color: #fee2e2;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.5;
+  background: rgba(185, 28, 28, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.6);
+  border-radius: 10px;
+}
+
+.studio-cost-summary {
+  margin: 0.75rem 0;
+  color: #e0e0e0;
+}
+
+.studio-cost-over {
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+.studio-cost-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-cost-table th,
+.studio-cost-table td {
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-wrap: anywhere;
+}
+
+.studio-cost-table th {
+  color: #9ca3af;
+  font-weight: normal;
+}
+
+.studio-cost-bar {
+  display: block;
+  width: 100%;
+  min-width: 3rem;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.studio-cost-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffd54f, #ffb74d);
+}
+
 /* ── Forms ─────────────────────────────────────── */
 
 .studio-upload {

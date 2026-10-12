@@ -322,6 +322,10 @@ service cloud.firestore {
       allow read: if hasApp('cartographer');
     }
 
+    // The studio's costs (L-706, §4.5): studio_costs and studio_costs_month
+    // are read and written only by the server; the page reads them through
+    // the studioCosts callable. No rule here, so clients are denied.
+
     match /loom_world_state/{worldId} {
       allow read: if hasApp('loom');
     }

@@ -4,97 +4,207 @@
       "collectionGroup": "symposium_ingredients",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "symposium_ingredients",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "inStock", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" }
+        {
+          "fieldPath": "inStock",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "symposium_equipment",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "symposium_equipment",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "condition", "order": "ASCENDING" },
-        { "fieldPath": "category", "order": "ASCENDING" }
+        {
+          "fieldPath": "condition",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "symposium_recipes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "symposium_recipes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "canMake", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "canMake",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "symposium_recipes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "favorite", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "favorite",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "symposium_shopping_list",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "loom_saves",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ownerUid", "order": "ASCENDING" },
-        { "fieldPath": "worldId", "order": "ASCENDING" }
+        {
+          "fieldPath": "ownerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "worldId",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "loom_turns",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "entityRefs", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "index", "order": "DESCENDING" }
+        {
+          "fieldPath": "entityRefs",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "index",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "scriptorium_notes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ownerUid", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "ownerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studio_costs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "month",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "at",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],
   "fieldOverrides": [
-    { "collectionGroup": "mcp_oauth_clients", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
-    { "collectionGroup": "mcp_oauth_codes", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
-    { "collectionGroup": "mcp_oauth_tokens", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
-    { "collectionGroup": "mcp_oauth_grants", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
-    { "collectionGroup": "mcp_audit", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
-    { "collectionGroup": "mcp_rate_limits", "fieldPath": "expireAt", "ttl": true, "indexes": [] }
+    {
+      "collectionGroup": "mcp_oauth_clients",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mcp_oauth_codes",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mcp_oauth_tokens",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mcp_oauth_grants",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mcp_audit",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "mcp_rate_limits",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    }
   ]
 }

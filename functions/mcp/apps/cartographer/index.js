@@ -721,6 +721,15 @@ function register(registry) {
     }
     return studioLibrary;
   };
+  let studioCosts;
+  const costs = () => {
+    if (!studioCosts) {
+      const { FieldValue } = require('firebase-admin/firestore');
+      const { createCosts } = require('../../../studio/costs');
+      studioCosts = createCosts({ db: getFirestore(), FieldValue });
+    }
+    return studioCosts;
+  };
   registry.registerApp(
     APP_ID,
     cartographerApp({
@@ -732,11 +741,12 @@ function register(registry) {
         // SVG Claude draws (set_art).
         draw: (uid, args) => cartographer().drawArt(uid, args),
       },
-      // The image studio: assigning library images to worlds (L-704), and the
-      // library itself (L-703).
+      // The image studio: assigning library images to worlds (L-704), the
+      // library itself (L-703) and its costs (L-706).
       studio: {
         assign: (uid, args) => cartographer().assignImage(uid, args),
         library: () => library(),
+        costs: () => costs(),
         load: async (path) => (await getStorage().bucket().file(path).download())[0],
       },
     })

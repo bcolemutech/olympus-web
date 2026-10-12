@@ -29,7 +29,7 @@ const functionsDir = path.resolve(__dirname, '../functions');
 const { PNG } = require(require.resolve('pngjs', { paths: [functionsDir] }));
 const jpegJs = require(require.resolve('jpeg-js', { paths: [functionsDir] }));
 const { initializeApp } = require(require.resolve('firebase-admin/app', { paths: [functionsDir] }));
-const { getFirestore } = require(
+const { getFirestore, FieldValue } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
 );
 const { getStorage } = require(
@@ -43,6 +43,7 @@ const loomCanon = require('../functions/loom-canon');
 const { createCartographerService } = require('../functions/cartographer/service');
 const { createLibrary, currentPath } = require('../functions/studio/library');
 const { readImage } = require('../functions/studio/formats');
+const { createCosts } = require('../functions/studio/costs');
 const { cartographerApp } = require('../functions/mcp/apps/cartographer');
 const { createFirestoreWorldReader } = require('../functions/mcp/apps/cartographer/reader');
 const { createFirestoreWorldWriter } = require('../functions/mcp/apps/cartographer/writer');
@@ -62,6 +63,7 @@ const bucket = getStorage(adminApp).bucket(`${PROJECT}.appspot.com`);
 const writer = createFirestoreWorldWriter(() => db);
 const service = createCartographerService({ db, bucket, writer });
 const library = createLibrary({ db, bucket });
+const costs = createCosts({ db, FieldValue });
 const load = async (at) => (await bucket.file(at).download())[0];
 
 const registry = createRegistry();
@@ -75,6 +77,7 @@ registry.registerApp(
       assign: (uid, args) => service.assignImage(uid, args),
       library: () => library,
       load,
+      costs: () => costs,
     },
   })
 );
@@ -131,6 +134,8 @@ const img = {};
 beforeAll(async () => {
   await db.recursiveDelete(db.collection('loom_worlds'));
   await db.recursiveDelete(db.collection('studio_images'));
+  await db.recursiveDelete(db.collection('studio_costs'));
+  await db.recursiveDelete(db.collection('studio_costs_month'));
   await bucket.deleteFiles({ force: true }).catch(() => {});
   const parsed = parseAzgaarExport(
     fs.readFileSync(path.join(__dirname, 'fixtures/azgaar/nisia.json'))
@@ -391,5 +396,65 @@ describe('studio_delete', () => {
   test('once unassigned, an image can be deleted', async () => {
     await ok('studio_unassign', { worldId: WORLD, target: 'map' });
     expect((await ok('studio_delete', { imageId: img.map.id })).deleted.id).toBe(img.map.id);
+  });
+});
+
+describe('costs (L-706)', () => {
+  test('every studio tool’s result carries the cost line', async () => {
+    await costs.record({ model: 'gemini-2.5-flash-image', createdBy: BUILDER, via: 'mcp' });
+    const spare = await add({ title: 'A spare cover', kind: 'cover' }, png(32, 32));
+    const calls = {
+      studio_find: { words: 'spare' },
+      studio_get: { imageId: spare.id },
+      studio_update: { imageId: spare.id, addLabels: ['spare'] },
+      studio_labels: {},
+      studio_assign: { worldId: WORLD, imageId: spare.id, target: 'cover' },
+      studio_unassign: { worldId: WORLD, target: 'cover' },
+      studio_delete: { imageId: spare.id },
+      studio_costs: {},
+    };
+    const { tools } = await client.listTools();
+    const studioNames = tools.map((t) => t.name).filter((n) => n.startsWith('studio_'));
+    expect(Object.keys(calls).sort()).toEqual(studioNames.sort());
+    for (const [name, args] of Object.entries(calls)) {
+      const result = await call(name, args);
+      expect(result.isError).toBeFalsy();
+      expect([name, result.structuredContent.cost]).toEqual([
+        name,
+        { job: 0, month: 0.039, warnAt: 50 },
+      ]);
+      // The text Claude reads says the same.
+      const text = result.content.find((item) => item.type === 'text');
+      expect(JSON.parse(text.text).cost).toEqual(result.structuredContent.cost);
+    }
+  });
+
+  test('studio_costs gives the month by day, model and who', async () => {
+    const result = await ok('studio_costs', {});
+    expect(result).toMatchObject({
+      total: 0.039,
+      count: 1,
+      warnAt: 50,
+      days: [{ usd: 0.039, count: 1 }],
+      models: [{ model: 'gemini-2.5-flash-image', usd: 0.039 }],
+      who: [{ uid: BUILDER, usd: 0.039, mcp: { usd: 0.039, count: 1 } }],
+      recent: [expect.objectContaining({ usd: 0.039, via: 'mcp' })],
+    });
+    expect(await refused('studio_costs', { month: '2026-13' })).toMatch(/month/);
+  });
+
+  test('past the figure, every result warns plainly', async () => {
+    await costs.record({
+      model: 'imagen-4.0-generate-001',
+      usd: 50,
+      createdBy: BUILDER,
+      via: 'page',
+    });
+    for (const name of ['studio_find', 'studio_labels', 'studio_costs']) {
+      const { cost } = await ok(name, {});
+      expect(cost.month).toBe(50.039);
+      expect(cost.warning).toMatch(/WARNING: .*past the \$50\.00 warning figure/);
+    }
+    expect((await ok('studio_costs', {})).warning).toMatch(/past the/);
   });
 });
