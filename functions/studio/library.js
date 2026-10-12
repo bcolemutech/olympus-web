@@ -269,6 +269,33 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
   }
 
   /**
+   * Changes an image's title, kind or labels (L-703). A kind is fixed while a
+   * world uses the image, since assigning checked it fits (L1).
+   */
+  async function updateImage(imageId, fields = {}) {
+    const record = await getImage(imageId);
+    const update = {};
+    if (fields.title !== undefined) update.title = checkTitle(fields.title);
+    if (fields.labels !== undefined) update.labels = normalizeLabels(fields.labels);
+    if (fields.kind !== undefined && fields.kind !== record.kind) {
+      update.kind = checkKind(fields.kind);
+      const uses = record.usedIn || [];
+      if (uses.length) {
+        const where = uses.map((use) => `${use.worldId} (${use.target} ${use.id})`).join(', ');
+        throw new LibraryError(
+          'failed-precondition',
+          `"${record.title}" is in use as a ${record.kind} image: ${where}. Unassign it before ` +
+            'changing its kind.'
+        );
+      }
+    }
+    if (!Object.keys(update).length) return record;
+    update.updatedAt = now();
+    await images().doc(record.id).update(update);
+    return { ...record, ...update };
+  }
+
+  /**
    * Searches the library (L3): filters (kind, labels — all of them, worldId
    * used in, styleId, createdBy, after and before dates) and words, each of
    * which must appear in the title, prompt or labels. Newest first, paged.
@@ -350,7 +377,16 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
     return { id: record.id, title: record.title };
   }
 
-  return { addImage, addVersion, setCurrent, getImage, search, labels, deleteImage };
+  return {
+    addImage,
+    addVersion,
+    setCurrent,
+    updateImage,
+    getImage,
+    search,
+    labels,
+    deleteImage,
+  };
 }
 
 module.exports = {

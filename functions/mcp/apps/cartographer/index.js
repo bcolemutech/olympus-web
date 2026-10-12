@@ -713,6 +713,14 @@ function register(registry) {
     }
     return service;
   };
+  let studioLibrary;
+  const library = () => {
+    if (!studioLibrary) {
+      const { createLibrary } = require('../../../studio/library');
+      studioLibrary = createLibrary({ db: getFirestore(), bucket: getStorage().bucket() });
+    }
+    return studioLibrary;
+  };
   registry.registerApp(
     APP_ID,
     cartographerApp({
@@ -724,8 +732,13 @@ function register(registry) {
         // SVG Claude draws (set_art).
         draw: (uid, args) => cartographer().drawArt(uid, args),
       },
-      // The image studio (L-704): assigning library images to worlds.
-      studio: { assign: (uid, args) => cartographer().assignImage(uid, args) },
+      // The image studio: assigning library images to worlds (L-704), and the
+      // library itself (L-703).
+      studio: {
+        assign: (uid, args) => cartographer().assignImage(uid, args),
+        library: () => library(),
+        load: async (path) => (await getStorage().bucket().file(path).download())[0],
+      },
     })
   );
 }
