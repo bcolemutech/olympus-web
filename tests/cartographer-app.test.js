@@ -32,6 +32,7 @@ const {
   cartographerTownImage,
   cartographerMapImage,
   loomCreateSave,
+  loomWorldRatings,
 } = require('../functions/index');
 const fs = require('fs');
 const path = require('path');
@@ -90,6 +91,7 @@ async function writeUp(worldId, id) {
 const importAs = (auth, data) => cartographerImport.run({ data, auth });
 const publishAs = (auth, data) => cartographerPublish.run({ data, auth });
 const completionAs = (auth, data) => cartographerCompletion.run({ data, auth });
+const ratingsAs = (auth, data) => loomWorldRatings.run({ data, auth });
 const townArtAs = (auth, data) => cartographerTownImage.run({ data, auth });
 const mapArtAs = (auth, data) => cartographerMapImage.run({ data, auth });
 
@@ -365,6 +367,40 @@ describe('cartographerPublish', () => {
     await expect(
       publishAs(BUILDER, { worldId, openingHook: 'x'.repeat(2001), startingLocationId: 'loc_1' })
     ).rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+});
+
+describe('loomWorldRatings (L-694)', () => {
+  test('a player sees each published world’s band, and nothing more about grading', async () => {
+    const { worldId: published } = await importAs(BUILDER, { uploadId: await upload() });
+    const { worldId: draft } = await importAs(BUILDER, { uploadId: await upload() });
+    await writeUp(published, 'loc_1');
+    await publishAs(BUILDER, {
+      worldId: published,
+      openingHook: 'A storm drives your ship ashore at Burdendal.',
+      startingLocationId: 'loc_1',
+    });
+    const result = await ratingsAs(PLAYER, { worldIds: [published, draft, 'no-such-world'] });
+    // The band's name only: a draft, or a world that doesn't exist, is left out.
+    expect(result).toEqual({ ratings: { [published]: 'playable' } });
+    // The same band the Cartographer page shows.
+    const completion = await completionAs(BUILDER, { worldIds: [published] });
+    expect(completion.worlds[published].band).toBe('playable');
+    expect(await ratingsAs(PLAYER, { worldIds: [] })).toEqual({ ratings: {} });
+  });
+
+  test('needs the loom claim and valid world ids', async () => {
+    await expect(ratingsAs(BUILDER, { worldIds: [] })).rejects.toMatchObject({
+      code: 'permission-denied',
+    });
+    await expect(ratingsAs(undefined, { worldIds: [] })).rejects.toMatchObject({
+      code: 'unauthenticated',
+    });
+    for (const worldIds of [undefined, 'nisia', ['Bad Id'], Array(21).fill('a')]) {
+      await expect(ratingsAs(PLAYER, { worldIds })).rejects.toMatchObject({
+        code: 'invalid-argument',
+      });
+    }
   });
 });
 

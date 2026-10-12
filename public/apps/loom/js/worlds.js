@@ -31,7 +31,40 @@
     return loadPublishedWorlds().then(function (published) {
       Loom.WORLDS = published;
       renderWorlds(Loom.WORLDS);
+      loadRatings(Loom.WORLDS);
     });
+  }
+
+  // How built each world is (L-694): its band's name, worked out on the
+  // server (loomWorldRatings). The cards show without it if it fails.
+  var BAND_LABELS = {
+    playable: 'Playable',
+    rich: 'Rich',
+    vivid: 'Vivid',
+    legendary: 'Legendary',
+  };
+
+  function loadRatings(worlds) {
+    var ids = worlds.slice(0, 20).map(function (world) {
+      return world.id;
+    });
+    if (!ids.length) return Promise.resolve();
+    return Loom.state.functions
+      .httpsCallable('loomWorldRatings')({ worldIds: ids })
+      .then(function (result) {
+        var ratings = (result.data && result.data.ratings) || {};
+        ids.forEach(function (id) {
+          var band = ratings[id];
+          var node = document.getElementById('loom-world-band-' + id);
+          if (!node || !BAND_LABELS[band]) return;
+          node.textContent = BAND_LABELS[band];
+          node.className = 'loom-world-band loom-world-band--' + band;
+          node.title = 'How built this world is: ' + BAND_LABELS[band];
+        });
+      })
+      .catch(function (err) {
+        console.error('Failed to load world ratings:', err);
+      });
   }
 
   function renderWorlds(worlds) {
@@ -45,6 +78,11 @@
       var title = document.createElement('h3');
       title.className = 'loom-card-title';
       title.textContent = world.name;
+      // Its band, filled in once the ratings arrive (L-694).
+      var band = document.createElement('span');
+      band.id = 'loom-world-band-' + world.id;
+      band.className = 'loom-world-band hidden';
+      title.appendChild(band);
 
       var tagline = document.createElement('p');
       tagline.className = 'loom-card-tagline';

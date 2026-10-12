@@ -33,6 +33,32 @@
   color: #e0e0e0;
 }
 
+.loom-world-band {
+  display: inline-block;
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: #90a4ae;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.loom-world-band--rich {
+  color: #81c784;
+}
+
+.loom-world-band--vivid {
+  color: #4fc3f7;
+}
+
+.loom-world-band--legendary {
+  color: #ffd54f;
+}
+
 .loom-card-tagline {
   margin: 0 0 1rem;
   color: #90a4ae;
