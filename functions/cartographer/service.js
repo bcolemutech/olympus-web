@@ -7,7 +7,8 @@ const loomCanon = require('../loom-canon');
 const { parseAzgaarExport, AzgaarFormatError } = require('./parse');
 const { mapToCanon } = require('./map');
 const { loadDraftWorld, newWorldId } = require('./load');
-const { gradeWorld, gradeLocation, isPlayable } = require('../loom-canon/grading');
+const { gradeWorld, gradeLocation, isPlayable, BANDS } = require('../loom-canon/grading');
+const { biggestGaps } = require('../mcp/apps/cartographer/work');
 const { unplacedCharacters } = require('../loom-canon/positions');
 const { ToolError } = require('../mcp/registry');
 const { checkSvg } = require('./svg');
@@ -50,8 +51,10 @@ const UNPLACED_SHOWN = 3;
 //
 // worldCompletion({ worldIds })
 //   How built each world is, for the Cartographer page: its places by grade
-//   (planning/the-loom-layered-worlds.md §4, §6; L-323 / #392). Graded here
-//   because the page would otherwise read every entity of every world.
+//   (planning/the-loom-layered-worlds.md §4, §6; L-323 / #392), and its score
+//   and band, counts by band for each kind, and its five biggest gaps
+//   (planning/the-loom-grading.md §4.5; L-693 / #554). Graded here because
+//   the page would otherwise read every entity of every world.
 //   (Until the MCP write tools exist, the Cartographer page supplies the hook
 //   and starting location at publish time.)
 
@@ -62,6 +65,7 @@ const MAX_NAME = 100;
 const MAX_HOOK = 2000;
 const MAX_TAGLINE = 200;
 const MAX_COMPLETION_WORLDS = 20;
+const GAPS_SHOWN = 5;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 // Width and height from a PNG's IHDR chunk (the first 24 bytes), or null.
@@ -282,11 +286,25 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
       const { places } = summary;
       // Open places, and those Rich or better (the score's bands, L-691).
       const richer = places.rich + places.vivid + places.legendary;
+      const bands = (counts) => Object.fromEntries(BANDS.map((band) => [band, counts[band] || 0]));
       worlds[id] = {
         total: places.total,
         playable: places.playable + richer,
         rich: richer,
         share: places.open,
+        // The world's score and band, counts by band for each kind, and its
+        // five biggest gaps, as list_work orders its score work (L-693).
+        score: summary.score,
+        band: summary.band,
+        counts: {
+          places: bands(places),
+          inTown: bands(summary.inTown),
+          characters: bands(summary.characters),
+          battleMaps: bands(summary.battleMaps),
+          factions: bands(summary.factions),
+          regions: bands(summary.regions),
+        },
+        gaps: biggestGaps(world, GAPS_SHOWN),
       };
     }
     return { worlds };

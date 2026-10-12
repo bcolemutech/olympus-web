@@ -371,9 +371,46 @@ describe('cartographerPublish', () => {
 describe('cartographerCompletion (L-323)', () => {
   test('reports how many places are playable, graded on the server', async () => {
     const { worldId } = await importAs(BUILDER, { uploadId: await upload() });
-    await expect(completionAs(BUILDER, { worldIds: [worldId, 'no-such-world'] })).resolves.toEqual({
-      worlds: { [worldId]: { total: 719, playable: 0, rich: 0, share: 0 } },
+    const fresh = await completionAs(BUILDER, { worldIds: [worldId, 'no-such-world'] });
+    expect(Object.keys(fresh.worlds)).toEqual([worldId]);
+    const none = { unbuilt: 0, stub: 0, playable: 0, rich: 0, vivid: 0, legendary: 0 };
+    expect(fresh.worlds[worldId]).toEqual({
+      total: 719,
+      playable: 0,
+      rich: 0,
+      share: 0,
+      // The world's score and band, counts by band per kind, and its biggest
+      // gaps (L-693).
+      score: expect.any(Number),
+      band: 'playable',
+      counts: {
+        places: { ...none, unbuilt: 719 },
+        inTown: none,
+        characters: none,
+        battleMaps: none,
+        factions: { ...none, stub: 23 },
+        regions: { ...none, stub: 145 },
+      },
+      gaps: expect.any(Array),
     });
+    // The five biggest, as list_work orders its score work: most points first,
+    // each with its tool and a line to show.
+    const { gaps } = fresh.worlds[worldId];
+    expect(gaps).toHaveLength(5);
+    expect(gaps.map((g) => g.points)).toEqual(gaps.map((g) => g.points).sort((a, b) => b - a));
+    for (const gap of gaps) {
+      expect(gap).toEqual({
+        criterion: expect.any(String),
+        label: expect.any(String),
+        need: expect.any(String),
+        tool: expect.any(String),
+        count: expect.any(Number),
+        points: expect.any(Number),
+        summary: expect.stringContaining(`${gap.points} points · ${gap.tool}`),
+      });
+    }
+    // Nothing is open yet, so its realms and regions are the work.
+    expect(gaps[0].criterion).toMatch(/^realm\./);
 
     const worldRef = db.collection('loom_worlds').doc(worldId);
     await worldRef
@@ -382,7 +419,7 @@ describe('cartographerCompletion (L-323)', () => {
       .update({ description: 'A rain-soaked port.', 'sources.description': 'mcp' });
     await layOutTowns(worldRef, 'loc_1');
     await worldRef.update({ canonVersion: 2 });
-    await expect(completionAs(BUILDER, { worldIds: [worldId] })).resolves.toEqual({
+    await expect(completionAs(BUILDER, { worldIds: [worldId] })).resolves.toMatchObject({
       worlds: { [worldId]: { total: 719, playable: 1, rich: 0, share: 0.001 } },
     });
 
@@ -424,9 +461,19 @@ describe('cartographerCompletion (L-323)', () => {
         },
       });
     await worldRef.update({ canonVersion: 3 });
-    await expect(completionAs(BUILDER, { worldIds: [worldId] })).resolves.toEqual({
-      worlds: { [worldId]: { total: 719, playable: 1, rich: 1, share: 0.001 } },
+    const built = (await completionAs(BUILDER, { worldIds: [worldId] })).worlds[worldId];
+    expect(built).toMatchObject({
+      total: 719,
+      playable: 1,
+      rich: 1,
+      share: 0.001,
+      counts: {
+        places: { rich: 1, unbuilt: 718 },
+        characters: { playable: 12 },
+      },
     });
+    // Its score rose with it.
+    expect(built.score).toBeGreaterThan(fresh.worlds[worldId].score);
   });
 
   test('needs the cartographer claim and valid world ids', async () => {

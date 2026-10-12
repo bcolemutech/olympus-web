@@ -172,7 +172,70 @@ textarea.carto-input {
 }
 
 .carto-completion {
+  margin: 0.2rem 0 0.4rem;
+}
+
+.carto-completion-places {
   color: #a5d6a7;
+}
+
+.carto-score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0 0.3rem;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.carto-band {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #90a4ae;
+}
+
+.carto-band--rich {
+  color: #81c784;
+}
+
+.carto-band--vivid {
+  color: #4fc3f7;
+}
+
+.carto-band--legendary {
+  color: #ffd54f;
+}
+
+.carto-band-counts {
+  margin: 0 0 0.3rem;
+  padding: 0;
+  list-style: none;
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.carto-gaps {
+  margin: 0.3rem 0;
+  color: #90a4ae;
+  font-size: 0.85rem;
+}
+
+.carto-gaps summary {
+  cursor: pointer;
+}
+
+.carto-gaps ol {
+  margin: 0.4rem 0 0;
+  padding-left: 1.4rem;
+}
+
+.carto-gaps li {
+  overflow-wrap: anywhere;
 }
 
 .carto-badge {
@@ -219,6 +282,7 @@ textarea.carto-input {
 
 .carto-form-actions {
   display: flex;
+  flex-wrap: wrap; /* the art buttons wrap on a phone, not off the page */
   align-items: center;
   gap: 1rem;
   margin-top: 0.75rem;
