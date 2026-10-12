@@ -712,6 +712,8 @@ function ownScore(world, kind, entity, layers) {
     earned += criterion.weight * progress;
     const need = result.need || criterion.need;
     const tool = result.tool || criterion.tool;
+    // The whole checklist, met or not, with each criterion's weight and
+    // progress, and for what is unmet the work and the tool that does it.
     criteria.push({
       id: criterion.id,
       label: criterion.label,
@@ -719,6 +721,7 @@ function ownScore(world, kind, entity, layers) {
       met: progress >= 1,
       progress: round1(progress * 100) / 100,
       ...(result.have !== undefined ? { have: result.have, want: result.want } : {}),
+      ...(progress < 1 ? { need, tool, message: result.message } : {}),
     });
     if (progress < 1) {
       unmet.push({

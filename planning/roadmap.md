@@ -33,7 +33,7 @@ Phases are numbered in the order they were planned, not the order they are built
 ## Build order (decided 2026-10-10)
 
 1. **Finish Phase 3c:** L-650 Town ground, L-660 Walking in town, L-670 Vision in town (all shipped).
-2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria. **In progress** (L-691 shipped; L-692 to L-694 next).
+2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria. **In progress** (L-691 and L-692 shipped; L-693 and L-694 next).
 3. **L-700 Image studio** (#523).
 4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views.
 5. **Phase 3d:** L-370 Game time (#421).
@@ -63,7 +63,7 @@ Phases are planned groups. This list, not the phase numbers, says what is built 
 
 | Epic                             | Issue | State                                                                                                                                                                                            |
 | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| L-690 Grading that asks for more | #551  | 🚧 **In progress**: L-691 the score (#552) shipped. Designed in [`the-loom-grading.md`](./the-loom-grading.md) (decided 2026-10-10); sub-issues L-691 to L-694 (#552–555). A 0–100 score above the gate, criteria added by every content feature |
+| L-690 Grading that asks for more | #551  | 🚧 **In progress**: L-691 the score (#552) and L-692 reads and the work list (#553) shipped. Designed in [`the-loom-grading.md`](./the-loom-grading.md) (decided 2026-10-10); sub-issues L-691 to L-694 (#552–555). A 0–100 score above the gate, criteria added by every content feature |
 | L-700 Image studio (Phase 6)     | #523  | **Designed**; sub-issues #537–545 (§4)                                                                                                                                                           |
 
 **Order:** L-690 comes first, once Phase 3c is done, so the content features that follow add their criteria to it from the start. L-700 follows it, then L-720 (§4).

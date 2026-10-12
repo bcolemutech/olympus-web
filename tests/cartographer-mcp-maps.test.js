@@ -487,17 +487,27 @@ describe('assigning maps', () => {
         message: 'It uses a generic battle map.',
       })
     );
+    // Its own map is score work (L-692), grouped with every place on a
+    // generic one; an own map without walls is work of its own.
+    const scored = (list) => list.items.filter((i) => i.priority === 'score');
+    const entitiesOf = (list, need) =>
+      scored(list)
+        .filter((g) => g.criterion === 'place.ownMap' && g.need === need)
+        .flatMap((g) => g.entities.map((e) => e.id));
     const ordinary = await ok('list_work', { worldId: W, kind: 'poi', limit: 100 });
-    expect(ordinary.items.some((i) => i.id === 'poi_1')).toBe(true);
+    expect(entitiesOf(ordinary, 'battleMap')).toContain('poi_1');
     const work = await ok('list_work', { worldId: W, need: 'battleMap', limit: 100 });
-    const byId = Object.fromEntries(work.items.map((i) => [i.id, i]));
-    expect(byId.poi_1).toMatchObject({ kind: 'poi', grade: 'playable', battleMap: 'generic' });
+    expect(entitiesOf(work, 'battleMap')).toContain('poi_1');
     // The Gull & Anchor has its own map, but no walls yet: still listed.
-    expect(byId['plc_1_the-gull-anchor']).toMatchObject({ battleMap: 'own', layers: false });
+    expect(entitiesOf(work, 'layers')).toContain('plc_1_the-gull-anchor');
+    // And maps without walls of their own (battle maps are scored too).
     expect(
-      work.items.every(
-        (i) => ['none', 'generic'].includes(i.battleMap) || (i.battleMap === 'own' && !i.layers)
-      )
+      scored(work).every((g) => ['place.ownMap', 'battleMap.layers'].includes(g.criterion))
+    ).toBe(true);
+    expect(
+      work.items
+        .filter((i) => i.priority !== 'score')
+        .every((i) => i.missing.includes('battleMap') || i.battleMap !== 'own')
     ).toBe(true);
     expect(work.howTo.battleMap).toMatch(/set_battle_map/);
     // Walled, it leaves the battle-map list.
@@ -514,8 +524,8 @@ describe('assigning maps', () => {
       ],
     });
     const after = await ok('list_work', { worldId: W, need: 'battleMap', limit: 100 });
-    expect(after.items.some((i) => i.id === 'plc_1_the-gull-anchor')).toBe(false);
-    // Without the filter, places still say where they stand.
+    expect(entitiesOf(after, 'layers')).not.toContain('plc_1_the-gull-anchor');
+    // Closed places still say where their map stands.
     const all = await ok('list_work', { worldId: W, kind: 'poi', limit: 1 });
     expect(['none', 'generic', 'own']).toContain(all.items[0].battleMap);
   });

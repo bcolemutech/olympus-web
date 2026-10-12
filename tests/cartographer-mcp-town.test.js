@@ -516,25 +516,27 @@ describe('removing places', () => {
   });
 });
 
-test('list_work puts the places of the nearest towns right after the frontier', async () => {
-  const list = await ok('list_work', { worldId: LIVE, kind: 'place' });
-  expect(list.byTier).toMatchObject({ town: list.total });
-  expect(list.items[0]).toMatchObject({
-    priority: 'town',
+test('list_work: open places in town are score work, near play, each with its tool', async () => {
+  const list = await ok('list_work', { worldId: LIVE, kind: 'place', limit: 100 });
+  // Every place in Burdendal's town is open: what is left is score work.
+  expect(list.byTier).toMatchObject({ frontier: 0, closed: 0, score: list.total });
+  const someone = list.items.find((g) => g.criterion === 'place.someone');
+  // Nobody is there yet (L-691 wants two), so each is listed, with its tool.
+  expect(someone).toMatchObject({ need: 'residents', tool: 'add_character' });
+  expect(someone.entities[0]).toMatchObject({
     type: 'place',
-    town: { id: 'loc_1', name: 'Burdendal' },
-    hops: 0,
-    band: 'playable',
+    kind: 'place',
+    have: 0,
+    want: 2,
+    // A place in an open town weighs 3 (§4.4): its whole 15, times 3.
+    points: 45,
   });
-  // Nobody is there yet, and it is on a generic map (L-622), so neither its
-  // own map nor its art scores (L-691).
-  expect(list.items[0].missing).toEqual(
-    expect.arrayContaining(['residents', 'battleMap', 'mapArt', 'lore'])
-  );
   expect(list.howTo.residents).toMatch(/placeId/);
-  const all = await ok('list_work', { worldId: LIVE, limit: 100 });
-  const tiers = [...new Set(all.items.map((i) => i.priority))];
-  expect(tiers.indexOf('town')).toBeLessThan(tiers.indexOf('closed'));
+  // Closed places come before any score work.
+  const { byTier } = await ok('list_work', { worldId: LIVE, limit: 1 });
+  const closed = byTier.frontier + byTier.closed;
+  const edge = await ok('list_work', { worldId: LIVE, offset: closed - 1, limit: 2 });
+  expect(edge.items.map((i) => i.priority)).toEqual(['closed', 'score']);
 });
 
 test('get_town says whether a town has art, and its size (L-347)', async () => {

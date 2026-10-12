@@ -143,6 +143,10 @@ afterAll(async () => {
 
 // The tests build on each other, like a session with Claude.
 
+const scoreItems = (list) => list.items.filter((item) => item.priority === 'score');
+const groupOf = (list, criterion, tool) =>
+  scoreItems(list).find((g) => g.criterion === criterion && (!tool || g.tool === tool));
+
 test('a fresh import: nothing is open, and the start is the only frontier', async () => {
   const list = await work({ limit: 5 });
   // No settlement has a town yet, nor any point of interest a map: all Unbuilt.
@@ -157,8 +161,10 @@ test('a fresh import: nothing is open, and the start is the only frontier', asyn
     legendary: 0,
     open: 0,
   });
+  expect(list.world).toEqual({ score: expect.any(Number), band: 'playable' });
   expect(list.origin).toEqual({ id: 'loc_1', name: 'Burdendal' });
-  expect(list.byTier).toEqual({ frontier: 1, town: 0, closed: 718, enrich: 0, describe: 168 });
+  expect(list.byTier).toMatchObject({ frontier: 1, closed: 718 });
+  expect(list.byTier.score).toBeGreaterThan(0);
   expect(list.items[0]).toEqual({
     priority: 'frontier',
     type: 'location',
@@ -170,8 +176,8 @@ test('a fresh import: nothing is open, and the start is the only frontier', asyn
     score: 0,
     hops: 0,
     population: 28473,
-    // The gate's needs first, then the criteria by score gained (L-691).
-    missing: ['town', 'description', 'residents', 'townArt', 'lore', 'ground'],
+    // What opens it: the gate's needs (its score's work comes once open).
+    missing: ['town', 'description'],
     // How far it is toward its size's people and lore, so "missing
     // residents" isn't read as "nobody" (a great city wants 12 and 8).
     progress: { size: 'great city', residents: '0 of 12', lore: '0 of 8' },
@@ -180,17 +186,46 @@ test('a fresh import: nothing is open, and the start is the only frontier', asyn
   });
   // Then the closed places nearest the start.
   expect(list.items.slice(1).every((i) => i.priority === 'closed' && i.hops === 1)).toBe(true);
-  expect(Object.keys(list.howTo)).toEqual([
-    'town',
-    'description',
-    'residents',
-    'townArt',
-    'lore',
-    'ground',
-  ]);
+  expect(Object.keys(list.howTo)).toEqual(['town', 'description']);
   expect(list.howTo.town).toMatch(/add_place/);
   expect(list.howTo.description).toMatch(/update_location/);
-  expect(list).toMatchObject({ total: 887, offset: 0, count: 5, nextOffset: 5 });
+  expect(list).toMatchObject({ offset: 0, count: 5, nextOffset: 5 });
+  expect(list.total).toBe(719 + list.byTier.score);
+});
+
+test('closed places come first; then the score’s work, grouped, most points first', async () => {
+  const all = await work({ limit: 100, offset: 719 });
+  const groups = scoreItems(all);
+  expect(groups.length).toBe(all.byTier.score);
+  // Most points first.
+  const points = groups.map((g) => g.points);
+  expect(points).toEqual([...points].sort((a, b) => b - a));
+  for (const group of groups) {
+    // Every group names its criterion, the tool that does it, and what it is for.
+    expect(group).toEqual(
+      expect.objectContaining({
+        type: 'criterion',
+        criterion: expect.any(String),
+        label: expect.any(String),
+        need: expect.any(String),
+        tool: expect.any(String),
+        weight: expect.any(Number),
+        count: group.entities.length + (group.more || 0),
+        summary: expect.stringContaining(`${group.points} points · ${group.tool}`),
+      })
+    );
+    for (const entity of group.entities) {
+      expect(entity).toEqual(
+        expect.objectContaining({ type: expect.any(String), id: expect.any(String) })
+      );
+    }
+  }
+  // Realms and regions are never gated: the work to describe them is score
+  // work, apart because their tools differ. 145 regions, shown ten at a time.
+  const regions = groupOf(all, 'realm.description', 'update_region');
+  expect(regions).toMatchObject({ count: 145, more: 135, need: 'description' });
+  expect(regions.summary).toMatch(/^145 regions: a description long enough · [\d.]+ points/);
+  expect(groupOf(all, 'realm.description', 'update_faction')).toMatchObject({ count: 23 });
 });
 
 test('writing up the start and laying out its town opens it, moving the frontier on', async () => {
@@ -201,16 +236,7 @@ test('writing up the start and laying out its town opens it, moving the frontier
   });
   // Written up, but still Unbuilt: it has no town.
   const written = await work({ limit: 1 });
-  expect(written.items[0]).toMatchObject({ id: 'loc_1', grade: 'unbuilt' });
-  // Written, but short: its description still wants 60 words (L-691).
-  expect(written.items[0].missing).toEqual([
-    'town',
-    'description',
-    'residents',
-    'townArt',
-    'lore',
-    'ground',
-  ]);
+  expect(written.items[0]).toMatchObject({ id: 'loc_1', grade: 'unbuilt', missing: ['town'] });
   expect(written.items[0].progress).toMatchObject({ residents: '0 of 12' });
 
   await ok('add_place', {
@@ -221,32 +247,45 @@ test('writing up the start and laying out its town opens it, moving the frontier
     description: 'Slate quays and tarred rope.',
     entranceFor: ['sea', 'trail'],
   });
-  const list = await work({ limit: 6 });
+  const list = await work({ limit: 5 });
   expect(list.completion).toMatchObject({ unbuilt: 718, playable: 1, open: 0.001 });
   expect(summary(list.items)).toEqual([
     ['frontier', 'loc_631', 'unbuilt', 1],
     ['frontier', 'loc_120', 'unbuilt', 1],
     ['frontier', 'loc_231', 'unbuilt', 1],
     ['frontier', 'loc_229', 'unbuilt', 1],
-    // The harbour itself, written up but with nobody there yet.
-    ['town', 'plc_1_the-harbour', 'playable', 0],
-    ['closed', list.items[5].id, list.items[5].grade, 2],
+    ['closed', list.items[4].id, list.items[4].grade, 2],
   ]);
-  expect(list.byTier).toMatchObject({ frontier: 4, town: 1, enrich: 1 });
+  expect(list.byTier).toMatchObject({ frontier: 4, closed: 714 });
 
-  const start = await work({ grade: 'playable' });
-  expect(start.items).toEqual([
-    expect.objectContaining({ priority: 'town', id: 'plc_1_the-harbour', band: 'playable' }),
+  // Open now, Burdendal and its harbour are score work: near play, so they
+  // weigh three times what far places do (§4.4).
+  const open = await work({ grade: 'playable', kind: 'settlement', limit: 100 });
+  expect(open.items.every((i) => i.priority === 'score')).toBe(true);
+  const residents = groupOf(open, 'settlement.residents');
+  expect(residents.entities).toEqual([
     expect.objectContaining({
-      priority: 'enrich',
+      type: 'location',
+      kind: 'settlement',
       id: 'loc_1',
       band: 'playable',
-      missing: ['description', 'residents', 'townArt', 'lore', 'ground'],
+      // Its whole weight, 15, times 3 for being where the game is.
+      points: 45,
+      have: 0,
+      want: 12,
+      message: 'A great city needs 12 residents (it has 0).',
     }),
+  ]);
+  expect(residents.summary).toBe(
+    '1 settlement: residents for its size · 45 points · add_character'
+  );
+  const harbour = await work({ kind: 'place', limit: 100 });
+  expect(groupOf(harbour, 'place.someone').entities).toEqual([
+    expect.objectContaining({ id: 'plc_1_the-harbour', kind: 'place', have: 0, want: 2 }),
   ]);
 });
 
-test('get_location shows the grade, the checklist, and which neighbours are open', async () => {
+test('get_location shows the score, band, what it is missing and its weighted checklist', async () => {
   const place = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
   expect(place).toMatchObject({ grade: 'playable', band: 'playable' });
   // Open, but nothing past the gate yet: its short description, nobody, no
@@ -269,10 +308,27 @@ test('get_location shows the grade, the checklist, and which neighbours are open
       tool: 'add_character',
     })
   );
-  // Its town's ground (L-655).
-  expect(missing).toContainEqual(
-    expect.objectContaining({ need: 'ground', message: 'Its town has no ground yet.' })
-  );
+  // The whole checklist: every criterion, with its weight and progress (L-692).
+  expect(place.checklist.map((c) => c.id)).toEqual([
+    'settlement.residents',
+    'settlement.lore',
+    'settlement.townArt',
+    'settlement.description',
+    'settlement.loreLinks',
+    'settlement.ground',
+  ]);
+  expect(place.checklist[0]).toEqual({
+    id: 'settlement.residents',
+    label: 'Residents for its size',
+    weight: 15,
+    met: false,
+    progress: 0,
+    have: 0,
+    want: 12,
+    need: 'residents',
+    tool: 'add_character',
+    message: 'A great city needs 12 residents (it has 0).',
+  });
   expect(place.connections.map((c) => c.grade)).toEqual([
     'unbuilt',
     'unbuilt',
@@ -281,7 +337,10 @@ test('get_location shows the grade, the checklist, and which neighbours are open
   ]);
   expect(place.town).toEqual({ places: 1, waysInAndOut: ['The Harbour'], valid: true });
   const neighbour = await ok('get_location', { worldId: WORLD, locationId: 'loc_631' });
-  expect(neighbour.connections.find((c) => c.id === 'loc_1').grade).toBe('playable');
+  expect(neighbour.connections.find((c) => c.id === 'loc_1')).toMatchObject({
+    grade: 'playable',
+    band: 'playable',
+  });
   expect(neighbour.missing.slice(0, 2)).toEqual([
     { need: 'town', for: 'playable', message: 'It has no town layout.' },
     {
@@ -292,7 +351,7 @@ test('get_location shows the grade, the checklist, and which neighbours are open
   ]);
 });
 
-test('people, lore and a long description make it Rich, and it leaves the work list; ground raises it', async () => {
+test('people, lore and a long description make it Rich; ground raises it', async () => {
   const long = (what) => `${what}. ` + Array(60).fill('salt').join(' ');
   await ok('update_location', {
     worldId: WORLD,
@@ -309,11 +368,6 @@ test('people, lore and a long description make it Rich, and it leaves the work l
     });
     // Five of a great city's twelve: its progress says so.
     if (i === 5) {
-      const enrich = await work({ grade: 'playable', kind: 'settlement' });
-      expect(enrich.items[0]).toMatchObject({
-        id: 'loc_1',
-        progress: { residents: '5 of 12', lore: '0 of 8' },
-      });
       const { missing } = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
       expect(missing).toContainEqual(
         expect.objectContaining({
@@ -325,6 +379,17 @@ test('people, lore and a long description make it Rich, and it leaves the work l
       );
     }
   }
+  // The same work across many: twelve locals with short descriptions and no
+  // realm make two groups of twelve, each with its tool (L-692).
+  const people = await work({ kind: 'character', limit: 100 });
+  expect(groupOf(people, 'character.description')).toMatchObject({
+    count: 12,
+    more: 2,
+    tool: 'update_character',
+    summary: expect.stringMatching(/^12 characters: a description long enough · [\d.]+ points/),
+  });
+  expect(groupOf(people, 'character.faction')).toMatchObject({ count: 12, need: 'faction' });
+
   // Eight entries long enough to count, about the town and its harbour, one
   // naming both (variety, and lore that links).
   for (let i = 1; i <= 8; i += 1) {
@@ -365,16 +430,35 @@ test('people, lore and a long description make it Rich, and it leaves the work l
   expect(built.score).toBeGreaterThan(unground.score);
   // Town art is what is left of its own: Vivid takes more than this.
   expect(built.missing.map((item) => item.need)).toEqual(['townArt']);
-  const list = await work({ limit: 100 });
+  const closed = await work({ kind: 'settlement', limit: 1 });
+  const list = await work({
+    kind: 'settlement',
+    offset: closed.byTier.frontier + closed.byTier.closed,
+  });
   expect(list.completion).toMatchObject({ playable: 0, rich: 1 });
-  // Nothing Rich is work: it has left the list entirely.
-  expect((await work({ grade: 'rich' })).total).toBe(0);
+  // What is left for it is town art, in its group with its tool.
+  expect(scoreItems(list).map((g) => g.criterion)).toEqual(['settlement.townArt']);
+  expect(groupOf(list, 'settlement.townArt')).toMatchObject({
+    tool: 'the Cartographer page',
+    entities: [expect.objectContaining({ id: 'loc_1', band: 'rich' })],
+  });
+  expect((await work({ band: 'rich', kind: 'settlement' })).total).toBe(1);
 
-  const rich = await ok('find_locations', { worldId: WORLD, grade: 'rich' });
+  const rich = await ok('find_locations', { worldId: WORLD, band: 'rich' });
   expect(rich.locations).toEqual([
-    expect.objectContaining({ id: 'loc_1', grade: 'playable', band: 'rich' }),
+    expect.objectContaining({
+      id: 'loc_1',
+      grade: 'playable',
+      band: 'rich',
+      score: built.score,
+    }),
   ]);
+  // `grade` filters by the gate.
+  const open = await ok('find_locations', { worldId: WORLD, grade: 'playable' });
+  expect(open.locations.map((l) => l.id)).toEqual(['loc_1']);
+  expect((await ok('find_locations', { worldId: WORLD, band: 'vivid' })).total).toBe(0);
   const overview = await ok('get_world', { worldId: WORLD });
+  expect(overview).toMatchObject({ score: overview.completion.score, band: 'playable' });
   expect(overview.completion).toMatchObject({
     graded: true,
     rubricVersion: 4,
@@ -382,28 +466,66 @@ test('people, lore and a long description make it Rich, and it leaves the work l
     places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
     regions: { stub: 145 },
+    characters: { playable: 12 },
   });
-  expect(overview.completion.score).toBeGreaterThan(0);
+  expect(overview.score).toBeGreaterThan(0);
+  expect(overview.completion.criteria.map((c) => c.id)).toEqual([
+    'world.mapArt',
+    'world.lore',
+    'world.hook',
+  ]);
+});
+
+test('get_character and get_battle_map show their score, band and weighted checklist', async () => {
+  const [local] = Object.values(
+    (await ok('get_world', { worldId: WORLD })).characters.filter((c) => c.name === 'Local A')
+  );
+  const character = await ok('get_character', { worldId: WORLD, characterId: local.id });
+  expect(character).toMatchObject({ grade: 'playable', band: expect.any(String) });
+  expect(character.checklist).toEqual([
+    expect.objectContaining({ id: 'character.description', weight: 25, met: false, have: 6 }),
+    // Tale 1 doesn't name them: no lore about them.
+    expect.objectContaining({ id: 'character.lore', weight: 15, met: false }),
+    expect.objectContaining({ id: 'character.faction', weight: 10, met: false }),
+  ]);
+  expect(character.missing[0]).toMatchObject({ criterion: 'character.description', gain: 25 });
+
+  const map = await ok('get_battle_map', { worldId: WORLD, mapId: GATEWAY.id });
+  expect(map).toMatchObject({ grade: 'playable', score: expect.any(Number) });
+  expect(map.checklist.map((c) => [c.id, c.weight])).toEqual([
+    ['battleMap.layers', 30],
+    ['battleMap.art', 30],
+    ['battleMap.features', 20],
+    ['battleMap.exits', 20],
+  ]);
+  // The gateway has an exit and nothing else.
+  expect(map.checklist.find((c) => c.id === 'battleMap.exits').met).toBe(true);
+  expect(map.score).toBe(20);
 });
 
 test('filters: by kind, by what is missing, and around another place', async () => {
-  // Settlements want residents (662 still need people), and places in town
-  // (the harbour) and points of interest (56) someone found there (L-691).
-  expect((await work({ need: 'residents' })).total).toBe(719);
-  const needingPeople = await work({ need: 'residents', kind: 'settlement', limit: 3 });
-  expect(needingPeople.total).toBe(662);
-  expect(needingPeople.items.every((i) => i.kind === 'settlement')).toBe(true);
-  expect(needingPeople.items.every((i) => i.missing.includes('residents'))).toBe(true);
-  expect((await work({ kind: 'poi', need: 'residents' })).total).toBe(56);
-
-  const regions = await work({ kind: 'region', limit: 2 });
-  expect(regions.total).toBe(145);
-  expect(regions.items[0]).toMatchObject({
-    priority: 'describe',
-    type: 'region',
-    grade: 'stub',
-    missing: ['description', 'lore', 'people'],
+  // Closed places, by what opens them.
+  const towns = await work({ need: 'town', limit: 3 });
+  expect(towns.items.every((i) => i.missing.includes('town'))).toBe(true);
+  expect(towns.byTier.score).toBe(0);
+  // Score work, by what it asks for: residents for the harbour (a place
+  // wants two found there).
+  const residents = await work({ need: 'residents' });
+  expect(residents.byTier).toMatchObject({ frontier: 0, closed: 0 });
+  expect(scoreItems(residents).every((g) => g.need === 'residents')).toBe(true);
+  expect(groupOf(residents, 'place.someone').entities.map((e) => e.id)).toEqual([
+    'plc_1_the-harbour',
+  ]);
+  // need battleMap: places without a map, or on a generic one.
+  const battleMaps = await work({ need: 'battleMap', kind: 'place' });
+  expect(groupOf(battleMaps, 'place.ownMap')).toMatchObject({
+    need: 'battleMap',
+    entities: [expect.objectContaining({ id: 'plc_1_the-harbour' })],
   });
+
+  const regions = await work({ kind: 'region', limit: 100 });
+  expect(regions.byTier).toMatchObject({ frontier: 0, closed: 0 });
+  expect(scoreItems(regions).every((g) => g.entities.every((e) => e.kind === 'region'))).toBe(true);
 
   // Around Hitchel instead of the start: it is closed, so it heads the frontier.
   const around = await work({ near: 'loc_24', limit: 2 });
@@ -430,12 +552,27 @@ test('update_region writes a description at last, and grades the region', async 
   expect(region).toMatchObject({
     description: 'Rain-green hills between the bay and the old road.',
     grade: 'playable',
+    band: expect.any(String),
+    score: expect.any(Number),
   });
   // Its description is short of 80 words, and nobody writes its lore yet.
   expect(region.missing.map((item) => item.criterion)).toEqual(
     expect.arrayContaining(['realm.description', 'realm.lore'])
   );
+  expect(region.checklist.map((c) => c.id)).toEqual([
+    'realm.description',
+    'realm.lore',
+    'realm.people',
+  ]);
+  // Burdendal's twelve locals are its notable people.
+  expect(region.checklist.find((c) => c.id === 'realm.people').met).toBe(true);
   expect(region.locations[0]).toMatchObject({ id: 'loc_1', grade: 'playable', band: 'rich' });
+  const realm = await ok('get_faction', { worldId: WORLD, factionId: 'fac_1' });
+  expect(realm.checklist.map((c) => c.id)).toEqual([
+    'realm.description',
+    'realm.lore',
+    'realm.people',
+  ]);
   expect((await call('update_region', { worldId: WORLD, regionId: 'reg_1' })).isError).toBe(true);
 });
 
