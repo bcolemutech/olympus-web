@@ -104,14 +104,21 @@ describe('recording costs', () => {
 
   test('totals add up across days, models, editors and page or MCP', async () => {
     clock = Date.parse('2026-10-31T08:00:00Z'); // the next day
+    // A minute apart, so "latest first" has one order.
+    const later = () => {
+      clock += 60000;
+    };
     await costs.record(flash());
+    later();
     await costs.record(flash({ via: 'page', createdBy: 'editor-002' }));
+    later();
     await costs.record({
       model: 'gemini-3-pro-image-preview',
       size: '4k',
       createdBy: 'builder-001',
       via: 'page',
     });
+    later();
     // A failed job the provider charged for still counts (§4.3).
     await costs.record(flash({ failed: true, usd: 0.01 }));
 
@@ -158,7 +165,10 @@ describe('recording costs', () => {
     });
     expect(totals.warning).toBeUndefined();
     expect(totals.recent).toHaveLength(2);
-    expect(totals.recent[0]).toMatchObject({ usd: 0.01, failed: true });
+    expect(totals.recent.map((r) => [r.usd, r.failed])).toEqual([
+      [0.01, true],
+      [0.24, false],
+    ]);
   });
 
   test('a new month starts from nothing', async () => {
