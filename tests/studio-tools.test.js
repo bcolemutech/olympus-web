@@ -401,7 +401,7 @@ describe('studio_delete', () => {
 
 describe('costs (L-706)', () => {
   test('every studio tool’s result carries the cost line', async () => {
-    await costs.record({ model: 'gemini-2.5-flash-image', createdBy: BUILDER, via: 'mcp' });
+    await costs.record({ model: 'gemini-3.1-flash-image', createdBy: BUILDER, via: 'mcp' });
     const spare = await add({ title: 'A spare cover', kind: 'cover' }, png(32, 32));
     const calls = {
       studio_find: { words: 'spare' },
@@ -421,7 +421,7 @@ describe('costs (L-706)', () => {
       expect(result.isError).toBeFalsy();
       expect([name, result.structuredContent.cost]).toEqual([
         name,
-        { job: 0, month: 0.039, warnAt: 50 },
+        { job: 0, month: 0.067, warnAt: 50 },
       ]);
       // The text Claude reads says the same.
       const text = result.content.find((item) => item.type === 'text');
@@ -432,27 +432,27 @@ describe('costs (L-706)', () => {
   test('studio_costs gives the month by day, model and who', async () => {
     const result = await ok('studio_costs', {});
     expect(result).toMatchObject({
-      total: 0.039,
+      total: 0.067,
       count: 1,
       warnAt: 50,
-      days: [{ usd: 0.039, count: 1 }],
-      models: [{ model: 'gemini-2.5-flash-image', usd: 0.039 }],
-      who: [{ uid: BUILDER, usd: 0.039, mcp: { usd: 0.039, count: 1 } }],
-      recent: [expect.objectContaining({ usd: 0.039, via: 'mcp' })],
+      days: [{ usd: 0.067, count: 1 }],
+      models: [{ model: 'gemini-3.1-flash-image', usd: 0.067 }],
+      who: [{ uid: BUILDER, usd: 0.067, mcp: { usd: 0.067, count: 1 } }],
+      recent: [expect.objectContaining({ usd: 0.067, via: 'mcp' })],
     });
     expect(await refused('studio_costs', { month: '2026-13' })).toMatch(/month/);
   });
 
   test('past the figure, every result warns plainly', async () => {
     await costs.record({
-      model: 'imagen-4.0-generate-001',
+      model: 'gemini-3-pro-image',
       usd: 50,
       createdBy: BUILDER,
       via: 'page',
     });
     for (const name of ['studio_find', 'studio_labels', 'studio_costs']) {
       const { cost } = await ok(name, {});
-      expect(cost.month).toBe(50.039);
+      expect(cost.month).toBe(50.067);
       expect(cost.warning).toMatch(/WARNING: .*past the \$50\.00 warning figure/);
     }
     expect((await ok('studio_costs', {})).warning).toMatch(/past the/);

@@ -43,7 +43,7 @@ const PLAYER = { uid: 'player-001', token: { apps: ['loom'] } };
 let clock = Date.parse('2026-10-30T23:30:00Z');
 const costs = createCosts({ db, FieldValue, now: () => clock });
 const flash = (fields = {}) => ({
-  model: 'gemini-2.5-flash-image',
+  model: 'gemini-3.1-flash-image',
   createdBy: 'builder-001',
   via: 'mcp',
   kind: 'worldMap',
@@ -63,13 +63,15 @@ afterAll(async () => {
 
 describe('the price table', () => {
   test('prices per image by size, or by tokens', () => {
-    expect(priceOf({ model: 'gemini-2.5-flash-image' })).toBe(0.039);
+    expect(priceOf({ model: 'gemini-3.1-flash-image' })).toBe(0.067);
+    expect(priceOf({ model: 'gemini-3.1-flash-image', size: '512' })).toBe(0.045);
     expect(priceOf({ model: 'gemini-3-pro-image-preview', size: '4K' })).toBe(0.24);
-    expect(priceOf({ model: 'gemini-3-pro-image-preview', size: '2k' })).toBe(0.134);
-    expect(priceOf({ model: 'imagen-4.0-generate-001', images: 3 })).toBeCloseTo(0.12, 10);
+    expect(priceOf({ model: 'gemini-3-pro-image', size: '2k' })).toBe(0.134);
+    expect(priceOf({ model: 'gemini-3.1-flash-lite-image', images: 3 })).toBeCloseTo(0.1008, 10);
+    // 2K from Pro: 1120 output tokens at $120 a million, and the prompt.
     expect(
-      priceOf({ model: 'gemini-2.5-flash-image', tokens: { input: 1000, output: 1290 } })
-    ).toBeCloseTo(0.0003 + 0.0387, 10);
+      priceOf({ model: 'gemini-3-pro-image', tokens: { input: 1000, output: 1120 } })
+    ).toBeCloseTo(0.002 + 0.1344, 10);
   });
 
   test('a model without a price can’t be charged for', () => {
@@ -90,14 +92,14 @@ describe('recording costs', () => {
     expect(entry).toMatchObject({
       jobId: 'job_1',
       imageId: 'img_1',
-      model: 'gemini-2.5-flash-image',
-      micros: 39000,
-      usd: 0.039,
+      model: 'gemini-3.1-flash-image',
+      micros: 67000,
+      usd: 0.067,
       month: '2026-10',
       day: '30',
       failed: false,
     });
-    expect(cost).toEqual({ job: 0.039, month: 0.039, warnAt: 50 });
+    expect(cost).toEqual({ job: 0.067, month: 0.067, warnAt: 50 });
     const stored = (await db.collection('studio_costs').doc(entry.id).get()).data();
     expect(stored).toEqual(entry);
   });
@@ -123,42 +125,42 @@ describe('recording costs', () => {
     await costs.record(flash({ failed: true, usd: 0.01 }));
 
     const month = await monthDoc('2026-10');
-    expect(month.micros).toBe(39000 * 3 + 240000 + 10000);
+    expect(month.micros).toBe(67000 * 3 + 240000 + 10000);
     expect(month.count).toBe(5);
     expect(month.days).toEqual({
-      30: { micros: 39000, count: 1 },
-      31: { micros: 39000 * 2 + 240000 + 10000, count: 4 },
+      30: { micros: 67000, count: 1 },
+      31: { micros: 67000 * 2 + 240000 + 10000, count: 4 },
     });
     // A model name with dots is one key, not a path.
-    expect(month.models['gemini-2.5-flash-image']).toEqual({ micros: 39000 * 3 + 10000, count: 4 });
+    expect(month.models['gemini-3.1-flash-image']).toEqual({ micros: 67000 * 3 + 10000, count: 4 });
 
     const totals = await costs.totals({ month: '2026-10', recent: 2 });
     expect(totals).toMatchObject({
       month: '2026-10',
-      total: 0.367,
+      total: 0.451,
       count: 5,
       warnAt: 50,
       days: [
-        { date: '2026-10-30', usd: 0.039, count: 1 },
-        { date: '2026-10-31', usd: 0.328, count: 4 },
+        { date: '2026-10-30', usd: 0.067, count: 1 },
+        { date: '2026-10-31', usd: 0.384, count: 4 },
       ],
       models: [
         { model: 'gemini-3-pro-image-preview', usd: 0.24, count: 1 },
-        { model: 'gemini-2.5-flash-image', usd: 0.127, count: 4 },
+        { model: 'gemini-3.1-flash-image', usd: 0.211, count: 4 },
       ],
       who: [
         {
           uid: 'builder-001',
-          usd: 0.328,
+          usd: 0.384,
           count: 4,
           page: { usd: 0.24, count: 1 },
-          mcp: { usd: 0.088, count: 3 },
+          mcp: { usd: 0.144, count: 3 },
         },
         {
           uid: 'editor-002',
-          usd: 0.039,
+          usd: 0.067,
           count: 1,
-          page: { usd: 0.039, count: 1 },
+          page: { usd: 0.067, count: 1 },
           mcp: { usd: 0, count: 0 },
         },
       ],
@@ -175,7 +177,7 @@ describe('recording costs', () => {
     clock = Date.parse('2026-11-01T00:00:01Z');
     expect(await costs.line()).toEqual({ job: 0, month: 0, warnAt: 50 });
     const { cost } = await costs.record(flash());
-    expect(cost).toEqual({ job: 0.039, month: 0.039, warnAt: 50 });
+    expect(cost).toEqual({ job: 0.067, month: 0.067, warnAt: 50 });
     expect((await costs.totals()).month).toBe('2026-11');
     expect((await monthDoc('2026-10')).count).toBe(5); // October unchanged
   });
@@ -207,7 +209,7 @@ describe('the warning', () => {
   });
 
   test('the line reads plainly below a dollar', () => {
-    expect(costLine({ jobMicros: 39000, monthMicros: 51e6 }).warning).toMatch(/\$51\.00/);
+    expect(costLine({ jobMicros: 67000, monthMicros: 51e6 }).warning).toMatch(/\$51\.00/);
     expect(costLine({ monthMicros: 0 })).toEqual({ job: 0, month: 0, warnAt: 50 });
   });
 });
@@ -215,7 +217,7 @@ describe('the warning', () => {
 describe('studioCosts (the page)', () => {
   test('gives the month’s totals against the figure, and the latest charges', async () => {
     const res = await studioCosts.run({ data: { month: '2026-10' }, auth: BUILDER });
-    expect(res).toMatchObject({ month: '2026-10', total: 0.367, warnAt: 50, names: {} });
+    expect(res).toMatchObject({ month: '2026-10', total: 0.451, warnAt: 50, names: {} });
     expect(res.recent.length).toBe(5);
     expect(res.who.map((w) => w.uid)).toEqual(['builder-001', 'editor-002']);
   });

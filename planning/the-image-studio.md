@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), and L-706, costs (§4.5). L-707, generation, is next.
+**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), L-706, costs (§4.5), and L-707, generation (§4.3). L-708 and L-709 are next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -134,6 +134,23 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 - **A job** builds the request: the prompt; the style's text and references, if any (M4); the `from` thing's data, if any (M7); references (M3); then calls the model for its tier, or the model named (M1). It stores the image as a new image (generate) or a new version (edit, E2), records the cost (4.5) and marks the job done.
 - **Models:** the tiers map to Gemini image models in config. Which models, at which sizes and prices, and whether they are served in `us-central1` or only from Vertex's `global` endpoint, is checked when L-707 is built; the M2 trial picks how big maps are made.
 - **Failures** are recorded on the job with the provider's message. A failure the provider charged for still writes a cost entry.
+- **As built (L-707):**
+  - **Models** (checked 2026-10-12 against Google's price list). Gemini 2.5 Flash Image was shut down on 2026-10-02. The tiers, in `functions/studio/config.js`:
+    - **`draft`:** Gemini 3.1 Flash Image at 1K, about $0.067.
+    - **`final`:** Gemini 3 Pro Image at 2K, about $0.134 (4K: $0.24).
+    - Claude can also name these models, or Gemini 3.1 Flash Lite Image (1K only, about $0.034).
+    - All are called with `generateContent` through Vertex's **`global`** endpoint, where the Gemini 3 image models are served, under their `-preview` ids. The price table (`costs.js`) is now these models.
+  - **Charging:** a job is charged by the tokens Vertex reports, with thinking tokens counted at the output price (on the high side), else per image at its size.
+  - **The queue:** `studioRunJob` is an `onTaskDispatched` function with 8 jobs at once, a 300-second timeout and **no retries**. A job is run once: one dispatched again while marked running is failed rather than run, so it is never charged twice.
+  - **The request:**
+    - `from` adds the thing's data before the prompt. A town is drawn square from above with its places named; a battle map is drawn in its grid's shape (the nearest supported ratio), without a grid; a character's image defaults to a portrait.
+    - Up to 6 references, each library image's current version, SVG drawn to PNG first.
+    - The kind can come from `from`; the title defaults to the prompt.
+  - **Failures:** a call that throws fails the job and isn't charged. No image back (refused or blocked) fails it with the model's reason, charged for the tokens reported.
+  - **Tools:** `studio_jobs` waits at most 45 seconds, since the connector sits behind Hosting's 60-second limit. It shows up to 4 finished images per result. Its cost line's `job` is what the listed jobs cost.
+  - **The page:** a form (prompt, kind, tier, shape, title, labels, and references chosen from an image's detail) calls `studioGenerate`. A jobs list follows `studio_jobs` live (editors may read it).
+  - **By hand:** the **Studio Generate** workflow (`scripts/studio-generate.js`) runs one real image, or the M2 trial, against Vertex and production.
+  - **The M2 trial** makes one world map three ways: Pro at 4K in one go; a 1K draft redrawn at 4K by Pro; and a 2K middle extended outward to 21:9 at 4K. Its result is recorded here once it has been run.
 
 ### 4.4 Assignment
 

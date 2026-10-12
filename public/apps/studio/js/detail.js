@@ -187,6 +187,20 @@
       download(record, version, down);
     });
     actions.appendChild(down);
+    // A reference for the next image made (L-707).
+    if (Studio.generate) {
+      var useRef = el(
+        'button',
+        'studio-link',
+        Studio.generate.hasReference(record.id) ? 'A reference ✓' : 'Use as a reference'
+      );
+      useRef.type = 'button';
+      useRef.addEventListener('click', function () {
+        Studio.generate.addReference(record.id);
+        useRef.textContent = 'A reference ✓';
+      });
+      actions.appendChild(useRef);
+    }
     body.appendChild(actions);
 
     var facts = el('dl', 'studio-facts');

@@ -1,0 +1,108 @@
+name: Studio Generate
+
+# Makes images with the real model, by hand (L-707 / #543; planning/the-image-
+# studio.md §4.3), by running scripts/studio-generate.js against Vertex and
+# production: one image, or the big-map trial (M2), which makes one world map
+# three ways for comparing. Every image goes into the studio's library and
+# every cost is recorded. The images and a summary are kept as the run's
+# artifact.
+#
+# It spends money: set confirm to "spend". The trial costs about $1.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'one image, or the big-map trial'
+        required: true
+        type: choice
+        options: [one, trial]
+        default: one
+      prompt:
+        description: 'What to draw (empty: an old-atlas world map)'
+        required: false
+        type: string
+        default: ''
+      tier:
+        description: 'For one image: draft or final'
+        required: false
+        type: choice
+        options: [draft, final]
+        default: draft
+      size:
+        description: 'For one image: 1K, 2K or 4K (empty: the tier’s size)'
+        required: false
+        type: string
+        default: ''
+      confirm:
+        description: 'Type "spend" to make the images'
+        required: true
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Check the inputs
+        env:
+          SIZE: ${{ inputs.size }}
+        run: |
+          if [[ -n "$SIZE" && ! "$SIZE" =~ ^(512|1K|2K|4K)$ ]]; then
+            echo "::error::The size is 512, 1K, 2K or 4K"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefix functions
+          npm install --prefix scripts
+
+      - name: Make the images
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          STUDIO_CONFIRM: ${{ inputs.confirm }}
+          STUDIO_BY: workflow:${{ github.actor }}
+          MODE: ${{ inputs.mode }}
+          PROMPT: ${{ inputs.prompt }}
+          TIER: ${{ inputs.tier }}
+          SIZE: ${{ inputs.size }}
+        run: |
+          args=("$MODE")
+          if [[ -n "$PROMPT" ]]; then args+=("$PROMPT"); fi
+          if [[ "$MODE" == "one" ]]; then
+            args+=(--tier "$TIER")
+            if [[ -n "$SIZE" ]]; then args+=(--size "$SIZE"); fi
+          fi
+          set -o pipefail
+          node scripts/studio-generate.js "${args[@]}" 2>&1 | tee generate.log
+
+      - name: Keep the images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-${{ inputs.mode }}-${{ github.run_id }}
+          path: studio-out/
+          if-no-files-found: ignore
+
+      - name: Summary
+        if: always()
+        run: |
+          if [[ -f studio-out/summary.md ]]; then
+            cat studio-out/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat generate.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi

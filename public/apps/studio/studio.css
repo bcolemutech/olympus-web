@@ -156,6 +156,83 @@
   background: linear-gradient(90deg, #ffd54f, #ffb74d);
 }
 
+/* ── Making images (L-707) ─────────────────────── */
+
+.studio-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.studio-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.25rem 0.55rem 0.25rem 0.25rem;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.studio-ref img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.studio-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-job {
+  padding: 0.55rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid #90a4ae;
+  border-radius: 8px;
+}
+
+.studio-job-running,
+.studio-job-queued {
+  border-left-color: #ffb74d;
+}
+
+.studio-job-done {
+  border-left-color: #81c784;
+}
+
+.studio-job-failed {
+  border-left-color: #f87171;
+}
+
+.studio-job-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+
+.studio-job-state {
+  color: #e0e0e0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.studio-job-prompt {
+  margin: 0.25rem 0;
+  color: #cfd8dc;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
 /* ── Forms ─────────────────────────────────────── */
 
 .studio-upload {

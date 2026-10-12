@@ -50,6 +50,80 @@
         </div>
         <p class="studio-banner hidden" id="studio-cost-banner" role="alert"></p>
 
+        <!-- Make an image (L-707) -->
+        <section class="studio-section hidden" id="studio-generate-section">
+          <details class="studio-upload" id="studio-generate" open>
+            <summary class="studio-section-title">Make an image</summary>
+            <p class="studio-help">
+              A Gemini image model draws it, and it goes into the library with its prompt. Every
+              image is charged: a draft costs about $0.07, a final image about $0.13. Several can be
+              made at once; they appear below as they finish.
+            </p>
+            <form class="studio-form" id="studio-generate-form">
+              <div class="studio-form-group">
+                <label class="studio-label" for="studio-prompt">Prompt</label>
+                <textarea
+                  class="studio-input"
+                  id="studio-prompt"
+                  rows="3"
+                  maxlength="4000"
+                  required
+                  placeholder="An old map of a rugged coastline, ink on parchment"
+                ></textarea>
+              </div>
+              <div class="studio-form-row">
+                <div class="studio-form-group">
+                  <label class="studio-label" for="studio-gen-kind">Kind</label>
+                  <select class="studio-input" id="studio-gen-kind" required></select>
+                </div>
+                <div class="studio-form-group">
+                  <label class="studio-label" for="studio-tier">Tier</label>
+                  <select class="studio-input" id="studio-tier">
+                    <option value="draft">Draft (fast, about $0.07)</option>
+                    <option value="final">Final (careful, about $0.13)</option>
+                  </select>
+                </div>
+                <div class="studio-form-group">
+                  <label class="studio-label" for="studio-ratio">Shape</label>
+                  <select class="studio-input" id="studio-ratio">
+                    <option value="">Model's choice</option>
+                  </select>
+                </div>
+              </div>
+              <div class="studio-form-row">
+                <div class="studio-form-group studio-grow">
+                  <label class="studio-label" for="studio-gen-title">Title</label>
+                  <input
+                    class="studio-input"
+                    id="studio-gen-title"
+                    type="text"
+                    maxlength="120"
+                    placeholder="Defaults to the prompt"
+                  />
+                </div>
+                <div class="studio-form-group studio-grow">
+                  <label class="studio-label" for="studio-gen-labels">Labels</label>
+                  <input
+                    class="studio-input"
+                    id="studio-gen-labels"
+                    type="text"
+                    list="studio-label-list"
+                    placeholder="Comma-separated"
+                  />
+                </div>
+              </div>
+              <div class="studio-form-group">
+                <span class="studio-label">References</span>
+                <div class="studio-refs" id="studio-refs"></div>
+              </div>
+              <p class="studio-error hidden" id="studio-generate-error" role="alert"></p>
+              <button class="app-btn" id="studio-generate-btn" type="submit">Make it</button>
+            </form>
+            <h3 class="studio-subtitle">Jobs</h3>
+            <ul class="studio-jobs" id="studio-jobs"></ul>
+          </details>
+        </section>
+
         <!-- Upload -->
         <section class="studio-section hidden" id="studio-upload-section">
           <details class="studio-upload" id="studio-upload">
@@ -174,6 +248,7 @@
     <script src="/apps/studio/js/detail.js"></script>
     <script src="/apps/studio/js/upload.js"></script>
     <script src="/apps/studio/js/costs.js"></script>
+    <script src="/apps/studio/js/generate.js"></script>
     <script src="/apps/studio/js/app.js"></script>
 
     <script>

@@ -30,26 +30,29 @@ const crypto = require('crypto');
 const WARN_AT_USD = 50;
 
 /**
- * The price table (C1): per image by output size, or per million tokens.
- * Which models the studio uses, and their prices on Vertex, are confirmed
- * when generation is built (L-707, §4.3); a model not listed here can't be
- * charged for, so it can't be run.
+ * The price table (C1): Google's prices for the image models (checked
+ * 2026-10-12; functions/studio/config.js lists the models), per million
+ * tokens and per image by output size. A job is charged by the tokens the
+ * provider reports, else per image. A model not listed here can't be charged
+ * for, so it can't be run. Vertex's preview ids ("…-preview") share their
+ * model's price.
  */
 const PRICES = Object.freeze({
-  // Gemini 2.5 Flash Image: 1290 output tokens an image at $30 a million.
-  'gemini-2.5-flash-image': {
-    perImage: { default: 0.039 },
-    perMillionTokens: { input: 0.3, output: 30 },
+  // Gemini 3.1 Flash Image: 747 tokens at 512, 1120 at 1K, 1680 at 2K, 2520 at 4K.
+  'gemini-3.1-flash-image': {
+    perImage: { default: 0.067, 512: 0.045, '1k': 0.067, '2k': 0.101, '4k': 0.151 },
+    perMillionTokens: { input: 0.5, output: 60 },
   },
-  // Gemini 3 Pro Image: by output size.
-  'gemini-3-pro-image-preview': {
+  // Gemini 3.1 Flash Lite Image: 1K only.
+  'gemini-3.1-flash-lite-image': {
+    perImage: { default: 0.0336, '1k': 0.0336 },
+    perMillionTokens: { input: 0.25, output: 30 },
+  },
+  // Gemini 3 Pro Image: 1120 tokens at 1K and 2K, 2000 at 4K.
+  'gemini-3-pro-image': {
     perImage: { default: 0.134, '1k': 0.134, '2k': 0.134, '4k': 0.24 },
     perMillionTokens: { input: 2, output: 120 },
   },
-  // Imagen 4, per image.
-  'imagen-4.0-fast-generate-001': { perImage: { default: 0.02 } },
-  'imagen-4.0-generate-001': { perImage: { default: 0.04 } },
-  'imagen-4.0-ultra-generate-001': { perImage: { default: 0.06 } },
 });
 
 const MICROS = 1e6;
@@ -72,7 +75,7 @@ const money = (usd) => `$${usd < 1 && usd > 0 ? usd.toFixed(3) : usd.toFixed(2)}
  * it and the model is priced by tokens, else per image at its size.
  */
 function priceOf({ model, size, tokens, images = 1 }) {
-  const price = PRICES[model];
+  const price = PRICES[String(model || '').replace(/-preview$/, '')];
   if (!price) {
     throw new CostError(
       `No price for the model "${model}", so it can't be used. Known: ${Object.keys(PRICES).join(', ')}.`

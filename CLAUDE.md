@@ -70,7 +70,7 @@ npm run format
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
 - **Jest 29** — Rules, Cloud Functions, Loom, Cartographer and MCP tests against the Firestore and Storage emulators
-- **GitHub Actions** — 9 workflows for CI, preview deploys, production deploys and admin tasks
+- **GitHub Actions** — 10 workflows for CI, preview deploys, production deploys and admin tasks
 
 ---
 
@@ -214,6 +214,7 @@ npm run deploy            # Deploy hosting only (production)
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
 | `studio_images/{imageId}` | `hasApp('cartographer')`, read only | The image studio's library: one record per image, with its kind, labels, versions and link (files in Storage at `studio/{imageId}/`) |
+| `studio_jobs/{jobId}` | `hasApp('cartographer')`, read only | The image studio's generation jobs: the request, its state (queued, running, done, failed), the image made, its cost or error |
 | `studio_costs/{entryId}`, `studio_costs_month/{yyyy-mm}` | Deny (server only) | The image studio's costs: one entry per charged job, and each month's totals by day, model and who (read through `studioCosts`) |
 | `scriptorium_notes/{id}` | Deny (server only) | Scriptorium notes, via MCP |
 | `mcp_*` (`oauth_clients`, `oauth_codes`, `oauth_tokens`, `oauth_grants`, `audit`, `rate_limits`) | Deny (server only) | MCP OAuth state, audit log, rate limits |
@@ -224,7 +225,7 @@ Client writes to Loom and Cartographer data are denied; the Cloud Functions writ
 
 ## Cloud Functions
 
-Functions v2, all exported from `functions/index.js`. Everything is a Callable except `mcpServer`, an HTTP function behind the Hosting rewrites for `/mcp/**`, `/authorize`, `/token`, `/register`, `/revoke` and the `.well-known` discovery docs.
+Functions v2, all exported from `functions/index.js`. Everything is a Callable except `studioRunJob`, a Cloud Tasks queue function, and `mcpServer`, an HTTP function behind the Hosting rewrites for `/mcp/**`, `/authorize`, `/token`, `/register`, `/revoke` and the `.well-known` discovery docs.
 
 | Function | Who Can Call | Purpose |
 |---|---|---|
@@ -245,6 +246,8 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `cartographerMapImage` | `cartographer` claim | Attach, replace or remove a battle map's art (an uploaded PNG or SVG drawn under its grid), through the image studio's library |
 | `studioUpload` | `cartographer` claim | Add an uploaded image (PNG, JPEG, WebP or SVG) to the image studio's library, with its title, kind and labels |
 | `studioCosts` | `cartographer` claim | The image studio's spending for a month, for its page: the total against the $50 warning figure, by day, model and who, and the latest charges |
+| `studioGenerate` | `cartographer` claim | Start making an image from the studio page's form (prompt, kind, tier, shape, references, title, labels); returns the job at once |
+| `studioRunJob` | Cloud Tasks queue only | Runs one generation job, at most 8 at once: the Gemini image model on Vertex, the image into the library, its cost recorded |
 | `mcpListConnections` / `mcpRevokeConnection` | Signed-in user (own connections) | Grand Hall "Manage connections" |
 | `mcpServer` | OAuth bearer token per connector | MCP connectors (Scriptorium, Cartographer) and the OAuth server |
 
@@ -265,6 +268,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 | `seed-categories.yml` | Manual dispatch | Populate Symposium categories |
 | `backfill-character-positions.yml` | Manual dispatch | Give characters made before L-680 a position (dry run, then apply) |
 | `backfill-art-library.yml` | Manual dispatch | Move world art from before the image studio into its library (dry run, then apply) |
+| `studio-generate.yml` | Manual dispatch | Make images with the real model by hand: one image, or the big-map trial; spends money, so it asks for confirm "spend" |
 
 **Required secret:** `FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00`
 
