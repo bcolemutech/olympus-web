@@ -180,12 +180,9 @@
       img.classList.add('hidden');
       return;
     }
-    if (image.path === map.imagePath) return;
-    map.imagePath = image.path;
-    firebase
-      .storage()
-      .ref(image.path)
-      .getDownloadURL()
+    if (Loom.artKey(image) === map.imagePath) return;
+    map.imagePath = Loom.artKey(image);
+    Loom.artUrl(image)
       .then(function (url) {
         img.src = url;
         img.classList.remove('hidden');

@@ -238,8 +238,8 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `cartographerImport` | `cartographer` claim | Uploaded Azgaar map → draft world |
 | `cartographerPublish` | `cartographer` claim | Publish a draft world to the Loom |
 | `cartographerCompletion` | `cartographer` claim | How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, and its biggest gaps |
-| `cartographerTownImage` | `cartographer` claim | Attach, replace or remove a town's art (an uploaded PNG drawn behind the town view) |
-| `cartographerMapImage` | `cartographer` claim | Attach, replace or remove a battle map's art (an uploaded PNG drawn under its grid) |
+| `cartographerTownImage` | `cartographer` claim | Attach, replace or remove a town's art (an uploaded PNG or SVG drawn behind the town view), through the image studio's library |
+| `cartographerMapImage` | `cartographer` claim | Attach, replace or remove a battle map's art (an uploaded PNG or SVG drawn under its grid), through the image studio's library |
 | `studioUpload` | `cartographer` claim | Add an uploaded image (PNG, JPEG, WebP or SVG) to the image studio's library, with its title, kind and labels |
 | `mcpListConnections` / `mcpRevokeConnection` | Signed-in user (own connections) | Grand Hall "Manage connections" |
 | `mcpServer` | OAuth bearer token per connector | MCP connectors (Scriptorium, Cartographer) and the OAuth server |

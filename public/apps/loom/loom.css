@@ -33,6 +33,18 @@
   color: #e0e0e0;
 }
 
+.loom-world-cover {
+  display: block;
+  width: calc(100% + 3rem);
+  max-width: none;
+  height: 160px;
+  margin: -1.5rem -1.5rem 1rem;
+  object-fit: cover;
+  border-radius: inherit;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .loom-world-band {
   display: inline-block;
   margin-left: 0.6rem;

@@ -15,7 +15,13 @@
         return snap.docs
           .map(function (doc) {
             var data = doc.data();
-            return { id: doc.id, name: data.name || doc.id, tagline: data.tagline || '' };
+            return {
+              id: doc.id,
+              name: data.name || doc.id,
+              tagline: data.tagline || '',
+              // Its cover image (L-704): a library image's link, the file only.
+              cover: data.cover && data.cover.link ? data.cover.link : null,
+            };
           })
           .sort(function (a, b) {
             return a.name.localeCompare(b.name);
@@ -74,6 +80,19 @@
     worlds.forEach(function (world) {
       var card = document.createElement('div');
       card.className = 'app-card loom-world-card';
+
+      if (world.cover) {
+        var cover = document.createElement('img');
+        cover.className = 'loom-world-cover';
+        cover.src = world.cover;
+        cover.alt = '';
+        cover.loading = 'lazy';
+        // A cover that won't load leaves the card as it would be without one.
+        cover.addEventListener('error', function () {
+          cover.remove();
+        });
+        card.appendChild(cover);
+      }
 
       var title = document.createElement('h3');
       title.className = 'loom-card-title';

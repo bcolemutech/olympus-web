@@ -103,20 +103,19 @@
 
   // ── Data ──────────────────────────────────────────
 
-  // Fetches the town's image URL from Cloud Storage, then redraws.
+  // Fetches the town's image URL (a library image's link, or from Cloud
+  // Storage for older art), then redraws.
   function loadArt(image) {
     if (!image) {
       town.art = { path: null, url: null };
       return;
     }
-    if (image.path === town.art.path) return;
-    town.art = { path: image.path, url: null };
-    firebase
-      .storage()
-      .ref(image.path)
-      .getDownloadURL()
+    var key = Loom.artKey(image);
+    if (key === town.art.path) return;
+    town.art = { path: key, url: null };
+    Loom.artUrl(image)
       .then(function (url) {
-        if (town.art.path !== image.path) return; // the player moved on meanwhile
+        if (town.art.path !== key) return; // the player moved on meanwhile
         town.art.url = url;
         Loom.map.render();
       })
@@ -606,7 +605,7 @@
     // The town's art (L-347), fitted inside the town's square, behind the
     // paths and places.
     var image = town.data.image;
-    if (image && town.art.url && town.art.path === image.path) {
+    if (image && town.art.url && town.art.path === Loom.artKey(image)) {
       var aspect = image.width / image.height || 1;
       var w = aspect >= 1 ? SPAN : SPAN * aspect;
       var h = aspect >= 1 ? SPAN / aspect : SPAN;

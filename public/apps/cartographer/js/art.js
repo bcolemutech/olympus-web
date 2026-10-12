@@ -228,7 +228,9 @@
               size.width +
               '×' +
               size.height +
-              '). Games see it on their next turn.'
+              '), kept in the image studio’s library. Games see it on their next turn.' +
+              // A shape that doesn't fit the grid or the town's square (L-704).
+              (res.data.warnings ? ' ' + res.data.warnings.join(' ') : '')
           );
           file.value = '';
           return load();

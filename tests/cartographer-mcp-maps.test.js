@@ -685,6 +685,9 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
     '<rect width="12" height="8" fill="#6d5a45"/>' +
     '<rect x="2" y="1" width="4" height="2" fill="#3b2a1d"/></svg>';
   const tavernMap = () => mapDoc(W, 'bm_the-gull-anchor-ground-floor');
+  // set_art's SVG is a library image (L-704).
+  const libraryImage = async (imageId) =>
+    (await db.collection('studio_images').doc(imageId).get()).data();
 
   test('a battle map’s art: stored as SVG, to be downloaded if opened directly', async () => {
     const result = await ok('set_art', {
@@ -697,15 +700,19 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
       of: 'battleMap',
       id: 'bm_the-gull-anchor-ground-floor',
       name: 'The Gull & Anchor, ground floor',
-      art: { format: 'svg', width: 12, height: 8 },
+      art: { imageId: expect.stringMatching(/^img_/), format: 'svg', width: 12, height: 8 },
       next: 'Check it with view_image.',
     });
     const { image } = await tavernMap();
-    expect(image).toMatchObject({ width: 12, height: 8, format: 'svg' });
-    expect(image.path).toMatch(
-      /^worlds\/nisia-m0m0m0\/map-bm_the-gull-anchor-ground-floor-.+\.svg$/
-    );
-    const [meta] = await bucket.file(image.path).getMetadata();
+    expect(image).toMatchObject({ imageId: result.art.imageId, width: 12, height: 8, format: 'svg' });
+    const stored = await libraryImage(image.imageId);
+    expect(stored).toMatchObject({
+      kind: 'battleMap',
+      via: 'mcp',
+      usedIn: [{ worldId: W, target: 'battleMap', id: 'bm_the-gull-anchor-ground-floor' }],
+    });
+    expect(stored.versions[0].path).toMatch(new RegExp(`^studio/${image.imageId}/v1\\.svg$`));
+    const [meta] = await bucket.file(stored.versions[0].path).getMetadata();
     expect(meta).toMatchObject({ contentType: 'image/svg+xml', contentDisposition: 'attachment' });
     // view_image draws it, under the grid.
     const seen = await call('view_image', {
@@ -717,8 +724,8 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
     expect(seen.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
   });
 
-  test('a shape that isn’t the grid’s is stretched, with a warning; replacing deletes the old', async () => {
-    const old = (await tavernMap()).image.path;
+  test('a shape that isn’t the grid’s is stretched, with a warning; replacing frees the old', async () => {
+    const old = (await tavernMap()).image.imageId;
     const wide = await ok('set_art', {
       worldId: W,
       of: 'battleMap',
@@ -726,7 +733,8 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
       svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100"/></svg>',
     });
     expect(wide.warnings[0]).toMatch(/isn't the grid's \(12 × 8\), so it is stretched/);
-    expect((await bucket.file(old).exists())[0]).toBe(false);
+    // The old image stays in the library, no longer used.
+    expect((await libraryImage(old)).usedIn).toEqual([]);
   });
 
   test('a town’s art; not square is fitted, with a warning', async () => {
@@ -748,13 +756,14 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
     });
     expect(wide.warnings[0]).toMatch(/isn't square/);
     expect((await ok('get_town', { worldId: W, locationId: 'loc_1' })).art).toEqual({
+      imageId: wide.art.imageId,
       width: 1600,
       height: 900,
     });
   });
 
   test('unsafe SVG is refused, and nothing is stored', async () => {
-    const before = (await tavernMap()).image.path;
+    const before = (await tavernMap()).image.imageId;
     expect(
       await refused('set_art', {
         worldId: W,
@@ -763,7 +772,7 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
         svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8"><script>alert(1)</script></svg>',
       })
     ).toMatch(/can't be used: it has a script/);
-    expect((await tavernMap()).image.path).toBe(before);
+    expect((await tavernMap()).image.imageId).toBe(before);
     expect(await refused('set_art', { worldId: W, of: 'town', id: 'poi_1', svg: SVG })).toMatch(
       /isn't a settlement/
     );
@@ -773,7 +782,7 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
   });
 
   test('svg null takes the art away', async () => {
-    const art = (await tavernMap()).image.path;
+    const art = (await tavernMap()).image.imageId;
     expect(
       await ok('set_art', {
         worldId: W,
@@ -783,7 +792,7 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
       })
     ).toMatchObject({ art: null });
     expect((await tavernMap()).image).toBeNull();
-    expect((await bucket.file(art).exists())[0]).toBe(false);
+    expect((await libraryImage(art)).usedIn).toEqual([]);
   });
 });
 

@@ -43,8 +43,9 @@
  */
 
 // 2: the Rich bar scales with a settlement's size; 3: a Rich settlement's town
-// has ground (L-655); 4: the score, its criteria and bands (L-691).
-const RUBRIC_VERSION = 4;
+// has ground (L-655); 4: the score, its criteria and bands (L-691); 5: a
+// world's cover image (L-704).
+const RUBRIC_VERSION = 5;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -70,7 +71,7 @@ const WEIGHTS = Object.freeze({
   character: { description: 25, lore: 15, faction: 10 },
   battleMap: { layers: 30, art: 30, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
-  world: { mapArt: 20, lore: 20, hook: 10 },
+  world: { mapArt: 20, lore: 20, hook: 10, cover: 15 },
 });
 const QUALITY = Object.freeze({
   // Words a description needs to count, and a lore entry to count anywhere.
@@ -264,7 +265,9 @@ function ownMap(world, entity, layers) {
   return kind === 'own' ? require('./maps').mapOf(world, entity) : null;
 }
 
-const hasArt = (thing) => Boolean(thing && thing.image && thing.image.path);
+// Art is a library image (L-704) or, from before the library, a Storage path
+// (./art.js).
+const hasArt = (thing) => Boolean(thing && require('./art').fromRef(thing.image));
 
 /**
  * The criteria registry (planning/the-loom-grading.md §4.1). Each is
@@ -332,7 +335,7 @@ const CRITERIA = Object.freeze([
     feature: 'L-347',
     label: 'Town art',
     need: 'townArt',
-    tool: 'the Cartographer page',
+    tool: 'studio_assign',
     check: (world, settlement) =>
       hasArt(settlement.town) ? met() : { progress: 0, message: 'Its town has no art.' },
   },
@@ -407,7 +410,7 @@ const CRITERIA = Object.freeze([
     feature: 'L-351',
     label: 'Art on its battle map',
     need: 'mapArt',
-    tool: 'the Cartographer page',
+    tool: 'studio_assign',
     check: (world, entity, { layers }) => {
       const map = ownMap(world, entity, layers);
       if (hasArt(map)) return met();
@@ -536,7 +539,7 @@ const CRITERIA = Object.freeze([
     feature: 'L-351',
     label: 'Art',
     need: 'mapArt',
-    tool: 'the Cartographer page',
+    tool: 'studio_assign',
     check: (world, map) => (hasArt(map) ? met() : { progress: 0, message: 'It has no art.' }),
   },
   {
@@ -641,11 +644,24 @@ const CRITERIA = Object.freeze([
     feature: 'C-4',
     label: 'Map art',
     need: 'mapArt',
-    tool: 'the Cartographer page',
+    tool: 'studio_assign',
     check: (world) =>
-      world.map && (world.map.imagePath || world.map.hasImage)
+      require('./art').worldMapArt(world) || (world.map && world.map.hasImage)
         ? met()
         : { progress: 0, message: 'The world map has no art.' },
+  },
+  {
+    id: 'world.cover',
+    kinds: ['world'],
+    weight: WEIGHTS.world.cover,
+    feature: 'L-704',
+    label: 'A cover image',
+    need: 'cover',
+    tool: 'studio_assign',
+    check: (world) =>
+      require('./art').coverArt(world)
+        ? met()
+        : { progress: 0, message: 'The world has no cover image for the Loom’s world list.' },
   },
   {
     id: 'world.lore',

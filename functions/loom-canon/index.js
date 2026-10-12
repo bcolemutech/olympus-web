@@ -172,6 +172,8 @@ async function readFirestoreWorld(db, worldId, meta) {
     status: meta.status,
     canonVersion: meta.canonVersion,
     map: meta.map || null,
+    // Its cover image (L-704): a library image reference (./art.js).
+    cover: meta.cover || null,
     rules: meta.rules || {},
   };
   ENTITY_COLLECTIONS.forEach(function (name, i) {

@@ -8,6 +8,7 @@ const { speedOf, turnStateOf } = require('../loom-models');
 const { planOn, doorStatesOf, doorSides } = require('./steps');
 const { walksTown, townPlanOf, streetOf } = require('./town-steps');
 const ground = require('../loom-canon/ground');
+const artOf = require('../loom-canon/art');
 const townSeen = require('./town-seen');
 const { foundIn } = require('./town-found');
 const townPaths = require('../loom-canon/town-paths');
@@ -99,9 +100,8 @@ function mapView(canonWorld, save, record, townRecord) {
         ? {
             width: map.width,
             height: map.height,
-            image: map.imagePath
-              ? { path: map.imagePath, width: map.imageWidth, height: map.imageHeight }
-              : null,
+            // Its art (L-704): a library image's link, or an older path.
+            image: artOf.forPlayer(artOf.worldMapArt(canonWorld)),
           }
         : null,
   };
@@ -209,7 +209,6 @@ function townView(canonWorld, save, discovered, townRecord) {
     });
   }
 
-  const art = settlement.town && settlement.town.image;
   // Its ground (L-664), for walking it in the town view: the shapes, its
   // width in metres, and whether the save walks its streets now (off any
   // map). The town's paths are found in the page with the server's own rules
@@ -234,8 +233,9 @@ function townView(canonWorld, save, discovered, townRecord) {
     links,
     exits,
     // The town's art (L-347), drawn behind the places, fitted to the town's
-    // 0–1000 square: { path (Cloud Storage), width, height }, or null.
-    image: art ? { path: art.path, width: art.width, height: art.height } : null,
+    // 0–1000 square: { url (a library image, L-704) or path (Cloud
+    // Storage), width, height }, or null. Never the image's record (A5).
+    image: artOf.forPlayer(artOf.townArt(settlement)),
     ...walking,
   };
 }
@@ -307,9 +307,7 @@ function battleView(canonWorld, save, record) {
     name: map.name,
     width: map.width,
     height: map.height,
-    image: map.image
-      ? { path: map.image.path, width: map.image.width, height: map.image.height }
-      : null,
+    image: artOf.forPlayer(artOf.mapArt(map)),
     here: { x: cell.x, y: cell.y },
     host: host ? { id: host.id, name: host.name } : null,
     entries: (map.entries || []).filter(on).map((e) => ({ id: e.id, x: e.x, y: e.y })),

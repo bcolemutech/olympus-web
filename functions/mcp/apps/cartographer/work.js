@@ -85,15 +85,21 @@ const HOW_TO = {
   layers:
     'Give its battle map walls, doors and obstacles: set_map_layers (or with the grid, ' +
     'set_battle_map). Check them against the art with view_image.',
-  townArt: 'Upload the town’s art on the Cartographer page (its town view).',
+  townArt:
+    'Give the town art: a town image from the studio’s library, with studio_assign (target ' +
+    'town), or upload it on the Cartographer page. Check it with view_image.',
   mapArt:
-    'Upload its battle map’s art on the Cartographer page, then line the grid up with ' +
+    'Give it art: an image from the studio’s library with studio_assign (target battleMap, or ' +
+    'map for the world map), or upload it on the Cartographer page. Line the grid up with ' +
     'view_image.',
   features: 'Name the features on its battle map (the bar, the altar): set_battle_map.',
   exits: 'Place its battle map’s exits: set_battle_map.',
   faction: 'Give them a realm: update_character with factionId.',
   people: 'Add notable people: add_character (with factionId for a realm).',
   hook: 'Give the world an opening hook and a tagline: publish_world.',
+  cover:
+    'Give the world a cover image: a cover image from the studio’s library, with studio_assign ' +
+    '(target cover). Players see it on the Loom’s world list.',
 };
 
 // What a group of entities is called, by kind.

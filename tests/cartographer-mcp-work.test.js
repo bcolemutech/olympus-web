@@ -439,7 +439,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   // What is left for it is town art, in its group with its tool.
   expect(scoreItems(list).map((g) => g.criterion)).toEqual(['settlement.townArt']);
   expect(groupOf(list, 'settlement.townArt')).toMatchObject({
-    tool: 'the Cartographer page',
+    tool: 'studio_assign',
     entities: [expect.objectContaining({ id: 'loc_1', band: 'rich' })],
   });
   expect((await work({ band: 'rich', kind: 'settlement' })).total).toBe(1);
@@ -461,7 +461,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   expect(overview).toMatchObject({ score: overview.completion.score, band: 'playable' });
   expect(overview.completion).toMatchObject({
     graded: true,
-    rubricVersion: 4,
+    rubricVersion: 5,
     band: 'playable',
     places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
@@ -471,6 +471,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   expect(overview.score).toBeGreaterThan(0);
   expect(overview.completion.criteria.map((c) => c.id)).toEqual([
     'world.mapArt',
+    'world.cover',
     'world.lore',
     'world.hook',
   ]);

@@ -1,8 +1,6 @@
 'use strict';
 
-const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
-const { FieldValue } = require('firebase-admin/firestore');
 const loomCanon = require('../loom-canon');
 const { parseAzgaarExport, AzgaarFormatError } = require('./parse');
 const { mapToCanon } = require('./map');
@@ -11,7 +9,6 @@ const { gradeWorld, gradeLocation, isPlayable, BANDS } = require('../loom-canon/
 const { biggestGaps } = require('../mcp/apps/cartographer/work');
 const { unplacedCharacters } = require('../loom-canon/positions');
 const { ToolError } = require('../mcp/registry');
-const { checkSvg } = require('./svg');
 
 // Unplaced characters a publish refusal names before "and N more" (L-683).
 const UNPLACED_SHOWN = 3;
@@ -120,23 +117,17 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     const worldId = newWorldId(mapped.canon.name);
     const warnings = [...mapped.warnings];
 
-    // Optional rendered map image: validated by its PNG header, then copied to
-    // the world's permanent location before the world is created.
+    // Optional rendered map image: checked by its header, then added to the
+    // image studio's library and assigned as the world's map (L-704), once
+    // the world exists. A file that isn't an image is skipped with a warning.
     const pngFile = uploadFile(uid, uploadId, 'map.png');
     const [pngExists] = await pngFile.exists();
-    let imagePath = null;
+    let mapImage = null;
     if (pngExists) {
       const [header] = await pngFile.download({ start: 0, end: 23 });
-      const size = pngDimensions(header);
-      if (size) {
-        imagePath = `worlds/${worldId}/map.png`;
-        await pngFile.copy(bucket.file(imagePath));
-        mapped.canon.map = {
-          ...mapped.canon.map,
-          imagePath,
-          imageWidth: size.width,
-          imageHeight: size.height,
-        };
+      if (pngDimensions(header)) {
+        const { readImage } = require('../studio/formats');
+        mapImage = readImage((await pngFile.download())[0]);
       } else {
         warnings.push({
           code: 'image_invalid',
@@ -146,23 +137,28 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
       }
     }
 
-    let result;
-    try {
-      result = await loadDraftWorld({
-        db,
-        mapped: { ...mapped, warnings },
-        source: parsed.source,
-        uploadedBy: uid,
-        now,
-        worldId,
-      });
-    } catch (err) {
-      if (imagePath)
-        await bucket
-          .file(imagePath)
-          .delete()
-          .catch(() => {});
-      throw err;
+    const result = await loadDraftWorld({
+      db,
+      mapped: { ...mapped, warnings },
+      source: parsed.source,
+      uploadedBy: uid,
+      now,
+      worldId,
+    });
+
+    let image = null;
+    if (mapImage) {
+      try {
+        const assigned = await studio().addAndAssign(uid, {
+          worldId: result.worldId,
+          target: 'map',
+          file: mapImage,
+          via: 'upload',
+        });
+        image = { imageId: assigned.image.imageId, width: mapImage.width, height: mapImage.height };
+      } catch (err) {
+        throw asHttps(err);
+      }
     }
 
     await bucket.deleteFiles({ prefix: `cartographer/${uid}/${uploadId}/` }).catch(() => {});
@@ -171,9 +167,7 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
       name: mapped.canon.name,
       counts: result.counts,
       warnings: result.warnings,
-      image: imagePath
-        ? { width: mapped.canon.map.imageWidth, height: mapped.canon.map.imageHeight }
-        : null,
+      image,
     };
   }
 
@@ -310,18 +304,36 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     return { worlds };
   }
 
-  // Attaches, replaces or removes a piece of art (L-347, L-355): checks the
-  // upload is a PNG, copies it beside the world's map image under a new name
-  // (so no browser shows an old one), records it through the write layer, and
-  // then deletes the replaced image and the upload. A refused attach leaves
-  // no copy behind.
-  //   kind: { file (upload name), label, name (for the path), place(e) → the
-  //           entity, apply(e, entity, image | null) → its previous image }
-  // Art is a PNG or (L-356) an SVG: from the upload folder (kind.file, or
-  // the same name ending .svg), or as SVG text drawn over MCP (`svg`). SVG is
-  // checked (./svg.js) and stored as image/svg+xml, to be downloaded, never
-  // shown, if opened directly.
-  async function attachArt(uid, { worldId, uploadId, remove, svg }, id, kind) {
+  // Art reaches a world through the image studio's library (L-704 / #540;
+  // planning/the-image-studio.md §4.4, A3): an upload or an SVG Claude draws
+  // becomes a library image, assigned to the town or battle map in one step.
+  // The library keeps it (and every earlier image) for reuse; replacing art
+  // only moves the world to the new image. Art from before the library is a
+  // Storage path; replacing it deletes its file, as before.
+  //
+  // Art is a PNG, JPEG, WebP or SVG: from the upload folder (kind.file, or
+  // the same name ending .svg), or SVG text drawn over MCP (`svg`). SVG is
+  // checked (./svg.js) as every SVG is.
+  const studio = () => {
+    const { createLibrary } = require('../studio/library');
+    const { createAssigner } = require('../studio/assign');
+    const library = createLibrary({ db, bucket, now });
+    return createAssigner({ db, bucket, writer, library });
+  };
+
+  // The assigner's and library's refusals, as the callables' errors.
+  const asHttps = (err) => {
+    if (err instanceof HttpsError) return err;
+    if (err && typeof err.code === 'string' && err.message && !(err instanceof ToolError)) {
+      const codes = ['invalid-argument', 'not-found', 'failed-precondition'];
+      if (codes.includes(err.code)) return new HttpsError(err.code, err.message);
+    }
+    // The write layer's own refusals (an unknown or uneditable world).
+    if (err instanceof ToolError) return new HttpsError('failed-precondition', err.message);
+    return err;
+  };
+
+  async function attachArt(uid, { worldId, uploadId, remove, svg }, id, kind, via = 'page') {
     if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
       throw new HttpsError('invalid-argument', 'worldId is required.');
     }
@@ -332,73 +344,47 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     if (!remove && !drawn && (typeof uploadId !== 'string' || !UPLOAD_ID.test(uploadId))) {
       throw new HttpsError('invalid-argument', 'uploadId is required.');
     }
-
-    let image = null;
-    const pathFor = (ext) =>
-      `worlds/${worldId}/${kind.name}-${id}-${now().toString(36)}${crypto
-        .randomBytes(3)
-        .toString('hex')}.${ext}`;
-    const saveSvg = async (text) => {
-      let checked;
+    const { readImage } = require('../studio/formats');
+    const read = (bytes) => {
       try {
-        checked = checkSvg(text);
+        return readImage(bytes);
       } catch (err) {
         throw new HttpsError(
           'invalid-argument',
           `The ${kind.label} can't be used: ${err.message}.`
         );
       }
-      image = { path: pathFor('svg'), width: checked.width, height: checked.height, format: 'svg' };
-      await bucket.file(image.path).save(checked.svg, {
-        contentType: 'image/svg+xml',
-        metadata: { contentDisposition: 'attachment' },
-      });
     };
+
+    let file = null;
     if (drawn) {
-      await saveSvg(svg);
+      file = read(Buffer.from(svg, 'utf8'));
+      if (file.format !== 'svg') {
+        throw new HttpsError('invalid-argument', `The ${kind.label} can't be used: it is not SVG.`);
+      }
     } else if (!remove) {
       const svgUpload = uploadFile(uid, uploadId, kind.file.replace(/\.png$/, '.svg'));
       const pngUpload = uploadFile(uid, uploadId, kind.file);
-      if ((await svgUpload.exists())[0]) {
-        const [bytes] = await svgUpload.download();
-        await saveSvg(bytes.toString('utf8'));
-      } else {
-        const [exists] = await pngUpload.exists();
-        if (!exists) throw new HttpsError('not-found', `Upload the ${kind.label} first.`);
-        const [header] = await pngUpload.download({ start: 0, end: 23 });
-        const size = pngDimensions(header);
-        if (!size) {
-          throw new HttpsError('invalid-argument', `The ${kind.label} is not a valid PNG.`);
-        }
-        image = { path: pathFor('png'), ...size };
-        await pngUpload.copy(bucket.file(image.path));
+      const upload = (await svgUpload.exists())[0] ? svgUpload : pngUpload;
+      if (!(await upload.exists())[0]) {
+        throw new HttpsError('not-found', `Upload the ${kind.label} first.`);
       }
+      file = read((await upload.download())[0]);
     }
 
     let result;
     try {
-      result = await writer.edit(worldId, uid, (e) => {
-        const entity = kind.place(e.world, id);
-        const previous = kind.apply(e, entity, image);
-        return { name: entity.name, previous };
-      });
+      result = file
+        ? await studio().addAndAssign(uid, {
+            worldId,
+            target: kind.target,
+            id,
+            file,
+            via: drawn ? 'mcp' : via,
+          })
+        : await studio().assign(uid, { worldId, target: kind.target, id, imageId: null });
     } catch (err) {
-      if (image)
-        await bucket
-          .file(image.path)
-          .delete()
-          .catch(() => {});
-      if (err instanceof HttpsError) throw err;
-      // The write layer's own refusals (an unknown or uneditable world).
-      if (err instanceof ToolError) throw new HttpsError('failed-precondition', err.message);
-      throw err;
-    }
-
-    if (result.previous && (!image || result.previous.path !== image.path)) {
-      await bucket
-        .file(result.previous.path)
-        .delete()
-        .catch(() => {});
+      throw asHttps(err);
     }
     if (!remove && !drawn) {
       await bucket.deleteFiles({ prefix: `cartographer/${uid}/${uploadId}/` }).catch(() => {});
@@ -407,9 +393,15 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
       worldId,
       [kind.idField]: id,
       name: result.name,
-      image: image
-        ? { width: image.width, height: image.height, format: image.format || 'png' }
+      image: result.image
+        ? {
+            imageId: result.image.imageId,
+            width: result.image.width,
+            height: result.image.height,
+            format: result.image.format,
+          }
         : null,
+      ...(result.warnings.length ? { warnings: result.warnings } : {}),
     };
   }
 
@@ -417,50 +409,16 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
   const TOWN_ART = {
     file: 'town.png',
     label: 'town image',
-    name: 'town',
+    target: 'town',
     idField: 'locationId',
-    place(world, id) {
-      const settlement = world.locations[id];
-      if (!settlement || settlement.retired) {
-        throw new HttpsError('not-found', 'No such place in this world.');
-      }
-      if ((settlement.geo || {}).kind !== 'settlement') {
-        throw new HttpsError(
-          'failed-precondition',
-          `${settlement.name} isn't a settlement, so it has no town.`
-        );
-      }
-      return settlement;
-    },
-    apply(e, settlement, image) {
-      const previous = (settlement.town && settlement.town.image) || null;
-      if (image || previous) {
-        e.update(e.ref('locations', settlement.id), {
-          'town.image': image || FieldValue.delete(),
-        });
-      }
-      return previous;
-    },
   };
 
   // A battle map's art, on the map as image (L-355), stretched to its grid.
   const MAP_ART = {
     file: 'battlemap.png',
     label: 'battle-map image',
-    name: 'map',
+    target: 'battleMap',
     idField: 'mapId',
-    place(world, id) {
-      const map = (world.battleMaps || {})[id];
-      if (!map || map.retired) {
-        throw new HttpsError('not-found', 'No such battle map in this world.');
-      }
-      return map;
-    },
-    apply(e, map, image) {
-      const previous = map.image || null;
-      if (image || previous) e.update(e.ref('battleMaps', map.id), { image: image || null });
-      return previous;
-    },
   };
 
   const townImage = (uid, data = {}) => attachArt(uid, data, data.locationId, TOWN_ART);
@@ -475,7 +433,28 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
       of === 'town' ? TOWN_ART : MAP_ART
     );
 
-  return { importUpload, publishWorld, worldCompletion, townImage, mapImage, drawArt };
+  // Using a library image for a world's map, cover, town or battle map, or
+  // taking it away (imageId null): studio_assign and studio_unassign (L-704).
+  async function assignImage(uid, { worldId, target, id, imageId } = {}) {
+    if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
+      throw new HttpsError('invalid-argument', 'worldId is required.');
+    }
+    try {
+      return await studio().assign(uid, { worldId, target, id, imageId: imageId || null });
+    } catch (err) {
+      throw asHttps(err);
+    }
+  }
+
+  return {
+    importUpload,
+    publishWorld,
+    worldCompletion,
+    townImage,
+    mapImage,
+    drawArt,
+    assignImage,
+  };
 }
 
 function requireCartographer(request) {
