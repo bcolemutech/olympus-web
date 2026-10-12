@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** Decided (2026-10-09). The gap sheet (§3) is answered; sub-issues are ready to file (§5).
+**Status:** In progress. Decided 2026-10-09. L-701, the library, has shipped (links settled in §4.6); L-702, L-703, L-704 and L-706 are next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -145,6 +145,12 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 ### 4.6 Links, downloads and fetching
 
 - **Every image has a link** (A6) from the moment it is made: an unguessable URL that serves the current version and keeps working when versions change. Whether it is a Storage download token on a stable copy or a small Hosting route is settled in L-701; either way it must survive new versions and be cacheable.
+- **Settled in L-701 (2026-10-12): a Storage download token on a stable copy.**
+  - **How it works:** each image has `studio/{imageId}/current`, a copy of its current version, saved with an unguessable download token (a random UUID) when the image is made. The link is that file's Firebase download URL (`…/o/studio%2F{id}%2Fcurrent?alt=media&token=…`), stored on the record as `link`.
+  - **New versions:** making a version current copies that version's file over `current`, keeping the same token, so the link never changes. The version files themselves never change.
+  - **Caching:** `current` is served with `Cache-Control: public, max-age=300`, so a new current version shows within five minutes.
+  - **Why not a Hosting route:** a route would run a function on every view, or need a CDN purge on each change. The download URL needs neither, and it works anywhere an image URL does.
+  - **Without the token:** the files are readable only by editors (`storage.rules`). Players never see the record, only the URL the Loom resolves (L-704).
 - **Download** on the page gives the current version's original file. **`studio_get`** returns the record, the link, and the image scaled for viewing; Claude can hand the link to other projects (A4).
 
 ### 4.7 Tools

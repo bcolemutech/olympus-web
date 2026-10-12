@@ -40,7 +40,25 @@ service firebase.storage {
             || ((file == 'town.svg' || file == 'battlemap.svg')
               && request.resource.contentType == 'image/svg+xml'
               && request.resource.size <= 1024 * 1024)
+            // An image for the studio's library (L-701): studioUpload reads it
+            // by its bytes, cleans an SVG, and removes the upload.
+            || ((file == 'studio.png' && request.resource.contentType == 'image/png'
+                || file == 'studio.jpg' && request.resource.contentType == 'image/jpeg'
+                || file == 'studio.webp' && request.resource.contentType == 'image/webp')
+              && request.resource.size <= 30 * 1024 * 1024)
+            || (file == 'studio.svg'
+              && request.resource.contentType == 'image/svg+xml'
+              && request.resource.size <= 1024 * 1024)
           );
+    }
+
+    // ── The image studio's library (L-701) ────────────────
+    // studio/{imageId}/v{n}.{ext}, one file per version, and
+    // studio/{imageId}/current, the copy its link serves (with a download
+    // token, which needs no rule). Editors read; only the server writes.
+
+    match /studio/{imageId}/{file} {
+      allow read: if hasApp('cartographer');
     }
 
     // ── World map images ──────────────────────────────────

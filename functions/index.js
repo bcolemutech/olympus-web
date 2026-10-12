@@ -70,6 +70,27 @@ exports.cartographerMapImage = onCall(async (request) => {
   return cartographerService().mapImage(uid, request.data || {});
 });
 
+// ── The image studio (L-700) ─────────────────────────────
+// One shared library of images for Cartographer editors. See
+// functions/studio/ and planning/the-image-studio.md.
+let _studioService;
+function studioService() {
+  if (!_studioService) {
+    const { getStorage } = require('firebase-admin/storage');
+    _studioService = require('./studio/service').createStudioService({
+      db: getFirestore(),
+      bucket: getStorage().bucket(),
+    });
+  }
+  return _studioService;
+}
+
+// Add an uploaded image (PNG, JPEG, WebP or SVG) to the library (L-701).
+exports.studioUpload = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return studioService().upload(uid, request.data || {});
+});
+
 // Grand Hall "connected assistants" (phase 1i): the signed-in user lists and
 // revokes their own MCP connections. See functions/mcp/connections.js.
 const mcpConnections = require('./mcp/connections');
