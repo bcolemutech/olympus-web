@@ -4,15 +4,12 @@ const { FieldValue } = require('firebase-admin/firestore');
 const art = require('../loom-canon/art');
 const loomCanon = require('../loom-canon');
 const { LibraryError } = require('./library');
+const { TARGETS, refOf } = require('./assign-targets');
 
 /**
  * Assigning library images to worlds (planning/the-image-studio.md §4.4;
- * L-704 / #540). A world holds a reference to a library image (A1) for:
- *
- *   map        the world map           world.map.image      kind worldMap
- *   cover      its cover image         world.cover          kind cover
- *   town       a settlement's town     location.town.image  kind town
- *   battleMap  a battle map's art      battleMap.image      kind battleMap
+ * L-704 / #540). A world holds a reference to a library image (A1) for its
+ * map, its cover, a town or a battle map (./assign-targets.js).
  *
  * The kind must fit the target (L1). The world is changed through the
  * Cartographer's versioned writer, and the image's `usedIn` in the same
@@ -21,30 +18,11 @@ const { LibraryError } = require('./library');
  * file, as replacing art always has.
  */
 
-const TARGETS = Object.freeze({
-  map: { kind: 'worldMap', label: 'world map' },
-  cover: { kind: 'cover', label: 'cover image' },
-  town: { kind: 'town', label: 'town art' },
-  battleMap: { kind: 'battleMap', label: 'battle-map art' },
-});
-
 class AssignError extends Error {
   constructor(code, message) {
     super(message);
     this.code = code;
   }
-}
-
-/** What a world holds for a library image: its link, and its current size. */
-function refOf(record) {
-  const version = record.versions.find((v) => v.n === record.current);
-  return {
-    imageId: record.id,
-    link: record.link,
-    width: version.width,
-    height: version.height,
-    format: version.format,
-  };
 }
 
 // The thing art is for, and the art it holds now.

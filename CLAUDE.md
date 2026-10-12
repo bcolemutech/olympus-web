@@ -69,7 +69,7 @@ npm run format
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
 - **Jest 29** — Rules, Cloud Functions, Loom, Cartographer and MCP tests against the Firestore and Storage emulators
-- **GitHub Actions** — 8 workflows for CI, preview deploys, production deploys and admin tasks
+- **GitHub Actions** — 9 workflows for CI, preview deploys, production deploys and admin tasks
 
 ---
 
@@ -260,6 +260,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 | `set-admin.yml` | Manual dispatch | Grant or revoke admin claim |
 | `seed-categories.yml` | Manual dispatch | Populate Symposium categories |
 | `backfill-character-positions.yml` | Manual dispatch | Give characters made before L-680 a position (dry run, then apply) |
+| `backfill-art-library.yml` | Manual dispatch | Move world art from before the image studio into its library (dry run, then apply) |
 
 **Required secret:** `FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00`
 
