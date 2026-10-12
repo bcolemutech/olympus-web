@@ -84,9 +84,17 @@ async function upload(file, bytes, { contentType = 'application/octet-stream' } 
   return uploadId;
 }
 const exists = async (name) => (await bucket.file(name).exists())[0];
-const fetchLink = async (link) => {
-  const res = await fetch(link);
-  return { status: res.status, bytes: Buffer.from(await res.arrayBuffer()) };
+// What the link serves: the file it names, and whether its token is that
+// file's download token. (Fetching it over HTTP depends on the emulator's
+// project and rules, so the test reads the file and its token directly.)
+const served = async (link) => {
+  const url = new URL(link);
+  const name = decodeURIComponent(url.pathname.replace(/^\/v0\/b\/[^/]+\/o\//, ''));
+  const file = bucket.file(name);
+  const [meta] = await file.getMetadata();
+  const [bytes] = await file.download();
+  const tokens = String((meta.metadata || {}).firebaseStorageDownloadTokens || '').split(',');
+  return { tokenOk: tokens.includes(url.searchParams.get('token')), bytes };
 };
 
 beforeEach(async () => {
@@ -225,7 +233,7 @@ describe('the link', () => {
         `/v0/b/${BUCKET}/o/studio%2F${record.id}%2Fcurrent\\?alt=media&token=[0-9a-f-]{36}$`
       )
     );
-    expect(await fetchLink(record.link)).toEqual({ status: 200, bytes: first });
+    expect(await served(record.link)).toEqual({ tokenOk: true, bytes: first });
     const [meta] = await bucket.file(`studio/${record.id}/current`).getMetadata();
     expect(meta.cacheControl).toBe(LINK_CACHE);
 
@@ -241,11 +249,11 @@ describe('the link', () => {
       [1, 100, null],
       [2, 200, 'make it wider'],
     ]);
-    expect(await fetchLink(record.link)).toEqual({ status: 200, bytes: second });
+    expect(await served(record.link)).toEqual({ tokenOk: true, bytes: second });
 
     // Back to the first: still the same link.
     expect(await library.setCurrent(record.id, 1)).toMatchObject({ current: 1 });
-    expect(await fetchLink(record.link)).toEqual({ status: 200, bytes: first });
+    expect(await served(record.link)).toEqual({ tokenOk: true, bytes: first });
     // Every version's file is kept, unchanged.
     expect(await exists(`studio/${record.id}/v1.png`)).toBe(true);
     expect(await exists(`studio/${record.id}/v2.png`)).toBe(true);
