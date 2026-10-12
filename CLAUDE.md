@@ -211,6 +211,7 @@ npm run deploy            # Deploy hosting only (production)
 | `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history |
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
+| `studio_images/{imageId}` | `hasApp('cartographer')`, read only | The image studio's library: one record per image, with its kind, labels, versions and link (files in Storage at `studio/{imageId}/`) |
 | `scriptorium_notes/{id}` | Deny (server only) | Scriptorium notes, via MCP |
 | `mcp_*` (`oauth_clients`, `oauth_codes`, `oauth_tokens`, `oauth_grants`, `audit`, `rate_limits`) | Deny (server only) | MCP OAuth state, audit log, rate limits |
 
@@ -239,6 +240,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `cartographerCompletion` | `cartographer` claim | How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, and its biggest gaps |
 | `cartographerTownImage` | `cartographer` claim | Attach, replace or remove a town's art (an uploaded PNG drawn behind the town view) |
 | `cartographerMapImage` | `cartographer` claim | Attach, replace or remove a battle map's art (an uploaded PNG drawn under its grid) |
+| `studioUpload` | `cartographer` claim | Add an uploaded image (PNG, JPEG, WebP or SVG) to the image studio's library, with its title, kind and labels |
 | `mcpListConnections` / `mcpRevokeConnection` | Signed-in user (own connections) | Grand Hall "Manage connections" |
 | `mcpServer` | OAuth bearer token per connector | MCP connectors (Scriptorium, Cartographer) and the OAuth server |
 

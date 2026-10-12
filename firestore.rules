@@ -316,6 +316,12 @@ service cloud.firestore {
       }
     }
 
+    // The image studio's library (L-701; planning/the-image-studio.md §4.2):
+    // one shared library for world builders. Written only by the server.
+    match /studio_images/{imageId} {
+      allow read: if hasApp('cartographer');
+    }
+
     match /loom_world_state/{worldId} {
       allow read: if hasApp('loom');
     }

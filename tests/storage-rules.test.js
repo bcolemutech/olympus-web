@@ -166,6 +166,55 @@ describe('world map images', () => {
   });
 });
 
+describe("the image studio's library (L-701)", () => {
+  const IMAGE = 'studio/img_0123456789abcdef/v1.png';
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.storage().ref(IMAGE).put(bytes(16), PNG_TYPE);
+    });
+  });
+
+  test('an editor uploads an image for studioUpload, in each format', async () => {
+    await assertSucceeds(builder().ref(uploadPath('studio.png')).put(bytes(1024), PNG_TYPE));
+    await assertSucceeds(
+      builder().ref(uploadPath('studio.jpg')).put(bytes(1024), { contentType: 'image/jpeg' })
+    );
+    await assertSucceeds(
+      builder().ref(uploadPath('studio.webp')).put(bytes(1024), { contentType: 'image/webp' })
+    );
+    const SVG_TYPE = { contentType: 'image/svg+xml' };
+    await assertSucceeds(builder().ref(uploadPath('studio.svg')).put(bytes(1024), SVG_TYPE));
+    // Each name with its own type only, and the size limits.
+    await assertFails(
+      builder().ref(uploadPath('studio.jpg')).put(bytes(64), PNG_TYPE)
+    );
+    await assertFails(
+      builder()
+        .ref(uploadPath('studio.webp'))
+        .put(bytes(30 * 1024 * 1024 + 1), { contentType: 'image/webp' })
+    );
+    await assertFails(
+      builder().ref(uploadPath('studio.svg')).put(bytes(1024 * 1024 + 1), SVG_TYPE)
+    );
+    await assertFails(
+      storageAs(BUILDER, ['loom']).ref(uploadPath('studio.png')).put(bytes(64), PNG_TYPE)
+    );
+  });
+
+  test('editors read the library; players, others and the signed-out cannot', async () => {
+    await assertSucceeds(builder().ref(IMAGE).getMetadata());
+    await assertFails(storageAs('player-001', ['loom']).ref(IMAGE).getMetadata());
+    await assertFails(storageAs('someone', []).ref(IMAGE).getMetadata());
+    await assertFails(testEnv.unauthenticatedContext().storage().ref(IMAGE).getMetadata());
+  });
+
+  test('nobody writes or deletes it directly, editors included', async () => {
+    await assertFails(builder().ref(IMAGE).put(bytes(8), PNG_TYPE));
+    await assertFails(builder().ref('studio/img_new/v1.png').put(bytes(8), PNG_TYPE));
+    await assertFails(builder().ref(IMAGE).delete());
+  });
+});
+
 test('everything else is denied', async () => {
   await assertFails(
     builder().ref('anything/else.txt').put(bytes(8), { contentType: 'text/plain' })

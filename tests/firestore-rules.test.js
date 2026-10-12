@@ -1852,3 +1852,60 @@ describe('mcp_* — Firestore Security Rules', function () {
     });
   });
 });
+
+describe('studio_images — Firestore Security Rules (L-701)', function () {
+  var testEnv;
+  var deleteDoc = require('firebase/firestore').deleteDoc;
+
+  beforeAll(async function () {
+    var firestoreConfig = { rules: readFileSync(RULES_PATH, 'utf8') };
+    var emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+    if (emulatorHost) {
+      var parts = emulatorHost.split(':');
+      if (parts[0]) firestoreConfig.host = parts[0];
+      var parsedPort = parseInt(parts[1], 10);
+      if (!isNaN(parsedPort)) firestoreConfig.port = parsedPort;
+    } else {
+      firestoreConfig.host = '127.0.0.1';
+      firestoreConfig.port = 8080;
+    }
+    testEnv = await initializeTestEnvironment({ projectId: PROJECT_ID, firestore: firestoreConfig });
+  });
+
+  beforeEach(async function () {
+    await testEnv.clearFirestore();
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      await setDoc(doc(ctx.firestore(), 'studio_images', 'img_0001'), {
+        title: 'Harbour',
+        kind: 'town',
+      });
+    });
+  });
+
+  afterAll(async function () {
+    await testEnv.cleanup();
+  });
+
+  var dbAs = function (apps) {
+    return testEnv.authenticatedContext('user-001', { apps: apps }).firestore();
+  };
+
+  it('lets an editor (the cartographer claim) read the library', async function () {
+    await assertSucceeds(getDoc(doc(dbAs(['cartographer']), 'studio_images', 'img_0001')));
+  });
+
+  it('keeps it from players, anyone else, and the signed-out', async function () {
+    await assertFails(getDoc(doc(dbAs(['loom']), 'studio_images', 'img_0001')));
+    await assertFails(getDoc(doc(dbAs([]), 'studio_images', 'img_0001')));
+    await assertFails(
+      getDoc(doc(testEnv.unauthenticatedContext().firestore(), 'studio_images', 'img_0001'))
+    );
+  });
+
+  it('lets nobody write it directly, editors included', async function () {
+    var editor = dbAs(['cartographer']);
+    await assertFails(setDoc(doc(editor, 'studio_images', 'img_0002'), { title: 'New' }));
+    await assertFails(setDoc(doc(editor, 'studio_images', 'img_0001'), { title: 'Changed' }));
+    await assertFails(deleteDoc(doc(editor, 'studio_images', 'img_0001')));
+  });
+});
