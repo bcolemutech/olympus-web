@@ -8,7 +8,7 @@ const { worldId, entityId } = require('./schemas');
 const { writeTools } = require('./write-tools');
 const { townTools } = require('./town-tools');
 const { mapTools } = require('./map-tools');
-const { BANDS } = require('../../../loom-canon/grading');
+const { GRADES, BANDS } = require('../../../loom-canon/grading');
 const { workList } = require('./work');
 const views = require('./views');
 const images = require('./images');
@@ -64,6 +64,11 @@ const NEEDS = [
   'layers',
   'townArt',
   'mapArt',
+  'features',
+  'exits',
+  'faction',
+  'people',
+  'hook',
 ];
 const GRADE_HELP =
   'Grades: unbuilt (a layer it needs is missing), stub (import text only), playable ' +
@@ -115,7 +120,9 @@ function cartographerApp({ reader, writer, art }) {
         title: 'Get world overview',
         description:
           'Overview of one world: name, tagline, opening hook, status, starting location, whether ' +
-          'it is ready to publish, how built it is (places, realms and regions by grade), counts, ' +
+          'it is ready to publish, its score and band, how built it is (places, places in town, ' +
+          'realms, regions, characters and battle maps counted by band, and the world’s own ' +
+          'checklist), counts, ' +
           'its realms (factions) with their regions, and its characters and lore. Start here ' +
           'before exploring a world. ' +
           GRADE_HELP,
@@ -134,7 +141,9 @@ function cartographerApp({ reader, writer, art }) {
           'realm (faction) or kind, or list those nearest another place. Filters combine. ' +
           'Results are paged: pass nextOffset back as offset for more. Largest settlements come ' +
           'first, or nearest first with `near` (distance is in map units, hops counts travel ' +
-          'steps along connections). Every row carries its grade, and `grade` filters by one.',
+          'steps along connections). Every row carries its grade, score and band; `grade` and ' +
+          '`band` filter by one. ' +
+          GRADE_HELP,
         inputSchema: {
           worldId,
           name: z
@@ -153,7 +162,8 @@ function cartographerApp({ reader, writer, art }) {
             .enum(['settlement', 'poi'])
             .optional()
             .describe('Only settlements, or only points of interest (poi).'),
-          grade: z
+          grade: z.enum(GRADES).optional().describe('Only places with this grade (the gate).'),
+          band: z
             .enum(BANDS)
             .optional()
             .describe('Only places in this band (unbuilt and stub are below the gate).'),
@@ -196,14 +206,17 @@ function cartographerApp({ reader, writer, art }) {
         name: 'list_work',
         title: 'List work to build',
         description:
-          'What to build next in a world, most useful first, each item with its grade and what ' +
-          'it is missing. A place must be Playable for players to enter it, so the list grows ' +
-          'the world outward from where the game is: frontier (closed places next to an open ' +
-          'one, or the starting location), then places inside the nearest towns, then other ' +
-          'closed places nearest the start, then open places that could be richer, then realms ' +
-          'and regions to describe. Write a place ' +
-          'up with update_location (setting a description marks it written), add residents ' +
-          'with add_character and lore with add_lore. Paged: pass nextOffset back as offset. ' +
+          'What to build next in a world, most useful first. A place must be Playable for ' +
+          'players to enter it, so closed places come first, growing the world outward from ' +
+          'where the game is: frontier (closed places next to an open one, the starting ' +
+          'location, or places in an open town), then other closed places nearest the start, ' +
+          'each with what opens it. Then the work that raises the world’s score most, grouped ' +
+          'across places, people, maps, realms and the world ("12 settlements: town art · 90 ' +
+          'points · the Cartographer page"): each group names its criterion, the tool that ' +
+          'does it, and the entities it is for, most points first. Points are the weight a ' +
+          'piece of work adds times how near play its place is. Write a place up with ' +
+          'update_location (setting a description marks it written), add residents with ' +
+          'add_character and lore with add_lore. Paged: pass nextOffset back as offset. ' +
           'unplaced lists the characters still without a position (a square, a town point or a ' +
           'world point), each with a suggested one: publishing refuses the world until ' +
           'everyone has one. ' +
@@ -211,13 +224,23 @@ function cartographerApp({ reader, writer, art }) {
         inputSchema: {
           worldId,
           kind: z
-            .enum(['settlement', 'poi', 'place', 'faction', 'region'])
+            .enum([
+              'settlement',
+              'poi',
+              'place',
+              'character',
+              'battleMap',
+              'faction',
+              'region',
+              'world',
+            ])
             .optional()
-            .describe('Only this kind of thing (place: a place in town).'),
-          grade: z
+            .describe('Only this kind of thing (place: a place in town; faction: a realm).'),
+          grade: z.enum(GRADES).optional().describe('Only things with this grade (the gate).'),
+          band: z
             .enum(BANDS)
             .optional()
-            .describe('Only items in this band (unbuilt and stub are below the gate).'),
+            .describe('Only things in this band (unbuilt and stub are below the gate).'),
           need: z
             .enum(NEEDS)
             .optional()
@@ -254,7 +277,9 @@ function cartographerApp({ reader, writer, art }) {
         name: 'get_location',
         title: 'Get location',
         description:
-          'One place in full: description, its grade and what it is missing, population, region ' +
+          'One place in full: description, its grade, score and band, what it is missing (most ' +
+          'score first) and its checklist (every criterion with its weight and progress), ' +
+          'population, region ' +
           'and realm, its connections (by road, trail or sea, with direction, distance and ' +
           'grade), the characters found there, and the lore about it. A settlement also has ' +
           'seeds: what the map says about the town (type, culture, and whether it has walls, a ' +
@@ -277,7 +302,8 @@ function cartographerApp({ reader, writer, art }) {
         name: 'get_faction',
         title: 'Get faction',
         description:
-          'One realm or faction in full: description, grade, government, capital, largest ' +
+          'One realm or faction in full: description, grade, score, band and checklist, ' +
+          'government, capital, largest ' +
           'settlements, regions, relations with other realms, members, and lore.',
         inputSchema: { worldId, factionId: entityId('faction', 'get_world') },
         annotations: readOnly,
@@ -297,7 +323,8 @@ function cartographerApp({ reader, writer, art }) {
         name: 'get_region',
         title: 'Get region',
         description:
-          'One region (province) in full: description, grade, its realm, capital, settlements ' +
+          'One region (province) in full: description, grade, score, band and checklist, its ' +
+          'realm, capital, settlements ' +
           '(largest first, with grades), and lore.',
         inputSchema: { worldId, regionId: entityId('region', 'get_world') },
         annotations: readOnly,
@@ -394,8 +421,9 @@ function cartographerApp({ reader, writer, art }) {
           'leading out to the town or the world, or to an entry on another map), features (named ' +
           'cells such as the bar), whether it is generic, whether it has an image (uploaded on ' +
           'the Cartographer page), which places use it and which characters stand where (set ' +
-          'with add_character or update_character). Cells are { x, y } from the top-left, ' +
-          '0-based.',
+          'with add_character or update_character), and its score, band, what it is missing and ' +
+          'its checklist (every criterion with its weight and progress). Cells are { x, y } ' +
+          'from the top-left, 0-based.',
         inputSchema: { worldId, mapId: entityId('battle map', 'list_battle_maps') },
         annotations: readOnly,
         handler: async (ctx, args) => {
@@ -609,7 +637,10 @@ function cartographerApp({ reader, writer, art }) {
       {
         name: 'get_character',
         title: 'Get character',
-        description: 'One character in full: description, faction, where they are found, and lore.',
+        description:
+          'One character in full: description, faction, where they are found, their score and ' +
+          'band, what they are missing and their checklist (every criterion with its weight and ' +
+          'progress), and lore.',
         inputSchema: { worldId, characterId: entityId('character', 'get_world') },
         annotations: readOnly,
         handler: async (ctx, args) => {

@@ -11,6 +11,8 @@ const {
   gradeWorld,
   isPlayable,
   gradePlace,
+  gradeCharacter,
+  gradeBattleMap,
 } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
@@ -107,9 +109,17 @@ function charactersAt(world, location) {
 const byPopulationThenName = (a, b) =>
   populationOf(b) - populationOf(a) || a.name.localeCompare(b.name);
 
-// A grade, its score and band, and what it is missing
-// (functions/loom-canon/grading.js; the score: L-691).
-const graded = ({ grade, band, score, checklist }) => ({ grade, band, score, missing: checklist });
+// A grade, its score and band, what it is missing (the gate's items first,
+// then the unmet criteria, most score first), and the whole checklist: every
+// criterion with its weight and progress (functions/loom-canon/grading.js;
+// the score: L-691, in the reads: L-692).
+const graded = ({ grade, band, score, checklist, criteria }) => ({
+  grade,
+  band,
+  score,
+  missing: checklist,
+  checklist: criteria || [],
+});
 
 // ── Rows ───────────────────────────────────────────────────────────────
 
@@ -125,9 +135,10 @@ function locationRow(world, location, within = {}) {
   if (region && !within.region) row.region = region.name;
   const faction = world.factions[(location.factionIds || [])[0]];
   if (faction && !within.realm) row.realm = faction.name;
-  const { grade, band } = gradeLocation(world, location);
+  const { grade, band, score } = gradeLocation(world, location);
   row.grade = grade;
   row.band = band;
+  row.score = score;
   if (location.retired) row.retired = true;
   return row;
 }
@@ -203,6 +214,7 @@ function worldOverview(meta, world) {
   }
 
   const map = world.map || {};
+  const completion = gradeWorld(world);
   const result = {
     id: world.id,
     name: world.name,
@@ -222,7 +234,10 @@ function worldOverview(meta, world) {
     source: meta.source
       ? { mapName: meta.source.mapName || null, azgaarVersion: meta.source.version || null }
       : null,
-    completion: gradeWorld(world),
+    // The world's score and band (L-691): 80% its places, weighted by
+    // nearness to play, and 20% its own criteria; completion has the rest.
+    ...(({ score, band }) => (score === undefined ? {} : { score, band }))(completion),
+    completion,
     counts: {
       settlements: live(locations.filter((l) => kindOf(l) === 'settlement')).length,
       pointsOfInterest: live(locations.filter((l) => kindOf(l) === 'poi')).length,
@@ -251,7 +266,8 @@ function worldOverview(meta, world) {
 }
 
 function findLocations(world, query) {
-  const { name, regionId, factionId, near, kind, grade, includeRetired = false } = query;
+  const { name, regionId, factionId, near, kind, grade, band } = query;
+  const { includeRetired = false } = query;
   const { limit, offset } = query;
   const origin = near ? world.locations[near] : null;
   const needle = name ? fold(name) : '';
@@ -264,7 +280,8 @@ function findLocations(world, query) {
       (!regionId || geoOf(location).regionId === regionId) &&
       (!factionId || (location.factionIds || []).includes(factionId)) &&
       (!needle || fold(location.name).includes(needle)) &&
-      (!grade || gradeLocation(world, location).band === grade)
+      (!grade || gradeLocation(world, location).grade === grade) &&
+      (!band || gradeLocation(world, location).band === band)
   );
 
   // Exact name matches first, then prefixes; then nearest (with `near`) or
@@ -340,7 +357,9 @@ function locationDetail(world, location) {
     ...ref(world.locations, id),
     via: links[id] || null,
     ...bearing(location, world.locations[id] || {}),
-    ...(world.locations[id] ? { grade: gradeLocation(world, world.locations[id]).grade } : {}),
+    ...(world.locations[id]
+      ? (({ grade, band }) => ({ grade, band }))(gradeLocation(world, world.locations[id]))
+      : {}),
   }));
   result.characters = charactersAt(world, location);
   result.lore = loreAbout(world, location.id);
@@ -527,6 +546,8 @@ function characterDetail(world, character) {
     // Where they are (L-682): a square, a town point or a world point, or why
     // they have none yet.
     position: positions.positionView(world, character),
+    // Its score and band (L-692): characters are never gated.
+    ...graded(gradeCharacter(world, character)),
     lore: loreAbout(world, character.id),
   };
   if (character.retired) result.retired = true;
@@ -589,7 +610,8 @@ function battleMapRow(world, map) {
     size: { width: map.width, height: map.height },
     generic: map.generic || null,
     hasImage: Boolean(map.image),
-    // Walls, doors or obstacles (L-622): what a place's own map needs for Rich.
+    // Walls, doors or obstacles (L-622): what a place's own map needs to
+    // count in full toward its score.
     hasLayers: layers.hasLayers(map),
     usedBy: usersOf(world, map.id).length,
     ...(map.retired ? { retired: true } : {}),
@@ -628,6 +650,8 @@ function battleMapDetail(world, map) {
       at: { id: host.id, name: host.name },
     })),
     usedBy: usersOf(world, map.id),
+    // Its score and band (L-692): battle maps are never gated.
+    ...graded(gradeBattleMap(world, map)),
     ...(map.retired ? { retired: true } : {}),
   };
 }

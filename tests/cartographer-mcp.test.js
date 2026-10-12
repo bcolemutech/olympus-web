@@ -417,6 +417,7 @@ describe('find_locations', () => {
       realm: 'Kingdom of Pendonia',
       grade: 'unbuilt', // no town yet
       band: 'unbuilt', // below the gate, its band is its grade (L-691)
+      score: 0, // and it scores nothing yet
     });
 
     // Exact, then prefix, then anywhere in the name — each largest first,
@@ -549,6 +550,7 @@ describe('get_location, get_faction, get_region', () => {
         distance: 29,
         direction: 'northwest',
         grade: 'unbuilt',
+        band: 'unbuilt',
       },
       {
         id: 'loc_229',
@@ -557,6 +559,7 @@ describe('get_location, get_faction, get_region', () => {
         distance: 27,
         direction: 'south',
         grade: 'unbuilt',
+        band: 'unbuilt',
       },
       {
         id: 'loc_231',
@@ -565,6 +568,7 @@ describe('get_location, get_faction, get_region', () => {
         distance: 25,
         direction: 'northeast',
         grade: 'unbuilt',
+        band: 'unbuilt',
       },
       {
         id: 'loc_631',
@@ -573,6 +577,7 @@ describe('get_location, get_faction, get_region', () => {
         distance: 21,
         direction: 'southeast',
         grade: 'unbuilt',
+        band: 'unbuilt',
       },
     ]);
   });
@@ -625,6 +630,7 @@ describe('get_location, get_faction, get_region', () => {
       port: true,
       grade: 'unbuilt',
       band: 'unbuilt',
+      score: 0,
     });
   });
 
@@ -652,6 +658,30 @@ describe('get_character and get_lore', () => {
       location: { id: 'loc_1', name: 'Burdendal' },
       // Seeded before positions were required (L-683 places them).
       position: { problem: 'Burdendal is a town: they need a town point (townPoint)' },
+      // Their score (L-692): a realm, but a short description and no lore.
+      grade: 'playable',
+      band: 'playable',
+      score: 20,
+      missing: [
+        expect.objectContaining({ criterion: 'character.description', gain: 25 }),
+        expect.objectContaining({ criterion: 'character.lore', gain: 15 }),
+      ],
+      checklist: [
+        {
+          id: 'character.description',
+          label: 'A description long enough',
+          weight: 25,
+          met: false,
+          progress: 0,
+          have: 3,
+          want: 40,
+          need: 'description',
+          tool: 'update_character',
+          message: 'Their description needs at least 40 words (it has 3).',
+        },
+        expect.objectContaining({ id: 'character.lore', weight: 15, met: false }),
+        { id: 'character.faction', label: 'A realm', weight: 10, met: true, progress: 1 },
+      ],
       lore: [],
     });
     expect(await read('get_character', { worldId: LIVE, characterId: 'chr_ghost' })).toMatchObject({

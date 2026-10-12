@@ -1,6 +1,6 @@
 # The Loom — Grading That Asks for More — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-10. L-691, the score, has shipped (rubric version 4, calibrated on Nisia; §4.3). L-692 to L-694 are next.
+**Status:** In progress. Decided 2026-10-10. L-691, the score (rubric version 4, calibrated on Nisia; §4.3), and L-692, the reads and the work list (§4.5), have shipped. L-693 and L-694 are next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-690 (#551)
 **Runs:** right after Phase 3c, before L-700 and L-720, so every new content feature adds to it from the start (Build order in [`roadmap.md`](./roadmap.md))
@@ -139,7 +139,12 @@ Criteria that today's content can meet go in with this epic. The rest are listed
 ### 4.5 The work list and reads
 
 - **`list_work` order (E3):** closed frontier places, then other closed places, as now. Then every unmet criterion, ordered by **score gained for the world** (its weight × the entity's place weight in §4.4). Items doing the same work are grouped ("12 residents have no portrait · 9 points · `studio_assign`"). Each item names its tool.
+  - **As built (L-692):** a closed place lists only what opens it; its score's work waits until it is open. A closed place in an open town counts as frontier.
+  - **Points:** the weight still missing × the place weight of where the entity is. A place in town or a character takes its settlement's; a battle map, the nearest of the places using it; a realm or region, the nearest of its settlements; the world's own criteria, 3.
+  - **Groups:** one per criterion and tool, so realms and regions are apart. Each shows its first 10 entities, with `more` for the rest, and a one-line `summary`.
+  - **Filters:** `grade` (the gate) and `band` are separate on `list_work` and `find_locations`; `kind` covers characters, battle maps and the world too.
 - **Reads:** `get_world`, `get_location`, `get_faction`, `get_region`, `get_character` and `get_battle_map` show score, band and checklist with each criterion's weight. `find_locations` can filter by band.
+  - **As built (L-692):** `missing` is what to do, most score first, and `checklist` is every criterion with its weight, progress and, if unmet, its tool. Rows (`find_locations`, a region's settlements) carry score and band too.
 - **The Cartographer page** shows each world's score and band, counts by band per kind, and its five biggest gaps (`cartographerCompletion`).
 
 ### 4.6 The rule for new features
