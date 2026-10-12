@@ -43,6 +43,7 @@ npm run format
 | JSX Runner | `public/apps/jsx-runner/` | Dynamic React applet executor |
 | The Loom | `public/apps/loom/` | AI-narrated game system; plays worlds with Gemini |
 | The Cartographer | `public/apps/cartographer/` | Turns Azgaar maps into Loom worlds; MCP connector at `/mcp/cartographer` |
+| The Image Studio | `public/apps/studio/` | The library of art for worlds: browse, search, look at, upload and download images. Opened by the `cartographer` claim (`claim:` in `apps.yaml`); its MCP tools are in the Cartographer connector |
 | Scriptorium | *(MCP connector only)* | Notes managed from Claude at `/mcp/scriptorium` |
 
 ---
@@ -89,7 +90,8 @@ olympus-web/
 │       ├── admin/                 # Admin panel
 │       ├── jsx-runner/            # React applet executor
 │       ├── loom/                  # The Loom game client
-│       └── cartographer/          # The Cartographer: map upload, worlds, publish
+│       ├── cartographer/          # The Cartographer: map upload, worlds, publish
+│       └── studio/                # The Image Studio: the image library
 ├── functions/
 │   ├── index.js                   # All Cloud Function exports (admin, Loom, Cartographer, MCP)
 │   ├── gemini.js                  # Gemini/Vertex AI callGemini helper (extracted for testability)
@@ -157,7 +159,7 @@ firebase.auth().onAuthStateChanged((user) => {
 
 ### App Access Control
 
-Access is controlled via Firebase custom claims. Users have an `apps[]` array and an `admin` boolean in their token.
+Access is controlled via Firebase custom claims. Users have an `apps[]` array and an `admin` boolean in their token. An app in `apps.yaml` may name another app's `claim` that opens it (the Image Studio opens with `cartographer`); the Grand Hall shows it to users with that claim, and The Pantheon doesn't offer it as a grant of its own.
 
 - `hasAdmin()` — checks `request.auth.token.admin == true`
 - `hasApp('symposium')` — checks if `'symposium'` is in the user's apps claim

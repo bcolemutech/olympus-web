@@ -1,3 +1,5 @@
+# An app may name the `claim` that opens it (default: its own id). Such an
+# app is not granted on its own, so The Pantheon doesn't list it.
 apps:
   # ── Embedded apps ───────────────────────────────────────
   - id: symposium
@@ -35,6 +37,17 @@ apps:
     path: /apps/cartographer/
     enabled: true
     order: 12
+
+  # Shown to anyone with the cartographer claim: no claim of its own.
+  - id: studio
+    name: The Image Studio
+    description: The library of art for worlds
+    icon: "\U0001F3A8"
+    type: embedded
+    path: /apps/studio/
+    claim: cartographer
+    enabled: true
+    order: 13
 
   # ── MCP connectors (used from Claude; no web UI) ────────
   # `connector` is the URL to add in Claude. The Grand Hall tile copies it.

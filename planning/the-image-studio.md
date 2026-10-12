@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), and L-703, the library tools (§4.7). L-702 and L-706 are next.
+**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), and L-702, the studio page (§4.1). L-706 is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -110,6 +110,12 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 ### 4.1 Where it lives
 
 - **The page:** `public/apps/studio/`, registered in `apps.yaml`, shown in the Grand Hall to anyone with the `cartographer` claim (S1). Vanilla JS in the IIFE pattern like the other apps (`window.Studio`), until the UI rewrite (L-720) decides otherwise for the Loom.
+- **As built (L-702):**
+  - **Who sees it:** `apps.yaml` gives the studio `claim: cartographer`, so the Grand Hall shows it to anyone with that claim. The Pantheon doesn't offer it as a grant of its own.
+  - **The library:** the page reads `studio_images` live, newest first, and filters it as you type, as `studio_find` does. Thumbnails are the images' links: there are no smaller copies yet.
+  - **An image's detail:** a dialog showing the image, kind, labels, prompt, who made it and when, the link with a copy button, where it is used (by world and town or battle map name), and its versions. Each version can be viewed and downloaded. Download fetches the file and saves it under the image's title, or opens it when the browser can't fetch it.
+  - **Upload:** several files at once, each a library image through `studioUpload`, with one kind and set of labels. The title defaults to the file's name.
+  - **Changes:** made from Claude (`studio_update`), so the page only reads and uploads.
 - **The tools:** in the Cartographer connector (`functions/mcp/apps/cartographer/`), in a `studio-tools.js` of their own, all prefixed `studio_` (T3).
 - **The server:** a `functions/studio/` folder for the library, jobs, costs and the Gemini image call, with callables for the page.
 

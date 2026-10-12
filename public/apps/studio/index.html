@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Image Studio — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-functions-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-storage-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- App-specific styles -->
+    <link rel="stylesheet" href="/apps/studio/studio.css" />
+  </head>
+  <body>
+    <!-- Shared header — rendered by app-header.js -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard — shown while checking auth state -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Mixing the paints&hellip;</p>
+    </div>
+
+    <!-- Main content — hidden until authenticated -->
+    <main class="app-main hidden" id="app-main">
+      <h1 class="app-title">The Image Studio</h1>
+      <p class="app-subtitle">The library of art for worlds</p>
+      <div class="app-divider"></div>
+
+      <div class="studio-root">
+        <p class="studio-denied hidden" id="studio-denied">
+          You don't have access to the Image Studio. It comes with the Cartographer: ask an admin to
+          grant it in The Pantheon.
+        </p>
+
+        <!-- Upload -->
+        <section class="studio-section hidden" id="studio-upload-section">
+          <details class="studio-upload" id="studio-upload">
+            <summary class="studio-section-title">Upload images</summary>
+            <p class="studio-help">
+              PNG, JPEG or WebP up to 30 MB, or SVG up to 1 MB. Each file becomes an image in the
+              library. Assign it to a world from Claude (<code>studio_assign</code>), or upload a
+              world's art from the Cartographer page.
+            </p>
+            <form class="studio-form" id="studio-upload-form">
+              <div class="studio-form-group">
+                <label class="studio-label" for="studio-files">Files</label>
+                <input
+                  class="studio-input"
+                  id="studio-files"
+                  type="file"
+                  multiple
+                  required
+                  accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                />
+              </div>
+              <div class="studio-form-row">
+                <div class="studio-form-group">
+                  <label class="studio-label" for="studio-kind">Kind</label>
+                  <select class="studio-input" id="studio-kind" required></select>
+                </div>
+                <div class="studio-form-group studio-grow">
+                  <label class="studio-label" for="studio-title">Title</label>
+                  <input
+                    class="studio-input"
+                    id="studio-title"
+                    type="text"
+                    maxlength="120"
+                    placeholder="Defaults to the file's name"
+                  />
+                </div>
+              </div>
+              <div class="studio-form-group">
+                <label class="studio-label" for="studio-labels">Labels</label>
+                <input
+                  class="studio-input"
+                  id="studio-labels"
+                  type="text"
+                  list="studio-label-list"
+                  placeholder="Comma-separated, e.g. nisia, harbour, night"
+                />
+              </div>
+              <div class="studio-progress hidden" id="studio-progress">
+                <div class="studio-progress-bar" id="studio-progress-bar"></div>
+              </div>
+              <p class="studio-status hidden" id="studio-upload-status" role="status"></p>
+              <p class="studio-error hidden" id="studio-upload-error" role="alert"></p>
+              <button class="app-btn" id="studio-upload-btn" type="submit">Upload</button>
+            </form>
+          </details>
+        </section>
+
+        <!-- The library -->
+        <section class="studio-section hidden" id="studio-library-section">
+          <h2 class="studio-section-title">Library</h2>
+          <form class="studio-filters" id="studio-filters" role="search">
+            <input
+              class="studio-input studio-grow"
+              id="studio-words"
+              type="search"
+              placeholder="Search titles, prompts and labels"
+              aria-label="Search words"
+            />
+            <select class="studio-input" id="studio-filter-kind" aria-label="Kind">
+              <option value="">Any kind</option>
+            </select>
+            <select class="studio-input" id="studio-filter-label" aria-label="Label">
+              <option value="">Any label</option>
+            </select>
+            <select class="studio-input" id="studio-filter-world" aria-label="World used in">
+              <option value="">Any world</option>
+            </select>
+          </form>
+          <datalist id="studio-label-list"></datalist>
+          <p class="studio-count" id="studio-count" role="status"></p>
+          <div class="app-loading" id="studio-grid-loading">
+            <div class="app-spinner"></div>
+          </div>
+          <p class="studio-error hidden" id="studio-grid-error" role="alert"></p>
+          <p class="studio-empty hidden" id="studio-empty"></p>
+          <div class="studio-grid" id="studio-grid"></div>
+        </section>
+      </div>
+
+      <!-- An image's detail -->
+      <dialog class="studio-detail" id="studio-detail" aria-labelledby="studio-detail-title">
+        <div class="studio-detail-body" id="studio-detail-body"></div>
+      </dialog>
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <!-- Studio modules (load order matters) -->
+    <script src="/apps/studio/js/state.js"></script>
+    <script src="/apps/studio/js/library.js"></script>
+    <script src="/apps/studio/js/detail.js"></script>
+    <script src="/apps/studio/js/upload.js"></script>
+    <script src="/apps/studio/js/app.js"></script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        firebase.auth().onAuthStateChanged(function (user) {
+          if (!user) {
+            window.location.href = '/';
+            return;
+          }
+
+          window.OlympusHeader.render('The Image Studio');
+
+          document.getElementById('app-loading').classList.add('hidden');
+          document.getElementById('app-main').classList.remove('hidden');
+
+          window.Studio.app.init(user);
+        });
+      });
+    </script>
+  </body>
+</html>
