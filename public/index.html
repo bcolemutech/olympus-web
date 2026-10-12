@@ -1359,9 +1359,12 @@
         const fetchGrantedApps = async (appIds) => {
           if (!appIds || appIds.length === 0) return [];
           const all = await fetchAllApps();
-          return all
-            .filter((a) => a.enabled && appIds.includes(a.id))
-            .sort((a, b) => (a.order || 0) - (b.order || 0));
+          return (
+            all
+              // An app may be opened by another app's claim (apps.yaml `claim`).
+              .filter((a) => a.enabled && appIds.includes(a.claim || a.id))
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+          );
         };
 
         const loadAppsForUser = async (user) => {

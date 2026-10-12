@@ -284,6 +284,10 @@
             .sort(function (a, b) {
               return (a.order || 0) - (b.order || 0);
             })
+            // Apps opened by another app's claim aren't granted on their own.
+            .filter(function (app) {
+              return !app.claim;
+            })
             .forEach(function (app) {
               var label = document.createElement('label');
               label.className = 'access-app-option';
@@ -454,6 +458,9 @@
               .slice()
               .sort(function (a, b) {
                 return (a.order || 0) - (b.order || 0);
+              })
+              .filter(function (app) {
+                return !app.claim;
               })
               .forEach(function (app) {
                 var label = document.createElement('label');
