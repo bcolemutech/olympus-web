@@ -1,6 +1,6 @@
 # The Loom — Grading That Asks for More — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-10. L-691, the score (rubric version 4, calibrated on Nisia; §4.3), and L-692, the reads and the work list (§4.5), have shipped. L-693 and L-694 are next.
+**Status:** In progress. Decided 2026-10-10. L-691, the score (rubric version 4, calibrated on Nisia; §4.3), L-692, the reads and the work list (§4.5), and L-693, the Cartographer page, have shipped. L-694 is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-690 (#551)
 **Runs:** right after Phase 3c, before L-700 and L-720, so every new content feature adds to it from the start (Build order in [`roadmap.md`](./roadmap.md))
@@ -146,6 +146,7 @@ Criteria that today's content can meet go in with this epic. The rest are listed
 - **Reads:** `get_world`, `get_location`, `get_faction`, `get_region`, `get_character` and `get_battle_map` show score, band and checklist with each criterion's weight. `find_locations` can filter by band.
   - **As built (L-692):** `missing` is what to do, most score first, and `checklist` is every criterion with its weight, progress and, if unmet, its tool. Rows (`find_locations`, a region's settlements) carry score and band too.
 - **The Cartographer page** shows each world's score and band, counts by band per kind, and its five biggest gaps (`cartographerCompletion`).
+  - **As built (L-693):** each world's card shows its band and score, the open share of its places, a line of counts by band for each kind, and a "Biggest gaps" toggle. The gaps are the first five groups of `list_work`'s score work, each with its count, points and tool.
 
 ### 4.6 The rule for new features
 

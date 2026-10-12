@@ -431,4 +431,28 @@ function workList(world, { kind, grade, band, need, near, limit, offset }) {
   return result;
 }
 
-module.exports = { workList, TIERS };
+/**
+ * A world's biggest gaps (L-693): the first `count` groups of score work, as
+ * list_work orders them (most points first), in short, for the Cartographer
+ * page.
+ */
+function biggestGaps(world, count = 5) {
+  const grades = new Map(
+    Object.values(world.locations)
+      .filter(live)
+      .map((l) => [l.id, gradeLocation(world, l)])
+  );
+  return scoreGroups(world, grades, {})
+    .slice(0, count)
+    .map(({ criterion, label, need, tool, count: entities, points, summary }) => ({
+      criterion,
+      label,
+      need,
+      tool,
+      count: entities,
+      points,
+      summary,
+    }));
+}
+
+module.exports = { workList, biggestGaps, TIERS };

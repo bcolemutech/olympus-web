@@ -235,7 +235,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `loomGetMap` | `loom` claim (own saves) | The world map a save may see: its discovered places, links, and which are open; in a town, its places for the town view; and the save's turn |
 | `cartographerImport` | `cartographer` claim | Uploaded Azgaar map → draft world |
 | `cartographerPublish` | `cartographer` claim | Publish a draft world to the Loom |
-| `cartographerCompletion` | `cartographer` claim | How built each world is (Playable places), for the Cartographer page |
+| `cartographerCompletion` | `cartographer` claim | How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, and its biggest gaps |
 | `cartographerTownImage` | `cartographer` claim | Attach, replace or remove a town's art (an uploaded PNG drawn behind the town view) |
 | `cartographerMapImage` | `cartographer` claim | Attach, replace or remove a battle map's art (an uploaded PNG drawn under its grid) |
 | `mcpListConnections` / `mcpRevokeConnection` | Signed-in user (own connections) | Grand Hall "Manage connections" |

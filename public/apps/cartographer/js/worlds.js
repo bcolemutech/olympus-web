@@ -196,7 +196,8 @@
       )
     );
     if (status === 'draft' || status === 'published') {
-      var completion = el('p', 'carto-meta carto-completion', 'Checking how built it is…');
+      var completion = el('div', 'carto-completion');
+      completion.appendChild(el('p', 'carto-meta', 'Checking how built it is…'));
       completion.id = 'carto-completion-' + world.id;
       card.appendChild(completion);
     }
@@ -242,8 +243,27 @@
   }
 
   // ── Completion ───────────────────────────────────
-  // How many places are Playable (open to players) and Rich, graded on the
-  // server (cartographerCompletion).
+  // How built a world is, graded on the server (cartographerCompletion): how
+  // many places are open, the world's score and band, counts by band for each
+  // kind, and its biggest gaps, behind a toggle (L-693).
+
+  var BAND_LABELS = {
+    unbuilt: 'Unbuilt',
+    stub: 'Stub',
+    playable: 'Playable',
+    rich: 'Rich',
+    vivid: 'Vivid',
+    legendary: 'Legendary',
+  };
+  var BAND_ORDER = ['legendary', 'vivid', 'rich', 'playable', 'stub', 'unbuilt'];
+  var KIND_LABELS = [
+    ['places', 'Places'],
+    ['inTown', 'Places in town'],
+    ['characters', 'Characters'],
+    ['battleMaps', 'Battle maps'],
+    ['factions', 'Realms'],
+    ['regions', 'Regions'],
+  ];
 
   function percent(share) {
     if (share > 0 && share < 0.01) return '<1%';
@@ -263,6 +283,45 @@
     );
   }
 
+  // "Places: 2 rich · 10 playable · 707 unbuilt", leaving out empty bands.
+  function describeBands(label, counts) {
+    var n = Cartographer.formatNumber;
+    var parts = BAND_ORDER.filter(function (band) {
+      return counts && counts[band];
+    }).map(function (band) {
+      return n(counts[band]) + ' ' + BAND_LABELS[band].toLowerCase();
+    });
+    return parts.length ? label + ': ' + parts.join(' · ') : null;
+  }
+
+  function renderCompletion(node, c) {
+    node.innerHTML = '';
+    if (!c) return;
+    if (c.band) {
+      var score = el('p', 'carto-score');
+      score.appendChild(el('span', 'carto-band carto-band--' + c.band, BAND_LABELS[c.band]));
+      score.appendChild(document.createTextNode(' Score ' + Math.round(c.score) + ' of 100'));
+      node.appendChild(score);
+    }
+    node.appendChild(el('p', 'carto-meta carto-completion-places', describeCompletion(c)));
+    var counts = el('ul', 'carto-band-counts');
+    KIND_LABELS.forEach(function (kind) {
+      var line = describeBands(kind[1], (c.counts || {})[kind[0]]);
+      if (line) counts.appendChild(el('li', null, line));
+    });
+    if (counts.children.length) node.appendChild(counts);
+    if (c.gaps && c.gaps.length) {
+      var details = el('details', 'carto-gaps');
+      details.appendChild(el('summary', null, 'Biggest gaps (' + c.gaps.length + ')'));
+      var list = el('ol');
+      c.gaps.forEach(function (gap) {
+        list.appendChild(el('li', null, gap.summary));
+      });
+      details.appendChild(list);
+      node.appendChild(details);
+    }
+  }
+
   function loadCompletion(worldIds) {
     if (!worldIds.length) return;
     state.functions
@@ -271,7 +330,7 @@
         var worlds = (result.data && result.data.worlds) || {};
         worldIds.forEach(function (id) {
           var node = document.getElementById('carto-completion-' + id);
-          if (node) node.textContent = worlds[id] ? describeCompletion(worlds[id]) : '';
+          if (node) renderCompletion(node, worlds[id]);
         });
       })
       .catch(function (err) {
