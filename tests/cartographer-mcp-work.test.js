@@ -153,6 +153,8 @@ test('a fresh import: nothing is open, and the start is the only frontier', asyn
     stub: 0,
     playable: 0,
     rich: 0,
+    vivid: 0,
+    legendary: 0,
     open: 0,
   });
   expect(list.origin).toEqual({ id: 'loc_1', name: 'Burdendal' });
@@ -164,17 +166,28 @@ test('a fresh import: nothing is open, and the start is the only frontier', asyn
     name: 'Burdendal',
     kind: 'settlement',
     grade: 'unbuilt',
+    band: 'unbuilt',
+    score: 0,
     hops: 0,
     population: 28473,
-    missing: ['town', 'description', 'residents', 'lore', 'ground'],
-    // How far it is toward Rich, so "missing residents" isn't read as "nobody".
-    progress: { size: 'great city', residents: '0 of 6', lore: '0 of 3' },
+    // The gate's needs first, then the criteria by score gained (L-691).
+    missing: ['town', 'description', 'residents', 'townArt', 'lore', 'ground'],
+    // How far it is toward its size's people and lore, so "missing
+    // residents" isn't read as "nobody" (a great city wants 12 and 8).
+    progress: { size: 'great city', residents: '0 of 12', lore: '0 of 8' },
     // Whether its town has ground yet (L-653).
     ground: false,
   });
   // Then the closed places nearest the start.
   expect(list.items.slice(1).every((i) => i.priority === 'closed' && i.hops === 1)).toBe(true);
-  expect(Object.keys(list.howTo)).toEqual(['town', 'description', 'residents', 'lore', 'ground']);
+  expect(Object.keys(list.howTo)).toEqual([
+    'town',
+    'description',
+    'residents',
+    'townArt',
+    'lore',
+    'ground',
+  ]);
   expect(list.howTo.town).toMatch(/add_place/);
   expect(list.howTo.description).toMatch(/update_location/);
   expect(list).toMatchObject({ total: 887, offset: 0, count: 5, nextOffset: 5 });
@@ -188,12 +201,17 @@ test('writing up the start and laying out its town opens it, moving the frontier
   });
   // Written up, but still Unbuilt: it has no town.
   const written = await work({ limit: 1 });
-  expect(written.items[0]).toMatchObject({
-    id: 'loc_1',
-    grade: 'unbuilt',
-    missing: ['town', 'residents', 'lore', 'ground'],
-  });
-  expect(written.items[0].progress).toMatchObject({ residents: '0 of 6' });
+  expect(written.items[0]).toMatchObject({ id: 'loc_1', grade: 'unbuilt' });
+  // Written, but short: its description still wants 60 words (L-691).
+  expect(written.items[0].missing).toEqual([
+    'town',
+    'description',
+    'residents',
+    'townArt',
+    'lore',
+    'ground',
+  ]);
+  expect(written.items[0].progress).toMatchObject({ residents: '0 of 12' });
 
   await ok('add_place', {
     worldId: WORLD,
@@ -218,27 +236,43 @@ test('writing up the start and laying out its town opens it, moving the frontier
 
   const start = await work({ grade: 'playable' });
   expect(start.items).toEqual([
-    expect.objectContaining({ priority: 'town', id: 'plc_1_the-harbour' }),
+    expect.objectContaining({ priority: 'town', id: 'plc_1_the-harbour', band: 'playable' }),
     expect.objectContaining({
       priority: 'enrich',
       id: 'loc_1',
-      missing: ['residents', 'lore', 'ground'],
+      band: 'playable',
+      missing: ['description', 'residents', 'townArt', 'lore', 'ground'],
     }),
   ]);
 });
 
 test('get_location shows the grade, the checklist, and which neighbours are open', async () => {
   const place = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
-  expect(place).toMatchObject({
-    grade: 'playable',
-    // Burdendal is a capital of 28,473: a great city's bar (SIZE_TIERS).
-    missing: [
-      { need: 'residents', for: 'rich', message: 'A great city needs 6 residents (it has 0).' },
-      { need: 'lore', for: 'rich', message: 'A great city needs 3 lore entries (it has 0).' },
-      // Its town needs ground to be Rich too (L-655).
-      { need: 'ground', for: 'rich', message: 'Its town has no ground yet.' },
-    ],
-  });
+  expect(place).toMatchObject({ grade: 'playable', band: 'playable' });
+  // Open, but nothing past the gate yet: its short description, nobody, no
+  // lore, no ground, and its harbour as bare.
+  expect(place.score).toBe(0);
+  // Burdendal is a capital of 28,473: a great city (SIZE_TIERS). Its unmet
+  // criteria come most score first, each with what doing it gains (L-691).
+  const { missing } = place;
+  expect(missing.every((item) => item.for === 'score')).toBe(true);
+  expect(missing.map((item) => item.gain)).toEqual(
+    missing.map((item) => item.gain).sort((a, b) => b - a)
+  );
+  expect(missing).toContainEqual(
+    expect.objectContaining({
+      need: 'residents',
+      criterion: 'settlement.residents',
+      message: 'A great city needs 12 residents (it has 0).',
+      have: 0,
+      want: 12,
+      tool: 'add_character',
+    })
+  );
+  // Its town's ground (L-655).
+  expect(missing).toContainEqual(
+    expect.objectContaining({ need: 'ground', message: 'Its town has no ground yet.' })
+  );
   expect(place.connections.map((c) => c.grade)).toEqual([
     'unbuilt',
     'unbuilt',
@@ -258,41 +292,54 @@ test('get_location shows the grade, the checklist, and which neighbours are open
   ]);
 });
 
-test('enough residents and lore for its size, and town ground, make it rich, and it leaves the work list', async () => {
-  const people = ['Mara Quill', 'Tobin Reed', 'Elsa Varne', 'Corin Hale', 'Isa Wren', 'Pell Marr'];
-  for (const [i, name] of people.entries()) {
+test('people, lore and a long description make it Rich, and it leaves the work list; ground raises it', async () => {
+  const long = (what) => `${what}. ` + Array(60).fill('salt').join(' ');
+  await ok('update_location', {
+    worldId: WORLD,
+    locationId: 'loc_1',
+    description: long('A rain-soaked port of slate roofs and tarred rope'),
+  });
+  for (let i = 1; i <= 12; i += 1) {
     await ok('add_character', {
       worldId: WORLD,
-      name,
-      description: `A Burdendal local, one of ${i + 1}.`,
+      name: `Local ${String.fromCharCode(64 + i)}`,
+      description: `A Burdendal local, one of ${i}.`,
       locationId: 'loc_1',
       townPoint: { x: 500, y: 500 },
     });
-    // One resident short of a great city's six: still only playable.
-    if (i === 4) {
+    // Five of a great city's twelve: its progress says so.
+    if (i === 5) {
       const enrich = await work({ grade: 'playable', kind: 'settlement' });
       expect(enrich.items[0]).toMatchObject({
         id: 'loc_1',
-        missing: ['residents', 'lore', 'ground'],
-        progress: { residents: '5 of 6', lore: '0 of 3' },
+        progress: { residents: '5 of 12', lore: '0 of 8' },
       });
-      expect(
-        (await ok('get_location', { worldId: WORLD, locationId: 'loc_1' })).missing[0]
-      ).toEqual({
-        need: 'residents',
-        for: 'rich',
-        message: 'A great city needs 6 residents (it has 5).',
-      });
+      const { missing } = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
+      expect(missing).toContainEqual(
+        expect.objectContaining({
+          need: 'residents',
+          message: 'A great city needs 12 residents (it has 5).',
+          have: 5,
+          want: 12,
+        })
+      );
     }
   }
-  for (const title of ['The Founding', 'The Drowned Bells', 'The Salt Tithe']) {
-    await ok('add_lore', { worldId: WORLD, title, text: `${title}, retold.`, about: ['loc_1'] });
+  // Eight entries long enough to count, about the town and its harbour, one
+  // naming both (variety, and lore that links).
+  for (let i = 1; i <= 8; i += 1) {
+    await ok('add_lore', {
+      worldId: WORLD,
+      title: `Tale ${i}`,
+      text: long(`Tale ${i}`),
+      about: i === 1 ? ['loc_1', 'plc_1_the-harbour'] : ['loc_1'],
+    });
   }
-  // People and lore enough, but its town has no ground yet (L-655).
-  expect(await ok('get_location', { worldId: WORLD, locationId: 'loc_1' })).toMatchObject({
-    grade: 'playable',
-    missing: [{ need: 'ground', for: 'rich', message: 'Its town has no ground yet.' }],
-  });
+  // Rich already, with only its town's art and ground (L-655) to go.
+  const unground = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
+  expect(unground.missing.map((item) => item.need)).toEqual(['townArt', 'ground']);
+  expect(unground).toMatchObject({ grade: 'playable', band: 'rich' });
+  expect(unground.score).toBeGreaterThanOrEqual(40);
   await ok('update_place', {
     worldId: WORLD,
     placeId: 'plc_1_the-harbour',
@@ -313,34 +360,41 @@ test('enough residents and lore for its size, and town ground, make it rich, and
       },
     ],
   });
-  expect((await ok('get_location', { worldId: WORLD, locationId: 'loc_1' })).grade).toBe('rich');
+  const built = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
+  expect(built).toMatchObject({ grade: 'playable', band: 'rich' });
+  expect(built.score).toBeGreaterThan(unground.score);
+  // Town art is what is left of its own: Vivid takes more than this.
+  expect(built.missing.map((item) => item.need)).toEqual(['townArt']);
   const list = await work({ limit: 100 });
   expect(list.completion).toMatchObject({ playable: 0, rich: 1 });
-  // Nothing rich is ever work: it has left the list entirely.
+  // Nothing Rich is work: it has left the list entirely.
   expect((await work({ grade: 'rich' })).total).toBe(0);
-  // 887 to start with, less Burdendal, plus its harbour.
-  expect((await work({ limit: 1 })).total).toBe(887);
 
   const rich = await ok('find_locations', { worldId: WORLD, grade: 'rich' });
-  expect(rich.locations).toEqual([expect.objectContaining({ id: 'loc_1', grade: 'rich' })]);
+  expect(rich.locations).toEqual([
+    expect.objectContaining({ id: 'loc_1', grade: 'playable', band: 'rich' }),
+  ]);
   const overview = await ok('get_world', { worldId: WORLD });
   expect(overview.completion).toMatchObject({
     graded: true,
+    rubricVersion: 4,
+    band: 'playable',
     places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
     regions: { stub: 145 },
   });
+  expect(overview.completion.score).toBeGreaterThan(0);
 });
 
 test('filters: by kind, by what is missing, and around another place', async () => {
-  // Settlements take residents (662 still need people), and so do places in
-  // town (the harbour).
-  expect((await work({ need: 'residents' })).total).toBe(663);
+  // Settlements want residents (662 still need people), and places in town
+  // (the harbour) and points of interest (56) someone found there (L-691).
+  expect((await work({ need: 'residents' })).total).toBe(719);
   const needingPeople = await work({ need: 'residents', kind: 'settlement', limit: 3 });
   expect(needingPeople.total).toBe(662);
   expect(needingPeople.items.every((i) => i.kind === 'settlement')).toBe(true);
   expect(needingPeople.items.every((i) => i.missing.includes('residents'))).toBe(true);
-  expect((await work({ kind: 'poi', need: 'residents' })).total).toBe(0);
+  expect((await work({ kind: 'poi', need: 'residents' })).total).toBe(56);
 
   const regions = await work({ kind: 'region', limit: 2 });
   expect(regions.total).toBe(145);
@@ -348,7 +402,7 @@ test('filters: by kind, by what is missing, and around another place', async () 
     priority: 'describe',
     type: 'region',
     grade: 'stub',
-    missing: ['description', 'lore'],
+    missing: ['description', 'lore', 'people'],
   });
 
   // Around Hitchel instead of the start: it is closed, so it heads the frontier.
@@ -376,9 +430,12 @@ test('update_region writes a description at last, and grades the region', async 
   expect(region).toMatchObject({
     description: 'Rain-green hills between the bay and the old road.',
     grade: 'playable',
-    missing: [{ need: 'lore', for: 'rich', message: 'There is no lore about it.' }],
   });
-  expect(region.locations[0]).toMatchObject({ id: 'loc_1', grade: 'rich' });
+  // Its description is short of 80 words, and nobody writes its lore yet.
+  expect(region.missing.map((item) => item.criterion)).toEqual(
+    expect.arrayContaining(['realm.description', 'realm.lore'])
+  );
+  expect(region.locations[0]).toMatchObject({ id: 'loc_1', grade: 'playable', band: 'rich' });
   expect((await call('update_region', { worldId: WORLD, regionId: 'reg_1' })).isError).toBe(true);
 });
 

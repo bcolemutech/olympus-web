@@ -1,0 +1,1762 @@
+{
+  "source": "nisia-625ffc, canonVersion 325, read over MCP 2026-10-11 (rubric 3 grades)",
+  "world": {
+    "tagline": true,
+    "openingHook": true,
+    "mapHasImage": true,
+    "startingLocationId": "loc_450"
+  },
+  "settlements": [
+    {
+      "id": "loc_450",
+      "name": "Hatham",
+      "population": 8552,
+      "capital": false,
+      "regionId": "reg_19",
+      "factionId": "fac_3",
+      "connections": ["loc_191", "loc_281", "loc_445"],
+      "descriptionWords": 242,
+      "hasTownArt": false,
+      "hasGround": true,
+      "npcIds": [
+        "chr_wren-callowmere",
+        "chr_old-tobin-marrish",
+        "chr_mara-quill",
+        "chr_bess-haddow"
+      ],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_191",
+      "name": "Daldockley",
+      "population": 9975,
+      "capital": false,
+      "regionId": "reg_19",
+      "factionId": "fac_3",
+      "connections": ["loc_358", "loc_450"],
+      "descriptionWords": 240,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": ["chr_aldous-pennick", "chr_hester-vane", "chr_gully-fenn"],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_3",
+      "name": "Keton",
+      "population": 26826,
+      "capital": true,
+      "regionId": "reg_18",
+      "factionId": "fac_3",
+      "connections": ["loc_102", "loc_43", "loc_597", "loc_401"],
+      "descriptionWords": 259,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": [
+        "chr_ambrose-kell",
+        "chr_silas-morrow",
+        "chr_jory-gannet",
+        "chr_elspeth-cray",
+        "chr_captain-tamsin-rook",
+        "chr_benedict-sallow",
+        "chr_wat-pilling"
+      ],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_343",
+      "name": "Dudlingin",
+      "population": 10699,
+      "capital": false,
+      "regionId": "reg_18",
+      "factionId": "fac_3",
+      "connections": ["loc_358", "loc_401"],
+      "descriptionWords": 206,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": [
+        "chr_dame-rowan-harrowgate",
+        "chr_barnaby-coyle",
+        "chr_imogen-strand",
+        "chr_ezra-pell",
+        "chr_tam-wexley",
+        "chr_bryn-ashcombe",
+        "chr_mags-tolliver"
+      ],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_43",
+      "name": "Bridgeford",
+      "population": 13620,
+      "capital": false,
+      "regionId": "reg_20",
+      "factionId": "fac_3",
+      "connections": ["loc_3", "loc_318", "loc_401", "loc_601"],
+      "descriptionWords": 227,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": ["chr_osric-vane", "chr_agnes-thorne", "chr_corin-ashdown", "chr_hester-quill"],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_358",
+      "name": "Midhurstle",
+      "population": 4183,
+      "capital": false,
+      "regionId": "reg_19",
+      "factionId": "fac_3",
+      "connections": ["loc_191", "loc_343"],
+      "descriptionWords": 169,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": ["chr_agnes-thorley", "chr_corran-dace", "chr_odo-fairweather"],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_281",
+      "name": "Brorough (Norton)",
+      "population": 10331,
+      "capital": false,
+      "regionId": "reg_19",
+      "factionId": "fac_3",
+      "connections": ["loc_450", "loc_580"],
+      "descriptionWords": 195,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": ["chr_sir-edric-hale", "chr_ysolde-brand", "chr_brother-anselm", "chr_nell-swift"],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_445",
+      "name": "Skipton (Norton)",
+      "population": 846,
+      "capital": false,
+      "regionId": "reg_19",
+      "factionId": "fac_3",
+      "connections": ["loc_450"],
+      "descriptionWords": 183,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": ["chr_torvald-ashby", "chr_ilse-brannock"],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_102",
+      "name": "Picheaping",
+      "population": 15586,
+      "capital": false,
+      "regionId": "reg_24",
+      "factionId": "fac_3",
+      "connections": ["loc_210", "loc_257", "loc_3"],
+      "descriptionWords": 208,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": [
+        "chr_lady-maud-cressy",
+        "chr_hal-brennick",
+        "chr_jacky-tull",
+        "chr_wenna-calloway"
+      ],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_401",
+      "name": "Mitfordge",
+      "population": 1585,
+      "capital": false,
+      "regionId": "reg_18",
+      "factionId": "fac_3",
+      "connections": ["loc_343", "loc_43", "loc_3"],
+      "descriptionWords": 194,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": ["chr_hobb-ferrar", "chr_nell-drayton"],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_597",
+      "name": "Sudbuse",
+      "population": 9337,
+      "capital": false,
+      "regionId": "reg_18",
+      "factionId": "fac_3",
+      "connections": ["loc_3", "loc_645"],
+      "descriptionWords": 219,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": ["chr_ned-coldwell", "chr_rosalind-ashby"],
+      "rubric2Rich": true
+    },
+    {
+      "id": "loc_580",
+      "name": "Helsterton",
+      "population": 1244,
+      "capital": false,
+      "regionId": "reg_19",
+      "factionId": "fac_3",
+      "connections": ["loc_111", "loc_244", "loc_278", "loc_281"],
+      "descriptionWords": 175,
+      "hasTownArt": false,
+      "hasGround": false,
+      "npcIds": ["chr_wenna-thistle", "chr_garrick-holt"],
+      "rubric2Rich": true
+    }
+  ],
+  "places": [
+    {
+      "id": "plc_450_the-customs-pillar",
+      "name": "The Customs Pillar",
+      "locationId": "loc_450",
+      "descriptionWords": 70,
+      "npcIds": [],
+      "mapId": "bm_town-green-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_450_the-fish-market",
+      "name": "The Fish Market",
+      "locationId": "loc_450",
+      "descriptionWords": 61,
+      "npcIds": [],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_450_the-harbour-quay",
+      "name": "The Harbour Quay",
+      "locationId": "loc_450",
+      "descriptionWords": 65,
+      "npcIds": [],
+      "mapId": "bm_quay-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_450_the-harbourmaster-s-tower",
+      "name": "The Harbourmaster's Tower",
+      "locationId": "loc_450",
+      "descriptionWords": 73,
+      "npcIds": ["chr_wren-callowmere"],
+      "mapId": "bm_the-harbourmaster-s-tower",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_450_the-lantern-oar",
+      "name": "The Lantern & Oar",
+      "locationId": "loc_450",
+      "descriptionWords": 78,
+      "npcIds": ["chr_bess-haddow"],
+      "mapId": "bm_the-lantern-oar",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_450_the-net-sheds",
+      "name": "The Net Sheds",
+      "locationId": "loc_450",
+      "descriptionWords": 73,
+      "npcIds": ["chr_old-tobin-marrish"],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_450_the-terraces",
+      "name": "The Terraces",
+      "locationId": "loc_450",
+      "descriptionWords": 66,
+      "npcIds": [],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_450_the-trailhead",
+      "name": "The Trailhead",
+      "locationId": "loc_450",
+      "descriptionWords": 61,
+      "npcIds": ["chr_mara-quill"],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_191_factors-row",
+      "name": "Factors' Row",
+      "locationId": "loc_191",
+      "descriptionWords": 65,
+      "npcIds": [],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_191_the-crown-quays",
+      "name": "The Crown Quays",
+      "locationId": "loc_191",
+      "descriptionWords": 69,
+      "npcIds": [],
+      "mapId": "bm_quay-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_191_the-customs-house",
+      "name": "The Customs House",
+      "locationId": "loc_191",
+      "descriptionWords": 79,
+      "npcIds": ["chr_aldous-pennick"],
+      "mapId": "bm_the-customs-house",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_191_the-gilded-tally",
+      "name": "The Gilded Tally",
+      "locationId": "loc_191",
+      "descriptionWords": 63,
+      "npcIds": ["chr_hester-vane"],
+      "mapId": "bm_the-gilded-tally-ground-floor",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_191_the-king-s-causeway",
+      "name": "The King's Causeway",
+      "locationId": "loc_191",
+      "descriptionWords": 77,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_191_the-sump",
+      "name": "The Sump",
+      "locationId": "loc_191",
+      "descriptionWords": 70,
+      "npcIds": ["chr_gully-fenn"],
+      "mapId": "bm_the-sump",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_3_crown-square",
+      "name": "Crown Square",
+      "locationId": "loc_3",
+      "descriptionWords": 74,
+      "npcIds": [],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_3_goldsmiths-row",
+      "name": "Goldsmiths' Row",
+      "locationId": "loc_3",
+      "descriptionWords": 54,
+      "npcIds": ["chr_benedict-sallow"],
+      "mapId": "bm_goldsmiths-row",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_3_herring-steps",
+      "name": "Herring Steps",
+      "locationId": "loc_3",
+      "descriptionWords": 57,
+      "npcIds": [],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_3_kingshold",
+      "name": "Kingshold",
+      "locationId": "loc_3",
+      "descriptionWords": 81,
+      "npcIds": [],
+      "mapId": "bm_great-hall-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_3_the-exchequer",
+      "name": "The Exchequer",
+      "locationId": "loc_3",
+      "descriptionWords": 89,
+      "npcIds": ["chr_ambrose-kell"],
+      "mapId": "bm_the-exchequer",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_3_the-hulks",
+      "name": "The Hulks",
+      "locationId": "loc_3",
+      "descriptionWords": 70,
+      "npcIds": ["chr_wat-pilling"],
+      "mapId": "bm_the-hulks",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_3_the-king-s-gate",
+      "name": "The King's Gate",
+      "locationId": "loc_3",
+      "descriptionWords": 59,
+      "npcIds": [],
+      "mapId": "bm_city-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_3_the-picheaping-gate",
+      "name": "The Picheaping Gate",
+      "locationId": "loc_3",
+      "descriptionWords": 44,
+      "npcIds": [],
+      "mapId": "bm_city-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_3_the-royal-dockyard",
+      "name": "The Royal Dockyard",
+      "locationId": "loc_3",
+      "descriptionWords": 74,
+      "npcIds": [],
+      "mapId": "bm_work-yard-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_3_the-royal-harbour",
+      "name": "The Royal Harbour",
+      "locationId": "loc_3",
+      "descriptionWords": 65,
+      "npcIds": [],
+      "mapId": "bm_quay-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_3_the-salt-crown",
+      "name": "The Salt Crown",
+      "locationId": "loc_3",
+      "descriptionWords": 71,
+      "npcIds": ["chr_captain-tamsin-rook"],
+      "mapId": "bm_the-salt-crown",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_3_the-sea-minster",
+      "name": "The Sea Minster",
+      "locationId": "loc_3",
+      "descriptionWords": 70,
+      "npcIds": ["chr_elspeth-cray"],
+      "mapId": "bm_the-sea-minster",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_3_the-strand",
+      "name": "The Strand",
+      "locationId": "loc_3",
+      "descriptionWords": 88,
+      "npcIds": ["chr_jory-gannet"],
+      "mapId": "bm_the-strand",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_3_the-water-gate",
+      "name": "The Water Gate",
+      "locationId": "loc_3",
+      "descriptionWords": 85,
+      "npcIds": ["chr_silas-morrow"],
+      "mapId": "bm_the-water-gate",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_343_the-castellan-s-hall",
+      "name": "The Castellan's Hall",
+      "locationId": "loc_343",
+      "descriptionWords": 65,
+      "npcIds": ["chr_dame-rowan-harrowgate"],
+      "mapId": "bm_great-hall-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_343_the-crowned-goose",
+      "name": "The Crowned Goose",
+      "locationId": "loc_343",
+      "descriptionWords": 65,
+      "npcIds": ["chr_imogen-strand"],
+      "mapId": "bm_tavern-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_343_the-mossmarket",
+      "name": "The Mossmarket",
+      "locationId": "loc_343",
+      "descriptionWords": 69,
+      "npcIds": ["chr_ezra-pell"],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_343_the-north-gate",
+      "name": "The North Gate",
+      "locationId": "loc_343",
+      "descriptionWords": 57,
+      "npcIds": ["chr_mags-tolliver"],
+      "mapId": "bm_the-north-gate",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_343_the-south-gate",
+      "name": "The South Gate",
+      "locationId": "loc_343",
+      "descriptionWords": 62,
+      "npcIds": ["chr_bryn-ashcombe"],
+      "mapId": "bm_the-south-gate",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_343_the-toll-yard",
+      "name": "The Toll Yard",
+      "locationId": "loc_343",
+      "descriptionWords": 56,
+      "npcIds": ["chr_barnaby-coyle"],
+      "mapId": "bm_work-yard-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_343_the-wall-walk",
+      "name": "The Wall Walk",
+      "locationId": "loc_343",
+      "descriptionWords": 65,
+      "npcIds": ["chr_tam-wexley"],
+      "mapId": "bm_the-wall-walk",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_43_bridge-market",
+      "name": "Bridge Market",
+      "locationId": "loc_43",
+      "descriptionWords": 66,
+      "npcIds": ["chr_hester-quill"],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_43_kete-wharf",
+      "name": "Kete Wharf",
+      "locationId": "loc_43",
+      "descriptionWords": 63,
+      "npcIds": ["chr_agnes-thorne"],
+      "mapId": "bm_quay-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_43_lane-end",
+      "name": "Lane End",
+      "locationId": "loc_43",
+      "descriptionWords": 57,
+      "npcIds": [],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_43_swabing-road",
+      "name": "Swabing Road",
+      "locationId": "loc_43",
+      "descriptionWords": 47,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_43_tanners-row",
+      "name": "Tanners' Row",
+      "locationId": "loc_43",
+      "descriptionWords": 46,
+      "npcIds": [],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_43_the-bargemen-s-rest",
+      "name": "The Bargemen's Rest",
+      "locationId": "loc_43",
+      "descriptionWords": 63,
+      "npcIds": ["chr_corin-ashdown"],
+      "mapId": "bm_tavern-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_43_the-king-s-bridge",
+      "name": "The King's Bridge",
+      "locationId": "loc_43",
+      "descriptionWords": 94,
+      "npcIds": [],
+      "mapId": "bm_the-king-s-bridge",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_43_the-toll-house",
+      "name": "The Toll House",
+      "locationId": "loc_43",
+      "descriptionWords": 73,
+      "npcIds": ["chr_osric-vane"],
+      "mapId": "bm_great-hall-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_358_market-square",
+      "name": "Market Square",
+      "locationId": "loc_358",
+      "descriptionWords": 66,
+      "npcIds": ["chr_agnes-thorley"],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_358_the-coast-road-end",
+      "name": "The Coastward Yard",
+      "locationId": "loc_358",
+      "descriptionWords": 55,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_358_the-laden-mule",
+      "name": "The Laden Mule",
+      "locationId": "loc_358",
+      "descriptionWords": 71,
+      "npcIds": ["chr_corran-dace"],
+      "mapId": "bm_tavern-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_358_the-midder-bridge",
+      "name": "The Midder Bridge",
+      "locationId": "loc_358",
+      "descriptionWords": 57,
+      "npcIds": ["chr_odo-fairweather"],
+      "mapId": "bm_the-midder-bridge",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_358_the-north-waymark",
+      "name": "The North Waymark",
+      "locationId": "loc_358",
+      "descriptionWords": 60,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_281_the-antlers",
+      "name": "The Antlers",
+      "locationId": "loc_281",
+      "descriptionWords": 73,
+      "npcIds": ["chr_nell-swift"],
+      "mapId": "bm_tavern-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_281_the-chapel-of-the-rain-saints",
+      "name": "The Chapel of the Rain Saints",
+      "locationId": "loc_281",
+      "descriptionWords": 76,
+      "npcIds": ["chr_brother-anselm"],
+      "mapId": "bm_great-hall-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_281_the-coast-gate",
+      "name": "The Coast Gate",
+      "locationId": "loc_281",
+      "descriptionWords": 60,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_281_the-helsterton-gate",
+      "name": "The Helsterton Gate",
+      "locationId": "loc_281",
+      "descriptionWords": 57,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_281_the-moot-hall",
+      "name": "The Moot Hall",
+      "locationId": "loc_281",
+      "descriptionWords": 62,
+      "npcIds": ["chr_sir-edric-hale"],
+      "mapId": "bm_great-hall-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_281_the-sawdust-quarter",
+      "name": "The Sawdust Quarter",
+      "locationId": "loc_281",
+      "descriptionWords": 64,
+      "npcIds": [],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_281_the-timber-market",
+      "name": "The Timber Market",
+      "locationId": "loc_281",
+      "descriptionWords": 76,
+      "npcIds": ["chr_ysolde-brand"],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_445_the-cedar-gate",
+      "name": "The Cedar Gate",
+      "locationId": "loc_445",
+      "descriptionWords": 58,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_445_the-longhouse-green",
+      "name": "The Longhouse Green",
+      "locationId": "loc_445",
+      "descriptionWords": 53,
+      "npcIds": ["chr_torvald-ashby"],
+      "mapId": "bm_town-green-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_445_the-sawpits",
+      "name": "The Sawpits",
+      "locationId": "loc_445",
+      "descriptionWords": 58,
+      "npcIds": [],
+      "mapId": "bm_work-yard-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_445_the-weeping-cedar",
+      "name": "The Weeping Cedar",
+      "locationId": "loc_445",
+      "descriptionWords": 71,
+      "npcIds": ["chr_ilse-brannock"],
+      "mapId": "bm_the-weeping-cedar",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_102_the-drove-pens",
+      "name": "The Drove Pens",
+      "locationId": "loc_102",
+      "descriptionWords": 52,
+      "npcIds": ["chr_jacky-tull"],
+      "mapId": "bm_work-yard-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_102_the-golden-fleece",
+      "name": "The Golden Fleece",
+      "locationId": "loc_102",
+      "descriptionWords": 58,
+      "npcIds": ["chr_wenna-calloway"],
+      "mapId": "bm_tavern-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_102_the-keton-gate",
+      "name": "The Keton Gate",
+      "locationId": "loc_102",
+      "descriptionWords": 46,
+      "npcIds": [],
+      "mapId": "bm_city-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_102_the-seneschal-s-house",
+      "name": "The Seneschal's House",
+      "locationId": "loc_102",
+      "descriptionWords": 60,
+      "npcIds": ["chr_lady-maud-cressy"],
+      "mapId": "bm_great-hall-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_102_the-upland-gate",
+      "name": "The Upland Gate",
+      "locationId": "loc_102",
+      "descriptionWords": 43,
+      "npcIds": [],
+      "mapId": "bm_city-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_102_the-wool-hall",
+      "name": "The Wool Hall",
+      "locationId": "loc_102",
+      "descriptionWords": 66,
+      "npcIds": ["chr_hal-brennick"],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_102_weavers-street",
+      "name": "Weavers' Street",
+      "locationId": "loc_102",
+      "descriptionWords": 57,
+      "npcIds": [],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_401_bridgeford-path",
+      "name": "Bridgeford Path",
+      "locationId": "loc_401",
+      "descriptionWords": 49,
+      "npcIds": [],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_401_dudlingin-lane",
+      "name": "Dudlingin Lane",
+      "locationId": "loc_401",
+      "descriptionWords": 63,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_401_kete-mill",
+      "name": "Kete Mill",
+      "locationId": "loc_401",
+      "descriptionWords": 56,
+      "npcIds": ["chr_hobb-ferrar"],
+      "mapId": "bm_work-yard-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_401_mitfordge-green",
+      "name": "Mitfordge Green",
+      "locationId": "loc_401",
+      "descriptionWords": 53,
+      "npcIds": [],
+      "mapId": "bm_town-green-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_401_the-old-ford",
+      "name": "The Old Ford",
+      "locationId": "loc_401",
+      "descriptionWords": 83,
+      "npcIds": [],
+      "mapId": "bm_the-old-ford",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_401_the-wet-hen",
+      "name": "The Wet Hen",
+      "locationId": "loc_401",
+      "descriptionWords": 59,
+      "npcIds": ["chr_nell-drayton"],
+      "mapId": "bm_tavern-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_597_beacon-hill",
+      "name": "Beacon Hill",
+      "locationId": "loc_597",
+      "descriptionWords": 77,
+      "npcIds": ["chr_ned-coldwell"],
+      "mapId": "bm_town-green-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_597_sudbuse-high-street",
+      "name": "Sudbuse High Street",
+      "locationId": "loc_597",
+      "descriptionWords": 54,
+      "npcIds": [],
+      "mapId": "bm_market-square-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_597_the-lamb-and-lantern",
+      "name": "The Lamb and Lantern",
+      "locationId": "loc_597",
+      "descriptionWords": 55,
+      "npcIds": [],
+      "mapId": "bm_tavern-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_597_the-shore-gate",
+      "name": "The Shore Gate",
+      "locationId": "loc_597",
+      "descriptionWords": 65,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_597_the-slate-quarry",
+      "name": "The Slate Quarry",
+      "locationId": "loc_597",
+      "descriptionWords": 61,
+      "npcIds": ["chr_rosalind-ashby"],
+      "mapId": "bm_work-yard-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_597_totham-lane",
+      "name": "Totham Lane",
+      "locationId": "loc_597",
+      "descriptionWords": 48,
+      "npcIds": [],
+      "mapId": "bm_town-street-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_580_the-east-gate",
+      "name": "The East Gate",
+      "locationId": "loc_580",
+      "descriptionWords": 46,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_580_the-four-horseshoes",
+      "name": "The Four Horseshoes",
+      "locationId": "loc_580",
+      "descriptionWords": 76,
+      "npcIds": ["chr_wenna-thistle"],
+      "mapId": "bm_tavern-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_580_the-four-ways",
+      "name": "The Four Ways",
+      "locationId": "loc_580",
+      "descriptionWords": 54,
+      "npcIds": [],
+      "mapId": "bm_town-green-generic",
+      "rubric2Rich": false
+    },
+    {
+      "id": "plc_580_the-guild-depot",
+      "name": "The Guild Depot",
+      "locationId": "loc_580",
+      "descriptionWords": 60,
+      "npcIds": ["chr_garrick-holt"],
+      "mapId": "bm_the-guild-depot",
+      "rubric2Rich": true
+    },
+    {
+      "id": "plc_580_the-west-gate",
+      "name": "The West Gate",
+      "locationId": "loc_580",
+      "descriptionWords": 58,
+      "npcIds": [],
+      "mapId": "bm_town-gate-generic",
+      "rubric2Rich": false
+    }
+  ],
+  "battleMaps": {
+    "bm_town-green-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 0,
+      "doors": 0,
+      "obstacles": 14,
+      "features": 3,
+      "exits": 4,
+      "entries": 1
+    },
+    "bm_market-square-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 0,
+      "doors": 0,
+      "obstacles": 18,
+      "features": 3,
+      "exits": 4,
+      "entries": 1
+    },
+    "bm_quay-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 22,
+      "height": 16,
+      "walls": 0,
+      "doors": 0,
+      "obstacles": 14,
+      "features": 4,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_town-street-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 24,
+      "height": 12,
+      "walls": 0,
+      "doors": 0,
+      "obstacles": 8,
+      "features": 3,
+      "exits": 4,
+      "entries": 1
+    },
+    "bm_town-gate-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 2,
+      "doors": 2,
+      "obstacles": 10,
+      "features": 4,
+      "exits": 2,
+      "entries": 2
+    },
+    "bm_great-hall-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 2,
+      "doors": 3,
+      "obstacles": 16,
+      "features": 2,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_city-gate-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 5,
+      "doors": 3,
+      "obstacles": 17,
+      "features": 4,
+      "exits": 2,
+      "entries": 2
+    },
+    "bm_work-yard-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 2,
+      "doors": 3,
+      "obstacles": 7,
+      "features": 4,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_tavern-generic": {
+      "generic": true,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 4,
+      "doors": 3,
+      "obstacles": 9,
+      "features": 5,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_the-harbourmaster-s-tower": {
+      "generic": false,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 1,
+      "doors": 1,
+      "obstacles": 15,
+      "features": 8,
+      "exits": 1,
+      "entries": 1
+    },
+    "bm_the-lantern-oar": {
+      "generic": false,
+      "hasImage": true,
+      "width": 26,
+      "height": 20,
+      "walls": 8,
+      "doors": 5,
+      "obstacles": 21,
+      "features": 8,
+      "exits": 3,
+      "entries": 3
+    },
+    "bm_the-customs-house": {
+      "generic": false,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 2,
+      "doors": 4,
+      "obstacles": 12,
+      "features": 4,
+      "exits": 3,
+      "entries": 3
+    },
+    "bm_the-gilded-tally-ground-floor": {
+      "generic": false,
+      "hasImage": true,
+      "width": 22,
+      "height": 16,
+      "walls": 8,
+      "doors": 5,
+      "obstacles": 12,
+      "features": 5,
+      "exits": 3,
+      "entries": 2
+    },
+    "bm_the-sump": {
+      "generic": false,
+      "hasImage": true,
+      "width": 22,
+      "height": 16,
+      "walls": 2,
+      "doors": 2,
+      "obstacles": 25,
+      "features": 6,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_goldsmiths-row": {
+      "generic": false,
+      "hasImage": true,
+      "width": 24,
+      "height": 16,
+      "walls": 6,
+      "doors": 3,
+      "obstacles": 15,
+      "features": 6,
+      "exits": 3,
+      "entries": 1
+    },
+    "bm_the-exchequer": {
+      "generic": false,
+      "hasImage": true,
+      "width": 26,
+      "height": 20,
+      "walls": 11,
+      "doors": 7,
+      "obstacles": 26,
+      "features": 6,
+      "exits": 1,
+      "entries": 1
+    },
+    "bm_the-hulks": {
+      "generic": false,
+      "hasImage": true,
+      "width": 26,
+      "height": 14,
+      "walls": 5,
+      "doors": 1,
+      "obstacles": 25,
+      "features": 6,
+      "exits": 1,
+      "entries": 1
+    },
+    "bm_the-salt-crown": {
+      "generic": false,
+      "hasImage": true,
+      "width": 22,
+      "height": 16,
+      "walls": 4,
+      "doors": 3,
+      "obstacles": 13,
+      "features": 6,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_the-sea-minster": {
+      "generic": false,
+      "hasImage": true,
+      "width": 22,
+      "height": 20,
+      "walls": 4,
+      "doors": 4,
+      "obstacles": 27,
+      "features": 7,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_the-strand": {
+      "generic": false,
+      "hasImage": true,
+      "width": 26,
+      "height": 18,
+      "walls": 2,
+      "doors": 2,
+      "obstacles": 43,
+      "features": 7,
+      "exits": 3,
+      "entries": 2
+    },
+    "bm_the-water-gate": {
+      "generic": false,
+      "hasImage": true,
+      "width": 24,
+      "height": 20,
+      "walls": 8,
+      "doors": 3,
+      "obstacles": 30,
+      "features": 8,
+      "exits": 3,
+      "entries": 1
+    },
+    "bm_the-north-gate": {
+      "generic": false,
+      "hasImage": true,
+      "width": 18,
+      "height": 16,
+      "walls": 4,
+      "doors": 3,
+      "obstacles": 14,
+      "features": 5,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_the-south-gate": {
+      "generic": false,
+      "hasImage": true,
+      "width": 18,
+      "height": 16,
+      "walls": 4,
+      "doors": 3,
+      "obstacles": 11,
+      "features": 4,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_the-wall-walk": {
+      "generic": false,
+      "hasImage": true,
+      "width": 24,
+      "height": 10,
+      "walls": 4,
+      "doors": 2,
+      "obstacles": 11,
+      "features": 3,
+      "exits": 2,
+      "entries": 2
+    },
+    "bm_the-king-s-bridge": {
+      "generic": false,
+      "hasImage": true,
+      "width": 18,
+      "height": 22,
+      "walls": 5,
+      "doors": 2,
+      "obstacles": 26,
+      "features": 7,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_the-midder-bridge": {
+      "generic": false,
+      "hasImage": true,
+      "width": 16,
+      "height": 20,
+      "walls": 2,
+      "doors": 0,
+      "obstacles": 12,
+      "features": 4,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_the-weeping-cedar": {
+      "generic": false,
+      "hasImage": true,
+      "width": 20,
+      "height": 16,
+      "walls": 0,
+      "doors": 0,
+      "obstacles": 13,
+      "features": 4,
+      "exits": 1,
+      "entries": 1
+    },
+    "bm_the-old-ford": {
+      "generic": false,
+      "hasImage": true,
+      "width": 24,
+      "height": 18,
+      "walls": 2,
+      "doors": 1,
+      "obstacles": 30,
+      "features": 6,
+      "exits": 2,
+      "entries": 1
+    },
+    "bm_the-guild-depot": {
+      "generic": false,
+      "hasImage": true,
+      "width": 22,
+      "height": 16,
+      "walls": 3,
+      "doors": 5,
+      "obstacles": 10,
+      "features": 7,
+      "exits": 2,
+      "entries": 1
+    }
+  },
+  "characters": [
+    {
+      "id": "chr_agnes-thorley",
+      "name": "Agnes Thorley",
+      "descriptionWords": 94,
+      "factionId": "fac_3",
+      "locationId": "loc_358",
+      "placeId": "plc_358_market-square"
+    },
+    {
+      "id": "chr_agnes-thorne",
+      "name": "Agnes Thorne",
+      "descriptionWords": 108,
+      "factionId": null,
+      "locationId": "loc_43",
+      "placeId": "plc_43_kete-wharf"
+    },
+    {
+      "id": "chr_aldous-pennick",
+      "name": "Aldous Pennick",
+      "descriptionWords": 158,
+      "factionId": "fac_3",
+      "locationId": "loc_191",
+      "placeId": "plc_191_the-customs-house"
+    },
+    {
+      "id": "chr_ambrose-kell",
+      "name": "Ambrose Kell",
+      "descriptionWords": 113,
+      "factionId": "fac_3",
+      "locationId": "loc_3",
+      "placeId": "plc_3_the-exchequer"
+    },
+    {
+      "id": "chr_barnaby-coyle",
+      "name": "Barnaby Coyle",
+      "descriptionWords": 99,
+      "factionId": "fac_3",
+      "locationId": "loc_343",
+      "placeId": "plc_343_the-toll-yard"
+    },
+    {
+      "id": "chr_benedict-sallow",
+      "name": "Benedict Sallow",
+      "descriptionWords": 98,
+      "factionId": null,
+      "locationId": "loc_3",
+      "placeId": "plc_3_goldsmiths-row"
+    },
+    {
+      "id": "chr_bess-haddow",
+      "name": "Bess Haddow",
+      "descriptionWords": 83,
+      "factionId": "fac_3",
+      "locationId": "loc_450",
+      "placeId": "plc_450_the-lantern-oar"
+    },
+    {
+      "id": "chr_brother-anselm",
+      "name": "Brother Anselm",
+      "descriptionWords": 92,
+      "factionId": "fac_3",
+      "locationId": "loc_281",
+      "placeId": "plc_281_the-chapel-of-the-rain-saints"
+    },
+    {
+      "id": "chr_bryn-ashcombe",
+      "name": "Bryn Ashcombe",
+      "descriptionWords": 147,
+      "factionId": null,
+      "locationId": "loc_343",
+      "placeId": "plc_343_the-south-gate"
+    },
+    {
+      "id": "chr_captain-tamsin-rook",
+      "name": "Captain Tamsin Rook",
+      "descriptionWords": 102,
+      "factionId": "fac_3",
+      "locationId": "loc_3",
+      "placeId": "plc_3_the-salt-crown"
+    },
+    {
+      "id": "chr_corin-ashdown",
+      "name": "Corin Ashdown",
+      "descriptionWords": 114,
+      "factionId": null,
+      "locationId": "loc_43",
+      "placeId": "plc_43_the-bargemen-s-rest"
+    },
+    {
+      "id": "chr_corran-dace",
+      "name": "Corran Dace",
+      "descriptionWords": 85,
+      "factionId": "fac_3",
+      "locationId": "loc_358",
+      "placeId": "plc_358_the-laden-mule"
+    },
+    {
+      "id": "chr_dame-rowan-harrowgate",
+      "name": "Dame Rowan Harrowgate",
+      "descriptionWords": 104,
+      "factionId": "fac_3",
+      "locationId": "loc_343",
+      "placeId": "plc_343_the-castellan-s-hall"
+    },
+    {
+      "id": "chr_elspeth-cray",
+      "name": "Elspeth Cray",
+      "descriptionWords": 102,
+      "factionId": null,
+      "locationId": "loc_3",
+      "placeId": "plc_3_the-sea-minster"
+    },
+    {
+      "id": "chr_ezra-pell",
+      "name": "Ezra Pell",
+      "descriptionWords": 108,
+      "factionId": "fac_3",
+      "locationId": "loc_343",
+      "placeId": "plc_343_the-mossmarket"
+    },
+    {
+      "id": "chr_garrick-holt",
+      "name": "Garrick Holt",
+      "descriptionWords": 103,
+      "factionId": "fac_3",
+      "locationId": "loc_580",
+      "placeId": "plc_580_the-guild-depot"
+    },
+    {
+      "id": "chr_gully-fenn",
+      "name": "Gully Fenn",
+      "descriptionWords": 104,
+      "factionId": "fac_3",
+      "locationId": "loc_191",
+      "placeId": "plc_191_the-sump"
+    },
+    {
+      "id": "chr_hal-brennick",
+      "name": "Hal Brennick",
+      "descriptionWords": 117,
+      "factionId": null,
+      "locationId": "loc_102",
+      "placeId": "plc_102_the-wool-hall"
+    },
+    {
+      "id": "chr_hester-quill",
+      "name": "Hester Quill",
+      "descriptionWords": 101,
+      "factionId": null,
+      "locationId": "loc_43",
+      "placeId": "plc_43_bridge-market"
+    },
+    {
+      "id": "chr_hester-vane",
+      "name": "Hester Vane",
+      "descriptionWords": 101,
+      "factionId": "fac_3",
+      "locationId": "loc_191",
+      "placeId": "plc_191_the-gilded-tally"
+    },
+    {
+      "id": "chr_hobb-ferrar",
+      "name": "Hobb Ferrar",
+      "descriptionWords": 121,
+      "factionId": "fac_3",
+      "locationId": "loc_401",
+      "placeId": "plc_401_kete-mill"
+    },
+    {
+      "id": "chr_ilse-brannock",
+      "name": "Ilse Brannock",
+      "descriptionWords": 154,
+      "factionId": null,
+      "locationId": "loc_445",
+      "placeId": "plc_445_the-weeping-cedar"
+    },
+    {
+      "id": "chr_imogen-strand",
+      "name": "Imogen Strand",
+      "descriptionWords": 113,
+      "factionId": "fac_3",
+      "locationId": "loc_343",
+      "placeId": "plc_343_the-crowned-goose"
+    },
+    {
+      "id": "chr_jacky-tull",
+      "name": "Jacky Tull",
+      "descriptionWords": 102,
+      "factionId": null,
+      "locationId": "loc_102",
+      "placeId": "plc_102_the-drove-pens"
+    },
+    {
+      "id": "chr_jory-gannet",
+      "name": "Jory Gannet",
+      "descriptionWords": 119,
+      "factionId": null,
+      "locationId": "loc_3",
+      "placeId": "plc_3_the-strand"
+    },
+    {
+      "id": "chr_lady-maud-cressy",
+      "name": "Lady Maud Cressy",
+      "descriptionWords": 106,
+      "factionId": "fac_3",
+      "locationId": "loc_102",
+      "placeId": "plc_102_the-seneschal-s-house"
+    },
+    {
+      "id": "chr_mags-tolliver",
+      "name": "Mags Tolliver",
+      "descriptionWords": 126,
+      "factionId": "fac_3",
+      "locationId": "loc_343",
+      "placeId": "plc_343_the-north-gate"
+    },
+    {
+      "id": "chr_mara-quill",
+      "name": "Mara Quill",
+      "descriptionWords": 100,
+      "factionId": "fac_3",
+      "locationId": "loc_450",
+      "placeId": "plc_450_the-trailhead"
+    },
+    {
+      "id": "chr_ned-coldwell",
+      "name": "Ned Coldwell",
+      "descriptionWords": 114,
+      "factionId": "fac_3",
+      "locationId": "loc_597",
+      "placeId": "plc_597_beacon-hill"
+    },
+    {
+      "id": "chr_nell-drayton",
+      "name": "Nell Drayton",
+      "descriptionWords": 95,
+      "factionId": null,
+      "locationId": "loc_401",
+      "placeId": "plc_401_the-wet-hen"
+    },
+    {
+      "id": "chr_nell-swift",
+      "name": "Nell Swift",
+      "descriptionWords": 92,
+      "factionId": "fac_3",
+      "locationId": "loc_281",
+      "placeId": "plc_281_the-antlers"
+    },
+    {
+      "id": "chr_odo-fairweather",
+      "name": "Odo Fairweather",
+      "descriptionWords": 125,
+      "factionId": "fac_3",
+      "locationId": "loc_358",
+      "placeId": "plc_358_the-midder-bridge"
+    },
+    {
+      "id": "chr_old-tobin-marrish",
+      "name": "Old Tobin Marrish",
+      "descriptionWords": 98,
+      "factionId": "fac_3",
+      "locationId": "loc_450",
+      "placeId": "plc_450_the-net-sheds"
+    },
+    {
+      "id": "chr_osric-vane",
+      "name": "Osric Vane",
+      "descriptionWords": 119,
+      "factionId": "fac_3",
+      "locationId": "loc_43",
+      "placeId": "plc_43_the-toll-house"
+    },
+    {
+      "id": "chr_rosalind-ashby",
+      "name": "Rosalind Ashby",
+      "descriptionWords": 107,
+      "factionId": "fac_3",
+      "locationId": "loc_597",
+      "placeId": "plc_597_the-slate-quarry"
+    },
+    {
+      "id": "chr_silas-morrow",
+      "name": "Silas Morrow",
+      "descriptionWords": 107,
+      "factionId": "fac_3",
+      "locationId": "loc_3",
+      "placeId": "plc_3_the-water-gate"
+    },
+    {
+      "id": "chr_sir-edric-hale",
+      "name": "Sir Edric Hale",
+      "descriptionWords": 108,
+      "factionId": "fac_3",
+      "locationId": "loc_281",
+      "placeId": "plc_281_the-moot-hall"
+    },
+    {
+      "id": "chr_tam-wexley",
+      "name": "Tam Wexley",
+      "descriptionWords": 121,
+      "factionId": "fac_3",
+      "locationId": "loc_343",
+      "placeId": "plc_343_the-wall-walk"
+    },
+    {
+      "id": "chr_torvald-ashby",
+      "name": "Torvald Ashby",
+      "descriptionWords": 107,
+      "factionId": "fac_3",
+      "locationId": "loc_445",
+      "placeId": "plc_445_the-longhouse-green"
+    },
+    {
+      "id": "chr_wat-pilling",
+      "name": "Wat Pilling",
+      "descriptionWords": 113,
+      "factionId": null,
+      "locationId": "loc_3",
+      "placeId": "plc_3_the-hulks"
+    },
+    {
+      "id": "chr_wenna-calloway",
+      "name": "Wenna Calloway",
+      "descriptionWords": 104,
+      "factionId": null,
+      "locationId": "loc_102",
+      "placeId": "plc_102_the-golden-fleece"
+    },
+    {
+      "id": "chr_wenna-thistle",
+      "name": "Wenna Thistle",
+      "descriptionWords": 107,
+      "factionId": "fac_3",
+      "locationId": "loc_580",
+      "placeId": "plc_580_the-four-horseshoes"
+    },
+    {
+      "id": "chr_wren-callowmere",
+      "name": "Wren Callowmere",
+      "descriptionWords": 128,
+      "factionId": "fac_3",
+      "locationId": "loc_450",
+      "placeId": "plc_450_the-harbourmaster-s-tower"
+    },
+    {
+      "id": "chr_ysolde-brand",
+      "name": "Ysolde Brand",
+      "descriptionWords": 98,
+      "factionId": "fac_3",
+      "locationId": "loc_281",
+      "placeId": "plc_281_the-timber-market"
+    }
+  ],
+  "lore": [
+    {
+      "id": "lore_filed-silver",
+      "words": 168,
+      "entityRefs": ["loc_343", "chr_ezra-pell", "fac_3", "fac_5", "fac_21"]
+    },
+    {
+      "id": "lore_keep-your-books-and-your-borders",
+      "words": 166,
+      "entityRefs": ["fac_3", "fac_5", "fac_21", "reg_19"]
+    },
+    {
+      "id": "lore_paying-twice-at-dudlingin",
+      "words": 185,
+      "entityRefs": [
+        "loc_343",
+        "reg_18",
+        "reg_19",
+        "chr_dame-rowan-harrowgate",
+        "chr_barnaby-coyle",
+        "chr_imogen-strand"
+      ]
+    },
+    {
+      "id": "lore_riding-low",
+      "words": 183,
+      "entityRefs": ["loc_43", "chr_agnes-thorne", "loc_3", "loc_401"]
+    },
+    {
+      "id": "lore_the-beacon-chain",
+      "words": 231,
+      "entityRefs": ["loc_597", "chr_ned-coldwell", "loc_3", "chr_captain-tamsin-rook"]
+    },
+    {
+      "id": "lore_the-cedar-guild",
+      "words": 164,
+      "entityRefs": ["loc_281", "chr_ysolde-brand", "reg_19"]
+    },
+    {
+      "id": "lore_the-drowned-ledger-of-hatham",
+      "words": 229,
+      "entityRefs": ["loc_450", "loc_191", "chr_wren-callowmere", "reg_19"]
+    },
+    {
+      "id": "lore_the-drowned-register",
+      "words": 224,
+      "entityRefs": ["loc_3", "chr_elspeth-cray", "chr_wat-pilling", "chr_jory-gannet"]
+    },
+    {
+      "id": "lore_the-earl-s-bridge",
+      "words": 228,
+      "entityRefs": ["loc_43", "reg_20", "chr_osric-vane"]
+    },
+    {
+      "id": "lore_the-fog-walkers",
+      "words": 168,
+      "entityRefs": ["loc_450", "chr_mara-quill"]
+    },
+    {
+      "id": "lore_the-ford-that-isn-t-there",
+      "words": 217,
+      "entityRefs": ["loc_401", "chr_hobb-ferrar", "loc_3"]
+    },
+    {
+      "id": "lore_the-great-cheaping",
+      "words": 217,
+      "entityRefs": ["loc_102", "reg_24", "chr_hal-brennick"]
+    },
+    {
+      "id": "lore_the-king-s-debts",
+      "words": 284,
+      "entityRefs": ["loc_3", "chr_ambrose-kell", "chr_benedict-sallow", "fac_3"]
+    },
+    {
+      "id": "lore_the-midder-carries-everything",
+      "words": 166,
+      "entityRefs": ["loc_358", "chr_agnes-thorley", "chr_corran-dace"]
+    },
+    {
+      "id": "lore_the-missing-letters",
+      "words": 133,
+      "entityRefs": ["loc_281", "chr_sir-edric-hale", "chr_nell-swift", "chr_wren-callowmere"]
+    },
+    {
+      "id": "lore_the-road-that-goes-nowhere",
+      "words": 153,
+      "entityRefs": ["loc_191", "reg_19", "chr_aldous-pennick"]
+    },
+    {
+      "id": "lore_the-seneschal-and-the-abacus",
+      "words": 210,
+      "entityRefs": ["loc_102", "chr_lady-maud-cressy", "chr_ambrose-kell", "reg_24"]
+    },
+    {
+      "id": "lore_the-waystone-mark",
+      "words": 145,
+      "entityRefs": ["loc_580", "chr_wenna-thistle", "chr_old-tobin-marrish"]
+    },
+    {
+      "id": "lore_the-weeping-cedar-of-skipton",
+      "words": 173,
+      "entityRefs": ["loc_445", "chr_torvald-ashby"]
+    }
+  ]
+}

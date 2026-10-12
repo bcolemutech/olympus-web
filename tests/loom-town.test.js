@@ -348,25 +348,27 @@ describe('towns in grading', () => {
     world = await loomCanon.loadWorld(WORLD, { db });
   });
 
-  test('places are graded: written up is playable; a resident or lore makes one rich', () => {
+  test('places are graded: written up is playable, and scored on who and what is there', () => {
     expect(grading.gradePlace(world, world.places.plc_1_temple).grade).toBe('stub');
-    expect(grading.gradePlace(world, world.places.plc_1_market)).toEqual({
-      grade: 'playable',
-      checklist: [
-        {
-          need: 'residents',
-          for: 'rich',
-          message: 'Nobody is found here and there is no lore about it: add either.',
-        },
-        // A generic battle map stops it short of Rich (L-622).
-        { need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' },
-      ],
+    const needs = (placeId) =>
+      grading.gradePlace(world, world.places[placeId]).checklist.map((item) => item.need);
+    const market = grading.gradePlace(world, world.places.plc_1_market);
+    expect(market).toMatchObject({ grade: 'playable', band: 'playable' });
+    // Nobody is there, and a generic battle map earns nothing for a map of its
+    // own (L-622, L-691).
+    expect(needs('plc_1_market')).toEqual(
+      expect.arrayContaining(['residents', 'battleMap', 'lore'])
+    );
+    expect(market.checklist).toContainEqual(
+      expect.objectContaining({ need: 'battleMap', message: 'It uses a generic battle map.' })
+    );
+    // Brannoch lives at the tavern: one of the two people a place wants.
+    const tavern = grading.gradePlace(world, world.places.plc_1_tavern);
+    expect(tavern.criteria.find((c) => c.id === 'place.someone')).toMatchObject({
+      have: 1,
+      want: 2,
     });
-    // Brannoch lives at the tavern, but its map is generic: Playable, not Rich.
-    expect(grading.gradePlace(world, world.places.plc_1_tavern)).toEqual({
-      grade: 'playable',
-      checklist: [{ need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' }],
-    });
+    expect(tavern.score).toBeGreaterThan(market.score);
     expect(grading.isPlaceOpen(world, world.places.plc_1_temple)).toBe(false);
     // Burdendal's five, and the gates of Wisin and Dunsmouth.
     expect(grading.gradeWorld(world).inTown).toEqual({
@@ -375,16 +377,20 @@ describe('towns in grading', () => {
       stub: 1,
       playable: 6,
       rich: 0,
+      vivid: 0,
+      legendary: 0,
     });
   });
 
   test('residents anywhere in town count toward the settlement', () => {
     const graded = grading.gradeLocation(world, world.locations.loc_1);
-    expect(graded.checklist).toContainEqual({
-      need: 'residents',
-      for: 'rich',
-      message: 'A great city needs 6 residents (it has 1).',
-    });
+    expect(graded.checklist).toContainEqual(
+      expect.objectContaining({
+        need: 'residents',
+        for: 'score',
+        message: 'A great city needs 12 residents (it has 1).',
+      })
+    );
   });
 
   test('the town requirement is on: a written-up settlement needs a working layout', () => {

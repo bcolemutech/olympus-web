@@ -524,8 +524,13 @@ test('list_work puts the places of the nearest towns right after the frontier', 
     type: 'place',
     town: { id: 'loc_1', name: 'Burdendal' },
     hops: 0,
-    missing: ['residents', 'battleMap'], // and its own map: it's on a generic one (L-622)
+    band: 'playable',
   });
+  // Nobody is there yet, and it is on a generic map (L-622), so neither its
+  // own map nor its art scores (L-691).
+  expect(list.items[0].missing).toEqual(
+    expect.arrayContaining(['residents', 'battleMap', 'mapArt', 'lore'])
+  );
   expect(list.howTo.residents).toMatch(/placeId/);
   const all = await ok('list_work', { worldId: LIVE, limit: 100 });
   const tiers = [...new Set(all.items.map((i) => i.priority))];

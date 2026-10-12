@@ -69,7 +69,7 @@ npm run format
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
 - **Jest 29** — Rules, Cloud Functions, Loom, Cartographer and MCP tests against the Firestore and Storage emulators
-- **GitHub Actions** — 7 workflows for CI, preview deploys, production deploys and admin tasks
+- **GitHub Actions** — 8 workflows for CI, preview deploys, production deploys and admin tasks
 
 ---
 
@@ -251,6 +251,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 |---|---|---|
 | `code-quality.yml` | Push/PR to main | ESLint + Prettier check |
 | `firebase-hosting-pull-request.yml` | Pull Request | Deploy preview channel, comment URL on PR |
+| `firebase-hosting-pr-cleanup.yml` | Pull Request closed | Delete the PR's preview channel, so the channel quota doesn't run out |
 | `firebase-hosting-merge.yml` | Push to main | Deploy hosting + Firestore rules/indexes + Storage rules + Cloud Functions |
 | `firestore-rules.yml` | Push/PR to main | Run the Jest suite against the Firestore and Storage emulators |
 | `set-admin.yml` | Manual dispatch | Grant or revoke admin claim |

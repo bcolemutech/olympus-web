@@ -699,37 +699,52 @@ describe('grading with battle maps (on in play since L-622)', () => {
 
   test('no map: Unbuilt, and closed', () => {
     const w = base();
-    expect(grading.gradeLocation(w, w.locations.ruin, { layers })).toEqual({
-      grade: 'unbuilt',
-      checklist: [{ need: 'battleMap', for: 'playable', message: 'It has no battle map.' }],
-    });
+    const ruin = grading.gradeLocation(w, w.locations.ruin, { layers });
+    expect(ruin).toMatchObject({ grade: 'unbuilt', band: 'unbuilt', score: 0 });
+    expect(ruin.checklist.filter((item) => item.for === 'playable')).toEqual([
+      { need: 'battleMap', for: 'playable', message: 'It has no battle map.' },
+    ]);
     expect(grading.gradePlace(w, w.places.plc_inn, { layers }).grade).toBe('unbuilt');
   });
 
-  test('a generic map: Playable, but short of Rich', () => {
+  // Its own map, with walls, is a criterion of the score (L-691).
+  const ownMap = (graded) => graded.criteria.find((c) => c.id === 'place.ownMap');
+
+  test('a generic map: Playable, but earning nothing for a map of its own', () => {
     const w = base();
     w.locations.ruin.battleMap = { mapId: 'bm_generic' };
     w.places.plc_inn.battleMap = { mapId: 'bm_generic' };
-    const generic = { need: 'battleMap', for: 'rich', message: 'It uses a generic battle map.' };
-    expect(grading.gradeLocation(w, w.locations.ruin, { layers })).toEqual({
-      grade: 'playable',
-      checklist: [generic],
+    const generic = expect.objectContaining({
+      need: 'battleMap',
+      for: 'score',
+      message: 'It uses a generic battle map.',
     });
-    expect(grading.gradePlace(w, w.places.plc_inn, { layers })).toEqual({
-      grade: 'playable',
-      checklist: [generic],
-    });
+    for (const graded of [
+      grading.gradeLocation(w, w.locations.ruin, { layers }),
+      grading.gradePlace(w, w.places.plc_inn, { layers }),
+    ]) {
+      expect(graded.grade).toBe('playable');
+      expect(graded.checklist).toContainEqual(generic);
+      expect(ownMap(graded)).toMatchObject({ met: false, progress: 0 });
+    }
   });
 
-  test('its own map: Rich, with the rest of the bar met; a retired map counts as none', () => {
+  test('its own map scores, in full with walls; a retired map counts as none', () => {
     const w = base();
     w.locations.ruin.battleMap = { mapId: 'bm_own' };
-    expect(grading.gradeLocation(w, w.locations.ruin, { layers }).grade).toBe('rich');
+    expect(ownMap(grading.gradeLocation(w, w.locations.ruin, { layers }))).toMatchObject({
+      met: true,
+    });
     // Its own map needs walls, doors or obstacles (L-628).
     w.battleMaps.bm_own = { ...w.battleMaps.bm_own, walls: [] };
-    expect(grading.gradeLocation(w, w.locations.ruin, { layers }).checklist).toEqual([
-      { need: 'layers', for: 'rich', message: 'Its battle map has no walls or obstacles.' },
-    ]);
+    const bare = grading.gradeLocation(w, w.locations.ruin, { layers });
+    expect(ownMap(bare)).toMatchObject({ met: false, progress: 0.5 });
+    expect(bare.checklist).toContainEqual(
+      expect.objectContaining({
+        need: 'layers',
+        message: 'Its battle map has no walls or obstacles.',
+      })
+    );
     w.battleMaps.bm_own.retired = true;
     expect(grading.gradeLocation(w, w.locations.ruin, { layers }).grade).toBe('unbuilt');
   });

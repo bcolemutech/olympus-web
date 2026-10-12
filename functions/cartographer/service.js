@@ -280,10 +280,12 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
       const summary = world && gradeWorld(world);
       if (!summary || !summary.graded) continue;
       const { places } = summary;
+      // Open places, and those Rich or better (the score's bands, L-691).
+      const richer = places.rich + places.vivid + places.legendary;
       worlds[id] = {
         total: places.total,
-        playable: places.playable + places.rich,
-        rich: places.rich,
+        playable: places.playable + richer,
+        rich: richer,
         share: places.open,
       };
     }
