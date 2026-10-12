@@ -713,23 +713,8 @@ function register(registry) {
     }
     return service;
   };
-  let studioLibrary;
-  const library = () => {
-    if (!studioLibrary) {
-      const { createLibrary } = require('../../../studio/library');
-      studioLibrary = createLibrary({ db: getFirestore(), bucket: getStorage().bucket() });
-    }
-    return studioLibrary;
-  };
-  let studioCosts;
-  const costs = () => {
-    if (!studioCosts) {
-      const { FieldValue } = require('firebase-admin/firestore');
-      const { createCosts } = require('../../../studio/costs');
-      studioCosts = createCosts({ db: getFirestore(), FieldValue });
-    }
-    return studioCosts;
-  };
+  // The image studio, built once on first use (functions/studio/index.js).
+  const studio = () => require('../../../studio').studio();
   registry.registerApp(
     APP_ID,
     cartographerApp({
@@ -742,11 +727,12 @@ function register(registry) {
         draw: (uid, args) => cartographer().drawArt(uid, args),
       },
       // The image studio: assigning library images to worlds (L-704), the
-      // library itself (L-703) and its costs (L-706).
+      // library itself (L-703), its costs (L-706) and generation (L-707).
       studio: {
         assign: (uid, args) => cartographer().assignImage(uid, args),
-        library: () => library(),
-        costs: () => costs(),
+        library: () => studio().library,
+        costs: () => studio().costs,
+        jobs: () => studio().jobs,
         load: async (path) => (await getStorage().bucket().file(path).download())[0],
       },
     })

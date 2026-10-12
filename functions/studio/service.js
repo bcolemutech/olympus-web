@@ -4,6 +4,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { readImage } = require('./formats');
 const { createLibrary, summary, LibraryError } = require('./library');
 const { createCosts, CostError } = require('./costs');
+const { JobError } = require('./jobs');
 
 /**
  * The image studio's callables (planning/the-image-studio.md §4.1; L-701 /
@@ -23,13 +24,13 @@ const MAX_PROMPT = 4000;
 
 // The library's refusals, as the callables' errors.
 function asHttps(err) {
-  if (err instanceof LibraryError || err instanceof CostError) {
+  if (err instanceof LibraryError || err instanceof CostError || err instanceof JobError) {
     return new HttpsError(err.code, err.message);
   }
   return err;
 }
 
-function createStudioService({ db, bucket, FieldValue, auth, now = () => Date.now() }) {
+function createStudioService({ db, bucket, FieldValue, auth, jobs, now = () => Date.now() }) {
   const library = createLibrary({ db, bucket, now });
   const ledger = FieldValue ? createCosts({ db, FieldValue, now }) : null;
 
@@ -103,7 +104,17 @@ function createStudioService({ db, bucket, FieldValue, auth, now = () => Date.no
     return { ...totals, names };
   }
 
-  return { upload, costs, library, ledger };
+  async function generate(uid, data = {}) {
+    if (!jobs) throw new HttpsError('unavailable', 'Generation isn’t set up.');
+    try {
+      const job = await jobs().start(uid, data, 'page');
+      return { job: { id: job.id, state: job.state, request: job.request } };
+    } catch (err) {
+      throw asHttps(err);
+    }
+  }
+
+  return { upload, costs, generate, library, ledger };
 }
 
 module.exports = { createStudioService, asHttps, UPLOAD_FILES };

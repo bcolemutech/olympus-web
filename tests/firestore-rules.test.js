@@ -1908,4 +1908,27 @@ describe('studio_images — Firestore Security Rules (L-701)', function () {
     await assertFails(setDoc(doc(editor, 'studio_images', 'img_0001'), { title: 'Changed' }));
     await assertFails(deleteDoc(doc(editor, 'studio_images', 'img_0001')));
   });
+
+  it('lets editors read generation jobs, and nobody write them (L-707)', async function () {
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      await setDoc(doc(ctx.firestore(), 'studio_jobs', 'job_0001'), { state: 'queued' });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(['cartographer']), 'studio_jobs', 'job_0001')));
+    await assertFails(getDoc(doc(dbAs(['loom']), 'studio_jobs', 'job_0001')));
+    await assertFails(
+      setDoc(doc(dbAs(['cartographer']), 'studio_jobs', 'job_0001'), { state: 'done' })
+    );
+  });
+
+  it('keeps the costs server-only, editors included (L-706)', async function () {
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      var admin = ctx.firestore();
+      await setDoc(doc(admin, 'studio_costs_month', '2026-10'), { micros: 1 });
+      await setDoc(doc(admin, 'studio_costs', 'cost_1'), { micros: 1 });
+    });
+    var editor = dbAs(['cartographer']);
+    await assertFails(getDoc(doc(editor, 'studio_costs_month', '2026-10')));
+    await assertFails(getDoc(doc(editor, 'studio_costs', 'cost_1')));
+    await assertFails(setDoc(doc(editor, 'studio_costs', 'cost_2'), { micros: 0 }));
+  });
 });

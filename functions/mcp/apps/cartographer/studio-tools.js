@@ -5,6 +5,8 @@ const { ToolError } = require('../../registry');
 const { worldId, entityId } = require('./schemas');
 const { KINDS, summary, normalizeLabels } = require('../../../studio/library');
 const { viewLibraryImage } = require('./images');
+const { TIERS, MODELS, ASPECT_RATIOS, MAX_REFERENCES } = require('../../../studio/config');
+const { FROM_KINDS } = require('../../../studio/jobs');
 
 // The image studio's tools in the Cartographer connector (planning/the-image-
 // studio.md §4.4, §4.7; T3: a studio_ prefix):
@@ -18,6 +20,9 @@ const { viewLibraryImage } = require('./images');
 //   an unused image (functions/studio/library.js).
 // - Costs (L-706 / #542): studio_costs, and the cost line on every studio
 //   tool's result (functions/studio/costs.js).
+// - Generation (L-707 / #543): studio_generate starts a job and returns at
+//   once; studio_jobs collects jobs, waiting briefly if asked, with finished
+//   images to look at (functions/studio/jobs.js).
 
 const TARGET = z
   .enum(['map', 'cover', 'town', 'battleMap'])
@@ -108,6 +113,7 @@ function studioTools({ studio }) {
     ...assignTools({ studio }),
     ...(studio.library ? libraryTools({ studio }) : []),
     ...(studio.costs ? costTools({ studio }) : []),
+    ...(studio.jobs ? generateTools({ studio }) : []),
   ];
   return studio.costs ? tools.map((tool) => withCost(tool, studio.costs)) : tools;
 }
@@ -387,6 +393,174 @@ function libraryTools({ studio }) {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       handler: (ctx, args) =>
         relay(async () => ({ deleted: await library().deleteImage(args.imageId) })),
+    },
+  ];
+}
+
+const MAX_SHOWN = 4; // finished images shown in one studio_jobs result
+
+function jobView(job, image) {
+  const r = job.request || {};
+  return {
+    id: job.id,
+    state: job.state,
+    request: {
+      prompt: r.prompt && r.prompt.length > 200 ? `${r.prompt.slice(0, 199)}…` : r.prompt,
+      kind: r.kind,
+      tier: r.tier,
+      model: r.model,
+      size: r.size,
+      aspectRatio: r.aspectRatio,
+      references: r.references,
+      from: r.from,
+      title: r.title,
+    },
+    ...(image ? { image } : {}),
+    ...(job.cost !== null && job.cost !== undefined ? { cost: job.cost } : {}),
+    ...(job.error ? { error: job.error } : {}),
+    ...(job.note ? { note: job.note } : {}),
+    createdBy: job.createdBy,
+    via: job.via,
+    createdAt: iso(job.createdAt),
+    finishedAt: iso(job.finishedAt),
+    ...(job.startedAt && job.finishedAt
+      ? { seconds: Math.round((job.finishedAt - job.startedAt) / 100) / 10 }
+      : {}),
+  };
+}
+
+function generateTools({ studio }) {
+  const jobs = () => studio.jobs();
+  return [
+    {
+      name: 'studio_generate',
+      title: 'Make an image',
+      description:
+        'Start making one image with a Gemini image model; it returns a job at once, so ' +
+        'several can run side by side (8 at a time, more wait their turn). Collect them with ' +
+        'studio_jobs (wait up to 45 seconds; an image takes about 10–60). Every image is ' +
+        'charged (draft about $0.07, final about $0.13; see studio_costs), and kept in the ' +
+        'library with its prompt. Give the kind; the tier (draft, the default, or final) or a ' +
+        'model; optionally a size and shape; library images as references (style, layout or ' +
+        'subject to follow); and `from`, a place, town, battle map or character in a world, ' +
+        'whose data is added to the prompt (a town is drawn square from above, a battle map ' +
+        'in its grid’s shape). Then label it, and assign it with studio_assign.',
+      inputSchema: {
+        prompt: z.string().min(1).max(4000).describe('What to draw, in words.'),
+        kind: KIND.optional().describe(
+          'What the image is (worldMap, town, battleMap, cover, portrait, …). Optional with from.'
+        ),
+        tier: z
+          .enum(Object.keys(TIERS))
+          .optional()
+          .describe(
+            `draft (${TIERS.draft.model}, ${TIERS.draft.size}) or final (${TIERS.final.model}, ` +
+              `${TIERS.final.size}). Default draft.`
+          ),
+        model: z
+          .enum(Object.keys(MODELS))
+          .optional()
+          .describe('A model by name, instead of a tier.'),
+        size: z
+          .enum(['512', '1K', '2K', '4K'])
+          .optional()
+          .describe('The output size, if the model makes it (4K costs more).'),
+        aspectRatio: z.enum(ASPECT_RATIOS).optional().describe('The shape, e.g. 16:9.'),
+        references: z
+          .array(imageId)
+          .max(MAX_REFERENCES)
+          .optional()
+          .describe('Library images to follow (style, layout, subject).'),
+        from: z
+          .object({
+            worldId,
+            kind: z.enum(FROM_KINDS),
+            id: entityId('place, battle map or character', 'find_locations, list_battle_maps'),
+          })
+          .optional()
+          .describe('A thing in a world whose data is added to the prompt.'),
+        title: z.string().min(1).max(120).optional().describe('Its title in the library.'),
+        labels: LABELS.optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      handler: (ctx, args) =>
+        relay(async () => {
+          const job = await jobs().start(ctx.uid, args, 'mcp');
+          return {
+            job: jobView(job),
+            next: `Collect it with studio_jobs (ids: ["${job.id}"], wait: 45).`,
+          };
+        }),
+    },
+    {
+      name: 'studio_jobs',
+      title: 'Collect images being made',
+      description:
+        'Jobs from studio_generate: by id, or the latest. Give `wait` (seconds, up to 45) to ' +
+        'wait until one of them finishes. Finished jobs come with their image to look at ' +
+        `(up to ${MAX_SHOWN}), its library id and link, and what it cost; failed ones say why.`,
+      inputSchema: {
+        ids: z
+          .array(z.string().regex(/^job_[0-9a-f]{16}$/, 'a job id, like job_0123456789abcdef'))
+          .max(20)
+          .optional()
+          .describe('The jobs (from studio_generate). The latest if not given.'),
+        recent: z.number().int().min(1).max(50).optional().describe('How many of the latest (10).'),
+        wait: z
+          .number()
+          .min(0)
+          .max(45)
+          .optional()
+          .describe('Seconds to wait for an unfinished job to finish (0).'),
+      },
+      annotations: readOnly,
+      handler: (ctx, args) =>
+        relay(async () => {
+          const found = await jobs().list({
+            ids: args.ids,
+            recent: args.recent,
+            wait: args.wait,
+          });
+          const content = [];
+          const views = [];
+          let micros = 0;
+          for (const job of found) {
+            let image = null;
+            if (job.state === 'done' && job.imageId) {
+              try {
+                const record = await studio.library().getImage(job.imageId);
+                image = dated(summary(record.id, record));
+                if (content.length < MAX_SHOWN) {
+                  const version = record.versions.find((v) => v.n === record.current);
+                  const view = viewLibraryImage(
+                    await studio.load(version.path),
+                    version.format,
+                    version
+                  );
+                  content.push({
+                    type: 'image',
+                    data: view.data.toString('base64'),
+                    mimeType: view.mimeType,
+                  });
+                  image.shown = content.length;
+                }
+              } catch {
+                image = { id: job.imageId, missing: 'It is no longer in the library.' };
+              }
+            }
+            if (job.cost) micros += Math.round(job.cost * 1e6);
+            views.push(jobView(job, image));
+          }
+          const body = {
+            jobs: views,
+            ...(views.some((j) => j.state === 'queued' || j.state === 'running')
+              ? { next: 'Some are still being made: call again with wait.' }
+              : {}),
+            cost: await studio.costs().line(micros),
+          };
+          content.push({ type: 'text', text: JSON.stringify(body, null, 2) });
+          return { content, structuredContent: body };
+        }),
     },
   ];
 }

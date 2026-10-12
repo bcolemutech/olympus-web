@@ -83,6 +83,7 @@ function studioService() {
       bucket: getStorage().bucket(),
       FieldValue,
       auth: getAuth(),
+      jobs: () => require('./studio').studio().jobs,
     });
   }
   return _studioService;
@@ -99,6 +100,29 @@ exports.studioCosts = onCall(async (request) => {
   const uid = cartographer.requireCartographer(request);
   return studioService().costs(uid, request.data || {});
 });
+
+// Start generating an image from the page's form (L-707): returns the job at
+// once; the page follows it in studio_jobs.
+exports.studioGenerate = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return studioService().generate(uid, request.data || {});
+});
+
+// Runs one generation job (L-707): the studio's Cloud Tasks queue, at most
+// MAX_RUNNING at once (T5). A job is run once: no retries, so it is never
+// charged twice.
+const { onTaskDispatched } = require('firebase-functions/v2/tasks');
+exports.studioRunJob = onTaskDispatched(
+  {
+    retryConfig: { maxAttempts: 1 },
+    rateLimits: { maxConcurrentDispatches: require('./studio/config').MAX_RUNNING },
+    timeoutSeconds: 300,
+    memory: '1GiB',
+  },
+  async (req) => {
+    await require('./studio').studio().jobs.run(req.data.jobId);
+  }
+);
 
 // Grand Hall "connected assistants" (phase 1i): the signed-in user lists and
 // revokes their own MCP connections. See functions/mcp/connections.js.
