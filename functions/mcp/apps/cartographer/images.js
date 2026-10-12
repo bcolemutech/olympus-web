@@ -615,4 +615,45 @@ function renderWorld(world, art, people = []) {
 
 const round = (n) => Math.round(n * 1000) / 1000;
 
-module.exports = { MAX_SIDE, renderBattleMap, renderTown, renderWorld, scaleDown, decode };
+// ── A library image, to look at (L-703) ───────────────────────────────────
+
+const MAX_PASSED_ON = 4 * 1024 * 1024; // WebP sent as it is, up to this size
+
+/**
+ * A studio image as Claude sees it (studio_get): PNG, JPEG and SVG scaled to
+ * at most MAX_SIDE on the long side, as JPEG. WebP isn't decoded here, so it
+ * is passed on as it is when it is small enough. Returns { data, mimeType },
+ * or throws when it can't be shown (err.tooLarge for a huge image).
+ */
+function viewLibraryImage(bytes, format, size = {}) {
+  if (size.width && size.height && size.width * size.height > MAX_PIXELS) {
+    const err = new Error(`too large to view (${size.width} × ${size.height})`);
+    err.tooLarge = true;
+    throw err;
+  }
+  if (format === 'webp') {
+    if (bytes.length > MAX_PASSED_ON) {
+      const err = new Error('a WebP image this large can only be seen through its link');
+      err.tooLarge = true;
+      throw err;
+    }
+    return { data: Buffer.from(bytes), mimeType: 'image/webp' };
+  }
+  let img;
+  if (format === 'jpeg') {
+    img = jpeg.decode(bytes, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 1024 });
+  } else {
+    img = decode(bytes);
+  }
+  return { data: Buffer.from(encode(scaleDown(img))), mimeType: 'image/jpeg' };
+}
+
+module.exports = {
+  MAX_SIDE,
+  renderBattleMap,
+  renderTown,
+  renderWorld,
+  scaleDown,
+  decode,
+  viewLibraryImage,
+};

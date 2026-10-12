@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), and L-705, today's art moved into the library (§4.4). L-702, L-703 and L-706 are next.
+**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), and L-703, the library tools (§4.7). L-702 and L-706 are next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -182,6 +182,13 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 | `studio_costs`                       | Totals by day, month and who, against the warning figure                                                      |
 
 Uploading stays on the page (S5): binary files don't travel well through a tool call.
+
+**As built (L-703):**
+
+- **`studio_get`** shows PNG, JPEG and SVG as a JPEG, at most 1568 px on the long side. SVG is drawn at that size, since it scales cleanly. WebP isn't decoded on the server, so it is passed on as it is when it is under 4 MB; otherwise the result says to open the link. An earlier version can be viewed by its number. The record leaves out file paths and the link's token.
+- **`studio_update`** takes labels whole, or as `addLabels` and `removeLabels`.
+  - **Kind:** it can't change while a world uses the image, since assigning checked that the kind fits.
+  - **An earlier version made current:** the image is assigned again wherever it is used, so worlds pick up that version's size (§4.4). The result names those uses, so Claude can check them with `view_image`.
 
 ---
 
