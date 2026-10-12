@@ -99,12 +99,14 @@ beforeEach(async () => {
   loomCanon.clearWorldCache();
   await db.recursiveDelete(db.collection('loom_worlds'));
   await db.recursiveDelete(db.collection('loom_saves'));
+  await db.recursiveDelete(db.collection('studio_images'));
   await bucket.deleteFiles().catch(() => {});
 });
 
 afterAll(async () => {
   await db.recursiveDelete(db.collection('loom_worlds'));
   await db.recursiveDelete(db.collection('loom_saves'));
+  await db.recursiveDelete(db.collection('studio_images'));
   await bucket.deleteFiles().catch(() => {});
   functionsTest.cleanup();
 });
@@ -117,7 +119,8 @@ describe('cartographerImport', () => {
     expect(result).toMatchObject({
       name: 'The Nisian Reaches',
       counts: { settlements: 663, pointsOfInterest: 56, factions: 23, regions: 145 },
-      image: { width: 5154, height: 3810 },
+      // In the image studio's library (L-704), as the world's map.
+      image: { imageId: expect.stringMatching(/^img_/), width: 5154, height: 3810 },
     });
     expect(result.worldId).toMatch(/^the-nisian-reaches-[0-9a-f]{6}$/);
     expect(result.warnings.map((w) => w.code)).toEqual(['names_qualified', 'isolated_linked']);
@@ -129,13 +132,25 @@ describe('cartographerImport', () => {
       map: {
         width: 1718,
         height: 1270,
-        imagePath: `worlds/${result.worldId}/map.png`,
-        imageWidth: 5154,
-        imageHeight: 3810,
+        image: {
+          imageId: result.image.imageId,
+          link: expect.any(String),
+          width: 5154,
+          height: 3810,
+          format: 'png',
+        },
       },
       source: { uploadedBy: BUILDER.uid, mapName: 'Nisia' },
     });
-    expect(await exists(`worlds/${result.worldId}/map.png`)).toBe(true);
+    const record = (await db.collection('studio_images').doc(result.image.imageId).get()).data();
+    expect(record).toMatchObject({
+      kind: 'worldMap',
+      title: 'The Nisian Reaches: world map',
+      via: 'upload',
+      usedIn: [{ worldId: result.worldId, target: 'map', id: result.worldId }],
+    });
+    expect(await exists(record.versions[0].path)).toBe(true);
+    expect(await exists(`worlds/${result.worldId}/map.png`)).toBe(false);
     expect(await exists(`cartographer/${BUILDER.uid}/${uploadId}/map.json`)).toBe(false);
     expect(await exists(`cartographer/${BUILDER.uid}/${uploadId}/map.png`)).toBe(false);
   });
@@ -533,6 +548,8 @@ describe('cartographerTownImage (L-347)', () => {
     ).data();
   const version = async () =>
     (await db.collection('loom_worlds').doc(worldId).get()).data().canonVersion;
+  const record = async (imageId) =>
+    (await db.collection('studio_images').doc(imageId).get()).data();
   // Uploads a town image to the builder's folder, as the page does.
   async function uploadTown(png, uid = BUILDER.uid) {
     seq += 1;
@@ -550,42 +567,56 @@ describe('cartographerTownImage (L-347)', () => {
   const attach = async (png) =>
     townArtAs(BUILDER, { worldId, locationId: 'loc_1', uploadId: await uploadTown(png) });
 
-  test('attaches a PNG to a settlement: copied beside the map, recorded, upload removed', async () => {
+  test('attaches a PNG to a settlement: a library image, assigned, upload removed (L-704)', async () => {
     const before = await version();
     const uploadId = await uploadTown(tinyPng(800, 600));
-    await expect(townArtAs(BUILDER, { worldId, locationId: 'loc_1', uploadId })).resolves.toEqual({
+    const result = await townArtAs(BUILDER, { worldId, locationId: 'loc_1', uploadId });
+    expect(result).toEqual({
       worldId,
       locationId: 'loc_1',
       name: 'Burdendal',
-      image: { width: 800, height: 600, format: 'png' },
+      image: { imageId: expect.stringMatching(/^img_/), width: 800, height: 600, format: 'png' },
+      // 800 × 600 isn't square: the town view fits it in.
+      warnings: [expect.stringMatching(/isn't square/)],
     });
     const { image } = (await loc1()).town;
-    expect(image).toMatchObject({ width: 800, height: 600 });
-    expect(image.path).toMatch(new RegExp(`^worlds/${worldId}/town-loc_1-[a-z0-9]+\\.png$`));
-    expect(await exists(image.path)).toBe(true);
+    expect(image).toEqual({
+      imageId: result.image.imageId,
+      link: expect.any(String),
+      width: 800,
+      height: 600,
+      format: 'png',
+    });
+    const art = await record(image.imageId);
+    expect(art).toMatchObject({
+      kind: 'town',
+      via: 'page',
+      usedIn: [{ worldId, target: 'town', id: 'loc_1' }],
+    });
+    expect(await exists(art.versions[0].path)).toBe(true);
     expect(await exists(`cartographer/${BUILDER.uid}/${uploadId}/town.png`)).toBe(false);
     expect(await version()).toBe(before + 1); // games see it on their next turn
   });
 
-  test('replacing it stores the new image under a new name and deletes the old one', async () => {
+  test('replacing it assigns the new image; the old one stays in the library, unused', async () => {
     await attach(tinyPng(800, 600));
-    const old = (await loc1()).town.image.path;
+    const old = (await loc1()).town.image.imageId;
     await attach(tinyPng(1024, 1024));
     const { image } = (await loc1()).town;
     expect(image).toMatchObject({ width: 1024, height: 1024 });
-    expect(image.path).not.toBe(old);
-    expect(await exists(image.path)).toBe(true);
-    expect(await exists(old)).toBe(false);
+    expect(image.imageId).not.toBe(old);
+    expect((await record(old)).usedIn).toEqual([]);
+    expect((await record(image.imageId)).usedIn).toHaveLength(1);
   });
 
-  test('removing it deletes the field and the file; removing again changes nothing', async () => {
+  test('removing it deletes the field and frees the image; removing again changes nothing', async () => {
     await attach(tinyPng(800, 600));
-    const { path: art } = (await loc1()).town.image;
+    const { imageId } = (await loc1()).town.image;
     await expect(
       townArtAs(BUILDER, { worldId, locationId: 'loc_1', remove: true })
     ).resolves.toMatchObject({ name: 'Burdendal', image: null });
     expect((await loc1()).town || {}).not.toHaveProperty('image');
-    expect(await exists(art)).toBe(false);
+    expect((await record(imageId)).usedIn).toEqual([]);
     const before = await version();
     await townArtAs(BUILDER, { worldId, locationId: 'loc_1', remove: true });
     expect(await version()).toBe(before);
@@ -599,8 +630,8 @@ describe('cartographerTownImage (L-347)', () => {
       code: 'failed-precondition',
       message: expect.stringMatching(/isn't a settlement/),
     });
-    const [left] = await bucket.getFiles({ prefix: `worlds/${worldId}/town-poi_1` });
-    expect(left).toEqual([]); // the copy made before the check is cleaned up
+    // Checked before anything is added to the library.
+    expect((await db.collection('studio_images').get()).size).toBe(0);
     await expect(
       townArtAs(BUILDER, {
         worldId,
@@ -615,6 +646,7 @@ describe('cartographerTownImage (L-347)', () => {
         uploadId: await uploadTown(Buffer.from('not a png at all, just text')),
       })
     ).rejects.toMatchObject({ code: 'invalid-argument', message: expect.stringMatching(/PNG/) });
+    expect((await db.collection('studio_images').get()).size).toBe(0);
     await expect(
       townArtAs(BUILDER, { worldId, locationId: 'loc_1', uploadId: 'never-uploaded' })
     ).rejects.toMatchObject({ code: 'not-found' });
@@ -685,12 +717,16 @@ describe('cartographerMapImage (L-355)', () => {
       worldId,
       mapId: 'bm_tavern',
       name: 'The Gull & Anchor',
-      image: { width: 1200, height: 800, format: 'png' },
+      // A library image (L-704); 1200 × 800 fits the 12 × 8 grid.
+      image: { imageId: expect.stringMatching(/^img_/), width: 1200, height: 800, format: 'png' },
     });
     const first = (await tavern()).image;
-    expect(first).toMatchObject({ width: 1200, height: 800 });
-    expect(first.path).toMatch(new RegExp(`^worlds/${worldId}/map-bm_tavern-[a-z0-9]+\\.png$`));
-    expect(await exists(first.path)).toBe(true);
+    expect(first).toMatchObject({ width: 1200, height: 800, imageId: expect.any(String) });
+    const usedIn = async (id) =>
+      (await db.collection('studio_images').doc(id).get()).data().usedIn;
+    expect(await usedIn(first.imageId)).toEqual([
+      { worldId, target: 'battleMap', id: 'bm_tavern' },
+    ]);
 
     await mapArtAs(BUILDER, {
       worldId,
@@ -699,7 +735,7 @@ describe('cartographerMapImage (L-355)', () => {
     });
     const second = (await tavern()).image;
     expect(second).toMatchObject({ width: 600, height: 400 });
-    expect(await exists(first.path)).toBe(false);
+    expect(await usedIn(first.imageId)).toEqual([]);
 
     await expect(
       mapArtAs(BUILDER, { worldId, mapId: 'bm_tavern', remove: true })
@@ -707,7 +743,7 @@ describe('cartographerMapImage (L-355)', () => {
       image: null,
     });
     expect((await tavern()).image).toBeNull();
-    expect(await exists(second.path)).toBe(false);
+    expect(await usedIn(second.imageId)).toEqual([]);
   });
 
   test('an SVG upload (L-356): checked, stored as SVG; an unsafe one is refused', async () => {
@@ -728,8 +764,9 @@ describe('cartographerMapImage (L-355)', () => {
       image: { width: 12, height: 8, format: 'svg' },
     });
     const { image } = await tavern();
-    expect(image.path).toMatch(/\.svg$/);
-    const [meta] = await bucket.file(image.path).getMetadata();
+    const stored = (await db.collection('studio_images').doc(image.imageId).get()).data();
+    expect(stored.versions[0].path).toMatch(/\.svg$/);
+    const [meta] = await bucket.file(stored.versions[0].path).getMetadata();
     expect(meta).toMatchObject({ contentType: 'image/svg+xml', contentDisposition: 'attachment' });
     expect(await exists(svgAt(uploadId))).toBe(false); // the upload is cleared
 
@@ -744,7 +781,7 @@ describe('cartographerMapImage (L-355)', () => {
       code: 'invalid-argument',
       message: expect.stringMatching(/can't be used: it has an event handler/),
     });
-    expect((await tavern()).image.path).toBe(image.path); // unchanged
+    expect((await tavern()).image.imageId).toBe(image.imageId); // unchanged
   });
 
   test('refuses an unknown or retired map, and needs the claim', async () => {
@@ -755,8 +792,7 @@ describe('cartographerMapImage (L-355)', () => {
         uploadId: await uploadMapArt(tinyPng(64, 64)),
       })
     ).rejects.toMatchObject({ code: 'not-found' });
-    const [left] = await bucket.getFiles({ prefix: `worlds/${worldId}/map-bm_nowhere` });
-    expect(left).toEqual([]);
+    expect((await db.collection('studio_images').get()).size).toBe(0);
     await worldRef().collection('battleMaps').doc('bm_tavern').update({ retired: true });
     await worldRef().update({ canonVersion: (await worldRef().get()).data().canonVersion + 1 });
     await expect(

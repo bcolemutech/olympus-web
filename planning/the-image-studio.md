@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-09. L-701, the library, has shipped (links settled in §4.6); L-702, L-703, L-704 and L-706 are next.
+**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), and L-704, worlds using library images (§4.4). L-702, L-703, L-705 and L-706 are next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -132,6 +132,12 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 ### 4.4 Assignment
 
 - **Worlds hold image ids**, not paths: `world.map.imageId`, a town's `imageId`, a battle map's `imageId`, and a new `world.cover.imageId` (A1, A2). The Loom and `view_image` resolve the id to the image's current version.
+- **As built (L-704):** a world holds a small reference, not a bare id: `{ imageId, link, width, height, format }`.
+  - **Where it lives:** `world.map.image`, `world.cover`, a settlement's `town.image` and a battle map's `image`.
+  - **Why the link:** it is the image's stable link (§4.6), which always serves the current version. So the Loom, grading and `view_image` read art without fetching the image's record. `view_image` reads the image's `current` file.
+  - **Size:** `width` and `height` are the current version's. When L-708 makes another version current, it updates them on the worlds in `usedIn`.
+  - **Older art:** paths from before the library (`map.imagePath`, a town's or battle map's `image.path`) still work until L-705 moves them. Replacing older art deletes its file, as before.
+  - **One reader:** `functions/loom-canon/art.js` reads both shapes.
 - **`studio_assign`** (and the Cartographer page's upload buttons, A3) checks the kind fits the target (L1), sets the id on the world, and adds the use to the image's `usedIn`; unassigning removes it. A battle map's grid-shape warnings from `set_art` apply the same way.
 - **Changing an image changes it everywhere it is used** (E2). Before making a new version of an image in use, the result names the worlds and targets it will change, so Claude can check them with `view_image`.
 - **`set_art`** stores its SVG as a library image (kind `town` or `battleMap`) and assigns it, rather than writing beside the world.

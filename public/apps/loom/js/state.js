@@ -20,6 +20,18 @@
   // (L-686 / #519).
   Loom.WORLDS = [];
 
+  // ── Art ───────────────────────────────────────────
+  // A piece of art from loomGetMap: a library image's link (`url`, L-704), or
+  // an older Storage `path` turned into a URL. Its key tells one piece from
+  // another, so the page doesn't load the same art twice.
+  Loom.artKey = function (image) {
+    return image ? image.url || image.path || null : null;
+  };
+  Loom.artUrl = function (image) {
+    if (image.url) return Promise.resolve(image.url);
+    return firebase.storage().ref(image.path).getDownloadURL();
+  };
+
   // ── Lazy-cached DOM ref helper ──────────────────
   var refCache = {};
   Loom.getRef = function (id) {

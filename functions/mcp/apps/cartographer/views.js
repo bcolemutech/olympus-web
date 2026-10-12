@@ -19,6 +19,7 @@ const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
+const artOf = require('../../../loom-canon/art');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -228,7 +229,11 @@ function worldOverview(meta, world) {
     map: {
       width: map.width || null,
       height: map.height || null,
-      hasImage: Boolean(map.imagePath),
+      hasImage: Boolean(artOf.worldMapArt(world)),
+      // A library image (L-704): its id, for studio tools.
+      ...(artOf.worldMapArt(world) && artOf.worldMapArt(world).imageId
+        ? { imageId: artOf.worldMapArt(world).imageId }
+        : {}),
       ...(map.distance ? { distance: map.distance } : {}),
     },
     source: meta.source
@@ -238,6 +243,10 @@ function worldOverview(meta, world) {
     // nearness to play, and 20% its own criteria; completion has the rest.
     ...(({ score, band }) => (score === undefined ? {} : { score, band }))(completion),
     completion,
+    // The cover image players see on the Loom's world list (L-704).
+    cover: artOf.coverArt(world)
+      ? (({ imageId, width, height }) => ({ imageId, width, height }))(artOf.coverArt(world))
+      : null,
     counts: {
       settlements: live(locations.filter((l) => kindOf(l) === 'settlement')).length,
       pointsOfInterest: live(locations.filter((l) => kindOf(l) === 'poi')).length,
@@ -477,10 +486,13 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
     ...(settlement.geo && settlement.geo.seeds ? { seeds: settlement.geo.seeds } : {}),
     // Its art (L-347), uploaded on the Cartographer page: the image's size,
     // drawn fitted to the town's 0–1000 square, or null.
-    art:
-      settlement.town && settlement.town.image
-        ? { width: settlement.town.image.width, height: settlement.town.image.height }
-        : null,
+    art: artOf.townArt(settlement)
+      ? (({ imageId, width, height }) => ({
+          ...(imageId ? { imageId } : {}),
+          width,
+          height,
+        }))(artOf.townArt(settlement))
+      : null,
     // Its real size (L-651): metres across its 0–1000 square, and whether
     // Claude set it (update_location townSize) or it is the default by size.
     size: town.townSize(settlement),
@@ -633,7 +645,14 @@ function battleMapDetail(world, map) {
     name: map.name,
     width: map.width,
     height: map.height,
-    image: map.image ? { width: map.image.width, height: map.image.height } : null,
+    image: artOf.mapArt(map)
+      ? (({ imageId, width, height, format }) => ({
+          ...(imageId ? { imageId } : {}),
+          width,
+          height,
+          format,
+        }))(artOf.mapArt(map))
+      : null,
     generic: map.generic || null,
     entries: map.entries || [],
     exits: (map.exits || []).map((exit) => ({ ...exit, to: exitTo(exit) })),

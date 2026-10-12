@@ -202,14 +202,12 @@
       battle.art = { path: null, url: null };
       return;
     }
-    if (image.path === battle.art.path) return;
-    battle.art = { path: image.path, url: null };
-    firebase
-      .storage()
-      .ref(image.path)
-      .getDownloadURL()
+    var key = Loom.artKey(image);
+    if (key === battle.art.path) return;
+    battle.art = { path: key, url: null };
+    Loom.artUrl(image)
       .then(function (url) {
-        if (battle.art.path !== image.path) return; // the player moved on meanwhile
+        if (battle.art.path !== key) return; // the player moved on meanwhile
         battle.art.url = url;
         Loom.map.render();
       })
@@ -452,7 +450,7 @@
         height: size.height,
       })
     );
-    if (d.image && battle.art.url && battle.art.path === d.image.path) {
+    if (d.image && battle.art.url && battle.art.path === Loom.artKey(d.image)) {
       // The art is stretched to the grid, as Claude sees it in view_image.
       overlay.appendChild(
         svg('image', {

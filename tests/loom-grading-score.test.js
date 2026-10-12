@@ -65,6 +65,8 @@ function world(overrides = {}) {
     tagline: 'Salt and smoke',
     openingHook: 'The bells are ringing.',
     map: { imagePath: 'maps/world.png' },
+    // Its cover (L-704): a library image reference.
+    cover: { imageId: 'img_00000000000000c0', link: 'https://x/c', width: 600, height: 300 },
     rules: { startingLocationId: 'port' },
     locations: {
       port: {
@@ -179,7 +181,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(4);
+    expect(RUBRIC_VERSION).toBe(5);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -412,9 +414,17 @@ describe('character, battle map, realm and world criteria', () => {
     });
   });
 
-  test('the world: map art, world-wide lore and its hook and tagline', () => {
+  test('the world: map art, world-wide lore, its hook and tagline, and a cover', () => {
     const w = world();
     expect(check('world.mapArt', w, w)).toEqual({ progress: 1 });
+    expect(check('world.cover', w, w)).toEqual({ progress: 1 });
+    expect(check('world.cover', { ...w, cover: null }, w)).toMatchObject({
+      progress: 0,
+      message: 'The world has no cover image for the Loom’s world list.',
+    });
+    // Map art from the library (L-704) counts as an older path does.
+    const libraryMap = { ...w, map: { image: { imageId: 'img_00000000000000a0', link: 'x' } } };
+    expect(check('world.mapArt', libraryMap, libraryMap)).toEqual({ progress: 1 });
     expect(check('world.lore', w, w)).toEqual({ progress: 1 });
     expect(check('world.hook', w, w)).toEqual({ progress: 1 });
     const bare = world({ map: null, tagline: '', lore: {} });

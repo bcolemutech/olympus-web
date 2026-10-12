@@ -8,6 +8,9 @@ const { worldId, entityId } = require('./schemas');
 const { writeTools } = require('./write-tools');
 const { townTools } = require('./town-tools');
 const { mapTools } = require('./map-tools');
+const { studioTools } = require('./studio-tools');
+const artOf = require('../../../loom-canon/art');
+const { currentPath } = require('../../../studio/library');
 const { GRADES, BANDS } = require('../../../loom-canon/grading');
 const { workList } = require('./work');
 const views = require('./views');
@@ -69,13 +72,14 @@ const NEEDS = [
   'faction',
   'people',
   'hook',
+  'cover',
 ];
 const GRADE_HELP =
   'Grades: unbuilt (a layer it needs is missing), stub (import text only), playable ' +
   '(written up: players may enter). Past the gate, a score from 0 to 100 from weighted ' +
   'criteria puts it in a band: playable (under 40), rich (40), vivid (70), legendary (90).';
 
-function cartographerApp({ reader, writer, art }) {
+function cartographerApp({ reader, writer, art, studio }) {
   // Loads a world the tools can read, or explains why it can't.
   async function worldFor(id) {
     const loaded = await reader.loadWorld(id);
@@ -464,9 +468,11 @@ function cartographerApp({ reader, writer, art }) {
         annotations: readOnly,
         handler: async (ctx, args) => {
           const { world } = await worldFor(args.worldId);
-          const load = async (path) => {
+          // Art is a library image (its current version, L-704) or an older
+          // Storage path.
+          const load = async (piece) => {
             try {
-              return await art.load(path);
+              return await art.load(piece.path || currentPath(piece.imageId));
             } catch {
               throw new ToolError('Its image could not be read from storage.');
             }
@@ -496,9 +502,10 @@ function cartographerApp({ reader, writer, art }) {
                 y: cell.y,
                 at: { id: host.id, name: host.name },
               }));
+              const mapPiece = artOf.mapArt(map);
               rendered = images.renderBattleMap(
                 map,
-                map.image ? await load(map.image.path) : null,
+                mapPiece ? await load(mapPiece) : null,
                 people
               );
             } else if (args.of === 'town') {
@@ -513,21 +520,25 @@ function cartographerApp({ reader, writer, art }) {
               if ((settlement.geo || {}).kind !== 'settlement') {
                 throw new ToolError(`${settlement.name} isn't a settlement, so it has no town.`);
               }
-              const townArt = settlement.town && settlement.town.image;
+              const townArt = artOf.townArt(settlement);
               rendered = images.renderTown(
                 world,
                 settlement,
                 town.placesOf(world, settlement.id),
-                townArt ? await load(townArt.path) : null,
+                townArt ? await load(townArt) : null,
                 peopleAt(world, 'town', (at) => at.settlement.id === settlement.id)
               );
             } else {
-              const path = world.map && world.map.imagePath;
-              if (!path)
-                throw new ToolError('This world has no map image: it was imported without one.');
+              const worldArt = artOf.worldMapArt(world);
+              if (!worldArt) {
+                throw new ToolError(
+                  'This world has no map image: it was imported without one. Assign one with ' +
+                    'studio_assign (target map).'
+                );
+              }
               rendered = images.renderWorld(
                 world,
-                await load(path),
+                await load(worldArt),
                 peopleAt(world, 'world', (at) => !at.location)
               );
             }
@@ -603,32 +614,22 @@ function cartographerApp({ reader, writer, art }) {
               throw new ToolError(err.message);
             throw err;
           }
-          const warnings = [];
+          // The art is a library image now (L-704), with the studio's shape
+          // checks.
+          const warnings = result.warnings || [];
           const size = result.image;
-          if (size) {
-            const aspect = size.width / size.height;
-            if (args.of === 'battleMap') {
-              const grid = target.width / target.height;
-              if (Math.abs(aspect - grid) / grid > 0.02) {
-                warnings.push(
-                  `Its shape (${size.width} × ${size.height}) isn't the grid's (${target.width} × ` +
-                    `${target.height}), so it is stretched to fit. Use viewBox="0 0 ${target.width} ` +
-                    `${target.height}" to line cells up exactly.`
-                );
-              }
-            } else if (Math.abs(aspect - 1) > 0.02) {
-              warnings.push(
-                `It isn't square (${size.width} × ${size.height}): the town view fits it inside the ` +
-                  'town’s square, centred, and place positions are in that square. Use ' +
-                  'viewBox="0 0 1000 1000" to line them up exactly.'
-              );
-            }
-          }
           return {
             of: args.of,
             id: args.id,
             name: result.name,
-            art: size ? { format: size.format, width: size.width, height: size.height } : null,
+            art: size
+              ? {
+                  imageId: size.imageId,
+                  format: size.format,
+                  width: size.width,
+                  height: size.height,
+                }
+              : null,
             ...(warnings.length ? { warnings } : {}),
             ...(size ? { next: 'Check it with view_image.' } : {}),
           };
@@ -677,6 +678,7 @@ function cartographerApp({ reader, writer, art }) {
       ...writeTools({ writer }),
       ...townTools({ writer }),
       ...mapTools({ writer }),
+      ...(studio ? studioTools({ studio }) : []),
     ],
     resources: [
       {
@@ -722,6 +724,8 @@ function register(registry) {
         // SVG Claude draws (set_art).
         draw: (uid, args) => cartographer().drawArt(uid, args),
       },
+      // The image studio (L-704): assigning library images to worlds.
+      studio: { assign: (uid, args) => cartographer().assignImage(uid, args) },
     })
   );
 }
