@@ -16,6 +16,8 @@ const { viewLibraryImage } = require('./images');
 // - The library (L-703 / #539): finding images, looking at one, changing its
 //   title, kind, labels or current version, the labels in use, and deleting
 //   an unused image (functions/studio/library.js).
+// - Costs (L-706 / #542): studio_costs, and the cost line on every studio
+//   tool's result (functions/studio/costs.js).
 
 const TARGET = z
   .enum(['map', 'cover', 'town', 'battleMap'])
@@ -102,7 +104,76 @@ async function relay(run) {
 }
 
 function studioTools({ studio }) {
-  return [...assignTools({ studio }), ...(studio.library ? libraryTools({ studio }) : [])];
+  const tools = [
+    ...assignTools({ studio }),
+    ...(studio.library ? libraryTools({ studio }) : []),
+    ...(studio.costs ? costTools({ studio }) : []),
+  ];
+  return studio.costs ? tools.map((tool) => withCost(tool, studio.costs)) : tools;
+}
+
+// Every studio tool's result carries the cost line (§4.5, C3): what the call
+// cost, the month's total so far against the figure, and a plain warning once
+// the month has passed it. A tool that made nothing cost nothing; one that
+// charged (generation, L-707) returns its own `cost`, which is kept.
+function withCost(tool, costs) {
+  return {
+    ...tool,
+    handler: async (ctx, args) => {
+      const result = await tool.handler(ctx, args);
+      if (!result || typeof result !== 'object') return result;
+      if (Array.isArray(result.content)) {
+        const body = result.structuredContent || {};
+        if (body.cost) return result;
+        const withLine = { ...body, cost: await costs().line() };
+        return {
+          ...result,
+          content: result.content.map((item) =>
+            item.type === 'text' ? { ...item, text: JSON.stringify(withLine, null, 2) } : item
+          ),
+          structuredContent: withLine,
+        };
+      }
+      if (result.cost) return result;
+      return { ...result, cost: await costs().line() };
+    },
+  };
+}
+
+function costTools({ studio }) {
+  return [
+    {
+      name: 'studio_costs',
+      title: 'What the studio has spent',
+      description:
+        'The image studio’s spending for a month (this one by default): the total against the ' +
+        '$50 warning figure, by day, by model, and by who asked (each editor, through the page ' +
+        'or Claude), with the latest charges. There is no spending limit, so check this before ' +
+        'making many images. Days and months are UTC.',
+      inputSchema: {
+        month: z
+          .string()
+          .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'a month, like 2026-10')
+          .optional()
+          .describe('The month (yyyy-mm). This month by default.'),
+        recent: z
+          .number()
+          .int()
+          .min(0)
+          .max(100)
+          .optional()
+          .describe('How many of the latest charges to list (10).'),
+      },
+      annotations: readOnly,
+      handler: (ctx, args) =>
+        relay(async () => {
+          const totals = await studio
+            .costs()
+            .totals({ month: args.month, recent: args.recent ?? 10 });
+          return { ...totals, cost: await studio.costs().line() };
+        }),
+    },
+  ];
 }
 
 function assignTools({ studio }) {

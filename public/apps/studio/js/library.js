@@ -210,6 +210,8 @@
           renderWorlds();
           render();
           Studio.detail.refresh();
+          // A new image may have cost something (L-706).
+          if (Studio.costs) Studio.costs.refresh();
         },
         function (err) {
           console.error('Failed to load the library:', err);

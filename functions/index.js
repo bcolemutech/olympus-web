@@ -77,9 +77,12 @@ let _studioService;
 function studioService() {
   if (!_studioService) {
     const { getStorage } = require('firebase-admin/storage');
+    const { FieldValue } = require('firebase-admin/firestore');
     _studioService = require('./studio/service').createStudioService({
       db: getFirestore(),
       bucket: getStorage().bucket(),
+      FieldValue,
+      auth: getAuth(),
     });
   }
   return _studioService;
@@ -89,6 +92,12 @@ function studioService() {
 exports.studioUpload = onCall(async (request) => {
   const uid = cartographer.requireCartographer(request);
   return studioService().upload(uid, request.data || {});
+});
+
+// The month's spending, for the studio page's header, panel and banner (L-706).
+exports.studioCosts = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return studioService().costs(uid, request.data || {});
 });
 
 // Grand Hall "connected assistants" (phase 1i): the signed-in user lists and

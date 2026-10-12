@@ -214,6 +214,7 @@ npm run deploy            # Deploy hosting only (production)
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
 | `studio_images/{imageId}` | `hasApp('cartographer')`, read only | The image studio's library: one record per image, with its kind, labels, versions and link (files in Storage at `studio/{imageId}/`) |
+| `studio_costs/{entryId}`, `studio_costs_month/{yyyy-mm}` | Deny (server only) | The image studio's costs: one entry per charged job, and each month's totals by day, model and who (read through `studioCosts`) |
 | `scriptorium_notes/{id}` | Deny (server only) | Scriptorium notes, via MCP |
 | `mcp_*` (`oauth_clients`, `oauth_codes`, `oauth_tokens`, `oauth_grants`, `audit`, `rate_limits`) | Deny (server only) | MCP OAuth state, audit log, rate limits |
 
@@ -243,6 +244,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `cartographerTownImage` | `cartographer` claim | Attach, replace or remove a town's art (an uploaded PNG or SVG drawn behind the town view), through the image studio's library |
 | `cartographerMapImage` | `cartographer` claim | Attach, replace or remove a battle map's art (an uploaded PNG or SVG drawn under its grid), through the image studio's library |
 | `studioUpload` | `cartographer` claim | Add an uploaded image (PNG, JPEG, WebP or SVG) to the image studio's library, with its title, kind and labels |
+| `studioCosts` | `cartographer` claim | The image studio's spending for a month, for its page: the total against the $50 warning figure, by day, model and who, and the latest charges |
 | `mcpListConnections` / `mcpRevokeConnection` | Signed-in user (own connections) | Grand Hall "Manage connections" |
 | `mcpServer` | OAuth bearer token per connector | MCP connectors (Scriptorium, Cartographer) and the OAuth server |
 

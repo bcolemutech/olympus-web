@@ -41,6 +41,15 @@
           grant it in The Pantheon.
         </p>
 
+        <!-- Costs (L-706): the month's total, always shown; a banner past the figure -->
+        <div class="studio-costbar hidden" id="studio-costbar">
+          <span class="studio-costbar-label">This month</span>
+          <span class="studio-costbar-total" id="studio-cost-total">—</span>
+          <span class="studio-costbar-figure" id="studio-cost-figure"></span>
+          <a class="studio-link" href="#studio-costs-section" id="studio-cost-link">Costs</a>
+        </div>
+        <p class="studio-banner hidden" id="studio-cost-banner" role="alert"></p>
+
         <!-- Upload -->
         <section class="studio-section hidden" id="studio-upload-section">
           <details class="studio-upload" id="studio-upload">
@@ -128,6 +137,26 @@
           <p class="studio-empty hidden" id="studio-empty"></p>
           <div class="studio-grid" id="studio-grid"></div>
         </section>
+
+        <!-- Costs: by day and by who -->
+        <section class="studio-section hidden" id="studio-costs-section">
+          <details class="studio-upload" id="studio-costs">
+            <summary class="studio-section-title">Costs</summary>
+            <p class="studio-help">
+              Every image the studio makes is charged, and there is no spending limit: the month's
+              total is shown above, with a warning once it passes the figure. Days and months are
+              UTC.
+            </p>
+            <div class="studio-form-row">
+              <div class="studio-form-group">
+                <label class="studio-label" for="studio-cost-month">Month</label>
+                <input class="studio-input" id="studio-cost-month" type="month" />
+              </div>
+            </div>
+            <p class="studio-error hidden" id="studio-cost-error" role="alert"></p>
+            <div class="studio-cost-panel" id="studio-cost-panel"></div>
+          </details>
+        </section>
       </div>
 
       <!-- An image's detail -->
@@ -144,6 +173,7 @@
     <script src="/apps/studio/js/library.js"></script>
     <script src="/apps/studio/js/detail.js"></script>
     <script src="/apps/studio/js/upload.js"></script>
+    <script src="/apps/studio/js/costs.js"></script>
     <script src="/apps/studio/js/app.js"></script>
 
     <script>

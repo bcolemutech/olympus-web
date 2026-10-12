@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), and L-702, the studio page (§4.1). L-706 is next.
+**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), and L-706, costs (§4.5). L-707, generation, is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -159,6 +159,14 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 
 - **Price table** in config by model and output size or tokens (C1). Each finished job writes a cost entry and adds to the month's totals (C2).
 - **Explicit everywhere** (C3): the page shows the month's total in its header at all times and a banner once past **$50** (C4); every studio tool result carries `cost: { job, month, warnAt, warning? }`, and the warning's text says plainly that the month has passed the figure. `studio_costs` gives the totals by day, month and who.
+- **As built (L-706):** `functions/studio/costs.js`.
+  - **The price table** lists Gemini 2.5 Flash Image, Gemini 3 Pro Image and the Imagen 4 models, per image by size or per million tokens. These are the published Vertex prices as of this story; L-707 confirms the models and prices it uses. A model without a price can't be charged for, so it can't be run.
+  - **Amounts** are kept in micro-dollars, so adding them up never drifts. Days and months are UTC.
+  - **`record`** writes a job's entry and adds it to the month's totals (by day, model, and who, split by page and MCP) in one batch. It takes the provider's charge when there is one (`usd`), otherwise the table's price.
+  - **The warning** appears once the month's total is past the figure (more than $50.00, not at it).
+  - **Every studio tool result** gets the cost line from one wrapper, in its structured result and in the text Claude reads. A tool that charged (L-707) returns its own line.
+  - **The page** reads totals through the `studioCosts` callable (which adds editors' names) rather than from Firestore, so the cost collections stay server-only. It shows the month's total in a bar that stays on screen, the banner past the figure, and a cost panel by day, who, model and latest charges, for any month.
+
 
 ### 4.6 Links, downloads and fetching
 

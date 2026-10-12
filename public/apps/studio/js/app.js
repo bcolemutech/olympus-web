@@ -21,6 +21,8 @@
         }
         Studio.show('studio-upload-section', true);
         Studio.show('studio-library-section', true);
+        Studio.show('studio-costs-section', true);
+        Studio.costs.init();
         Studio.detail.init();
         Studio.upload.init();
         Studio.library.init();

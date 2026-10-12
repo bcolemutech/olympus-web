@@ -3,6 +3,7 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { readImage } = require('./formats');
 const { createLibrary, summary, LibraryError } = require('./library');
+const { createCosts, CostError } = require('./costs');
 
 /**
  * The image studio's callables (planning/the-image-studio.md §4.1; L-701 /
@@ -22,12 +23,15 @@ const MAX_PROMPT = 4000;
 
 // The library's refusals, as the callables' errors.
 function asHttps(err) {
-  if (err instanceof LibraryError) return new HttpsError(err.code, err.message);
+  if (err instanceof LibraryError || err instanceof CostError) {
+    return new HttpsError(err.code, err.message);
+  }
   return err;
 }
 
-function createStudioService({ db, bucket, now = () => Date.now() }) {
+function createStudioService({ db, bucket, FieldValue, auth, now = () => Date.now() }) {
   const library = createLibrary({ db, bucket, now });
+  const ledger = FieldValue ? createCosts({ db, FieldValue, now }) : null;
 
   async function upload(uid, { uploadId, title, kind, labels, prompt } = {}) {
     if (typeof uploadId !== 'string' || !UPLOAD_ID.test(uploadId)) {
@@ -73,7 +77,33 @@ function createStudioService({ db, bucket, now = () => Date.now() }) {
     return { image: summary(record.id, record) };
   }
 
-  return { upload, library };
+  async function costs(uid, { month } = {}) {
+    if (month !== undefined && typeof month !== 'string') {
+      throw new HttpsError('invalid-argument', 'A month is written yyyy-mm.');
+    }
+    let totals;
+    try {
+      totals = await ledger.totals({ month, recent: 20 });
+    } catch (err) {
+      throw asHttps(err);
+    }
+    // Editors' names for the panel ("by who"), where Auth knows them.
+    const names = {};
+    const uids = totals.who.map((w) => w.uid).filter((id) => id !== uid);
+    if (auth && uids.length) {
+      try {
+        const found = await auth.getUsers(uids.slice(0, 100).map((id) => ({ uid: id })));
+        for (const user of found.users) {
+          names[user.uid] = user.displayName || user.email || user.uid;
+        }
+      } catch {
+        // Names are a nicety: the uids stand in.
+      }
+    }
+    return { ...totals, names };
+  }
+
+  return { upload, costs, library, ledger };
 }
 
 module.exports = { createStudioService, asHttps, UPLOAD_FILES };
