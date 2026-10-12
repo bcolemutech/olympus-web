@@ -7,7 +7,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleAuth } = require('google-auth-library');
 const { runTurnPipeline, LoomTurnError } = require('./loom-turn');
 const loomCanon = require('./loom-canon');
-const { isPlayable } = require('./loom-canon/grading');
+const { isPlayable, gradeWorld } = require('./loom-canon/grading');
 const { withNeighbours } = require('./loom-turn/discovery');
 const { arrivalPlace } = require('./loom-canon/town');
 const maps = require('./loom-canon/maps');
@@ -625,6 +625,44 @@ exports.loomGetMap = onCall(async (request) => {
     record && record.exists ? record.data() : null,
     townRecord && townRecord.exists ? townRecord.data() : null
   );
+});
+
+/**
+ * loomWorldRatings — each published world's band, for the Loom's world list
+ * (planning/the-loom-grading.md §4.4, E4; L-694 / #555).
+ *
+ * Players see the band's name only (playable, rich, vivid or legendary):
+ * never the score, a checklist or criteria. Worlds that aren't published, or
+ * don't exist, are left out. Grades are computed here, never stored, as
+ * everywhere else.
+ *
+ * Data: { worldIds: string[] } (up to 20)
+ * Returns: { ratings: { [worldId]: band } }
+ */
+const MAX_RATED_WORLDS = 20;
+const RATED_WORLD_ID = /^[a-z0-9-]{1,64}$/;
+exports.loomWorldRatings = onCall(async (request) => {
+  requireLoomAuth(request);
+  const { worldIds } = request.data || {};
+  if (
+    !Array.isArray(worldIds) ||
+    worldIds.length > MAX_RATED_WORLDS ||
+    !worldIds.every((id) => typeof id === 'string' && RATED_WORLD_ID.test(id))
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      `worldIds must be up to ${MAX_RATED_WORLDS} world ids.`
+    );
+  }
+  const db = getFirestore();
+  const ratings = {};
+  for (const id of new Set(worldIds)) {
+    // Published worlds only (loadWorld's default for play).
+    const world = await loomCanon.loadWorld(id, { db });
+    const summary = world && gradeWorld(world);
+    if (summary && summary.graded) ratings[id] = summary.band;
+  }
+  return { ratings };
 });
 
 /**

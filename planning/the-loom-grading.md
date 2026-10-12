@@ -1,6 +1,6 @@
 # The Loom — Grading That Asks for More — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-10. L-691, the score (rubric version 4, calibrated on Nisia; §4.3), L-692, the reads and the work list (§4.5), and L-693, the Cartographer page, have shipped. L-694 is next.
+**Status:** Shipped (decided 2026-10-10; built 2026-10-11 to 2026-10-12): L-691 to L-694. The score is rubric version 4, calibrated on Nisia (§4.3). New content epics add their criteria (§4.6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-690 (#551)
 **Runs:** right after Phase 3c, before L-700 and L-720, so every new content feature adds to it from the start (Build order in [`roadmap.md`](./roadmap.md))
@@ -135,6 +135,7 @@ Criteria that today's content can meet go in with this epic. The rest are listed
 - **Weights by distance from play (S3):** each place's score is weighted by how near it is to play. The start, open places and the frontier next to them weigh 3. Other places weigh 1 at two travel steps beyond the frontier, falling to 0.25 beyond that.
 - **The formula:** the world's score is 80% that weighted average of its places, plus 20% its own criteria (C5).
 - **Its band is shown to players** on the Loom's world list (E4) as the band name.
+  - **As built (L-694):** the `loomWorldRatings` callable returns each published world's band name, and nothing more about grading. The world list asks it once for its worlds and shows the band as a pill on each card; a world without one shows none.
 
 ### 4.5 The work list and reads
 
