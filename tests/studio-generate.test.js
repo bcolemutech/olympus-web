@@ -614,7 +614,7 @@ describe('the model call', () => {
       aspectRatio: '16:9',
     });
     expect(genai.sent[0]).toEqual({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-3-pro-image',
       contents: [
         {
           role: 'user',
