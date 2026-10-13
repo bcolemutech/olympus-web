@@ -139,7 +139,7 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
     - **`draft`:** Gemini 3.1 Flash Image at 1K, about $0.067.
     - **`final`:** Gemini 3 Pro Image at 2K, about $0.134 (4K: $0.24).
     - Claude can also name these models, or Gemini 3.1 Flash Lite Image (1K only, about $0.034).
-    - All are called with `generateContent` through Vertex's **`global`** endpoint, where the Gemini 3 image models are served, under their `-preview` ids. The price table (`costs.js`) is now these models.
+    - All are called with `generateContent` through Vertex's **`global`** endpoint, where the Gemini 3 image models are served, under their plain ids (`gemini-3.1-flash-image`, `gemini-3-pro-image`; the first real call, to the `-preview` id, came back 404). The price table (`costs.js`) is now these models.
   - **Charging:** a job is charged by the tokens Vertex reports, with thinking tokens counted at the output price (on the high side), else per image at its size.
   - **The queue:** `studioRunJob` is an `onTaskDispatched` function with 8 jobs at once, a 300-second timeout and **no retries**. A job is run once: one dispatched again while marked running is failed rather than run, so it is never charged twice.
   - **The request:**
@@ -183,7 +183,6 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
   - **The warning** appears once the month's total is past the figure (more than $50.00, not at it).
   - **Every studio tool result** gets the cost line from one wrapper, in its structured result and in the text Claude reads. A tool that charged (L-707) returns its own line.
   - **The page** reads totals through the `studioCosts` callable (which adds editors' names) rather than from Firestore, so the cost collections stay server-only. It shows the month's total in a bar that stays on screen, the banner past the figure, and a cost panel by day, who, model and latest charges, for any month.
-
 
 ### 4.6 Links, downloads and fetching
 

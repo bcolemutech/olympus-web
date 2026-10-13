@@ -7,8 +7,9 @@
  * Models (checked 2026-10-12 against Google's price list): Gemini 2.5 Flash
  * Image was shut down on 2026-10-02; the current image models are Gemini 3.1
  * Flash Image, its Lite version, and Gemini 3 Pro Image. All are called with
- * generateContent, through Vertex's `global` endpoint, where the Gemini 3
- * image models are served.
+ * generateContent, through Vertex's `global` endpoint, under the ids Vertex's
+ * locations page lists (no "-preview": checked 2026-10-13, after a real call
+ * to the -preview id came back 404).
  */
 
 // Named tiers (M1): a fast, cheap draft and a careful final image.
@@ -20,15 +21,15 @@ const TIERS = Object.freeze({
 // Each model, the sizes it makes, and the id Vertex serves it under.
 const MODELS = Object.freeze({
   'gemini-3.1-flash-image': {
-    vertexId: 'gemini-3.1-flash-image-preview',
+    vertexId: 'gemini-3.1-flash-image',
     sizes: ['512', '1K', '2K', '4K'],
   },
   'gemini-3.1-flash-lite-image': {
-    vertexId: 'gemini-3.1-flash-lite-image-preview',
+    vertexId: 'gemini-3.1-flash-lite-image',
     sizes: ['1K'],
   },
   'gemini-3-pro-image': {
-    vertexId: 'gemini-3-pro-image-preview',
+    vertexId: 'gemini-3-pro-image',
     sizes: ['1K', '2K', '4K'],
   },
 });
