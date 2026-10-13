@@ -341,6 +341,31 @@ describe('the request', () => {
 });
 
 describe('failures', () => {
+  test('a job the queue refuses says why, on the job and to whoever asked', async () => {
+    const refusing = createJobs({
+      db,
+      library,
+      costs,
+      model,
+      enqueue: async () => {
+        throw new Error('7 PERMISSION_DENIED: lacks cloudtasks.tasks.create');
+      },
+      loadWorld: async () => null,
+      placesOf: () => [],
+      rasterize,
+      load,
+    });
+    const err = await refusing.start(BUILDER, { prompt: 'x', kind: 'scene' }).catch((e) => e);
+    expect(err).toMatchObject({
+      code: 'unavailable',
+      message: 'The job could not be queued: 7 PERMISSION_DENIED: lacks cloudtasks.tasks.create',
+    });
+    const [failed] = (await db.collection('studio_jobs').where('state', '==', 'failed').get()).docs
+      .map((d) => d.data())
+      .filter((j) => j.error && j.error.startsWith('The job could not be queued'));
+    expect(failed.error).toBe(err.message);
+  });
+
   test('a call that fails records its error, and isn’t charged', async () => {
     model.respond = () => {
       throw new Error('429 RESOURCE_EXHAUSTED');

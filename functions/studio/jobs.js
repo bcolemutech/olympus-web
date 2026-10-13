@@ -268,10 +268,13 @@ function createJobs({
     try {
       await enqueue({ jobId: id });
     } catch (err) {
-      await jobs()
-        .doc(id)
-        .update({ state: 'failed', error: 'The job could not be queued.', finishedAt: now() });
-      throw err;
+      // The queue's own reason (often a missing permission), on the job and
+      // to whoever asked, so it can be fixed without reading the logs.
+      console.error(`studio job ${id} could not be queued:`, err);
+      const reason = String((err && err.message) || err).slice(0, 500);
+      const error = `The job could not be queued: ${reason}`;
+      await jobs().doc(id).update({ state: 'failed', error, finishedAt: now() });
+      throw new JobError('unavailable', error);
     }
     return job;
   }
