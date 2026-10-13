@@ -80,52 +80,10 @@ jobs:
             --project olympus-dfa00
       - name: Install functions dependencies
         run: npm ci --prefix functions
-      # TEMPORARY (L-707): why can't the deploy read the studioRunJob Cloud
-      # Tasks queue? Prints the account the deploy runs as, its roles, what
-      # Cloud Tasks lets it do, and the queue. No keys or tokens are printed.
-      # Remove once the queue deploys.
-      - name: Diagnose Cloud Tasks access (temporary)
-        continue-on-error: true
-        run: |
-          set +e
-          ACCOUNT="$(gcloud config get-value account 2>/dev/null)"
-          echo "== Deploying as: $ACCOUNT"
-          echo "== Project: $(gcloud projects describe olympus-dfa00 --format='value(projectId,projectNumber)')"
-          echo "== Cloud Tasks API enabled:"
-          gcloud services list --enabled --project olympus-dfa00 \
-            --filter="config.name=cloudtasks.googleapis.com" --format="value(config.name)"
-          echo "== Project roles held by $ACCOUNT (needs getIamPolicy; may be refused):"
-          gcloud projects get-iam-policy olympus-dfa00 --flatten="bindings[].members" \
-            --filter="bindings.members:$ACCOUNT" --format="table(bindings.role,bindings.condition.title)"
-          echo "== Who holds Cloud Tasks Admin:"
-          gcloud projects get-iam-policy olympus-dfa00 --flatten="bindings[].members" \
-            --filter="bindings.role=roles/cloudtasks.admin" --format="value(bindings.members)"
-          echo "== Permissions $ACCOUNT has on the project (testIamPermissions):"
-          curl -s -X POST \
-            -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-            -H "Content-Type: application/json" \
-            "https://cloudresourcemanager.googleapis.com/v1/projects/olympus-dfa00:testIamPermissions" \
-            -d '{"permissions":["cloudtasks.queues.get","cloudtasks.queues.list","cloudtasks.queues.create","cloudtasks.queues.update","cloudtasks.queues.getIamPolicy","cloudtasks.queues.setIamPolicy","cloudtasks.tasks.create","iam.serviceAccounts.actAs","run.services.get"]}'
-          echo
-          echo "== Queues in us-central1:"
-          gcloud tasks queues list --location=us-central1 --project=olympus-dfa00
-          echo "== The studioRunJob queue:"
-          gcloud tasks queues describe studioRunJob --location=us-central1 --project=olympus-dfa00
-          exit 0
       - name: Deploy Cloud Functions
         id: deploy_functions
         continue-on-error: true
         run: firebase deploy --only functions --force --project olympus-dfa00
-      # TEMPORARY (L-707): deploys studioRunJob on its own, even when its code
-      # is unchanged (an unchanged function is otherwise skipped, and its queue
-      # never retried), and shows the CLI's Cloud Tasks requests and errors.
-      - name: Deploy the studio's task queue (temporary)
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          firebase deploy --only functions:studioRunJob --force --project olympus-dfa00 --debug 2>&1 \
-            | grep -iE "cloudtasks|queue|studioRunJob|HTTP Error|permission|denied|error" \
-            | grep -viE "authorization|bearer|token" || true
       - name: Grant Cloud Run invoker to allUsers for new callable functions
         run: |
           for svc in listusers; do

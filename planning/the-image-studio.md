@@ -150,6 +150,12 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
   - **Tools:** `studio_jobs` waits at most 45 seconds, since the connector sits behind Hosting's 60-second limit. It shows up to 4 finished images per result. Its cost line's `job` is what the listed jobs cost.
   - **The page:** a form (prompt, kind, tier, shape, title, labels, and references chosen from an image's detail) calls `studioGenerate`. A jobs list follows `studio_jobs` live (editors may read it).
   - **By hand:** the **Studio Generate** workflow (`scripts/studio-generate.js`) runs one real image, or the M2 trial, against Vertex and production.
+  - **The first real generation** (2026-10-13, from the page): a draft portrait with `gemini-3.1-flash-image` at 1K came back in 14.3 s as a 1408 × 768 PNG. It was charged $0.067204: 1,120 output tokens at $60 a million, plus the prompt. That matches Google's published $0.067, so thinking tokens didn't inflate the cost.
+  - **Getting it running in production took three fixes:**
+    - The deploy account needs **Cloud Tasks Admin**, so the deploy can create the `studioRunJob` queue. The CLI skips an unchanged function, so a failed queue isn't retried until that function's code changes, or it's deployed with `--only functions:studioRunJob`.
+    - The models are called by their plain Vertex ids, not `-preview`.
+    - A job the queue refuses now says why.
+  - **Shape by kind:** with no shape asked for (and none from `from`), a job takes its kind's usual shape (`DEFAULT_RATIOS` in `config.js`): world map 16:9, region map 4:3, town 1:1, cover 16:9, portrait 3:4, token 1:1, item 1:1, scene 16:9. Interface and other art are left to the model. Left to the model, the first portrait came back wide.
   - **The M2 trial** makes one world map three ways: Pro at 4K in one go; a 1K draft redrawn at 4K by Pro; and a 2K middle extended outward to 21:9 at 4K. Its result is recorded here once it has been run.
 
 ### 4.4 Assignment
