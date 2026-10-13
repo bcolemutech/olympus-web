@@ -155,7 +155,7 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
     - The deploy account needs **Cloud Tasks Admin**, so the deploy can create the `studioRunJob` queue. The CLI skips an unchanged function, so a failed queue isn't retried until that function's code changes, or it's deployed with `--only functions:studioRunJob`.
     - The models are called by their plain Vertex ids, not `-preview`.
     - A job the queue refuses now says why.
-  - **No shape given:** the model picks one. A portrait came out wide, so defaulting the shape by kind is worth adding.
+  - **Shape by kind:** with no shape asked for (and none from `from`), a job takes its kind's usual shape (`DEFAULT_RATIOS` in `config.js`): world map 16:9, region map 4:3, town 1:1, cover 16:9, portrait 3:4, token 1:1, item 1:1, scene 16:9. Interface and other art are left to the model. Left to the model, the first portrait came back wide.
   - **The M2 trial** makes one world map three ways: Pro at 4K in one go; a 1K draft redrawn at 4K by Pro; and a 2K middle extended outward to 21:9 at 4K. Its result is recorded here once it has been run.
 
 ### 4.4 Assignment

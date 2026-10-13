@@ -48,6 +48,20 @@ const ASPECT_RATIOS = Object.freeze([
   '21:9',
 ]);
 
+// The shape each kind gets when none is asked for (and `from` doesn't set
+// one): left to the model, a portrait came back wide. Battle maps take their
+// grid's shape from `from`; interface and other art is left to the model.
+const DEFAULT_RATIOS = Object.freeze({
+  worldMap: '16:9',
+  regionMap: '4:3',
+  town: '1:1',
+  cover: '16:9',
+  portrait: '3:4',
+  token: '1:1',
+  item: '1:1',
+  scene: '16:9',
+});
+
 const VERTEX_LOCATION = 'global';
 
 // Jobs running at once (T5): guards against a runaway loop; not a spending limit.
@@ -60,6 +74,7 @@ module.exports = {
   TIERS,
   MODELS,
   ASPECT_RATIOS,
+  DEFAULT_RATIOS,
   VERTEX_LOCATION,
   MAX_RUNNING,
   MAX_REFERENCES,

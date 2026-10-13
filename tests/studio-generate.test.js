@@ -251,7 +251,7 @@ describe('a job', () => {
     expect(named.request).toMatchObject({ tier: null, size: '4K', aspectRatio: '21:9' });
     await drain();
     expect(model.calls.slice(-2).map((c) => [c.model, c.size, c.aspectRatio])).toEqual([
-      ['gemini-3-pro-image', '2K', null],
+      ['gemini-3-pro-image', '2K', '16:9'],
       ['gemini-3-pro-image', '4K', '21:9'],
     ]);
   });
@@ -291,7 +291,7 @@ describe('the request', () => {
     expect([townJob, mapJob, person].map((j) => [j.request.kind, j.request.aspectRatio])).toEqual([
       ['town', '1:1'],
       ['battleMap', '16:9'],
-      ['portrait', null],
+      ['portrait', '3:4'],
     ]);
     await drain();
     const [t, m, p] = model.calls;
@@ -310,6 +310,18 @@ describe('the request', () => {
       kind: 'town',
       id: 'loc_1',
     });
+  });
+
+  test('a kind’s usual shape when none is asked for', async () => {
+    const shape = async (input) =>
+      (await jobs.start(BUILDER, { prompt: 'x', ...input })).request.aspectRatio;
+    expect(await shape({ kind: 'portrait' })).toBe('3:4');
+    expect(await shape({ kind: 'worldMap' })).toBe('16:9');
+    expect(await shape({ kind: 'town' })).toBe('1:1');
+    expect(await shape({ kind: 'token' })).toBe('1:1');
+    expect(await shape({ kind: 'other' })).toBeNull(); // left to the model
+    expect(await shape({ kind: 'portrait', aspectRatio: '1:1' })).toBe('1:1'); // as asked
+    await drain();
   });
 
   test('the nearest shape to a grid', () => {

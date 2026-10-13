@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const { setTimeout: sleep } = require('timers/promises');
-const { TIERS, MODELS, ASPECT_RATIOS, MAX_REFERENCES } = require('./config');
+const { TIERS, MODELS, ASPECT_RATIOS, DEFAULT_RATIOS, MAX_REFERENCES } = require('./config');
 const { KINDS, normalizeLabels, LibraryError } = require('./library');
 const { readImage } = require('./formats');
 const { priceOf, CostError } = require('./costs');
@@ -225,7 +225,9 @@ function createJobs({
       tier,
       model: modelName,
       size,
-      aspectRatio: input.aspectRatio || (fromInfo && fromInfo.aspectRatio) || null,
+      // Asked for, else from what it's of, else its kind's usual shape.
+      aspectRatio:
+        input.aspectRatio || (fromInfo && fromInfo.aspectRatio) || DEFAULT_RATIOS[kind] || null,
       references,
       from,
       title,
