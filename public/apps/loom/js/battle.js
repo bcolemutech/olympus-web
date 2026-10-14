@@ -994,19 +994,10 @@
 
   // ── The card ──────────────────────────────────────
 
-  function button(text, onClick) {
-    var b = el('button', 'app-btn loom-map-travel', text);
-    b.type = 'button';
-    b.disabled = state.turnInProgress;
-    b.addEventListener('click', onClick);
-    return b;
-  }
-
-  /** The card: what was clicked (or where you are), and the turn under it. */
+  /** The card: what was clicked, or where you are (the turn is on the overlay, L-725). */
   function renderInfo(info) {
     info.innerHTML = '';
     renderCard(info);
-    renderTurn(info);
   }
 
   function renderCard(info) {
@@ -1088,40 +1079,32 @@
     );
   }
 
-  // The turn (L-613, L-615): the turn number, movement left, the action,
-  // Continue for a kept plan, and End turn.
-  function renderTurn(info) {
+  /** Continue (L-613): walks the kept plan, the token walking it as it lands. */
+  function continuePlan() {
     var turn = battle.turn;
-    if (!turn) return;
-    info.appendChild(
-      el(
-        'p',
-        'loom-map-info-facts loom-map-turn-state',
-        'Turn ' +
-          turn.n +
-          ' · movement ' +
-          turn.movementLeft +
-          ' of ' +
-          turn.speed +
-          ' · ' +
-          (turn.actionUsed ? 'you have acted' : 'your action is ready')
-      )
-    );
-    var row = el('div', 'loom-map-turn');
-    if (turn.plan && turn.movementLeft > 0) {
-      row.appendChild(
-        button('Continue', function () {
-          battle.pending = { mapId: battle.data.id, from: battle.data.here, path: turn.plan.path };
-          Loom.play.continuePlan();
-        })
-      );
+    if (battle.data && turn && turn.plan) {
+      battle.pending = { mapId: battle.data.id, from: battle.data.here, path: turn.plan.path };
     }
-    row.appendChild(
-      button('End turn', function () {
-        Loom.play.endTurn();
+    Loom.play.continuePlan();
+  }
+
+  /** The minimap's view of the map: the grid, the people in sight and you. */
+  function minimap() {
+    var d = battle.data;
+    var points = (d.people || [])
+      .filter(function (p) {
+        return p.x !== undefined;
       })
-    );
-    info.appendChild(row);
+      .map(function (p) {
+        var c = centre(p);
+        return { x: c.x, y: c.y, colour: '#4db6ac', r: 2.5 };
+      });
+    var me = centre(d.here);
+    points.push({ x: me.x, y: me.y, colour: '#ffffff', r: 3.5, ring: '#ffb74d' });
+    return {
+      rect: { x: PAD, y: PAD, width: d.width * CELL, height: d.height * CELL, fill: '#1a1f2c' },
+      points: points,
+    };
   }
 
   function capitalise(text) {
@@ -1143,6 +1126,8 @@
     },
     tap: tap,
     hover: hover,
+    continuePlan: continuePlan,
+    minimap: minimap,
     renderInfo: renderInfo,
     current: function () {
       return battle.data;

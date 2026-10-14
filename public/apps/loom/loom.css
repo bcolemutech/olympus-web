@@ -886,3 +886,181 @@ body.loom-playing .app-divider {
   color: #78909c;
   font-size: 0.72rem;
 }
+
+/* ── Over the map (L-725): where you are, the turn bar, the minimap ── */
+
+.loom-map-overlay-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.loom-map-overlay-host > * {
+  pointer-events: auto;
+}
+
+/* Top left: where you are, and a peek at another level. */
+.loom-map-where {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-width: 22rem;
+  padding: 0.45rem 0.75rem;
+  background: rgba(10, 14, 26, 0.82);
+  border: 1px solid rgba(255, 183, 77, 0.22);
+  border-radius: 8px;
+}
+
+.loom-map-time {
+  color: #ffb74d;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.loom-map-here {
+  color: #e0e0e0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.95rem;
+}
+
+.loom-map-peek {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.5rem;
+  color: #90a4ae;
+  font-size: 0.8rem;
+}
+
+.loom-map-back {
+  padding: 0.15rem 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  color: #ffb74d;
+  background: rgba(255, 183, 77, 0.12);
+  border: 1px solid rgba(255, 183, 77, 0.4);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* Bottom centre: the turn bar. */
+.loom-map-turnbar {
+  position: absolute;
+  bottom: 0.6rem;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  max-width: calc(100% - 25rem);
+  padding: 0.4rem 0.6rem 0.4rem 0.9rem;
+  background: rgba(10, 14, 26, 0.88);
+  border: 1px solid rgba(255, 183, 77, 0.28);
+  border-radius: 999px;
+  transform: translateX(-50%);
+}
+
+.loom-map-turnbar-state {
+  color: #b0bec5;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.loom-map-turnbar-btn {
+  padding: 0.3rem 0.85rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #ffb74d;
+  background: rgba(255, 183, 77, 0.1);
+  border: 1px solid rgba(255, 183, 77, 0.45);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.loom-map-turnbar-btn.is-primary {
+  color: #0a0e1a;
+  background: #ffb74d;
+}
+
+.loom-map-turnbar-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Bottom right: the minimap. */
+.loom-map-minimap {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  width: 176px;
+  height: 120px;
+  background: rgba(10, 14, 26, 0.9);
+  border: 1px solid rgba(255, 183, 77, 0.28);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.loom-map-minimap.hidden {
+  display: none;
+}
+
+/* Bottom left: the level switcher above the zoom buttons. */
+.loom-map-panel .loom-map-layers {
+  top: auto;
+  bottom: 3.4rem;
+}
+
+.loom-map-panel .loom-map-controls {
+  top: auto;
+  right: auto;
+  bottom: 0.6rem;
+  left: 0.6rem;
+  flex-direction: row;
+}
+
+/* Top right: the card of what was clicked. */
+.loom-map-pane .loom-map-info {
+  top: 0.6rem;
+  right: 0.6rem;
+  bottom: auto;
+  left: auto;
+  width: 20rem;
+  max-width: calc(100% - 1.2rem);
+  max-height: calc(100% - 11rem);
+  overflow-y: auto;
+}
+
+/* The turn is on the map now; the panel keeps its bar only without one. */
+@media (min-width: 900px) {
+  .loom-shell:not(.no-map) .loom-turn-bar {
+    display: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .loom-map-minimap {
+    display: none;
+  }
+
+  .loom-map-turnbar {
+    max-width: calc(100% - 1.2rem);
+    bottom: 3.4rem;
+  }
+
+  .loom-map-panel .loom-map-layers {
+    bottom: 6.2rem;
+  }
+
+  .loom-map-pane .loom-map-info {
+    top: auto;
+    bottom: 0.6rem;
+    right: 0.6rem;
+    left: auto;
+    width: 14rem;
+    max-height: 40%;
+  }
+}
