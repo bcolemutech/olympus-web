@@ -35,7 +35,7 @@ Phases are numbered in the order they were planned, not the order they are built
 1. **Finish Phase 3c:** L-650 Town ground, L-660 Walking in town, L-670 Vision in town (all shipped).
 2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria (shipped).
 3. **L-700 Image studio** (#523). **Shipped** (L-701 the library, L-702 the studio page, L-703 library tools, L-704 worlds use library images, L-705 today's art into the library, L-706 costs, L-707 generation, L-708 editing and L-709 styles).
-4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views. **In progress** (L-721 the shell shipped).
+4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views. **In progress** (L-721 the shell and L-722 the map engine shipped).
 5. **Phase 3d:** L-370 Game time (#421).
 6. **L-710 Worlds without Azgaar** (#524), then L-360 off-road travel (#418), then the rest of Phases 7 and 8 in their order (§4).
 

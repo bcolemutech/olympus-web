@@ -1,6 +1,6 @@
 # The Loom — A Map-First Loom (UI Rewrite) — Design Document v0.1
 
-**Status:** Decided (2026-10-10). The gap sheet (§3) is answered. Sub-issues filed (2026-10-14): L-721 to L-729 (#592–600). In progress. Shipped: L-721, the shell (§4.1, §4.2): Preact 10.29.8 and htm 3.1.1 pinned with their hashes, the store (`js/ui.js`), and the frame with the menu bar and side panel (`js/shell.js`) hosting today's views. L-722, L-726 and L-729 are next.
+**Status:** Decided (2026-10-10). The gap sheet (§3) is answered. Sub-issues filed (2026-10-14): L-721 to L-729 (#592–600). In progress. Shipped: L-721, the shell (§4.1, §4.2): Preact 10.29.8 and htm 3.1.1 pinned with their hashes, the store (`js/ui.js`), and the frame with the menu bar and side panel (`js/shell.js`) hosting today's views. L-722, the map engine and the world map (§4.3): PixiJS 8.21.0 (WebGL, canvas without it) in `js/engine.js`, with the camera and input for every level and the click menu, and the world layer in `js/world.js`; the SVG world view is gone, and town and battle stay SVG until L-723 and L-724. L-723, L-724, L-726 and L-729 are next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-720 (#525)
 **Phase:** 7 — Map-first Loom. Built right after L-700, the Image studio, so it shows the studio's art well, and before Phase 3d (the Build order in [`roadmap.md`](./roadmap.md)).

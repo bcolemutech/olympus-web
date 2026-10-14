@@ -352,17 +352,20 @@
   cursor: grabbing;
 }
 
-.loom-map-image {
+/* The map engine's stage (L-722): the world map is drawn on it; town and
+   battle are still SVG over it until L-723 and L-724. */
+.loom-map-stage {
   position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
-  max-width: none;
+  inset: 0;
   pointer-events: none;
 }
 
-.loom-map-image.hidden {
+.loom-map-stage.hidden {
   display: none;
+}
+
+.loom-map-canvas {
+  display: block;
 }
 
 .loom-map-overlay {
@@ -397,51 +400,14 @@
   stroke-dasharray: 2 6;
 }
 
-.loom-map-dot {
-  stroke: #0a0e1a;
-  stroke-width: 1.5;
-}
-
-.loom-map-place.is-open .loom-map-dot {
-  fill: #a5d6a7;
-}
-
-.loom-map-place.is-closed .loom-map-dot {
-  fill: #4b5563;
-  stroke: #9ca3af;
-  stroke-dasharray: 2 2;
-}
-
-.loom-map-place.is-here .loom-map-dot {
-  fill: #ffb74d;
-}
-
 .loom-map-ring {
   fill: none;
   stroke: #ffb74d;
   stroke-width: 2;
 }
 
-.loom-map-place.is-selected .loom-map-dot {
-  stroke: #ffffff;
-  stroke-width: 2.5;
-}
-
 .loom-map-lock {
   font-size: 10px;
-}
-
-.loom-map-label {
-  fill: #e0e0e0;
-  font-size: 12px;
-  text-anchor: middle;
-  paint-order: stroke;
-  stroke: rgba(10, 14, 26, 0.85);
-  stroke-width: 3px;
-}
-
-.loom-map-place.is-closed .loom-map-label {
-  fill: #9ca3af;
 }
 
 .loom-map-controls {
@@ -563,10 +529,6 @@
 }
 
 /* ── The town view (town.js; L-345 / #399) ─────────── */
-
-.loom-map-panel.is-town .loom-map-image {
-  display: none;
-}
 
 .loom-town-ground {
   fill: rgba(215, 185, 138, 0.05);
@@ -1237,4 +1199,73 @@ body.loom-playing .app-divider {
     text-overflow: ellipsis;
     writing-mode: vertical-rl;
   }
+}
+
+/* ── The click menu (L-722, I2) ─────────────────────── */
+
+.loom-map-menu-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.loom-map-menu {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 11rem;
+  max-width: 14rem;
+  padding: 0.45rem;
+  pointer-events: auto;
+  background: rgba(15, 21, 37, 0.97);
+  border: 1px solid rgba(255, 183, 77, 0.28);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  cursor: default;
+}
+
+.loom-map-menu-title {
+  margin: 0.1rem 0.4rem 0;
+  color: #e0e0e0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.95rem;
+}
+
+.loom-map-menu-subtitle {
+  margin: 0 0.4rem 0.3rem;
+  color: #90a4ae;
+  font-size: 0.75rem;
+}
+
+.loom-map-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.4rem 0.55rem;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  color: #ffb74d;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.loom-map-menu-item:hover:not(:disabled),
+.loom-map-menu-item:focus-visible {
+  outline: none;
+  background: rgba(255, 183, 77, 0.12);
+}
+
+.loom-map-menu-item:disabled {
+  color: #78909c;
+  cursor: default;
+}
+
+.loom-map-menu-note {
+  color: #78909c;
+  font-size: 0.72rem;
 }
