@@ -250,7 +250,9 @@ describe('a job', () => {
     });
     expect(named.request).toMatchObject({ tier: null, size: '4K', aspectRatio: '21:9' });
     await drain();
-    expect(model.calls.slice(-2).map((c) => [c.model, c.size, c.aspectRatio])).toEqual([
+    // The two run side by side, so either may reach the model first.
+    const sent = model.calls.slice(-2).map((c) => [c.model, c.size, c.aspectRatio]);
+    expect(sent.sort()).toEqual([
       ['gemini-3-pro-image', '2K', '16:9'],
       ['gemini-3-pro-image', '4K', '21:9'],
     ]);
@@ -294,7 +296,9 @@ describe('the request', () => {
       ['portrait', '3:4'],
     ]);
     await drain();
-    const [t, m, p] = model.calls;
+    // They run side by side: find each by its prompt, not its place.
+    const called = (end) => model.calls.find((c) => c.prompt.endsWith(end));
+    const [t, m, p] = ['Lanterns along the quay', 'Damp stone', 'Head and shoulders'].map(called);
     expect(t.prompt).toMatch(/^About what to draw:\n.*settlement/);
     expect(t.prompt).toMatch(/A rain-soaked port of slate roofs\./);
     expect(t.prompt).toMatch(/In town: The Town Gate/);
