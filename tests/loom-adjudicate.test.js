@@ -153,6 +153,30 @@ describe('evaluate — generic (dice) verbs', () => {
     expect(resolution.mutations).toHaveLength(1); // tried, so used all the same
   });
 
+  it('says what was rolled, against what, and whether it passed (L-726)', () => {
+    const roll = (dice) =>
+      evaluate(makeProposedAction({ verb: 'search' }), {}, makeCharacterState(), dice, CANON_WORLD)
+        .roll;
+    expect(roll(DEFAULT_DIFFICULTY_CLASS)).toEqual({
+      die: 20,
+      value: DEFAULT_DIFFICULTY_CLASS,
+      difficulty: DEFAULT_DIFFICULTY_CLASS,
+      against: 'the difficulty',
+      success: true,
+    });
+    expect(roll(3)).toMatchObject({ value: 3, success: false });
+    expect(Object.isFrozen(roll(3))).toBe(true);
+    // Nothing is rolled for a move, or for an action turned down.
+    const move = evaluate(
+      makeProposedAction({ verb: 'move', targets: ['loc_nowhere'] }),
+      {},
+      makeCharacterState(),
+      20,
+      CANON_WORLD
+    );
+    expect(move.roll).toBeUndefined();
+  });
+
   it('a generic action changes nothing but the turn: its action is used, win or lose', () => {
     [1, 20].forEach((dice) => {
       const resolution = evaluate(

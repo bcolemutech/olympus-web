@@ -179,37 +179,8 @@
             <div class="loom-map-info" id="loom-map-info" aria-live="polite"></div>
           </section>
 
-          <section class="loom-story-pane" id="loom-story-pane" aria-label="Story">
-            <div class="loom-summary hidden" id="loom-summary"></div>
-
-            <div class="loom-narration-log" id="loom-narration-log"></div>
-
-            <div class="loom-suggested-actions" id="loom-suggested-actions"></div>
-
-            <form id="loom-turn-form" class="loom-turn-form">
-              <textarea
-                class="loom-turn-input"
-                id="loom-turn-input"
-                placeholder="What do you do?"
-                rows="2"
-                maxlength="2000"
-              ></textarea>
-              <button class="app-btn" id="loom-turn-submit" type="submit">Act</button>
-            </form>
-
-            <div class="loom-turn-bar hidden" id="loom-turn-bar">
-              <span class="loom-turn-state" id="loom-turn-state"></span>
-              <button class="app-btn loom-turn-end" id="loom-turn-end" type="button">
-                End turn
-              </button>
-            </div>
-
-            <div class="app-loading hidden" id="loom-turn-loading">
-              <div class="app-spinner"></div>
-              <p class="app-loading-text">The Loom weaves&hellip;</p>
-            </div>
-            <p class="loom-error hidden" id="loom-turn-error"></p>
-          </section>
+          <!-- The panel's content, drawn by js/journal.js (L-726) -->
+          <section class="loom-story-pane" id="loom-story-pane" aria-label="Story"></section>
         </div>
       </div>
     </main>
@@ -258,6 +229,7 @@
     <script src="/apps/loom/js/battle.js"></script>
     <script src="/apps/loom/js/map.js"></script>
     <script src="/apps/loom/js/overlay.js"></script>
+    <script src="/apps/loom/js/journal.js"></script>
     <script src="/apps/loom/js/play.js"></script>
     <script src="/apps/loom/js/shell.js"></script>
     <script src="/apps/loom/js/app.js"></script>

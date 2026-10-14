@@ -32,10 +32,8 @@
 
   function openPanel(focusInput) {
     store.setUi({ panelCollapsed: false });
-    if (focusInput) {
-      var input = Loom.getRef('loom-turn-input');
-      if (input && !input.disabled) input.focus();
-    }
+    Loom.journal.finishReveal(); // the full narration, at once
+    if (focusInput) Loom.journal.focusInput();
   }
 
   function signOut() {

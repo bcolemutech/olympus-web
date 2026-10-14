@@ -485,13 +485,16 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
 
   test('picked or forced: a roll against the lock; a success unlocks it, either way the action is used', () => {
     expect(DEFAULT_LOCK_DIFFICULTY).toBe(15);
+    const lock = { die: 20, difficulty: 15, against: 'the lock on the inner door' };
     expect(attempt('pick_lock', beside(), 15)).toEqual({
       outcome: 'success',
+      roll: { ...lock, value: 15, success: true }, // for the panel's roll card (L-726)
       mutations: [doorTo('closed'), used],
       constraints: ['The lock gives way: the inner door is unlocked.'],
     });
     expect(attempt('force', beside(), 14)).toEqual({
       outcome: 'failure',
+      roll: { ...lock, value: 14, success: false },
       mutations: [used],
       constraints: ['The lock on the inner door holds.'],
     });

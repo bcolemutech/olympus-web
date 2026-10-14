@@ -549,10 +549,17 @@ function nameList(places, last = 'or') {
 
 const andList = (places) => nameList(places, 'and');
 
+// The die as the panel shows it (L-726, the-map-first-loom.md L4): what was
+// rolled, what it was against, and whether it passed.
+function rolled(dice, difficulty, against) {
+  return { die: 20, value: dice, difficulty, against, success: dice >= difficulty };
+}
+
 function evaluateGeneric(proposedAction, dice) {
   const success = dice >= DEFAULT_DIFFICULTY_CLASS;
   return {
     outcome: success ? 'success' : 'failure',
+    roll: rolled(dice, DEFAULT_DIFFICULTY_CLASS, 'the difficulty'),
     mutations: [],
     constraints: [
       success
@@ -728,14 +735,21 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
     };
   }
   const difficulty = Number.isInteger(door.difficulty) ? door.difficulty : DEFAULT_LOCK_DIFFICULTY;
-  if (dice >= difficulty) {
+  const roll = rolled(dice, difficulty, 'the lock on ' + name);
+  if (roll.success) {
     return {
       outcome: 'success',
+      roll,
       mutations: [set('closed')],
       constraints: ['The lock gives way: ' + name + ' is unlocked.'],
     };
   }
-  return { outcome: 'failure', mutations: [], constraints: ['The lock on ' + name + ' holds.'] };
+  return {
+    outcome: 'failure',
+    roll,
+    mutations: [],
+    constraints: ['The lock on ' + name + ' holds.'],
+  };
 }
 
 function evaluate(proposedAction, worldState, characterState, dice, canonWorld, known, found) {
@@ -756,6 +770,7 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     outcome: resolution.outcome,
     mutations: Object.freeze(resolution.mutations),
     constraints: Object.freeze(resolution.constraints),
+    ...(resolution.roll ? { roll: Object.freeze({ ...resolution.roll }) } : {}),
     ...(resolution.walked ? { walked: Object.freeze(resolution.walked) } : {}),
     ...(resolution.walkedTown ? { walkedTown: Object.freeze(resolution.walkedTown) } : {}),
   });
