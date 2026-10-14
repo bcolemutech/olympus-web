@@ -51,7 +51,7 @@ const { createLibrary } = require('../functions/studio/library');
 const { createCosts } = require('../functions/studio/costs');
 const { createJobs, nearestRatio } = require('../functions/studio/jobs');
 const { createStudioService } = require('../functions/studio/service');
-const { createImageModel } = require('../functions/studio/image-model');
+const { createImageModel, usageOf } = require('../functions/studio/image-model');
 const { readImage } = require('../functions/studio/formats');
 const { rasterize } = require('../functions/studio');
 const { createCartographerService } = require('../functions/cartographer/service');
@@ -645,8 +645,28 @@ describe('the model call', () => {
     expect(readImage(result.image.bytes)).toMatchObject({ width: 8, height: 8 });
     expect(result).toMatchObject({
       text: 'A map.',
-      usage: { input: 300, output: 1200 },
+      usage: { input: 300, output: 1120, text: 80 }, // thinking priced as text
       finishReason: 'STOP',
+    });
+  });
+
+  test('image tokens and text tokens are counted apart, by modality when given', () => {
+    expect(
+      usageOf({
+        promptTokenCount: 40,
+        candidatesTokenCount: 2012,
+        thoughtsTokenCount: 340,
+        candidatesTokensDetails: [
+          { modality: 'TEXT', tokenCount: 12 },
+          { modality: 'IMAGE', tokenCount: 2000 },
+        ],
+      })
+    ).toEqual({ input: 40, output: 2000, text: 352 });
+    // Without the per-modality counts, all but thinking counts as image.
+    expect(usageOf({ promptTokenCount: 5, candidatesTokenCount: 1120 })).toEqual({
+      input: 5,
+      output: 1120,
+      text: 0,
     });
   });
 
@@ -665,7 +685,7 @@ describe('the model call', () => {
     expect(genai.sent[0].config.imageConfig).toEqual({});
     expect(result).toEqual({
       image: null,
-      usage: { input: 50, output: 0 },
+      usage: { input: 50, output: 0, text: 0 },
       text: '',
       finishReason: 'SAFETY',
     });

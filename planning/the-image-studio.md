@@ -140,7 +140,7 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
     - **`final`:** Gemini 3 Pro Image at 2K, about $0.134 (4K: $0.24).
     - Claude can also name these models, or Gemini 3.1 Flash Lite Image (1K only, about $0.034).
     - All are called with `generateContent` through Vertex's **`global`** endpoint, where the Gemini 3 image models are served, under their plain ids (`gemini-3.1-flash-image`, `gemini-3-pro-image`; the first real call, to the `-preview` id, came back 404). The price table (`costs.js`) is now these models.
-  - **Charging:** a job is charged by the tokens Vertex reports, with thinking tokens counted at the output price (on the high side), else per image at its size.
+  - **Charging:** a job is charged by the tokens Vertex reports, else per image at its size. Image tokens are charged at the image price. Text and thinking tokens are charged at the text price, a tenth of that (Pro $12 against $120 a million, Flash $3 against $60). Charging thinking at the image price had recorded Pro images about 17% high (a 4K image at $0.28, against Google's $0.24); fixed 2026-10-14.
   - **The queue:** `studioRunJob` is an `onTaskDispatched` function with 8 jobs at once, a 300-second timeout and **no retries**. A job is run once: one dispatched again while marked running is failed rather than run, so it is never charged twice.
   - **The request:**
     - `from` adds the thing's data before the prompt. A town is drawn square from above with its places named; a battle map is drawn in its grid's shape (the nearest supported ratio), without a grid; a character's image defaults to a portrait.
@@ -150,13 +150,22 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
   - **Tools:** `studio_jobs` waits at most 45 seconds, since the connector sits behind Hosting's 60-second limit. It shows up to 4 finished images per result. Its cost line's `job` is what the listed jobs cost.
   - **The page:** a form (prompt, kind, tier, shape, title, labels, and references chosen from an image's detail) calls `studioGenerate`. A jobs list follows `studio_jobs` live (editors may read it).
   - **By hand:** the **Studio Generate** workflow (`scripts/studio-generate.js`) runs one real image, or the M2 trial, against Vertex and production.
-  - **The first real generation** (2026-10-13, from the page): a draft portrait with `gemini-3.1-flash-image` at 1K came back in 14.3 s as a 1408 × 768 PNG. It was charged $0.067204: 1,120 output tokens at $60 a million, plus the prompt. That matches Google's published $0.067, so thinking tokens didn't inflate the cost.
+  - **The first real generation** (2026-10-13, from the page): a draft portrait with `gemini-3.1-flash-image` at 1K came back in 14.3 s as a 1408 × 768 PNG. It was charged $0.067204: 1,120 output tokens at $60 a million, plus the prompt. That matches Google's published $0.067; Flash used no thinking.
   - **Getting it running in production took three fixes:**
     - The deploy account needs **Cloud Tasks Admin**, so the deploy can create the `studioRunJob` queue. The CLI skips an unchanged function, so a failed queue isn't retried until that function's code changes, or it's deployed with `--only functions:studioRunJob`.
     - The models are called by their plain Vertex ids, not `-preview`.
     - A job the queue refuses now says why.
   - **Shape by kind:** with no shape asked for (and none from `from`), a job takes its kind's usual shape (`DEFAULT_RATIOS` in `config.js`): world map 16:9, region map 4:3, town 1:1, cover 16:9, portrait 3:4, token 1:1, item 1:1, scene 16:9. Interface and other art are left to the model. Left to the model, the first portrait came back wide.
-  - **The M2 trial** makes one world map three ways: Pro at 4K in one go; a 1K draft redrawn at 4K by Pro; and a 2K middle extended outward to 21:9 at 4K. Its result is recorded here once it has been run.
+  - **The M2 trial** (2026-10-14, run through `studio_generate`; $1.07, the images labelled `m2 trial` in the library) made one world map three ways:
+
+    | Way | Result | Time | Cost |
+    | --- | --- | --- | --- |
+    | **a.** Pro at 4K, 16:9, in one go | 5504 × 3072. Clean, and it kept to "no text", but the detail is sparse for its size: thick lines and wide empty areas, so up close it reads as a small map enlarged. | ~55 s | $0.28 |
+    | **b.** A 1K Flash draft, then Pro redraws it at 4K | 5504 × 3072. Keeps the draft's layout, and is by far the richest: mountains, forests, towns and ships stay crisp up close. But the draft ignored "no text", and the redraw kept its invented labels as garbled lettering. | 14 s + ~50 s | $0.07 + $0.28 |
+    | **c.** A 2K Pro middle, then Pro extends it to 21:9 at 4K | 6336 × 2688, the widest. The style carries and the new land fits, but it drew a second compass rose, and the edges are patchier than the middle. | 30 s + ~55 s | $0.17 + $0.28 |
+
+    - **Recommended: b.** It gives the most detail per pixel, and drafts at about $0.07 let the layout be settled before paying for 4K. Its prompts should forbid lettering at both steps. Extending outward (c) is for adding land to a finished map. Awaiting the user's confirmation.
+  - **Viewing 4K images:** shrinking a 5504 × 3072 PNG for Claude to look at needs about 290 MB. That was past the MCP server's 256 MiB default, so `studio_jobs` and `studio_get` crashed (502) on 4K images. `mcpServer` now has 1 GiB.
 
 ### 4.4 Assignment
 

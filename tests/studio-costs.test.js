@@ -74,6 +74,16 @@ describe('the price table', () => {
     ).toBeCloseTo(0.002 + 0.1344, 10);
   });
 
+  test('text and thinking tokens cost a tenth of image tokens', () => {
+    // A Pro 4K image: 2000 image tokens at $120 a million, 340 thinking at $12.
+    expect(
+      priceOf({ model: 'gemini-3-pro-image', tokens: { input: 40, output: 2000, text: 340 } })
+    ).toBeCloseTo(0.00008 + 0.24 + 0.00408, 10);
+    expect(
+      priceOf({ model: 'gemini-3.1-flash-image', tokens: { output: 1120, text: 100 } })
+    ).toBeCloseTo(0.0672 + 0.0003, 10);
+  });
+
   test('a model without a price can’t be charged for', () => {
     expect(() => priceOf({ model: 'some-new-model' })).toThrow(/No price for the model/);
     expect(Object.keys(PRICES).length).toBeGreaterThan(0);
