@@ -7,6 +7,7 @@ const { KINDS, summary, normalizeLabels } = require('../../../studio/library');
 const { viewLibraryImage } = require('./images');
 const { TIERS, MODELS, ASPECT_RATIOS, MAX_REFERENCES } = require('../../../studio/config');
 const { FROM_KINDS } = require('../../../studio/jobs');
+const { MAX_NAME, MAX_STYLE_PROMPT, MAX_STYLE_REFERENCES } = require('../../../studio/styles');
 
 // The image studio's tools in the Cartographer connector (planning/the-image-
 // studio.md §4.4, §4.7; T3: a studio_ prefix):
@@ -25,6 +26,9 @@ const { FROM_KINDS } = require('../../../studio/jobs');
 //   images to look at (functions/studio/jobs.js).
 // - Editing (L-708 / #544): studio_edit starts an edit job, naming the worlds
 //   that will change; the edit becomes the image's next version.
+// - Styles (L-709 / #545): studio_styles and studio_set_style; a style named
+//   in studio_generate or studio_edit, or a world's default style
+//   (functions/studio/styles.js).
 
 const TARGET = z
   .enum(['map', 'cover', 'town', 'battleMap'])
@@ -110,12 +114,13 @@ async function relay(run) {
   }
 }
 
-function studioTools({ studio }) {
+function studioTools({ studio, reader, writer }) {
   const tools = [
     ...assignTools({ studio }),
     ...(studio.library ? libraryTools({ studio }) : []),
     ...(studio.costs ? costTools({ studio }) : []),
     ...(studio.jobs ? generateTools({ studio }) : []),
+    ...(studio.styles ? styleTools({ studio, reader, writer }) : []),
   ];
   return studio.costs ? tools.map((tool) => withCost(tool, studio.costs)) : tools;
 }
@@ -401,6 +406,12 @@ function libraryTools({ studio }) {
 
 const MAX_SHOWN = 4; // finished images shown in one studio_jobs result
 
+const STYLE_ID = z
+  .string()
+  .regex(/^sty_[0-9a-f]{16}$/, 'a style id, like sty_0123456789abcdef')
+  .describe('The style, from studio_styles.');
+const STYLE_CHOICE = z.union([STYLE_ID, z.literal('none')]).optional();
+
 function jobView(job, image) {
   const r = job.request || {};
   const clip200 = (text) => (text && text.length > 200 ? `${text.slice(0, 199)}…` : text);
@@ -423,6 +434,7 @@ function jobView(job, image) {
       references: r.references,
       from: r.from,
       title: r.title,
+      style: r.style ? { id: r.style.id, name: r.style.name } : null,
     },
     ...(image ? { image } : {}),
     ...(job.cost !== null && job.cost !== undefined ? { cost: job.cost } : {}),
@@ -490,6 +502,10 @@ function generateTools({ studio }) {
           .describe('A thing in a world whose data is added to the prompt.'),
         title: z.string().min(1).max(120).optional().describe('Its title in the library.'),
         labels: LABELS.optional(),
+        styleId: STYLE_CHOICE.describe(
+          'A style from studio_styles: its text and reference images are added. With `from`, ' +
+            'the world’s default style is used unless another is named, or "none".'
+        ),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       handler: (ctx, args) =>
@@ -537,6 +553,10 @@ function generateTools({ studio }) {
           .max(MAX_REFERENCES - 1)
           .optional()
           .describe('Other library images to follow for the change.'),
+        styleId: STYLE_CHOICE.describe(
+          'A style from studio_styles to redraw it in. None by default: an edit keeps the ' +
+            'image’s own look.'
+        ),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       handler: (ctx, args) =>
@@ -630,6 +650,135 @@ function generateTools({ studio }) {
           };
           content.push({ type: 'text', text: JSON.stringify(body, null, 2) });
           return { content, structuredContent: body };
+        }),
+    },
+  ];
+}
+
+// A style for Claude: what it is, and its images' links.
+async function styleView(style, library) {
+  const references = [];
+  for (const id of style.references || []) {
+    try {
+      const record = await library.getImage(id);
+      references.push({ id, title: record.title, link: record.link });
+    } catch {
+      references.push({ id, missing: 'It is no longer in the library.' });
+    }
+  }
+  return {
+    id: style.id,
+    name: style.name,
+    prompt: style.prompt,
+    references,
+    createdBy: style.createdBy,
+    createdAt: iso(style.createdAt),
+    updatedAt: iso(style.updatedAt),
+  };
+}
+
+function styleTools({ studio, reader, writer }) {
+  const styles = () => studio.styles();
+  // Sets or clears a world's default style (world.studio.styleId).
+  const setDefault = (uid, worldId, styleId) =>
+    writer.edit(worldId, uid, ({ world, updateWorld }) => {
+      const was = (world.studio && world.studio.styleId) || null;
+      if (was === styleId) return { defaultStyle: styleId };
+      const { FieldValue } = require('firebase-admin/firestore');
+      updateWorld({ 'studio.styleId': styleId || FieldValue.delete() });
+      return { defaultStyle: styleId, previous: was };
+    });
+  return [
+    {
+      name: 'studio_styles',
+      title: 'Styles',
+      description:
+        'The image studio’s named styles: each is prompt text plus up to ' +
+        `${MAX_STYLE_REFERENCES} reference images, so a world’s art keeps one look. Name one ` +
+        'in studio_generate or studio_edit (styleId). Give a worldId to see that world’s ' +
+        'default style, used when studio_generate is about the world (from). Find the images ' +
+        'made in a style with studio_find (styleId).',
+      inputSchema: {
+        worldId: worldId.optional().describe('A world whose default style to show.'),
+      },
+      annotations: readOnly,
+      handler: (ctx, args) =>
+        relay(async () => {
+          const list = await styles().list();
+          const library = studio.library();
+          const body = { styles: [] };
+          for (const style of list) body.styles.push(await styleView(style, library));
+          if (args.worldId) {
+            const found = await reader.loadWorld(args.worldId);
+            if (!found) throw new ToolError('World not found. Use list_worlds to see world ids.');
+            body.worldId = args.worldId;
+            body.defaultStyle = (found.meta.studio && found.meta.studio.styleId) || null;
+          }
+          return body;
+        }),
+    },
+    {
+      name: 'studio_set_style',
+      title: 'Make or change a style',
+      description:
+        'Make a style (name and prompt, optionally reference images), or change one ' +
+        '(styleId, and the name, prompt or references to replace). The prompt says how ' +
+        'images in the style look ("ink and watercolour on parchment, muted earth tones, ' +
+        'hand-lettered names"); the references show it. Give a worldId to make the style ' +
+        'that world’s default, or worldId and clearDefault to clear it. Changing a style ' +
+        'changes what later images get, not images already made.',
+      inputSchema: {
+        styleId: STYLE_ID.optional().describe('The style to change, or set as a default.'),
+        name: z.string().min(1).max(MAX_NAME).optional().describe('Its name.'),
+        prompt: z
+          .string()
+          .min(1)
+          .max(MAX_STYLE_PROMPT)
+          .optional()
+          .describe('How images in the style look, in words.'),
+        references: z
+          .array(imageId)
+          .max(MAX_STYLE_REFERENCES)
+          .optional()
+          .describe('Library images that show the style, replacing any it has.'),
+        worldId: worldId.optional().describe('A world to make this style the default of.'),
+        clearDefault: z
+          .boolean()
+          .optional()
+          .describe('With worldId alone: the world has no default style any more.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      handler: (ctx, args) =>
+        relay(async () => {
+          const changing = ['name', 'prompt', 'references'].some((k) => args[k] !== undefined);
+          if (args.clearDefault) {
+            if (!args.worldId) throw new ToolError('Say which world (worldId) to clear.');
+            if (changing || args.styleId) {
+              throw new ToolError('Clear a world’s default on its own, without a style.');
+            }
+            const done = await setDefault(ctx.uid, args.worldId, null);
+            return { worldId: args.worldId, defaultStyle: null, cleared: done.previous || null };
+          }
+          const style =
+            args.styleId && !changing
+              ? await styles().get(args.styleId)
+              : await styles().set(ctx.uid, {
+                  styleId: args.styleId,
+                  name: args.name,
+                  prompt: args.prompt,
+                  references: args.references,
+                });
+          const body = {
+            style: await styleView(style, studio.library()),
+            ...(args.styleId ? {} : { created: true }),
+          };
+          if (args.worldId) {
+            const done = await setDefault(ctx.uid, args.worldId, style.id);
+            body.worldId = args.worldId;
+            body.defaultStyle = style.id;
+            if (done.previous) body.previousDefault = done.previous;
+          }
+          return body;
         }),
     },
   ];

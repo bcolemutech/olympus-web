@@ -1920,6 +1920,17 @@ describe('studio_images — Firestore Security Rules (L-701)', function () {
     );
   });
 
+  it('lets editors read styles, and nobody write them (L-709)', async function () {
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      await setDoc(doc(ctx.firestore(), 'studio_styles', 'sty_0001'), { name: 'Ink' });
+    });
+    await assertSucceeds(getDoc(doc(dbAs(['cartographer']), 'studio_styles', 'sty_0001')));
+    await assertFails(getDoc(doc(dbAs(['loom']), 'studio_styles', 'sty_0001')));
+    await assertFails(
+      setDoc(doc(dbAs(['cartographer']), 'studio_styles', 'sty_0001'), { name: 'Oil' })
+    );
+  });
+
   it('keeps the costs server-only, editors included (L-706)', async function () {
     await testEnv.withSecurityRulesDisabled(async function (ctx) {
       var admin = ctx.firestore();
