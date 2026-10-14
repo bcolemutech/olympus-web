@@ -34,7 +34,7 @@ Phases are numbered in the order they were planned, not the order they are built
 
 1. **Finish Phase 3c:** L-650 Town ground, L-660 Walking in town, L-670 Vision in town (all shipped).
 2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria (shipped).
-3. **L-700 Image studio** (#523). **In progress** (L-701 the library, L-702 the studio page, L-703 library tools, L-704 worlds use library images, L-705 today's art into the library, L-706 costs and L-707 generation shipped).
+3. **L-700 Image studio** (#523). **In progress** (L-701 the library, L-702 the studio page, L-703 library tools, L-704 worlds use library images, L-705 today's art into the library, L-706 costs, L-707 generation and L-708 editing shipped).
 4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views.
 5. **Phase 3d:** L-370 Game time (#421).
 6. **L-710 Worlds without Azgaar** (#524), then L-360 off-road travel (#418), then the rest of Phases 7 and 8 in their order (§4).
@@ -64,7 +64,7 @@ Phases are planned groups. This list, not the phase numbers, says what is built 
 | Epic                             | Issue | State                                                                                                                                                                                            |
 | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | L-690 Grading that asks for more | #551  | ✅ Shipped (L-691 to L-694, #552–555). [`the-loom-grading.md`](./the-loom-grading.md): a 0–100 score above the gate, in bands, calibrated on Nisia; criteria added by every content feature (§4.6) |
-| L-700 Image studio (Phase 6)     | #523  | 🚧 **In progress**: L-701 the library (#537), L-702 the studio page (#538), L-703 library tools (#539), L-704 worlds use library images (#540), L-705 today's art into the library (#541), L-706 costs (#542) and L-707 generation (#543) shipped. Designed; sub-issues #537–545 (§4)                                                                                                                                                         |
+| L-700 Image studio (Phase 6)     | #523  | 🚧 **In progress**: L-701 the library (#537), L-702 the studio page (#538), L-703 library tools (#539), L-704 worlds use library images (#540), L-705 today's art into the library (#541), L-706 costs (#542), L-707 generation (#543) and L-708 editing (#544) shipped. Designed; sub-issues #537–545 (§4)                                                                                                                                                         |
 
 **Order:** L-690 comes first, once Phase 3c is done, so the content features that follow add their criteria to it from the start. L-700 follows it, then L-720 (§4).
 

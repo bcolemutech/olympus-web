@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), L-706, costs (§4.5), and L-707, generation (§4.3). L-708 and L-709 are next.
+**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), L-706, costs (§4.5), L-707, generation (§4.3), and L-708, editing by instruction (§4.3, §4.4). L-709, styles, is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -167,13 +167,23 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
     - **Recommended: b.** It gives the most detail per pixel, and drafts at about $0.07 let the layout be settled before paying for 4K. Its prompts should forbid lettering at both steps. Extending outward (c) is for adding land to a finished map. Awaiting the user's confirmation.
   - **Viewing 4K images:** shrinking a 5504 × 3072 PNG for Claude to look at needs about 290 MB. That was past the MCP server's 256 MiB default, so `studio_jobs` and `studio_get` crashed (502) on 4K images. `mcpServer` now has 1 GiB.
 
+- **Editing, as built (L-708):**
+  - **The job:** `studio_edit` starts an edit job, a second kind on the same queue. Its request holds the image, the version it was asked of (`baseVersion`), the instruction, the tier or model and size, and up to 5 more references.
+  - **Shape:** an edit keeps the image's shape (the nearest supported ratio) unless asked otherwise.
+  - **The call:** the job sends that version as the first reference, with "Edit the first image: … Keep everything else as it is", and any other references after it.
+  - **The result:** what comes back becomes the image's next version, made current, with its instruction and cost on the version. The link serves it, and the image is assigned again on every world using it, so they hold its new size.
+  - **The in-use notice:** `studio_edit` names every world and target using the image, to check with `view_image`.
+  - **Undoing:** `studio_update` with `current` brings back an earlier version everywhere. An edit after that builds on the version now current; the version numbers keep counting up.
+  - **Deletion:** an image deleted before its edit runs fails the job, uncharged. Deleted while the model was drawing, the job fails and is still charged.
+  - **The page** shows edit jobs in its jobs list, with their instruction and the version made. Edits themselves are made from Claude (S4).
+
 ### 4.4 Assignment
 
 - **Worlds hold image ids**, not paths: `world.map.imageId`, a town's `imageId`, a battle map's `imageId`, and a new `world.cover.imageId` (A1, A2). The Loom and `view_image` resolve the id to the image's current version.
 - **As built (L-704):** a world holds a small reference, not a bare id: `{ imageId, link, width, height, format }`.
   - **Where it lives:** `world.map.image`, `world.cover`, a settlement's `town.image` and a battle map's `image`.
   - **Why the link:** it is the image's stable link (§4.6), which always serves the current version. So the Loom, grading and `view_image` read art without fetching the image's record. `view_image` reads the image's `current` file.
-  - **Size:** `width` and `height` are the current version's. When L-708 makes another version current, it updates them on the worlds in `usedIn`.
+  - **Size:** `width` and `height` are the current version's. When another version becomes current (an edit, or `studio_update` making an earlier one current), the image is assigned again on every world in `usedIn`, which updates them.
   - **Older art:** paths from before the library (`map.imagePath`, a town's or battle map's `image.path`) still work until L-705 moves them. Replacing older art deletes its file, as before.
   - **One reader:** `functions/loom-canon/art.js` reads both shapes.
 - **Today's art moved in (L-705):** `scripts/backfill-art-library.js` moves each world map, town art and battle-map art still on a path into the library. It is also the **Backfill Art Library** workflow: a dry run first, then apply with a confirmation.

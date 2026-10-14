@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The image studio, wired for production (L-707): the library, the cost
+ * The image studio, wired for production (L-707, L-708): the library, the cost
  * ledger and generation jobs over the Admin SDK, Cloud Storage, the Gemini
  * image models on Vertex and the studioRunJob task queue. Built once, on
  * first use, and shared by the callables, the task function and the
@@ -50,6 +50,23 @@ function studio() {
     placesOf: town.placesOf,
     rasterize,
     load: async (path) => (await bucket.file(path).download())[0],
+    // An edit's new version (L-708): each world using the image is assigned it
+    // again, through the Cartographer's service, so it holds the new size.
+    refreshUses: async (record, uid) => {
+      const { createCartographerService } = require('../cartographer/service');
+      const { createFirestoreWorldWriter } = require('../mcp/apps/cartographer/writer');
+      const service = createCartographerService({
+        db,
+        bucket,
+        writer: createFirestoreWorldWriter(() => db),
+      });
+      const done = [];
+      for (const use of record.usedIn || []) {
+        await service.assignImage(uid, { ...use, imageId: record.id });
+        done.push(use);
+      }
+      return done;
+    },
   });
   built = { db, bucket, library, costs, jobs };
   return built;

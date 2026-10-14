@@ -77,9 +77,23 @@
       )
     );
     item.appendChild(head);
-    item.appendChild(el('p', 'studio-job-prompt', r.prompt));
+    // An edit (L-708, made from Claude) shows its instruction and the version it made.
+    item.appendChild(
+      el(
+        'p',
+        'studio-job-prompt',
+        job.kind === 'edit' ? 'Edit “' + (r.title || r.imageId) + '”: ' + r.instruction : r.prompt
+      )
+    );
     if (job.state === 'done' && job.imageId) {
-      var open = el('button', 'studio-link', 'Open “' + (r.title || 'the image') + '”');
+      var open = el(
+        'button',
+        'studio-link',
+        'Open “' +
+          (r.title || 'the image') +
+          '”' +
+          (job.kind === 'edit' && job.version ? ' (version ' + job.version + ')' : '')
+      );
       open.type = 'button';
       open.addEventListener('click', function () {
         Studio.detail.open(job.imageId);
