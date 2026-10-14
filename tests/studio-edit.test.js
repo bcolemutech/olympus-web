@@ -92,12 +92,14 @@ const library = createLibrary({ db, bucket });
 const costs = createCosts({ db, FieldValue });
 const load = async (at) => (await bucket.file(at).download())[0];
 const dispatched = [];
+const queue = { held: false };
 const jobs = createJobs({
   db,
   library,
   costs,
   model,
   enqueue: async ({ jobId }) => {
+    if (queue.held) return; // run by hand, so no run is left going after a test
     dispatched.push(new Promise((resolve) => setImmediate(resolve)).then(() => jobs.run(jobId)));
   },
   loadWorld: async () => null,
@@ -362,8 +364,12 @@ describe('refusals and failures', () => {
       createdBy: BUILDER,
       via: 'page',
     });
-    const { job } = await jobs.startEdit(BUILDER, { imageId: lone.id, instruction: 'Rain' });
-    dispatched.length = 0; // run it by hand, after the delete
+    queue.held = true; // run it by hand below
+    const { job } = await jobs
+      .startEdit(BUILDER, { imageId: lone.id, instruction: 'Rain' })
+      .finally(() => {
+        queue.held = false;
+      });
     await library.deleteImage(lone.id);
     await jobs.run(job.id);
     const failed = (await db.collection('studio_jobs').doc(job.id).get()).data();
@@ -380,8 +386,12 @@ describe('refusals and failures', () => {
       createdBy: BUILDER,
       via: 'page',
     });
-    const { job } = await jobs.startEdit(BUILDER, { imageId: lone.id, instruction: 'Fog' });
-    dispatched.length = 0;
+    queue.held = true; // run it by hand below
+    const { job } = await jobs
+      .startEdit(BUILDER, { imageId: lone.id, instruction: 'Fog' })
+      .finally(() => {
+        queue.held = false;
+      });
     model.before = () => library.deleteImage(lone.id); // deleted mid-call
     try {
       await jobs.run(job.id);

@@ -109,7 +109,11 @@ const model = {
 
 // The queue: runs each job soon, side by side, as Cloud Tasks would.
 const dispatched = [];
+// `held`: the queue takes jobs but never runs them (a test runs them by hand),
+// so no run is left going after the test.
+const queue = { held: false };
 const enqueue = async ({ jobId }) => {
+  if (queue.held) return;
   dispatched.push(new Promise((resolve) => setImmediate(resolve)).then(() => jobs.run(jobId)));
 };
 const drain = async () => {
@@ -421,8 +425,10 @@ describe('failures', () => {
     const charged = (await costEntries()).filter((e) => e.jobId === job.id).length;
     expect(await jobs.run(job.id)).toBeNull(); // done already
     // One still marked running (its first run crashed) is failed, not rerun.
-    const stuck = await jobs.start(BUILDER, { prompt: 'y', kind: 'scene' });
-    dispatched.length = 0; // the queue never ran it
+    queue.held = true; // the queue never ran it
+    const stuck = await jobs.start(BUILDER, { prompt: 'y', kind: 'scene' }).finally(() => {
+      queue.held = false;
+    });
     await db.collection('studio_jobs').doc(stuck.id).update({ state: 'running' });
     const calls = model.calls.length;
     expect(await jobs.run(stuck.id)).toBeNull();
