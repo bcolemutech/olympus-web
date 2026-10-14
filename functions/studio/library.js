@@ -253,6 +253,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
       versions: record.versions.concat([version]),
       updatedAt: now(),
       ...(makeCurrent ? { current: n } : {}),
+      ...(fields.styleId ? { styleId: fields.styleId } : {}),
     };
     await images().doc(record.id).update(update);
     return { ...record, ...update };

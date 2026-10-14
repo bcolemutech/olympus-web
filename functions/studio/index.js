@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * The image studio, wired for production (L-707, L-708): the library, the cost
- * ledger and generation jobs over the Admin SDK, Cloud Storage, the Gemini
+ * The image studio, wired for production (L-707, L-708, L-709): the library,
+ * the cost ledger, styles and generation jobs over the Admin SDK, Cloud Storage, the Gemini
  * image models on Vertex and the studioRunJob task queue. Built once, on
  * first use, and shared by the callables, the task function and the
  * Cartographer connector's studio tools.
@@ -29,6 +29,7 @@ function studio() {
   const { createLibrary } = require('./library');
   const { createCosts } = require('./costs');
   const { createJobs } = require('./jobs');
+  const { createStyles } = require('./styles');
   const { createImageModel } = require('./image-model');
   const loomCanon = require('../loom-canon');
   const town = require('../loom-canon/town');
@@ -37,6 +38,7 @@ function studio() {
   const bucket = getStorage().bucket();
   const library = createLibrary({ db, bucket });
   const costs = createCosts({ db, FieldValue });
+  const styles = createStyles({ db, library });
   const jobs = createJobs({
     db,
     library,
@@ -49,6 +51,7 @@ function studio() {
     loadWorld: (worldId) => loomCanon.loadWorld(worldId, { db, playableOnly: false }),
     placesOf: town.placesOf,
     rasterize,
+    styles,
     load: async (path) => (await bucket.file(path).download())[0],
     // An edit's new version (L-708): each world using the image is assigned it
     // again, through the Cartographer's service, so it holds the new size.
@@ -68,7 +71,7 @@ function studio() {
       return done;
     },
   });
-  built = { db, bucket, library, costs, jobs };
+  built = { db, bucket, library, costs, jobs, styles };
   return built;
 }
 

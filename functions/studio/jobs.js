@@ -6,6 +6,7 @@ const { TIERS, MODELS, ASPECT_RATIOS, DEFAULT_RATIOS, MAX_REFERENCES } = require
 const { KINDS, normalizeLabels, LibraryError } = require('./library');
 const { readImage } = require('./formats');
 const { priceOf, CostError } = require('./costs');
+const { chooseStyle, snapshot, StyleError } = require('./styles');
 
 /**
  * Generation jobs (planning/the-image-studio.md §4.3; L-707 / #543).
@@ -13,9 +14,11 @@ const { priceOf, CostError } = require('./costs');
  *   studio_jobs/{jobId}
  *     kind: 'generate' | 'edit',
  *     request (generate): { prompt, kind, tier, model, size, aspectRatio,
- *       references[], from, title, labels }
+ *       references[], from, title, labels, style }
  *     request (edit, L-708): { imageId, baseVersion, instruction, kind, tier,
- *       model, size, aspectRatio, references[] }
+ *       model, size, aspectRatio, references[], style }
+ *     (style, L-709: the style used, as it was when asked for — { id, name,
+ *     prompt, references[] } — or null)
  *     state: 'queued' |
  *     'running' | 'done' | 'failed', imageId, cost (dollars), usage, error,
  *     note (the model's words, if any), createdBy, via ('page' | 'mcp'),
@@ -25,8 +28,9 @@ const { priceOf, CostError } = require('./costs');
  * (`enqueue`, a Cloud Tasks queue running at most MAX_RUNNING at once), then
  * returns at once (T1). run() does the work when the queue dispatches it:
  *
- *   1. the request: the `from` thing's data (M7), then the prompt as given;
- *      the reference images (M3), each library image's current version;
+ *   1. the request: the `from` thing's data (M7), the style's text (M4), then
+ *      the prompt as given; the style's reference images, then the request's
+ *      (M3), each library image's current version;
  *   2. one call to the model for the tier, or the model named (M1, M5);
  *   3. the image into the library, its cost recorded (no image is made
  *      without its cost recorded), and the job marked done.
@@ -160,18 +164,55 @@ function fromData(world, from, { placesOf }) {
   };
 }
 
-/** An edit's prompt: the change asked for, and everything else kept. */
-function editPrompt(instruction, extraReferences) {
+// Which images, counting from `first`, show the style: "image 2", "images 2–3".
+function styleImages(style, first) {
+  const n = style ? style.references.length : 0;
+  if (!n) return '';
+  return n === 1 ? `image ${first}` : `images ${first}–${first + n - 1}`;
+}
+
+/**
+ * An edit's prompt: the change asked for, and everything else kept. With a
+ * style (L-709), it is redrawn in that style; its images follow the first.
+ */
+function editPrompt(instruction, extraReferences, style = null) {
+  if (!style) {
+    return (
+      `Edit the first image: ${instruction}\n` +
+      'Keep everything else as it is: the layout, the composition, the style and the colours.' +
+      (extraReferences ? ' Use the other images as references for the change.' : '')
+    );
+  }
+  const shown = styleImages(style, 2);
   return (
     `Edit the first image: ${instruction}\n` +
-    'Keep everything else as it is: the layout, the composition, the style and the colours.' +
-    (extraReferences ? ' Use the other images as references for the change.' : '')
+    `Redraw it in this style: ${style.prompt}\n` +
+    'Keep everything else as it is: the layout and the composition.' +
+    (shown ? ` ${shown[0].toUpperCase()}${shown.slice(1)} show the style.` : '') +
+    (extraReferences
+      ? shown
+        ? ' Use the images after those as references for the change.'
+        : ' Use the other images as references for the change.'
+      : '')
   );
 }
 
-/** The prompt sent: the world's data first, then what was asked. */
-function buildPrompt(prompt, from) {
-  return from ? `About what to draw:\n${from.text}\n\nThe image:\n${prompt}` : prompt;
+/**
+ * The prompt sent: the world's data first, then the style (L-709), then what
+ * was asked. A style's images come first among the references.
+ */
+function buildPrompt(prompt, from, style = null) {
+  if (!from && !style) return prompt;
+  const shown = styleImages(style, 1);
+  return [
+    from && `About what to draw:\n${from.text}`,
+    style &&
+      `The style:\n${style.prompt}` +
+        (shown ? `\nFollow the style of ${shown} (the look, not the subject).` : ''),
+    `The image:\n${prompt}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 function createJobs({
@@ -184,12 +225,22 @@ function createJobs({
   placesOf,
   rasterize,
   load,
+  // Named styles (L-709, functions/studio/styles.js); none when not given.
+  styles = null,
   // Refreshes the worlds using an image after its current version changes
   // (their reference holds its size): (record, uid) → uses refreshed.
   refreshUses = async () => [],
   now = () => Date.now(),
 }) {
   const jobs = () => db.collection('studio_jobs');
+
+  // The style a request uses (L-709), as it is now, or null.
+  async function styleFor(requested, world) {
+    const styleId = chooseStyle(requested, world);
+    if (!styleId) return null;
+    if (!styles) throw invalid('Styles are not available here.');
+    return snapshot(await styles.get(styleId));
+  }
 
   // Checks a request and fills in what it leaves out.
   async function checkRequest(input) {
@@ -214,24 +265,33 @@ function createJobs({
     // It can be charged for (L-706): a model without a price isn't run.
     priceOf({ model: modelName, size });
 
-    const references = input.references || [];
-    if (!Array.isArray(references) || references.length > MAX_REFERENCES) {
-      throw invalid(`At most ${MAX_REFERENCES} reference images.`);
-    }
-    for (const id of references) await library.getImage(id); // each must exist
-
     let from = null;
     let fromInfo = null;
+    let world = null;
     if (input.from) {
       const { worldId, kind, id } = input.from;
       if (!FROM_KINDS.includes(kind)) {
         throw invalid(`from.kind is one of ${FROM_KINDS.join(', ')}.`);
       }
-      const world = await loadWorld(worldId);
+      world = await loadWorld(worldId);
       if (!world) throw new JobError('not-found', `No world "${worldId}".`);
       fromInfo = fromData(world, { kind, id }, { placesOf });
       from = { worldId, kind, id };
     }
+    // The style named, else the world's default (L-709).
+    const style = await styleFor(input.styleId, world);
+
+    const references = input.references || [];
+    const room = MAX_REFERENCES - (style ? style.references.length : 0);
+    if (!Array.isArray(references) || references.length > room) {
+      throw invalid(
+        `At most ${room} reference images` +
+          (style && style.references.length
+            ? ` with the style "${style.name}" (it brings ${style.references.length}).`
+            : '.')
+      );
+    }
+    for (const id of references) await library.getImage(id); // each must exist
 
     const kind = input.kind || (fromInfo && fromInfo.kind) || null;
     if (!KINDS.includes(kind)) throw invalid(`Say what kind of image it is: ${KINDS.join(', ')}.`);
@@ -253,6 +313,7 @@ function createJobs({
       from,
       title,
       labels: normalizeLabels(input.labels),
+      style,
     };
   }
 
@@ -292,7 +353,7 @@ function createJobs({
   }
 
   const asJobError = (err) =>
-    err instanceof LibraryError || err instanceof CostError
+    err instanceof LibraryError || err instanceof CostError || err instanceof StyleError
       ? new JobError(err.code, err.message)
       : err;
 
@@ -332,10 +393,13 @@ function createJobs({
       throw invalid(`The shape (aspectRatio) is one of ${ASPECT_RATIOS.join(', ')}.`);
     }
     priceOf({ model: modelName, size });
-    // The image itself is the first reference, so one fewer may be added.
+    // A style only when named (L-709): an edit otherwise keeps the image's look.
+    const style = await styleFor(input.styleId === undefined ? null : input.styleId, null);
+    // The image itself is the first reference, then the style's.
+    const room = MAX_REFERENCES - 1 - (style ? style.references.length : 0);
     const references = input.references || [];
-    if (!Array.isArray(references) || references.length > MAX_REFERENCES - 1) {
-      throw invalid(`At most ${MAX_REFERENCES - 1} more reference images with an edit.`);
+    if (!Array.isArray(references) || references.length > room) {
+      throw invalid(`At most ${room} more reference images with this edit.`);
     }
     for (const id of references) await library.getImage(id);
     return {
@@ -351,6 +415,7 @@ function createJobs({
         aspectRatio: input.aspectRatio || nearestRatio(version.width, version.height),
         references,
         title: record.title,
+        style,
       },
       record,
     };
@@ -414,10 +479,11 @@ function createJobs({
     try {
       let prompt;
       const references = [];
+      const style = request.style || null;
       if (job.kind === 'edit') {
         // The image as it was when the edit was asked for, then any others.
         references.push(await referenceOf(request.imageId, request.baseVersion));
-        prompt = editPrompt(request.instruction, request.references.length > 0);
+        prompt = editPrompt(request.instruction, request.references.length > 0, style);
       } else {
         let from = null;
         if (request.from) {
@@ -425,8 +491,10 @@ function createJobs({
           if (!world) throw new JobError('not-found', 'Its world is gone.');
           from = fromData(world, request.from, { placesOf });
         }
-        prompt = buildPrompt(request.prompt, from);
+        prompt = buildPrompt(request.prompt, from, style);
       }
+      // The style's images, then the request's own.
+      for (const id of style ? style.references : []) references.push(await referenceOf(id));
       for (const id of request.references) references.push(await referenceOf(id));
       result = await model.generate({
         model: request.model,
@@ -499,6 +567,7 @@ function createJobs({
       prompt: request.prompt,
       model: request.model,
       tier: request.tier,
+      styleId: request.style ? request.style.id : null,
       from: request.from,
       references: request.references,
       file,
@@ -532,6 +601,8 @@ function createJobs({
         via: job.via,
         instruction: request.instruction,
         cost: price,
+        // Redrawn in a style (L-709): the image is in that style now.
+        ...(request.style ? { styleId: request.style.id } : {}),
       });
     } catch (err) {
       // Deleted while it was being edited: the call was still charged.

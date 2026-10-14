@@ -678,7 +678,7 @@ function cartographerApp({ reader, writer, art, studio }) {
       ...writeTools({ writer }),
       ...townTools({ writer }),
       ...mapTools({ writer }),
-      ...(studio ? studioTools({ studio }) : []),
+      ...(studio ? studioTools({ studio, reader, writer }) : []),
     ],
     resources: [
       {
@@ -727,12 +727,14 @@ function register(registry) {
         draw: (uid, args) => cartographer().drawArt(uid, args),
       },
       // The image studio: assigning library images to worlds (L-704), the
-      // library itself (L-703), its costs (L-706) and generation (L-707).
+      // library itself (L-703), its costs (L-706), generation (L-707) and
+      // styles (L-709).
       studio: {
         assign: (uid, args) => cartographer().assignImage(uid, args),
         library: () => studio().library,
         costs: () => studio().costs,
         jobs: () => studio().jobs,
+        styles: () => studio().styles,
         load: async (path) => (await getStorage().bucket().file(path).download())[0],
       },
     })

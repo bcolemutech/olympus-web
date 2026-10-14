@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), L-706, costs (§4.5), L-707, generation (§4.3), and L-708, editing by instruction (§4.3, §4.4). L-709, styles, is next.
+**Status:** Shipped. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), L-706, costs (§4.5), L-707, generation (§4.3), L-708, editing by instruction (§4.3, §4.4), and L-709, styles (§4.2, §4.3). The M2 recommendation (§4.3) awaits the user's confirmation.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -123,7 +123,10 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 
 - **`studio_images/{imageId}`:** `{ title, kind, labels[], prompt, model, tier, styleId, from, references[], parentId, current (version number), versions: [{ n, path, width, height, format, bytes, createdAt, createdBy, via, instruction, cost }], usedIn: [{ worldId, target, id }], link, createdBy, via ('page' | 'mcp' | 'upload' | 'backfill'), source, createdAt, updatedAt }`. Versions live on the document (an image has few); `usedIn` is kept up to date by assignment so "in use" (L5) and "worlds used in" (L3) are one read.
 - **Files:** `studio/{imageId}/v{n}.{png|jpg|webp|svg}` in the default bucket. A version's file never changes; making a version current moves the link (4.6).
-- **`studio_styles/{styleId}`:** `{ name, prompt, references[], createdBy, updatedAt }`. A world's default style is `world.studio.styleId`.
+- **`studio_styles/{styleId}`:** `{ id, name, prompt, references[], createdBy, createdAt, updatedBy, updatedAt }`. A world's default style is `world.studio.styleId`. Names are unique (any case); a style holds at most 3 reference images, so a request keeps room for its own (6 in all). Built in L-709:
+  - **Which style:** the one a request names; none when it asks for `"none"`; else, when `studio_generate` is about a world (`from`), that world's default. An edit uses a style only when it names one, and otherwise keeps the image's own look.
+  - **The request** carries the style as it was when asked for (its name, text and references), so changing a style later changes only later images. The prompt reads: the world's data, then `The style:` with its text, then `The image:` with what was asked; the style's images come first among the references, and the prompt says which they are. An edit in a style is told to redraw the image in it, keeping the layout and composition, and the image's `styleId` becomes that style.
+  - **Images made in a style** carry its `styleId`, so `studio_find` (styleId) finds them.
 - **`studio_jobs/{jobId}`:** `{ kind: 'generate' | 'edit', request, state: 'queued' | 'running' | 'done' | 'failed', imageId, version, cost, error, createdBy, via, createdAt, finishedAt }`.
 - **`studio_costs/{entryId}`** (one per finished job, and per failed job the provider charged for) and **`studio_costs_month/{yyyy-mm}`** (running totals by day, model and who, so the page and every tool result read one document).
 - **Rules:** editors (`hasApp('cartographer')`) may read `studio_images`, `studio_styles`, `studio_jobs` and the month totals; all writes go through the Admin SDK, like the Loom and Cartographer data.
