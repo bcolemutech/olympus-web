@@ -135,7 +135,7 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 
 - **A Cloud Tasks queue** (`onTaskDispatched`, `maxConcurrentDispatches: 8`, T5) runs jobs. `studio_generate` and `studio_edit` write a job, enqueue it and return its id at once (T1). The page's generate form does the same.
 - **A job** builds the request: the prompt; the style's text and references, if any (M4); the `from` thing's data, if any (M7); references (M3); then calls the model for its tier, or the model named (M1). It stores the image as a new image (generate) or a new version (edit, E2), records the cost (4.5) and marks the job done.
-- **Models:** the tiers map to Gemini image models in config. Which models, at which sizes and prices, and whether they are served in `us-central1` or only from Vertex's `global` endpoint, is checked when L-707 is built; the M2 trial picks how big maps are made.
+- **Models:** the tiers map to Gemini image models in config. Which models, at which sizes and prices, and whether they are served in `us-central1` or only from Vertex's `global` endpoint, is checked when L-707 is built. How big world maps are made was decided after the M2 trial (§4.3).
 - **Failures** are recorded on the job with the provider's message. A failure the provider charged for still writes a cost entry.
 - **As built (L-707):**
   - **Models** (checked 2026-10-12 against Google's price list). Gemini 2.5 Flash Image was shut down on 2026-10-02. The tiers, in `functions/studio/config.js`:
@@ -169,7 +169,7 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 
     - **Decided (2026-10-14): b.** It gives the most detail per pixel, and drafts at about $0.07 let the layout be settled before paying for 4K. Extending outward (c) is kept for adding land to a finished map.
   - **How a big world map is made (M2):**
-    1. Draft layouts with `studio_generate` (kind `worldMap`, tier `draft`; 16:9 by default) until one is right. Each costs about $0.07.
+    1. Draft layouts with `studio_generate` (kind `worldMap`, tier `draft`; 16:9 by default) until one is right. Each costs about $0.07. **A draft with any lettering is not right:** the prompt alone didn't stop it in the trial, and the redraw keeps it. Draft again, or remove it first with `studio_edit` at the draft tier (about $0.07), and check the result with `studio_get`.
     2. Redraw the chosen draft with `studio_generate`: the draft as the only reference, model `gemini-3-pro-image` at size `4K`, the same shape, and a prompt asking for the same layout, redrawn in full detail. About $0.28 and a minute.
     3. Both prompts forbid lettering ("no text, labels or names anywhere on the map"). The trial's draft invented labels anyway and the redraw kept them garbled, so the place names belong in the Loom, not in the art.
     4. Check the redraw with `studio_get`, then assign it with `studio_assign` (target `map`).
