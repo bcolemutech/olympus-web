@@ -123,7 +123,6 @@
                  or, in a town, the town view (town.js) -->
           <section class="loom-map-pane hidden" id="loom-map-pane" aria-label="Map">
             <div class="loom-map-panel" id="loom-map-panel">
-              <img class="loom-map-image hidden" id="loom-map-image" alt="" draggable="false" />
               <svg class="loom-map-overlay" id="loom-map-overlay" aria-hidden="true"></svg>
               <div class="loom-map-layers hidden" id="loom-map-layers" role="group">
                 <button
@@ -236,6 +235,13 @@
       integrity="sha384-toVdrLSMaw7Y55MowcKqkmFL/Ek6Sky62NOk0b5sDDZBu2wcoPyyQUt9unDVjXhL"
     ></script>
 
+    <!-- PixiJS for the map engine (L-722): WebGL, or canvas without it -->
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/pixi.js@8.21.0/dist/pixi.min.js"
+      integrity="sha384-M63Y6T7xfuqwc9J8+LKmpo0Eib/j8rOHiD7C1Nt1HwdznFV+5RVUZUHquFP/4ciG"
+    ></script>
+
     <!-- Loom modules (load order matters) -->
     <script src="/apps/loom/js/state.js"></script>
     <script src="/apps/loom/js/ui.js"></script>
@@ -246,6 +252,8 @@
     <script src="/apps/loom/js/layers.js"></script>
     <script src="/apps/loom/js/worlds.js"></script>
     <script src="/apps/loom/js/saves.js"></script>
+    <script src="/apps/loom/js/engine.js"></script>
+    <script src="/apps/loom/js/world.js"></script>
     <script src="/apps/loom/js/town.js"></script>
     <script src="/apps/loom/js/battle.js"></script>
     <script src="/apps/loom/js/map.js"></script>

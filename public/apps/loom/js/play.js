@@ -111,7 +111,8 @@
     setLoading(true);
     showError(null);
     renderSuggestedActions([]);
-    Loom.map.render(); // the Travel button disables while a turn runs
+    Loom.engine.closeMenu(); // a click menu's choices are for before the turn
+    Loom.map.render(); // the cards' buttons disable while a turn runs
 
     var loomPlayTurn = state.functions.httpsCallable('loomPlayTurn');
     var request = Object.assign({ worldId: state.worldId, saveId: state.saveId }, turn);
