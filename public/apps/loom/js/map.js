@@ -7,10 +7,10 @@
   //
   // - The world map is drawn by the map engine (engine.js, world.js; L-722 /
   //   #593), which also owns the camera and the input for every level.
-  // - In a settlement with a town layout, the town view (town.js; L-345 /
-  //   #399), and on a battle map the grid view (battle.js; L-354 / #403), are
-  //   still drawn in SVG over the panel, until L-723 and L-724 move them to
-  //   the engine.
+  // - In a settlement with a town layout, the town (town.js; L-345 / #399)
+  //   is drawn by the engine too (L-723 / #594).
+  // - On a battle map the grid view (battle.js; L-354 / #403) is still drawn
+  //   in SVG over the panel, until L-724 moves it to the engine.
 
   var Loom = window.Loom;
   var state = Loom.state;
@@ -243,8 +243,8 @@
 
     var overlayEl = ref('loom-map-overlay');
     ref('loom-map-panel').classList.toggle('is-town', map.mode !== 'world');
-    // Town and battle are still SVG over the panel; the engine's stage hides.
-    if (map.mode !== 'world') Loom.engine.setLevel(null);
+    // Battle is still SVG over the panel; the engine's stage hides.
+    if (map.mode === 'battle') Loom.engine.setLevel(null);
     if (map.mode === 'battle') {
       overlayEl.setAttribute('width', size.width);
       overlayEl.setAttribute('height', size.height);
@@ -253,27 +253,12 @@
       Loom.battle.renderInfo(ref('loom-map-info'), actCell);
       return;
     }
-    if (map.mode === 'town') {
-      overlayEl.setAttribute('width', size.width);
-      overlayEl.setAttribute('height', size.height);
-      overlayEl.innerHTML = '';
-      Loom.town.draw(overlayEl, v);
-      Loom.town.renderInfo(ref('loom-map-info'), act);
-      return;
-    }
-
-    // The world map: drawn by the engine.
+    // The world map and the town: drawn by the engine.
     overlayEl.innerHTML = '';
-    Loom.engine.setLevel('world');
+    Loom.engine.setLevel(map.mode);
     Loom.engine.draw();
-    Loom.world.renderInfo(ref('loom-map-info'));
-  }
-
-  // A move from a town's card: a place in town.
-  function act(id, name) {
-    Loom.play.travelTo(id, name);
-    // On a phone, the story is where the journey is told.
-    if (isPhone()) showTab('story');
+    if (map.mode === 'town') Loom.town.renderInfo(ref('loom-map-info'));
+    else Loom.world.renderInfo(ref('loom-map-info'));
   }
 
   // A step on a battle map, from the grid view's card.
@@ -294,15 +279,17 @@
       return;
     }
     if (map.mode === 'town') {
-      Loom.town.pick(point, cam.view);
-      render();
+      Loom.town.tap(point, cam.view);
       return;
     }
     Loom.world.tap(point, cam.view);
   }
 
   function onHover(point) {
-    if (map.mode === 'world' && map.data && cam.view) Loom.world.hover(point, cam.view);
+    if (!map.data || !cam.view) return;
+    if (map.mode === 'world') Loom.world.hover(point, cam.view);
+    else if (map.mode === 'town') Loom.town.hover(point, cam.view);
+    else Loom.engine.panelCursor('');
   }
 
   // ── Wiring ────────────────────────────────────────
@@ -350,14 +337,13 @@
     showTab('story');
   }
 
-  // Redraws only the overlay, for the token's walk on a battle map (L-615)
-  // or in town (L-664): the card stays as it is.
+  // Redraws only the overlay, for the token's walk on a battle map (L-615):
+  // the card stays as it is.
   function redrawOverlay() {
-    if ((map.mode !== 'battle' && map.mode !== 'town') || !map.data || !cam.view) return;
+    if (map.mode !== 'battle' || !map.data || !cam.view) return;
     var overlayEl = ref('loom-map-overlay');
     overlayEl.innerHTML = '';
-    if (map.mode === 'battle') Loom.battle.draw(overlayEl, cam.view);
-    else Loom.town.draw(overlayEl, cam.view);
+    Loom.battle.draw(overlayEl, cam.view);
   }
 
   // The map's area changed size (the shell's panel resized or collapsed, or

@@ -107,23 +107,11 @@
       engine.draw();
       return;
     }
-    Loom.artUrl(image)
-      .then(function (url) {
-        return new Promise(function (resolve, reject) {
-          var img = new window.Image();
-          img.crossOrigin = 'anonymous'; // WebGL needs CORS; Storage sends it
-          img.onload = function () {
-            resolve(img);
-          };
-          img.onerror = function () {
-            reject(new Error('the image did not load'));
-          };
-          img.src = url;
-        });
-      })
-      .then(function (img) {
+    Loom.draw
+      .loadTexture(image)
+      .then(function (texture) {
         if (world.artKey !== key) return; // another world's art meanwhile
-        world.texture = window.PIXI.Texture.from(img);
+        world.texture = texture;
         engine.draw();
       })
       .catch(function (err) {
@@ -143,47 +131,20 @@
     world.nodes = { art: art, routes: routes, pins: pins, labels: labels };
   }
 
-  // A line from a to b, dashed if asked: [dash, gap] in px.
-  function line(g, a, b, dashes) {
-    if (!dashes) {
-      g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      return;
-    }
-    var length = Math.hypot(b.x - a.x, b.y - a.y);
-    if (!length) return;
-    var ux = (b.x - a.x) / length;
-    var uy = (b.y - a.y) / length;
-    for (var at = 0; at < length; at += dashes[0] + dashes[1]) {
-      var end = Math.min(length, at + dashes[0]);
-      g.moveTo(a.x + ux * at, a.y + uy * at).lineTo(a.x + ux * end, a.y + uy * end);
-    }
-  }
+  var line = Loom.draw.line;
 
   function radiusOf(p) {
     return p.capital ? 5 : p.kind === 'settlement' ? 4 : 3;
   }
 
-  // A small padlock beside a locked place.
   function padlock(g, x, y) {
-    g.moveTo(x + 0.8, y - 1)
-      .arc(x + 3, y - 1, 2.2, Math.PI, 0)
-      .stroke({ width: 1.2, color: COLOURS.closedEdge });
-    g.rect(x, y - 1, 6, 4.5).fill({ color: COLOURS.closedEdge });
+    Loom.draw.padlock(g, x, y, COLOURS.closedEdge);
   }
 
   function labelFor(p) {
     var label = world.labels[p.id];
     if (!label) {
-      label = new window.PIXI.Text({
-        text: p.name,
-        style: {
-          fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
-          fontSize: 12,
-          fill: COLOURS.label,
-          stroke: { color: COLOURS.casing, width: 3, alpha: 0.85 },
-        },
-      });
-      label.anchor.set(0.5, 0);
+      label = Loom.draw.label(p.name);
       world.labels[p.id] = label;
       world.nodes.labels.addChild(label);
     }

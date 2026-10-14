@@ -48,7 +48,13 @@
 
   function showPlay(saveId, save) {
     Loom.store.set({
-      save: { id: saveId, worldId: state.worldId, worldName: worldName(state.worldId) },
+      save: {
+        id: saveId,
+        worldId: state.worldId,
+        worldName: worldName(state.worldId),
+        // For the player's token (A6): its initials.
+        characterName: (save.character && save.character.name) || '',
+      },
     });
     Loom.play.init(saveId, save);
     showView('play');
@@ -89,7 +95,7 @@
           .createSave(state.worldId, name, characterName)
           .then(function (saveId) {
             hideNewSaveForm();
-            showPlay(saveId, { recentSummary: '' });
+            showPlay(saveId, { recentSummary: '', character: { name: characterName } });
           })
           .catch(function () {
             // Error already surfaced inline by createSave(); nothing more to do here.
