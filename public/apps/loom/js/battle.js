@@ -1,85 +1,105 @@
 (function () {
   'use strict';
 
-  // The grid view in the play view (planning/the-loom-layered-worlds.md §9;
-  // L-354 / #403): the battle map the player stands on, from loomGetMap's
-  // `battleMap`. The map's art (or a plain grid) under its grid, the player's
-  // token, its exits and features. Tapping a cell shows a card with the one
-  // move it allows: step there, go to a feature, or go out by an exit (which
-  // leaves the map). Moves are structured moves on the grid
-  // (Loom.play.moveToCell), adjudicated on the server like typed ones.
+  // The battle level of the map engine (planning/the-map-first-loom.md §4.3;
+  // L-724 / #595): the battle map the player stands on, from loomGetMap's
+  // `battleMap` (planning/the-loom-layered-worlds.md §9). Its art (or a plain
+  // grid) under the grid; its layers (L-627): on a plain grid, walls and
+  // obstacles (solid dark, low hatched, difficult dotted), over art the art
+  // shows them; doors always, by their state for this save (closed amber,
+  // open dashed, locked red); entries, exits and features; the people in
+  // sight (L-642) and you, as tokens with initials (A6).
   //
-  // The layers (§4; L-627 / #452): on a plain grid, walls and obstacles are
-  // drawn (solid dark, low hatched, difficult dotted); over art, the art shows
-  // them. Doors are always marked, by their state for this save (closed amber,
-  // open dashed, locked red); tapping one opens a card to open or close it
-  // from beside it (Loom.play.doorAction).
+  // - The fog (L-634, A3): from loomGetMap's `fog` (L-633), squares never
+  //   seen are dark, those seen before but out of sight now dimmed, those in
+  //   sight clear, with feathered edges and a faint grain. The dimming lies
+  //   under the grid and the layers, so the layout remembered still reads;
+  //   the dark covers everything. Only what the server sent is drawn.
+  // - The turn (L-615): this turn's reach is lit; a selected square shows
+  //   the path a move would take (grid-paths.js, the server's own rules),
+  //   solid for this turn and dashed after, and a kept plan is dashed. After
+  //   a move the token walks its path (K3; a click skips ahead, reduced
+  //   motion jumps). Reach and paths cover only squares seen (L-635).
+  // - Every click opens the engine's menu (I2), no one-tap shortcuts: on a
+  //   square, Move (step there, go to someone or a feature, go out by an
+  //   exit; beyond this turn the rest is kept as the plan) and Look; on a
+  //   door, Open, Close or Try it from beside it, and Look.
   //
-  // The fog (planning/the-loom-movement-and-vision.md §5; L-634 / #457), from
-  // loomGetMap's `fog` (L-633): squares never seen are dark, those seen before
-  // but not in sight now are dimmed, and those in sight are clear. The dark
-  // covers the art, the grid and what's on it; the dimming lies over the art
-  // but under the grid and the layers, so the layout remembered still reads,
-  // with what stands there faded. The token, the way and the names stay on
-  // top. Only what the server sent is drawn: it sends nothing unseen.
-  //
-  // The turn (planning/the-loom-movement-and-vision.md §3; L-615 / #445): the
-  // squares in reach of this turn's movement are lit; tapping a square draws
-  // the path a move would take (grid-paths.js, the server's own rules), solid
-  // for this turn and dashed after, and the card says what it costs and in
-  // how many turns; a kept plan is drawn dashed. After a move the token walks
-  // its path (a tap skips ahead; reduced motion jumps). Reach and paths cover
-  // only squares seen, as on the server (L-635 / #458); a square in the dark
-  // says "You haven't seen that."
-  //
-  // People (planning/the-loom-movement-and-vision.md §6; L-642 / #461): those
-  // standing on a square in sight are drawn as tokens (the server sends no
-  // one else). A path goes through their square but never ends on it: a way
-  // to someone ends beside them, and a walk ends on the last free square.
-  //
-  // map.js owns the panel, pan and zoom, and switches between this, the town
-  // view and the world map; this module draws the map into the panel's SVG
-  // overlay in screen space. Map coordinates are CELL units per cell, with
-  // room around the grid.
+  // The map is drawn in map coordinates (CELL units a square, PAD around
+  // the grid) in a container the camera moves, so panning only moves it; it
+  // is rebuilt when what it shows or the zoom changes. Strokes, tokens and
+  // labels keep their size on screen at every zoom.
 
   var Loom = window.Loom;
   var state = Loom.state;
   var M = Loom.mapMath;
   var P = Loom.gridPaths;
   var L = Loom.mapLayers;
-  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var engine = Loom.engine;
   var CELL = 40;
-  var PAD = 60; // room for the labels of cells at the edge
+  var PAD = 60; // room for the labels of squares at the edge
   var STEP_MS = 110; // the token's walk, a square at a time
+  var DOOR_HIT = 0.2; // squares from a door's line that a click picks it
+
+  var COLOURS = {
+    ground: 0x1a1f2c,
+    groundEdge: 0xffffff,
+    grid: 0xffffff,
+    entry: 0x66bb6a,
+    exit: 0xef5350,
+    exitLabel: 0xffab91,
+    feature: 0xffb74d,
+    dark: 0x0a0e1a,
+    wall: 0xe9e4d8,
+    solid: 0x080a10,
+    solidEdge: 0x3a4050,
+    low: 0xcdaa7d,
+    difficult: 0x9aa0a6,
+    dot: 0xbebebe,
+    door: 0xffb74d,
+    doorLocked: 0xe57373,
+    reach: 0xffb74d,
+    path: 0xffb74d,
+    selected: 0xffffff,
+    person: 0x4db6ac,
+    you: 0xffffff,
+    ring: 0xffb74d,
+    label: 0xe0e0e0,
+  };
+  var FOG_DIM = 0.6; // seen before, out of sight now
+  var FOG_SCALE = 4; // fog texture pixels a square, before it is stretched
+  var FOG_BLUR = 3; // px of that texture: the feathered edge, about ¾ of a square
 
   var battle = {
     data: null, // loomGetMap's `battleMap`
     turn: null, // loomGetMap's `turn` (L-611): movement left, the plan
     selected: null, // a cell { x, y }
-    selectedDoor: null, // a door's id, when a door is tapped (L-627)
-    art: { path: null, url: null },
+    selectedDoor: null, // a door's id, when a door is clicked (L-627)
+    art: { path: null, texture: null },
     reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
     fog: null, // the fog (L-634): { dark: runs, dim: runs }, as reach's runs
     known: null, // whether a square (by y × width + x) has been seen (L-635)
     preview: null, // the path to the selected cell: { path, walked, rest, cost, turns } or { none }
     pending: null, // a move sent: { mapId, from, path }, for the walk when it lands
     anim: null, // the token's walk: { cells, t0 }
+    version: 0, // bumped when what is drawn changes
+    built: null, // what the drawing was last built for
+    nodes: null, // the PixiJS objects
+    labels: [], // the labels in use
+    tokens: {}, // person id → token
+    fogTextures: { key: null, dim: null, dark: null },
   };
+
+  // Something drawn changed: rebuild on the next draw.
+  function changed() {
+    battle.version += 1;
+  }
 
   // ── Helpers ───────────────────────────────────────
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-
-  function svg(tag, attrs, text) {
-    var node = document.createElementNS(SVG_NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) {
-      node.setAttribute(k, attrs[k]);
-    });
     if (text !== undefined) node.textContent = text;
     return node;
   }
@@ -199,17 +219,19 @@
 
   function loadArt(image) {
     if (!image) {
-      battle.art = { path: null, url: null };
+      battle.art = { path: null, texture: null };
       return;
     }
     var key = Loom.artKey(image);
     if (key === battle.art.path) return;
-    battle.art = { path: key, url: null };
-    Loom.artUrl(image)
-      .then(function (url) {
+    battle.art = { path: key, texture: null };
+    Loom.draw
+      .loadTexture(image)
+      .then(function (texture) {
         if (battle.art.path !== key) return; // the player moved on meanwhile
-        battle.art.url = url;
-        Loom.map.render();
+        battle.art.texture = texture;
+        changed();
+        engine.draw();
       })
       .catch(function (err) {
         console.error('Could not load the battle-map art:', err);
@@ -233,6 +255,7 @@
     computeFog();
     computeReach();
     computePreview();
+    changed();
   }
 
   // Whether bit `i` is set in squares packed as the server packs them (one bit
@@ -303,10 +326,11 @@
     if (!anim) return;
     if ((now() - anim.t0) / STEP_MS >= anim.cells.length - 1) {
       battle.anim = null;
+      changed();
       Loom.map.render();
       return;
     }
-    Loom.map.redrawOverlay();
+    engine.draw(); // only the token moves
     window.requestAnimationFrame(frame);
   }
 
@@ -432,338 +456,385 @@
 
   // ── Drawing ───────────────────────────────────────
 
-  /** Draws the map into the overlay, for a view in map coordinates. */
-  function draw(overlay, view) {
+  function build(container) {
+    var PIXI = window.PIXI;
+    var n = {
+      scene: new PIXI.Container(),
+      ground: new PIXI.Graphics(),
+      art: new PIXI.Sprite(),
+      fogDim: new PIXI.Sprite(),
+      under: new PIXI.Graphics(), // reach, grid, layers, entries, exits, features
+      people: new PIXI.Container(),
+      fogDark: new PIXI.Sprite(),
+      labels: new PIXI.Container(),
+      over: new PIXI.Graphics(), // the selected square and the way
+      you: Loom.draw.token(),
+    };
+    n.art.alpha = 0.95;
+    n.scene.addChild(n.ground, n.art, n.fogDim, n.under, n.people, n.fogDark);
+    n.scene.addChild(n.labels, n.over, n.you.container);
+    container.addChild(n.scene);
+    battle.nodes = n;
+  }
+
+  // A deterministic grain for the dark (A3): 0–1 from a square.
+  function grain(x, y) {
+    var h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return h - Math.floor(h);
+  }
+
+  // The fog as two textures (A3), a few pixels a square, blurred for soft
+  // edges and stretched over the grid smoothly: the dimming of squares seen
+  // before, and the dark of squares never seen, with a faint grain.
+  function fogTextures(d) {
+    var key = d.id + '|' + d.fog.seen + '|' + d.fog.inSight;
+    if (battle.fogTextures.key === key) return battle.fogTextures;
+    var seen = unpacked(d.fog.seen);
+    var inSight = unpacked(d.fog.inSight);
+    var make = function (alphaOf) {
+      var raw = document.createElement('canvas');
+      raw.width = d.width * FOG_SCALE;
+      raw.height = d.height * FOG_SCALE;
+      var ctx = raw.getContext('2d');
+      for (var y = 0; y < d.height; y++) {
+        for (var x = 0; x < d.width; x++) {
+          var a = alphaOf(y * d.width + x, x, y);
+          if (!a) continue;
+          ctx.fillStyle = 'rgba(0,0,0,' + a + ')';
+          ctx.fillRect(x * FOG_SCALE, y * FOG_SCALE, FOG_SCALE, FOG_SCALE);
+        }
+      }
+      var soft = document.createElement('canvas');
+      soft.width = raw.width;
+      soft.height = raw.height;
+      var sctx = soft.getContext('2d');
+      if ('filter' in sctx) sctx.filter = 'blur(' + FOG_BLUR + 'px)';
+      sctx.drawImage(raw, 0, 0);
+      var texture = window.PIXI.Texture.from(soft);
+      texture.source.scaleMode = 'linear';
+      return texture;
+    };
+    ['dim', 'dark'].forEach(function (kind) {
+      if (battle.fogTextures[kind]) battle.fogTextures[kind].destroy(true);
+    });
+    battle.fogTextures = {
+      key: key,
+      dim: make(function (i) {
+        return seen(i) && !inSight(i) ? FOG_DIM : 0;
+      }),
+      dark: make(function (i, x, y) {
+        return seen(i) ? 0 : 0.9 + 0.1 * grain(x, y);
+      }),
+    };
+    return battle.fogTextures;
+  }
+
+  // Diagonal hatching inside a rectangle (low obstacles), lines `gap` apart.
+  function hatch(g, x0, y0, x1, y1, gap) {
+    for (var c = x0 + y0 + gap / 2; c < x1 + y1; c += gap) {
+      var xa = Math.max(x0, c - y1);
+      var xb = Math.min(x1, c - y0);
+      if (xb > xa) g.moveTo(xa, c - xa).lineTo(xb, c - xb);
+    }
+  }
+
+  function rebuild(view) {
+    var n = battle.nodes;
     var d = battle.data;
-    var s = function (x, y) {
-      return M.toScreen(view, x, y);
-    };
-    var topLeft = s(PAD, PAD);
-    var bottomRight = s(PAD + d.width * CELL, PAD + d.height * CELL);
-    var size = { width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
-    overlay.appendChild(
-      svg('rect', {
-        class: 'loom-grid-ground',
-        x: topLeft.x,
-        y: topLeft.y,
-        width: size.width,
-        height: size.height,
-      })
-    );
-    if (d.image && battle.art.url && battle.art.path === Loom.artKey(d.image)) {
-      // The art is stretched to the grid, as Claude sees it in view_image.
-      overlay.appendChild(
-        svg('image', {
-          class: 'loom-grid-art',
-          href: battle.art.url,
-          x: topLeft.x,
-          y: topLeft.y,
-          width: size.width,
-          height: size.height,
-          preserveAspectRatio: 'none',
-        })
-      );
+    var px = 1 / view.scale; // a screen pixel, in map units
+    var cellPx = CELL * view.scale;
+    var gw = d.width * CELL;
+    var gh = d.height * CELL;
+
+    n.ground.clear();
+    n.ground
+      .rect(PAD, PAD, gw, gh)
+      .fill({ color: COLOURS.ground })
+      .stroke({ width: px, color: COLOURS.groundEdge, alpha: 0.25 });
+
+    // The art is stretched to the grid, as Claude sees it in view_image.
+    var art = d.image && battle.art.texture && battle.art.path === Loom.artKey(d.image);
+    n.art.visible = Boolean(art);
+    if (art) {
+      n.art.texture = battle.art.texture;
+      n.art.position.set(PAD, PAD);
+      n.art.width = gw;
+      n.art.height = gh;
     }
 
-    var cellPx = (bottomRight.x - topLeft.x) / d.width;
-    // Row runs of squares as one shape, so no seams show between them.
-    var runsPath = function (runs) {
-      return runs
-        .map(function (run) {
-          var a = s(PAD + run.x0 * CELL, PAD + run.y * CELL);
-          var b = s(PAD + (run.x1 + 1) * CELL, PAD + (run.y + 1) * CELL);
-          return 'M' + a.x + ' ' + a.y + 'H' + b.x + 'V' + b.y + 'H' + a.x + 'Z';
-        })
-        .join('');
+    var fog = d.fog ? fogTextures(d) : null;
+    [
+      [n.fogDim, fog && fog.dim],
+      [n.fogDark, fog && fog.dark],
+    ].forEach(function (pair) {
+      pair[0].visible = Boolean(pair[1]);
+      if (!pair[1]) return;
+      pair[0].texture = pair[1];
+      pair[0].position.set(PAD, PAD);
+      pair[0].width = gw;
+      pair[0].height = gh;
+    });
+
+    var g = n.under;
+    g.clear();
+    var square = function (cell) {
+      return { x: PAD + cell.x * CELL, y: PAD + cell.y * CELL };
     };
-    // The fog's dimming (L-634) lies under the grid and the layers, so the
-    // layout of squares seen before still reads over their dimmed art.
-    var fog = function (level) {
-      if (battle.fog && battle.fog[level].length) {
-        overlay.appendChild(
-          svg('path', { class: 'loom-grid-fog is-' + level, d: runsPath(battle.fog[level]) })
-        );
-      }
-    };
-    fog('dim');
+
+    // This turn's reach (L-615).
     if (battle.reach && !battle.anim) {
-      // This turn's reach (L-615).
-      overlay.appendChild(
-        svg('path', { class: 'loom-grid-reach', d: runsPath(battle.reach.runs) })
-      );
-    }
-    if (cellPx >= 6) {
-      for (var gx = 0; gx <= d.width; gx++) {
-        var x = s(PAD + gx * CELL, 0).x;
-        overlay.appendChild(
-          svg('line', {
-            class: 'loom-grid-line' + (gx % 5 === 0 ? ' is-major' : ''),
-            x1: x,
-            y1: topLeft.y,
-            x2: x,
-            y2: bottomRight.y,
-          })
-        );
-      }
-      for (var gy = 0; gy <= d.height; gy++) {
-        var y = s(0, PAD + gy * CELL).y;
-        overlay.appendChild(
-          svg('line', {
-            class: 'loom-grid-line' + (gy % 5 === 0 ? ' is-major' : ''),
-            x1: topLeft.x,
-            y1: y,
-            x2: bottomRight.x,
-            y2: y,
-          })
-        );
-      }
+      battle.reach.runs.forEach(function (run) {
+        var a = square({ x: run.x0, y: run.y });
+        g.rect(a.x, a.y, (run.x1 - run.x0 + 1) * CELL, CELL);
+      });
+      g.fill({ color: COLOURS.reach, alpha: 0.12 });
     }
 
-    // The layers (L-627).
-    var corner = function (p) {
-      var c = s(PAD + p.x * CELL, PAD + p.y * CELL);
-      return c.x + ',' + c.y;
-    };
-    var wallWidth = Math.max(3, cellPx / 7);
+    // The grid, when its squares are big enough to see.
+    if (cellPx >= 6) {
+      [false, true].forEach(function (major) {
+        for (var gx = 0; gx <= d.width; gx++) {
+          if ((gx % 5 === 0) !== major) continue;
+          g.moveTo(PAD + gx * CELL, PAD).lineTo(PAD + gx * CELL, PAD + gh);
+        }
+        for (var gy = 0; gy <= d.height; gy++) {
+          if ((gy % 5 === 0) !== major) continue;
+          g.moveTo(PAD, PAD + gy * CELL).lineTo(PAD + gw, PAD + gy * CELL);
+        }
+        g.stroke({ width: px, color: COLOURS.grid, alpha: major ? 0.3 : 0.12 });
+      });
+    }
+
+    // The layers (L-627): on a plain grid, obstacles and walls.
+    var wallWidth = Math.max(3, cellPx / 7) * px;
     if (!d.image) {
-      var defs = svg('defs');
-      var hatch = svg('pattern', {
-        id: 'loom-grid-hatch',
-        width: 8,
-        height: 8,
-        patternUnits: 'userSpaceOnUse',
-        patternTransform: 'rotate(45)',
-      });
-      hatch.appendChild(svg('rect', { class: 'loom-grid-hatch', width: 3, height: 8 }));
-      var dots = svg('pattern', {
-        id: 'loom-grid-dots',
-        width: 9,
-        height: 9,
-        patternUnits: 'userSpaceOnUse',
-      });
-      dots.appendChild(svg('circle', { class: 'loom-grid-dot', cx: 4.5, cy: 4.5, r: 1.6 }));
-      defs.appendChild(hatch);
-      defs.appendChild(dots);
-      overlay.appendChild(defs);
       (d.obstacles || []).forEach(function (o) {
-        var a = s(PAD + o.x * CELL, PAD + o.y * CELL);
-        var b = s(PAD + (o.x + (o.w || 1)) * CELL, PAD + (o.y + (o.h || 1)) * CELL);
-        var attrs = {
-          class: 'loom-grid-obstacle is-' + o.kind,
-          x: a.x,
-          y: a.y,
-          width: b.x - a.x,
-          height: b.y - a.y,
-        };
-        if (o.kind === 'low') attrs.fill = 'url(#loom-grid-hatch)';
-        if (o.kind === 'difficult') attrs.fill = 'url(#loom-grid-dots)';
-        overlay.appendChild(svg('rect', attrs));
+        var a = square(o);
+        var w = (o.w || 1) * CELL;
+        var h = (o.h || 1) * CELL;
+        if (o.kind === 'solid') {
+          g.rect(a.x, a.y, w, h)
+            .fill({ color: COLOURS.solid, alpha: 0.88 })
+            .stroke({ width: 1.5 * px, color: COLOURS.solidEdge });
+        } else if (o.kind === 'low') {
+          hatch(g, a.x, a.y, a.x + w, a.y + h, 8 * px * Math.SQRT2);
+          g.stroke({ width: 3 * px, color: COLOURS.low, alpha: 0.75 });
+          g.rect(a.x, a.y, w, h).stroke({ width: 1.5 * px, color: COLOURS.low });
+        } else {
+          var gap = 9 * px;
+          if ((w / gap) * (h / gap) < 4000) {
+            for (var dx = gap / 2; dx < w; dx += gap) {
+              for (var dy = gap / 2; dy < h; dy += gap) g.circle(a.x + dx, a.y + dy, 1.6 * px);
+            }
+            g.fill({ color: COLOURS.dot, alpha: 0.8 });
+          }
+          Loom.draw.polyline(
+            g,
+            [
+              { x: a.x, y: a.y },
+              { x: a.x + w, y: a.y },
+              { x: a.x + w, y: a.y + h },
+              { x: a.x, y: a.y + h },
+              { x: a.x, y: a.y },
+            ],
+            [4 * px, 3 * px]
+          );
+          g.stroke({ width: 1.5 * px, color: COLOURS.difficult });
+        }
       });
       (d.walls || []).forEach(function (w) {
-        overlay.appendChild(
-          svg('polyline', {
-            class: 'loom-grid-wall',
-            points: (w.points || []).map(corner).join(' '),
-            'stroke-width': wallWidth,
-          })
-        );
+        Loom.draw.polyline(g, (w.points || []).map(square));
+        g.stroke({ width: wallWidth, color: COLOURS.wall, cap: 'square', join: 'miter' });
       });
     }
+
+    // Doors, always, by their state for this save.
     (d.doors || []).forEach(function (door) {
-      var a = corner(door.from).split(',');
-      var b = corner(door.to).split(',');
-      overlay.appendChild(
-        svg('line', {
-          class:
-            'loom-grid-door is-' +
-            door.state +
-            (battle.selectedDoor === door.id ? ' is-selected' : ''),
-          x1: a[0],
-          y1: a[1],
-          x2: b[0],
-          y2: b[1],
-          'stroke-width': wallWidth + 2,
-        })
-      );
+      var a = square(door.from);
+      var b = square(door.to);
+      if (battle.selectedDoor === door.id) {
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+        g.stroke({ width: wallWidth + 8 * px, color: COLOURS.selected, alpha: 0.45 });
+      }
+      Loom.draw.line(g, a, b, door.state === 'open' ? [3 * px, 4 * px] : null);
+      g.stroke({
+        width: wallWidth + 2 * px,
+        color: door.state === 'locked' ? COLOURS.doorLocked : COLOURS.door,
+        alpha: door.state === 'open' ? 0.85 : 1,
+      });
     });
 
-    // What stands on a square seen before but not in sight now is faded.
-    var remembered = function (cell) {
-      return inSightNow(cell) ? '' : ' is-remembered';
+    // Entries, exits and features: what stands on a square seen before but
+    // out of sight now is faded.
+    var faded = function (cell) {
+      return inSightNow(cell) ? 1 : 0.55;
     };
-    var cellBox = function (cell, className) {
-      var a = s(PAD + cell.x * CELL, PAD + cell.y * CELL);
-      overlay.appendChild(
-        svg('rect', {
-          class: className,
-          x: a.x + 1,
-          y: a.y + 1,
-          width: Math.max(1, cellPx - 2),
-          height: Math.max(1, cellPx - 2),
-          rx: Math.min(4, cellPx / 6),
-        })
-      );
+    var box = function (cell) {
+      var a = square(cell);
+      var inset = Math.min(1 * px, CELL / 8);
+      return [
+        a.x + inset,
+        a.y + inset,
+        CELL - 2 * inset,
+        CELL - 2 * inset,
+        Math.min(4 * px, CELL / 6),
+      ];
     };
-    // Names are drawn after the fog, so one below a square at the fog's edge
-    // still reads; dimmed for a square seen before but not in sight now.
-    var labels = [];
-    var label = function (cell, text, className) {
-      var c = centre(cell);
-      var p = s(c.x, c.y);
-      labels.push(
-        svg(
-          'text',
-          {
-            class: className + remembered(cell),
-            x: p.x,
-            y: p.y + cellPx / 2 + 12,
-          },
-          text
-        )
-      );
-    };
-
     d.entries.forEach(function (e) {
-      cellBox(e, 'loom-grid-entry' + remembered(e));
+      var r = box(e);
+      g.roundRect(r[0], r[1], r[2], r[3], r[4])
+        .fill({ color: COLOURS.entry, alpha: 0.25 * faded(e) })
+        .stroke({ width: px, color: COLOURS.entry, alpha: 0.7 * faded(e) });
     });
     d.exits.forEach(function (e) {
-      cellBox(e, 'loom-grid-exit' + remembered(e));
-      label(e, e.name, 'loom-grid-label is-exit');
+      var r = box(e);
+      g.roundRect(r[0], r[1], r[2], r[3], r[4])
+        .fill({ color: COLOURS.exit, alpha: 0.55 * faded(e) })
+        .stroke({ width: 1.5 * px, color: COLOURS.exit, alpha: faded(e) });
     });
     d.features.forEach(function (f) {
       var c = centre(f);
-      var p = s(c.x, c.y);
-      overlay.appendChild(
-        svg('circle', {
-          class: 'loom-grid-feature' + remembered(f),
-          cx: p.x,
-          cy: p.y,
-          r: Math.max(3, cellPx * 0.28),
-        })
-      );
-      label(f, f.name, 'loom-grid-label');
+      g.circle(c.x, c.y, Math.max(3 * px, CELL * 0.28))
+        .fill({ color: COLOURS.feature, alpha: faded(f) })
+        .stroke({ width: 1.5 * px, color: COLOURS.dark, alpha: faded(f) });
     });
 
-    // People in sight (L-642): a token with their initial, and their name.
+    // People in sight (L-642), as tokens (A6).
+    var people = {};
     (d.people || []).forEach(function (person) {
       if (person.x === undefined) return;
+      var token = battle.tokens[person.id || person.name];
+      if (!token) {
+        token = Loom.draw.token();
+        battle.tokens[person.id || person.name] = token;
+        n.people.addChild(token.container);
+      }
+      people[person.id || person.name] = true;
       var c = centre(person);
-      var p = s(c.x, c.y);
-      var r = Math.max(5, cellPx * 0.32);
-      overlay.appendChild(svg('circle', { class: 'loom-grid-person', cx: p.x, cy: p.y, r: r }));
-      overlay.appendChild(
-        svg(
-          'text',
-          {
-            class: 'loom-grid-person-initial',
-            x: p.x,
-            y: p.y,
-            'font-size': Math.max(8, Math.round(r * 1.1)),
-          },
-          person.name.charAt(0)
-        )
-      );
-      label(person, person.name, 'loom-grid-label is-person');
+      token.container.visible = true;
+      token.container.scale.set(px);
+      token.update({
+        x: c.x,
+        y: c.y,
+        radius: Math.max(5, cellPx * 0.32),
+        name: person.name,
+        fill: COLOURS.person,
+      });
+    });
+    Object.keys(battle.tokens).forEach(function (id) {
+      if (!people[id]) battle.tokens[id].container.visible = false;
     });
 
-    // The fog's dark (L-634) covers everything never seen.
-    fog('dark');
-    labels.forEach(function (node) {
-      overlay.appendChild(node);
+    // Names, drawn over the fog so one by a square at its edge still reads.
+    n.labels.removeChildren();
+    var label = function (cell, text, colour) {
+      var node = Loom.draw.label(text, 11.5);
+      var c = centre(cell);
+      node.style.fill = colour || COLOURS.label;
+      node.alpha = faded(cell);
+      node.scale.set(px);
+      node.position.set(c.x, c.y + CELL / 2 + 3 * px);
+      n.labels.addChild(node);
+    };
+    battle.labels.forEach(function (node) {
+      node.destroy();
     });
-    if (battle.selected) cellBox(battle.selected, 'loom-grid-selected');
+    d.exits.forEach(function (e) {
+      label(e, e.name, COLOURS.exitLabel);
+    });
+    d.features.forEach(function (f) {
+      label(f, f.name);
+    });
+    (d.people || []).forEach(function (person) {
+      if (person.x !== undefined) label(person, person.name);
+    });
+    battle.labels = n.labels.children.slice();
 
-    // The way: the selected cell's path (this turn solid, the rest dashed), or
-    // else the plan kept from an earlier move (L-615).
-    var line = function (cells, className) {
-      if (cells.length < 2) return;
-      overlay.appendChild(
-        svg('polyline', {
-          class: className,
-          points: cells
-            .map(function (cell) {
-              var c = centre(cell);
-              var p = s(c.x, c.y);
-              return p.x + ',' + p.y;
-            })
-            .join(' '),
-        })
-      );
+    // The selected square, and the way: its path (this turn solid, the rest
+    // dashed), or else the plan kept from an earlier move (L-615).
+    var o = n.over;
+    o.clear();
+    if (battle.selected) {
+      var r = box(battle.selected);
+      o.roundRect(r[0], r[1], r[2], r[3], r[4]).stroke({ width: 2 * px, color: COLOURS.selected });
+    }
+    var centres = function (cells) {
+      return cells.map(centre);
     };
     var preview = battle.preview;
     var plan = battle.turn && battle.turn.plan;
     if (!battle.anim && preview && preview.path) {
-      line([d.here].concat(preview.walked), 'loom-grid-path');
-      line(
-        [preview.walked.length ? preview.walked[preview.walked.length - 1] : d.here].concat(
-          preview.rest
-        ),
-        'loom-grid-path is-later'
-      );
+      Loom.draw.polyline(o, centres([d.here].concat(preview.walked)));
+      o.stroke({ width: 3 * px, color: COLOURS.path, cap: 'round', join: 'round' });
+      var from = preview.walked.length ? preview.walked[preview.walked.length - 1] : d.here;
+      Loom.draw.polyline(o, centres([from].concat(preview.rest)), [2 * px, 7 * px]);
+      o.stroke({ width: 3 * px, color: COLOURS.path, alpha: 0.85, cap: 'round' });
     } else if (!battle.anim && !battle.selected && plan) {
-      line([d.here].concat(plan.path), 'loom-grid-path is-later is-plan');
+      Loom.draw.polyline(o, centres([d.here].concat(plan.path)), [2 * px, 7 * px]);
+      o.stroke({ width: 3 * px, color: COLOURS.path, alpha: 0.5, cap: 'round' });
     }
-
-    // The player's token: along its walk, or where it stands.
-    var me = tokenCentre();
-    var mp = s(me.x, me.y);
-    overlay.appendChild(
-      svg('circle', { class: 'loom-map-ring', cx: mp.x, cy: mp.y, r: Math.max(7, cellPx * 0.45) })
-    );
-    overlay.appendChild(
-      svg('circle', { class: 'loom-grid-you', cx: mp.x, cy: mp.y, r: Math.max(5, cellPx * 0.3) })
-    );
   }
 
-  /** Selects the cell under a tap (screen point), if it is on the grid. */
-  function pick(point, view) {
-    if (battle.anim) {
-      battle.anim = null; // a tap skips the walk ahead
-      return;
+  /** Draws the map for the camera's view: rebuilt when needed, else just moved. */
+  function draw(container, view) {
+    if (!battle.data) return;
+    if (!battle.nodes) build(container);
+    var n = battle.nodes;
+    var key = [
+      battle.version,
+      view.scale,
+      battle.selected ? battle.selected.x + ',' + battle.selected.y : '',
+      battle.selectedDoor || '',
+      battle.anim ? 1 : 0,
+    ].join('|');
+    if (key !== battle.built) {
+      rebuild(view);
+      battle.built = key;
     }
-    var d = battle.data;
-    var m = M.toMap(view, point.x, point.y);
-    // A door, if the tap is on one (within a fifth of a square of its line).
+    n.scene.position.set(view.x, view.y);
+    n.scene.scale.set(view.scale);
+
+    // You: along your walk, or where you stand.
+    var cellPx = CELL * view.scale;
+    var me = tokenCentre();
+    var save = Loom.store.get().save;
+    n.you.container.scale.set(1 / view.scale);
+    n.you.update({
+      x: me.x,
+      y: me.y,
+      radius: Math.max(5, cellPx * 0.3),
+      name: save && save.characterName,
+      fill: COLOURS.you,
+      ring: COLOURS.ring,
+    });
+  }
+
+  // ── Clicks: the menu (I2) ─────────────────────────
+
+  // The door under a point (within a fifth of a square of its line), or null.
+  function doorAt(m) {
     var gx = (m.x - PAD) / CELL;
     var gy = (m.y - PAD) / CELL;
-    var door = (d.doors || []).filter(function (dr) {
-      var x0 = Math.min(dr.from.x, dr.to.x);
-      var x1 = Math.max(dr.from.x, dr.to.x);
-      var y0 = Math.min(dr.from.y, dr.to.y);
-      var y1 = Math.max(dr.from.y, dr.to.y);
-      var dx = Math.max(x0 - gx, 0, gx - x1);
-      var dy = Math.max(y0 - gy, 0, gy - y1);
-      return Math.sqrt(dx * dx + dy * dy) <= 0.2;
-    })[0];
-    if (door) {
-      battle.selectedDoor = door.id;
-      battle.selected = null;
-      battle.preview = null;
-      return;
-    }
-    battle.selectedDoor = null;
-    var cell = { x: Math.floor(gx), y: Math.floor(gy) };
-    var inside = cell.x >= 0 && cell.y >= 0 && cell.x < d.width && cell.y < d.height;
-    battle.selected = inside ? cell : null;
-    computePreview();
+    return (
+      (battle.data.doors || []).filter(function (dr) {
+        var x0 = Math.min(dr.from.x, dr.to.x);
+        var x1 = Math.max(dr.from.x, dr.to.x);
+        var y0 = Math.min(dr.from.y, dr.to.y);
+        var y1 = Math.max(dr.from.y, dr.to.y);
+        var dx = Math.max(x0 - gx, 0, gx - x1);
+        var dy = Math.max(y0 - gy, 0, gy - y1);
+        return Math.sqrt(dx * dx + dy * dy) <= DOOR_HIT;
+      })[0] || null
+    );
   }
 
-  // A tapped door's card (L-627): its state, and Open, Close or Try from
-  // beside it.
-  function renderDoorCard(info, door) {
+  function doorStateWord(door) {
+    return door.state === 'open' ? 'open' : door.state === 'locked' ? 'locked' : 'closed';
+  }
+
+  // A door's menu (L-627): Open, Close or Try it from beside it.
+  function doorItems(door) {
     var name = door.name || 'the door';
-    info.appendChild(el('h3', 'loom-map-info-name', capitalise(name)));
-    info.appendChild(
-      el(
-        'p',
-        'loom-map-info-facts',
-        'Door · ' + (door.state === 'open' ? 'open' : door.state === 'locked' ? 'locked' : 'closed')
-      )
-    );
-    if (!besideDoor(door)) {
-      info.appendChild(el('p', 'loom-map-info-status', 'Walk beside it to open or close it.'));
-      return;
-    }
     var open = door.state !== 'open';
     var text =
       door.state === 'open'
@@ -771,14 +842,157 @@
         : door.state === 'locked'
           ? 'Try ' + name + ' (locked)'
           : 'Open ' + name;
-    info.appendChild(
-      button(capitalise(text), function () {
-        Loom.play.doorAction(door.id, open, (open ? 'open ' : 'close ') + name);
-      })
-    );
+    var beside = besideDoor(door);
+    return [
+      {
+        label: capitalise(text),
+        disabled: !beside,
+        note: beside ? '1 movement' : 'Walk beside it to open or close it.',
+        onSelect: function () {
+          Loom.play.doorAction(door.id, open, (open ? 'open ' : 'close ') + name);
+          Loom.map.showStory();
+        },
+      },
+    ];
   }
 
-  // ── The cell card ─────────────────────────────────
+  function whereTo(exit) {
+    return exit.to === 'out'
+      ? 'out of ' + (battle.data.host ? battle.data.host.name : 'here')
+      : 'to ' + exit.to.name;
+  }
+
+  // What a square is: its title and facts, for the menu and the card.
+  function describe(cell) {
+    var there = at(cell);
+    var person = personAt(cell);
+    var coords = '(' + cell.x + ', ' + cell.y + ')';
+    if (person) {
+      return {
+        title: person.name,
+        facts: (there.feature ? 'At ' + there.feature.name + ' · ' : '') + coords,
+        go: 'Go to ' + person.name,
+      };
+    }
+    if (there.exit) {
+      return {
+        title: capitalise(there.exit.name),
+        facts: 'Way out, ' + whereTo(there.exit) + ' · ' + coords,
+        go: 'Go out by ' + there.exit.name,
+      };
+    }
+    if (there.feature) {
+      return {
+        title: capitalise(there.feature.name),
+        facts: 'Feature · ' + coords,
+        go: 'Go to ' + there.feature.name,
+      };
+    }
+    return { title: 'Square ' + coords, facts: '', go: 'Move here', coords: coords };
+  }
+
+  // Why a move to the selected square can't be made, or null.
+  function refusal(cell) {
+    var preview = battle.preview;
+    if (same(cell, battle.data.here)) return 'You are here.';
+    if (preview && preview.unseen) return "You haven't seen that.";
+    if (preview && preview.beside) return "You're beside " + preview.beside.name + '.';
+    if (!preview || preview.none) return "There's no way there from here.";
+    return null;
+  }
+
+  // Move to the selected square: a step, or as far as this turn goes with
+  // the rest kept as the plan (L-613), remembered so the token can walk it.
+  function moveItem(cell) {
+    var about = describe(cell);
+    var no = refusal(cell);
+    if (no) return { label: about.go, disabled: true, note: no };
+    var preview = battle.preview;
+    var d = battle.data;
+    var label = about.coords ? 'move to ' + about.coords : about.go.toLowerCase();
+    return {
+      label: about.go,
+      note: costLine(preview),
+      onSelect: function () {
+        battle.pending = { mapId: d.id, from: d.here, path: preview.path };
+        Loom.play.moveToCell(cell, label);
+      },
+    };
+  }
+
+  function busy(items) {
+    if (!state.turnInProgress) return items;
+    return items.map(function (item) {
+      return item.disabled
+        ? item
+        : Object.assign({}, item, { disabled: true, note: 'A turn is under way.' });
+    });
+  }
+
+  /** A click on the map (I2): a door or a square, and a menu for it. */
+  function tap(point, view) {
+    if (!battle.data) return;
+    if (battle.anim) {
+      battle.anim = null; // a click skips the walk ahead
+      changed();
+      Loom.map.render();
+      return;
+    }
+    var d = battle.data;
+    var m = M.toMap(view, point.x, point.y);
+    var door = doorAt(m);
+    if (door) {
+      battle.selectedDoor = door.id;
+      battle.selected = null;
+      battle.preview = null;
+      Loom.map.render();
+      engine.openMenu(point, {
+        title: capitalise(door.name || 'the door'),
+        subtitle: 'Door · ' + doorStateWord(door),
+        items: busy(doorItems(door)).concat([lookItem()]),
+      });
+      return;
+    }
+    battle.selectedDoor = null;
+    var cell = { x: Math.floor((m.x - PAD) / CELL), y: Math.floor((m.y - PAD) / CELL) };
+    var inside = cell.x >= 0 && cell.y >= 0 && cell.x < d.width && cell.y < d.height;
+    battle.selected = inside ? cell : null;
+    computePreview();
+    Loom.map.render();
+    if (!inside) return;
+    var about = describe(cell);
+    engine.openMenu(point, {
+      title: about.title,
+      subtitle: about.facts || undefined,
+      items: busy([moveItem(cell)]).concat([lookItem()]),
+    });
+  }
+
+  // Look: the card shows what was clicked; nothing is played.
+  function lookItem() {
+    return {
+      label: 'Look',
+      onSelect: function () {
+        Loom.map.render();
+      },
+    };
+  }
+
+  /** A hover over the grid shows it can be clicked. */
+  function hover(point, view) {
+    if (!point || !battle.data) {
+      engine.panelCursor('');
+      return;
+    }
+    var m = M.toMap(view, point.x, point.y);
+    var d = battle.data;
+    var gx = (m.x - PAD) / CELL;
+    var gy = (m.y - PAD) / CELL;
+    var onGrid = gx >= 0 && gy >= 0 && gx < d.width && gy < d.height;
+    engine.panelCursor(doorAt(m) || onGrid ? 'pointer' : '');
+  }
+
+  // ── The card ──────────────────────────────────────
 
   function button(text, onClick) {
     var b = el('button', 'app-btn loom-map-travel', text);
@@ -788,28 +1002,22 @@
     return b;
   }
 
-  function whereTo(exit) {
-    return exit.to === 'out'
-      ? 'out of ' + (battle.data.host ? battle.data.host.name : 'here')
-      : 'to ' + exit.to.name;
-  }
-
-  /**
-   * Fills the card for the selected cell, and the turn under it (movement
-   * left, Continue, End turn). `act(cell, label)` makes the move: a step on
-   * the grid, which leaves by an exit if the cell is one.
-   */
-  function renderInfo(info, act) {
+  /** The card: what was clicked (or where you are), and the turn under it. */
+  function renderInfo(info) {
     info.innerHTML = '';
-    renderCard(info, act);
+    renderCard(info);
     renderTurn(info);
   }
 
-  function renderCard(info, act) {
+  function renderCard(info) {
     var d = battle.data;
-    var tapped = battle.selectedDoor && doorById(battle.selectedDoor);
-    if (tapped) {
-      renderDoorCard(info, tapped);
+    var door = battle.selectedDoor && doorById(battle.selectedDoor);
+    if (door) {
+      info.appendChild(el('h3', 'loom-map-info-name', capitalise(door.name || 'the door')));
+      info.appendChild(el('p', 'loom-map-info-facts', 'Door · ' + doorStateWord(door)));
+      if (!besideDoor(door)) {
+        info.appendChild(el('p', 'loom-map-info-status', 'Walk beside it to open or close it.'));
+      }
       return;
     }
     var cell = battle.selected;
@@ -833,7 +1041,9 @@
           ) +
           '.'
         : '';
-      info.appendChild(el('p', 'loom-map-hint', where + 'Tap a cell to move.' + ways));
+      info.appendChild(
+        el('p', 'loom-map-hint', where + 'Click a square for what you can do.' + ways)
+      );
       if (d.people.length) {
         info.appendChild(
           el(
@@ -851,67 +1061,15 @@
       }
       return;
     }
-
-    var there = at(cell);
-    var person = personAt(cell);
-    var coords = '(' + cell.x + ', ' + cell.y + ')';
-    if (person) {
-      info.appendChild(el('h3', 'loom-map-info-name', person.name));
-      info.appendChild(
-        el(
-          'p',
-          'loom-map-info-facts',
-          (there.feature ? 'At ' + there.feature.name + ' · ' : '') + coords
-        )
-      );
-    } else if (there.exit) {
-      info.appendChild(el('h3', 'loom-map-info-name', capitalise(there.exit.name)));
-      info.appendChild(
-        el('p', 'loom-map-info-facts', 'Way out, ' + whereTo(there.exit) + ' · ' + coords)
-      );
-    } else if (there.feature) {
-      info.appendChild(el('h3', 'loom-map-info-name', capitalise(there.feature.name)));
-      info.appendChild(el('p', 'loom-map-info-facts', 'Feature · ' + coords));
-    } else {
-      info.appendChild(el('h3', 'loom-map-info-name', 'Cell ' + coords));
-    }
-
-    if (same(cell, d.here)) {
-      info.appendChild(el('p', 'loom-map-info-status', 'You are here.'));
-      return;
-    }
-    var preview = battle.preview;
-    if (preview && preview.unseen) {
-      info.appendChild(el('p', 'loom-map-info-status', "You haven't seen that."));
-      return;
-    }
-    if (preview && preview.beside) {
-      info.appendChild(
-        el('p', 'loom-map-info-status', "You're beside " + preview.beside.name + '.')
-      );
-      return;
-    }
-    if (!preview || preview.none) {
-      info.appendChild(el('p', 'loom-map-info-status', "There's no way there from here."));
-      return;
-    }
-    info.appendChild(el('p', 'loom-map-info-facts', costLine(preview)));
-    // The move, remembered so the token can walk it when it lands.
-    var go = function (label) {
-      return function () {
-        battle.pending = { mapId: d.id, from: d.here, path: preview.path };
-        act(cell, label);
-      };
-    };
-    if (person) {
-      info.appendChild(button('Go to ' + person.name, go('go to ' + person.name)));
-    } else if (there.exit) {
-      info.appendChild(button('Go out by ' + there.exit.name, go('go out by ' + there.exit.name)));
-    } else if (there.feature) {
-      info.appendChild(button('Go to ' + there.feature.name, go('go to ' + there.feature.name)));
-    } else {
-      info.appendChild(button('Move here', go('move to ' + coords)));
-    }
+    var about = describe(cell);
+    info.appendChild(el('h3', 'loom-map-info-name', about.title));
+    if (about.facts) info.appendChild(el('p', 'loom-map-info-facts', about.facts));
+    var no = refusal(cell);
+    info.appendChild(
+      no
+        ? el('p', 'loom-map-info-status', no)
+        : el('p', 'loom-map-info-facts', costLine(battle.preview))
+    );
   }
 
   // What a move costs, and when it gets there: "8 movement · this turn".
@@ -970,15 +1128,21 @@
     return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
   }
 
+  engine.addLayer('battle', { draw: draw });
+
   Loom.battle = {
     setData: setData,
     reset: reset,
     bounds: bounds,
     framePoints: framePoints,
     herePoint: herePoint,
-    selectHere: selectHere,
-    draw: draw,
-    pick: pick,
+    selectHere: function () {
+      selectHere();
+      battle.selectedDoor = null;
+      computePreview();
+    },
+    tap: tap,
+    hover: hover,
     renderInfo: renderInfo,
     current: function () {
       return battle.data;
