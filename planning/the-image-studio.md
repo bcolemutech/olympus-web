@@ -1,6 +1,6 @@
 # The Image Studio — Design Document v0.1
 
-**Status:** Shipped. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), L-706, costs (§4.5), L-707, generation (§4.3), L-708, editing by instruction (§4.3, §4.4), and L-709, styles (§4.2, §4.3). The M2 recommendation (§4.3) awaits the user's confirmation.
+**Status:** Shipped. Decided 2026-10-09. Shipped: L-701, the library (links settled in §4.6), L-704, worlds using library images (§4.4), L-705, today's art moved into the library (§4.4), L-703, the library tools (§4.7), L-702, the studio page (§4.1), L-706, costs (§4.5), L-707, generation (§4.3), L-708, editing by instruction (§4.3, §4.4), and L-709, styles (§4.2, §4.3). M2, how big world maps are made, was decided 2026-10-14 after the trial (§4.3).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-700 (#523)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4). Built after Phase 3c and L-690 (grading), before the UI rewrite (L-720); see the roadmap's Build order.
@@ -45,7 +45,7 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 | ID     | Question                                | Decision                                                                                                                                                    |
 | ------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **M1** | How is the model picked?                | **Named tiers, `draft` and `final`**, mapped to models in config. **Claude can also name a model** outright                                                 |
-| **M2** | Big world maps?                         | **A trial** in the generation story: the models' largest sizes, an upscale step, and extending outward, compared on a real map. The result is recorded here |
+| **M2** | Big world maps?                         | **A trial** in the generation story: the models' largest sizes, an upscale step, and extending outward, compared on a real map. **Decided 2026-10-14 after the trial (§4.3): a 1K draft, then Pro redraws it at 4K**, with no lettering asked for at either step |
 | **M3** | Reference images?                       | **Yes: any library images**, given by id                                                                                                                    |
 | **M4** | Named styles?                           | **Yes:** a style is saved prompt text plus reference images, made and changed over MCP. A world can name a default style                                    |
 | **M5** | Images per request?                     | **One.** Several at once means several jobs (T1)                                                                                                            |
@@ -167,7 +167,13 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
     | **b.** A 1K Flash draft, then Pro redraws it at 4K | 5504 × 3072. Keeps the draft's layout, and is by far the richest: mountains, forests, towns and ships stay crisp up close. But the draft ignored "no text", and the redraw kept its invented labels as garbled lettering. | 14 s + ~50 s | $0.07 + $0.28 |
     | **c.** A 2K Pro middle, then Pro extends it to 21:9 at 4K | 6336 × 2688, the widest. The style carries and the new land fits, but it drew a second compass rose, and the edges are patchier than the middle. | 30 s + ~55 s | $0.17 + $0.28 |
 
-    - **Recommended: b.** It gives the most detail per pixel, and drafts at about $0.07 let the layout be settled before paying for 4K. Its prompts should forbid lettering at both steps. Extending outward (c) is for adding land to a finished map. Awaiting the user's confirmation.
+    - **Decided (2026-10-14): b.** It gives the most detail per pixel, and drafts at about $0.07 let the layout be settled before paying for 4K. Extending outward (c) is kept for adding land to a finished map.
+  - **How a big world map is made (M2):**
+    1. Draft layouts with `studio_generate` (kind `worldMap`, tier `draft`; 16:9 by default) until one is right. Each costs about $0.07.
+    2. Redraw the chosen draft with `studio_generate`: the draft as the only reference, model `gemini-3-pro-image` at size `4K`, the same shape, and a prompt asking for the same layout, redrawn in full detail. About $0.28 and a minute.
+    3. Both prompts forbid lettering ("no text, labels or names anywhere on the map"). The trial's draft invented labels anyway and the redraw kept them garbled, so the place names belong in the Loom, not in the art.
+    4. Check the redraw with `studio_get`, then assign it with `studio_assign` (target `map`).
+  - Nothing new is built for it now: both steps work with today's tools. Worlds without Azgaar (L-710), which starts every new world from a studio map, may make it one step.
   - **Viewing 4K images:** shrinking a 5504 × 3072 PNG for Claude to look at needs about 290 MB. That was past the MCP server's 256 MiB default, so `studio_jobs` and `studio_get` crashed (502) on 4K images. `mcpServer` now has 1 GiB.
 
 - **Editing, as built (L-708):**
