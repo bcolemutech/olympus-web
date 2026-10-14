@@ -55,7 +55,7 @@ npm run format
 - **Vanilla JavaScript** — IIFE namespace pattern (no bundler, no build step)
 - **React 18.3.1** — CDN via unpkg.com (used in JSX Runner applets only)
 - **Preact 10.29.8 + htm 3.1.1** — CDN via unpkg.com, no build (the Loom's play view: components in `window.Loom`, one store; `public/apps/loom/js/ui.js`, `shell.js`)
-- **PixiJS 8.21.0** — CDN via unpkg.com (the Loom's map engine, `public/apps/loom/js/engine.js`: WebGL, canvas without it; the world map in `world.js`, towns in `town.js`, shared drawing in `draw.js`)
+- **PixiJS 8.21.0** — CDN via unpkg.com (the Loom's map engine, `public/apps/loom/js/engine.js`: WebGL, canvas without it; the world map in `world.js`, towns in `town.js`, battle maps in `battle.js`, shared drawing in `draw.js`)
 - **Babel Standalone 7.26.10** — In-browser JSX transpilation (JSX Runner only)
 - **Firebase SDK v12.9** — CDN, compat mode (`firebase/compat/app`, etc.)
 - **js-yaml 4.1.0** — YAML manifest parsing (CDN)
