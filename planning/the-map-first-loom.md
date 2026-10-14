@@ -1,6 +1,6 @@
 # The Loom — A Map-First Loom (UI Rewrite) — Design Document v0.1
 
-**Status:** Decided (2026-10-10). The gap sheet (§3) is answered. Sub-issues are planned (§6) and are filed when this epic is next.
+**Status:** Decided (2026-10-10). The gap sheet (§3) is answered. Sub-issues filed (2026-10-14): L-721 to L-729 (#592–600).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-720 (#525)
 **Phase:** 7 — Map-first Loom. Built right after L-700, the Image studio, so it shows the studio's art well, and before Phase 3d (the Build order in [`roadmap.md`](./roadmap.md)).
@@ -124,7 +124,7 @@ Settled with the user through a questionnaire (2026-10-10), with two follow-ups 
 - **Fog** sits over the town and battle layers.
 - **Moving between levels** (L6) is a zoom that cross-fades into the layer below, and back out.
 - **Clicks:** every thing on the map can be hit-tested. A click opens a small menu (I2) of Move and Look for now. Today's actions (travel, move, open a door, plan a path) become menu entries: **every click opens the menu**, with no one-tap shortcuts (decided 2026-10-11 for L-740, C7: the menu will grow, so every action stays explicit).
-- **Art (A1):** the engine loads a screen-sized copy of a layer's art first, and the full image once the camera zooms past it. The studio makes the screen-sized copy when it stores a version (see L-727 below). Markers stay quiet (A2).
+- **Art (A1):** the engine loads a screen-sized copy of a layer's art first, and the full image once the camera zooms past it. The studio makes the screen-sized copy when it stores a version (L-727). Markers stay quiet (A2).
 - **Fog (A3):** a render texture, feathered at its edges. Seen, remembered and unseen are kept as today; only how they are drawn changes.
 - **Motion (K3):**
   - tokens walk their path, and the camera eases after the player;
@@ -159,19 +159,19 @@ A whole session is played from the full-window map, on the world map, in a town 
 
 ---
 
-## 6. Sub-issues (planned; filed when this epic is next)
+## 6. Sub-issues
 
-| ID    | Story                                                                                                                                                           | Depends on   | Model  |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
-| L-721 | **The shell:** Preact and htm, the store, the full-window layout, the side panel (resize, collapse), the menu bar, the hidden header, around today's views      | —            | Opus   |
-| L-722 | **The map engine and the world map:** PixiJS stage, camera, art loading, routes and places, quiet markers, clicks with a small menu; the old world view removed | L-721        | Opus   |
-| L-723 | **The town level:** art or ground, places, paths, movement; the old town view removed                                                                           | L-722        | Sonnet |
-| L-724 | **The battle level:** grid, walls, doors, obstacles, features, tokens, reach, paths, soft fog; the old battle view removed                                      | L-722        | Opus   |
-| L-725 | **Between levels and over the map:** the zoom between levels, peeking, the turn bar, time and place overlay, the minimap, the camera following the player       | L-723, L-724 | Sonnet |
-| L-726 | **The panel's content:** the narration revealed as written, roll cards, arrival banners, suggested actions, the input box, keyboard shortcuts                   | L-721        | Sonnet |
-| L-727 | **Art at its best:** a screen-sized copy made when the studio stores a version, the full image when zoomed in, ambient effects                                  | L-722, L-701 | Sonnet |
-| L-728 | **Phones:** the bottom sheet, the compact overlay, pinch and drag, the bigger-screen note                                                                       | L-725, L-726 | Sonnet |
-| L-729 | **The look and the screens around play:** the Baldur's Gate trim, the world accent, the world list and saves with cover cards, the cover while loading          | L-721        | Sonnet |
+| ID           | Story                                                                                                                                                           | Depends on   | Model  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
+| L-721 (#592) | **The shell:** Preact and htm, the store, the full-window layout, the side panel (resize, collapse), the menu bar, the hidden header, around today's views      | —            | Opus   |
+| L-722 (#593) | **The map engine and the world map:** PixiJS stage, camera, art loading, routes and places, quiet markers, clicks with a small menu; the old world view removed | L-721        | Opus   |
+| L-723 (#594) | **The town level:** art or ground, places, paths, movement; the old town view removed                                                                           | L-722        | Sonnet |
+| L-724 (#595) | **The battle level:** grid, walls, doors, obstacles, features, tokens, reach, paths, soft fog; the old battle view removed                                      | L-722        | Opus   |
+| L-725 (#596) | **Between levels and over the map:** the zoom between levels, peeking, the turn bar, time and place overlay, the minimap, the camera following the player       | L-723, L-724 | Sonnet |
+| L-726 (#597) | **The panel's content:** the narration revealed as written, roll cards, arrival banners, suggested actions, the input box, keyboard shortcuts                   | L-721        | Sonnet |
+| L-727 (#598) | **Art at its best:** a screen-sized copy made when the studio stores a version, the full image when zoomed in, ambient effects                                  | L-722, L-701 | Sonnet |
+| L-728 (#599) | **Phones:** the bottom sheet, the compact overlay, pinch and drag, the bigger-screen note                                                                       | L-725, L-726 | Sonnet |
+| L-729 (#600) | **The look and the screens around play:** the Baldur's Gate trim, the world accent, the world list and saves with cover cards, the cover while loading          | L-721        | Sonnet |
 
 **Order:** L-721 first. L-722, L-726 and L-729 can run side by side after it. L-723 and L-724 follow L-722, and L-725 follows both. L-727 and L-728 come last.
 
