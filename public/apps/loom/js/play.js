@@ -18,6 +18,7 @@
     narrationEl.className = 'loom-log-narration';
     narrationEl.textContent = narration;
     log.appendChild(narrationEl);
+    Loom.shell.newLine(narration); // the collapsed panel shows it, and opens
 
     log.scrollTop = log.scrollHeight;
   }
@@ -64,6 +65,7 @@
    * beside it, wherever the player is.
    */
   function showTurn(turn) {
+    Loom.store.set({ turn: turn || null });
     var bar = Loom.getRef('loom-turn-bar');
     bar.classList.toggle('hidden', !turn);
     if (!turn) return;

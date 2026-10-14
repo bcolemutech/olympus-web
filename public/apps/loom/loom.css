@@ -328,17 +328,10 @@
   }
 }
 
-/* Wide screens: map and story side by side; no tabs. */
+/* Wide screens: the shell shows map and story together; no tabs. */
 @media (min-width: 900px) {
   .loom-play-tabs {
     display: none;
-  }
-
-  .loom-play--map .loom-play-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-    gap: 1.5rem;
-    align-items: start;
   }
 }
 
@@ -912,4 +905,336 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0 0.5rem;
+}
+
+/* ── The play shell (L-721): menu bar, map, side panel ─────────── */
+
+/* In play the menu bar takes the Olympus header's place (L5). */
+body.loom-playing #appHeader,
+body.loom-playing .app-title,
+body.loom-playing .app-subtitle,
+body.loom-playing .app-divider {
+  display: none;
+}
+
+.loom-shell {
+  --loom-frame: #0a0e1a;
+  --loom-panel-bg: #0f1525;
+  --loom-edge: rgba(255, 183, 77, 0.28);
+  --loom-menubar-height: 2.6rem;
+}
+
+.loom-menubar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: var(--loom-menubar-height);
+  padding: 0 0.5rem;
+  background: var(--loom-frame);
+  border-bottom: 1px solid var(--loom-edge);
+}
+
+.loom-menubar-item {
+  position: relative;
+}
+
+.loom-menubar-btn {
+  padding: 0.35rem 0.75rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: #cfd8dc;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.loom-menubar-btn:hover:not(:disabled),
+.loom-menubar-btn:focus-visible,
+.loom-menubar-btn[aria-expanded='true'] {
+  color: #ffb74d;
+  border-color: var(--loom-edge);
+}
+
+.loom-menubar-btn.is-active {
+  color: #ffb74d;
+}
+
+.loom-menubar-btn:disabled {
+  color: #546e7a;
+  cursor: default;
+}
+
+.loom-menubar-title {
+  margin-left: auto;
+  padding-right: 0.25rem;
+  overflow: hidden;
+  color: #90a4ae;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.loom-menu {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  padding: 0.3rem;
+  background: var(--loom-panel-bg);
+  border: 1px solid var(--loom-edge);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.loom-menu-item {
+  padding: 0.45rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  color: #e0e0e0;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.loom-menu-item:hover,
+.loom-menu-item:focus-visible {
+  background: rgba(255, 183, 77, 0.12);
+}
+
+.loom-menu-item[aria-checked='true'] {
+  color: #ffb74d;
+}
+
+.loom-menu-item[aria-checked='true']::before {
+  content: '• ';
+}
+
+.loom-panel-title {
+  margin: 0;
+  color: #e0e0e0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1rem;
+  font-weight: normal;
+  letter-spacing: 0.04em;
+}
+
+.loom-panel-collapse,
+.loom-panel-handle,
+.loom-panel-strip {
+  display: none;
+}
+
+/* Phones: the menu bar on top, then the panes under their tabs as before
+   (the bottom sheet comes with L-728). */
+@media (max-width: 899px) {
+  body.loom-playing .app-main {
+    padding-top: 0;
+  }
+
+  .loom-menubar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin: 0 -1rem 0.9rem;
+  }
+
+  .loom-panel-head {
+    display: none;
+  }
+}
+
+/* Wide screens: the map fills the window, the panel sits on the right (L1),
+   resizable and collapsible to a strip (L2). */
+@media (min-width: 900px) {
+  .loom-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    background: var(--loom-frame);
+  }
+
+  .loom-shell-body {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .loom-shell-map {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .loom-shell-map-host,
+  .loom-shell-map .loom-map-pane {
+    height: 100%;
+  }
+
+  .loom-shell-map .loom-map-panel {
+    height: 100%;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  .loom-shell.no-map .loom-shell-map {
+    display: none;
+  }
+
+  .loom-shell-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: var(--loom-panel-width);
+    min-height: 0;
+    background: var(--loom-panel-bg);
+    border-left: 1px solid var(--loom-edge);
+  }
+
+  /* No map to show: the story takes the window, in a readable column. */
+  .loom-shell.no-map .loom-shell-panel {
+    flex: 1;
+    width: auto;
+    border-left: none;
+  }
+
+  .loom-shell.no-map .loom-panel-body {
+    width: 100%;
+    max-width: 46rem;
+    margin: 0 auto;
+  }
+
+  .loom-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.9rem 0.4rem;
+  }
+
+  .loom-panel-collapse {
+    display: block;
+    width: 1.8rem;
+    height: 1.8rem;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: #90a4ae;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .loom-panel-collapse:hover,
+  .loom-panel-collapse:focus-visible {
+    color: #ffb74d;
+    border-color: var(--loom-edge);
+  }
+
+  .loom-shell.no-map .loom-panel-collapse {
+    display: none;
+  }
+
+  .loom-panel-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0 0.9rem 0.9rem;
+  }
+
+  .loom-panel-body .loom-story-pane {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .loom-panel-body .loom-narration-log {
+    flex: 1;
+    max-height: none;
+    min-height: 0;
+  }
+
+  .loom-panel-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    z-index: 5;
+    display: block;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .loom-panel-handle:hover,
+  .loom-panel-handle:focus-visible {
+    outline: none;
+    background: linear-gradient(
+      to right,
+      transparent 3px,
+      rgba(255, 183, 77, 0.6) 3px,
+      rgba(255, 183, 77, 0.6) 5px,
+      transparent 5px
+    );
+  }
+
+  .loom-shell.no-map .loom-panel-handle {
+    display: none;
+  }
+
+  /* Collapsed: a slim strip with the latest line; the body is kept, hidden,
+     so the story keeps its place. */
+  .loom-shell-panel.is-collapsed {
+    width: 2.75rem;
+  }
+
+  .loom-shell-panel.is-collapsed .loom-panel-head,
+  .loom-shell-panel.is-collapsed .loom-panel-body {
+    display: none;
+  }
+
+  .loom-panel-strip {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 0;
+    padding: 0.7rem 0;
+    overflow: hidden;
+    font: inherit;
+    color: #b0bec5;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  .loom-panel-strip:hover,
+  .loom-panel-strip:focus-visible {
+    color: #ffb74d;
+  }
+
+  .loom-panel-strip-icon {
+    font-size: 1.1rem;
+  }
+
+  .loom-panel-strip-line {
+    min-height: 0;
+    overflow: hidden;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    writing-mode: vertical-rl;
+  }
 }

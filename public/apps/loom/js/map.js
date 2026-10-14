@@ -103,6 +103,7 @@
 
   // The map only exists for worlds with coordinates (Cartographer worlds).
   function setAvailable(available) {
+    Loom.store.setUi({ hasMap: Boolean(available) });
     if (!available) ref('loom-map-layers').classList.add('hidden');
     ref('loom-view-play').classList.toggle('loom-play--map', available);
     ref('loom-root').classList.toggle('loom-root--wide', available);
@@ -146,6 +147,13 @@
     if (battle) {
       ref('loom-layer-battle').textContent = battle.host ? battle.host.name : battle.name;
     }
+    // The menu bar's Map levels (L-721) lists the same layers.
+    Loom.store.setUi({
+      level: map.mode,
+      levels: layers.map(function (mode) {
+        return { mode: mode, label: ref('loom-layer-' + mode).textContent.trim() };
+      }),
+    });
     ['battle', 'town', 'world'].forEach(function (mode) {
       var button = ref('loom-layer-' + mode);
       button.classList.toggle('hidden', !available(mode));
@@ -228,6 +236,7 @@
         );
         var townData = (data && data.town) || null;
         var battleData = (data && data.battleMap) || null;
+        Loom.store.set({ map: data || null });
         Loom.play.showTurn((data && data.turn) || null);
         setAvailable(usable || Boolean(townData) || Boolean(battleData));
         if (!usable && !townData && !battleData) return;
@@ -295,6 +304,8 @@
     Loom.battle.reset();
     ref('loom-map-overlay').innerHTML = '';
     ref('loom-map-info').innerHTML = '';
+    Loom.store.set({ map: null, turn: null });
+    Loom.store.setUi({ level: 'world', levels: [], selection: null });
     setAvailable(false);
   }
 
@@ -306,6 +317,7 @@
     if (!size.width || !size.height) return;
     map.view = M.clamp(map.view, size, bounds());
     var v = map.view;
+    Loom.store.setUi({ selection: map.mode === 'world' && map.selected ? map.selected : null });
 
     var overlayEl = ref('loom-map-overlay');
     ref('loom-map-panel').classList.toggle('is-town', map.mode !== 'world');
@@ -667,12 +679,22 @@
     else Loom.town.draw(overlayEl, map.view);
   }
 
+  // The map's area changed size (the shell's panel resized or collapsed, or
+  // the map shown at last): frame it if it never had a size, and redraw.
+  function resize() {
+    if (map.data && !map.view) frame();
+    render();
+  }
+
   Loom.map = {
+    resize: resize,
     init: init,
     load: load,
     reset: reset,
     render: render,
     redrawOverlay: redrawOverlay,
+    // Shows a layer: 'world', 'town' or 'battle' (the menu bar's Map levels).
+    setLevel: setMode,
     // On a phone, switches to the story (after a narrated move from the map).
     showStory: function () {
       if (isPhone()) showTab('story');

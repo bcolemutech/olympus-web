@@ -92,8 +92,10 @@
         </div>
 
         <!-- Play view -->
+        <!-- Play view: shell.js builds its frame (menu bar, map, side panel) in
+             #loom-play-shell and hosts the panes below in it, unchanged -->
         <div id="loom-view-play" class="loom-view hidden">
-          <button class="loom-back-link" id="loom-back-to-saves" type="button">&larr; Saves</button>
+          <div id="loom-play-shell"></div>
 
           <!-- Story / Map tabs: phones only, and only for worlds with a map -->
           <div class="loom-play-tabs hidden" id="loom-play-tabs" role="tablist">
@@ -117,101 +119,99 @@
             </button>
           </div>
 
-          <div class="loom-play-layout">
-            <!-- The map (map.js): the world map (discovered places, routes, travel),
+          <!-- The map (map.js): the world map (discovered places, routes, travel),
                  or, in a town, the town view (town.js) -->
-            <section class="loom-map-pane hidden" id="loom-map-pane" aria-label="Map">
-              <div class="loom-map-panel" id="loom-map-panel">
-                <img class="loom-map-image hidden" id="loom-map-image" alt="" draggable="false" />
-                <svg class="loom-map-overlay" id="loom-map-overlay" aria-hidden="true"></svg>
-                <div class="loom-map-layers hidden" id="loom-map-layers" role="group">
-                  <button
-                    class="loom-map-layer hidden"
-                    id="loom-layer-battle"
-                    type="button"
-                    aria-pressed="false"
-                  >
-                    Here
-                  </button>
-                  <button
-                    class="loom-map-layer is-active"
-                    id="loom-layer-town"
-                    type="button"
-                    aria-pressed="true"
-                  >
-                    Town
-                  </button>
-                  <button
-                    class="loom-map-layer"
-                    id="loom-layer-world"
-                    type="button"
-                    aria-pressed="false"
-                  >
-                    World
-                  </button>
-                </div>
-                <div class="loom-map-controls">
-                  <button
-                    class="loom-map-btn"
-                    id="loom-map-zoom-in"
-                    type="button"
-                    aria-label="Zoom in"
-                  >
-                    +
-                  </button>
-                  <button
-                    class="loom-map-btn"
-                    id="loom-map-zoom-out"
-                    type="button"
-                    aria-label="Zoom out"
-                  >
-                    &minus;
-                  </button>
-                  <button
-                    class="loom-map-btn"
-                    id="loom-map-home"
-                    type="button"
-                    aria-label="Show where I am"
-                  >
-                    &#9678;
-                  </button>
-                </div>
-              </div>
-              <div class="loom-map-info" id="loom-map-info" aria-live="polite"></div>
-            </section>
-
-            <section class="loom-story-pane" aria-label="Story">
-              <div class="loom-summary hidden" id="loom-summary"></div>
-
-              <div class="loom-narration-log" id="loom-narration-log"></div>
-
-              <div class="loom-suggested-actions" id="loom-suggested-actions"></div>
-
-              <form id="loom-turn-form" class="loom-turn-form">
-                <textarea
-                  class="loom-turn-input"
-                  id="loom-turn-input"
-                  placeholder="What do you do?"
-                  rows="2"
-                  maxlength="2000"
-                ></textarea>
-                <button class="app-btn" id="loom-turn-submit" type="submit">Act</button>
-              </form>
-
-              <div class="loom-turn-bar hidden" id="loom-turn-bar">
-                <span class="loom-turn-state" id="loom-turn-state"></span>
-                <button class="app-btn loom-turn-end" id="loom-turn-end" type="button">
-                  End turn
+          <section class="loom-map-pane hidden" id="loom-map-pane" aria-label="Map">
+            <div class="loom-map-panel" id="loom-map-panel">
+              <img class="loom-map-image hidden" id="loom-map-image" alt="" draggable="false" />
+              <svg class="loom-map-overlay" id="loom-map-overlay" aria-hidden="true"></svg>
+              <div class="loom-map-layers hidden" id="loom-map-layers" role="group">
+                <button
+                  class="loom-map-layer hidden"
+                  id="loom-layer-battle"
+                  type="button"
+                  aria-pressed="false"
+                >
+                  Here
+                </button>
+                <button
+                  class="loom-map-layer is-active"
+                  id="loom-layer-town"
+                  type="button"
+                  aria-pressed="true"
+                >
+                  Town
+                </button>
+                <button
+                  class="loom-map-layer"
+                  id="loom-layer-world"
+                  type="button"
+                  aria-pressed="false"
+                >
+                  World
                 </button>
               </div>
-
-              <div class="app-loading hidden" id="loom-turn-loading">
-                <div class="app-spinner"></div>
-                <p class="app-loading-text">The Loom weaves&hellip;</p>
+              <div class="loom-map-controls">
+                <button
+                  class="loom-map-btn"
+                  id="loom-map-zoom-in"
+                  type="button"
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+                <button
+                  class="loom-map-btn"
+                  id="loom-map-zoom-out"
+                  type="button"
+                  aria-label="Zoom out"
+                >
+                  &minus;
+                </button>
+                <button
+                  class="loom-map-btn"
+                  id="loom-map-home"
+                  type="button"
+                  aria-label="Show where I am"
+                >
+                  &#9678;
+                </button>
               </div>
-              <p class="loom-error hidden" id="loom-turn-error"></p>
-            </section>
-          </div>
+            </div>
+            <div class="loom-map-info" id="loom-map-info" aria-live="polite"></div>
+          </section>
+
+          <section class="loom-story-pane" id="loom-story-pane" aria-label="Story">
+            <div class="loom-summary hidden" id="loom-summary"></div>
+
+            <div class="loom-narration-log" id="loom-narration-log"></div>
+
+            <div class="loom-suggested-actions" id="loom-suggested-actions"></div>
+
+            <form id="loom-turn-form" class="loom-turn-form">
+              <textarea
+                class="loom-turn-input"
+                id="loom-turn-input"
+                placeholder="What do you do?"
+                rows="2"
+                maxlength="2000"
+              ></textarea>
+              <button class="app-btn" id="loom-turn-submit" type="submit">Act</button>
+            </form>
+
+            <div class="loom-turn-bar hidden" id="loom-turn-bar">
+              <span class="loom-turn-state" id="loom-turn-state"></span>
+              <button class="app-btn loom-turn-end" id="loom-turn-end" type="button">
+                End turn
+              </button>
+            </div>
+
+            <div class="app-loading hidden" id="loom-turn-loading">
+              <div class="app-spinner"></div>
+              <p class="app-loading-text">The Loom weaves&hellip;</p>
+            </div>
+            <p class="loom-error hidden" id="loom-turn-error"></p>
+          </section>
         </div>
       </div>
     </main>
@@ -219,8 +219,26 @@
     <!-- Shared header component -->
     <script src="/js/components/app-header.js"></script>
 
+    <!-- Preact and htm for the play view's components (L-721) -->
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/preact@10.29.8/dist/preact.umd.js"
+      integrity="sha384-sv9MUf3DTScOmi2+NOnSmwR2JpUeADK0KYAP8ohhmg99VOdSccabVgt/PnPDXK0N"
+    ></script>
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/preact@10.29.8/hooks/dist/hooks.umd.js"
+      integrity="sha384-5BuvBL8F0gboRla2VFizWuUXbA44J2dFYJZZGhPD7/8zlTbKMJAPtgIerv7vIpPw"
+    ></script>
+    <script
+      crossorigin="anonymous"
+      src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"
+      integrity="sha384-toVdrLSMaw7Y55MowcKqkmFL/Ek6Sky62NOk0b5sDDZBu2wcoPyyQUt9unDVjXhL"
+    ></script>
+
     <!-- Loom modules (load order matters) -->
     <script src="/apps/loom/js/state.js"></script>
+    <script src="/apps/loom/js/ui.js"></script>
     <script src="/apps/loom/js/map-math.js"></script>
     <script src="/apps/loom/js/town-layout.js"></script>
     <script src="/apps/loom/js/grid-paths.js"></script>
@@ -232,6 +250,7 @@
     <script src="/apps/loom/js/battle.js"></script>
     <script src="/apps/loom/js/map.js"></script>
     <script src="/apps/loom/js/play.js"></script>
+    <script src="/apps/loom/js/shell.js"></script>
     <script src="/apps/loom/js/app.js"></script>
 
     <script>
