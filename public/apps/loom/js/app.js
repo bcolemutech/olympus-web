@@ -12,6 +12,10 @@
     // The play view widens for its map; the other views keep the narrow column.
     var withMap = Loom.getRef('loom-view-play').classList.contains('loom-play--map');
     Loom.getRef('loom-root').classList.toggle('loom-root--wide', view === 'play' && withMap);
+    // In play the Olympus header gives way to the menu bar (L-721, L5); the
+    // world list and saves keep it.
+    document.body.classList.toggle('loom-playing', view === 'play');
+    if (view !== 'play') Loom.store.setUi({ menu: null });
   }
 
   function showWorlds() {
@@ -35,7 +39,17 @@
     Loom.saves.loadSaves(worldId);
   }
 
+  function worldName(worldId) {
+    var world = Loom.WORLDS.filter(function (w) {
+      return w.id === worldId;
+    })[0];
+    return world ? world.name : '';
+  }
+
   function showPlay(saveId, save) {
+    Loom.store.set({
+      save: { id: saveId, worldId: state.worldId, worldName: worldName(state.worldId) },
+    });
     Loom.play.init(saveId, save);
     showView('play');
   }
@@ -50,18 +64,12 @@
       state.functions = firebase.functions();
       state.uid = user.uid;
 
+      Loom.shell.mount(); // hosts the map and story panes before they are used
       Loom.worlds.renderWorldList();
       Loom.map.init();
       showWorlds();
 
       Loom.getRef('loom-back-to-worlds').addEventListener('click', showWorlds);
-
-      Loom.getRef('loom-back-to-saves').addEventListener('click', function () {
-        var world = Loom.WORLDS.filter(function (w) {
-          return w.id === state.worldId;
-        })[0];
-        showSaves(state.worldId, world ? world.name : '');
-      });
 
       Loom.getRef('loom-new-save-btn').addEventListener('click', function () {
         Loom.getRef('loom-new-save-form').classList.remove('hidden');
