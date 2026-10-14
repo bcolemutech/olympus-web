@@ -285,7 +285,8 @@ function scaleDown(img, max = MAX_SIDE) {
   if (ratio === 1) return img;
   const w = Math.max(1, Math.round(img.width * ratio));
   const h = Math.max(1, Math.round(img.height * ratio));
-  const sums = new Float64Array(w * h * 4);
+  // Whole-number sums: a 4K image's sums in 32 bits take half the memory.
+  const sums = new Uint32Array(w * h * 4);
   for (let y = 0; y < img.height; y++) {
     const ty = Math.min(h - 1, Math.floor((y * h) / img.height));
     for (let x = 0; x < img.width; x++) {

@@ -31,8 +31,9 @@ const WARN_AT_USD = 50;
 
 /**
  * The price table (C1): Google's prices for the image models (checked
- * 2026-10-12; functions/studio/config.js lists the models), per million
- * tokens and per image by output size. A job is charged by the tokens the
+ * 2026-10-12, text rates 2026-10-14; functions/studio/config.js lists the
+ * models), per million tokens (prompt, image output, and text and thinking
+ * output) and per image by output size. A job is charged by the tokens the
  * provider reports, else per image. A model not listed here can't be charged
  * for, so it can't be run. Vertex's preview ids ("…-preview") share their
  * model's price.
@@ -41,17 +42,17 @@ const PRICES = Object.freeze({
   // Gemini 3.1 Flash Image: 747 tokens at 512, 1120 at 1K, 1680 at 2K, 2520 at 4K.
   'gemini-3.1-flash-image': {
     perImage: { default: 0.067, 512: 0.045, '1k': 0.067, '2k': 0.101, '4k': 0.151 },
-    perMillionTokens: { input: 0.5, output: 60 },
+    perMillionTokens: { input: 0.5, output: 60, text: 3 },
   },
   // Gemini 3.1 Flash Lite Image: 1K only.
   'gemini-3.1-flash-lite-image': {
     perImage: { default: 0.0336, '1k': 0.0336 },
-    perMillionTokens: { input: 0.25, output: 30 },
+    perMillionTokens: { input: 0.25, output: 30, text: 1.5 },
   },
   // Gemini 3 Pro Image: 1120 tokens at 1K and 2K, 2000 at 4K.
   'gemini-3-pro-image': {
     perImage: { default: 0.134, '1k': 0.134, '2k': 0.134, '4k': 0.24 },
-    perMillionTokens: { input: 2, output: 120 },
+    perMillionTokens: { input: 2, output: 120, text: 12 },
   },
 });
 
@@ -82,9 +83,14 @@ function priceOf({ model, size, tokens, images = 1 }) {
     );
   }
   if (tokens && price.perMillionTokens) {
+    // Image tokens (`output`) and text and thinking tokens (`text`) are
+    // priced apart: thinking at the image price overcharged Pro by about 17%.
     const per = price.perMillionTokens;
     return (
-      ((tokens.input || 0) * (per.input || 0) + (tokens.output || 0) * (per.output || 0)) / MICROS
+      ((tokens.input || 0) * (per.input || 0) +
+        (tokens.output || 0) * (per.output || 0) +
+        (tokens.text || 0) * (per.text || per.output || 0)) /
+      MICROS
     );
   }
   if (price.perImage) {

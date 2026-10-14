@@ -10,7 +10,7 @@ const { MODELS, VERTEX_LOCATION } = require('./config');
  *
  *   generate({ model, prompt, references: [{ bytes, mimeType }], size,
  *              aspectRatio })
- *     → { image: { bytes, mimeType } | null, usage: { input, output } | null,
+ *     → { image: { bytes, mimeType } | null, usage: { input, output, text } | null,
  *         text, finishReason }
  *
  * No image back (refused, or blocked by safety) isn't an error here: the job
@@ -34,6 +34,24 @@ function getClient() {
     });
   }
   return client;
+}
+
+/**
+ * What a call used, as the price list charges it: prompt tokens (`input`),
+ * image tokens (`output`), and text and thinking tokens (`text`), which cost
+ * a tenth of image tokens. The image's share comes from the reply's
+ * per-modality counts; without them, everything but thinking counts as image.
+ */
+function usageOf(meta) {
+  const candidates = meta.candidatesTokenCount || 0;
+  const details = meta.candidatesTokensDetails || [];
+  const imageDetail = details.find((d) => d && d.modality === 'IMAGE');
+  const image = imageDetail ? imageDetail.tokenCount || 0 : candidates;
+  return {
+    input: meta.promptTokenCount || 0,
+    output: image,
+    text: candidates - image + (meta.thoughtsTokenCount || 0),
+  };
 }
 
 function createImageModel({ genai } = {}) {
@@ -77,13 +95,7 @@ function createImageModel({ genai } = {}) {
             mimeType: picture.inlineData.mimeType || 'image/png',
           }
         : null,
-      usage: meta
-        ? {
-            input: meta.promptTokenCount || 0,
-            // Thinking tokens are billed as output.
-            output: (meta.candidatesTokenCount || 0) + (meta.thoughtsTokenCount || 0),
-          }
-        : null,
+      usage: meta ? usageOf(meta) : null,
       text,
       finishReason:
         candidate.finishReason ||
@@ -95,4 +107,4 @@ function createImageModel({ genai } = {}) {
   return { generate };
 }
 
-module.exports = { createImageModel };
+module.exports = { createImageModel, usageOf };

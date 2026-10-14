@@ -51,7 +51,7 @@ const { createLibrary } = require('../functions/studio/library');
 const { createCosts } = require('../functions/studio/costs');
 const { createJobs, nearestRatio } = require('../functions/studio/jobs');
 const { createStudioService } = require('../functions/studio/service');
-const { createImageModel } = require('../functions/studio/image-model');
+const { createImageModel, usageOf } = require('../functions/studio/image-model');
 const { readImage } = require('../functions/studio/formats');
 const { rasterize } = require('../functions/studio');
 const { createCartographerService } = require('../functions/cartographer/service');
@@ -250,7 +250,9 @@ describe('a job', () => {
     });
     expect(named.request).toMatchObject({ tier: null, size: '4K', aspectRatio: '21:9' });
     await drain();
-    expect(model.calls.slice(-2).map((c) => [c.model, c.size, c.aspectRatio])).toEqual([
+    // The two run side by side, so either may reach the model first.
+    const sent = model.calls.slice(-2).map((c) => [c.model, c.size, c.aspectRatio]);
+    expect(sent.sort()).toEqual([
       ['gemini-3-pro-image', '2K', '16:9'],
       ['gemini-3-pro-image', '4K', '21:9'],
     ]);
@@ -294,7 +296,9 @@ describe('the request', () => {
       ['portrait', '3:4'],
     ]);
     await drain();
-    const [t, m, p] = model.calls;
+    // They run side by side: find each by its prompt, not its place.
+    const called = (end) => model.calls.find((c) => c.prompt.endsWith(end));
+    const [t, m, p] = ['Lanterns along the quay', 'Damp stone', 'Head and shoulders'].map(called);
     expect(t.prompt).toMatch(/^About what to draw:\n.*settlement/);
     expect(t.prompt).toMatch(/A rain-soaked port of slate roofs\./);
     expect(t.prompt).toMatch(/In town: The Town Gate/);
@@ -645,8 +649,28 @@ describe('the model call', () => {
     expect(readImage(result.image.bytes)).toMatchObject({ width: 8, height: 8 });
     expect(result).toMatchObject({
       text: 'A map.',
-      usage: { input: 300, output: 1200 },
+      usage: { input: 300, output: 1120, text: 80 }, // thinking priced as text
       finishReason: 'STOP',
+    });
+  });
+
+  test('image tokens and text tokens are counted apart, by modality when given', () => {
+    expect(
+      usageOf({
+        promptTokenCount: 40,
+        candidatesTokenCount: 2012,
+        thoughtsTokenCount: 340,
+        candidatesTokensDetails: [
+          { modality: 'TEXT', tokenCount: 12 },
+          { modality: 'IMAGE', tokenCount: 2000 },
+        ],
+      })
+    ).toEqual({ input: 40, output: 2000, text: 352 });
+    // Without the per-modality counts, all but thinking counts as image.
+    expect(usageOf({ promptTokenCount: 5, candidatesTokenCount: 1120 })).toEqual({
+      input: 5,
+      output: 1120,
+      text: 0,
     });
   });
 
@@ -665,7 +689,7 @@ describe('the model call', () => {
     expect(genai.sent[0].config.imageConfig).toEqual({});
     expect(result).toEqual({
       image: null,
-      usage: { input: 50, output: 0 },
+      usage: { input: 50, output: 0, text: 0 },
       text: '',
       finishReason: 'SAFETY',
     });

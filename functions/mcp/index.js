@@ -165,7 +165,9 @@ async function route(req, res) {
 }
 
 const mcpServer = onRequest(
-  { region: 'us-central1', cors: false, secrets: [MCP_JWT_SECRET] },
+  // 1 GiB: the studio's tools shrink images for Claude to look at, and a 4K
+  // image (5504 × 3072) needs about 325 MB to decode, past the 256 MiB default.
+  { region: 'us-central1', cors: false, secrets: [MCP_JWT_SECRET], memory: '1GiB' },
   async (req, res) => {
     try {
       await route(req, res);
