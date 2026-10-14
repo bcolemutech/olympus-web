@@ -11,8 +11,12 @@ const { priceOf, CostError } = require('./costs');
  * Generation jobs (planning/the-image-studio.md §4.3; L-707 / #543).
  *
  *   studio_jobs/{jobId}
- *     kind: 'generate', request: { prompt, kind, tier, model, size,
- *     aspectRatio, references[], from, title, labels }, state: 'queued' |
+ *     kind: 'generate' | 'edit',
+ *     request (generate): { prompt, kind, tier, model, size, aspectRatio,
+ *       references[], from, title, labels }
+ *     request (edit, L-708): { imageId, baseVersion, instruction, kind, tier,
+ *       model, size, aspectRatio, references[] }
+ *     state: 'queued' |
  *     'running' | 'done' | 'failed', imageId, cost (dollars), usage, error,
  *     note (the model's words, if any), createdBy, via ('page' | 'mcp'),
  *     createdAt, startedAt, finishedAt
@@ -26,6 +30,11 @@ const { priceOf, CostError } = require('./costs');
  *   2. one call to the model for the tier, or the model named (M1, M5);
  *   3. the image into the library, its cost recorded (no image is made
  *      without its cost recorded), and the job marked done.
+ *
+ * An edit (L-708, E1–E3) sends the image's version as the first reference
+ * with the instruction, and stores what comes back as the image's next
+ * version, made current (E2): its link serves it, and the worlds using it are
+ * refreshed (their reference's size) so they show it on their next turn.
  *
  * A call that brings no image back (refused, blocked) fails the job with the
  * model's reason, and is still charged for the tokens the provider reports.
@@ -151,6 +160,15 @@ function fromData(world, from, { placesOf }) {
   };
 }
 
+/** An edit's prompt: the change asked for, and everything else kept. */
+function editPrompt(instruction, extraReferences) {
+  return (
+    `Edit the first image: ${instruction}\n` +
+    'Keep everything else as it is: the layout, the composition, the style and the colours.' +
+    (extraReferences ? ' Use the other images as references for the change.' : '')
+  );
+}
+
 /** The prompt sent: the world's data first, then what was asked. */
 function buildPrompt(prompt, from) {
   return from ? `About what to draw:\n${from.text}\n\nThe image:\n${prompt}` : prompt;
@@ -166,6 +184,9 @@ function createJobs({
   placesOf,
   rasterize,
   load,
+  // Refreshes the worlds using an image after its current version changes
+  // (their reference holds its size): (record, uid) → uses refreshed.
+  refreshUses = async () => [],
   now = () => Date.now(),
 }) {
   const jobs = () => db.collection('studio_jobs');
@@ -235,27 +256,16 @@ function createJobs({
     };
   }
 
-  /**
-   * Starts a job (T1): checks it, writes it queued and hands it to the queue.
-   * Returns the job at once.
-   */
-  async function start(uid, input = {}, via = 'mcp') {
-    let request;
-    try {
-      request = await checkRequest(input);
-    } catch (err) {
-      if (err instanceof LibraryError || err instanceof CostError) {
-        throw new JobError(err.code, err.message);
-      }
-      throw err;
-    }
+  // Writes a job queued and hands it to the queue; returns it at once (T1).
+  async function queue(uid, kind, request, via) {
     const id = `job_${crypto.randomBytes(8).toString('hex')}`;
     const job = {
       id,
-      kind: 'generate',
+      kind,
       request,
       state: 'queued',
-      imageId: null,
+      imageId: kind === 'edit' ? request.imageId : null,
+      version: null,
       cost: null,
       usage: null,
       error: null,
@@ -281,10 +291,93 @@ function createJobs({
     return job;
   }
 
-  // A reference image as the model reads it.
-  async function referenceOf(imageId) {
-    const record = await library.getImage(imageId);
+  const asJobError = (err) =>
+    err instanceof LibraryError || err instanceof CostError
+      ? new JobError(err.code, err.message)
+      : err;
+
+  /** Starts making an image (L-707). Returns the job at once. */
+  async function start(uid, input = {}, via = 'mcp') {
+    let request;
+    try {
+      request = await checkRequest(input);
+    } catch (err) {
+      throw asJobError(err);
+    }
+    return queue(uid, 'generate', request, via);
+  }
+
+  // Checks an edit and fills in what it leaves out (L-708).
+  async function checkEdit(input) {
+    const instruction = typeof input.instruction === 'string' ? input.instruction.trim() : '';
+    if (!instruction) throw invalid('Say what to change (instruction).');
+    if (instruction.length > MAX_PROMPT) {
+      throw invalid(`An instruction is at most ${MAX_PROMPT} characters.`);
+    }
+    const record = await library.getImage(input.imageId);
     const version = record.versions.find((v) => v.n === record.current);
+    if (input.tier !== undefined && !TIERS[input.tier]) {
+      throw invalid(`The tier is ${Object.keys(TIERS).join(' or ')}.`);
+    }
+    if (input.model !== undefined && !MODELS[input.model]) {
+      throw invalid(`The model is one of: ${Object.keys(MODELS).join(', ')}.`);
+    }
+    const tier = input.model ? null : input.tier || 'draft';
+    const modelName = input.model || TIERS[tier].model;
+    const size = input.size || (tier ? TIERS[tier].size : MODELS[modelName].sizes[0]);
+    if (!MODELS[modelName].sizes.includes(size)) {
+      throw invalid(`${modelName} makes ${MODELS[modelName].sizes.join(', ')} images.`);
+    }
+    if (input.aspectRatio !== undefined && !ASPECT_RATIOS.includes(input.aspectRatio)) {
+      throw invalid(`The shape (aspectRatio) is one of ${ASPECT_RATIOS.join(', ')}.`);
+    }
+    priceOf({ model: modelName, size });
+    // The image itself is the first reference, so one fewer may be added.
+    const references = input.references || [];
+    if (!Array.isArray(references) || references.length > MAX_REFERENCES - 1) {
+      throw invalid(`At most ${MAX_REFERENCES - 1} more reference images with an edit.`);
+    }
+    for (const id of references) await library.getImage(id);
+    return {
+      request: {
+        imageId: record.id,
+        baseVersion: record.current,
+        instruction,
+        kind: record.kind,
+        tier,
+        model: modelName,
+        size,
+        // An edit keeps the image's shape unless asked otherwise.
+        aspectRatio: input.aspectRatio || nearestRatio(version.width, version.height),
+        references,
+        title: record.title,
+      },
+      record,
+    };
+  }
+
+  /**
+   * Starts an edit of an image by instruction (L-708). Returns the job at
+   * once, and where the image is used: every one of those changes when the
+   * edit is done (E2).
+   */
+  async function startEdit(uid, input = {}, via = 'mcp') {
+    let checked;
+    try {
+      checked = await checkEdit(input);
+    } catch (err) {
+      throw asJobError(err);
+    }
+    const job = await queue(uid, 'edit', checked.request, via);
+    return { job, usedIn: checked.record.usedIn || [] };
+  }
+
+  // A reference image as the model reads it.
+  async function referenceOf(imageId, n) {
+    const record = await library.getImage(imageId);
+    const version =
+      record.versions.find((v) => v.n === (n || record.current)) ||
+      record.versions.find((v) => v.n === record.current);
     let bytes = await load(version.path);
     let mimeType = READABLE[version.format];
     if (version.format === 'svg') {
@@ -319,17 +412,25 @@ function createJobs({
     const request = job.request;
     let result;
     try {
-      let from = null;
-      if (request.from) {
-        const world = await loadWorld(request.from.worldId);
-        if (!world) throw new JobError('not-found', 'Its world is gone.');
-        from = fromData(world, request.from, { placesOf });
-      }
+      let prompt;
       const references = [];
+      if (job.kind === 'edit') {
+        // The image as it was when the edit was asked for, then any others.
+        references.push(await referenceOf(request.imageId, request.baseVersion));
+        prompt = editPrompt(request.instruction, request.references.length > 0);
+      } else {
+        let from = null;
+        if (request.from) {
+          const world = await loadWorld(request.from.worldId);
+          if (!world) throw new JobError('not-found', 'Its world is gone.');
+          from = fromData(world, request.from, { placesOf });
+        }
+        prompt = buildPrompt(request.prompt, from);
+      }
       for (const id of request.references) references.push(await referenceOf(id));
       result = await model.generate({
         model: request.model,
-        prompt: buildPrompt(request.prompt, from),
+        prompt,
         references,
         size: request.size,
         aspectRatio: request.aspectRatio,
@@ -390,6 +491,7 @@ function createJobs({
     const price = result.usage
       ? priceOf({ model: request.model, tokens: result.usage })
       : priceOf({ model: request.model, size: request.size });
+    if (job.kind === 'edit') return finishEdit(job, ref, file, price, charge, result);
     const record = await library.addImage({
       title: request.title,
       kind: request.kind,
@@ -409,12 +511,63 @@ function createJobs({
     await ref.update({
       state: 'done',
       imageId: record.id,
+      version: 1,
       cost: entry.usd,
       usage: result.usage,
       note: result.text ? clip(result.text, 500) : null,
       finishedAt: now(),
     });
     return { state: 'done', imageId: record.id };
+  }
+
+  // An edit's image becomes the image's next version, made current (E2), and
+  // the worlds using it are refreshed to show it.
+  async function finishEdit(job, ref, file, price, charge, result) {
+    const request = job.request;
+    let record;
+    try {
+      record = await library.addVersion(request.imageId, {
+        file,
+        createdBy: job.createdBy,
+        via: job.via,
+        instruction: request.instruction,
+        cost: price,
+      });
+    } catch (err) {
+      // Deleted while it was being edited: the call was still charged.
+      const { entry } = await charge({ imageId: request.imageId, usd: price, failed: true });
+      await ref.update({
+        state: 'failed',
+        error: `The edit couldn't be kept: ${err.message}`,
+        cost: entry.usd,
+        usage: result.usage,
+        finishedAt: now(),
+      });
+      return { state: 'failed' };
+    }
+    const { entry } = await charge({ imageId: record.id, usd: price });
+    let refreshed = null;
+    try {
+      refreshed = await refreshUses(record, job.createdBy);
+    } catch (err) {
+      console.error(`studio edit ${job.id}: worlds not refreshed:`, err);
+    }
+    const notes = [
+      result.text ? clip(result.text, 500) : null,
+      refreshed === null && (record.usedIn || []).length
+        ? 'The worlds using it may show the old size until it is assigned again.'
+        : null,
+    ].filter(Boolean);
+    await ref.update({
+      state: 'done',
+      imageId: record.id,
+      version: record.current,
+      cost: entry.usd,
+      usage: result.usage,
+      note: notes.length ? notes.join(' ') : null,
+      finishedAt: now(),
+    });
+    return { state: 'done', imageId: record.id, version: record.current };
   }
 
   async function getJob(jobId) {
@@ -450,13 +603,14 @@ function createJobs({
     return found;
   }
 
-  return { start, run, getJob, list };
+  return { start, startEdit, run, getJob, list };
 }
 
 module.exports = {
   createJobs,
   fromData,
   buildPrompt,
+  editPrompt,
   nearestRatio,
   JobError,
   FROM_KINDS,

@@ -23,6 +23,8 @@ const { FROM_KINDS } = require('../../../studio/jobs');
 // - Generation (L-707 / #543): studio_generate starts a job and returns at
 //   once; studio_jobs collects jobs, waiting briefly if asked, with finished
 //   images to look at (functions/studio/jobs.js).
+// - Editing (L-708 / #544): studio_edit starts an edit job, naming the worlds
+//   that will change; the edit becomes the image's next version.
 
 const TARGET = z
   .enum(['map', 'cover', 'town', 'battleMap'])
@@ -401,11 +403,18 @@ const MAX_SHOWN = 4; // finished images shown in one studio_jobs result
 
 function jobView(job, image) {
   const r = job.request || {};
+  const clip200 = (text) => (text && text.length > 200 ? `${text.slice(0, 199)}…` : text);
   return {
     id: job.id,
+    kind: job.kind || 'generate',
     state: job.state,
+    ...(job.kind === 'edit'
+      ? { imageId: r.imageId, fromVersion: r.baseVersion, version: job.version || null }
+      : {}),
     request: {
-      prompt: r.prompt && r.prompt.length > 200 ? `${r.prompt.slice(0, 199)}…` : r.prompt,
+      ...(job.kind === 'edit'
+        ? { instruction: clip200(r.instruction) }
+        : { prompt: clip200(r.prompt) }),
       kind: r.kind,
       tier: r.tier,
       model: r.model,
@@ -493,10 +502,68 @@ function generateTools({ studio }) {
         }),
     },
     {
+      name: 'studio_edit',
+      title: 'Edit an image',
+      description:
+        'Change a library image by instruction ("make it night", "add a ruined tower on the ' +
+        'hill"): the model redraws it with the change and keeps the rest. The result is a new ' +
+        'version of the same image, made current, so every world using it changes too (the ' +
+        'result names them: check each with view_image). Earlier versions are kept; bring one ' +
+        'back with studio_update (current). Returns a job at once: collect it with studio_jobs. ' +
+        'Charged like studio_generate (draft about $0.07, final about $0.13). The shape stays ' +
+        "the image's unless asked otherwise. Extra references (style or detail to follow) are " +
+        'optional.',
+      inputSchema: {
+        imageId,
+        instruction: z.string().min(1).max(4000).describe('The change, in words.'),
+        tier: z
+          .enum(Object.keys(TIERS))
+          .optional()
+          .describe(`draft (${TIERS.draft.model}) or final (${TIERS.final.model}). Default draft.`),
+        model: z
+          .enum(Object.keys(MODELS))
+          .optional()
+          .describe('A model by name, instead of a tier.'),
+        size: z
+          .enum(['512', '1K', '2K', '4K'])
+          .optional()
+          .describe('The output size, if the model makes it.'),
+        aspectRatio: z
+          .enum(ASPECT_RATIOS)
+          .optional()
+          .describe("A new shape; the image's own by default."),
+        references: z
+          .array(imageId)
+          .max(MAX_REFERENCES - 1)
+          .optional()
+          .describe('Other library images to follow for the change.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      handler: (ctx, args) =>
+        relay(async () => {
+          const { job, usedIn } = await jobs().startEdit(ctx.uid, args, 'mcp');
+          return {
+            job: jobView(job),
+            ...(usedIn.length
+              ? {
+                  inUse: usedIn,
+                  notice:
+                    `It is in use in ${usedIn.length} place${usedIn.length === 1 ? '' : 's'}: ` +
+                    usedIn.map((u) => `${u.worldId} (${u.target} ${u.id})`).join(', ') +
+                    '. Each will show the edit once it is done; check them with view_image. ' +
+                    'To undo, make the earlier version current with studio_update.',
+                }
+              : {}),
+            next: `Collect it with studio_jobs (ids: ["${job.id}"], wait: 45).`,
+          };
+        }),
+    },
+    {
       name: 'studio_jobs',
       title: 'Collect images being made',
       description:
-        'Jobs from studio_generate: by id, or the latest. Give `wait` (seconds, up to 45) to ' +
+        'Jobs from studio_generate and studio_edit: by id, or the latest. Give `wait` (seconds, ' +
+        'up to 45) to ' +
         'wait until one of them finishes. Finished jobs come with their image to look at ' +
         `(up to ${MAX_SHOWN}), its library id and link, and what it cost; failed ones say why.`,
       inputSchema: {
@@ -504,7 +571,7 @@ function generateTools({ studio }) {
           .array(z.string().regex(/^job_[0-9a-f]{16}$/, 'a job id, like job_0123456789abcdef'))
           .max(20)
           .optional()
-          .describe('The jobs (from studio_generate). The latest if not given.'),
+          .describe('The jobs (from studio_generate or studio_edit). The latest if not given.'),
         recent: z.number().int().min(1).max(50).optional().describe('How many of the latest (10).'),
         wait: z
           .number()
@@ -531,7 +598,10 @@ function generateTools({ studio }) {
                 const record = await studio.library().getImage(job.imageId);
                 image = dated(summary(record.id, record));
                 if (content.length < MAX_SHOWN) {
-                  const version = record.versions.find((v) => v.n === record.current);
+                  // The version this job made (an edit's), else the current one.
+                  const version =
+                    record.versions.find((v) => v.n === job.version) ||
+                    record.versions.find((v) => v.n === record.current);
                   const view = viewLibraryImage(
                     await studio.load(version.path),
                     version.format,
