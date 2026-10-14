@@ -2,7 +2,7 @@
 
 **Status:** Decided (2026-10-14). The gap sheet (§3) is answered. Epics and sub-issues are planned (§6) and are filed when this phase is next.
 **Project:** Olympus (`olympus-dfa00`)
-**Phase:** 9 — Game systems ([`roadmap.md`](./roadmap.md)). Built after Phase 3d and before L-710 (the Build order).
+**Phase:** 9 — Game systems (milestone #25, [`roadmap.md`](./roadmap.md)). Built after Phase 3d and before L-710 (the Build order).
 **Replaces:** L-202 "richer rule sets" (#313). Its combat becomes this phase's first module; L-200, the world tick, stays in Phase 2.
 **Depends on:** L-720 (#525), whose menu bar and roll cards (L-726) this builds on.
 **Related:** [`the-loom-design.md`](./the-loom-design.md) §10 (the rules seam), [`the-loom-grading.md`](./the-loom-grading.md), [`portraits-and-tokens.md`](./portraits-and-tokens.md) (the Character panel), [`npc-types.md`](./npc-types.md), [`inventory.md`](./inventory.md), [`ai-characters.md`](./ai-characters.md)
@@ -195,7 +195,7 @@ Two worlds on different systems, a d20 fantasy and a dice-pool sci-fi. In each, 
 
 ## 6. Epics and sub-issues (planned; filed when this phase is next)
 
-### L-800 — The system engine
+### L-800 — The system engine (#606)
 
 | ID    | Story                                                                                                                                                                                                           | Depends on   | Model  |
 | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
@@ -205,7 +205,7 @@ Two worlds on different systems, a d20 fantasy and a dice-pool sci-fi. In each, 
 | L-804 | **The two built-in systems:** the d20 fantasy and the dice-pool sci-fi; existing worlds get the fantasy system                                                                                                  | L-803        | Sonnet |
 | L-805 | **Rolls in the Loom:** the roll card's dice to tap, landing on the server's result, and the breakdown; NARRATE by degree and in the system's words; the rules reference                                         | L-803, L-726 | Sonnet |
 
-### L-810 — Character sheets
+### L-810 — Character sheets (#607)
 
 | ID    | Story                                                                                                                                                                        | Depends on   | Model  |
 | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
