@@ -892,52 +892,42 @@
 
   // ── The card ──────────────────────────────────────
 
-  function button(text, onClick) {
-    var b = el('button', 'app-btn loom-map-travel', text);
-    b.type = 'button';
-    b.disabled = state.turnInProgress;
-    b.addEventListener('click', onClick);
-    return b;
+  /** Continue (L-662): walks the kept plan, the token walking it as it lands. */
+  function continuePlan() {
+    var turn = town.turn;
+    var plan = planPath();
+    if (plan && turn) {
+      var w = P.walk(plan, turn.movementLeft * METRES_PER_POINT);
+      town.pending = {
+        points: w.arrived
+          ? plan.points
+          : plan.points.slice(0, plan.points.length - w.rest.points.length + 1).concat([w.to]),
+      };
+    }
+    Loom.play.continuePlan();
   }
 
-  // The turn (as on battle maps, L-615): movement left, Continue for a kept
-  // plan, and End turn.
-  function renderTurn(info) {
-    var turn = town.turn;
-    if (!turn) return;
-    info.appendChild(
-      el(
-        'p',
-        'loom-map-info-facts loom-map-turn-state',
-        'Turn ' +
-          turn.n +
-          ' · ' +
-          distance(turn.movementLeft * METRES_PER_POINT) +
-          ' left to walk · ' +
-          (turn.actionUsed ? 'you have acted' : 'your action is ready')
-      )
-    );
-    var row = el('div', 'loom-map-turn');
-    var plan = planPath();
-    if (plan && turn.movementLeft > 0) {
-      row.appendChild(
-        button('Continue', function () {
-          var w = P.walk(plan, turn.movementLeft * METRES_PER_POINT);
-          town.pending = {
-            points: w.arrived
-              ? plan.points
-              : plan.points.slice(0, plan.points.length - w.rest.points.length + 1).concat([w.to]),
-          };
-          Loom.play.continuePlan();
-        })
-      );
-    }
-    row.appendChild(
-      button('End turn', function () {
-        Loom.play.endTurn();
-      })
-    );
-    info.appendChild(row);
+  /** The minimap's view of the town: its square, its art, its places and you. */
+  function minimap() {
+    var points = town.data.places.map(function (place) {
+      var p = town.positions[place.id];
+      var here = place.id === town.data.here;
+      return {
+        x: p.x,
+        y: p.y,
+        colour: here ? '#ffb74d' : place.open && !place.retired ? '#a5d6a7' : '#4b5563',
+        r: here ? 3.5 : 2.5,
+      };
+    });
+    var you = walking() ? tokenPoint() : null;
+    if (you)
+      points.push({ x: you.x + PAD, y: you.y + PAD, colour: '#ffffff', r: 3.5, ring: '#ffb74d' });
+    var art = town.art.texture && town.art.texture.source && town.art.texture.source.resource;
+    return {
+      rect: { x: PAD, y: PAD, width: SPAN, height: SPAN, fill: '#211f1c' },
+      image: art || null,
+      points: points,
+    };
   }
 
   // The ways on from a way out, as facts.
@@ -1008,7 +998,6 @@
         )
       );
     }
-    if (walking()) renderTurn(info);
   }
 
   engine.addLayer('town', { draw: draw });
@@ -1023,6 +1012,8 @@
     selectHere: selectHere,
     tap: tap,
     hover: hover,
+    continuePlan: continuePlan,
+    minimap: minimap,
     renderInfo: renderInfo,
     current: function () {
       return town.data;

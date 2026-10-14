@@ -53,6 +53,7 @@
   }
 
   function setLoading(isLoading) {
+    Loom.store.setUi({ busy: Boolean(isLoading) }); // the overlay's turn bar (L-725)
     Loom.getRef('loom-turn-loading').classList.toggle('hidden', !isLoading);
     Loom.getRef('loom-turn-submit').disabled = isLoading;
     Loom.getRef('loom-turn-input').disabled = isLoading;
@@ -108,6 +109,7 @@
     var kept = suggestions.slice();
 
     state.turnInProgress = true;
+    Loom.engine.follow(); // the camera follows the player's move again (K3)
     setLoading(true);
     showError(null);
     renderSuggestedActions([]);

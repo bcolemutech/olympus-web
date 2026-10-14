@@ -17,9 +17,13 @@
   var ref = Loom.getRef;
   var cam = Loom.engine.camera; // cam.view: { scale, x, y }, of the level showing
 
+  var DEPTH = { world: 0, town: 1, battle: 2 }; // levels, outermost first
+  var ZOOM = 6; // how far a level zooms in or out as it gives way to the next
+
   var map = {
     data: null, // loomGetMap's result
-    mode: 'world', // 'world' | 'town' | 'battle'
+    mode: 'world', // 'world' | 'town' | 'battle': the level showing
+    playerMode: 'world', // the level the player is on (another may be peeked at)
     views: { world: null, town: null, battle: null }, // each layer's view while another shows
     townId: null, // the settlement whose town is loaded
     battleId: null, // the battle map loaded
@@ -28,10 +32,14 @@
 
   // ── Helpers ───────────────────────────────────────
 
-  // The coordinate space of the layer showing.
+  // The coordinate space of a level (the one showing by default).
+  function boundsOf(mode) {
+    if (mode === 'battle') return Loom.battle.bounds();
+    return mode === 'town' ? Loom.town.BOUNDS : map.data.map;
+  }
+
   function bounds() {
-    if (map.mode === 'battle') return Loom.battle.bounds();
-    return map.mode === 'town' ? Loom.town.BOUNDS : map.data.map;
+    return boundsOf(map.mode);
   }
 
   function isPhone() {
@@ -94,6 +102,7 @@
     // The menu bar's Map levels (L-721) lists the same layers.
     Loom.store.setUi({
       level: map.mode,
+      playerLevel: map.playerMode,
       levels: layers.map(function (mode) {
         return { mode: mode, label: ref('loom-layer-' + mode).textContent.trim() };
       }),
@@ -106,36 +115,116 @@
     });
   }
 
+  // Shows another level (a peek, or back to your own): with the zoom between
+  // them (L6). The player stays where they are.
   function setMode(mode) {
     if (!available(mode)) mode = available('town') ? 'town' : 'world';
     if (mode === map.mode) {
       updateLayerButtons();
       return;
     }
-    map.views[map.mode] = cam.view;
+    goTo(mode);
+  }
+
+  // ── Between levels (L6) ───────────────────────────
+
+  // Where the deeper level lies in the one around it: the settlement (or
+  // place) on the world map, the place on the town's. `worldId` names
+  // another world place, for a town just left.
+  function anchorIn(shallow, worldId) {
+    if (shallow !== 'world') return Loom.town.herePoint();
+    return (worldId && Loom.world.pointOf(worldId)) || Loom.world.herePoint();
+  }
+
+  // A view zoomed by `factor` about a screen point.
+  function zoomedAbout(view, point, factor) {
+    return {
+      scale: view.scale * factor,
+      x: point.x - (point.x - view.x) * factor,
+      y: point.y - (point.y - view.y) * factor,
+    };
+  }
+
+  /**
+   * Moves the camera to another level, zooming between them: into a level
+   * from the place it lies in on the level around it, or back out to it.
+   * The level shown is `mode` from here on. `opts`: { worldId, then }: the
+   * world place to zoom about, and what to do once there.
+   */
+  function goTo(mode, opts) {
+    opts = opts || {};
+    var after = function () {
+      render();
+      if (opts.then) opts.then();
+    };
+    var size = panelSize();
+    var from = map.mode;
+    var fromView = cam.view;
+    map.views[from] = fromView;
+    var toView = map.views[mode] || viewFor(mode, size);
     map.mode = mode;
-    cam.view = map.views[mode];
+    cam.view = toView;
     updateLayerButtons();
-    if (!cam.view) frame();
-    render();
+    if (!fromView || !toView || !size.width) {
+      after();
+      return;
+    }
+    var deeper = DEPTH[mode] > DEPTH[from];
+    var shallow = deeper ? from : mode;
+    var shallowView = deeper ? fromView : toView;
+    var deepView = deeper ? toView : fromView;
+    var anchor = anchorIn(shallow, opts.worldId);
+    var centre = { x: size.width / 2, y: size.height / 2 };
+    var a = anchor ? M.toScreen(shallowView, anchor.x, anchor.y) : centre;
+    var shallowRef = anchor || M.toMap(shallowView, centre.x, centre.y);
+    var deepRef = M.toMap(deepView, centre.x, centre.y);
+    // The deep level, small, with its middle where it lies on the shallow one.
+    var deepSmall = {
+      scale: deepView.scale / ZOOM,
+      x: a.x - deepRef.x * (deepView.scale / ZOOM),
+      y: a.y - deepRef.y * (deepView.scale / ZOOM),
+    };
+    var shallowNear = zoomedAbout(shallowView, a, ZOOM);
+    var shallowSide = { level: shallow, ref: shallowRef };
+    var deepSide = { level: deeper ? mode : from, ref: deepRef };
+    if (deeper) {
+      shallowSide.v0 = shallowView;
+      shallowSide.v1 = shallowNear;
+      deepSide.v0 = deepSmall;
+      deepSide.v1 = deepView;
+    } else {
+      deepSide.v0 = deepView;
+      deepSide.v1 = deepSmall;
+      shallowSide.v0 = shallowNear;
+      shallowSide.v1 = shallowView;
+    }
+    Loom.engine.transition(deeper ? shallowSide : deepSide, deeper ? deepSide : shallowSide, after);
+    render(); // the card and overlay for the level arrived at
   }
 
   // ── Loading ───────────────────────────────────────
 
-  // Frames the discovered places around where the player stands, or the
-  // whole town.
+  // A level framed: the discovered places around where the player stands,
+  // the whole town, or the whole battle map.
+  function viewFor(mode, size) {
+    if (!size.width || !size.height) return null;
+    if (mode === 'battle') return M.fit(Loom.battle.framePoints(), size, boundsOf(mode));
+    if (mode === 'town') return M.fit(Loom.town.framePoints(), size, boundsOf(mode));
+    return Loom.world.frame(size);
+  }
+
   function frame() {
-    var size = panelSize();
-    if (!size.width || !size.height) return;
-    if (map.mode === 'battle') {
-      cam.view = M.fit(Loom.battle.framePoints(), size, bounds());
-      return;
-    }
-    if (map.mode === 'town') {
-      cam.view = M.fit(Loom.town.framePoints(), size, bounds());
-      return;
-    }
-    cam.view = Loom.world.frame(size);
+    var view = viewFor(map.mode, panelSize());
+    if (view) cam.view = view;
+  }
+
+  // Where the player is on a level, in its own coordinates.
+  function herePointIn(mode) {
+    return mode === 'battle'
+      ? Loom.battle.herePoint()
+      : mode === 'town'
+        ? Loom.town.herePoint()
+        : Loom.world.herePoint();
   }
 
   /** Loads (or reloads, after a turn) this save's map. */
@@ -167,41 +256,57 @@
         Loom.town.setData(townData, data.turn);
         Loom.battle.setData(battleData, data.turn);
 
-        // Entering a battle map or a town shows it; leaving one goes back to
-        // the layer above. Otherwise the layer the player chose stays.
+        // Play is on the player's level: the battle map they stand on, else
+        // their town, else the world. After every turn the map returns there
+        // from any level peeked at (L-725), zooming into a level entered and
+        // out of one left (L6).
         var townId = townData ? townData.locationId : null;
         var mapId = battleData ? battleData.id : null;
+        var townLeft = map.townId;
         var enteredTown = townId !== map.townId;
         var enteredMap = mapId !== map.battleId;
         map.townId = townId;
         map.battleId = mapId;
         if (enteredTown) map.views.town = null;
         if (enteredMap) map.views.battle = null;
-        var mode;
-        if (battleData && (enteredMap || map.mode === 'battle')) mode = 'battle';
-        else if (townData && (enteredTown || map.mode !== 'world' || !usable)) mode = 'town';
-        else if (battleData && !usable && !townData) mode = 'battle';
-        else mode = usable ? 'world' : townData ? 'town' : 'battle';
-        if (mode !== map.mode) {
-          map.views[map.mode] = cam.view;
+        var mode = battleData ? 'battle' : townData ? 'town' : usable ? 'world' : 'world';
+        map.playerMode = mode;
+        var size = panelSize();
+        if (firstLoad || !cam.view || !size.width) {
           map.mode = mode;
           cam.view = map.views[mode];
-        } else if ((mode === 'town' && enteredTown) || (mode === 'battle' && enteredMap)) {
-          cam.view = null;
+          updateLayerButtons();
+          if (!cam.view) frame();
+          render();
+          return;
+        }
+        if (mode !== map.mode || (enteredTown && townLeft)) {
+          // From one town to another: out to the world, then into the next.
+          var leftTown = enteredTown && townLeft && map.worldUsable && map.mode !== 'world';
+          if (leftTown && mode !== 'world') {
+            goTo('world', {
+              worldId: townLeft,
+              then: function () {
+                goTo(mode);
+              },
+            });
+          } else if (mode !== map.mode) {
+            goTo(mode, { worldId: leftTown ? townLeft : null });
+          } else {
+            frame();
+            updateLayerButtons();
+            render();
+          }
+          return;
+        }
+        if ((mode === 'town' && enteredTown) || (mode === 'battle' && enteredMap)) {
+          frame();
+        } else if (Loom.engine.following()) {
+          // The camera eases after the player (K3), unless they moved it.
+          var herePoint = herePointIn(mode);
+          if (herePoint) Loom.engine.easeTo(M.reveal(cam.view, herePoint, size, bounds()));
         }
         updateLayerButtons();
-
-        if (firstLoad || !cam.view) {
-          frame();
-        } else {
-          var herePoint =
-            mode === 'battle'
-              ? Loom.battle.herePoint()
-              : mode === 'town'
-                ? Loom.town.herePoint()
-                : Loom.world.herePoint();
-          if (herePoint) cam.view = M.reveal(cam.view, herePoint, panelSize(), bounds());
-        }
         render();
       })
       .catch(function (err) {
@@ -215,6 +320,7 @@
     map.data = null;
     cam.view = null;
     map.mode = 'world';
+    map.playerMode = 'world';
     map.views = { world: null, town: null, battle: null };
     map.townId = null;
     map.battleId = null;
@@ -241,6 +347,7 @@
     // Every level is drawn by the engine; the card under it is the level's.
     Loom.engine.setLevel(map.mode);
     Loom.engine.draw();
+    if (Loom.overlay) Loom.overlay.drawMinimap();
     var info = ref('loom-map-info');
     if (map.mode === 'battle') Loom.battle.renderInfo(info);
     else if (map.mode === 'town') Loom.town.renderInfo(info);
@@ -322,8 +429,43 @@
     render();
   }
 
+  // Continue (L-613): walks the plan kept on the player's level.
+  function continuePlan() {
+    if (map.playerMode === 'battle') Loom.battle.continuePlan();
+    else if (map.playerMode === 'town') Loom.town.continuePlan();
+    else Loom.play.continuePlan();
+  }
+
+  // What the minimap shows: the level's extent, what is on it, and the view.
+  function minimap() {
+    if (!map.data || !cam.view) return null;
+    var parts =
+      map.mode === 'battle'
+        ? Loom.battle.minimap()
+        : map.mode === 'town'
+          ? Loom.town.minimap()
+          : Loom.world.minimap();
+    return Object.assign({ bounds: bounds(), view: cam.view, size: panelSize() }, parts);
+  }
+
+  // Moves the view to centre on a point of the level showing (the minimap).
+  function lookAt(point) {
+    if (!cam.view) return;
+    var size = panelSize();
+    Loom.engine.userMoved();
+    cam.view = {
+      scale: cam.view.scale,
+      x: size.width / 2 - point.x * cam.view.scale,
+      y: size.height / 2 - point.y * cam.view.scale,
+    };
+    render();
+  }
+
   Loom.map = {
     resize: resize,
+    continuePlan: continuePlan,
+    minimap: minimap,
+    lookAt: lookAt,
     init: init,
     load: load,
     reset: reset,

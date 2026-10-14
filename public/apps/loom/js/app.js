@@ -73,6 +73,7 @@
       Loom.shell.mount(); // hosts the map and story panes before they are used
       Loom.worlds.renderWorldList();
       Loom.map.init();
+      Loom.overlay.mount(Loom.getRef('loom-map-panel')); // L-725: over the map
       showWorlds();
 
       Loom.getRef('loom-back-to-worlds').addEventListener('click', showWorlds);

@@ -421,6 +421,31 @@
     return M.fit(positioned(), size, world.data.map, here && { x: here.x, y: here.y });
   }
 
+  /** The minimap's view of the world: its art and the places found. */
+  function minimap() {
+    var points = positioned().map(function (p) {
+      var here = p.id === world.data.here;
+      return {
+        x: p.x,
+        y: p.y,
+        colour: here ? '#ffb74d' : p.open ? '#a5d6a7' : '#6b7280',
+        r: here ? 3.5 : 2,
+      };
+    });
+    var art = world.texture && world.texture.source && world.texture.source.resource;
+    return {
+      rect: {
+        x: 0,
+        y: 0,
+        width: world.data.map.width,
+        height: world.data.map.height,
+        fill: '#0d1424',
+      },
+      image: art || null,
+      points: points,
+    };
+  }
+
   engine.addLayer('world', {
     draw: draw,
     hit: hit,
@@ -431,6 +456,7 @@
     reset: reset,
     tap: tap,
     hover: hover,
+    minimap: minimap,
     renderInfo: renderInfo,
     frame: frame,
     usable: function () {
@@ -439,6 +465,11 @@
     selectHere: function () {
       world.selected = world.data ? world.data.here : null;
       world.look = null;
+    },
+    /** A world place's point, by id (a town just left, L-725). */
+    pointOf: function (id) {
+      var p = placeById(id);
+      return p && typeof p.x === 'number' ? { x: p.x, y: p.y } : null;
     },
     herePoint: function () {
       var here = placeById(world.data && world.data.here);

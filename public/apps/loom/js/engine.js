@@ -28,8 +28,13 @@
   var KEY_PAN = 80; // px an arrow key pans by
   var WHEEL_RATE = 0.0015;
 
-  // Presses on the panel's own buttons, card and menu are theirs, not the map's.
-  var PANEL_UI = '.loom-map-controls, .loom-map-layers, .loom-map-info, .loom-map-menu';
+  var TRANSITION_MS = 520; // the zoom between levels (L6)
+  var EASE_MS = 380; // the camera easing after the player (K3)
+
+  // Presses on the panel's own buttons, card, menu and overlay are theirs,
+  // not the map's.
+  var PANEL_UI =
+    '.loom-map-controls, .loom-map-layers, .loom-map-info, .loom-map-menu, .loom-map-ui';
 
   var engine = {
     camera: { view: null },
@@ -44,7 +49,34 @@
     pointers: {},
     gesture: null,
     pending: false,
+    transition: null, // the zoom between levels running: see transition()
+    ease: null, // the camera easing to a view: { from, to, t0, ms }
+    following: true, // the camera follows the player until they move it (K3)
   };
+
+  function reducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function now() {
+    return window.performance ? window.performance.now() : Date.now();
+  }
+
+  function smooth(t) {
+    return t * t * (3 - 2 * t);
+  }
+
+  // A view between two, at t (0–1): the scale goes geometrically, and the
+  // map point `ref` slides straight across the screen between where each view
+  // shows it, so a zoom about a point keeps that point still.
+  function between(v0, v1, ref, t) {
+    var scale = v0.scale * Math.pow(v1.scale / v0.scale, t);
+    var p0 = M.toScreen(v0, ref.x, ref.y);
+    var p1 = M.toScreen(v1, ref.x, ref.y);
+    var x = p0.x + (p1.x - p0.x) * t;
+    var y = p0.y + (p1.y - p0.y) * t;
+    return { scale: scale, x: x - ref.x * scale, y: y - ref.y * scale };
+  }
 
   // ── The stage ─────────────────────────────────────
 
@@ -102,8 +134,9 @@
     engine.host.classList.toggle('hidden', !engine.level);
   }
 
-  /** Shows a level: one drawn here, or null while map.js draws it in SVG. */
+  /** Shows a level drawn here (null for none). */
   function setLevel(level) {
+    if (engine.transition) return; // it ends on its own level
     if (level === engine.level) return;
     closeMenu();
     showLevel(level);
@@ -122,8 +155,7 @@
 
   function draw() {
     var app = engine.app;
-    var layer = engine.layers[engine.level];
-    if (!app || !layer || !engine.camera.view) return;
+    if (!app) return;
     var s = size();
     if (!s.width || !s.height) return;
     if (
@@ -132,8 +164,116 @@
     ) {
       app.renderer.resize(s.width, s.height);
     }
+    if (engine.transition) {
+      drawTransition(s);
+      app.render();
+      return;
+    }
+    var layer = engine.layers[engine.level];
+    if (!layer || !engine.camera.view) return;
     layer.draw(layer.container, engine.camera.view, s);
     app.render();
+  }
+
+  // ── Between levels (L6) ───────────────────────────
+
+  // Both levels drawn as the zoom goes: the one left fading out as the
+  // camera goes in (or out), the one arrived at fading in.
+  function drawTransition(s) {
+    var tr = engine.transition;
+    var t = smooth(Math.min(1, (now() - tr.t0) / tr.ms));
+    [
+      [tr.from, 1 - t],
+      [tr.to, t],
+    ].forEach(function (pair) {
+      var side = pair[0];
+      var layer = engine.layers[side.level];
+      if (!layer) return;
+      layer.container.visible = true;
+      layer.container.alpha = pair[1];
+      layer.draw(layer.container, between(side.v0, side.v1, side.ref, t), s);
+    });
+  }
+
+  // Ends the zoom running: both levels whole again, its own level shown.
+  function finishTransition() {
+    var tr = engine.transition;
+    if (!tr) return;
+    engine.transition = null;
+    [tr.from.level, tr.to.level].forEach(function (level) {
+      if (engine.layers[level]) engine.layers[level].container.alpha = 1;
+    });
+    showLevel(tr.to.level);
+    engine.camera.view = tr.to.v1;
+    tr.done();
+  }
+
+  function tickTransition(tr) {
+    if (engine.transition !== tr) return; // ended, or another took its place
+    if (now() - tr.t0 >= tr.ms) {
+      finishTransition();
+      return;
+    }
+    draw();
+    window.requestAnimationFrame(function () {
+      tickTransition(tr);
+    });
+  }
+
+  /**
+   * Zooms from one level into another, or back out (L6): `from` and `to`
+   * are { level, v0, v1, ref }, each level's view at the start and the end
+   * and the map point the zoom keeps on its way. Ends on `to`'s level with
+   * its end view, then calls done(). Instant with reduced motion, or when a
+   * level isn't drawn here.
+   */
+  function transition(from, to, done) {
+    finishTransition(); // a zoom already running ends at once
+    closeMenu();
+    engine.ease = null;
+    if (reducedMotion() || !engine.app || !engine.layers[from.level] || !engine.layers[to.level]) {
+      showLevel(to.level);
+      engine.camera.view = to.v1;
+      done();
+      return;
+    }
+    var tr = { from: from, to: to, t0: now(), ms: TRANSITION_MS, done: done };
+    engine.transition = tr;
+    engine.host.classList.remove('hidden');
+    window.requestAnimationFrame(function () {
+      tickTransition(tr);
+    });
+  }
+
+  // ── Following the player (K3) ─────────────────────
+
+  function tickEase() {
+    var e = engine.ease;
+    if (!e) return;
+    var t = Math.min(1, (now() - e.t0) / e.ms);
+    var ref = M.toMap(e.to, size().width / 2, size().height / 2);
+    engine.camera.view = t >= 1 ? e.to : between(e.from, e.to, ref, smooth(t));
+    if (t >= 1) engine.ease = null;
+    engine.hooks.onCamera();
+    if (engine.ease) window.requestAnimationFrame(tickEase);
+  }
+
+  /** Eases the camera to a view (or jumps, with reduced motion). */
+  function easeTo(view) {
+    var from = engine.camera.view;
+    if (!from || reducedMotion()) {
+      engine.camera.view = view;
+      engine.hooks.onCamera();
+      return;
+    }
+    engine.ease = { from: from, to: view, t0: now(), ms: EASE_MS };
+    window.requestAnimationFrame(tickEase);
+  }
+
+  // The player moved the camera: it stops following them until their next move.
+  function userMoved() {
+    engine.following = false;
+    engine.ease = null;
   }
 
   // ── The camera ────────────────────────────────────
@@ -156,9 +296,10 @@
     setView(M.zoomAt(view, factor, x, y, size(), engine.hooks.bounds()));
   }
 
-  /** Zooms about the panel's centre (the + and − buttons). */
+  /** Zooms about the panel's centre (the + and − buttons): the player's move. */
   function zoomBy(factor) {
     var s = size();
+    userMoved();
     zoomAt(factor, s.width / 2, s.height / 2);
   }
 
@@ -176,7 +317,7 @@
   }
 
   function onPointerDown(event) {
-    if (!engine.camera.view || event.target.closest(PANEL_UI)) return;
+    if (engine.transition || !engine.camera.view || event.target.closest(PANEL_UI)) return;
     try {
       engine.panel.setPointerCapture(event.pointerId);
     } catch {
@@ -213,8 +354,10 @@
       var dx = p.x - gesture.last.x;
       var dy = p.y - gesture.last.y;
       gesture.last = p;
+      if (gesture.moved > TAP_SLOP) userMoved();
       panBy(dx, dy);
     } else if (gesture.kind === 'pinch' && points.length === 2) {
+      userMoved();
       setView(
         M.pinch(gesture.startView, gesture.start, M.spreadOf(points), size(), engine.hooks.bounds())
       );
@@ -237,8 +380,9 @@
   }
 
   function onWheel(event) {
-    if (!engine.camera.view || event.target.closest('.loom-map-info, .loom-map-menu')) return;
+    if (engine.transition || !engine.camera.view || event.target.closest(PANEL_UI)) return;
     event.preventDefault();
+    userMoved();
     var p = localPoint(event);
     zoomAt(Math.exp(-event.deltaY * WHEEL_RATE), p.x, p.y);
   }
@@ -267,6 +411,7 @@
     }
     if (!engine.panel.getClientRects().length) return; // the map isn't showing
     event.preventDefault();
+    userMoved();
     panBy(step[0], step[1]);
   }
 
@@ -401,6 +546,19 @@
     draw: requestDraw,
     setView: setView,
     panBy: panBy,
+    transition: transition,
+    easeTo: easeTo,
+    userMoved: userMoved,
+    /** Follow the player again (their next move, K3). */
+    follow: function () {
+      engine.following = true;
+    },
+    following: function () {
+      return engine.following;
+    },
+    transitioning: function () {
+      return Boolean(engine.transition);
+    },
     zoomBy: zoomBy,
     openMenu: openMenu,
     closeMenu: closeMenu,
