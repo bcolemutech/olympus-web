@@ -1,34 +1,33 @@
 (function () {
   'use strict';
 
-  // The town view in the play view (planning/the-loom-layered-worlds.md §8;
-  // L-345 / #399): a drawn map of the town the player stands in, from
-  // loomGetMap's `town`. Places are labelled and tappable, the paths between
-  // them are drawn, and the place card offers the one move it allows: walk to
-  // any place there's an open way to, in one move (L-600 / #433), or set out
-  // along a world route from a way out.
-  // Moves are structured moves (Loom.play.travelTo), adjudicated and gated on
-  // the server like typed ones.
+  // The town level of the map engine (planning/the-map-first-loom.md §4.3;
+  // L-723 / #594), from loomGetMap's `town` (planning/the-loom-layered-
+  // worlds.md §8): the town's art, or its ground where it has none, its
+  // places and the paths between them, its fog, and you.
   //
-  // In a town with ground (planning/the-loom-movement-and-vision.md §8; L-664
-  // / #471), the player walks its streets: a tap on open ground or on a place
-  // previews the path, found with the server's own rules (town-paths.js),
-  // this turn's part solid and the rest dashed, with how far and how many
-  // turns; Walk goes as far as this turn's movement allows, Walk there plays
-  // out the turns, Continue walks a kept plan, and the token walks the way.
-  // Without art, the town's shapes are drawn. Over the town lies its fog
-  // (L-672): dark where never seen, less dark where seen, clear in sight.
+  // - Every click opens the engine's menu (I2), with no one-tap shortcuts:
+  //   on a place, Move (walk there, go in, set out along a route from a way
+  //   out) and Look; in a town with ground (L-664), on the street too, with
+  //   Walk there to play out the turns. Moves are structured moves
+  //   (Loom.play), adjudicated and gated on the server like typed ones.
+  // - Walks are previewed with the server's own rules (town-paths.js): this
+  //   turn's part solid, the rest dashed, with how far and how many turns;
+  //   the token walks the way it went.
+  // - The fog (L-672): dark where never seen, less dark where seen, clear in
+  //   sight; plain dimming until L-724 brings the soft fog. Places not found
+  //   yet aren't sent (L-673), so they stay hidden.
+  // - You are a token (A6): a disc with your initials.
   //
-  // map.js owns the panel, pan and zoom, and switches between the world map
-  // and this view; this module draws the town into the panel's SVG overlay in
-  // screen space, in town coordinates (0–1000 each way). Places without a
-  // position are placed by town-layout.js.
+  // Everything is drawn in screen space from town coordinates (0–1000 each
+  // way, PAD around them); places without a position are placed by
+  // town-layout.js.
 
   var Loom = window.Loom;
   var state = Loom.state;
   var M = Loom.mapMath;
-  var SVG_NS = 'http://www.w3.org/2000/svg';
-  var HIT_RADIUS = 20; // px around a place that selects it
+  var engine = Loom.engine;
+  var HIT_RADIUS = 20; // px around a place that a click selects
   var STUB = 30; // px: the stub of road leading out from a way out
   var SPAN = Loom.townLayout.SPAN;
   // The view's space is the town's 0–1000 with room around it, so a place at
@@ -40,16 +39,49 @@
   var MS_PER_UNIT = 6; // the token's walk: town units a millisecond, inverted
   var MAX_WALK_MS = 2500;
 
+  var COLOURS = {
+    groundFill: 0xd7b98a,
+    road: 0xffb74d,
+    trail: 0xd7b98a,
+    sea: 0x4fc3f7,
+    casing: 0x0a0e1a,
+    path: 0xcbbd9f,
+    pathClosed: 0x4b5563,
+    water: 0x286ee6,
+    waterEdge: 0x78b4ff,
+    crossing: 0xdeb86e,
+    crossingEdge: 0xffecb3,
+    ford: 0xbeebff,
+    building: 0xb07048,
+    buildingEdge: 0xf0be96,
+    wall: 0xebebeb,
+    open: 0xa5d6a7,
+    entrance: 0x80cbc4,
+    closed: 0x4b5563,
+    closedEdge: 0x9ca3af,
+    near: 0xffb74d,
+    here: 0xffb74d,
+    selected: 0xffffff,
+    walk: 0xffb74d,
+    target: 0xffffff,
+    you: 0xffffff,
+    label: 0xe0e0e0,
+    labelClosed: 0x9ca3af,
+  };
+
   var town = {
     data: null, // loomGetMap's `town`
     turn: null, // loomGetMap's `turn`
     positions: {}, // id → { x, y, auto }
     selected: null, // a place id
-    art: { path: null, url: null }, // the town's image (L-347), once its URL is known
+    art: { path: null, texture: null }, // the town's image (L-347), once loaded
     target: null, // where a walk would go (L-664): { point } or { placeId }
     preview: null, // the walk there, as the server would find it
     pending: null, // a walk sent: { points }, for the token's walk when it lands
     anim: null, // the token's walk: { points, units, t0 }
+    nodes: null, // the PixiJS objects, built on first draw
+    labels: {}, // place id → its label
+    fog: { key: null, texture: null },
   };
 
   // ── Helpers ───────────────────────────────────────
@@ -57,15 +89,6 @@
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-
-  function svg(tag, attrs, text) {
-    var node = document.createElementNS(SVG_NS, tag);
-    Object.keys(attrs || {}).forEach(function (k) {
-      node.setAttribute(k, attrs[k]);
-    });
     if (text !== undefined) node.textContent = text;
     return node;
   }
@@ -103,21 +126,22 @@
 
   // ── Data ──────────────────────────────────────────
 
-  // Fetches the town's image URL (a library image's link, or from Cloud
-  // Storage for older art), then redraws.
+  // Loads the town's art (a library image's link, or from Cloud Storage for
+  // older art) as a texture, then redraws.
   function loadArt(image) {
     if (!image) {
-      town.art = { path: null, url: null };
+      town.art = { path: null, texture: null };
       return;
     }
     var key = Loom.artKey(image);
     if (key === town.art.path) return;
-    town.art = { path: key, url: null };
-    Loom.artUrl(image)
-      .then(function (url) {
+    town.art = { path: key, texture: null };
+    Loom.draw
+      .loadTexture(image)
+      .then(function (texture) {
         if (town.art.path !== key) return; // the player moved on meanwhile
-        town.art.url = url;
-        Loom.map.render();
+        town.art.texture = texture;
+        engine.draw();
       })
       .catch(function (err) {
         console.error('Could not load the town art:', err);
@@ -292,7 +316,7 @@
       Loom.map.render();
       return;
     }
-    Loom.map.redrawOverlay();
+    engine.draw();
     window.requestAnimationFrame(frame);
   }
 
@@ -321,7 +345,6 @@
 
   var FOG_UNSEEN = 0.72; // never seen: dark, the town still showing through
   var FOG_SEEN = 0.38; // seen before, out of sight now: less dark
-  var fogCache = { key: null, url: null };
 
   function bitsOf(packed, size) {
     var bytes = window.atob(packed || '');
@@ -332,12 +355,12 @@
     return bits;
   }
 
-  // The fog as an image the size of the walking grid (a pixel a square),
-  // stretched over the town: dark where never seen, less dark where seen
-  // before, clear where in sight.
-  function fogImage(fog) {
+  // The fog as a texture the size of the walking grid (a pixel a square),
+  // stretched over the town and smoothed: dark where never seen, less dark
+  // where seen before, clear where in sight.
+  function fogTexture(fog) {
     var key = fog.side + '|' + fog.seen + '|' + fog.inSight;
-    if (fogCache.key === key) return fogCache.url;
+    if (town.fog.key === key) return town.fog.texture;
     var side = fog.side;
     var seen = bitsOf(fog.seen, side * side);
     var now = bitsOf(fog.inSight, side * side);
@@ -354,106 +377,14 @@
       image.data[i * 4 + 3] = Math.round(alpha * 255);
     }
     context.putImageData(image, 0, 0);
-    fogCache = { key: key, url: canvas.toDataURL() };
-    return fogCache.url;
+    if (town.fog.texture) town.fog.texture.destroy(true);
+    var texture = window.PIXI.Texture.from(canvas);
+    texture.source.scaleMode = 'linear';
+    town.fog = { key: key, texture: texture };
+    return texture;
   }
 
-  function drawFog(overlay, view) {
-    var fog = town.data.fog;
-    if (!fog) return;
-    var corner = M.toScreen(view, PAD, PAD);
-    var far = M.toScreen(view, PAD + SPAN, PAD + SPAN);
-    // Clipped to the town's ground, rounded as it is.
-    var clip = svg('clipPath', { id: 'loom-town-fog-clip' });
-    clip.appendChild(
-      svg('rect', {
-        x: corner.x,
-        y: corner.y,
-        width: far.x - corner.x,
-        height: far.y - corner.y,
-        rx: 18,
-      })
-    );
-    overlay.appendChild(clip);
-    overlay.appendChild(
-      svg('image', {
-        class: 'loom-town-fog',
-        'clip-path': 'url(#loom-town-fog-clip)',
-        href: fogImage(fog),
-        x: corner.x,
-        y: corner.y,
-        width: far.x - corner.x,
-        height: far.y - corner.y,
-        preserveAspectRatio: 'none',
-      })
-    );
-  }
-
-  // The town's shapes, for a town without art.
-  function drawGround(overlay, view) {
-    var g = town.data.ground;
-    var toPoints = function (shape) {
-      return shape.points
-        .map(function (p) {
-          var s = M.toScreen(view, p.x + PAD, p.y + PAD);
-          return s.x + ',' + s.y;
-        })
-        .join(' ');
-    };
-    var shapes = function (list, tag, className) {
-      (list || []).forEach(function (shape) {
-        overlay.appendChild(svg(tag, { class: className, points: toPoints(shape) }));
-      });
-    };
-    shapes(g.water, 'polygon', 'loom-town-water');
-    (g.crossings || []).forEach(function (shape) {
-      overlay.appendChild(
-        svg('polygon', {
-          class: 'loom-town-crossing' + (shape.kind === 'ford' ? ' is-ford' : ''),
-          points: toPoints(shape),
-        })
-      );
-    });
-    shapes(g.buildings, 'polygon', 'loom-town-building');
-    shapes(g.walls, 'polyline', 'loom-town-wall');
-  }
-
-  // A line through town points, in screen space.
-  function line(overlay, view, points, className) {
-    if (points.length < 2) return;
-    overlay.appendChild(
-      svg('polyline', {
-        class: className,
-        points: points
-          .map(function (p) {
-            var s = M.toScreen(view, p.x + PAD, p.y + PAD);
-            return s.x + ',' + s.y;
-          })
-          .join(' '),
-      })
-    );
-  }
-
-  // The walk: the preview, or the kept plan; the target; and you.
-  function drawWalk(overlay, view) {
-    var preview = town.preview;
-    if (preview && preview.path && !town.anim) {
-      line(overlay, view, preview.walked, 'loom-town-walk');
-      line(overlay, view, preview.later, 'loom-town-walk is-later');
-    } else if (!town.target && !town.anim) {
-      var plan = planPath();
-      if (plan) line(overlay, view, plan.points, 'loom-town-walk is-later is-plan');
-    }
-    if (town.target && town.target.point) {
-      var t = M.toScreen(view, town.target.point.x + PAD, town.target.point.y + PAD);
-      overlay.appendChild(svg('circle', { class: 'loom-town-target', cx: t.x, cy: t.y, r: 7 }));
-    }
-    var you = tokenPoint();
-    if (you) {
-      var s = M.toScreen(view, you.x + PAD, you.y + PAD);
-      overlay.appendChild(svg('circle', { class: 'loom-town-you', cx: s.x, cy: s.y, r: 7 }));
-    }
-  }
+  // ── Walks ─────────────────────────────────────────
 
   // Sends a walk: as far as this turn goes (Walk), or all the way (Walk there).
   function sendWalk(there) {
@@ -467,6 +398,7 @@
     var action = place ? { target: place.id } : { point: { x: target.point.x, y: target.point.y } };
     if (there) Loom.play.walkThere(action, label);
     else Loom.play.walkTo(action, label);
+    Loom.map.showStory();
   }
 
   function distance(metres) {
@@ -483,38 +415,489 @@
     return distance(preview.metres) + ' · ' + when;
   }
 
-  // The card's walking part: the preview's line and Walk and Walk there.
-  function renderWalk(info) {
+  // Why the preview can't be walked, or null.
+  function walkRefusal(preview) {
+    if (!preview) return "There's no way there from here.";
+    if (preview.blocked) return "You can't stand there.";
+    if (preview.none) return "There's no way there from here.";
+    return null;
+  }
+
+  // A move to a place in town, or along a route out of it.
+  function act(id, name) {
+    Loom.play.travelTo(id, name);
+    Loom.map.showStory(); // on a phone, the story is where the journey is told
+  }
+
+  /** The places as map points, for framing the view. */
+  function points() {
+    return Object.keys(town.positions).map(function (id) {
+      return { id: id, x: town.positions[id].x, y: town.positions[id].y };
+    });
+  }
+
+  /** The town's own ground, for framing: a town is small enough to show whole. */
+  function framePoints() {
+    return [
+      { x: PAD, y: PAD },
+      { x: PAD + SPAN, y: PAD + SPAN },
+    ];
+  }
+
+  function herePoint() {
+    if (walking()) {
+      var from = fromPoint();
+      return from ? { x: from.x + PAD, y: from.y + PAD } : null;
+    }
+    var here = town.data && town.positions[town.data.here];
+    return here ? { x: here.x, y: here.y } : null;
+  }
+
+  function selectHere() {
+    town.selected = town.data ? town.data.here : null;
+    town.target = null;
+    computePreview();
+  }
+
+  // ── Drawing ───────────────────────────────────────
+
+  function build(container) {
+    var PIXI = window.PIXI;
+    var n = {
+      ground: new PIXI.Graphics(),
+      art: new PIXI.Sprite(),
+      shapes: new PIXI.Graphics(),
+      fog: new PIXI.Sprite(),
+      paths: new PIXI.Graphics(),
+      pins: new PIXI.Graphics(),
+      labels: new PIXI.Container(),
+      walk: new PIXI.Graphics(),
+      you: Loom.draw.token(),
+    };
+    n.art.alpha = 0.9;
+    container.addChild(n.ground, n.art, n.shapes, n.fog, n.paths, n.pins, n.labels, n.walk);
+    container.addChild(n.you.container);
+    town.nodes = n;
+  }
+
+  function toScreen(view, p) {
+    return M.toScreen(view, p.x + PAD, p.y + PAD);
+  }
+
+  // The town's shapes, for a town without art.
+  function drawGround(g, view) {
+    var ground = town.data.ground;
+    var flat = function (shape) {
+      var out = [];
+      shape.points.forEach(function (p) {
+        var s = toScreen(view, p);
+        out.push(s.x, s.y);
+      });
+      return out;
+    };
+    (ground.water || []).forEach(function (shape) {
+      g.poly(flat(shape))
+        .fill({ color: COLOURS.water, alpha: 0.45 })
+        .stroke({ width: 1, color: COLOURS.waterEdge, alpha: 0.8 });
+    });
+    (ground.crossings || []).forEach(function (shape) {
+      var ford = shape.kind === 'ford';
+      g.poly(flat(shape))
+        .fill({ color: ford ? COLOURS.ford : COLOURS.crossing, alpha: ford ? 0.6 : 0.85 })
+        .stroke({ width: 1, color: COLOURS.crossingEdge, alpha: 0.9 });
+    });
+    (ground.buildings || []).forEach(function (shape) {
+      g.poly(flat(shape))
+        .fill({ color: COLOURS.building, alpha: 0.7 })
+        .stroke({ width: 1, color: COLOURS.buildingEdge, alpha: 0.85 });
+    });
+    (ground.walls || []).forEach(function (shape) {
+      var pts = shape.points.map(function (p) {
+        return toScreen(view, p);
+      });
+      Loom.draw.polyline(g, pts);
+      g.stroke({ width: 4, color: COLOURS.wall, cap: 'round', join: 'round' });
+    });
+  }
+
+  // The walk: the preview, or the kept plan; the target.
+  function drawWalk(g, view) {
+    var screen = function (list) {
+      return list.map(function (p) {
+        return toScreen(view, p);
+      });
+    };
     var preview = town.preview;
-    if (!preview) return;
-    if (preview.blocked) {
-      info.appendChild(el('p', 'loom-map-info-status is-closed', "You can't stand there."));
-      return;
+    if (preview && preview.path && !town.anim) {
+      Loom.draw.polyline(g, screen(preview.walked));
+      g.stroke({ width: 3, color: COLOURS.walk, cap: 'round', join: 'round' });
+      Loom.draw.polyline(g, screen(preview.later), [2, 7]);
+      g.stroke({ width: 3, color: COLOURS.walk, alpha: 0.85, cap: 'round' });
+    } else if (!town.target && !town.anim) {
+      var plan = planPath();
+      if (plan) {
+        Loom.draw.polyline(g, screen(plan.points), [2, 7]);
+        g.stroke({ width: 3, color: COLOURS.walk, alpha: 0.5, cap: 'round' });
+      }
     }
-    if (preview.none) {
-      info.appendChild(
-        el('p', 'loom-map-info-status is-closed', "There's no way there from here.")
-      );
-      return;
+    if (town.target && town.target.point) {
+      var t = toScreen(view, town.target.point);
+      g.circle(t.x, t.y, 7).stroke({ width: 2, color: COLOURS.target });
     }
-    if (preview.here) return;
-    info.appendChild(el('p', 'loom-map-info-facts loom-town-walk-line', walkLine(preview)));
-    var row = el('div', 'loom-map-turn');
-    if (preview.walked.length) {
-      row.appendChild(
-        button('Walk', function () {
-          sendWalk(false);
-        })
-      );
+  }
+
+  function labelFor(place) {
+    var label = town.labels[place.id];
+    if (!label) {
+      label = Loom.draw.label(place.name, 12.5);
+      town.labels[place.id] = label;
+      town.nodes.labels.addChild(label);
     }
+    var here = place.id === town.data.here;
+    var shut = !place.open || place.retired;
+    label.text = place.name;
+    label.style.fill = here ? COLOURS.here : shut ? COLOURS.labelClosed : COLOURS.label;
+    label.style.fontWeight = here ? '600' : 'normal';
+    return label;
+  }
+
+  /** Draws the town for a view in town coordinates (+ PAD). */
+  function draw(container, view) {
+    if (!town.nodes) build(container);
+    var n = town.nodes;
+    var data = town.data;
+    if (!data) return;
+    var corner = M.toScreen(view, PAD, PAD);
+    var far = M.toScreen(view, PAD + SPAN, PAD + SPAN);
+    var width = far.x - corner.x;
+    var height = far.y - corner.y;
+
+    n.ground.clear();
+    n.ground
+      .roundRect(corner.x, corner.y, width, height, 18)
+      .fill({ color: COLOURS.groundFill, alpha: 0.05 })
+      .stroke({ width: 1, color: COLOURS.groundFill, alpha: 0.18 });
+
+    // The town's art (L-347), fitted inside the town's square, behind the
+    // paths and places.
+    var image = data.image;
+    var art = image && town.art.texture && town.art.path === Loom.artKey(image);
+    n.art.visible = Boolean(art);
+    if (art) {
+      var aspect = image.width / image.height || 1;
+      var w = aspect >= 1 ? SPAN : SPAN * aspect;
+      var h = aspect >= 1 ? SPAN / aspect : SPAN;
+      var topLeft = M.toScreen(view, PAD + (SPAN - w) / 2, PAD + (SPAN - h) / 2);
+      n.art.texture = town.art.texture;
+      n.art.position.set(topLeft.x, topLeft.y);
+      n.art.width = w * view.scale;
+      n.art.height = h * view.scale;
+    }
+
+    // Without art, the town's shapes (L-664); over them, the fog (L-672).
+    n.shapes.clear();
+    if (data.ground && !art) drawGround(n.shapes, view);
+    n.fog.visible = Boolean(data.fog);
+    if (data.fog) {
+      n.fog.texture = fogTexture(data.fog);
+      n.fog.position.set(corner.x, corner.y);
+      n.fog.width = width;
+      n.fog.height = height;
+    }
+
+    var at = function (id) {
+      var p = town.positions[id];
+      return p && M.toScreen(view, p.x, p.y);
+    };
+
+    // The roads out of town, as stubs leading away from the middle; the
+    // paths between places, in a town without ground.
+    var g = n.paths;
+    g.clear();
+    var middle = M.toScreen(view, BOUNDS.width / 2, BOUNDS.height / 2);
+    data.places.forEach(function (place) {
+      if (!place.entranceFor) return;
+      var s = at(place.id);
+      var via = exitsFrom(place.id).map(function (exit) {
+        return exit.via;
+      })[0];
+      via = via || place.entranceFor[0];
+      var dx = s.x - middle.x;
+      var dy = s.y - middle.y;
+      var d = Math.hypot(dx, dy) || 1;
+      var end = { x: s.x + (dx / d) * STUB, y: s.y + (dy / d) * STUB };
+      Loom.draw.line(g, s, end);
+      g.stroke({ width: 5.5, color: COLOURS.casing, alpha: 0.55, cap: 'round' });
+      var colour = COLOURS[via] ? via : 'road';
+      Loom.draw.line(g, s, end, colour === 'trail' ? [6, 5] : colour === 'sea' ? [2, 6] : null);
+      g.stroke({ width: 3, color: COLOURS[colour], cap: 'round' });
+    });
+    data.links.forEach(function (link) {
+      var s = at(link.from);
+      var t = at(link.to);
+      if (!s || !t) return;
+      var a = placeById(link.from);
+      var b = placeById(link.to);
+      var shut = !a.open || !b.open || a.retired || b.retired;
+      Loom.draw.line(g, s, t);
+      g.stroke({ width: 8, color: COLOURS.casing, alpha: 0.6, cap: 'round' });
+      Loom.draw.line(g, s, t, shut ? [4, 5] : null);
+      g.stroke({ width: 4, color: shut ? COLOURS.pathClosed : COLOURS.path, cap: 'round' });
+    });
+
+    // The places.
+    var pins = n.pins;
+    pins.clear();
+    var shown = {};
+    data.places.forEach(function (place) {
+      var s = at(place.id);
+      var here = place.id === data.here;
+      var shut = !place.open || place.retired;
+      var r = 8;
+      if (here) pins.circle(s.x, s.y, 14).stroke({ width: 2, color: COLOURS.here });
+      if (place.entranceFor) pins.roundRect(s.x - r, s.y - r, r * 2, r * 2, 3);
+      else pins.circle(s.x, s.y, r);
+      var fill = here
+        ? COLOURS.here
+        : shut
+          ? COLOURS.closed
+          : place.entranceFor
+            ? COLOURS.entrance
+            : COLOURS.open;
+      var edge = COLOURS.casing;
+      var edgeWidth = 2;
+      if (shut) edge = COLOURS.closedEdge;
+      if (!walking() && isNext(place.id)) edge = COLOURS.near;
+      if (place.id === town.selected) {
+        edge = COLOURS.selected;
+        edgeWidth = 3;
+      }
+      pins.fill({ color: fill }).stroke({ width: edgeWidth, color: edge });
+      if (shut) Loom.draw.padlock(pins, s.x + r + 2, s.y - r - 3, COLOURS.closedEdge);
+      var label = labelFor(place);
+      label.position.set(s.x, s.y + r + 4);
+      label.visible = true;
+      shown[place.id] = true;
+    });
+    Object.keys(town.labels).forEach(function (id) {
+      if (!shown[id]) town.labels[id].visible = false;
+    });
+
+    // The walk and you.
+    n.walk.clear();
+    if (walking()) drawWalk(n.walk, view);
+    var you = walking() ? tokenPoint() : null;
+    n.you.container.visible = Boolean(you);
+    if (you) {
+      var p = toScreen(view, you);
+      var save = Loom.store.get().save;
+      n.you.update({
+        x: p.x,
+        y: p.y,
+        radius: 9,
+        name: save && save.characterName,
+        fill: COLOURS.you,
+        ring: COLOURS.here,
+      });
+    }
+  }
+
+  // ── Clicks: the menu (I2) ─────────────────────────
+
+  // The place nearest a point in the panel, if close enough.
+  function placeAt(point, view) {
+    var best = null;
+    points().forEach(function (p) {
+      var s = M.toScreen(view, p.x, p.y);
+      var d = Math.hypot(s.x - point.x, s.y - point.y);
+      if (d <= HIT_RADIUS && (!best || d < best.d)) best = { id: p.id, d: d };
+    });
+    return best ? placeById(best.id) : null;
+  }
+
+  function factsOf(place) {
+    var facts = [capitalised(place.kind)];
+    if (place.entranceFor) facts.push('Way in and out by ' + listOf(place.entranceFor));
+    return facts.join(' · ');
+  }
+
+  // Setting out along the world routes from a way out you stand at.
+  function setOutItems(place) {
+    var items = [];
+    exitsFrom(place.id).forEach(function (exit) {
+      var label = exit.name + (exit.via ? ' by ' + exit.via : '');
+      if (!exit.open) {
+        items.push({ label: 'Set out for ' + label, disabled: true, note: 'The way is closed.' });
+        return;
+      }
+      var ways = exit.waysIn || [];
+      if (ways.length > 1) {
+        // Where to arrive (L-346): travelling to a way in arrives by it.
+        ways.forEach(function (way) {
+          items.push({
+            label: 'Set out for ' + label + ', arriving by ' + way.name,
+            onSelect: function () {
+              act(way.id, exit.name + ' by ' + way.name);
+            },
+          });
+        });
+      } else {
+        items.push({
+          label: 'Set out for ' + label,
+          onSelect: function () {
+            act(exit.id, exit.name);
+          },
+        });
+      }
+    });
+    return items;
+  }
+
+  // The walk items: Move (as far as this turn goes) and Walk there.
+  function walkItems() {
+    var preview = town.preview;
+    var no = walkRefusal(preview);
+    if (no) return [{ label: 'Move', disabled: true, note: no }];
+    var items = [];
+    var line = walkLine(preview);
+    items.push({
+      label: 'Move',
+      disabled: !preview.walked.length,
+      note: preview.walked.length ? line : 'No movement left this turn.',
+      onSelect: function () {
+        sendWalk(false);
+      },
+    });
     if (!preview.thisTurn) {
-      row.appendChild(
-        button('Walk there', function () {
+      items.push({
+        label: 'Walk there',
+        note: line,
+        onSelect: function () {
           sendWalk(true);
-        })
-      );
+        },
+      });
     }
-    info.appendChild(row);
+    return items;
+  }
+
+  // What Move does for a place: walk there, go in, or why not.
+  function placeItems(place) {
+    var here = place.id === town.data.here;
+    if (walking()) {
+      var from = fromPoint();
+      var atDoor = from && isPoint(place.position) && near(from, place.position);
+      if (atDoor) {
+        var items = [
+          {
+            label: 'Go in',
+            onSelect: function () {
+              act(place.id, place.name);
+            },
+          },
+        ];
+        return place.entranceFor ? items.concat(setOutItems(place)) : items;
+      }
+      if (place.retired) {
+        return [{ label: 'Move', disabled: true, note: "That place can't be reached anymore." }];
+      }
+      if (!place.open) {
+        return [{ label: 'Move', disabled: true, note: 'Not built yet. The way is closed.' }];
+      }
+      return walkItems();
+    }
+    if (here) {
+      var stay = [{ label: 'Move', disabled: true, note: 'You are here.' }];
+      return place.entranceFor ? stay.concat(setOutItems(place)) : stay;
+    }
+    if (place.retired) {
+      return [{ label: 'Move', disabled: true, note: "That place can't be reached anymore." }];
+    }
+    if (!place.open) {
+      return [{ label: 'Move', disabled: true, note: 'Not built yet. The way is closed.' }];
+    }
+    if (!isNext(place.id)) {
+      return [{ label: 'Move', disabled: true, note: "There's no open way there from here." }];
+    }
+    return [
+      {
+        label: 'Move',
+        onSelect: function () {
+          act(place.id, place.name);
+        },
+      },
+    ];
+  }
+
+  function busy(items) {
+    if (!state.turnInProgress) return items;
+    return items.map(function (item) {
+      return item.disabled
+        ? item
+        : Object.assign({}, item, { disabled: true, note: 'A turn is under way.' });
+    });
+  }
+
+  /** A click on the town (I2): what is there, and a menu for it. */
+  function tap(point, view) {
+    if (!town.data) return;
+    // A click skips the token's walk to its end.
+    if (town.anim) {
+      town.anim = null;
+      Loom.map.render();
+      return;
+    }
+    var place = placeAt(point, view);
+    town.selected = place ? place.id : null;
+    town.target = null;
+    if (walking()) {
+      if (place) {
+        town.target = { placeId: place.id };
+      } else {
+        var m = M.toMap(view, point.x, point.y);
+        var spot = { x: Math.round(m.x - PAD), y: Math.round(m.y - PAD) };
+        var inTown = spot.x >= 0 && spot.y >= 0 && spot.x <= SPAN && spot.y <= SPAN;
+        town.target = inTown ? { point: spot } : null;
+      }
+    }
+    computePreview();
+    Loom.map.render();
+
+    if (place) {
+      engine.openMenu(point, {
+        title: place.name,
+        subtitle: factsOf(place),
+        items: busy(placeItems(place)).concat([
+          {
+            label: 'Look',
+            onSelect: function () {
+              town.selected = place.id;
+              town.target = null;
+              computePreview();
+              Loom.map.render();
+            },
+          },
+        ]),
+      });
+    } else if (town.target && town.target.point) {
+      engine.openMenu(point, { title: 'A spot in the street', items: busy(walkItems()) });
+    }
+  }
+
+  /** A hover over a place shows it can be clicked. */
+  function hover(point, view) {
+    var over = point && town.data ? placeAt(point, view) : null;
+    var street = !over && point && walking() && town.data;
+    engine.panelCursor(over ? 'pointer' : street ? 'crosshair' : '');
+  }
+
+  // ── The card ──────────────────────────────────────
+
+  function button(text, onClick) {
+    var b = el('button', 'app-btn loom-map-travel', text);
+    b.type = 'button';
+    b.disabled = state.turnInProgress;
+    b.addEventListener('click', onClick);
+    return b;
   }
 
   // The turn (as on battle maps, L-615): movement left, Continue for a kept
@@ -557,358 +940,78 @@
     info.appendChild(row);
   }
 
-  /** The places as map points, for framing the view. */
-  function points() {
-    return Object.keys(town.positions).map(function (id) {
-      return { id: id, x: town.positions[id].x, y: town.positions[id].y };
-    });
-  }
-
-  /** The town's own ground, for framing: a town is small enough to show whole. */
-  function framePoints() {
-    return [
-      { x: PAD, y: PAD },
-      { x: PAD + SPAN, y: PAD + SPAN },
-    ];
-  }
-
-  function herePoint() {
-    if (walking()) {
-      var from = fromPoint();
-      return from ? { x: from.x + PAD, y: from.y + PAD } : null;
-    }
-    var here = town.data && town.positions[town.data.here];
-    return here ? { x: here.x, y: here.y } : null;
-  }
-
-  function selectHere() {
-    town.selected = town.data ? town.data.here : null;
-  }
-
-  // ── Drawing ───────────────────────────────────────
-
-  /** Draws the town into the overlay, for a view in town coordinates. */
-  function draw(overlay, view) {
-    var corner = M.toScreen(view, PAD, PAD);
-    var far = M.toScreen(view, PAD + SPAN, PAD + SPAN);
-    overlay.appendChild(
-      svg('rect', {
-        class: 'loom-town-ground',
-        x: corner.x,
-        y: corner.y,
-        width: far.x - corner.x,
-        height: far.y - corner.y,
-        rx: 18,
-      })
-    );
-
-    // The town's art (L-347), fitted inside the town's square, behind the
-    // paths and places.
-    var image = town.data.image;
-    if (image && town.art.url && town.art.path === Loom.artKey(image)) {
-      var aspect = image.width / image.height || 1;
-      var w = aspect >= 1 ? SPAN : SPAN * aspect;
-      var h = aspect >= 1 ? SPAN / aspect : SPAN;
-      var topLeft = M.toScreen(view, PAD + (SPAN - w) / 2, PAD + (SPAN - h) / 2);
-      var bottomRight = M.toScreen(view, PAD + (SPAN + w) / 2, PAD + (SPAN + h) / 2);
-      overlay.appendChild(
-        svg('image', {
-          class: 'loom-town-art',
-          href: town.art.url,
-          x: topLeft.x,
-          y: topLeft.y,
-          width: bottomRight.x - topLeft.x,
-          height: bottomRight.y - topLeft.y,
-          preserveAspectRatio: 'none',
-        })
-      );
-    }
-
-    // Without art, the town's shapes (L-664); over them, the fog (L-672).
-    if (town.data.ground && !(image && town.art.url)) drawGround(overlay, view);
-    drawFog(overlay, view);
-
-    var at = function (id) {
-      var p = town.positions[id];
-      return p && M.toScreen(view, p.x, p.y);
-    };
-
-    // The roads out of town, as stubs leading away from the middle.
-    var middle = M.toScreen(view, BOUNDS.width / 2, BOUNDS.height / 2);
-    town.data.places.forEach(function (place) {
-      if (!place.entranceFor) return;
-      var s = at(place.id);
-      var served = exitsFrom(place.id).map(function (exit) {
-        return exit.via;
-      });
-      var via = served[0] || place.entranceFor[0];
-      var dx = s.x - middle.x;
-      var dy = s.y - middle.y;
-      var d = Math.hypot(dx, dy) || 1;
-      var ends = { x1: s.x, y1: s.y, x2: s.x + (dx / d) * STUB, y2: s.y + (dy / d) * STUB };
-      overlay.appendChild(svg('line', Object.assign({ class: 'loom-map-route-casing' }, ends)));
-      overlay.appendChild(
-        svg(
-          'line',
-          Object.assign({ class: 'loom-map-route loom-map-route--' + (via || 'road') }, ends)
-        )
-      );
-    });
-
-    town.data.links.forEach(function (link) {
-      var s = at(link.from);
-      var t = at(link.to);
-      if (!s || !t) return;
-      var a = placeById(link.from);
-      var b = placeById(link.to);
-      var shut = !a.open || !b.open || a.retired || b.retired;
-      var ends = { x1: s.x, y1: s.y, x2: t.x, y2: t.y };
-      overlay.appendChild(svg('line', Object.assign({ class: 'loom-town-path-casing' }, ends)));
-      overlay.appendChild(
-        svg('line', Object.assign({ class: 'loom-town-path' + (shut ? ' is-closed' : '') }, ends))
-      );
-    });
-
-    town.data.places.forEach(function (place) {
-      var s = at(place.id);
-      var here = place.id === town.data.here;
-      var classes = [
-        'loom-town-place',
-        place.open && !place.retired ? 'is-open' : 'is-closed',
-        'kind-' + place.kind,
-      ];
-      if (place.entranceFor) classes.push('is-entrance');
-      if (here) classes.push('is-here');
-      if (isNext(place.id)) classes.push('is-near');
-      if (place.id === town.selected) classes.push('is-selected');
-      var group = svg('g', {
-        class: classes.join(' '),
-        transform: 'translate(' + s.x + ',' + s.y + ')',
-      });
-      if (here) group.appendChild(svg('circle', { class: 'loom-map-ring', r: 14 }));
-      var r = 8;
-      if (place.entranceFor) {
-        group.appendChild(
-          svg('rect', {
-            class: 'loom-town-dot',
-            x: -r,
-            y: -r,
-            width: r * 2,
-            height: r * 2,
-            rx: 3,
-          })
-        );
-      } else {
-        group.appendChild(svg('circle', { class: 'loom-town-dot', r: r }));
-      }
-      if (!place.open || place.retired) {
-        group.appendChild(svg('text', { class: 'loom-map-lock', x: r + 2, y: -r - 1 }, '🔒'));
-      }
-      group.appendChild(svg('text', { class: 'loom-town-label', x: 0, y: r + 16 }, place.name));
-      overlay.appendChild(group);
-    });
-
-    if (walking()) drawWalk(overlay, view);
-  }
-
-  /** Selects the place nearest a tap (screen point), if any is close enough. */
-  function pick(point, view) {
-    var best = null;
-    points().forEach(function (p) {
-      var s = M.toScreen(view, p.x, p.y);
-      var d = Math.hypot(s.x - point.x, s.y - point.y);
-      if (d <= HIT_RADIUS && (!best || d < best.d)) best = { id: p.id, d: d };
-    });
-    town.selected = best ? best.id : null;
-    if (!walking()) return;
-    // A tap skips the token's walk to its end.
-    if (town.anim) {
-      town.anim = null;
-      return;
-    }
-    // In a town with ground (L-664): a place's door, or a point on the street.
-    if (best) {
-      town.target = { placeId: best.id };
-    } else {
-      var m = M.toMap(view, point.x, point.y);
-      var spot = { x: Math.round(m.x - PAD), y: Math.round(m.y - PAD) };
-      var inTown = spot.x >= 0 && spot.y >= 0 && spot.x <= SPAN && spot.y <= SPAN;
-      town.target = inTown ? { point: spot } : null;
-    }
-    computePreview();
-  }
-
-  // ── The place card ────────────────────────────────
-
-  function button(text, onClick) {
-    var b = el('button', 'app-btn loom-map-travel', text);
-    b.type = 'button';
-    b.disabled = state.turnInProgress;
-    b.addEventListener('click', onClick);
-    return b;
-  }
-
-  // Routes out of town from a way out: set out along the open ones.
-  function routesOut(info, place, act, standingHere) {
+  // The ways on from a way out, as facts.
+  function waysOn(info, place) {
     var exits = exitsFrom(place.id);
     if (!exits.length) return;
-    if (!standingHere) {
-      var names = exits.map(function (exit) {
-        return exit.name + ' (' + (exit.via || 'route') + ')';
-      });
-      info.appendChild(el('p', 'loom-map-info-facts', 'Ways on from here: ' + names.join(', ')));
-      return;
-    }
-    exits.forEach(function (exit) {
-      var label = exit.name + (exit.via ? ' by ' + exit.via : '');
-      if (!exit.open) {
-        info.appendChild(el('p', 'loom-map-info-status is-closed', label + ': the way is closed.'));
-        return;
-      }
-      var list = el('div', 'loom-town-routes');
-      var ways = exit.waysIn || [];
-      if (ways.length > 1) {
-        // Where to arrive (L-346): travelling to a way in arrives by it.
-        info.appendChild(
-          el('p', 'loom-map-info-status', 'Set out for ' + label + ', arriving by:')
-        );
-        ways.forEach(function (way) {
-          list.appendChild(
-            button(way.name, function () {
-              act(way.id, exit.name + ' by ' + way.name);
-            })
-          );
-        });
-      } else {
-        list.appendChild(
-          button('Set out for ' + label, function () {
-            act(exit.id, exit.name);
-          })
-        );
-      }
-      info.appendChild(list);
+    var names = exits.map(function (exit) {
+      return exit.name + ' (' + (exit.via || 'route') + ')' + (exit.open ? '' : ', closed');
     });
+    info.appendChild(el('p', 'loom-map-info-facts', 'Ways on from here: ' + names.join(', ')));
   }
 
-  /**
-   * Fills the card for the selected place. `act(id, name)` makes the move:
-   * a place in town, or a world place along a route out.
-   */
-  function renderInfo(info, act) {
+  /** The card: the place or spot looked at, the walk there, and the turn. */
+  function renderInfo(info) {
     info.innerHTML = '';
-    if (walking()) {
-      renderWalkingInfo(info, act);
-      return;
-    }
-    var here = placeById(town.data.here);
     var place = placeById(town.selected);
-    if (!place) {
-      var where = here ? "You're at " + here.name + ', ' + town.data.name + '. ' : '';
-      info.appendChild(
-        el(
-          'p',
-          'loom-map-hint',
-          where + 'Tap a place to see it. Drag to pan, pinch or scroll to zoom.'
-        )
-      );
-      return;
-    }
-
-    info.appendChild(el('h3', 'loom-map-info-name', place.name));
-    var facts = [capitalised(place.kind)];
-    if (place.entranceFor) facts.push('Way in and out by ' + listOf(place.entranceFor));
-    info.appendChild(el('p', 'loom-map-info-facts', facts.join(' · ')));
-
-    if (place.id === town.data.here) {
-      info.appendChild(el('p', 'loom-map-info-status', 'You are here.'));
-      if (place.entranceFor) {
-        routesOut(info, place, act, true);
-      } else if (town.data.exits.length) {
-        var ways = town.data.places
-          .filter(function (p) {
-            return p.entranceFor && !p.retired;
-          })
-          .map(function (p) {
-            return p.name;
-          });
-        if (ways.length) {
-          info.appendChild(
-            el('p', 'loom-map-info-facts', 'To leave town, go to ' + listOf(ways) + '.')
-          );
-        }
-      }
-      return;
-    }
-    if (place.retired) {
-      info.appendChild(
-        el('p', 'loom-map-info-status is-closed', "That place can't be reached anymore.")
-      );
-      return;
-    }
-    if (!place.open) {
-      info.appendChild(
-        el('p', 'loom-map-info-status is-closed', 'Not built yet. The way is closed.')
-      );
-      return;
-    }
-    if (isNext(place.id)) {
-      info.appendChild(
-        button('Walk here', function () {
-          act(place.id, place.name);
-        })
-      );
-    } else {
-      info.appendChild(el('p', 'loom-map-info-status', "There's no open way there from here."));
-    }
-    if (place.entranceFor) routesOut(info, place, act, false);
-  }
-
-  // The card in a town the player walks (L-664): the place or spot chosen,
-  // the walk there, and the turn.
-  function renderWalkingInfo(info, act) {
-    var place = placeById(town.selected);
-    var from = fromPoint();
     if (place) {
       info.appendChild(el('h3', 'loom-map-info-name', place.name));
-      var facts = [capitalised(place.kind)];
-      if (place.entranceFor) facts.push('Way in and out by ' + listOf(place.entranceFor));
-      info.appendChild(el('p', 'loom-map-info-facts', facts.join(' · ')));
-      var atDoor = from && isPoint(place.position) && near(from, place.position);
-      if (atDoor) {
-        info.appendChild(el('p', 'loom-map-info-status', 'You are at its door.'));
-        if (place.entranceFor) routesOut(info, place, act, true);
-        info.appendChild(
-          button('Go in', function () {
-            act(place.id, place.name);
-          })
-        );
+      info.appendChild(el('p', 'loom-map-info-facts', factsOf(place)));
+      var status = null;
+      var from = walking() && fromPoint();
+      if (walking() && from && isPoint(place.position) && near(from, place.position)) {
+        status = 'You are at its door.';
+      } else if (!walking() && place.id === town.data.here) {
+        status = 'You are here.';
       } else if (place.retired) {
-        info.appendChild(
-          el('p', 'loom-map-info-status is-closed', "That place can't be reached anymore.")
-        );
+        status = "That place can't be reached anymore.";
       } else if (!place.open) {
-        info.appendChild(
-          el('p', 'loom-map-info-status is-closed', 'Not built yet. The way is closed.')
-        );
-      } else {
-        renderWalk(info);
+        status = 'Not built yet. The way is closed.';
+      } else if (!walking() && !isNext(place.id)) {
+        status = "There's no open way there from here.";
       }
-    } else if (town.target && town.target.point) {
+      if (status) {
+        info.appendChild(
+          el('p', 'loom-map-info-status' + (place.open ? '' : ' is-closed'), status)
+        );
+      }
+      if (place.entranceFor) waysOn(info, place);
+      if (walking() && town.target && !walkRefusal(town.preview) && !town.preview.here) {
+        info.appendChild(
+          el('p', 'loom-map-info-facts loom-town-walk-line', walkLine(town.preview))
+        );
+      }
+    } else if (walking() && town.target && town.target.point) {
       info.appendChild(el('h3', 'loom-map-info-name', 'A spot in the street'));
-      renderWalk(info);
+      var no = walkRefusal(town.preview);
+      info.appendChild(
+        no
+          ? el('p', 'loom-map-info-status is-closed', no)
+          : el('p', 'loom-map-info-facts loom-town-walk-line', walkLine(town.preview))
+      );
     } else {
+      var here = placeById(town.data.here);
+      var where = walking()
+        ? 'You are in ' + town.data.name + '. '
+        : here
+          ? "You're at " + here.name + ', ' + town.data.name + '. '
+          : '';
       info.appendChild(
         el(
           'p',
           'loom-map-hint',
-          'You are in ' +
-            town.data.name +
-            '. Tap the street or a place to walk there. Drag to pan, pinch or scroll to zoom.'
+          where +
+            (walking()
+              ? 'Click the street or a place for what you can do. '
+              : 'Click a place for what you can do there. ') +
+            'Drag to pan, scroll or pinch to zoom.'
         )
       );
     }
-    renderTurn(info);
+    if (walking()) renderTurn(info);
   }
+
+  engine.addLayer('town', { draw: draw });
 
   Loom.town = {
     BOUNDS: BOUNDS,
@@ -918,8 +1021,8 @@
     framePoints: framePoints,
     herePoint: herePoint,
     selectHere: selectHere,
-    draw: draw,
-    pick: pick,
+    tap: tap,
+    hover: hover,
     renderInfo: renderInfo,
     current: function () {
       return town.data;
