@@ -103,32 +103,11 @@
         </div>
 
         <!-- Play view -->
-        <!-- Play view: shell.js builds its frame (menu bar, map, side panel) in
-             #loom-play-shell and hosts the panes below in it, unchanged -->
+        <!-- Play view: shell.js builds its frame (menu bar, map, side panel or,
+             on a phone, bottom sheet) in #loom-play-shell and hosts the panes
+             below in it -->
         <div id="loom-view-play" class="loom-view hidden">
           <div id="loom-play-shell"></div>
-
-          <!-- Story / Map tabs: phones only, and only for worlds with a map -->
-          <div class="loom-play-tabs hidden" id="loom-play-tabs" role="tablist">
-            <button
-              class="loom-play-tab is-active"
-              id="loom-tab-story"
-              type="button"
-              role="tab"
-              aria-selected="true"
-            >
-              Story
-            </button>
-            <button
-              class="loom-play-tab"
-              id="loom-tab-map"
-              type="button"
-              role="tab"
-              aria-selected="false"
-            >
-              Map
-            </button>
-          </div>
 
           <!-- The map (map.js): the world map (discovered places, routes, travel),
                  or, in a town, the town view (town.js) -->

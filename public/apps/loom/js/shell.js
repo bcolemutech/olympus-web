@@ -8,8 +8,11 @@
   // the story pane (play.js) is the panel's body, until their own stories
   // rebuild them.
   //
-  // On a phone (under 900px wide) the panes stack under the Story / Map tabs
-  // as before, below the menu bar, until L-728 brings the bottom sheet.
+  // On a phone (under 900px wide; L7, L-728) the map fills the screen under
+  // the menu bar and the panel is a bottom sheet over it: peeking with the
+  // latest line, half up or full, dragged or tapped between them by its grip,
+  // and rising when a new line comes. A one-time note suggests a bigger
+  // screen.
 
   var Loom = window.Loom;
   var ui = Loom.ui;
@@ -22,6 +25,10 @@
   var MAX_WIDTH = 720; // px, at its widest
   var MAP_MIN = 320; // px of map always left beside it
   var KEY_STEP = 24; // px an arrow key resizes by
+  var SHEETS = ['peek', 'half', 'full']; // the bottom sheet's heights, lowest first
+  var TAP_SLOP = 6; // px a press on the grip may move and still be a tap
+  var NOTE_KEY = 'loom.bigScreenNote'; // the bigger-screen note, once dismissed
+  var PHONE = window.matchMedia('(max-width: 899px)');
 
   var nodes = null; // the hosted views: { tabs, map, story }
 
@@ -30,8 +37,15 @@
     return Math.round(Math.min(max, Math.max(MIN_WIDTH, width)));
   }
 
+  /** On a phone, the sheet up to half if it only peeks (a new line, typing). */
+  function raise() {
+    var u = store.get().ui;
+    if (u.phone && u.sheet === 'peek') store.setUi({ sheet: 'half' });
+  }
+
   function openPanel(focusInput) {
     store.setUi({ panelCollapsed: false });
+    raise();
     Loom.journal.finishReveal(); // the full narration, at once
     if (focusInput) Loom.journal.focusInput();
   }
@@ -168,16 +182,142 @@
       <${MenuButton}
         id="journal"
         label="Journal"
-        pressed=${!state.panelCollapsed}
-        active=${!state.panelCollapsed}
+        pressed=${state.phone ? state.sheet !== 'peek' : !state.panelCollapsed}
+        active=${state.phone ? state.sheet !== 'peek' : !state.panelCollapsed}
         onClick=${function () {
-          if (store.get().ui.panelCollapsed) openPanel(true);
+          var u = store.get().ui;
+          if (u.phone) store.setUi({ sheet: u.sheet === 'peek' ? 'half' : 'peek' });
+          else if (u.panelCollapsed) openPanel(true);
           else store.setUi({ panelCollapsed: true });
         }}
       />
       ${extra}
       <span class="loom-menubar-title">${save ? save.worldName : ''}</span>
     </nav>`;
+  }
+
+  // ── The bottom sheet, on a phone (L7) ─────────────
+
+  // The grip: drag it to any height and let go to snap to the nearest of
+  // peek, half and full; a tap goes up a step (from full, back to peek); the
+  // arrow keys step up and down.
+  function SheetGrip(props) {
+    var drag = hooks.useRef(null);
+    var sheet = props.sheet;
+
+    function heights(panel) {
+      var room = panel.parentNode.clientHeight;
+      var peek = parseFloat(
+        window.getComputedStyle(panel).getPropertyValue('--loom-sheet-peek-px')
+      );
+      return { peek: peek || 84, half: Math.round(room * 0.5), full: room - 8 };
+    }
+
+    function step(by) {
+      var i = Math.max(0, Math.min(SHEETS.length - 1, SHEETS.indexOf(sheet) + by));
+      store.setUi({ sheet: SHEETS[i] });
+    }
+
+    function down(event) {
+      if (event.button !== 0) return;
+      var panel = event.currentTarget.closest('.loom-shell-panel');
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drag.current = {
+        panel: panel,
+        y: event.clientY,
+        from: panel.getBoundingClientRect().height,
+        moved: false,
+        sizes: heights(panel),
+      };
+    }
+
+    function move(event) {
+      var d = drag.current;
+      if (!d) return;
+      var dy = event.clientY - d.y;
+      if (Math.abs(dy) > TAP_SLOP) d.moved = true;
+      if (!d.moved) return;
+      var h = Math.max(d.sizes.peek, Math.min(d.sizes.full, d.from - dy));
+      d.panel.style.height = h + 'px';
+      d.panel.classList.add('is-dragging');
+    }
+
+    function up(event) {
+      var d = drag.current;
+      drag.current = null;
+      if (!d) return;
+      d.panel.classList.remove('is-dragging');
+      if (!d.moved) {
+        store.setUi({ sheet: sheet === 'full' ? 'peek' : SHEETS[SHEETS.indexOf(sheet) + 1] });
+        return;
+      }
+      var h = d.panel.getBoundingClientRect().height;
+      d.panel.style.height = '';
+      var nearest = SHEETS.reduce(function (best, name) {
+        return Math.abs(d.sizes[name] - h) < Math.abs(d.sizes[best] - h) ? name : best;
+      }, 'peek');
+      store.setUi({ sheet: nearest });
+      event.preventDefault();
+    }
+
+    return html`<button
+      class="loom-sheet-grip"
+      id="loom-sheet-grip"
+      type="button"
+      aria-label=${'The journal, ' +
+      (sheet === 'peek' ? 'peeking' : sheet === 'half' ? 'half open' : 'open') +
+      ': drag or tap to resize'}
+      aria-expanded=${String(sheet !== 'peek')}
+      onPointerDown=${down}
+      onPointerMove=${move}
+      onPointerUp=${up}
+      onPointerCancel=${up}
+      onKeyDown=${function (event) {
+        var by = { ArrowUp: 1, ArrowDown: -1, Enter: 1, ' ': 1 }[event.key];
+        if (!by) return;
+        event.preventDefault();
+        if (by > 0 && sheet === 'full' && event.key !== 'ArrowUp') store.setUi({ sheet: 'peek' });
+        else step(by);
+      }}
+    >
+      <span class="loom-sheet-bar" aria-hidden="true"></span>
+    </button>`;
+  }
+
+  // The note on a phone, once: the Loom is made for a bigger screen (L7).
+  function noteDismissed() {
+    try {
+      return localStorage.getItem(NOTE_KEY) === 'dismissed';
+    } catch {
+      return false;
+    }
+  }
+
+  function BigScreenNote() {
+    var pair = hooks.useState(noteDismissed());
+    var dismissed = pair[0];
+    var setDismissed = pair[1];
+    if (dismissed) return null;
+    return html`<div class="loom-bigscreen-note loom-map-ui" id="loom-bigscreen-note" role="note">
+      <span
+        >The Loom is made for a bigger screen: a tablet or computer shows the map and the story side
+        by side.</span
+      >
+      <button
+        class="loom-bigscreen-dismiss"
+        type="button"
+        onClick=${function () {
+          try {
+            localStorage.setItem(NOTE_KEY, 'dismissed');
+          } catch {
+            // Not remembered: it shows again next time, nothing else depends on it.
+          }
+          setDismissed(true);
+        }}
+      >
+        Got it
+      </button>
+    </div>`;
   }
 
   // ── The side panel (L1, L2) ───────────────────────
@@ -216,10 +356,25 @@
       store.setUi({ panelWidth: clampWidth(store.get().ui.panelWidth + step) });
     }
 
+    var sheet = state.phone && state.hasMap ? state.sheet : null;
     return html`<aside
-      class=${'loom-shell-panel' + (collapsed ? ' is-collapsed' : '')}
+      class=${'loom-shell-panel' +
+      (collapsed ? ' is-collapsed' : '') +
+      (sheet ? ' is-sheet is-' + sheet : '')}
       aria-label="Journal"
     >
+      ${sheet && html`<${SheetGrip} sheet=${sheet} />`}
+      ${sheet === 'peek' &&
+      html`<button
+        class="loom-sheet-line"
+        id="loom-sheet-line"
+        type="button"
+        onClick=${function () {
+          store.setUi({ sheet: 'half' });
+        }}
+      >
+        ${state.latestLine || 'The journal: drag up to read and act'}
+      </button>`}
       ${!collapsed &&
       html`<div
         class="loom-panel-handle"
@@ -288,18 +443,31 @@
       };
     }, []);
 
+    // Phone or not, as the window changes (L7).
+    hooks.useEffect(function () {
+      function check() {
+        store.setUi({ phone: PHONE.matches });
+      }
+      check();
+      if (PHONE.addEventListener) PHONE.addEventListener('change', check);
+      return function () {
+        if (PHONE.removeEventListener) PHONE.removeEventListener('change', check);
+      };
+    }, []);
+
     var classes = ['loom-shell'];
     if (state.panelCollapsed) classes.push('is-collapsed');
     if (!state.hasMap) classes.push('no-map');
+    if (state.phone) classes.push('is-phone');
     return html`<div
       class=${classes.join(' ')}
       style=${{ '--loom-panel-width': clampWidth(state.panelWidth) + 'px' }}
     >
       <${MenuBar} />
       <div class="loom-shell-body">
-        <${Host} class="loom-shell-tabs" node=${nodes.tabs} />
         <div class="loom-shell-map" ref=${mapRef}>
           <${Host} class="loom-shell-map-host" node=${nodes.map} />
+          ${state.phone && state.hasMap && html`<${BigScreenNote} />`}
         </div>
         <${Panel} />
       </div>
@@ -313,7 +481,6 @@
   function mount() {
     if (nodes) return;
     nodes = {
-      tabs: Loom.getRef('loom-play-tabs'),
       map: Loom.getRef('loom-map-pane'),
       story: Loom.getRef('loom-story-pane'),
     };
@@ -324,10 +491,14 @@
     ui.render(html`<${Shell} />`, root);
   }
 
-  /** A new line of narration: the collapsed panel shows it, and opens (L2). */
+  /**
+   * A new line of narration: the collapsed panel shows it, and opens (L2);
+   * on a phone, the sheet rises from its peek (L7).
+   */
   function newLine(text) {
     store.setUi({ latestLine: text || '' });
     if (store.get().ui.panelCollapsed) openPanel(false);
+    else raise();
   }
 
   /**
@@ -344,6 +515,7 @@
   Loom.shell = {
     mount: mount,
     newLine: newLine,
+    raise: raise,
     addMenuButton: addMenuButton,
   };
 })();

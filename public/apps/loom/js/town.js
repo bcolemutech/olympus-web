@@ -452,7 +452,6 @@
     var action = place ? { target: place.id } : { point: { x: target.point.x, y: target.point.y } };
     if (there) Loom.play.walkThere(action, label);
     else Loom.play.walkTo(action, label);
-    Loom.map.showStory();
   }
 
   function distance(metres) {
@@ -480,7 +479,6 @@
   // A move to a place in town, or along a route out of it.
   function act(id, name) {
     Loom.play.travelTo(id, name);
-    Loom.map.showStory(); // on a phone, the story is where the journey is told
   }
 
   /** The places as map points, for framing the view. */
