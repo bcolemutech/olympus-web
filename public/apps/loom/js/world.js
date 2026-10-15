@@ -80,6 +80,36 @@
     return ids;
   }
 
+  // How long the trip to a place takes from here (L-376; game time R3),
+  // from loomGetMap's estimate (L-373): "about 6 hours by trail", and the
+  // part of day on arrival when night falls or day breaks on the way:
+  // "arriving at night", "arriving on Day 2, in the morning". Null without one.
+  var ARRIVING = {
+    night: 'at night',
+    dawn: 'at dawn',
+    midday: 'at midday',
+    morning: 'in the morning',
+    afternoon: 'in the afternoon',
+    evening: 'in the evening',
+  };
+  function tripWords(placeId) {
+    var here = world.data && world.data.here;
+    var link = (world.data ? world.data.links : []).filter(function (l) {
+      return (l.from === here && l.to === placeId) || (l.to === here && l.from === placeId);
+    })[0];
+    var travel = link && link.travel;
+    if (!travel) return null;
+    var words = travel.label;
+    var arrives = travel.crossesDuskOrDawn && /^Day (\d+), (\w+)$/.exec(travel.arrives || '');
+    if (arrives) {
+      var now = /^Day (\d+)/.exec((Loom.store.get().turn || {}).time || '');
+      var sameDay = now && now[1] === arrives[1];
+      words +=
+        ', arriving ' + (sameDay ? '' : 'on Day ' + arrives[1] + ', ') + ARRIVING[arrives[2]];
+    }
+    return words;
+  }
+
   /** A new loomGetMap result (after loading or a turn). */
   function setData(data) {
     world.data = data;
@@ -327,10 +357,11 @@
     var ways = (place.waysIn || []).filter(function (w) {
       return typeof via !== 'string' || w.via.indexOf(via) !== -1;
     });
+    var trip = no ? null : tripWords(place.id);
     if (!no && ways.length > 1) {
       ways.forEach(function (way) {
         items.push({
-          label: 'Move, arriving by ' + way.name,
+          label: 'Travel to ' + place.name + ' by ' + way.name + (trip ? ' · ' + trip : ''),
           onSelect: function () {
             travel(way.id, place.name + ' by ' + way.name);
           },
@@ -338,7 +369,7 @@
       });
     } else {
       items.push({
-        label: 'Move',
+        label: trip ? 'Travel to ' + place.name + ' · ' + trip : 'Move',
         disabled: Boolean(no),
         note: no || undefined,
         onSelect: function () {

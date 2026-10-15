@@ -12,6 +12,7 @@ const { recordOf, knownTo, added } = require('./seen');
 const { planTownStep, walksTown, townPlanOf } = require('./town-steps');
 const { lookInTown, townRecordOf } = require('./town-seen');
 const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
+const clock = require('../loom-canon/clock');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -196,6 +197,8 @@ async function runTurnPipeline(params) {
         narration: lines.join(' '),
         stateSummary: step.summary,
         suggestedActions: [],
+        // A step takes no time of its own: End turn charges it (L-371).
+        time: clock.timeView(clock.timeOf(save)),
         step: {
           cell: step.cell || save.cell || null,
           movementLeft: (step.turn || turnStateOf(save)).movementLeft,
@@ -245,6 +248,7 @@ async function runTurnPipeline(params) {
       narration: ACTED,
       stateSummary: save.recentSummary || '',
       suggestedActions: [],
+      time: clock.timeView(clock.timeOf(save)),
       refused: true,
     };
   }
@@ -292,6 +296,7 @@ function refusal(save, line) {
     narration: line,
     stateSummary: save.recentSummary || '',
     suggestedActions: [],
+    time: clock.timeView(clock.timeOf(save)),
     step: {
       townPoint: save.townPoint || null,
       movementLeft: turnStateOf(save).movementLeft,
@@ -336,6 +341,7 @@ async function townStep(params, target) {
     narration: lines.join(' '),
     stateSummary: step.before.recentSummary || '',
     suggestedActions: [],
+    time: clock.timeView(clock.timeOf(step.before)),
     step: {
       townPoint: step.point || step.before.townPoint || null,
       movementLeft: (step.turn || turnStateOf(step.before)).movementLeft,

@@ -85,7 +85,13 @@ describe('ending a turn', () => {
     await seed('save-spent', { turn: { n: 3, movementLeft: 0, actionUsed: true, plan } });
     const before = (await clock()) || 0;
     const result = await endTurn('save-spent');
-    expect(result).toEqual({ narration: 'Turn 3 ends.', stateSummary: '', suggestedActions: [] });
+    expect(result).toEqual({
+      narration: 'Turn 3 ends.',
+      stateSummary: '',
+      suggestedActions: [],
+      // The time, for the map's clock (L-376): 08:00 and a 5-minute turn.
+      time: { seconds: 8 * 3600 + 300, label: 'Day 1, morning' },
+    });
     expect((await saveOf('save-spent')).turn).toEqual({
       n: 4,
       movementLeft: 20,

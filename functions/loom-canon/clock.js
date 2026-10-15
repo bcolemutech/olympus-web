@@ -186,6 +186,11 @@ function timeLine(now, spent) {
   );
 }
 
+/** A time as the play view gets it (L-376; T15): `{ seconds, label }`. */
+function timeView(seconds) {
+  return { seconds, label: label(seconds) };
+}
+
 /**
  * The rules time is charged by, for a world (R2). Today every world takes
  * the defaults; a world's own settings come with L-714 and Phase 9.
@@ -215,6 +220,7 @@ module.exports = {
   crossed,
   duration,
   timeLine,
+  timeView,
   nextStartOf,
   timeRules,
   turnSeconds,

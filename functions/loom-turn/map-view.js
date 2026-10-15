@@ -101,6 +101,8 @@ function mapView(canonWorld, save, record, townRecord) {
     // The turn (L-611 / #441): which it is, the movement left of the
     // character's speed, whether its action is used, and any plan kept.
     turn: turnView(save),
+    // The save's time, for the map's clock (L-376): "Day 1, evening".
+    time: clock.timeView(clock.timeOf(save)),
     map:
       map && map.width
         ? {
@@ -119,7 +121,16 @@ function mapView(canonWorld, save, record, townRecord) {
 // with no length.
 function estimate(canonWorld, save, toId) {
   const t = travel.trip(canonWorld, save.location, toId, clock.timeOf(save));
-  return t ? { miles: t.miles, seconds: t.seconds, label: t.label, arrives: t.arrives } : null;
+  return t
+    ? {
+        miles: t.miles,
+        seconds: t.seconds,
+        label: t.label,
+        arrives: t.arrives,
+        // Whether night falls or day breaks on the way (L-376; R3).
+        crossesDuskOrDawn: t.crossed.length > 0,
+      }
+    : null;
 }
 
 // A settlement's open ways in, and the routes each serves (`via`, a route
