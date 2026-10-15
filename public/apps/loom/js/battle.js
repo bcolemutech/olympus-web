@@ -69,13 +69,16 @@
   var FOG_DIM = 0.6; // seen before, out of sight now
   var FOG_SCALE = 4; // fog texture pixels a square, before it is stretched
   var FOG_BLUR = 3; // px of that texture: the feathered edge, about ¾ of a square
+  var MIST = 0.16; // the drifting mist over unseen ground, at its thickest (K3)
+  var MIST_RGB = '84,98,128';
+  var MIST_PERIOD = 9; // s for the mist to turn over
 
   var battle = {
     data: null, // loomGetMap's `battleMap`
     turn: null, // loomGetMap's `turn` (L-611): movement left, the plan
     selected: null, // a cell { x, y }
     selectedDoor: null, // a door's id, when a door is clicked (L-627)
-    art: { path: null, texture: null },
+    art: null, // its image (Loom.draw.art): the copy, then the full image (L-727)
     reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
     fog: null, // the fog (L-634): { dark: runs, dim: runs }, as reach's runs
     known: null, // whether a square (by y × width + x) has been seen (L-635)
@@ -87,7 +90,7 @@
     nodes: null, // the PixiJS objects
     labels: [], // the labels in use
     tokens: {}, // person id → token
-    fogTextures: { key: null, dim: null, dark: null },
+    fogTextures: { key: null, dim: null, dark: null, mistA: null, mistB: null, unseen: 0 },
   };
 
   // Something drawn changed: rebuild on the next draw.
@@ -217,25 +220,16 @@
 
   // ── Data ──────────────────────────────────────────
 
+  // The map's art: its screen-sized copy first, the full image once zoomed in
+  // (A1; L-727).
   function loadArt(image) {
-    if (!image) {
-      battle.art = { path: null, texture: null };
-      return;
-    }
-    var key = Loom.artKey(image);
-    if (key === battle.art.path) return;
-    battle.art = { path: key, texture: null };
-    Loom.draw
-      .loadTexture(image)
-      .then(function (texture) {
-        if (battle.art.path !== key) return; // the player moved on meanwhile
-        battle.art.texture = texture;
+    if (!battle.art) {
+      battle.art = Loom.draw.art(function () {
         changed();
         engine.draw();
-      })
-      .catch(function (err) {
-        console.error('Could not load the battle-map art:', err);
-      });
+      }, 'battle-map art');
+    }
+    battle.art.set(image);
   }
 
   /** Takes loomGetMap's `battleMap` (or null), and its `turn`. */
@@ -466,12 +460,14 @@
       under: new PIXI.Graphics(), // reach, grid, layers, entries, exits, features
       people: new PIXI.Container(),
       fogDark: new PIXI.Sprite(),
+      mistA: new PIXI.Sprite(),
+      mistB: new PIXI.Sprite(),
       labels: new PIXI.Container(),
       over: new PIXI.Graphics(), // the selected square and the way
       you: Loom.draw.token(),
     };
     n.art.alpha = 0.95;
-    n.scene.addChild(n.ground, n.art, n.fogDim, n.under, n.people, n.fogDark);
+    n.scene.addChild(n.ground, n.art, n.fogDim, n.under, n.people, n.fogDark, n.mistA, n.mistB);
     n.scene.addChild(n.labels, n.over, n.you.container);
     container.addChild(n.scene);
     battle.nodes = n;
@@ -491,7 +487,8 @@
     if (battle.fogTextures.key === key) return battle.fogTextures;
     var seen = unpacked(d.fog.seen);
     var inSight = unpacked(d.fog.inSight);
-    var make = function (alphaOf) {
+    var unseen = 0;
+    var make = function (alphaOf, rgb) {
       var raw = document.createElement('canvas');
       raw.width = d.width * FOG_SCALE;
       raw.height = d.height * FOG_SCALE;
@@ -500,7 +497,7 @@
         for (var x = 0; x < d.width; x++) {
           var a = alphaOf(y * d.width + x, x, y);
           if (!a) continue;
-          ctx.fillStyle = 'rgba(0,0,0,' + a + ')';
+          ctx.fillStyle = 'rgba(' + (rgb || '0,0,0') + ',' + a + ')';
           ctx.fillRect(x * FOG_SCALE, y * FOG_SCALE, FOG_SCALE, FOG_SCALE);
         }
       }
@@ -514,18 +511,32 @@
       texture.source.scaleMode = 'linear';
       return texture;
     };
-    ['dim', 'dark'].forEach(function (kind) {
+    ['dim', 'dark', 'mistA', 'mistB'].forEach(function (kind) {
       if (battle.fogTextures[kind]) battle.fogTextures[kind].destroy(true);
     });
+    // The mist (K3): blotches two squares across, in two phases the ambient
+    // touches cross-fade and drift, over unseen ground only.
+    var mist = function (phase) {
+      return make(function (i, x, y) {
+        return seen(i)
+          ? 0
+          : MIST * grain(Math.floor((x + phase * 3) / 2), Math.floor((y + phase * 5) / 2));
+      }, MIST_RGB);
+    };
     battle.fogTextures = {
       key: key,
       dim: make(function (i) {
         return seen(i) && !inSight(i) ? FOG_DIM : 0;
       }),
       dark: make(function (i, x, y) {
-        return seen(i) ? 0 : 0.9 + 0.1 * grain(x, y);
+        if (seen(i)) return 0;
+        unseen += 1;
+        return 0.9 + 0.1 * grain(x, y);
       }),
+      mistA: mist(0),
+      mistB: mist(1),
     };
+    battle.fogTextures.unseen = unseen;
     return battle.fogTextures;
   }
 
@@ -553,19 +564,23 @@
       .stroke({ width: px, color: COLOURS.groundEdge, alpha: 0.25 });
 
     // The art is stretched to the grid, as Claude sees it in view_image.
-    var art = d.image && battle.art.texture && battle.art.path === Loom.artKey(d.image);
+    var art = d.image && battle.art && battle.art.ready(d.image);
     n.art.visible = Boolean(art);
     if (art) {
       n.art.texture = battle.art.texture;
       n.art.position.set(PAD, PAD);
       n.art.width = gw;
       n.art.height = gh;
+      battle.art.sharpen(Loom.draw.devicePx(Math.max(gw, gh) * view.scale));
     }
 
     var fog = d.fog ? fogTextures(d) : null;
+    var misty = Boolean(fog && fog.unseen) && !reducedMotion(); // only while it drifts
     [
       [n.fogDim, fog && fog.dim],
       [n.fogDark, fog && fog.dark],
+      [n.mistA, misty && fog.mistA],
+      [n.mistB, misty && fog.mistB],
     ].forEach(function (pair) {
       pair[0].visible = Boolean(pair[1]);
       if (!pair[1]) return;
@@ -1111,7 +1126,24 @@
     return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
   }
 
-  engine.addLayer('battle', { draw: draw });
+  // The ambient touches (K3; L-727): the mist over unseen ground turns over
+  // slowly, its two phases cross-fading as they drift a little apart.
+  function ambient(container, t) {
+    var n = battle.nodes;
+    if (!n || !battle.data || !n.mistA.visible) return false;
+    var w = 0.5 + 0.5 * Math.sin((t * 2 * Math.PI) / MIST_PERIOD);
+    var drift = Math.sin((t * 2 * Math.PI) / (MIST_PERIOD * 2)) * CELL * 0.3;
+    n.mistA.alpha = 1 - w;
+    n.mistB.alpha = w;
+    n.mistA.position.set(PAD + drift, PAD);
+    n.mistB.position.set(PAD - drift, PAD + drift / 2);
+    return true;
+  }
+
+  engine.addLayer('battle', {
+    ambient: ambient,
+    draw: draw,
+  });
 
   Loom.battle = {
     setData: setData,

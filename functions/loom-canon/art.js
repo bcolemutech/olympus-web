@@ -1,5 +1,7 @@
 'use strict';
 
+const { screenLinkOf } = require('../studio/screen');
+
 /**
  * A world's art (planning/the-image-studio.md §4.4; L-704 / #540): its map, a
  * town's art, a battle map's art, and its cover. Art is a library image
@@ -77,8 +79,11 @@ function coverArt(world) {
  */
 function forPlayer(art) {
   if (!art) return null;
+  // A library image's screen-sized copy (L-727), which the Loom loads first.
+  const screenUrl = art.url ? screenLinkOf(art.url) : null;
   return {
     ...(art.url ? { url: art.url } : { path: art.path }),
+    ...(screenUrl ? { screenUrl } : {}),
     width: art.width,
     height: art.height,
   };

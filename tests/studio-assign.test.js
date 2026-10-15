@@ -319,9 +319,21 @@ describe('players and view_image see the assigned image', () => {
     }));
     const view = await loomGetMap.run({ data: { worldId, saveId }, auth: PLAYER });
     const { map } = await worldDoc(worldId);
-    expect(view.map.image).toEqual({ url: map.image.link, width: 400, height: 300 });
+    // With its screen-sized copy's link beside it (L-727).
+    const screenOf = (link) => link.replace('%2Fcurrent?', '%2Fscreen?');
+    expect(view.map.image).toEqual({
+      url: map.image.link,
+      screenUrl: screenOf(map.image.link),
+      width: 400,
+      height: 300,
+    });
     const townArt = (await entity(worldId, 'locations', 'loc_1')).town.image;
-    expect(view.town.image).toEqual({ url: townArt.link, width: 500, height: 500 });
+    expect(view.town.image).toEqual({
+      url: townArt.link,
+      screenUrl: screenOf(townArt.link),
+      width: 500,
+      height: 500,
+    });
     expect(JSON.stringify(view)).not.toMatch(/imageId|usedIn|createdBy/);
   });
 

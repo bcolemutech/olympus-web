@@ -53,7 +53,7 @@
     item.setAttribute('aria-label', record.title);
     var frame = el('div', 'studio-thumb');
     var img = el('img');
-    img.src = record.link;
+    Studio.thumb(img, record); // its screen-sized copy (L-727)
     img.alt = '';
     img.loading = 'lazy';
     img.decoding = 'async';

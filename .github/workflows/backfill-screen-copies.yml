@@ -1,0 +1,87 @@
+name: Backfill Screen Copies
+
+# Makes screen-sized copies for the image studio's library (L-727 / #598;
+# planning/the-map-first-loom.md §3 A1), by running
+# scripts/backfill-screen-copies.js against production: every version stored
+# before L-727 that is bigger than a screen gets a copy at most 2048 px on its
+# long side, and every image its screen link, which the Loom loads first.
+#
+# Run it with apply off first: the run's summary shows what would be made.
+# Then run it again with apply on and confirm set to "all" (or the image id,
+# if you gave one). Copies already made are left alone, so running it twice
+# is safe.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'One image id (e.g. img_0123456789abcdef); leave empty for every image'
+        required: false
+        type: string
+        default: ''
+      apply:
+        description: 'Make the copies (off: a dry run that only shows the plan)'
+        required: true
+        type: boolean
+        default: false
+      confirm:
+        description: 'With apply: type "all", or the image id given above'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Validate the image id
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          if [[ -n "$IMAGE" && ! "$IMAGE" =~ ^img_[0-9a-f]{16}$ ]]; then
+            echo "::error::Not an image id: $IMAGE"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install script and functions dependencies (sharp makes the copies)
+        run: |
+          npm install --prefix scripts
+          npm ci --prefix functions
+
+      - name: Make the screen copies
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          IMAGE: ${{ inputs.image }}
+          APPLY: ${{ inputs.apply }}
+          BACKFILL_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          args=()
+          if [[ -n "$IMAGE" ]]; then args+=("$IMAGE"); else args+=(--all); fi
+          if [[ "$APPLY" == "true" ]]; then args+=(--apply); fi
+          set -o pipefail
+          node scripts/backfill-screen-copies.js "${args[@]}" 2>&1 | tee backfill.log
+
+      - name: Summary
+        if: always()
+        env:
+          APPLY: ${{ inputs.apply }}
+        run: |
+          if [[ "$APPLY" == "true" ]]; then
+            echo "## Screen copies: applied" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Screen copies: dry run (nothing written)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat backfill.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

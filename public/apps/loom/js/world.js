@@ -45,8 +45,7 @@
     selected: null, // a place id
     hovered: null, // a place id
     look: null, // what Look is showing: { kind: 'route', link } or null
-    artKey: null,
-    texture: null,
+    art: null, // the map's art (Loom.draw.art): its copy, then the full image
     nodes: null, // the PixiJS objects, built on first draw
     labels: {}, // place id → its label
   };
@@ -96,27 +95,16 @@
     world.look = null;
   }
 
-  // The world's art, as a texture under the camera. It loads as today: the
-  // full image (a screen-sized copy first comes with L-727).
+  // The world's art, as a texture under the camera: its screen-sized copy
+  // first, the full image once zoomed in past it (A1; L-727).
   function loadArt(image) {
-    var key = Loom.artKey(image);
-    if (key === world.artKey) return;
-    world.artKey = key;
-    world.texture = null;
-    if (!image) {
-      engine.draw();
-      return;
-    }
-    Loom.draw
-      .loadTexture(image)
-      .then(function (texture) {
-        if (world.artKey !== key) return; // another world's art meanwhile
-        world.texture = texture;
+    if (!world.art) {
+      world.art = Loom.draw.art(function () {
         engine.draw();
-      })
-      .catch(function (err) {
-        console.error('Could not load the map image:', err);
-      });
+      }, 'map image');
+    }
+    world.art.set(image);
+    engine.draw();
   }
 
   // ── Drawing ───────────────────────────────────────
@@ -159,12 +147,14 @@
     var data = world.data;
     if (!data) return;
 
-    n.art.visible = Boolean(world.texture);
-    if (world.texture) {
-      n.art.texture = world.texture;
+    var texture = world.art && world.art.ready(data.map.image) ? world.art.texture : null;
+    n.art.visible = Boolean(texture);
+    if (texture) {
+      n.art.texture = texture;
       n.art.position.set(view.x, view.y);
       n.art.width = data.map.width * view.scale;
       n.art.height = data.map.height * view.scale;
+      world.art.sharpen(Loom.draw.devicePx(Math.max(n.art.width, n.art.height)));
     }
 
     var byId = {};
@@ -432,7 +422,8 @@
         r: here ? 3.5 : 2,
       };
     });
-    var art = world.texture && world.texture.source && world.texture.source.resource;
+    var texture = world.art && world.art.texture;
+    var art = texture && texture.source && texture.source.resource;
     return {
       rect: {
         x: 0,

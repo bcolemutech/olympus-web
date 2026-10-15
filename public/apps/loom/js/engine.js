@@ -29,6 +29,7 @@
   var WHEEL_RATE = 0.0015;
 
   var TRANSITION_MS = 520; // the zoom between levels (L6)
+  var AMBIENT_MS = 50; // a frame of the ambient touches: slow drifts need no more (K3)
   var EASE_MS = 380; // the camera easing after the player (K3)
 
   // Presses on the panel's own buttons, card, menu and overlay are theirs,
@@ -52,6 +53,7 @@
     transition: null, // the zoom between levels running: see transition()
     ease: null, // the camera easing to a view: { from, to, t0, ms }
     following: true, // the camera follows the player until they move it (K3)
+    ambient: null, // the ambient touches running: { last } (K3; L-727)
   };
 
   function reducedMotion() {
@@ -116,7 +118,9 @@
 
   /**
    * Registers a level drawn by the engine: { draw(container, view, size),
-   * hit(point, view) }. Its container is shown only while it is the level.
+   * hit(point, view) }, and optionally ambient(container, seconds), its
+   * ambient touches, which returns whether it has any to show. Its container
+   * is shown only while it is the level.
    */
   function addLayer(level, layer) {
     var container = new window.PIXI.Container();
@@ -173,9 +177,52 @@
     if (!layer || !engine.camera.view) return;
     layer.draw(layer.container, engine.camera.view, s);
     app.render();
+    startAmbient();
   }
 
   // ── Between levels (L6) ───────────────────────────
+
+  // ── Ambient touches (K3; L-727) ───────────────────
+  // Drifting fog and water shimmer, from the level showing: a slow loop that
+  // runs only while that level has some to show, the page is visible and the
+  // camera is still, and never with prefers-reduced-motion.
+
+  function ambientWanted() {
+    var layer = engine.layers[engine.level];
+    return Boolean(
+      engine.app &&
+      layer &&
+      layer.ambient &&
+      engine.camera.view &&
+      !engine.transition &&
+      !document.hidden &&
+      !reducedMotion()
+    );
+  }
+
+  function startAmbient() {
+    if (engine.ambient || !ambientWanted()) return;
+    engine.ambient = { last: 0 };
+    window.requestAnimationFrame(tickAmbient);
+  }
+
+  function tickAmbient(now) {
+    if (!engine.ambient) return;
+    if (!ambientWanted()) {
+      engine.ambient = null;
+      return;
+    }
+    if (now - engine.ambient.last >= AMBIENT_MS) {
+      engine.ambient.last = now;
+      var layer = engine.layers[engine.level];
+      if (!layer.ambient(layer.container, now / 1000)) {
+        engine.ambient = null; // nothing to show; the next draw looks again
+        return;
+      }
+      if (!engine.pending) engine.app.render(); // a pending draw renders it anyway
+    }
+    window.requestAnimationFrame(tickAmbient);
+  }
 
   // Both levels drawn as the zoom goes: the one left fading out as the
   // camera goes in (or out), the one arrived at fading in.
@@ -521,6 +568,13 @@
       },
       { passive: false }
     );
+    // The ambient touches pick up again when the page shows, or motion is
+    // allowed again (a draw starts them if the level has any).
+    document.addEventListener('visibilitychange', requestDraw);
+    if (window.matchMedia) {
+      var motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      if (motion.addEventListener) motion.addEventListener('change', requestDraw);
+    }
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && menuOpen()) {
         closeMenu();
@@ -558,6 +612,10 @@
     },
     transitioning: function () {
       return Boolean(engine.transition);
+    },
+    /** Whether the ambient touches are running (K3). */
+    ambientRunning: function () {
+      return Boolean(engine.ambient);
     },
     zoomBy: zoomBy,
     openMenu: openMenu,
