@@ -121,6 +121,47 @@ function duration(seconds) {
   return `about ${halves(n)} days`;
 }
 
+// What came on the way: "dusk fell on the way", "dusk fell and dawn broke
+// on the way", or for more, how many of each and which came last.
+function crossedWords(crossed) {
+  const said = { dusk: 'dusk fell', dawn: 'dawn broke' };
+  if (crossed.length <= 2) return crossed.map((c) => said[c.event]).join(' and ') + ' on the way';
+  const count = (event) => crossed.filter((c) => c.event === event).length;
+  const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : n + ' times');
+  const last = crossed[crossed.length - 1].event;
+  return (
+    'on the way, dusk fell ' +
+    times(count('dusk')) +
+    ' and dawn broke ' +
+    times(count('dawn')) +
+    ', the last ' +
+    (last === 'dusk' ? 'dusk' : 'dawn')
+  );
+}
+
+/**
+ * The TIME line the GM is given (game time T14; L-375): the day and part of
+ * day `now`, and, when `spent` is given ({ seconds, crossed }), how much
+ * passed and any dusk or dawn on the way: "Day 3, evening. About 6 hours
+ * passed; dusk fell on the way." No time spent says so: "No time passed."
+ */
+function timeLine(now, spent) {
+  const at = label(now) + '.';
+  if (spent === undefined) return at;
+  const seconds = (spent && spent.seconds) || 0;
+  if (seconds <= 0) return at + ' No time passed.';
+  const passed = duration(seconds);
+  const crossed = (spent && spent.crossed) || [];
+  return (
+    at +
+    ' ' +
+    passed.charAt(0).toUpperCase() +
+    passed.slice(1) +
+    ' passed' +
+    (crossed.length ? '; ' + crossedWords(crossed) + '.' : '.')
+  );
+}
+
 /**
  * The rules time is charged by, for a world (R2). Today every world takes
  * the defaults; a world's own settings come with L-714 and Phase 9.
@@ -148,6 +189,7 @@ module.exports = {
   label,
   crossed,
   duration,
+  timeLine,
   timeRules,
   turnSeconds,
 };

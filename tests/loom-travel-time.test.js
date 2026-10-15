@@ -5,9 +5,10 @@
  * §4.2; L-373 / #501): world trips by route and speed, nights on the road,
  * ships through the night, walks across a town without ground by distance,
  * no time for a refused move, and loomGetMap's estimate equal to what the
- * trip then takes. Played through loomPlayTurn with Gemini stubbed, on a
- * small world built from Nisia's Hatham and Daldockley (positions 153,
- * 615.13 and 156.55, 611.7 at 2 mi a map unit).
+ * trip then takes; and the GM knows the time (§3 T14, §4.4; L-375 / #503):
+ * INTERPRET and NARRATE get a TIME line. Played through loomPlayTurn with
+ * Gemini stubbed, on a small world built from Nisia's Hatham and Daldockley
+ * (positions 153, 615.13 and 156.55, 611.7 at 2 mi a map unit).
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest loom-travel-time --verbose"
@@ -93,8 +94,16 @@ jest.mock('../functions/loom-canon', () => {
       worldId === mockWorld.id ? mockWorld : real.loadWorld(worldId, options),
   };
 });
+// What a typed action is read as (INTERPRET), and every prompt (L-375).
+const mockIntent = { verb: 'look', targets: [], params: {} };
+const prompts = { interpret: [], narrate: [] };
 const mockCallGemini = jest.fn(async (options) => {
   if (options.systemInstruction.includes('summarizer')) return 'A summary.';
+  if (options.systemInstruction.includes('INTERPRET stage')) {
+    prompts.interpret.push(options.systemInstruction);
+    return mockIntent;
+  }
+  prompts.narrate.push(options);
   return { narration: 'You go on.', inventedEntities: [], suggestedActions: [] };
 });
 jest.mock('../functions/gemini', () => ({
@@ -281,5 +290,80 @@ describe("loomGetMap's estimates", () => {
       at(1, 1)
     );
     expect(clockOnly).toMatchObject({ seconds: 1800, arrives: null, nights: 0 });
+  });
+});
+
+describe('the GM knows the time (L-375)', () => {
+  // A typed action: INTERPRET reads it, then NARRATE tells it.
+  async function typed(saveId, actionText, intent) {
+    Object.assign(mockIntent, intent);
+    prompts.interpret.length = 0;
+    prompts.narrate.length = 0;
+    await saveRef(saveId).update({ 'turn.actionUsed': false });
+    await loomPlayTurn.run({ data: { worldId: WORLD, saveId, actionText }, auth: PLAYER });
+  }
+  const timeIn = (message) => (message.match(/TIME \(final\):\n(.*)/) || [])[1];
+
+  test('both prompts carry the TIME line', async () => {
+    await seed('save-gm-look', { placeId: 'plc_market', time: at(1, 18, 30) });
+    await typed('save-gm-look', 'look around', { verb: 'look', targets: [], params: {} });
+    expect(prompts.interpret).toHaveLength(1);
+    expect(prompts.interpret[0]).toContain('TIME: Day 1, evening.');
+    expect(prompts.narrate).toHaveLength(1);
+    // Looking takes no time of its own (T5): it says so, inventing none.
+    expect(timeIn(prompts.narrate[0].userMessage)).toBe('Day 1, evening. No time passed.');
+    // The narrator is told how to use it.
+    expect(prompts.narrate[0].systemInstruction).toMatch(/TIME line/);
+    expect(prompts.narrate[0].systemInstruction).toMatch(/Never state a different time of day/);
+  });
+
+  test('a trip that crosses dusk puts "dusk fell" in NARRATE\'s prompt', async () => {
+    await seed('save-gm-dusk', { location: 'daldockley', time: at(1, 16) });
+    await typed('save-gm-dusk', 'walk to Hatham', {
+      verb: 'move',
+      targets: ['hatham'],
+      params: {},
+    });
+    expect(prompts.interpret[0]).toContain('TIME: Day 1, afternoon.');
+    const line = timeIn(prompts.narrate[0].userMessage);
+    // About 6 hours from 16:00: night by 22:00, dusk at 20:00 on the way.
+    expect(line).toBe('Day 1, night. About 6 hours passed; dusk fell on the way.');
+    expect(prompts.narrate[0].userMessage).toContain('- Night falls on the trail.');
+  });
+
+  test('a trip of days says how many dusks and dawns, and which came last', async () => {
+    await seed('save-gm-days', { placeId: 'plc_gate', time: at(1, 8) });
+    await saveRef('save-gm-days').update({ location: 'daldockley', placeId: null });
+    await typed('save-gm-days', 'on to Midhurstle', {
+      verb: 'move',
+      targets: ['midhurstle'],
+      params: {},
+    });
+    // 10 hours on the trail with a night camped: 26 hours, to Day 2 at 10:00.
+    expect(timeIn(prompts.narrate[0].userMessage)).toBe(
+      'Day 2, morning. About a day passed; dusk fell and dawn broke on the way.'
+    );
+  });
+
+  test('a walk across town: its minutes', async () => {
+    await seed('save-gm-walk', { placeId: 'plc_gate', time: at(1, 8) });
+    await typed('save-gm-walk', 'go to the market', {
+      verb: 'move',
+      targets: ['plc_market'],
+      params: {},
+    });
+    expect(timeIn(prompts.narrate[0].userMessage)).toBe(
+      'Day 1, morning. About 3 minutes passed.'
+    );
+  });
+
+  test('a refused move: no time passed', async () => {
+    await seed('save-gm-refused', { placeId: 'plc_gate', time: at(1, 21) });
+    await typed('save-gm-refused', 'go to Faraway', {
+      verb: 'move',
+      targets: ['faraway'],
+      params: {},
+    });
+    expect(timeIn(prompts.narrate[0].userMessage)).toBe('Day 1, night. No time passed.');
   });
 });

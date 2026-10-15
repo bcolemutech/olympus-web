@@ -126,3 +126,33 @@ test("a save's time: its own, or 08:00 for an older save", () => {
   expect(clock.timeOf({ time: 1.5 })).toBe(START);
   expect(clock.timeOf(null)).toBe(START);
 });
+
+describe('the TIME line for the GM (L-375)', () => {
+  test('the time alone, for INTERPRET', () => {
+    expect(clock.timeLine(START)).toBe('Day 1, morning.');
+  });
+
+  test('no time spent says so, inventing none', () => {
+    expect(clock.timeLine(at(1, 9), null)).toBe('Day 1, morning. No time passed.');
+    expect(clock.timeLine(at(1, 9), { seconds: 0, crossed: [] })).toBe(
+      'Day 1, morning. No time passed.'
+    );
+  });
+
+  test('how much passed, and dusk or dawn on the way', () => {
+    const spent = (from, to) => ({ seconds: to - from, crossed: clock.crossed(from, to) });
+    expect(clock.timeLine(at(1, 8, 3), spent(at(1, 8), at(1, 8, 3)))).toBe(
+      'Day 1, morning. About 3 minutes passed.'
+    );
+    expect(clock.timeLine(at(1, 21), spent(at(1, 14), at(1, 21)))).toBe(
+      'Day 1, night. About 7 hours passed; dusk fell on the way.'
+    );
+    expect(clock.timeLine(at(2, 6), spent(at(1, 19), at(2, 6)))).toBe(
+      'Day 2, dawn. About 11 hours passed; dusk fell and dawn broke on the way.'
+    );
+    expect(clock.timeLine(at(4, 10), spent(at(1, 8), at(4, 10)))).toBe(
+      'Day 4, morning. About 3 days passed; on the way, dusk fell 3 times and dawn broke 3 ' +
+        'times, the last dawn.'
+    );
+  });
+});
