@@ -37,7 +37,7 @@ Phases are numbered in the order they were planned, not the order they are built
 2. **L-690 Grading that asks for more** (#551), so every content feature after it adds its criteria (shipped).
 3. **L-700 Image studio** (#523). **Shipped** (L-701 the library, L-702 the studio page, L-703 library tools, L-704 worlds use library images, L-705 today's art into the library, L-706 costs, L-707 generation, L-708 editing and L-709 styles).
 4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views. **Shipped** (L-721 the shell, L-722 the map engine, L-723 the town level, L-724 the battle level, L-725 between levels, L-726 the panel's content, L-727 the art, L-728 phones and L-729 the look).
-5. **Phase 3d:** L-370 Game time (#421). **In progress** (L-371 time in saves shipped).
+5. **Phase 3d:** L-370 Game time (#421). **In progress** (L-371 time in saves and L-372 route lengths shipped).
 6. **Phase 9 — Game systems:** L-800 the system engine, then L-810 character sheets (decided 2026-10-14). New worlds then pick a system as they are made, and Phases 7 and 8 build on the sheet.
 7. **L-710 Worlds without Azgaar** (#524), then L-360 off-road travel (#418), then the rest of Phases 7 and 8 in their order (§4).
 
