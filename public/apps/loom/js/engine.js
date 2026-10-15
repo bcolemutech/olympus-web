@@ -177,6 +177,7 @@
     if (!layer || !engine.camera.view) return;
     layer.draw(layer.container, engine.camera.view, s);
     app.render();
+    engine.renderedAt = window.performance.now();
     startAmbient();
   }
 
@@ -219,7 +220,12 @@
         engine.ambient = null; // nothing to show; the next draw looks again
         return;
       }
-      if (!engine.pending) engine.app.render(); // a pending draw renders it anyway
+      // While the camera moves, its draws show the ambient touches too: no
+      // second render on top of them.
+      if (!engine.pending && now - (engine.renderedAt || 0) >= AMBIENT_MS) {
+        engine.app.render();
+        engine.renderedAt = now;
+      }
     }
     window.requestAnimationFrame(tickAmbient);
   }
