@@ -6,6 +6,7 @@ const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
 const clock = require('../loom-canon/clock');
+const travel = require('../loom-canon/travel');
 const { planStep, doorStatesOf, doorSides, hasKey, besideDoor } = require('./steps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
@@ -114,14 +115,19 @@ function evaluateTownMove(target, characterState, canonWorld) {
   const walk = town.walkTo(canonWorld, here, target, town.passableFor(canonWorld, characterState));
   if (!walk) return blockedOnTheWay(here, target, characterState, canonWorld);
   const passed = walk.slice(0, -1);
+  // The walk takes its length at 80 m a minute (L-373; game time T11).
+  const { seconds } = travel.townWalk(canonWorld, settlement, here, walk);
+  const time = travel.timeSpent(clock.timeOf(characterState), seconds);
   return {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'placeId', value: target.id },
       // A place with a battle map (L-351) is entered on it, at its entry.
       ...maps.arrivalMutations(canonWorld, target, characterState),
+      ...(seconds ? [{ target: 'save', op: 'set-flag', path: 'time', value: time.to }] : []),
       { op: 'increment', path: 'worldClock', value: 1 },
     ],
+    ...(seconds ? { time } : {}),
     constraints: [
       passed.length
         ? 'You make your way ' +
@@ -506,13 +512,21 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
   // Arriving where there is a battle map (L-351) lands on it, at its entry:
   // the way in reached, or the point of interest itself.
   mutations.push(...maps.arrivalMutations(canonWorld, arrival || targetLocation, characterState));
+  // The trip takes its time (L-373; game time T8–T10): the route's miles at
+  // its speed, nights camped on land. The same trip() gives the map's
+  // estimate before setting out (./map-view.js).
+  const trip = travel.trip(canonWorld, currentId, targetId, clock.timeOf(characterState));
+  if (trip) mutations.push({ target: 'save', op: 'set-flag', path: 'time', value: trip.to });
   mutations.push({ op: 'increment', path: 'worldClock', value: 1 });
+  const arrived =
+    'you arrive at ' + targetLocation.name + (arrival ? ', at ' + arrival.name : '') + '.';
   return {
     outcome: 'success',
     mutations,
-    constraints: (walkedOut ? ['You make your way to ' + walkedOut.way.name + '.'] : []).concat([
-      'You arrive at ' + targetLocation.name + (arrival ? ', at ' + arrival.name : '') + '.',
-    ]),
+    constraints: (walkedOut ? ['You make your way to ' + walkedOut.way.name + '.'] : []).concat(
+      trip ? travel.tripLines(trip, arrived) : ['Y' + arrived.slice(1)]
+    ),
+    ...(trip ? { time: travel.timeSpent(trip.from, trip.seconds) } : {}),
   };
 }
 
@@ -779,6 +793,8 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     mutations: Object.freeze(resolution.mutations),
     constraints: Object.freeze(resolution.constraints),
     ...(resolution.roll ? { roll: Object.freeze({ ...resolution.roll }) } : {}),
+    // The time it took and the dawns and dusks on the way (L-373), for the GM (L-375).
+    ...(resolution.time ? { time: Object.freeze({ ...resolution.time }) } : {}),
     ...(resolution.walked ? { walked: Object.freeze(resolution.walked) } : {}),
     ...(resolution.walkedTown ? { walkedTown: Object.freeze(resolution.walkedTown) } : {}),
   });

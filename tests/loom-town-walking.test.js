@@ -418,7 +418,7 @@ describe('typed moves follow the streets (L-663)', () => {
     await typed(saveId, 'set out for the market town', ['loc_631']);
     const resolution = await lastResolution(saveId);
     expect(resolution.constraints[0]).toBe('You make your way to The South Gate.');
-    expect(resolution.constraints[1]).toMatch(/^You arrive at /);
+    expect(resolution.constraints.at(-1)).toMatch(/, you arrive at /);
     expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
   });
 

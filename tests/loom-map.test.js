@@ -244,7 +244,9 @@ describe('loomGetMap', () => {
     // Links only between discovered places, each once.
     const shown = new Set(BURDENDAL_AND_AROUND);
     expect(map.links.every((l) => shown.has(l.from) && shown.has(l.to))).toBe(true);
-    expect(map.links).toContainEqual({ from: 'loc_1', to: 'loc_631', via: 'trail' });
+    expect(map.links).toContainEqual(
+      expect.objectContaining({ from: 'loc_1', to: 'loc_631', via: 'trail' })
+    );
     const keys = map.links.map((l) => [l.from, l.to].sort().join('|'));
     expect(new Set(keys).size).toBe(keys.length);
   });

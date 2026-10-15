@@ -310,7 +310,9 @@ describe('mapping Nisia', () => {
 
     const ok = move(target);
     expect(ok.outcome).toBe('success');
-    expect(ok.constraints[0]).toBe(`You arrive at ${canon.locations[target].name}.`);
+    expect(ok.constraints.at(-1)).toMatch(
+      new RegExp(`^After .+, you arrive at ${canon.locations[target].name}\\.$`)
+    );
     expect(move(notConnected).outcome).toBe('blocked');
   });
 });

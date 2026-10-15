@@ -112,6 +112,8 @@ describe('evaluate — move verb', () => {
     expect(resolution.outcome).toBe('success');
     expect(resolution.mutations).toEqual([
       { target: 'save', op: 'set-flag', path: 'location', value: 'the-drowned-shoals' },
+      // The trip takes its time (L-373).
+      { target: 'save', op: 'set-flag', path: 'time', value: expect.any(Number) },
       { op: 'increment', path: 'worldClock', value: 1 },
     ]);
   });
