@@ -123,9 +123,15 @@
     };
   }
 
+  var SVG_PX = 2048; // the long side SVG art is drawn at: sharp at any zoom the map allows
+
   /**
    * A piece of art (a library image's link, or an older Storage path) as a
-   * texture. WebGL needs it served with CORS, which Firebase Storage does.
+   * texture. WebGL and canvas textures need it served with CORS: Cloud
+   * Storage sends Access-Control-Allow-Origin once the bucket has its CORS
+   * policy (storage-cors.json, the Set Storage CORS workflow). SVG is drawn
+   * onto a canvas at SVG_PX on its long side first, since its own size is
+   * often its grid's, a few dozen pixels, and would blur when stretched.
    */
   function loadTexture(image) {
     return Loom.artUrl(image)
@@ -137,14 +143,32 @@
             resolve(img);
           };
           img.onerror = function () {
-            reject(new Error('the image did not load'));
+            reject(
+              new Error(
+                'the image did not load (from Cloud Storage, the bucket needs its CORS policy: ' +
+                  'run the Set Storage CORS workflow)'
+              )
+            );
           };
           img.src = url;
         });
       })
       .then(function (img) {
-        return window.PIXI.Texture.from(img);
+        return window.PIXI.Texture.from(image.svg ? rasterized(img, image) : img);
       });
+  }
+
+  // SVG art on a canvas, SVG_PX on its long side, in the shape the world
+  // gives it (its width and height), else its own.
+  function rasterized(img, image) {
+    var w = image.width || img.naturalWidth || 1;
+    var h = image.height || img.naturalHeight || 1;
+    var k = SVG_PX / Math.max(w, h);
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(w * k));
+    canvas.height = Math.max(1, Math.round(h * k));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
   }
 
   /**
@@ -178,7 +202,7 @@
       a.key = key;
       a.image = image || null;
       a.texture = null;
-      a.full = !image || !image.screenUrl;
+      a.full = !image || !image.screenUrl || image.svg; // SVG is sharp at any size: no copy
       a.fetching = false;
       if (!image) return;
       if (a.full) {

@@ -81,9 +81,13 @@ function forPlayer(art) {
   if (!art) return null;
   // A library image's screen-sized copy (L-727), which the Loom loads first.
   const screenUrl = art.url ? screenLinkOf(art.url) : null;
+  // SVG, which the page draws at a sharp size: its width and height are
+  // often its grid's, a few dozen pixels.
+  const svg = art.format === 'svg' || /\.svg$/i.test(art.path || '');
   return {
     ...(art.url ? { url: art.url } : { path: art.path }),
     ...(screenUrl ? { screenUrl } : {}),
+    ...(svg ? { svg: true } : {}),
     width: art.width,
     height: art.height,
   };

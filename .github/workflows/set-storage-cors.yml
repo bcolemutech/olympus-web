@@ -1,0 +1,96 @@
+name: Set Storage CORS
+
+# Lets the Loom's map engine draw art from Cloud Storage. It loads each image
+# as a WebGL or canvas texture (crossOrigin "anonymous"), which the browser
+# allows only when Storage answers with Access-Control-Allow-Origin, and the
+# bucket sends that only once it has a CORS policy. This applies
+# storage-cors.json to the bucket: GET and HEAD from any origin. It grants no
+# access: every link still needs its download token, or the Storage rules.
+#
+# Run it with apply off first: the summary shows the bucket's current CORS
+# policy and the one it would set. Then run it with apply on and confirm set
+# to "cors". Running it again is safe: it sets the same policy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Set the policy (off: a dry run that only shows it)'
+        required: true
+        type: boolean
+        default: false
+      confirm:
+        description: 'With apply: type "cors"'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  cors:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      BUCKET: gs://olympus-dfa00.firebasestorage.app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the confirmation
+        if: inputs.apply
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [[ "$CONFIRM" != "cors" ]]; then
+            echo "::error::Not confirmed: type \"cors\" in confirm to apply. Nothing changed."
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: olympus-dfa00
+
+      - name: The bucket's CORS policy now
+        run: |
+          set -o pipefail
+          gcloud storage buckets describe "$BUCKET" --format="json(cors_config)" | tee before.json
+
+      - name: Set the policy
+        if: inputs.apply
+        run: |
+          set -o pipefail
+          gcloud storage buckets update "$BUCKET" --cors-file=storage-cors.json
+          gcloud storage buckets describe "$BUCKET" --format="json(cors_config)" | tee after.json
+
+      - name: Summary
+        if: always()
+        env:
+          APPLY: ${{ inputs.apply }}
+        run: |
+          if [[ "$APPLY" == "true" ]]; then
+            echo "## Storage CORS: applied" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Storage CORS: dry run (nothing changed)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "### Before" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat before.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(not read)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "### The policy (storage-cors.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat storage-cors.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f after.json ]]; then
+            echo "### After" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat after.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
