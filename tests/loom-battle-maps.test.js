@@ -378,9 +378,15 @@ describe('a visit to the Gull & Anchor', () => {
   });
 
   test('stepping to a cell, from the grid; nothing blocks movement, but the edges do', async () => {
-    expect((await stepTo(saveId, { x: 9, y: 1 })).step).toMatchObject({
+    const first = await stepTo(saveId, { x: 9, y: 1 });
+    expect(first.step).toMatchObject({
       cell: { x: 9, y: 1 },
       lines: ["You're at the hearth."],
+    });
+    // The time comes with a step (L-376); a step takes none of its own.
+    expect(first.time).toEqual({
+      seconds: (await saveOf(saveId)).time,
+      label: expect.stringMatching(/^Day \d+, \w+$/),
     });
     expect((await stepTo(saveId, { x: 6, y: 5 })).step).toMatchObject({
       cell: { x: 6, y: 5 },
@@ -771,6 +777,8 @@ describe('moving without the GM (L-613)', () => {
       narration: "You're at the hearth.",
       stateSummary: '',
       suggestedActions: [],
+      // The time, for the map's clock (L-376).
+      time: { seconds: 8 * 3600, label: 'Day 1, morning' },
       step: {
         cell: { x: 9, y: 1 },
         movementLeft: 12,
@@ -944,6 +952,7 @@ describe('typed actions and the turn (L-614)', () => {
       stateSummary: '',
       suggestedActions: [],
       refused: true,
+      time: { seconds: 8 * 3600, label: 'Day 1, morning' },
     });
     expect(calls).toEqual({ interpret: 2, narrate: 1 }); // read, but not narrated
     expect(await recorded()).toBe(before); // nor recorded

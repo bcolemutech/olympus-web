@@ -16,8 +16,18 @@
    * The turn (L-614 / #444): its number, the movement left, and whether the
    * action is used, from loomGetMap's `turn`, for the turn bars.
    */
-  function showTurn(turn) {
-    Loom.store.set({ turn: turn || null });
+  // The turn, and the time for the map's clock (L-376): "Day 1, evening",
+  // made on the server. Without a new time, the one shown stays.
+  function showTurn(turn, time) {
+    var before = Loom.store.get().turn;
+    var label = time && time.label ? time.label : before && before.time;
+    Loom.store.set({ turn: turn ? Object.assign({}, turn, { time: label || null }) : null });
+  }
+
+  // An answer's time, shown at once, before the map reloads.
+  function showTime(time) {
+    var turn = Loom.store.get().turn;
+    if (turn && time && time.label) showTurn(turn, time);
   }
 
   /**
@@ -52,6 +62,7 @@
         state.turnInProgress = false;
         setLoading(false);
         var data = result.data;
+        showTime(data.time);
         // A second action turned down (L-614) keeps the suggestions, too.
         var keep = (options.keep || data.refused) && !(data.suggestedActions || []).length;
         // A walk that ends by going in or setting out (L-664) is narrated.

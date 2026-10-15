@@ -367,3 +367,33 @@ describe('the GM knows the time (L-375)', () => {
     expect(timeIn(prompts.narrate[0].userMessage)).toBe('Day 1, night. No time passed.');
   });
 });
+
+describe('the time in every answer (L-376)', () => {
+  const play = (saveId, data) =>
+    loomPlayTurn.run({ data: { worldId: WORLD, saveId, ...data }, auth: PLAYER });
+
+  test('loomGetMap, a move, a refusal and End turn each carry it', async () => {
+    await seed('save-answers', { placeId: 'plc_gate', time: at(1, 8) });
+    expect((await mapOf('save-answers')).time).toEqual({
+      seconds: at(1, 8),
+      label: 'Day 1, morning',
+    });
+    await saveRef('save-answers').update({ 'turn.actionUsed': false });
+    const moved = await play('save-answers', { action: { verb: 'move', target: 'daldockley' } });
+    const after = (await saveOf('save-answers')).time;
+    expect(moved.time).toEqual({ seconds: after, label: 'Day 1, afternoon' });
+    // A refusal that changes nothing: the time as it stands.
+    const refused = await play('save-answers', {
+      action: { verb: 'walk-there', target: 'plc_market' },
+    });
+    expect(refused).toMatchObject({
+      narration: 'There are no streets to walk here.',
+      time: { seconds: after, label: 'Day 1, afternoon' },
+    });
+    const ended = await play('save-answers', { action: { verb: 'end-turn' } });
+    expect(ended.time).toEqual({ seconds: after + 300, label: 'Day 1, afternoon' });
+    // Each route out of here says whether night falls or day breaks on the way.
+    const links = (await mapOf('save-answers')).links.filter((l) => l.travel);
+    expect(links.every((l) => typeof l.travel.crossesDuskOrDawn === 'boolean')).toBe(true);
+  });
+});

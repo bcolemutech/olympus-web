@@ -222,7 +222,7 @@
         var townData = (data && data.town) || null;
         var battleData = (data && data.battleMap) || null;
         Loom.store.set({ map: data || null });
-        Loom.play.showTurn((data && data.turn) || null);
+        Loom.play.showTurn((data && data.turn) || null, data && data.time);
         setAvailable(usable || Boolean(townData) || Boolean(battleData));
         if (!usable && !townData && !battleData) return;
         var firstLoad = !map.data;

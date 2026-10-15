@@ -169,6 +169,8 @@ async function commitTurn(params) {
         suggestedActions: suggestedActions || [],
         // The die, for the panel's roll card (L-726); kept in the turn record too.
         ...(resolution.roll ? { roll: resolution.roll } : {}),
+        // The time once the turn is done, for the map's clock (L-376).
+        time: clock.timeView(clock.timeOf(save)),
       },
     };
   });

@@ -328,6 +328,8 @@ describe('"Walk there"', () => {
     // About 910 m: three turns of 400.
     const answer = await play(saveId, { verb: 'walk-there', point: pt(150, 850) });
     expect(answer.step).toMatchObject({ townPoint: pt(150, 850), plan: null, turns: 3 });
+    // The time comes with it (L-376): two turns ended on the way, 5 min each.
+    expect(answer.time).toEqual({ seconds: 8 * 3600 + 600, label: 'Day 1, morning' });
     expect(answer.narration).toMatch(/^You walk 400 m\. You walk 400 m\. You walk 1[01]\d m\.$/);
   });
 
@@ -335,7 +337,11 @@ describe('"Walk there"', () => {
     const saveId = await newGame();
     await stepOffMap(saveId);
     const answer = await play(saveId, { verb: 'walk-there', point: pt(500, 650) });
-    expect(answer).toMatchObject({ narration: "You can't stand there.", refused: true });
+    expect(answer).toMatchObject({
+      narration: "You can't stand there.",
+      refused: true,
+      time: { seconds: expect.any(Number), label: expect.stringMatching(/^Day \d+, \w+$/) },
+    });
   });
 });
 
