@@ -82,7 +82,7 @@
     nodes: null, // the PixiJS objects, built on first draw
     labels: {}, // place id → its label
     fog: { key: null, texture: null },
-    mist: { key: null, a: null, b: null, unseen: 0 }, // the mist's two phases (K3)
+    mist: { key: null, texture: null, unseen: 0 }, // the mist over unseen ground (K3)
     mistAt: null, // where the mist is drawn this frame: { x, y, width, height }
   };
 
@@ -338,7 +338,7 @@
   var FOG_UNSEEN = 0.72; // never seen: dark, the town still showing through
   var FOG_SEEN = 0.38; // seen before, out of sight now: less dark
   var MIST = 0.18; // the drifting mist over unseen ground, at its thickest (K3)
-  var MIST_PERIOD = 9; // s for the mist to turn over
+  var MIST_PERIOD = 9; // s for the mist to thin and thicken
   var SHIMMER_PERIOD = 3.5; // s for the water's shimmer to come and go
 
   function bitsOf(packed, size) {
@@ -402,15 +402,15 @@
     return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
   }
 
-  // The mist over unseen ground (K3; L-727), in two phases the ambient
-  // touches cross-fade and drift: soft clouds some walking squares across.
+  // The mist over unseen ground (K3; L-727), one layer the ambient touches
+  // drift and thin and thicken: soft clouds some walking squares across.
   function mistTextures(fog) {
     var key = fog.side + '|' + fog.seen;
     if (town.mist.key === key) return town.mist;
     var side = fog.side;
     var seen = bitsOf(fog.seen, side * side);
     var unseen = 0;
-    var make = function (phase) {
+    var make = function () {
       var canvas = document.createElement('canvas');
       canvas.width = side;
       canvas.height = side;
@@ -418,10 +418,10 @@
       var image = context.createImageData(side, side);
       for (var i = 0; i < side * side; i++) {
         if (seen[i]) continue;
-        if (!phase) unseen += 1;
+        unseen += 1;
         var x = i % side;
         var y = Math.floor(i / side);
-        var blotch = noise(x + phase * 13, y + phase * 7, 9);
+        var blotch = noise(x, y, 9);
         image.data[i * 4] = 84;
         image.data[i * 4 + 1] = 98;
         image.data[i * 4 + 2] = 128;
@@ -432,9 +432,8 @@
       texture.source.scaleMode = 'linear';
       return texture;
     };
-    if (town.mist.a) town.mist.a.destroy(true);
-    if (town.mist.b) town.mist.b.destroy(true);
-    town.mist = { key: key, a: make(0), b: make(1), unseen: 0 };
+    if (town.mist.texture) town.mist.texture.destroy(true);
+    town.mist = { key: key, texture: make(), unseen: 0 };
     town.mist.unseen = unseen;
     return town.mist;
   }
@@ -523,8 +522,7 @@
       art: new PIXI.Sprite(),
       shapes: new PIXI.Graphics(),
       fog: new PIXI.Sprite(),
-      mistA: new PIXI.Sprite(),
-      mistB: new PIXI.Sprite(),
+      mist: new PIXI.Sprite(),
       shimmer: new PIXI.Graphics(), // the water's shimmer, over a town drawn from its ground
       paths: new PIXI.Graphics(),
       pins: new PIXI.Graphics(),
@@ -533,7 +531,7 @@
       you: Loom.draw.token(),
     };
     n.art.alpha = 0.9;
-    container.addChild(n.ground, n.art, n.shapes, n.shimmer, n.fog, n.mistA, n.mistB);
+    container.addChild(n.ground, n.art, n.shapes, n.shimmer, n.fog, n.mist);
     container.addChild(n.paths, n.pins, n.labels, n.walk);
     container.addChild(n.you.container);
     town.nodes = n;
@@ -675,17 +673,13 @@
     var mist = data.fog && !reducedMotion() ? mistTextures(data.fog) : null;
     var misty = Boolean(mist && mist.unseen);
     town.mistAt = misty ? { x: corner.x, y: corner.y, width: width, height: height } : null;
-    [
-      [n.mistA, misty && mist.a],
-      [n.mistB, misty && mist.b],
-    ].forEach(function (pair) {
-      pair[0].visible = Boolean(pair[1]);
-      if (!pair[1]) return;
-      pair[0].texture = pair[1];
-      pair[0].position.set(corner.x, corner.y);
-      pair[0].width = width;
-      pair[0].height = height;
-    });
+    n.mist.visible = misty;
+    if (misty) {
+      n.mist.texture = mist.texture;
+      n.mist.position.set(corner.x, corner.y);
+      n.mist.width = width;
+      n.mist.height = height;
+    }
 
     var at = function (id) {
       var p = town.positions[id];
@@ -1084,7 +1078,7 @@
   }
 
   // The ambient touches (K3; L-727): the water shimmers, and the mist over
-  // unseen ground turns over, its two phases cross-fading as they drift.
+  // unseen ground drifts to and fro, thinning and thickening as it goes.
   function ambient(container, t) {
     var n = town.nodes;
     if (!n || !town.data) return false;
@@ -1094,13 +1088,13 @@
       any = true;
     }
     var at = town.mistAt;
-    if (at && n.mistA.visible) {
-      var w = 0.5 + 0.5 * Math.sin((t * 2 * Math.PI) / MIST_PERIOD);
-      var drift = Math.sin((t * 2 * Math.PI) / (MIST_PERIOD * 2)) * at.width * 0.006;
-      n.mistA.alpha = 1 - w;
-      n.mistB.alpha = w;
-      n.mistA.position.set(at.x + drift, at.y);
-      n.mistB.position.set(at.x - drift, at.y + drift / 2);
+    if (at && n.mist.visible) {
+      var phase = (t * 2 * Math.PI) / MIST_PERIOD;
+      n.mist.alpha = 0.55 + 0.45 * Math.sin(phase);
+      n.mist.position.set(
+        at.x + Math.sin(phase / 2) * at.width * 0.008,
+        at.y + Math.cos(phase / 3) * at.width * 0.005
+      );
       any = true;
     }
     return any;

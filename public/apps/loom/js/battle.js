@@ -71,7 +71,7 @@
   var FOG_BLUR = 3; // px of that texture: the feathered edge, about ¾ of a square
   var MIST = 0.16; // the drifting mist over unseen ground, at its thickest (K3)
   var MIST_RGB = '84,98,128';
-  var MIST_PERIOD = 9; // s for the mist to turn over
+  var MIST_PERIOD = 9; // s for the mist to thin and thicken
 
   var battle = {
     data: null, // loomGetMap's `battleMap`
@@ -90,7 +90,7 @@
     nodes: null, // the PixiJS objects
     labels: [], // the labels in use
     tokens: {}, // person id → token
-    fogTextures: { key: null, dim: null, dark: null, mistA: null, mistB: null, unseen: 0 },
+    fogTextures: { key: null, dim: null, dark: null, mist: null, unseen: 0 },
   };
 
   // Something drawn changed: rebuild on the next draw.
@@ -460,14 +460,13 @@
       under: new PIXI.Graphics(), // reach, grid, layers, entries, exits, features
       people: new PIXI.Container(),
       fogDark: new PIXI.Sprite(),
-      mistA: new PIXI.Sprite(),
-      mistB: new PIXI.Sprite(),
+      mist: new PIXI.Sprite(),
       labels: new PIXI.Container(),
       over: new PIXI.Graphics(), // the selected square and the way
       you: Loom.draw.token(),
     };
     n.art.alpha = 0.95;
-    n.scene.addChild(n.ground, n.art, n.fogDim, n.under, n.people, n.fogDark, n.mistA, n.mistB);
+    n.scene.addChild(n.ground, n.art, n.fogDim, n.under, n.people, n.fogDark, n.mist);
     n.scene.addChild(n.labels, n.over, n.you.container);
     container.addChild(n.scene);
     battle.nodes = n;
@@ -511,18 +510,14 @@
       texture.source.scaleMode = 'linear';
       return texture;
     };
-    ['dim', 'dark', 'mistA', 'mistB'].forEach(function (kind) {
+    ['dim', 'dark', 'mist'].forEach(function (kind) {
       if (battle.fogTextures[kind]) battle.fogTextures[kind].destroy(true);
     });
-    // The mist (K3): blotches two squares across, in two phases the ambient
-    // touches cross-fade and drift, over unseen ground only.
-    var mist = function (phase) {
-      return make(function (i, x, y) {
-        return seen(i)
-          ? 0
-          : MIST * grain(Math.floor((x + phase * 3) / 2), Math.floor((y + phase * 5) / 2));
-      }, MIST_RGB);
-    };
+    // The mist (K3): blotches two squares across over unseen ground, one
+    // layer the ambient touches drift and thin and thicken.
+    var mist = make(function (i, x, y) {
+      return seen(i) ? 0 : MIST * grain(Math.floor(x / 2), Math.floor((y + 1) / 2));
+    }, MIST_RGB);
     battle.fogTextures = {
       key: key,
       dim: make(function (i) {
@@ -533,8 +528,7 @@
         unseen += 1;
         return 0.9 + 0.1 * grain(x, y);
       }),
-      mistA: mist(0),
-      mistB: mist(1),
+      mist: mist,
     };
     battle.fogTextures.unseen = unseen;
     return battle.fogTextures;
@@ -579,8 +573,7 @@
     [
       [n.fogDim, fog && fog.dim],
       [n.fogDark, fog && fog.dark],
-      [n.mistA, misty && fog.mistA],
-      [n.mistB, misty && fog.mistB],
+      [n.mist, misty && fog.mist],
     ].forEach(function (pair) {
       pair[0].visible = Boolean(pair[1]);
       if (!pair[1]) return;
@@ -801,6 +794,7 @@
       battle.selected ? battle.selected.x + ',' + battle.selected.y : '',
       battle.selectedDoor || '',
       battle.anim ? 1 : 0,
+      reducedMotion() ? 'still' : '', // the mist shows only while it may drift
     ].join('|');
     if (key !== battle.built) {
       rebuild(view);
@@ -1126,17 +1120,17 @@
     return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
   }
 
-  // The ambient touches (K3; L-727): the mist over unseen ground turns over
-  // slowly, its two phases cross-fading as they drift a little apart.
+  // The ambient touches (K3; L-727): the mist over unseen ground drifts to
+  // and fro, thinning and thickening as it goes.
   function ambient(container, t) {
     var n = battle.nodes;
-    if (!n || !battle.data || !n.mistA.visible) return false;
-    var w = 0.5 + 0.5 * Math.sin((t * 2 * Math.PI) / MIST_PERIOD);
-    var drift = Math.sin((t * 2 * Math.PI) / (MIST_PERIOD * 2)) * CELL * 0.3;
-    n.mistA.alpha = 1 - w;
-    n.mistB.alpha = w;
-    n.mistA.position.set(PAD + drift, PAD);
-    n.mistB.position.set(PAD - drift, PAD + drift / 2);
+    if (!n || !battle.data || !n.mist.visible) return false;
+    var phase = (t * 2 * Math.PI) / MIST_PERIOD;
+    n.mist.alpha = 0.55 + 0.45 * Math.sin(phase);
+    n.mist.position.set(
+      PAD + Math.sin(phase / 2) * CELL * 0.35,
+      PAD + Math.cos(phase / 3) * CELL * 0.2
+    );
     return true;
   }
 
