@@ -76,9 +76,9 @@ Phases are planned groups. This list, not the phase numbers, says what is built 
 
 L-370 and its sub-issues (#499–504) moved from the Phase 3b milestone (#19) to their own, #21 (2026-10-14). L-690, which belongs to no phase, sits with the studio in Phase 6's milestone (#22).
 
-| Epic            | Issue | State                                                                                                          | Depends on                                                                   |
-| --------------- | ----- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| L-370 Game time | #421  | Designed in [`the-loom-game-time.md`](./the-loom-game-time.md) (decided 2026-10-08); sub-issues L-371 to L-376 | Phase 3c: turns become time (6 s a battle-map turn, about 5 min a town turn) |
+| Epic            | Issue | State                                                                                                                                                                | Depends on                                                                   |
+| --------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| L-370 Game time | #421  | Designed in [`the-loom-game-time.md`](./the-loom-game-time.md) (decided 2026-10-08, revisited 2026-10-15 after the UI rewrite); sub-issues L-371 to L-376 (#499–504) | Phase 3c: turns become time (6 s a battle-map turn, about 5 min a town turn) |
 
 **Order:** Phase 3d follows L-690, L-700 and L-720 (Build order, above). Plan L-370's sub-issues before it starts.
 
