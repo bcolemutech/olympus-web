@@ -46,7 +46,10 @@
           <button class="loom-back-link" id="loom-back-to-worlds" type="button">
             &larr; Choose a different world
           </button>
-          <h2 class="loom-view-title" id="loom-save-select-title"></h2>
+          <!-- The world's cover, its name over it (L-729) -->
+          <div class="loom-hero" id="loom-saves-hero">
+            <h2 class="loom-view-title" id="loom-save-select-title"></h2>
+          </div>
 
           <div class="app-loading hidden" id="loom-saves-loading">
             <div class="app-spinner"></div>
@@ -89,6 +92,14 @@
               <button class="loom-back-link" id="loom-new-save-cancel" type="button">Cancel</button>
             </div>
           </form>
+        </div>
+
+        <!-- While a game loads: its world's cover (L-729) -->
+        <div class="loom-play-cover hidden" id="loom-play-cover" role="status">
+          <div class="loom-play-cover-text">
+            <p class="loom-play-cover-name" id="loom-play-cover-name"></p>
+            <p class="loom-play-cover-note">The Loom weaves&hellip;</p>
+          </div>
         </div>
 
         <!-- Play view -->
@@ -214,6 +225,7 @@
 
     <!-- Loom modules (load order matters) -->
     <script src="/apps/loom/js/state.js"></script>
+    <script src="/apps/loom/js/theme.js"></script>
     <script src="/apps/loom/js/ui.js"></script>
     <script src="/apps/loom/js/map-math.js"></script>
     <script src="/apps/loom/js/town-layout.js"></script>

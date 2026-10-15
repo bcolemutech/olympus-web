@@ -45,19 +45,22 @@
   }
 
   function renderSaveCard(saveId, save) {
-    var card = document.createElement('div');
-    card.className = 'app-card loom-save-card';
+    var card = document.createElement('article');
+    card.className = 'loom-save-card';
+    var body = document.createElement('div');
+    body.className = 'loom-card-body';
+    card.appendChild(body);
 
     var title = document.createElement('h3');
     title.className = 'loom-card-title';
     title.textContent = save.name || 'Unnamed Save';
-    card.appendChild(title);
+    body.appendChild(title);
 
     if (save.character && save.character.name) {
       var meta = document.createElement('p');
       meta.className = 'loom-card-tagline';
       meta.textContent = save.character.name;
-      card.appendChild(meta);
+      body.appendChild(meta);
     }
 
     var actions = document.createElement('div');
@@ -81,7 +84,7 @@
     });
     actions.appendChild(deleteBtn);
 
-    card.appendChild(actions);
+    body.appendChild(actions);
     return card;
   }
 
