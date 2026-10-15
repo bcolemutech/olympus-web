@@ -59,13 +59,13 @@ exports.cartographerCompletion = onCall(async (request) => {
 });
 
 // A town's art (Layered Worlds, L-347 / #416): attach, replace or remove it.
-exports.cartographerTownImage = onCall(async (request) => {
+exports.cartographerTownImage = onCall({ memory: '1GiB' }, async (request) => {
   const uid = cartographer.requireCartographer(request);
   return cartographerService().townImage(uid, request.data || {});
 });
 
 // A battle map's art (Layered Worlds, L-355 / #417): attach, replace or remove it.
-exports.cartographerMapImage = onCall(async (request) => {
+exports.cartographerMapImage = onCall({ memory: '1GiB' }, async (request) => {
   const uid = cartographer.requireCartographer(request);
   return cartographerService().mapImage(uid, request.data || {});
 });
@@ -89,8 +89,9 @@ function studioService() {
   return _studioService;
 }
 
-// Add an uploaded image (PNG, JPEG, WebP or SVG) to the library (L-701).
-exports.studioUpload = onCall(async (request) => {
+// Add an uploaded image (PNG, JPEG, WebP or SVG) to the library (L-701). It has
+// room to make a big image's screen-sized copy (L-727), as the art callables do.
+exports.studioUpload = onCall({ memory: '1GiB' }, async (request) => {
   const uid = cartographer.requireCartographer(request);
   return studioService().upload(uid, request.data || {});
 });

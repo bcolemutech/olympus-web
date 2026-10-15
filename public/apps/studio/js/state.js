@@ -114,4 +114,21 @@
       })[0] || {}
     );
   };
+
+  /**
+   * A thumbnail for a record (L-727): its screen-sized copy, which the studio
+   * keeps beside its link (functions/studio/screen.js), or the full image when
+   * that isn't there (an image from before the copies were made).
+   */
+  Studio.thumb = function (img, record) {
+    var screen = String(record.link || '').replace('%2Fcurrent?', '%2Fscreen?');
+    img.addEventListener(
+      'error',
+      function () {
+        if (img.src !== record.link) img.src = record.link;
+      },
+      { once: true }
+    );
+    img.src = screen;
+  };
 })();

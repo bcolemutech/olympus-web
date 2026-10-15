@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { FORMATS } = require('./formats');
+const screen = require('./screen');
 
 /**
  * The image studio's library (planning/the-image-studio.md §4.2, §4.6; L-701 /
@@ -13,7 +14,8 @@ const { FORMATS } = require('./formats');
  *     styleId, from, references[], parentId,
  *     current (a version number),
  *     versions: [{ n, path, width, height, format, bytes, createdAt,
- *                  createdBy, via, instruction, cost }],
+ *                  createdBy, via, instruction, cost,
+ *                  screen: { path, width, height, format, bytes } | null }],
  *     usedIn: [{ worldId, target, id }]   (kept by assignment, L-704)
  *     link, createdBy, via, source, createdAt, updatedAt
  *
@@ -27,6 +29,11 @@ const { FORMATS } = require('./formats');
  * serve. Making another version current copies that version over the same
  * file with the same token, so the link never changes. It is cached briefly
  * (LINK_CACHE), so a new current version shows within minutes.
+ *
+ * Screen-sized copies (L-727, ./screen.js): a version bigger than a screen
+ * also gets a copy at most 2048 px long, and studio/{imageId}/screen holds the
+ * current version's copy (or the version itself) under the same token, so
+ * the screen link (screenLinkOf) never changes either.
  *
  * Every write is through the Admin SDK (rules let editors read only).
  */
@@ -126,6 +133,8 @@ function summary(id, data) {
     height: version.height || null,
     format: version.format || null,
     link: data.link,
+    // Its screen-sized copy (L-727), for thumbnails.
+    screenLink: screen.screenLinkOf(data.link),
     usedIn: (data.usedIn || []).length,
     styleId: data.styleId || null,
     createdBy: data.createdBy,
@@ -138,8 +147,8 @@ function summary(id, data) {
 function createLibrary({ db, bucket, now = () => Date.now() }) {
   const images = () => db.collection('studio_images');
 
-  async function writeCurrent(imageId, token, file) {
-    await bucket.file(currentPath(imageId)).save(file.bytes, {
+  function linked(path, token, file) {
+    return bucket.file(path).save(file.bytes, {
       resumable: false,
       contentType: file.contentType,
       metadata: {
@@ -151,6 +160,16 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
     });
   }
 
+  /**
+   * Makes `file` the image's current one: its link serves it, and its screen
+   * link serves `copy` (its screen-sized copy), or the file itself.
+   */
+  async function writeCurrent(imageId, token, file, copy) {
+    await linked(currentPath(imageId), token, file);
+    await linked(screen.screenCurrentPath(imageId), token, copy || file);
+  }
+
+  // Stores a version's file, and its screen-sized copy when it needs one.
   async function saveVersion(imageId, n, file) {
     const path = versionPath(imageId, n, file.format);
     await bucket.file(path).save(file.bytes, {
@@ -158,10 +177,34 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
       contentType: file.contentType,
       metadata: file.format === 'svg' ? { contentDisposition: 'attachment' } : {},
     });
-    return path;
+    // A copy that can't be made (a file sharp can't read) costs only speed:
+    // the Loom loads the full image instead.
+    const copy = await screen.screenCopy(file).catch((err) => {
+      console.warn(`No screen copy for ${path}: ${err.message}`);
+      return null;
+    });
+    if (copy) {
+      copy.path = screen.screenVersionPath(imageId, n);
+      await bucket
+        .file(copy.path)
+        .save(copy.bytes, { resumable: false, contentType: copy.contentType });
+    }
+    return { path, copy };
   }
 
-  function versionOf(n, path, file, fields) {
+  function screenOf(copy) {
+    return copy
+      ? {
+          path: copy.path,
+          width: copy.width,
+          height: copy.height,
+          format: copy.format,
+          bytes: copy.bytes.length,
+        }
+      : null;
+  }
+
+  function versionOf(n, path, file, fields, copy) {
     return {
       n,
       path,
@@ -174,6 +217,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
       via: fields.via,
       instruction: fields.instruction || null,
       cost: fields.cost === undefined ? null : fields.cost,
+      screen: screenOf(copy),
     };
   }
 
@@ -191,8 +235,8 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
     }
     const id = `img_${crypto.randomBytes(8).toString('hex')}`;
     const token = crypto.randomUUID();
-    const path = await saveVersion(id, 1, fields.file);
-    await writeCurrent(id, token, fields.file);
+    const { path, copy } = await saveVersion(id, 1, fields.file);
+    await writeCurrent(id, token, fields.file, copy);
     const at = now();
     const record = {
       id,
@@ -207,7 +251,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
       references: fields.references || [],
       parentId: fields.parentId || null,
       current: 1,
-      versions: [versionOf(1, path, fields.file, fields)],
+      versions: [versionOf(1, path, fields.file, fields, copy)],
       usedIn: [],
       link: `${linkBase()}/v0/b/${bucket.name}/o/${encodeURIComponent(
         currentPath(id)
@@ -238,6 +282,14 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
     return { bytes, format: version.format, contentType: FORMATS[version.format].contentType };
   }
 
+  // A version's screen-sized copy, as stored, or null when it has none.
+  async function copyOf(record, n) {
+    const version = record.versions.find((v) => v.n === n);
+    if (!version || !version.screen) return null;
+    const [bytes] = await bucket.file(version.screen.path).download();
+    return { bytes, format: 'webp', contentType: 'image/webp' };
+  }
+
   /**
    * Adds a version to an image (an edit, E2). It becomes current unless
    * `makeCurrent` is false.
@@ -245,10 +297,10 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
   async function addVersion(imageId, fields) {
     const record = await getImage(imageId);
     const n = Math.max(...record.versions.map((v) => v.n)) + 1;
-    const path = await saveVersion(record.id, n, fields.file);
-    const version = versionOf(n, path, fields.file, fields);
+    const { path, copy } = await saveVersion(record.id, n, fields.file);
+    const version = versionOf(n, path, fields.file, fields, copy);
     const makeCurrent = fields.makeCurrent !== false;
-    if (makeCurrent) await writeCurrent(record.id, record.linkToken, fields.file);
+    if (makeCurrent) await writeCurrent(record.id, record.linkToken, fields.file, copy);
     const update = {
       versions: record.versions.concat([version]),
       updatedAt: now(),
@@ -263,7 +315,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
   async function setCurrent(imageId, n) {
     const record = await getImage(imageId);
     const file = await fileOf(record, n);
-    await writeCurrent(record.id, record.linkToken, file);
+    await writeCurrent(record.id, record.linkToken, file, await copyOf(record, n));
     const update = { current: n, updatedAt: now() };
     await images().doc(record.id).update(update);
     return { ...record, ...update };
@@ -372,7 +424,9 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
         `"${record.title}" is in use: ${where}. Unassign it first.`
       );
     }
-    const paths = record.versions.map((v) => v.path).concat([currentPath(record.id)]);
+    const paths = record.versions
+      .flatMap((v) => [v.path].concat(v.screen ? [v.screen.path] : []))
+      .concat([currentPath(record.id), screen.screenCurrentPath(record.id)]);
     await Promise.all(paths.map((path) => bucket.file(path).delete({ ignoreNotFound: true })));
     await images().doc(record.id).delete();
     return { id: record.id, title: record.title };

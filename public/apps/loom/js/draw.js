@@ -147,7 +147,79 @@
       });
   }
 
+  /**
+   * A layer's art, sharper as it is zoomed (A1; L-727): its screen-sized copy
+   * first, then the full image once the art shows bigger on screen than the
+   * copy has pixels. Art without a copy (older art), or whose copy won't load,
+   * loads whole. `onChange` is called when a texture arrives.
+   *
+   *   set(image)    a new piece of art from loomGetMap (or null)
+   *   ready(image)  whether that art has a texture to draw
+   *   texture       the sharpest texture loaded
+   *   sharpen(px)   the art's long side on screen now, in device pixels
+   */
+  function art(onChange, what) {
+    var a = { key: null, image: null, texture: null, full: true, fetching: false };
+    var whole = function (key) {
+      a.fetching = true;
+      return loadTexture(a.image).then(function (texture) {
+        if (a.key !== key) return;
+        a.texture = texture;
+        a.full = true;
+        onChange();
+      });
+    };
+    var failed = function (err) {
+      console.error('Could not load the ' + what + ':', err);
+    };
+    function set(image) {
+      var key = Loom.artKey(image);
+      if (key === a.key) return;
+      a.key = key;
+      a.image = image || null;
+      a.texture = null;
+      a.full = !image || !image.screenUrl;
+      a.fetching = false;
+      if (!image) return;
+      if (a.full) {
+        whole(key).catch(failed);
+        return;
+      }
+      loadTexture({ url: image.screenUrl })
+        .then(function (texture) {
+          if (a.key !== key) return;
+          a.texture = texture;
+          onChange();
+        })
+        .catch(function () {
+          if (a.key === key) whole(key).catch(failed); // no copy yet: the full image
+        });
+    }
+    function sharpen(px) {
+      if (a.full || a.fetching || !a.texture) return;
+      if (px <= Math.max(a.texture.width, a.texture.height)) return;
+      whole(a.key).catch(failed); // once: a failure keeps the copy
+    }
+    return {
+      set: set,
+      sharpen: sharpen,
+      ready: function (image) {
+        return Boolean(a.texture) && a.key === Loom.artKey(image);
+      },
+      get texture() {
+        return a.texture;
+      },
+    };
+  }
+
+  /** How many device pixels a length on screen covers (the stage's resolution). */
+  function devicePx(length) {
+    return length * Math.min(2, window.devicePixelRatio || 1);
+  }
+
   Loom.draw = {
+    art: art,
+    devicePx: devicePx,
     loadTexture: loadTexture,
     line: line,
     polyline: polyline,

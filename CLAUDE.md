@@ -73,7 +73,7 @@ npm run format
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
 - **Jest 29** — Rules, Cloud Functions, Loom, Cartographer and MCP tests against the Firestore and Storage emulators
-- **GitHub Actions** — 10 workflows for CI, preview deploys, production deploys and admin tasks
+- **GitHub Actions** — 11 workflows for CI, preview deploys, production deploys and admin tasks
 
 ---
 
@@ -216,7 +216,7 @@ npm run deploy            # Deploy hosting only (production)
 | `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history |
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
-| `studio_images/{imageId}` | `hasApp('cartographer')`, read only | The image studio's library: one record per image, with its kind, labels, versions and link (files in Storage at `studio/{imageId}/`) |
+| `studio_images/{imageId}` | `hasApp('cartographer')`, read only | The image studio's library: one record per image, with its kind, labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`) |
 | `studio_jobs/{jobId}` | `hasApp('cartographer')`, read only | The image studio's jobs, making an image or editing one: the request, its state (queued, running, done, failed), the image (and version) made, its cost or error |
 | `studio_styles/{styleId}` | `hasApp('cartographer')`, read only | The image studio's named styles: a name, prompt text and up to 3 reference images, named in a generation or edit; a world's default is `world.studio.styleId` |
 | `studio_costs/{entryId}`, `studio_costs_month/{yyyy-mm}` | Deny (server only) | The image studio's costs: one entry per charged job, and each month's totals by day, model and who (read through `studioCosts`) |
@@ -272,6 +272,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 | `seed-categories.yml` | Manual dispatch | Populate Symposium categories |
 | `backfill-character-positions.yml` | Manual dispatch | Give characters made before L-680 a position (dry run, then apply) |
 | `backfill-art-library.yml` | Manual dispatch | Move world art from before the image studio into its library (dry run, then apply) |
+| `backfill-screen-copies.yml` | Manual dispatch | Make screen-sized copies for library images stored before L-727 (dry run, then apply) |
 | `studio-generate.yml` | Manual dispatch | Make images with the real model by hand: one image, or the big-map trial; spends money, so it asks for confirm "spend" |
 
 **Required secret:** `FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00`

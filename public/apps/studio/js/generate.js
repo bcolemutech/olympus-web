@@ -42,7 +42,7 @@
       var chip = el('span', 'studio-ref');
       if (record) {
         var img = el('img');
-        img.src = record.link;
+        Studio.thumb(img, record); // its screen-sized copy (L-727)
         img.alt = '';
         chip.appendChild(img);
       }

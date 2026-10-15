@@ -74,7 +74,7 @@
     turn: null, // loomGetMap's `turn`
     positions: {}, // id → { x, y, auto }
     selected: null, // a place id
-    art: { path: null, texture: null }, // the town's image (L-347), once loaded
+    art: null, // the town's image (L-347; Loom.draw.art): its copy, then the full image
     target: null, // where a walk would go (L-664): { point } or { placeId }
     preview: null, // the walk there, as the server would find it
     pending: null, // a walk sent: { points }, for the token's walk when it lands
@@ -82,6 +82,8 @@
     nodes: null, // the PixiJS objects, built on first draw
     labels: {}, // place id → its label
     fog: { key: null, texture: null },
+    mist: { key: null, texture: null, unseen: 0 }, // the mist over unseen ground (K3)
+    mistAt: null, // where the mist is drawn this frame: { x, y, width, height }
   };
 
   // ── Helpers ───────────────────────────────────────
@@ -127,25 +129,15 @@
   // ── Data ──────────────────────────────────────────
 
   // Loads the town's art (a library image's link, or from Cloud Storage for
-  // older art) as a texture, then redraws.
+  // older art): its screen-sized copy first, the full image once zoomed in
+  // (A1; L-727).
   function loadArt(image) {
-    if (!image) {
-      town.art = { path: null, texture: null };
-      return;
-    }
-    var key = Loom.artKey(image);
-    if (key === town.art.path) return;
-    town.art = { path: key, texture: null };
-    Loom.draw
-      .loadTexture(image)
-      .then(function (texture) {
-        if (town.art.path !== key) return; // the player moved on meanwhile
-        town.art.texture = texture;
+    if (!town.art) {
+      town.art = Loom.draw.art(function () {
         engine.draw();
-      })
-      .catch(function (err) {
-        console.error('Could not load the town art:', err);
-      });
+      }, 'town art');
+    }
+    town.art.set(image);
   }
 
   /** Takes loomGetMap's `town` (or null) and `turn`, and places what has no position. */
@@ -345,6 +337,9 @@
 
   var FOG_UNSEEN = 0.72; // never seen: dark, the town still showing through
   var FOG_SEEN = 0.38; // seen before, out of sight now: less dark
+  var MIST = 0.18; // the drifting mist over unseen ground, at its thickest (K3)
+  var MIST_PERIOD = 9; // s for the mist to thin and thicken
+  var SHIMMER_PERIOD = 3.5; // s for the water's shimmer to come and go
 
   function bitsOf(packed, size) {
     var bytes = window.atob(packed || '');
@@ -382,6 +377,65 @@
     texture.source.scaleMode = 'linear';
     town.fog = { key: key, texture: texture };
     return texture;
+  }
+
+  // A deterministic grain, 0–1, at whole points.
+  function grain(x, y) {
+    var h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return h - Math.floor(h);
+  }
+
+  // Smooth noise, 0–1, its features about `size` across: the mist's clouds.
+  function noise(x, y, size) {
+    var gx = x / size;
+    var gy = y / size;
+    var x0 = Math.floor(gx);
+    var y0 = Math.floor(gy);
+    var fx = gx - x0;
+    var fy = gy - y0;
+    var sx = fx * fx * (3 - 2 * fx);
+    var sy = fy * fy * (3 - 2 * fy);
+    var a = grain(x0, y0);
+    var b = grain(x0 + 1, y0);
+    var c = grain(x0, y0 + 1);
+    var d = grain(x0 + 1, y0 + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  }
+
+  // The mist over unseen ground (K3; L-727), one layer the ambient touches
+  // drift and thin and thicken: soft clouds some walking squares across.
+  function mistTextures(fog) {
+    var key = fog.side + '|' + fog.seen;
+    if (town.mist.key === key) return town.mist;
+    var side = fog.side;
+    var seen = bitsOf(fog.seen, side * side);
+    var unseen = 0;
+    var make = function () {
+      var canvas = document.createElement('canvas');
+      canvas.width = side;
+      canvas.height = side;
+      var context = canvas.getContext('2d');
+      var image = context.createImageData(side, side);
+      for (var i = 0; i < side * side; i++) {
+        if (seen[i]) continue;
+        unseen += 1;
+        var x = i % side;
+        var y = Math.floor(i / side);
+        var blotch = noise(x, y, 9);
+        image.data[i * 4] = 84;
+        image.data[i * 4 + 1] = 98;
+        image.data[i * 4 + 2] = 128;
+        image.data[i * 4 + 3] = Math.round(MIST * blotch * 255);
+      }
+      context.putImageData(image, 0, 0);
+      var texture = window.PIXI.Texture.from(canvas);
+      texture.source.scaleMode = 'linear';
+      return texture;
+    };
+    if (town.mist.texture) town.mist.texture.destroy(true);
+    town.mist = { key: key, texture: make(), unseen: 0 };
+    town.mist.unseen = unseen;
+    return town.mist;
   }
 
   // ── Walks ─────────────────────────────────────────
@@ -468,6 +522,8 @@
       art: new PIXI.Sprite(),
       shapes: new PIXI.Graphics(),
       fog: new PIXI.Sprite(),
+      mist: new PIXI.Sprite(),
+      shimmer: new PIXI.Graphics(), // the water's shimmer, over a town drawn from its ground
       paths: new PIXI.Graphics(),
       pins: new PIXI.Graphics(),
       labels: new PIXI.Container(),
@@ -475,7 +531,8 @@
       you: Loom.draw.token(),
     };
     n.art.alpha = 0.9;
-    container.addChild(n.ground, n.art, n.shapes, n.fog, n.paths, n.pins, n.labels, n.walk);
+    container.addChild(n.ground, n.art, n.shapes, n.shimmer, n.fog, n.mist);
+    container.addChild(n.paths, n.pins, n.labels, n.walk);
     container.addChild(n.you.container);
     town.nodes = n;
   }
@@ -484,8 +541,9 @@
     return M.toScreen(view, p.x + PAD, p.y + PAD);
   }
 
-  // The town's shapes, for a town without art.
-  function drawGround(g, view) {
+  // The town's shapes, for a town without art; its water again on `shimmer`,
+  // which the ambient touches bring and take away (K3).
+  function drawGround(g, view, shimmer) {
     var ground = town.data.ground;
     var flat = function (shape) {
       var out = [];
@@ -499,7 +557,12 @@
       g.poly(flat(shape))
         .fill({ color: COLOURS.water, alpha: 0.45 })
         .stroke({ width: 1, color: COLOURS.waterEdge, alpha: 0.8 });
+      if (shimmer) shimmer.poly(flat(shape)).fill({ color: COLOURS.waterEdge, alpha: 1 });
     });
+    if (shimmer) {
+      shimmer.visible = Boolean((ground.water || []).length) && !reducedMotion();
+      shimmer.alpha = 0;
+    }
     (ground.crossings || []).forEach(function (shape) {
       var ford = shape.kind === 'ford';
       g.poly(flat(shape))
@@ -581,7 +644,7 @@
     // The town's art (L-347), fitted inside the town's square, behind the
     // paths and places.
     var image = data.image;
-    var art = image && town.art.texture && town.art.path === Loom.artKey(image);
+    var art = image && town.art && town.art.ready(image);
     n.art.visible = Boolean(art);
     if (art) {
       var aspect = image.width / image.height || 1;
@@ -589,6 +652,7 @@
       var h = aspect >= 1 ? SPAN / aspect : SPAN;
       var topLeft = M.toScreen(view, PAD + (SPAN - w) / 2, PAD + (SPAN - h) / 2);
       n.art.texture = town.art.texture;
+      town.art.sharpen(Loom.draw.devicePx(Math.max(w, h) * view.scale));
       n.art.position.set(topLeft.x, topLeft.y);
       n.art.width = w * view.scale;
       n.art.height = h * view.scale;
@@ -596,13 +660,25 @@
 
     // Without art, the town's shapes (L-664); over them, the fog (L-672).
     n.shapes.clear();
-    if (data.ground && !art) drawGround(n.shapes, view);
+    n.shimmer.clear();
+    if (data.ground && !art) drawGround(n.shapes, view, n.shimmer);
     n.fog.visible = Boolean(data.fog);
     if (data.fog) {
       n.fog.texture = fogTexture(data.fog);
       n.fog.position.set(corner.x, corner.y);
       n.fog.width = width;
       n.fog.height = height;
+    }
+    // The mist drifts over unseen ground, only while the ambient touches run.
+    var mist = data.fog && !reducedMotion() ? mistTextures(data.fog) : null;
+    var misty = Boolean(mist && mist.unseen);
+    town.mistAt = misty ? { x: corner.x, y: corner.y, width: width, height: height } : null;
+    n.mist.visible = misty;
+    if (misty) {
+      n.mist.texture = mist.texture;
+      n.mist.position.set(corner.x, corner.y);
+      n.mist.width = width;
+      n.mist.height = height;
     }
 
     var at = function (id) {
@@ -922,7 +998,8 @@
     var you = walking() ? tokenPoint() : null;
     if (you)
       points.push({ x: you.x + PAD, y: you.y + PAD, colour: '#ffffff', r: 3.5, ring: '#ffb74d' });
-    var art = town.art.texture && town.art.texture.source && town.art.texture.source.resource;
+    var texture = town.art && town.art.texture;
+    var art = texture && texture.source && texture.source.resource;
     return {
       rect: { x: PAD, y: PAD, width: SPAN, height: SPAN, fill: '#211f1c' },
       image: art || null,
@@ -1000,7 +1077,30 @@
     }
   }
 
-  engine.addLayer('town', { draw: draw });
+  // The ambient touches (K3; L-727): the water shimmers, and the mist over
+  // unseen ground drifts to and fro, thinning and thickening as it goes.
+  function ambient(container, t) {
+    var n = town.nodes;
+    if (!n || !town.data) return false;
+    var any = false;
+    if (n.shimmer.visible) {
+      n.shimmer.alpha = 0.04 + 0.1 * (0.5 + 0.5 * Math.sin((t * 2 * Math.PI) / SHIMMER_PERIOD));
+      any = true;
+    }
+    var at = town.mistAt;
+    if (at && n.mist.visible) {
+      var phase = (t * 2 * Math.PI) / MIST_PERIOD;
+      n.mist.alpha = 0.55 + 0.45 * Math.sin(phase);
+      n.mist.position.set(
+        at.x + Math.sin(phase / 2) * at.width * 0.008,
+        at.y + Math.cos(phase / 3) * at.width * 0.005
+      );
+      any = true;
+    }
+    return any;
+  }
+
+  engine.addLayer('town', { draw: draw, ambient: ambient });
 
   Loom.town = {
     BOUNDS: BOUNDS,
