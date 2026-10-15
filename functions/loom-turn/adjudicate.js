@@ -5,6 +5,7 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
+const clock = require('../loom-canon/clock');
 const { planStep, doorStatesOf, doorSides, hasKey, besideDoor } = require('./steps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
@@ -581,7 +582,8 @@ function evaluateGeneric(proposedAction, dice) {
 // movement and the action are refilled, the plan is kept, and the turn
 // counts. Always allowed, wherever the player is. On a battle map, the record
 // says how far the player moved this turn, since steps aren't recorded
-// (L-613 / #443).
+// (L-613 / #443). The turn takes its length of game time (L-371; game time
+// T4): 6 s on a battle map, 5 min anywhere else, from timeRules.
 function evaluateEndTurn(characterState, canonWorld) {
   const spent = speedOf(characterState) - turnStateOf(characterState).movementLeft;
   const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
@@ -599,6 +601,12 @@ function evaluateEndTurn(characterState, canonWorld) {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
+      {
+        target: 'save',
+        op: 'set-flag',
+        path: 'time',
+        value: clock.timeOf(characterState) + clock.turnSeconds(canonWorld, Boolean(map)),
+      },
       { op: 'increment', path: 'worldClock', value: 1 },
     ],
     constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved],

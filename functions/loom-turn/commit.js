@@ -7,6 +7,7 @@ const { shouldRegenerateSummary, maybeRegenerateSummary } = require('./summary')
 const { doorStatesOf } = require('./steps');
 const { look } = require('./seen');
 const { lookInTown } = require('./town-seen');
+const clock = require('../loom-canon/clock');
 
 /**
  * Stage 5 — COMMIT (design doc §5, §8).
@@ -96,6 +97,8 @@ async function commitTurn(params) {
       discovered.map((id) => ({ op: 'add', path: 'discovered', value: id }))
     );
     applyStateMutations(worldState, worldMutations);
+    // An older save gets its clock on its next turn (L-371): Day 1, 08:00.
+    if (!clock.isTime(save.time)) save.time = clock.START;
 
     // What the save now sees on its map, read before any write.
     const looked = saveMutations.some((m) => /^(mapId|cell|doors)(\.|$)/.test(m.path));

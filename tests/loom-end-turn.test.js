@@ -144,6 +144,36 @@ describe('ending a turn', () => {
   });
 });
 
+describe('game time (L-371)', () => {
+  test('a new save starts on Day 1 at 08:00', async () => {
+    expect((await seed('save-clock-new')).time).toBe(8 * 3600);
+  });
+
+  test('End turn off a battle map takes 5 minutes, turn after turn', async () => {
+    await seed('save-clock-town');
+    await endTurn('save-clock-town');
+    expect((await saveOf('save-clock-town')).time).toBe(8 * 3600 + 300);
+    await endTurn('save-clock-town');
+    expect((await saveOf('save-clock-town')).time).toBe(8 * 3600 + 600);
+  });
+
+  test('an older save without a clock reads as 08:00 and gets one on its next turn', async () => {
+    const older = await seed('save-clock-old');
+    delete older.time;
+    await db.collection('loom_saves').doc('save-clock-old').set(older);
+    expect((await saveOf('save-clock-old')).time).toBeUndefined();
+    await endTurn('save-clock-old');
+    expect((await saveOf('save-clock-old')).time).toBe(8 * 3600 + 300);
+  });
+
+  test('worldClock still counts turns', async () => {
+    await seed('save-clock-count');
+    const before = (await clock()) || 0;
+    await endTurn('save-clock-count');
+    expect(await clock()).toBe(before + 1);
+  });
+});
+
 describe('loomGetMap carries the turn', () => {
   test('the turn number, movement left of the speed, the action and the plan', async () => {
     await seed('save-view', { turn: { n: 7, movementLeft: 12, actionUsed: true, plan: null } });

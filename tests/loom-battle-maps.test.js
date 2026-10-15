@@ -819,7 +819,11 @@ describe('moving without the GM (L-613)', () => {
       });
     await stepTo(saveId, { x: 9, y: 1 });
     expect((await continueOn(saveId)).step.lines).toEqual([OUT_OF_MOVEMENT]);
+    const before = (await saveOf(saveId)).time;
+    expect(before).toBe(8 * 3600); // a game made by loomCreateSave starts on Day 1, 08:00
     expect((await endTurn(saveId)).narration).toBe('Turn 1 ends. You moved 4 squares.');
+    // A battle-map turn is 6 seconds of game time (L-371; game time T4).
+    expect((await saveOf(saveId)).time).toBe(before + 6);
     const { step } = await continueOn(saveId);
     expect(step).toMatchObject({ cell: { x: 9, y: 1 }, movementLeft: 0, plan: null });
     expect(step.lines).toEqual(["You're at the hearth."]);

@@ -1,0 +1,153 @@
+'use strict';
+
+/**
+ * Game time (planning/the-loom-game-time.md §4.1; L-371 / #499): each save's
+ * clock, in whole seconds since the game began, Day 1 at 00:00 (T1). A new
+ * game starts at 08:00 (T2), and an older save reads as that until its next
+ * turn gives it the field (T16).
+ *
+ * The day has named parts, and no hours are shown (T3):
+ *   dawn 05–07, morning 07–12, midday 12–14, afternoon 14–17,
+ *   evening 17–20, night 20–05.
+ * Dawn breaks at 05:00 and dusk falls at 20:00, when night begins.
+ *
+ * timeRules(world) holds every number time is charged by (R2): turn lengths,
+ * the travel day and route speeds. Nothing else holds them, so L-714 (route
+ * kinds per world) and Phase 9 (game systems) change only it.
+ *
+ * Pure: no Firestore, no clock of the machine's.
+ */
+
+const MINUTE = 60;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const START = 8 * HOUR; // Day 1, 08:00 (T2)
+
+// The parts of the day, by the hour each begins (T3). Night runs past midnight.
+const PARTS = [
+  { name: 'night', from: 0 },
+  { name: 'dawn', from: 5 },
+  { name: 'morning', from: 7 },
+  { name: 'midday', from: 12 },
+  { name: 'afternoon', from: 14 },
+  { name: 'evening', from: 17 },
+  { name: 'night', from: 20 },
+];
+const DAWN = 5 * HOUR; // dawn breaks
+const DUSK = 20 * HOUR; // dusk falls: night begins
+
+// The defaults (R2): 6 s a battle-map turn, about 5 min a town turn (T4);
+// 8 hours a day on land (T9); road 3 mph, trail 2, sea 5 (T8); ships sail
+// round the clock.
+const DEFAULT_RULES = Object.freeze({
+  turnSeconds: Object.freeze({ battle: 6, other: 300 }),
+  travelDayHours: 8,
+  routeSpeeds: Object.freeze({ road: 3, trail: 2, sea: 5 }),
+  roundTheClock: Object.freeze(['sea']),
+});
+
+/** Whether a value is a save's time: whole seconds, 0 or more. */
+function isTime(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+/** A save's time: its own, or the start for an older save without one (T16). */
+function timeOf(save) {
+  return save && isTime(save.time) ? save.time : START;
+}
+
+/** The day (from 1), the part of day and the hour (0–23) for a time. */
+function partOf(seconds) {
+  const day = Math.floor(seconds / DAY) + 1;
+  const hour = Math.floor((seconds % DAY) / HOUR);
+  let part = PARTS[0].name;
+  for (const p of PARTS) if (hour >= p.from) part = p.name;
+  return { day, part, hour };
+}
+
+/** "Day 1, evening" (T15). */
+function label(seconds) {
+  const { day, part } = partOf(seconds);
+  return `Day ${day}, ${part}`;
+}
+
+/**
+ * The dawns and dusks between two times, in order: [{ event: 'dawn' |
+ * 'dusk', day, at }], where `at` is the time it came. A time exactly at the
+ * start isn't counted; one exactly at the end is.
+ */
+function crossed(from, to) {
+  const events = [];
+  if (!(to > from)) return events;
+  for (let dayStart = Math.floor(from / DAY) * DAY; dayStart <= to; dayStart += DAY) {
+    for (const [event, offset] of [
+      ['dawn', DAWN],
+      ['dusk', DUSK],
+    ]) {
+      const at = dayStart + offset;
+      if (at > from && at <= to) events.push({ event, day: dayStart / DAY + 1, at });
+    }
+  }
+  return events;
+}
+
+// "1", "1½", "2": a number of halves in words.
+function halves(n) {
+  const whole = Math.floor(n / 2);
+  return n % 2 ? `${whole || ''}½` : String(whole);
+}
+
+/**
+ * How long, in words: "a few seconds", "about 5 minutes", "about an hour",
+ * "about 1½ hours", "about 6 hours", "a day", "2 days", "about 2½ days".
+ */
+function duration(seconds) {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < MINUTE) return 'a few seconds';
+  if (s < 45 * MINUTE) {
+    const minutes = Math.round(s / MINUTE);
+    if (minutes <= 1) return 'about a minute';
+    const rounded = minutes < 10 ? minutes : Math.round(minutes / 5) * 5;
+    return `about ${rounded} minutes`;
+  }
+  if (s < 23 * HOUR) {
+    const n = Math.max(2, Math.round(s / (HOUR / 2))); // half hours, from 1 hour
+    return n === 2 ? 'about an hour' : `about ${halves(n)} hours`;
+  }
+  const n = Math.max(2, Math.round(s / (DAY / 2))); // half days, from 1 day
+  const exact = s % DAY === 0;
+  if (n === 2) return exact ? 'a day' : 'about a day';
+  if (n % 2 === 0 && exact) return `${n / 2} days`;
+  return `about ${halves(n)} days`;
+}
+
+/**
+ * The rules time is charged by, for a world (R2). Today every world takes
+ * the defaults; a world's own settings come with L-714 and Phase 9.
+ */
+// eslint-disable-next-line no-unused-vars
+function timeRules(world) {
+  return DEFAULT_RULES;
+}
+
+/** A turn's length in seconds: on a battle map, or anywhere else (T4). */
+function turnSeconds(world, onBattleMap) {
+  const turns = timeRules(world).turnSeconds;
+  return onBattleMap ? turns.battle : turns.other;
+}
+
+module.exports = {
+  MINUTE,
+  HOUR,
+  DAY,
+  START,
+  PARTS,
+  isTime,
+  timeOf,
+  partOf,
+  label,
+  crossed,
+  duration,
+  timeRules,
+  turnSeconds,
+};

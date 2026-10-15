@@ -213,7 +213,7 @@ npm run deploy            # Deploy hosting only (production)
 | `apps/{appId}` | `hasApp(appId)` or admin | App registry |
 | `pool_handicap/{userId}` | Self read/write only | Billiards handicap data |
 | `loom_worlds/{worldId}` | `hasApp('cartographer')`; `hasApp('loom')` for published only | Cartographer worlds; entity subcollections (`locations`, `factions`, `regions`, `characters`, `lore`, `places`) readable by `cartographer` only |
-| `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history |
+| `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history; each save keeps its own clock, `time` in seconds from Day 1 (rules in `functions/loom-canon/clock.js`) |
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
 | `studio_images/{imageId}` | `hasApp('cartographer')`, read only | The image studio's library: one record per image, with its kind, labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`) |
