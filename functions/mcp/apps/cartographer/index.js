@@ -284,8 +284,9 @@ function cartographerApp({ reader, writer, art, studio }) {
           'One place in full: description, its grade, score and band, what it is missing (most ' +
           'score first) and its checklist (every criterion with its weight and progress), ' +
           'population, region ' +
-          'and realm, its connections (by road, trail or sea, with direction, distance and ' +
-          'grade), the characters found there, and the lore about it. A settlement also has ' +
+          'and realm, its connections (by road, trail or sea, with direction, length in miles ' +
+          '(from the map: the straight line at its scale, × 1.25 for winding; null if either ' +
+          'place has no position) and grade), the characters found there, and the lore about it. A settlement also has ' +
           'seeds: what the map says about the town (type, culture, and whether it has walls, a ' +
           'citadel, a plaza (market square), a temple, a shanty town).',
         inputSchema: { worldId, locationId: entityId('location', 'find_locations') },

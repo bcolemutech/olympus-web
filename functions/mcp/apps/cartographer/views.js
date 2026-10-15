@@ -20,6 +20,7 @@ const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
 const artOf = require('../../../loom-canon/art');
+const routes = require('../../../loom-canon/routes');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -362,10 +363,13 @@ function locationDetail(world, location) {
   }
   result.region = geo.regionId ? ref(world.regions, geo.regionId) : null;
   result.factions = (location.factionIds || []).map((id) => ref(world.factions, id));
+  // Each route's length in miles (L-372): the map's straight line, scaled,
+  // × 1.25 for winding (loom-canon/routes.js); null without positions.
   result.connections = (location.connections || []).map((id) => ({
     ...ref(world.locations, id),
     via: links[id] || null,
-    ...bearing(location, world.locations[id] || {}),
+    miles: routes.roundMiles(routes.routeMiles(world, location, world.locations[id])),
+    direction: bearing(location, world.locations[id] || {}).direction,
     ...(world.locations[id]
       ? (({ grade, band }) => ({ grade, band }))(gradeLocation(world, world.locations[id]))
       : {}),
