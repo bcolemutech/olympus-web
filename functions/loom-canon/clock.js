@@ -121,6 +121,30 @@ function duration(seconds) {
   return `about ${halves(n)} days`;
 }
 
+// When each part of the day begins, in hours: night begins at dusk (T3).
+const PART_STARTS = Object.freeze({
+  dawn: 5,
+  morning: 7,
+  midday: 12,
+  afternoon: 14,
+  evening: 17,
+  night: 20,
+});
+
+/**
+ * The next start of a part of the day after `now` (L-374; T12): waiting
+ * until it. Already in that part, it is the next one: sleeping until dawn
+ * at dawn waits for the next dawn. Null for a name that isn't a part.
+ */
+function nextStartOf(now, part) {
+  const hour = PART_STARTS[part];
+  if (hour === undefined) return null;
+  const dayStart = Math.floor(now / DAY) * DAY;
+  const at = dayStart + hour * HOUR;
+  // The first start after now: within that part, its start is behind you.
+  return at > now ? at : at + DAY;
+}
+
 // What came on the way: "dusk fell on the way", "dusk fell and dawn broke
 // on the way", or for more, how many of each and which came last.
 function crossedWords(crossed) {
@@ -183,6 +207,7 @@ module.exports = {
   DAY,
   START,
   PARTS,
+  PART_STARTS,
   isTime,
   timeOf,
   partOf,
@@ -190,6 +215,7 @@ module.exports = {
   crossed,
   duration,
   timeLine,
+  nextStartOf,
   timeRules,
   turnSeconds,
 };

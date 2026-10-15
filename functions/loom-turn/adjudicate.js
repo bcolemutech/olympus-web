@@ -627,6 +627,55 @@ function evaluateEndTurn(characterState, canonWorld) {
   };
 }
 
+// Waiting, resting and sleeping (L-374; game time T12, §4.3): a `wait` for
+// `params.minutes`, or `params.until` the next start of a part of the day
+// (dawn, morning, midday, afternoon, evening, night). Capped at a day. It
+// uses the turn's action and ends the turn, so the next starts fresh; the
+// wait is its time, so End turn's length isn't added too.
+const WAIT_VERBS = { wait: 'wait', rest: 'rest', sleep: 'sleep', nap: 'sleep', camp: 'rest' };
+const MAX_WAIT = 24 * clock.HOUR;
+const HOW_LONG =
+  'How long? Wait a number of minutes, or until dawn, morning, midday, afternoon, evening ' +
+  'or night.';
+
+function evaluateWait(proposedAction, characterState) {
+  const turn = turnStateOf(characterState);
+  if (turn.actionUsed) return blocked(ACTED);
+  const params = proposedAction.params || {};
+  // Sleeping or resting, as the player put it ("sleep until dawn").
+  const how = WAIT_VERBS[String(params.how || '').toLowerCase()] || WAIT_VERBS[proposedAction.verb];
+  const now = clock.timeOf(characterState);
+  const until = typeof params.until === 'string' ? params.until.toLowerCase().trim() : null;
+  const minutes = Number(params.minutes !== undefined ? params.minutes : NaN);
+  let seconds;
+  let said;
+  if (until) {
+    const at = clock.nextStartOf(now, until);
+    if (at === null) return blocked(HOW_LONG);
+    seconds = at - now;
+    said = 'You ' + how + ' until ' + until + '.';
+  } else if (Number.isFinite(minutes) && minutes > 0) {
+    seconds = Math.min(Math.round(minutes * clock.MINUTE), MAX_WAIT);
+    said =
+      seconds === MAX_WAIT && minutes * clock.MINUTE > MAX_WAIT
+        ? 'You ' + how + ' for a day, as long as anyone can at a stretch.'
+        : 'You ' + how + ' for ' + clock.duration(seconds) + '.';
+  } else {
+    return blocked(HOW_LONG);
+  }
+  const time = travel.timeSpent(now, seconds);
+  return {
+    outcome: 'success',
+    mutations: [
+      { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
+      { target: 'save', op: 'set-flag', path: 'time', value: time.to },
+      { op: 'increment', path: 'worldClock', value: 1 },
+    ],
+    constraints: [said],
+    time,
+  };
+}
+
 // What an action aims at on the battle map the player stands on: its name,
 // the squares it stands on (a door, either side of it), and whether it's a
 // person (someone placed on a square, §6), or null if it isn't there.
@@ -780,6 +829,8 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     resolution = evaluateMove(proposedAction, worldState, characterState, canonWorld, known, found);
   } else if (proposedAction.verb === 'end-turn') {
     resolution = evaluateEndTurn(characterState, canonWorld);
+  } else if (WAIT_VERBS[proposedAction.verb]) {
+    resolution = evaluateWait(proposedAction, characterState);
   } else {
     resolution = evaluateAction(proposedAction, characterState, dice, canonWorld);
   }
