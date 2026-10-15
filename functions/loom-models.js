@@ -9,6 +9,8 @@
  * rather than this module generating them.
  */
 
+const clock = require('./loom-canon/clock');
+
 // ── Mutation vocabulary (design doc §8, §10 L-401) ─────────────────────────
 // state_mutations are deltas, never whole-document overwrites, so retried
 // transactional writes (batch tick, concurrent turns) merge cleanly.
@@ -303,6 +305,11 @@ function validateSave(data) {
   if (data.turn !== undefined) {
     errors.push.apply(errors, validateTurnState(data.turn, speedOf(data)));
   }
+  // The save's clock (L-371): seconds since the game began; older saves have
+  // none and read as Day 1, 08:00 until their next turn.
+  if (data.time !== undefined && !clock.isTime(data.time)) {
+    errors.push('time must be whole seconds, 0 or more');
+  }
 
   return { valid: errors.length === 0, errors: errors };
 }
@@ -404,6 +411,7 @@ function makeSave(fields) {
     relationships: fields.relationships || {},
     recentSummary: fields.recentSummary || '',
     turn: fields.turn || freshTurnState({ character }),
+    time: fields.time === undefined ? clock.START : fields.time, // Day 1, 08:00 (L-371)
     // Doors this save has opened, closed or unlocked on battle maps (L-624).
     ...(fields.doors !== undefined ? { doors: fields.doors } : {}),
     createdAt: fields.createdAt,

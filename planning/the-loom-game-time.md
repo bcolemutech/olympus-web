@@ -1,6 +1,6 @@
 # The Loom — Game Time — Design Document v0.1
 
-**Status:** Decided (2026-10-08), revisited 2026-10-15 after the UI rewrite (§3, R1–R4). Sub-issues filed: L-371 to L-376 (#499–504).
+**Status:** Decided (2026-10-08), revisited 2026-10-15 after the UI rewrite (§3, R1–R4). Sub-issues filed: L-371 to L-376 (#499–504). In progress. Shipped: L-371, time in saves: `save.time` (seconds since Day 1, 00:00; a new game and an older save's next turn start at 08:00), the clock module (`functions/loom-canon/clock.js`: the part of day, labels, dawn and dusk crossed, durations in words) with `timeRules(world)` holding every number, and End turn adding 6 s on a battle map and 5 min anywhere else. L-372 is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-370 (#421)
 **Follows:** Phase 3c "Movement and Vision" ([`the-loom-movement-and-vision.md`](./the-loom-movement-and-vision.md))
