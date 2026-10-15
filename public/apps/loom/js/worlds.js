@@ -21,6 +21,9 @@
               tagline: data.tagline || '',
               // Its cover image (L-704): a library image's link, the file only.
               cover: data.cover && data.cover.link ? data.cover.link : null,
+              // Its accent colour (K1, L-729): set from the brief's art
+              // direction (L-710); null for the Loom's own.
+              accent: typeof data.accent === 'string' ? Loom.theme.accentOf(data.accent) : null,
             };
           })
           .sort(function (a, b) {
@@ -73,26 +76,58 @@
       });
   }
 
+  /**
+   * A world's cover art (A4): its cover image, or a plain one in its accent
+   * with its initial; one that won't load leaves the plain one.
+   */
+  function coverOf(world, lazy) {
+    var art = document.createElement('div');
+    art.className = 'loom-cover';
+    var initial = document.createElement('span');
+    initial.className = 'loom-cover-initial';
+    initial.setAttribute('aria-hidden', 'true');
+    initial.textContent = (world.name || '?').trim().charAt(0).toUpperCase();
+    art.appendChild(initial);
+    if (world.cover) {
+      var img = document.createElement('img');
+      img.className = 'loom-cover-image';
+      img.src = world.cover;
+      img.alt = '';
+      if (lazy) img.loading = 'lazy';
+      art.classList.add('has-image');
+      img.addEventListener('error', function () {
+        img.remove();
+        art.classList.remove('has-image');
+      });
+      art.appendChild(img);
+    }
+    return art;
+  }
+
+  /** The world entered, by id. */
+  function worldById(worldId) {
+    return (
+      Loom.WORLDS.filter(function (w) {
+        return w.id === worldId;
+      })[0] || null
+    );
+  }
+
   function renderWorlds(worlds) {
     var container = Loom.getRef('loom-world-list');
     container.innerHTML = '';
 
     worlds.forEach(function (world) {
-      var card = document.createElement('div');
-      card.className = 'app-card loom-world-card';
+      var card = document.createElement('article');
+      card.className = 'loom-world-card';
+      card.dataset.worldId = world.id;
+      // Each card in its own world's accent (K1).
+      if (world.accent) card.style.setProperty('--loom-accent', world.accent);
 
-      if (world.cover) {
-        var cover = document.createElement('img');
-        cover.className = 'loom-world-cover';
-        cover.src = world.cover;
-        cover.alt = '';
-        cover.loading = 'lazy';
-        // A cover that won't load leaves the card as it would be without one.
-        cover.addEventListener('error', function () {
-          cover.remove();
-        });
-        card.appendChild(cover);
-      }
+      card.appendChild(coverOf(world, true));
+
+      var body = document.createElement('div');
+      body.className = 'loom-card-body';
 
       var title = document.createElement('h3');
       title.className = 'loom-card-title';
@@ -111,16 +146,18 @@
       btn.type = 'button';
       btn.className = 'app-btn';
       btn.textContent = 'Enter';
+      btn.setAttribute('aria-label', 'Enter ' + world.name);
       btn.addEventListener('click', function () {
         Loom.app.showSaves(world.id, world.name);
       });
 
-      card.appendChild(title);
-      card.appendChild(tagline);
-      card.appendChild(btn);
+      body.appendChild(title);
+      body.appendChild(tagline);
+      body.appendChild(btn);
+      card.appendChild(body);
       container.appendChild(card);
     });
   }
 
-  Loom.worlds = { renderWorldList: renderWorldList };
+  Loom.worlds = { renderWorldList: renderWorldList, coverOf: coverOf, worldById: worldById };
 })();

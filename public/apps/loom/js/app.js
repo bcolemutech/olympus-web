@@ -21,7 +21,35 @@
   function showWorlds() {
     state.worldId = null;
     state.saveId = null;
+    Loom.theme.useAccent(null); // the Loom's own; each card has its world's
     showView('worlds');
+  }
+
+  // The world's cover in an element, in place of the one there (L-729).
+  function putCover(el, world) {
+    var old = el.querySelector('.loom-cover');
+    if (old) old.remove();
+    el.insertBefore(Loom.worlds.coverOf(world), el.firstChild);
+  }
+
+  var coverTimer = 0;
+
+  /** While a save loads, its world's cover over the page; null hides it. */
+  function showCover(world) {
+    var el = Loom.getRef('loom-play-cover');
+    window.clearTimeout(coverTimer);
+    if (world) {
+      putCover(el, world);
+      Loom.getRef('loom-play-cover-name').textContent = world.name;
+      el.classList.remove('hidden', 'is-leaving');
+      return;
+    }
+    if (el.classList.contains('hidden')) return;
+    el.classList.add('is-leaving'); // fades (none with reduced motion)
+    coverTimer = window.setTimeout(function () {
+      el.classList.add('hidden');
+      el.classList.remove('is-leaving');
+    }, 400);
   }
 
   function hideNewSaveForm() {
@@ -33,6 +61,9 @@
 
   function showSaves(worldId, worldName) {
     state.worldId = worldId;
+    var world = Loom.worlds.worldById(worldId) || { id: worldId, name: worldName };
+    Loom.theme.useAccent(world.accent); // the world's accent, through to play (K1)
+    putCover(Loom.getRef('loom-saves-hero'), world);
     Loom.getRef('loom-save-select-title').textContent = worldName;
     hideNewSaveForm();
     showView('saves');
@@ -56,7 +87,15 @@
         characterName: (save.character && save.character.name) || '',
       },
     });
-    Loom.play.init(saveId, save);
+    showCover(Loom.worlds.worldById(state.worldId) || { name: worldName(state.worldId) });
+    Loom.play.init(saveId, save).then(
+      function () {
+        showCover(null);
+      },
+      function () {
+        showCover(null);
+      }
+    );
     showView('play');
   }
 

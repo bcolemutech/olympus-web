@@ -128,7 +128,7 @@
     playTurn({ action: { verb: 'end-turn' } }, 'end turn', { keep: true });
   }
 
-  /** Resets the play view for a newly-selected save. */
+  /** Resets the play view for a newly-selected save; resolves once its map has loaded. */
   function init(saveId, save) {
     state.saveId = saveId;
 
@@ -139,7 +139,7 @@
 
     showTurn(null);
     Loom.map.reset();
-    Loom.map.load();
+    return Loom.map.load(); // the loading cover stays until it has (L-729)
   }
 
   Loom.play = {
