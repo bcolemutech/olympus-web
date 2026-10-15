@@ -12,6 +12,7 @@ const { doorStatesOf, doorSides } = require('./steps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
 const { recordOf, squaresOf, peopleInSight } = require('./seen');
+const clock = require('../loom-canon/clock');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -65,6 +66,11 @@ function buildSystemInstruction(knownEntities) {
     'name in inventedEntities so it can be tracked as provisional. Most narration invents no ' +
     'new named entities at all — leave this empty unless you actually named someone/somewhere ' +
     'new.\n\n' +
+    'The TIME line says the day and part of day once this resolves, and how much time ' +
+    'passed. Let the time of day colour the scene when it matters (morning fog, the heat ' +
+    'of midday, lanterns lit at night), and narrate any dusk or dawn it says came on the ' +
+    'way. Never state a different time of day, or more or less time passing, than it ' +
+    'says.\n\n' +
     'Optionally suggest 2-4 short next actions as plain phrases (e.g. "search the wreck"). ' +
     'Leave empty if nothing obvious suggests itself.\n\n' +
     'Respond with ONLY a JSON object: { "narration": string, "inventedEntities": string[], ' +
@@ -329,6 +335,14 @@ function buildExitsSection(canonWorld, position, save, resolution, view) {
   return 'WAYS ON FROM ' + here.name + ':\n' + note + lines.join('\n');
 }
 
+// The time once this resolves, and what passed on the way (L-375; game time
+// T14): the resolution's own account (L-373), or none.
+function buildTimeSection(save, resolution) {
+  const change = (resolution.mutations || []).find((m) => m.target === 'save' && m.path === 'time');
+  const now = change ? change.value : clock.timeOf(save);
+  return 'TIME (final):\n' + clock.timeLine(now, resolution.time || null);
+}
+
 // Where the player is in their turn once this resolves (L-614 / #444): the
 // movement left and whether they've acted, for pacing; the rules have
 // already decided what they may do.
@@ -357,6 +371,7 @@ function buildUserMessage(params) {
     recentSummary,
     exitsSection,
     turnSection,
+    timeSection,
   } = params;
 
   const constraintsText =
@@ -375,6 +390,7 @@ function buildUserMessage(params) {
     'Hard facts:\n' +
     constraintsText +
     '\n\n' +
+    (timeSection ? timeSection + '\n\n' : '') +
     'ROLLING SUMMARY:\n' +
     (recentSummary || '(none yet)') +
     '\n\n' +
@@ -486,6 +502,7 @@ async function narrateResolution(params) {
         recentSummary: save.recentSummary,
         exitsSection: buildExitsSection(canonWorld, position, save, resolution, view),
         turnSection: buildTurnSection(save, resolution),
+        timeSection: buildTimeSection(save, resolution),
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,

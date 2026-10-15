@@ -4,6 +4,7 @@ const { callGemini } = require('../gemini');
 const maps = require('../loom-canon/maps');
 const { doorSides } = require('./steps');
 const { peopleInSight } = require('./seen');
+const clock = require('../loom-canon/clock');
 
 /**
  * Stage 2 — INTERPRET (design doc §5).
@@ -24,7 +25,7 @@ const { peopleInSight } = require('./seen');
 const MODEL_NAME = 'gemini-2.5-flash';
 const MAX_OUTPUT_TOKENS = 512;
 
-function buildSystemInstruction(knownEntities) {
+function buildSystemInstruction(knownEntities, save) {
   const entityList = knownEntities
     .map((e) => '- ' + e.id + ' (' + e.kind + '): ' + e.name)
     .join('\n');
@@ -36,6 +37,11 @@ function buildSystemInstruction(knownEntities) {
     'decides that. Never invent outcomes, dice rolls, or state changes.\n\n' +
     'Known entities in this world:\n' +
     entityList +
+    '\n\n' +
+    // The time now (L-375; game time T14), to read the player by ("wait
+    // until dusk"); it is not for deciding anything.
+    'TIME: ' +
+    clock.timeLine(clock.timeOf(save)) +
     '\n\n' +
     'Extract from the player action:\n' +
     '- verb: a short lowercase snake_case verb summarizing the intent (e.g. "look", ' +
@@ -219,7 +225,7 @@ async function interpretAction(params) {
   try {
     raw = await callGemini({
       modelName: MODEL_NAME,
-      systemInstruction: buildSystemInstruction(knownEntities),
+      systemInstruction: buildSystemInstruction(knownEntities, save),
       userMessage: actionText,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,
