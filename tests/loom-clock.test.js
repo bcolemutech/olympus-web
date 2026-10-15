@@ -156,3 +156,22 @@ describe('the TIME line for the GM (L-375)', () => {
     );
   });
 });
+
+describe('the next start of a part of the day (L-374)', () => {
+  test('later today, or tomorrow once it has begun', () => {
+    expect(clock.nextStartOf(at(1, 15), 'evening')).toBe(at(1, 17));
+    expect(clock.nextStartOf(at(1, 21), 'morning')).toBe(at(2, 7));
+    // Already dawn: the next dawn. Exactly at its start too.
+    expect(clock.nextStartOf(at(1, 5, 30), 'dawn')).toBe(at(2, 5));
+    expect(clock.nextStartOf(at(1, 5), 'dawn')).toBe(at(2, 5));
+  });
+
+  test('night begins at 20:00, even past midnight', () => {
+    expect(clock.nextStartOf(at(2, 4), 'night')).toBe(at(2, 20));
+    expect(clock.nextStartOf(at(2, 22), 'night')).toBe(at(3, 20));
+  });
+
+  test('not a part of the day: null', () => {
+    expect(clock.nextStartOf(at(1, 9), 'teatime')).toBeNull();
+  });
+});

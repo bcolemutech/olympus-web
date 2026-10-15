@@ -52,6 +52,11 @@ function buildSystemInstruction(knownEntities, save) {
     '("to Daldockley by the King\'s Causeway"), target that way in.\n' +
     '- params: an object of any other relevant details (e.g. {"item": "sword"}). Use an ' +
     'empty object if there are none.\n\n' +
+    // Letting time pass (L-374; game time T12).
+    'To let time pass ("wait an hour", "rest until evening", "sleep until dawn"), use the ' +
+    'verb "wait" with params {"minutes": number} for a length of time, or {"until": part} ' +
+    'for a time of day, where part is one of dawn, morning, midday, afternoon, evening or ' +
+    'night; add {"how": "sleep"} or {"how": "rest"} when the player sleeps or rests.\n\n' +
     'Respond with ONLY a JSON object: { "verb": string, "targets": string[], "params": object }'
   );
 }
