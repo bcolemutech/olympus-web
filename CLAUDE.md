@@ -65,7 +65,7 @@ npm run format
 - **Firebase Hosting** — Static, `public/` directory
 - **Firestore** — `us-central1`, schema enforced by security rules
 - **Cloud Functions v2** — Node.js 22, CommonJS; entry point `functions/index.js`
-- **Cloud Storage** — `olympus-dfa00.firebasestorage.app`, rules in `storage.rules` (Cartographer map uploads and world images)
+- **Cloud Storage** — `olympus-dfa00.firebasestorage.app`, rules in `storage.rules` (Cartographer map uploads and world images); its CORS policy in `storage-cors.json` (GET from any origin, so WebGL and canvas can use its images as textures), applied by the Set Storage CORS workflow
 - **MCP server** — `@modelcontextprotocol/sdk`, Streamable HTTP with its own OAuth 2.1 authorization server, in `functions/mcp/`
 - **Firebase Auth** — Email/password + Google Sign-in
 
@@ -73,7 +73,7 @@ npm run format
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
 - **Jest 29** — Rules, Cloud Functions, Loom, Cartographer and MCP tests against the Firestore and Storage emulators
-- **GitHub Actions** — 11 workflows for CI, preview deploys, production deploys and admin tasks
+- **GitHub Actions** — 12 workflows for CI, preview deploys, production deploys and admin tasks
 
 ---
 
@@ -273,6 +273,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 | `backfill-character-positions.yml` | Manual dispatch | Give characters made before L-680 a position (dry run, then apply) |
 | `backfill-art-library.yml` | Manual dispatch | Move world art from before the image studio into its library (dry run, then apply) |
 | `backfill-screen-copies.yml` | Manual dispatch | Make screen-sized copies for library images stored before L-727 (dry run, then apply) |
+| `set-storage-cors.yml` | Manual dispatch | Apply `storage-cors.json` to the Storage bucket, so the Loom's map engine can draw art from it (dry run, then apply) |
 | `studio-generate.yml` | Manual dispatch | Make images with the real model by hand: one image, or the big-map trial; spends money, so it asks for confirm "spend" |
 
 **Required secret:** `FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00`

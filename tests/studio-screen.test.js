@@ -172,6 +172,18 @@ describe('a new version', () => {
       height: 10,
     });
     expect(summary(record.id, record).screenLink).toBe(screenLinkOf(record.link));
+    // SVG art is marked, so the page draws it sharp, not at its few dozen pixels.
+    expect(art.forPlayer({ path: 'worlds/w/map-bm_a-1.svg', width: 24, height: 12 })).toEqual({
+      path: 'worlds/w/map-bm_a-1.svg',
+      svg: true,
+      width: 24,
+      height: 12,
+    });
+    expect(
+      art.forPlayer(
+        art.fromRef({ imageId: 'img_1', link: record.link, width: 24, height: 12, format: 'svg' })
+      )
+    ).toMatchObject({ svg: true, url: record.link });
     expect(screenLinkOf('https://example.com/elsewhere.png')).toBeNull();
   });
 });
