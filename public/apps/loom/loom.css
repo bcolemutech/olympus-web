@@ -189,10 +189,146 @@
   margin-top: 0;
 }
 
+.loom-log-entry + .loom-log-entry {
+  margin-top: 1rem;
+}
+
 .loom-log-narration {
   color: #e0e0e0;
   line-height: 1.6;
   margin: 0;
+}
+
+/* ── The panel's content (L-726) ───────────────────── */
+
+.loom-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The narration being revealed (K3): the rest keeps its room, unseen. */
+.loom-log-narration.is-revealing {
+  cursor: pointer;
+}
+
+.loom-log-unshown {
+  opacity: 0;
+}
+
+/* A roll (L4): the die, what it was against, pass or fail; one line once read. */
+.loom-roll {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 3px solid #9ca3af;
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.75);
+  color: #cfd8dc;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.loom-roll.is-pass {
+  border-left-color: #81c784;
+}
+
+.loom-roll.is-fail {
+  border-left-color: #e57373;
+}
+
+.loom-roll:not(.is-open) {
+  padding: 0.25rem 0.75rem;
+  color: #90a4ae;
+  font-size: 0.8rem;
+}
+
+.loom-roll-die {
+  min-width: 2.2rem;
+  color: #ffb74d;
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.loom-roll-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.loom-roll-need {
+  color: #90a4ae;
+  font-size: 0.75rem;
+}
+
+.loom-roll-verdict {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.loom-roll.is-pass .loom-roll-verdict {
+  color: #81c784;
+}
+
+.loom-roll.is-fail .loom-roll-verdict {
+  color: #e57373;
+}
+
+/* Arriving somewhere with art (A5): its banner atop the narration. */
+.loom-banner {
+  position: relative;
+  flex: none;
+  margin: 0 0 0.75rem;
+  border: 1px solid var(--loom-edge, rgba(255, 183, 77, 0.28));
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.loom-banner-image {
+  display: block;
+  width: 100%;
+  height: 7.5rem;
+  object-fit: cover;
+}
+
+.loom-banner-name {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 1.2rem 0.75rem 0.45rem;
+  background: linear-gradient(transparent, rgba(10, 14, 26, 0.9));
+  color: #ffe0b2;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* The key that takes a suggestion (I1). */
+.loom-chip-key {
+  display: inline-block;
+  margin-right: 0.4rem;
+  min-width: 1.1rem;
+  border-radius: 4px;
+  background: rgba(255, 183, 77, 0.2);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.loom-suggested-action-chip:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .loom-suggested-actions {

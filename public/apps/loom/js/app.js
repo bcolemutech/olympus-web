@@ -70,6 +70,7 @@
       state.functions = firebase.functions();
       state.uid = user.uid;
 
+      Loom.journal.mount(Loom.getRef('loom-story-pane')); // the panel's content (L-726)
       Loom.shell.mount(); // hosts the map and story panes before they are used
       Loom.worlds.renderWorldList();
       Loom.map.init();
@@ -101,18 +102,6 @@
           .catch(function () {
             // Error already surfaced inline by createSave(); nothing more to do here.
           });
-      });
-
-      Loom.getRef('loom-turn-end').addEventListener('click', function () {
-        Loom.play.endTurn();
-      });
-
-      Loom.getRef('loom-turn-form').addEventListener('submit', function (e) {
-        e.preventDefault();
-        var inputEl = Loom.getRef('loom-turn-input');
-        var actionText = inputEl.value;
-        inputEl.value = '';
-        Loom.play.submitTurn(actionText);
       });
     },
   };

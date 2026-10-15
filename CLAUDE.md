@@ -54,7 +54,7 @@ npm run format
 ### Frontend
 - **Vanilla JavaScript** — IIFE namespace pattern (no bundler, no build step)
 - **React 18.3.1** — CDN via unpkg.com (used in JSX Runner applets only)
-- **Preact 10.29.8 + htm 3.1.1** — CDN via unpkg.com, no build (the Loom's play view: components in `window.Loom`, one store; `public/apps/loom/js/ui.js`, `shell.js`)
+- **Preact 10.29.8 + htm 3.1.1** — CDN via unpkg.com, no build (the Loom's play view: components in `window.Loom`, one store; `public/apps/loom/js/ui.js`, `shell.js`, the panel's content in `journal.js`)
 - **PixiJS 8.21.0** — CDN via unpkg.com (the Loom's map engine, `public/apps/loom/js/engine.js`: WebGL, canvas without it; the world map in `world.js`, towns in `town.js`, battle maps in `battle.js`, shared drawing in `draw.js`)
 - **Babel Standalone 7.26.10** — In-browser JSX transpilation (JSX Runner only)
 - **Firebase SDK v12.9** — CDN, compat mode (`firebase/compat/app`, etc.)
@@ -240,7 +240,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `manageAccess` | Admin only | Add/remove app from user's claims |
 | `setUserDisabled` | Admin only | Enable/disable a user |
 | `loomCreateSave` / `loomDeleteSave` | `loom` claim (own saves) | Start or delete a game |
-| `loomPlayTurn` | `loom` claim (own saves) | Run one turn of the Loom pipeline (typed text, a move made on the map, continuing a plan, or ending the turn); steps on a battle map, and walks in a town with ground (with "Walk there"), are worked out without the model |
+| `loomPlayTurn` | `loom` claim (own saves) | Run one turn of the Loom pipeline (typed text, a move made on the map, continuing a plan, or ending the turn); steps on a battle map, and walks in a town with ground (with "Walk there"), are worked out without the model; a rolled action returns its `roll` for the panel's roll card |
 | `loomWorldRatings` | `loom` claim | Each published world's band (Playable, Rich, Vivid or Legendary) for the Loom's world list; the band's name only |
 | `loomGetMap` | `loom` claim (own saves) | The world map a save may see: its discovered places, links, and which are open; in a town, its places for the town view; and the save's turn |
 | `cartographerImport` | `cartographer` claim | Uploaded Azgaar map → draft world |

@@ -920,7 +920,19 @@ describe('typed actions and the turn (L-614)', () => {
 
   test('acting uses the action; a second action is turned down plainly', async () => {
     playerTypes('talk', 'chr_brannoch');
-    expect((await type('ask about rooms')).narration).toBe('You go on.');
+    const acted = await type('ask about rooms');
+    expect(acted.narration).toBe('You go on.');
+    // The die comes back for the panel's roll card (L-726), and is recorded.
+    expect(acted.roll).toEqual({
+      die: 20,
+      value: expect.any(Number),
+      difficulty: 10,
+      against: 'the difficulty',
+      success: acted.roll.value >= 10,
+    });
+    const turns = await db.collection('loom_saves').doc(saveId).collection('loom_turns').get();
+    const last = turns.docs.map((d) => d.data()).sort((a, b) => b.index - a.index)[0];
+    expect(last.resolution.roll).toEqual(acted.roll);
     expect((await turnOf()).actionUsed).toBe(true);
     const before = await recorded();
     expect(await type('ask about the cellar')).toEqual({

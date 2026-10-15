@@ -164,6 +164,8 @@ async function commitTurn(params) {
         narration,
         stateSummary: save.recentSummary || '',
         suggestedActions: suggestedActions || [],
+        // The die, for the panel's roll card (L-726); kept in the turn record too.
+        ...(resolution.roll ? { roll: resolution.roll } : {}),
       },
     };
   });

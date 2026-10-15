@@ -4,91 +4,20 @@
   var Loom = window.Loom;
   var state = Loom.state;
 
-  function appendNarration(actionText, narration) {
-    var log = Loom.getRef('loom-narration-log');
-
-    if (actionText) {
-      var actionEl = document.createElement('p');
-      actionEl.className = 'loom-log-action';
-      actionEl.textContent = '> ' + actionText;
-      log.appendChild(actionEl);
-    }
-
-    var narrationEl = document.createElement('p');
-    narrationEl.className = 'loom-log-narration';
-    narrationEl.textContent = narration;
-    log.appendChild(narrationEl);
-    Loom.shell.newLine(narration); // the collapsed panel shows it, and opens
-
-    log.scrollTop = log.scrollHeight;
-  }
-
-  function renderSummary(summary) {
-    var el = Loom.getRef('loom-summary');
-    if (summary) {
-      el.textContent = summary;
-      el.classList.remove('hidden');
-    } else {
-      el.classList.add('hidden');
-    }
-  }
-
-  var suggestions = []; // the suggestions showing, kept across steps (L-613)
-
-  function renderSuggestedActions(actions) {
-    suggestions = actions || [];
-    var container = Loom.getRef('loom-suggested-actions');
-    container.innerHTML = '';
-
-    (actions || []).forEach(function (action) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'loom-suggested-action-chip';
-      btn.textContent = action;
-      btn.addEventListener('click', function () {
-        submitTurn(action);
-      });
-      container.appendChild(btn);
-    });
-  }
+  // What the panel shows lives in the store's journal; journal.js draws it
+  // (L-726 / #597).
+  var journal = Loom.journal;
 
   function setLoading(isLoading) {
-    Loom.store.setUi({ busy: Boolean(isLoading) }); // the overlay's turn bar (L-725)
-    Loom.getRef('loom-turn-loading').classList.toggle('hidden', !isLoading);
-    Loom.getRef('loom-turn-submit').disabled = isLoading;
-    Loom.getRef('loom-turn-input').disabled = isLoading;
-    Loom.getRef('loom-turn-end').disabled = isLoading;
+    Loom.store.setUi({ busy: Boolean(isLoading) }); // the turn bars and the box
   }
 
   /**
-   * The turn under the box (L-614 / #444): its number, the movement left,
-   * and whether the action is used, from loomGetMap's `turn`; End turn
-   * beside it, wherever the player is.
+   * The turn (L-614 / #444): its number, the movement left, and whether the
+   * action is used, from loomGetMap's `turn`, for the turn bars.
    */
   function showTurn(turn) {
     Loom.store.set({ turn: turn || null });
-    var bar = Loom.getRef('loom-turn-bar');
-    bar.classList.toggle('hidden', !turn);
-    if (!turn) return;
-    Loom.getRef('loom-turn-state').textContent =
-      'Turn ' +
-      turn.n +
-      ' · movement ' +
-      turn.movementLeft +
-      ' of ' +
-      turn.speed +
-      ' · ' +
-      (turn.actionUsed ? 'you have acted' : 'your action is ready');
-  }
-
-  function showError(message) {
-    var errorEl = Loom.getRef('loom-turn-error');
-    if (message) {
-      errorEl.textContent = message;
-      errorEl.classList.remove('hidden');
-    } else {
-      errorEl.classList.add('hidden');
-    }
   }
 
   /**
@@ -106,13 +35,14 @@
   function playTurn(turn, label, options) {
     if (state.turnInProgress) return;
     options = options || {};
-    var kept = suggestions.slice();
+    var kept = journal.suggestions();
 
     state.turnInProgress = true;
     Loom.engine.follow(); // the camera follows the player's move again (K3)
     setLoading(true);
-    showError(null);
-    renderSuggestedActions([]);
+    journal.setError(null);
+    journal.finishReveal();
+    journal.setSuggestions([]);
     Loom.engine.closeMenu(); // a click menu's choices are for before the turn
     Loom.map.render(); // the cards' buttons disable while a turn runs
 
@@ -127,21 +57,25 @@
         var keep = (options.keep || data.refused) && !(data.suggestedActions || []).length;
         // A walk that ends by going in or setting out (L-664) is narrated.
         if (data.step && !data.step.entered && !data.step.left) {
-          if (data.step.lines.length) appendNarration(label, data.step.lines.join(' '));
-          renderSuggestedActions(kept);
+          if (data.step.lines.length) journal.add(label, data.step.lines.join(' '));
+          journal.setSuggestions(kept);
         } else {
-          appendNarration(label, data.narration);
-          renderSuggestedActions(keep ? kept : data.suggestedActions);
+          journal.add(label, data.narration, data.roll); // the roll as a card (L4)
+          journal.setSuggestions(keep ? kept : data.suggestedActions);
           if (options.fromMap) Loom.map.showStory();
         }
-        renderSummary(data.stateSummary);
-        Loom.map.load();
+        journal.setSummary(data.stateSummary);
+        var before = Loom.store.get().map;
+        Loom.map.load().then(function () {
+          journal.arrived(before, Loom.store.get().map); // the banner (A5)
+        });
       })
       .catch(function (err) {
         state.turnInProgress = false;
         setLoading(false);
         Loom.map.render();
-        showError('The Loom faltered: ' + (err.message || 'Unknown error'));
+        journal.setSuggestions(kept);
+        journal.setError('The Loom faltered: ' + (err.message || 'Unknown error'));
       });
   }
 
@@ -198,14 +132,10 @@
   function init(saveId, save) {
     state.saveId = saveId;
 
-    Loom.getRef('loom-narration-log').innerHTML = '';
-    renderSummary(save.recentSummary || '');
-    renderSuggestedActions([]);
-    showError(null);
+    journal.reset(save.recentSummary || '');
     setLoading(false);
-
-    var inputEl = Loom.getRef('loom-turn-input');
-    inputEl.value = '';
+    var input = document.getElementById('loom-turn-input');
+    if (input) input.value = '';
 
     showTurn(null);
     Loom.map.reset();
