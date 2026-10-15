@@ -99,6 +99,8 @@
     journal: { entries: [], suggestions: [], summary: '', error: null, banner: null },
     ui: Object.assign(readPanel(), {
       hasMap: false, // the save has a map to show
+      phone: false, // a narrow screen: the panel is a bottom sheet (L7)
+      sheet: 'peek', // the bottom sheet: 'peek' | 'half' | 'full'
       level: 'world', // 'world' | 'town' | 'battle'
       levels: [], // [{ mode, label }], the levels there are
       selection: null, // what is selected on the map

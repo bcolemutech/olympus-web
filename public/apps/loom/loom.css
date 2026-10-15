@@ -612,64 +612,12 @@
   max-width: 1240px;
 }
 
-.loom-play-tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.9rem;
-}
-
-.loom-play-tabs.hidden {
-  display: none;
-}
-
-.loom-play-tab {
-  flex: 1;
-  padding: 0.5rem 0;
-  font: inherit;
-  font-size: 0.9rem;
-  color: var(--loom-muted);
-  background: rgba(17, 24, 39, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.loom-play-tab.is-active {
-  color: var(--loom-accent);
-  border-color: color-mix(in srgb, var(--loom-accent) 45%, transparent);
-  background: color-mix(in srgb, var(--loom-accent) 10%, transparent);
-}
-
 .loom-map-pane {
   position: relative;
 }
 
 .loom-map-pane.hidden {
   display: none;
-}
-
-/* Phones: one pane at a time, chosen by the tabs; the map fits the screen
-   below them (opening the tab scrolls them to the top). */
-@media (max-width: 899px) {
-  .loom-play--map[data-tab='story'] .loom-map-pane,
-  .loom-play--map[data-tab='map'] .loom-story-pane {
-    display: none;
-  }
-
-  /* svh, not dvh: the panel keeps its height while the browser's toolbar
-     shows or hides mid-gesture (#420). */
-  .loom-map-panel {
-    height: calc(100vh - 5.5rem);
-    height: calc(100svh - 5.5rem);
-    max-height: 44rem;
-  }
-}
-
-/* Wide screens: the shell shows map and story together; no tabs. */
-@media (min-width: 900px) {
-  .loom-play-tabs {
-    display: none;
-  }
 }
 
 .loom-map-panel {
@@ -945,22 +893,176 @@ body.loom-playing .app-divider {
   display: none;
 }
 
-/* Phones: the menu bar on top, then the panes under their tabs as before
-   (the bottom sheet comes with L-728). */
+/* Phones (L7; L-728): the map fills the screen under the menu bar, and the
+   panel is a bottom sheet over it, peeking with the latest line, half up or
+   full. svh keeps the frame still while the browser's toolbar comes and goes. */
 @media (max-width: 899px) {
-  body.loom-playing .app-main {
-    padding-top: 0;
+  body.loom-playing {
+    overflow: hidden;
+  }
+
+  .loom-shell {
+    --loom-sheet-peek: 4.25rem;
+    --loom-sheet-peek-px: 68;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    height: 100svh;
+    overflow: hidden;
+    background: var(--loom-frame);
   }
 
   .loom-menubar {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    margin: 0 -1rem 0.9rem;
+    flex: none;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  .loom-panel-head {
+  .loom-menubar-title {
     display: none;
+  }
+
+  .loom-shell-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .loom-shell-map {
+    position: absolute;
+    inset: 0;
+  }
+
+  .loom-shell-map-host,
+  .loom-shell-map .loom-map-pane {
+    height: 100%;
+  }
+
+  .loom-shell-map .loom-map-panel {
+    height: 100%;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  .loom-shell.no-map .loom-shell-map {
+    display: none;
+  }
+
+  .loom-shell-panel {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    height: var(--loom-sheet-peek);
+    background: var(--loom-panel-bg);
+    border-top: 1px solid var(--loom-edge);
+    border-radius: 14px 14px 0 0;
+    box-shadow:
+      0 -8px 24px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 color-mix(in srgb, var(--loom-edge-bright) 22%, transparent);
+    transition: height 0.25s ease;
+  }
+
+  .loom-shell-panel.is-half {
+    height: 50%;
+  }
+
+  .loom-shell-panel.is-full {
+    height: calc(100% - 0.5rem);
+  }
+
+  .loom-shell-panel.is-dragging {
+    transition: none;
+  }
+
+  /* No map: the story is the whole screen. */
+  .loom-shell.no-map .loom-shell-panel {
+    inset: 0;
+    height: auto;
+    border-top: none;
+    border-radius: 0;
+  }
+
+  .loom-panel-head,
+  .loom-shell-panel.is-peek .loom-panel-body {
+    display: none;
+  }
+
+  .loom-panel-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0 0.9rem 0.9rem;
+  }
+
+  .loom-panel-body .loom-story-pane {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .loom-panel-body .loom-narration-log {
+    flex: 1;
+    max-height: none;
+    min-height: 0;
+  }
+
+  /* The grip: drag or tap it to raise and lower the sheet. */
+  .loom-sheet-grip {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 1.6rem;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .loom-sheet-grip:focus-visible {
+    outline: 2px solid var(--loom-accent);
+    outline-offset: -2px;
+  }
+
+  .loom-sheet-bar {
+    width: 2.75rem;
+    height: 4px;
+    background: var(--loom-edge-bright);
+    border-radius: 2px;
+    opacity: 0.75;
+  }
+
+  /* Peeking: the latest line. */
+  .loom-sheet-line {
+    flex: none;
+    margin: 0 0.9rem;
+    padding: 0.1rem 0 0.7rem;
+    overflow: hidden;
+    color: var(--loom-text);
+    font: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* 16px, so a phone doesn't zoom into the box when it is tapped. */
+  .loom-turn-input {
+    font-size: 1rem;
   }
 }
 
@@ -1376,32 +1478,124 @@ body.loom-playing .app-divider {
 }
 
 /* The turn is on the map now; the panel keeps its bar only without one. */
-@media (min-width: 900px) {
-  .loom-shell:not(.no-map) .loom-turn-bar {
-    display: none;
-  }
+.loom-shell:not(.no-map) .loom-turn-bar {
+  display: none;
 }
 
+/* Phones (L-728): the overlay compacts around the sheet's peek. Where you
+   are top left, the minimap top right, the card under them; the level
+   switcher and zoom, then the turn bar, just above the sheet. Controls and
+   the click menu are sized for a finger. */
 @media (max-width: 899px) {
+  .loom-map-where {
+    max-width: calc(100% - 9rem);
+    padding: 0.3rem 0.55rem;
+  }
+
+  .loom-map-here {
+    font-size: 0.85rem;
+  }
+
   .loom-map-minimap {
-    display: none;
-  }
-
-  .loom-map-turnbar {
-    max-width: calc(100% - 1.2rem);
-    bottom: 3.4rem;
-  }
-
-  .loom-map-panel .loom-map-layers {
-    bottom: 6.2rem;
+    top: 0.6rem;
+    bottom: auto;
+    width: 112px;
+    height: 76px;
   }
 
   .loom-map-pane .loom-map-info {
-    top: auto;
-    bottom: 0.6rem;
+    top: 6rem;
     right: 0.6rem;
+    bottom: auto;
+    left: 0.6rem;
+    width: auto;
+    max-height: 30%;
+  }
+
+  .loom-map-turnbar {
+    bottom: calc(var(--loom-sheet-peek, 0px) + 0.5rem);
+    gap: 0.4rem;
+    max-width: calc(100% - 1.2rem);
+    padding: 0.3rem 0.35rem 0.3rem 0.7rem;
+  }
+
+  .loom-map-turnbar-state {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.75rem;
+    text-overflow: ellipsis;
+  }
+
+  .loom-map-turnbar-btn {
+    min-height: 2.4rem;
+    padding: 0.3rem 0.8rem;
+    white-space: nowrap;
+  }
+
+  /* A row above the turn bar: the levels on the left, zoom on the right. */
+  .loom-map-panel .loom-map-layers {
+    bottom: calc(var(--loom-sheet-peek, 0px) + 4.1rem);
+    left: 0.6rem;
+    max-width: calc(100% - 10.2rem);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .loom-map-layer {
+    min-height: 2.4rem;
+  }
+
+  .loom-map-panel .loom-map-controls {
+    right: 0.6rem;
+    bottom: calc(var(--loom-sheet-peek, 0px) + 4.1rem);
     left: auto;
-    width: 14rem;
-    max-height: 40%;
+  }
+
+  .loom-map-btn {
+    width: 2.6rem;
+    height: 2.6rem;
+  }
+
+  .loom-map-menu {
+    min-width: 13rem;
+    max-width: calc(100% - 1.2rem);
+  }
+
+  .loom-map-menu-item {
+    min-height: 2.75rem;
+    justify-content: center;
+    font-size: 0.95rem;
+  }
+
+  /* The note, once: a bigger screen shows map and story side by side. */
+  .loom-bigscreen-note {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    left: 0.6rem;
+    z-index: 7;
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    color: var(--loom-text);
+    font-size: 0.85rem;
+    background: var(--loom-panel-bg);
+    border: 1px solid var(--loom-edge);
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  }
+
+  .loom-bigscreen-dismiss {
+    flex: none;
+    min-height: 2.4rem;
+    padding: 0.3rem 0.8rem;
+    color: var(--loom-on-accent);
+    font: inherit;
+    font-weight: 600;
+    background: var(--loom-accent);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
   }
 }

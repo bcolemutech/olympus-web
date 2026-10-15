@@ -28,9 +28,8 @@
    *
    * A step on a battle map (L-613 / #443) answers with `step` and no
    * narration: only its plain lines ("You're out of movement…") join the
-   * story, and the suggestions stay. `options.fromMap` shows the story on a
-   * phone when a move from the map is narrated (an arrival); `options.keep`
-   * keeps the suggestions when none come back (ending the turn).
+   * story, and the suggestions stay. `options.keep` keeps the suggestions
+   * when none come back (ending the turn).
    */
   function playTurn(turn, label, options) {
     if (state.turnInProgress) return;
@@ -62,7 +61,6 @@
         } else {
           journal.add(label, data.narration, data.roll); // the roll as a card (L4)
           journal.setSuggestions(keep ? kept : data.suggestedActions);
-          if (options.fromMap) Loom.map.showStory();
         }
         journal.setSummary(data.stateSummary);
         var before = Loom.store.get().map;
@@ -95,9 +93,7 @@
    * as this turn's movement goes, keeping the rest as the plan (L-613).
    */
   function moveToCell(cell, label) {
-    playTurn({ action: { verb: 'move', cell: { x: cell.x, y: cell.y } } }, label, {
-      fromMap: true,
-    });
+    playTurn({ action: { verb: 'move', cell: { x: cell.x, y: cell.y } } }, label);
   }
 
   /**
@@ -105,22 +101,22 @@
    * { target: <place id> }, as far as this turn's movement goes.
    */
   function walkTo(target, label) {
-    playTurn({ action: Object.assign({ verb: 'move' }, target) }, label, { fromMap: true });
+    playTurn({ action: Object.assign({ verb: 'move' }, target) }, label);
   }
 
   /** "Walk there" (L-664): walks on, turn after turn, until it arrives. */
   function walkThere(target, label) {
-    playTurn({ action: Object.assign({ verb: 'walk-there' }, target) }, label, { fromMap: true });
+    playTurn({ action: Object.assign({ verb: 'walk-there' }, target) }, label);
   }
 
   /** Walks the plan kept from an earlier move (L-613 / #443). */
   function continuePlan() {
-    playTurn({ action: { verb: 'continue' } }, 'continue', { fromMap: true });
+    playTurn({ action: { verb: 'continue' } }, 'continue');
   }
 
   /** Opens (open true) or closes a door beside the player, for 1 movement (L-625, L-627). */
   function doorAction(doorId, open, label) {
-    playTurn({ action: { verb: 'door', door: doorId, open: open } }, label, { fromMap: true });
+    playTurn({ action: { verb: 'door', door: doorId, open: open } }, label);
   }
 
   /** Ends the turn: movement and the action refilled (L-611 / #441). */

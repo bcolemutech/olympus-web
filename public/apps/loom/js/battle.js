@@ -859,7 +859,6 @@
         note: beside ? '1 movement' : 'Walk beside it to open or close it.',
         onSelect: function () {
           Loom.play.doorAction(door.id, open, (open ? 'open ' : 'close ') + name);
-          Loom.map.showStory();
         },
       },
     ];

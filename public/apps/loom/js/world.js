@@ -282,7 +282,6 @@
 
   function travel(id, name) {
     Loom.play.travelTo(id, name);
-    Loom.map.showStory(); // on a phone, the story is where the journey is told
   }
 
   function routeName(link) {

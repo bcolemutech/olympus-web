@@ -42,16 +42,12 @@
     return boundsOf(map.mode);
   }
 
-  function isPhone() {
-    return window.matchMedia('(max-width: 899px)').matches;
-  }
-
   function panelSize() {
     var rect = ref('loom-map-panel').getBoundingClientRect();
     return { width: rect.width, height: rect.height };
   }
 
-  // ── Availability and tabs ─────────────────────────
+  // ── Availability ──────────────────────────────────
 
   // The map only exists for worlds with coordinates (Cartographer worlds).
   function setAvailable(available) {
@@ -59,27 +55,7 @@
     if (!available) ref('loom-map-layers').classList.add('hidden');
     ref('loom-view-play').classList.toggle('loom-play--map', available);
     ref('loom-root').classList.toggle('loom-root--wide', available);
-    ref('loom-play-tabs').classList.toggle('hidden', !available);
     ref('loom-map-pane').classList.toggle('hidden', !available);
-    if (!available) showTab('story');
-  }
-
-  function showTab(tab) {
-    ref('loom-view-play').setAttribute('data-tab', tab);
-    ['story', 'map'].forEach(function (name) {
-      var button = ref('loom-tab-' + name);
-      button.classList.toggle('is-active', name === tab);
-      button.setAttribute('aria-selected', String(name === tab));
-    });
-    if (tab === 'map' && map.data) {
-      // On a phone, bring the tabs to the top so the whole map is in view.
-      if (isPhone()) {
-        ref('loom-play-tabs').scrollIntoView({ block: 'start' });
-      }
-      // The panel had no size while hidden: frame it now it's visible.
-      if (!cam.view) frame();
-      render();
-    }
   }
 
   // ── Layers: the world map, the town view, the grid view ─
@@ -412,14 +388,7 @@
     ref('loom-layer-world').addEventListener('click', function () {
       setMode('world');
     });
-    ref('loom-tab-story').addEventListener('click', function () {
-      showTab('story');
-    });
-    ref('loom-tab-map').addEventListener('click', function () {
-      showTab('map');
-    });
     window.addEventListener('resize', render);
-    showTab('story');
   }
 
   // The map's area changed size (the shell's panel resized or collapsed, or
@@ -472,9 +441,5 @@
     render: render,
     // Shows a layer: 'world', 'town' or 'battle' (the menu bar's Map levels).
     setLevel: setMode,
-    // On a phone, switches to the story (after a narrated move from the map).
-    showStory: function () {
-      if (isPhone()) showTab('story');
-    },
   };
 })();

@@ -390,7 +390,7 @@
 
   function focusInput() {
     if (store.get().ui.panelCollapsed) store.setUi({ panelCollapsed: false });
-    Loom.map.showStory(); // a phone's Story tab
+    Loom.shell.raise(); // on a phone, the sheet up far enough to type
     window.requestAnimationFrame(function () {
       var input = document.getElementById('loom-turn-input');
       if (input && !input.disabled) input.focus();
