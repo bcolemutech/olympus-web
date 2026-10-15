@@ -242,7 +242,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `loomCreateSave` / `loomDeleteSave` | `loom` claim (own saves) | Start or delete a game |
 | `loomPlayTurn` | `loom` claim (own saves) | Run one turn of the Loom pipeline (typed text, a move made on the map, continuing a plan, or ending the turn); steps on a battle map, and walks in a town with ground (with "Walk there"), are worked out without the model; a rolled action returns its `roll` for the panel's roll card |
 | `loomWorldRatings` | `loom` claim | Each published world's band (Playable, Rich, Vivid or Legendary) for the Loom's world list; the band's name only |
-| `loomGetMap` | `loom` claim (own saves) | The world map a save may see: its discovered places, links, and which are open; in a town, its places for the town view; and the save's turn |
+| `loomGetMap` | `loom` claim (own saves) | The world map a save may see: its discovered places, links, and which are open; in a town, its places for the town view; each route out of here with how long the trip takes (`travel`); and the save's turn |
 | `cartographerImport` | `cartographer` claim | Uploaded Azgaar map → draft world |
 | `cartographerPublish` | `cartographer` claim | Publish a draft world to the Loom |
 | `cartographerCompletion` | `cartographer` claim | How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, and its biggest gaps |

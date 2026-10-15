@@ -212,7 +212,10 @@ describe('a walk through Burdendal', () => {
     await standAt(saveId, 'loc_229', null); // Wisin, an older save with no place
     expect(await moveTo(saveId, 'loc_1')).toMatchObject({
       outcome: 'success',
-      constraints: ['You arrive at Burdendal, at The Harbour.'],
+      constraints: [
+        'Night falls at sea.',
+        'After about 13½ hours at sea, you arrive at Burdendal, at The Harbour.',
+      ],
     });
     expect(await saveOf(saveId)).toMatchObject({ location: 'loc_1', placeId: 'plc_1_harbour' });
     // Arriving lands on the harbour's battle map (L-622): the narrator is told
@@ -543,6 +546,8 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
         open: false,
         waysOut: ['plc_1_harbour'],
         waysIn: [],
+        // How long the trip takes (L-373).
+        travel: expect.objectContaining({ label: 'about 14½ hours by sea' }),
       },
       {
         id: 'loc_229',
@@ -551,6 +556,8 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
         open: true,
         waysOut: ['plc_1_harbour'],
         waysIn: gate('plc_229_town-gate'),
+        // How long the trip takes (L-373).
+        travel: expect.objectContaining({ label: 'about 13½ hours by sea' }),
       },
       {
         id: 'loc_231',
@@ -559,6 +566,8 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
         open: false,
         waysOut: ['plc_1_gate'],
         waysIn: [],
+        // How long the trip takes (L-373).
+        travel: expect.objectContaining({ label: 'about 3½ days by trail' }),
       },
       {
         id: 'loc_631',
@@ -567,6 +576,8 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
         open: true,
         waysOut: ['plc_1_gate'],
         waysIn: gate('plc_631_town-gate'),
+        // How long the trip takes (L-373).
+        travel: expect.objectContaining({ label: 'about 3 days by trail' }),
       },
     ]);
   });
@@ -700,7 +711,11 @@ describe('choosing the way in (L-346)', () => {
     await atTheGate();
     expect(await moveTo(saveId, 'plc_631_west-gate')).toMatchObject({
       outcome: 'success',
-      constraints: ['You arrive at Dunsmouth, at The West Gate.'],
+      constraints: [
+        'Night falls on the trail.',
+        'You make camp 3 nights on the trail.',
+        'After about 3 days on the trail, you arrive at Dunsmouth, at The West Gate.',
+      ],
     });
     expect(await saveOf(saveId)).toMatchObject({
       location: 'loc_631',

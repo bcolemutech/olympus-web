@@ -14,6 +14,8 @@ const { foundIn } = require('./town-found');
 const townPaths = require('../loom-canon/town-paths');
 const layers = require('../loom-canon/layers');
 const seen = require('./seen');
+const travel = require('../loom-canon/travel');
+const clock = require('../loom-canon/clock');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -79,7 +81,11 @@ function mapView(canonWorld, save, record, townRecord) {
       const key = [id, other].sort().join('|');
       if (!shown.has(other) || seen.has(key)) continue;
       seen.add(key);
-      links.push({ from: id, to: other, via: via[other] || null });
+      const link = { from: id, to: other, via: via[other] || null };
+      // A route out of here: how long it takes (L-373; game time R3).
+      const out = id === save.location ? other : other === save.location ? id : null;
+      if (out) link.travel = estimate(canonWorld, save, out);
+      links.push(link);
     }
   }
 
@@ -105,6 +111,15 @@ function mapView(canonWorld, save, record, townRecord) {
           }
         : null,
   };
+}
+
+// How long the trip from where the save stands to `toId` takes, setting out
+// now (L-373; game time R3): `{ miles, seconds, label, arrives }`, by the
+// same trip() that charges it (../loom-canon/travel.js), or null for a route
+// with no length.
+function estimate(canonWorld, save, toId) {
+  const t = travel.trip(canonWorld, save.location, toId, clock.timeOf(save));
+  return t ? { miles: t.miles, seconds: t.seconds, label: t.label, arrives: t.arrives } : null;
 }
 
 // A settlement's open ways in, and the routes each serves (`via`, a route
@@ -206,6 +221,7 @@ function townView(canonWorld, save, discovered, townRecord) {
       waysOut: entrances.filter((p) => town.serves(p, via)).map((p) => p.id),
       // Where you can choose to arrive by this route (L-346).
       waysIn: open ? waysInto(canonWorld, id, via).map((p) => ({ id: p.id, name: p.name })) : [],
+      travel: estimate(canonWorld, save, id),
     });
   }
 
