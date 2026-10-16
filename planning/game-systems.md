@@ -1,6 +1,6 @@
 # The Loom — Game Systems and Modules — Design Document v0.1
 
-**Status:** Decided (2026-10-14). The gap sheet (§3) is answered. Epics and sub-issues are planned (§6) and are filed when this phase is next.
+**Status:** Decided (2026-10-14). L-800's sub-issues filed (2026-10-16): L-801 to L-805 (#627–631). The gap sheet (§3) is answered. Epics and sub-issues are planned (§6) and are filed when this phase is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** 9 — Game systems (milestone #25, [`roadmap.md`](./roadmap.md)). Built after Phase 3d and before L-710 (the Build order).
 **Replaces:** L-202 "richer rule sets" (#313). Its combat becomes this phase's first module; L-200, the world tick, stays in Phase 2.
@@ -197,13 +197,13 @@ Two worlds on different systems, a d20 fantasy and a dice-pool sci-fi. In each, 
 
 ### L-800 — The system engine (#606)
 
-| ID    | Story                                                                                                                                                                                                           | Depends on   | Model  |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
-| L-801 | **Systems as data:** `loom_systems`, the system's shape and checks, `world.systemId`, latest-version saves with flags, copies; `list_systems`, `get_system`, `set_system`, `copy_system`; the grading criterion | —            | Opus   |
-| L-802 | **The formula language:** `formula.js`: parser, dice with keep, arithmetic, functions, fields, tables, pool counts; checks on save; seeded evaluation with a breakdown                                          | —            | Opus   |
-| L-803 | **Checks:** the check formula, degrees, the ladder; INTERPRET proposes, ADJUDICATE validates and rolls; canon difficulties; opposed checks; locks through checks; `test_roll`                                   | L-801, L-802 | Opus   |
-| L-804 | **The two built-in systems:** the d20 fantasy and the dice-pool sci-fi; existing worlds get the fantasy system                                                                                                  | L-803        | Sonnet |
-| L-805 | **Rolls in the Loom:** the roll card's dice to tap, landing on the server's result, and the breakdown; NARRATE by degree and in the system's words; the rules reference                                         | L-803, L-726 | Sonnet |
+| ID           | Story                                                                                                                                                                                                           | Depends on   | Model  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
+| L-801 (#627) | **Systems as data:** `loom_systems`, the system's shape and checks, `world.systemId`, latest-version saves with flags, copies; `list_systems`, `get_system`, `set_system`, `copy_system`; the grading criterion | —            | Opus   |
+| L-802 (#628) | **The formula language:** `formula.js`: parser, dice with keep, arithmetic, functions, fields, tables, pool counts; checks on save; seeded evaluation with a breakdown                                          | —            | Opus   |
+| L-803 (#629) | **Checks:** the check formula, degrees, the ladder; INTERPRET proposes, ADJUDICATE validates and rolls; canon difficulties; opposed checks; locks through checks; `test_roll`                                   | L-801, L-802 | Opus   |
+| L-804 (#630) | **The two built-in systems:** the d20 fantasy and the dice-pool sci-fi; existing worlds get the fantasy system                                                                                                  | L-803        | Sonnet |
+| L-805 (#631) | **Rolls in the Loom:** the roll card's dice to tap, landing on the server's result, and the breakdown; NARRATE by degree and in the system's words; the rules reference                                         | L-803, L-726 | Sonnet |
 
 ### L-810 — Character sheets (#607)
 
