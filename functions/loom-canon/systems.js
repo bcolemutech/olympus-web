@@ -21,10 +21,15 @@
  *     creation: { method: 'array' | 'pointBuy' | 'rolling', ...its settings }
  *     advancement: {}                    empty for now (L-830)
  *     modules: { [module]: settings }    none are built yet (L-820 on)
+ *     tables:  { [name]: [{ min?, max?, value }] }   lookups for table(name, x)
  *     gmNotes: tone and pacing for NARRATE
  *
- * Formulas are stored as text. The formula language (L-802) parses and checks
- * them once it lands; until then a formula only has to be text.
+ * Formulas are text in the formula language (./formula.js; L-802), checked
+ * on save where they stand: a sheet formula reads the sheet's fields and
+ * level; the check formula also `attribute`, `modifier` and `rank` (what it
+ * is rolled with); a degree is a comparison that also reads `result` and
+ * `difficulty`. A modifier can't use mod(). Warnings: an attribute nothing
+ * uses, and a ladder rung no check can reach.
  *
  * Sheet field ids (attributes, resources, skills, derived values) are the
  * names formulas use, so they are unique across the sheet.
@@ -43,6 +48,21 @@ const DEFAULT_SYSTEM_ID = 'd20-fantasy';
 const OPTIONAL_PARTS = ['skills', 'traits', 'conditions', 'derived'];
 const DEGREES = ['criticalFailure', 'failure', 'successAtCost', 'success', 'criticalSuccess'];
 const CREATION_METHODS = ['array', 'pointBuy', 'rolling'];
+
+const formulaLanguage = require('./formula');
+
+// The names each place a formula is in may use besides the sheet's fields
+// (L-802): a check reads the attribute and skill it is rolled with, and a
+// degree the check's result against the rung it was rolled at.
+const CHECK_NAMES = ['attribute', 'modifier', 'rank'];
+const PLACE_NAMES = {
+  sheet: [],
+  modifier: [],
+  check: CHECK_NAMES,
+  degree: CHECK_NAMES.concat(['result', 'difficulty']),
+};
+// Words formulas use, which no sheet field may be named.
+const RESERVED_NAMES = formulaLanguage.FUNCTIONS.concat(PLACE_NAMES.degree, ['level']);
 
 const SYSTEM_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const FIELD_ID = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
@@ -159,13 +179,15 @@ function validateSystem(input) {
   const sheet = s.sheet;
   const fieldIds = new Map(); // lower-cased id → where it was declared
   const formulas = []; // every formula, to find what is used
-  const formula = (value, where) => {
-    if (typeof value === 'number' && Number.isFinite(value)) return formulas.push(String(value));
+  // Each formula and where it is, checked by the formula language once the
+  // whole shape is known (L-802): `kind` says which names it may use.
+  const formula = (value, where, kind = 'sheet', owner = null) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return undefined;
     if (typeof value !== 'string' || !value.trim() || value.length > MAX_FORMULA) {
       errors.push(`${where} must be a formula (text, at most ${MAX_FORMULA} characters).`);
       return undefined;
     }
-    return formulas.push(value);
+    return formulas.push({ value, where, kind, owner });
   };
   // A list of named things, each with an id unique across the sheet when
   // `field`, and names unique within it.
@@ -185,6 +207,8 @@ function validateSystem(input) {
       item.name = text(item.name);
       if (typeof item.id !== 'string' || !FIELD_ID.test(item.id)) {
         errors.push(`${at}.id must start with a letter and use letters, digits and _ only.`);
+      } else if (field && (/^d\d+$/i.test(item.id) || RESERVED_NAMES.includes(item.id))) {
+        errors.push(`${at}.id "${item.id}" is a word formulas use; choose another.`);
       } else if (field) {
         const key = item.id.toLowerCase();
         if (fieldIds.has(key)) {
@@ -209,7 +233,7 @@ function validateSystem(input) {
         if (!Number.isInteger(a.min) || !Number.isInteger(a.max) || a.min >= a.max) {
           errors.push(`${at} needs whole-number min and max, min below max.`);
         }
-        formula(a.modifier, `${at}.modifier`);
+        formula(a.modifier, `${at}.modifier`, 'modifier', a.id);
       },
     });
     list(sheet.resources, 'sheet.resources', {
@@ -280,14 +304,14 @@ function validateSystem(input) {
   if (!isObject(checks)) {
     errors.push('checks is required: the check formula and the difficulty ladder.');
   } else {
-    formula(checks.formula, 'checks.formula');
+    formula(checks.formula, 'checks.formula', 'check');
     checks.degrees = checks.degrees === undefined ? {} : checks.degrees;
     if (!isObject(checks.degrees)) errors.push('checks.degrees must map degrees to formulas.');
     else {
       for (const [degree, value] of Object.entries(checks.degrees)) {
         if (!DEGREES.includes(degree)) {
           errors.push(`checks.degrees: "${degree}" isn't a degree (${DEGREES.join(', ')}).`);
-        } else formula(value, `checks.degrees.${degree}`);
+        } else formula(value, `checks.degrees.${degree}`, 'degree');
       }
     }
     const ladder = checks.ladder;
@@ -320,6 +344,36 @@ function validateSystem(input) {
     }
   }
 
+  // Lookup tables (FX2; L-802): { name: [{ min?, max?, value }] }, rows
+  // tried in order; a value is a number or a formula ("1d6").
+  s.tables = s.tables === undefined ? {} : s.tables;
+  if (!isObject(s.tables)) errors.push('tables must map each table name to its rows.');
+  else {
+    for (const [name, rows] of Object.entries(s.tables)) {
+      const at = `tables.${name}`;
+      if (!FIELD_ID.test(name)) errors.push(`${at}: a table name starts with a letter.`);
+      if (!Array.isArray(rows) || !rows.length || rows.length > MAX_LIST) {
+        errors.push(`${at} needs 1 to ${MAX_LIST} rows.`);
+        continue;
+      }
+      rows.forEach((row, i) => {
+        const where = `${at}[${i}]`;
+        if (!isObject(row)) return errors.push(`${where} must be { min?, max?, value }.`);
+        for (const end of ['min', 'max']) {
+          if (
+            row[end] !== undefined &&
+            (typeof row[end] !== 'number' || !Number.isFinite(row[end]))
+          ) {
+            errors.push(`${where}.${end} must be a number.`);
+          }
+        }
+        if (typeof row.min === 'number' && typeof row.max === 'number' && row.min > row.max) {
+          errors.push(`${where}: min is above max.`);
+        }
+        formula(row.value, `${where}.value`);
+      });
+    }
+  }
   // ── Making, growing, modules (CS5, CS6, MD1) ──
   if (s.creation === undefined) {
     warnings.push('No creation method: the Loom can’t walk a player through making a character.');
@@ -337,19 +391,73 @@ function validateSystem(input) {
     }
   }
 
-  // ── What isn't used (FX3) ──
-  if (!errors.length && isObject(sheet)) {
-    const bySkill = new Set((sheet.skills || []).map((k) => k.attribute));
-    for (const a of sheet.attributes) {
-      const others = formulas.filter((f) => f !== a.modifier);
-      const word = new RegExp(`(^|[^A-Za-z0-9_])${a.id}([^A-Za-z0-9_]|$)`);
-      if (!bySkill.has(a.id) && !others.some((f) => word.test(f))) {
-        warnings.push(`Attribute ${a.id} isn't used by any skill or formula.`);
+  // ── The formulas (L-802), once the shape is known ──
+  const reads = []; // every name each formula reads, for what isn't used
+  let checkType = null;
+  if (!errors.length) {
+    for (const f of formulas) {
+      const result = formulaLanguage.check(f.value, { system: s, names: PLACE_NAMES[f.kind] });
+      result.errors.forEach((e) => errors.push(`${f.where}: ${e}`));
+      if (result.errors.length) continue;
+      if (f.kind === 'modifier' && /\bmod\s*\(/.test(f.value)) {
+        errors.push(`${f.where}: a modifier can't use mod().`);
       }
+      if (f.kind === 'degree' && result.type !== 'bool') {
+        errors.push(`${f.where} must be a comparison (result >= difficulty, say).`);
+      } else if (f.kind !== 'degree' && f.kind !== 'check' && result.type === 'bool') {
+        errors.push(`${f.where} must come to a number, not a comparison.`);
+      }
+      if (f.kind === 'check') checkType = result.type;
+      reads.push({ f, names: result.names });
     }
   }
 
+  // ── What isn't used, and what can't happen (FX3) ──
+  if (!errors.length) {
+    const bySkill = new Set((sheet.skills || []).map((k) => k.attribute));
+    for (const a of sheet.attributes) {
+      const named = reads.some(
+        ({ f, names }) => !(f.kind === 'modifier' && f.owner === a.id) && names.includes(a.id)
+      );
+      if (!bySkill.has(a.id) && !named) {
+        warnings.push(`Attribute ${a.id} isn't used by any skill or formula.`);
+      }
+    }
+    unreachableRungs(s, checkType).forEach((w) => warnings.push(w));
+  }
+
   return { errors, warnings, system: errors.length ? null : s };
+}
+
+// Ladder rungs no check can reach (FX3), as far as the ranges show: for a
+// check that adds up, a rung above the most it can come to (or, on a ladder
+// for rolling under, below the least). A name with no range (a skill's rank)
+// leaves it unknown, and nothing is said.
+function unreachableRungs(system, checkType) {
+  if (checkType === 'bool') return [];
+  const attributes = system.sheet.attributes;
+  const ranges = { level: [system.sheet.level.min, system.sheet.level.max] };
+  attributes.forEach((a) => {
+    ranges[a.id] = [a.min, a.max];
+  });
+  ranges.attribute = [
+    Math.min(...attributes.map((a) => a.min)),
+    Math.max(...attributes.map((a) => a.max)),
+  ];
+  const mods = attributes.map((a) => formulaLanguage.range(a.modifier, { ranges, system }));
+  ranges.modifier = [Math.min(...mods.map((r) => r[0])), Math.max(...mods.map((r) => r[1]))];
+  const [lo, hi] = formulaLanguage.range(system.checks.formula, { ranges, system });
+  const ladder = system.checks.ladder;
+  const rising = ladder[ladder.length - 1].value > ladder[0].value;
+  return ladder
+    .filter((r) =>
+      rising ? Number.isFinite(hi) && r.value > hi : Number.isFinite(lo) && r.value < lo
+    )
+    .map(
+      (r) =>
+        `checks.ladder: "${r.name}" (${r.value}) can never be reached; the check comes to ` +
+        `${rising ? 'at most ' + hi : 'at least ' + lo}.`
+    );
 }
 
 // ── In Firestore ──────────────────────────────────────────────────────
