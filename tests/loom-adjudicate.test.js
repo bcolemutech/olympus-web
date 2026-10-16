@@ -159,12 +159,26 @@ describe('evaluate — generic (dice) verbs', () => {
     const roll = (dice) =>
       evaluate(makeProposedAction({ verb: 'search' }), {}, makeCharacterState(), dice, CANON_WORLD)
         .roll;
+    // With no check proposed, a plain attempt at the system's easiest rung
+    // (L-803): the built-in fantasy system's Easy, 10.
     expect(roll(DEFAULT_DIFFICULTY_CLASS)).toEqual({
       die: 20,
       value: DEFAULT_DIFFICULTY_CLASS,
       difficulty: DEFAULT_DIFFICULTY_CLASS,
-      against: 'the difficulty',
+      against: 'Easy',
       success: true,
+      total: 10,
+      formula: '1d20 + modifier + rank',
+      rung: 'Easy',
+      degree: 'success',
+      breakdown: {
+        shown: '10 + 0 + 0',
+        terms: [
+          { kind: 'dice', expr: '1d20', rolls: [{ value: 10, kept: true }], value: 10 },
+          { kind: 'field', name: 'modifier', value: 0 },
+          { kind: 'field', name: 'rank', value: 0 },
+        ],
+      },
     });
     expect(roll(3)).toMatchObject({ value: 3, success: false });
     expect(Object.isFrozen(roll(3))).toBe(true);

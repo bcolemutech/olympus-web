@@ -935,12 +935,16 @@ describe('typed actions and the turn (L-614)', () => {
     const acted = await type('ask about rooms');
     expect(acted.narration).toBe('You go on.');
     // The die comes back for the panel's roll card (L-726), and is recorded.
-    expect(acted.roll).toEqual({
+    expect(acted.roll).toMatchObject({
       die: 20,
       value: expect.any(Number),
       difficulty: 10,
-      against: 'the difficulty',
+      against: 'Easy',
       success: acted.roll.value >= 10,
+      // The check (L-803): the system's formula, the rung, the degree.
+      formula: '1d20 + modifier + rank',
+      rung: 'Easy',
+      degree: expect.stringMatching(/success|failure|criticalSuccess|criticalFailure/),
     });
     const turns = await db.collection('loom_saves').doc(saveId).collection('loom_turns').get();
     const last = turns.docs.map((d) => d.data()).sort((a, b) => b.index - a.index)[0];
