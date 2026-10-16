@@ -46,7 +46,7 @@ function pirates(overrides = {}) {
     },
     checks: {
       formula: 'count((attribute + rank)d10, >= 7)',
-      degrees: { success: 'successes >= difficulty' },
+      degrees: { success: 'result >= difficulty' },
       ladder: [
         { name: 'Easy', value: 1 },
         { name: 'Hard', value: 2 },

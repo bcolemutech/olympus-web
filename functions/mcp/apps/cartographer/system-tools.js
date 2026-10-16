@@ -21,6 +21,17 @@ const {
 
 const { systemId } = require('./schemas');
 
+// The formula language (L-802), as Claude needs it to write a system.
+const FORMULAS =
+  'Formulas: numbers; dice NdX, with khN or klN to keep the highest or lowest N (2d20kh1); ' +
+  'a bracket before d is the count ((DEX + Athletics)d10); + - * / and brackets; min, max, ' +
+  'floor, ceil; sheet field ids and level; mod(STR), an attribute through its modifier ' +
+  'formula; table(name, value); count(dice, >= 7), the dice that meet it; and one ' +
+  'comparison (<=, >=, <, >, =) for rolling under (d100 <= Stealth). A modifier reads its ' +
+  'own attribute and can’t use mod(). The check formula also reads attribute, modifier and ' +
+  'rank (what it is rolled with); each degree is a comparison that also reads result and ' +
+  'difficulty (result >= difficulty + 10). Every formula is checked on save.';
+
 const SHAPE =
   'A system is an object: id (lowercase letters, digits and dashes), name, credits ' +
   '([{ source, licence, url? }]: openly licensed text only, credited), words ({ health: ' +
@@ -33,8 +44,9 @@ const SHAPE =
   'ids are the names formulas use, unique across the sheet. checks: formula, degrees ' +
   `({ ${DEGREES.join(', ')} }: formulas, optional) and ladder [{ name, value }], ` +
   'easiest first, in strict order. creation: { method: ' +
-  `${CREATION_METHODS.join(' | ')}, ...its settings }. Formulas are text for now; the ` +
-  'formula language checks them once it lands.';
+  `${CREATION_METHODS.join(' | ')}, ...its settings }. tables: { name: [{ min?, max?, ` +
+  'value }] }, rows tried in order. ' +
+  FORMULAS;
 
 const row = (s) => ({
   id: s.id,
