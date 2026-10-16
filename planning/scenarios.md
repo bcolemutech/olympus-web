@@ -181,15 +181,15 @@ Settled with the user through a questionnaire (2026-10-16). Every answer took th
 
 ## 5. Where each gap lands
 
-| Gap                   | Home                                                                          | When                                                                |
-| --------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| G1 Map levels         | **L-900 Map levels** (design: `map-levels.md`, to write), with G9's templates | Designed now; built with or just before L-710                       |
-| G2 Vehicles           | **L-910 Vehicles** (design: `vehicles.md`, to write), with G10's crew         | Designed now; built after L-900 (order set with its design)         |
-| G3 Effects            | **L-815 Effects**, in L-810                                                   | Phase 9, before combat                                              |
-| G4 Advancement        | **L-830 Advancement**                                                         | Phase 9, after combat                                               |
-| G5 Defeat, rests      | **L-820 Combat** (rests: a wait that restores)                                | Phase 9                                                             |
-| G12 Hostile creatures | **L-820 Combat**                                                              | Phase 9                                                             |
-| G6 Dungeon features   | **A dungeon epic** (light, traps, secrets, searching, floor tools)            | After combat; first after Phase 9, as sword and sorcery comes first |
-| G7 Crafting           | **The crafting module**                                                       | Phase 9's module order                                              |
-| G8 Calendar           | **A calendar epic**                                                           | Before the steampunk game's trains                                  |
-| G11 Quests            | **A quests epic**                                                             | After Phase 8                                                       |
+| Gap                   | Home                                                                                   | When                                                                |
+| --------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| G1 Map levels         | **L-900 Map levels** (design: [`map-levels.md`](./map-levels.md)), with G9's templates | Designed now; built with or just before L-710                       |
+| G2 Vehicles           | **L-910 Vehicles** (design: [`vehicles.md`](./vehicles.md)), with G10's crew           | Designed; built after the dungeon epic, when steampunk is next      |
+| G3 Effects            | **L-815 Effects**, in L-810                                                            | Phase 9, before combat                                              |
+| G4 Advancement        | **L-830 Advancement**                                                                  | Phase 9, after combat                                               |
+| G5 Defeat, rests      | **L-820 Combat** (rests: a wait that restores)                                         | Phase 9                                                             |
+| G12 Hostile creatures | **L-820 Combat**                                                                       | Phase 9                                                             |
+| G6 Dungeon features   | **A dungeon epic** (light, traps, secrets, searching, floor tools)                     | After combat; first after Phase 9, as sword and sorcery comes first |
+| G7 Crafting           | **The crafting module**                                                                | Phase 9's module order                                              |
+| G8 Calendar           | **A calendar epic**                                                                    | Before the steampunk game's trains                                  |
+| G11 Quests            | **A quests epic**                                                                      | After Phase 8                                                       |
