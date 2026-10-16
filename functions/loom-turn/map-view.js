@@ -16,6 +16,7 @@ const layers = require('../loom-canon/layers');
 const seen = require('./seen');
 const travel = require('../loom-canon/travel');
 const clock = require('../loom-canon/clock');
+const checks = require('../loom-canon/checks');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -36,7 +37,8 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * `battleMap` is what the save has seen of that map, for the grid view
  * (battleView below; `record` is the save's seen record for it, ./seen.js);
  * else null. `turn` is the save's turn (L-611 / #441): `{ n, movementLeft,
- * speed, actionUsed, plan }`, a fresh one for an older save.
+ * speed, actionUsed, plan }`, a fresh one for an older save. `rules` is the
+ * world's game system for the rules reference (../loom-canon/checks.js rulesOf).
  */
 function mapView(canonWorld, save, record, townRecord) {
   const discovered = new Set(discoveredBy(canonWorld, save));
@@ -103,6 +105,9 @@ function mapView(canonWorld, save, record, townRecord) {
     turn: turnView(save),
     // The save's time, for the map's clock (L-376): "Day 1, evening".
     time: clock.timeView(clock.timeOf(save)),
+    // The world's game system as players read it, for the rules reference
+    // (L-805; game systems SY7).
+    rules: checks.rulesOf(checks.systemOf(canonWorld)),
     map:
       map && map.width
         ? {

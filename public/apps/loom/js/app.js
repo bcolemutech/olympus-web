@@ -111,6 +111,7 @@
 
       Loom.journal.mount(Loom.getRef('loom-story-pane')); // the panel's content (L-726)
       Loom.shell.mount(); // hosts the map and story panes before they are used
+      Loom.rules.mount(); // L-805: the rules reference, from the menu bar
       Loom.worlds.renderWorldList();
       Loom.map.init();
       Loom.overlay.mount(Loom.getRef('loom-map-panel')); // L-725: over the map

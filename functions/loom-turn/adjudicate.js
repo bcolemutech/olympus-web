@@ -575,11 +575,27 @@ function nameList(places, last = 'or') {
 const andList = (places) => nameList(places, 'and');
 
 // A check as the panel's roll card shows it (L-726, the-map-first-loom.md
-// L4; L-803): the die, the result, what it was against and whether it
-// passed, and the check's formula, breakdown, rung and degree.
-function rolled(check, against) {
+// L4; L-803, L-805): the die, the result, what it was against and whether
+// it passed; the check's formula, breakdown, rung and degree; its line with
+// each term named (DC6), the dice to tap (DC5: each die's sides and face,
+// whether it was kept and, in a pool, counted) and the degree in the
+// system's words.
+function rolled(check, against, system) {
   const first = check.breakdown.terms.find((t) => t.kind === 'dice' || t.kind === 'count');
   const sides = first ? Number(/d(\d+)/.exec(first.expr)[1]) : 20;
+  const dice = [];
+  for (const term of check.breakdown.terms) {
+    if (term.kind !== 'dice' && term.kind !== 'count') continue;
+    const of = Number(/d(\d+)/.exec(term.expr)[1]);
+    for (const r of term.rolls) {
+      dice.push({
+        sides: of,
+        value: r.value,
+        kept: r.kept,
+        ...(term.kind === 'count' ? { counted: r.counted } : {}),
+      });
+    }
+  }
   return {
     die: sides,
     value: check.type === 'bool' ? check.natural : check.total,
@@ -591,6 +607,9 @@ function rolled(check, against) {
     breakdown: check.breakdown,
     rung: check.rung,
     degree: check.degree,
+    line: check.breakdown.named,
+    dice,
+    verdict: checks.degreeName(system, check.degree),
   };
 }
 
@@ -628,8 +647,8 @@ function evaluateGeneric(proposedAction, dice, characterState, canonWorld) {
     const { attacker, defender } = both;
     return {
       outcome: attacker.success ? 'success' : 'failure',
-      roll: rolled(attacker, opponent.name),
-      opposed: { by: opponent.id, roll: rolled(defender, 'you') },
+      roll: rolled(attacker, opponent.name, system),
+      opposed: { by: opponent.id, roll: rolled(defender, 'you', system) },
       mutations: [],
       constraints: [
         `The attempt to ${verb} against ${opponent.name} ${DEGREE_WORDS[attacker.degree]} ` +
@@ -640,7 +659,7 @@ function evaluateGeneric(proposedAction, dice, characterState, canonWorld) {
   const roll = checks.rollCheck(system, { check: proposed || {}, character, dice });
   return {
     outcome: roll.success ? 'success' : 'failure',
-    roll: rolled(roll, roll.rung),
+    roll: rolled(roll, roll.rung, system),
     mutations: [],
     constraints: ['The attempt to ' + verb + ' ' + DEGREE_WORDS[roll.degree] + '.'],
   };
@@ -888,7 +907,7 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
     ),
     dice,
   });
-  const roll = rolled(lock, 'the lock on ' + name);
+  const roll = rolled(lock, 'the lock on ' + name, system);
   if (roll.success) {
     return {
       outcome: 'success',

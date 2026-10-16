@@ -485,6 +485,99 @@
   color: #e57373;
 }
 
+/* The dice to tap (DC5; L-805): blank until tapped, tumbling, then landed on
+   the server's faces. A die not kept is dimmed; in a pool, the dice that
+   counted are lit. */
+.loom-roll-dice {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-width: 9.5rem;
+}
+
+.loom-die {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid color-mix(in srgb, var(--loom-accent) 55%, transparent);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  line-height: 1;
+}
+
+.loom-die-face {
+  color: var(--loom-text);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.loom-die-sides {
+  margin-top: 0.1rem;
+  color: var(--loom-muted);
+  font-size: 0.55rem;
+}
+
+.loom-die.is-waiting .loom-die-face {
+  color: var(--loom-muted);
+}
+
+.loom-die.is-rolling {
+  animation: loom-die-tumble 0.21s linear infinite;
+}
+
+.loom-die.is-dropped {
+  opacity: 0.4;
+}
+
+.loom-die.is-counted {
+  border-color: #81c784;
+  background: rgba(129, 199, 132, 0.18);
+}
+
+.loom-die.is-missed .loom-die-face {
+  color: var(--loom-muted);
+}
+
+@keyframes loom-die-tumble {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(0.88);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loom-die.is-rolling {
+    animation: none;
+  }
+}
+
+.loom-roll.is-waiting {
+  border-left-color: var(--loom-accent);
+}
+
+.loom-roll-tap {
+  color: var(--loom-text);
+  font-weight: 600;
+}
+
+.loom-roll-what {
+  overflow-wrap: anywhere;
+}
+
+.loom-roll.is-criticalSuccess .loom-roll-verdict,
+.loom-roll.is-criticalFailure .loom-roll-verdict {
+  text-decoration: underline;
+}
+
 /* Arriving somewhere with art (A5): its banner atop the narration. */
 .loom-banner {
   position: relative;
@@ -1597,5 +1690,145 @@ body.loom-playing .app-divider {
     border: none;
     border-radius: 999px;
     cursor: pointer;
+  }
+}
+
+/* The rules reference (SY7; L-805): a panel over the play view, from the
+   menu bar's Rules button. */
+.loom-rules-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(5, 8, 15, 0.6);
+}
+
+.loom-rules {
+  display: flex;
+  flex-direction: column;
+  width: min(40rem, 100%);
+  max-height: min(44rem, 100%);
+  border: 1px solid var(--loom-edge);
+  border-radius: 12px;
+  background: var(--loom-panel-bg);
+  color: var(--loom-text);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.loom-rules-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--loom-edge);
+}
+
+.loom-rules-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.loom-rules-close {
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--loom-edge);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--loom-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.loom-rules-body {
+  overflow-y: auto;
+  padding: 0.25rem 1rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.loom-rules-heading {
+  margin: 1rem 0 0.4rem;
+  color: var(--loom-accent);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.loom-rules-section p {
+  margin: 0.3rem 0;
+}
+
+.loom-rules-formula,
+.loom-rules-list code {
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.loom-rules-list {
+  margin: 0.3rem 0;
+  padding-left: 1.1rem;
+}
+
+.loom-rules-list li span {
+  color: var(--loom-muted);
+}
+
+.loom-rules-skills {
+  columns: 2;
+}
+
+.loom-rules-table {
+  border-collapse: collapse;
+}
+
+.loom-rules-table th,
+.loom-rules-table td {
+  padding: 0.15rem 1.25rem 0.15rem 0;
+  text-align: left;
+  font-weight: normal;
+}
+
+.loom-rules-table td {
+  color: var(--loom-muted);
+}
+
+.loom-rules-degrees {
+  margin: 0.3rem 0;
+}
+
+.loom-rules-degree {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.15rem 0;
+}
+
+.loom-rules-degree dt {
+  flex: 0 0 9.5rem;
+  font-weight: 600;
+}
+
+.loom-rules-degree dd {
+  margin: 0;
+  color: var(--loom-text-soft);
+}
+
+.loom-rules-note {
+  color: var(--loom-muted);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 899px) {
+  .loom-rules-backdrop {
+    padding: 0.5rem;
+  }
+
+  .loom-rules-skills {
+    columns: 1;
   }
 }
