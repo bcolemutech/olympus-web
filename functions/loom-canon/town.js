@@ -127,11 +127,9 @@ function reachableFromEntrances(world, places) {
   return seen;
 }
 
-// The abilities a save's character has (`save.character.abilities`; a bare
-// character state carries them itself).
-function abilitiesOf(state) {
-  return (state && ((state.character && state.character.abilities) || state.abilities)) || [];
-}
+// What a save's character can do: its sheet's traits, or an older
+// character's abilities (CS4; L-811, ./sheets.js).
+const abilitiesOf = (state) => require('./sheets').traitsOf(state);
 
 /** The ability a place requires that the traveller lacks, or null. */
 function missingAbility(place, state) {

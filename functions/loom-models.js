@@ -10,6 +10,7 @@
  */
 
 const clock = require('./loom-canon/clock');
+const { DEFAULT_SPEED, MAX_SPEED, sheetOf } = require('./loom-canon/sheets');
 
 // ── Mutation vocabulary (design doc §8, §10 L-401) ─────────────────────────
 // state_mutations are deltas, never whole-document overwrites, so retried
@@ -137,12 +138,13 @@ function validateWorldState(data) {
 // Older saves and characters have none: they read as a fresh turn and the
 // default speed. (A save's turn is not a turn record: see makeTurn.)
 
-const DEFAULT_SPEED = 20;
-const MAX_SPEED = 1000;
-
-/** A save's character's speed, or the default for older characters. */
+/**
+ * A save's character's speed: its sheet's (L-811), an older character's own,
+ * or the default.
+ */
 function speedOf(save) {
-  const speed = save && save.character && save.character.speed;
+  const sheet = sheetOf(save);
+  const speed = sheet ? sheet.speed : save && save.character && save.character.speed;
   return Number.isInteger(speed) && speed > 0 && speed <= MAX_SPEED ? speed : DEFAULT_SPEED;
 }
 
@@ -186,13 +188,20 @@ function validateCharacter(character) {
   if (typeof character.name !== 'string' || character.name.length === 0) {
     errors.push('character.name must be a non-empty string');
   }
-  if (typeof character.condition !== 'string' || character.condition.length === 0) {
+  // A sheet (L-811) holds the condition, traits and speed; it is checked
+  // against the world's system (./loom-canon/sheets.js), not here. A
+  // character made before sheets has them itself.
+  const sheet = character.sheet !== undefined;
+  if (sheet && (!character.sheet || typeof character.sheet !== 'object')) {
+    errors.push('character.sheet must be an object');
+  }
+  if (!sheet && (typeof character.condition !== 'string' || character.condition.length === 0)) {
     errors.push('character.condition must be a non-empty string');
   }
   if (!Array.isArray(character.inventory)) {
     errors.push('character.inventory must be an array');
   }
-  if (!Array.isArray(character.abilities)) {
+  if (!sheet && !Array.isArray(character.abilities)) {
     errors.push('character.abilities must be an array');
   }
   if (!Array.isArray(character.goals)) {
@@ -381,6 +390,15 @@ function makeWorldState(fields) {
 
 function makeCharacter(fields) {
   fields = fields || {};
+  // With a sheet (L-811): its condition, traits and speed are in it.
+  if (fields.sheet) {
+    return {
+      name: fields.name,
+      inventory: fields.inventory || [],
+      goals: fields.goals || [],
+      sheet: fields.sheet,
+    };
+  }
   return {
     name: fields.name,
     condition: fields.condition || 'healthy',

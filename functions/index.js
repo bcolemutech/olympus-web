@@ -11,6 +11,8 @@ const { isPlayable, gradeWorld } = require('./loom-canon/grading');
 const { withNeighbours } = require('./loom-turn/discovery');
 const { arrivalPlace } = require('./loom-canon/town');
 const maps = require('./loom-canon/maps');
+const checks = require('./loom-canon/checks');
+const sheets = require('./loom-canon/sheets');
 const { mapView } = require('./loom-turn/map-view');
 const { firstLook, seenRef } = require('./loom-turn/seen');
 const { seenTownRef } = require('./loom-turn/town-seen');
@@ -770,9 +772,13 @@ exports.loomCreateSave = onCall(async (request) => {
     ownerUid: uid,
     worldId: worldId.trim(),
     name: name.trim(),
+    // A sheet with the world's system's defaults (L-811; creation is L-812),
+    // the world's starting abilities as its traits.
     character: {
       name: characterName.trim(),
-      abilities: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
+      sheet: sheets.defaultSheet(checks.systemOf(canonWorld), {
+        traits: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
+      }),
     },
     location: canonWorld.rules && canonWorld.rules.startingLocationId,
     // A start with a town layout (L-342) begins at its first open entrance,

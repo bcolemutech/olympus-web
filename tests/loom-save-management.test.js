@@ -126,8 +126,15 @@ describe('loomCreateSave', () => {
     expect(save.worldId).toBe(WORLD_ID);
     expect(save.name).toBe('My Save');
     expect(save.character.name).toBe('Ishmael');
-    expect(save.character.condition).toBe('healthy');
-    expect(save.character.abilities).toEqual(['seaworthy-vessel']);
+    // A sheet with the world's system's defaults (L-811), the world's starting
+    // abilities as its traits.
+    const { COAST } = require('./helpers/coast');
+    const system = require('../functions/loom-canon/checks').systemOf(COAST);
+    const { defaultSheet, validateSheet } = require('../functions/loom-canon/sheets');
+    expect(save.character.sheet).toEqual(defaultSheet(system, { traits: ['seaworthy-vessel'] }));
+    expect(validateSheet(system, save.character.sheet)).toEqual([]);
+    expect(save.character.sheet).toMatchObject({ traits: ['seaworthy-vessel'], speed: 20 });
+    expect(save.character).not.toHaveProperty('abilities');
     expect(save.location).toBe('widows-reach');
     expect(save.recentSummary).toBe('');
   });

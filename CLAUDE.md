@@ -73,7 +73,7 @@ npm run format
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
 - **Jest 29** — Rules, Cloud Functions, Loom, Cartographer and MCP tests against the Firestore and Storage emulators
-- **GitHub Actions** — 13 workflows for CI, preview deploys, production deploys and admin tasks
+- **GitHub Actions** — 14 workflows for CI, preview deploys, production deploys and admin tasks
 
 ---
 
@@ -213,7 +213,7 @@ npm run deploy            # Deploy hosting only (production)
 | `apps/{appId}` | `hasApp(appId)` or admin | App registry |
 | `pool_handicap/{userId}` | Self read/write only | Billiards handicap data |
 | `loom_worlds/{worldId}` | `hasApp('cartographer')`; `hasApp('loom')` for published only | Cartographer worlds; entity subcollections (`locations`, `factions`, `regions`, `characters`, `lore`, `places`) readable by `cartographer` only |
-| `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history; each save keeps its own clock, `time` in seconds from Day 1 (rules in `functions/loom-canon/clock.js`) |
+| `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history; each save keeps its own clock, `time` in seconds from Day 1 (rules in `functions/loom-canon/clock.js`); its character's sheet, shaped by the world's game system, at `character.sheet` (attributes, skills, resources, level, traits, conditions, speed; `functions/loom-canon/sheets.js`) |
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
 | `loom_systems/{systemId}` | Deny (server only) | Game systems as data (L-801; `functions/loom-canon/systems.js`): the sheet, checks and ladder, creation, modules, words; written over MCP (`set_system`, `copy_system`), named by `world.systemId` (the built-in `d20-fantasy` when none; `pool-scifi` is the other built-in, both in `built-in-systems.js`) |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
@@ -275,6 +275,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 | `backfill-art-library.yml` | Manual dispatch | Move world art from before the image studio into its library (dry run, then apply) |
 | `backfill-screen-copies.yml` | Manual dispatch | Make screen-sized copies for library images stored before L-727 (dry run, then apply) |
 | `backfill-world-systems.yml` | Manual dispatch | Give worlds made before game systems the built-in fantasy system's id (L-804; dry run, then apply) |
+| `backfill-character-sheets.yml` | Manual dispatch | Give saves made before character sheets their world's system's defaults, abilities as traits (L-811; dry run, then apply) |
 | `set-storage-cors.yml` | Manual dispatch | Apply `storage-cors.json` to the Storage bucket, so the Loom's map engine can draw art from it (dry run, then apply) |
 | `studio-generate.yml` | Manual dispatch | Make images with the real model by hand: one image, or the big-map trial; spends money, so it asks for confirm "spend" |
 

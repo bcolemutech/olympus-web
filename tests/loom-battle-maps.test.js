@@ -817,12 +817,13 @@ describe('moving without the GM (L-613)', () => {
   });
 
   test('Continue next turn walks the plan; End turn says how far you went', async () => {
-    // A character with a speed of 4: the hearth (8 away) takes two turns.
+    // A character with a speed of 4 on its sheet (L-811): the hearth (8
+    // away) takes two turns.
     await db
       .collection('loom_saves')
       .doc(saveId)
       .update({
-        'character.speed': 4,
+        'character.sheet.speed': 4,
         turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null },
       });
     await stepTo(saveId, { x: 9, y: 1 });

@@ -538,12 +538,11 @@ async function copySystem(db, fromId, { id, name }, { uid, now = Date.now() } = 
 }
 
 /**
- * What of a character's sheet no longer fits its system (SY2): L-811 fills
- * this in when saves have sheets. Today there are none, so nothing.
+ * What of a character's sheet no longer fits its system (SY2; L-811): each
+ * problem named, or none. See ./sheets.js.
  */
-// eslint-disable-next-line no-unused-vars
 function misfits(system, sheet) {
-  return [];
+  return require('./sheets').validateSheet(system, sheet);
 }
 
 /**

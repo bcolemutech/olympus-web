@@ -75,13 +75,19 @@ function hollin(changes = {}) {
   };
 }
 const CLOSED = { sources: { description: 'import' } };
-const at = (placeId, abilities = []) => ({
+// A save at a place, with what its character can do: an older character's
+// abilities, or (`sheet`) its sheet's traits (L-811).
+const at = (placeId, abilities = [], sheet = false) => ({
   location: 'loc_9',
   placeId,
   mapId: null,
   cell: null,
-  character: { name: 'Tam', abilities },
+  character: sheet ? { name: 'Tam', sheet: { traits: abilities } } : { name: 'Tam', abilities },
 });
+const SHAPES = [
+  ['abilities', false],
+  ['a sheet’s traits (L-811)', true],
+];
 const moveTo = (world, save, target) =>
   evaluate({ verb: 'move', targets: [target], params: {} }, {}, save, 10, world);
 
@@ -134,22 +140,32 @@ describe('a move to any place in town', () => {
     ]);
   });
 
-  test('a place you need an ability to pass is in the way without it', () => {
-    expect(moveTo(hollin(), at('plc_gate'), 'plc_belfry').constraints).toEqual([
-      'You lack what it takes to get past The Tower (requires: climbing).',
-    ]);
-  });
+  test.each(SHAPES)(
+    'a place you need an ability to pass is in the way without it (%s)',
+    (_, sheet) => {
+      expect(moveTo(hollin(), at('plc_gate', [], sheet), 'plc_belfry').constraints).toEqual([
+        'You lack what it takes to get past The Tower (requires: climbing).',
+      ]);
+    }
+  );
 
-  test("with the ability (on the save's character), the way is open", () => {
-    expect(moveTo(hollin(), at('plc_gate', ['climbing']), 'plc_belfry').constraints).toEqual([
-      'You make your way from The Gate past The Lane, The Square and The Tower to The Belfry.',
-    ]);
-    // A place that itself requires it lets the character in, too.
-    expect(moveTo(hollin(), at('plc_square', ['climbing']), 'plc_tower').outcome).toBe('success');
-    expect(moveTo(hollin(), at('plc_square'), 'plc_tower').constraints).toEqual([
-      'You lack what it takes to get in (requires: climbing).',
-    ]);
-  });
+  test.each(SHAPES)(
+    "with the ability (on the save's character, as %s), the way is open",
+    (_, sheet) => {
+      expect(
+        moveTo(hollin(), at('plc_gate', ['climbing'], sheet), 'plc_belfry').constraints
+      ).toEqual([
+        'You make your way from The Gate past The Lane, The Square and The Tower to The Belfry.',
+      ]);
+      // A place that itself requires it lets the character in, too.
+      expect(moveTo(hollin(), at('plc_square', ['climbing'], sheet), 'plc_tower').outcome).toBe(
+        'success'
+      );
+      expect(moveTo(hollin(), at('plc_square', [], sheet), 'plc_tower').constraints).toEqual([
+        'You lack what it takes to get in (requires: climbing).',
+      ]);
+    }
+  );
 
   test('a retired place, and a place in a town with no way through, are refused', () => {
     expect(
@@ -178,12 +194,19 @@ describe('where a save can walk to', () => {
     expect(
       ids(town.reachableFrom(world, 'loc_9', world.places.plc_gate, passable(world, at())))
     ).toEqual(['plc_lane', 'plc_wharf', 'plc_square']);
-    const climber = at('plc_gate', ['climbing']);
-    expect(
-      ids(
-        town.reachableFrom(hollin(), 'loc_9', hollin().places.plc_gate, passable(hollin(), climber))
-      )
-    ).toContain('plc_belfry');
+    for (const [, sheet] of SHAPES) {
+      const climber = at('plc_gate', ['climbing'], sheet);
+      expect(
+        ids(
+          town.reachableFrom(
+            hollin(),
+            'loc_9',
+            hollin().places.plc_gate,
+            passable(hollin(), climber)
+          )
+        )
+      ).toContain('plc_belfry');
+    }
   });
 
   test('standing nowhere in town, the walk starts at its ways in', () => {

@@ -14,6 +14,7 @@ const sight = require('../loom-canon/sight');
 const { recordOf, squaresOf, peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
+const { sheetOf, validateSheet } = require('../loom-canon/sheets');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -397,6 +398,20 @@ function buildTurnSection(save, resolution) {
   );
 }
 
+// What of the player's sheet no longer fits the world's rules (SY2; L-811),
+// for the GM to repair in play; null when it all fits, or there's no sheet.
+function buildSheetSection(save, canonWorld) {
+  const sheet = sheetOf(save);
+  if (!sheet) return null;
+  const misfits = validateSheet(checks.systemOf(canonWorld), sheet);
+  if (!misfits.length) return null;
+  return (
+    "THE PLAYER'S SHEET no longer fits this world's rules (they changed). When the story " +
+    'allows, let the character notice and adjust; do not narrate rules:\n' +
+    misfits.map((m) => '- ' + m).join('\n')
+  );
+}
+
 // The check rolled this turn, if one was (L-805): what it was, its total,
 // the rung, and the degree in the system's words.
 function buildRollSection(resolution, canonWorld) {
@@ -431,6 +446,7 @@ function buildUserMessage(params) {
     exitsSection,
     turnSection,
     timeSection,
+    sheetSection,
   } = params;
   const rollSection = buildRollSection(resolution, canonWorld);
 
@@ -458,7 +474,8 @@ function buildUserMessage(params) {
     'RELEVANT ENTITIES:\n' +
     entitySections +
     (exitsSection ? '\n\n' + exitsSection : '') +
-    (turnSection ? '\n\n' + turnSection : '')
+    (turnSection ? '\n\n' + turnSection : '') +
+    (sheetSection ? '\n\n' + sheetSection : '')
   );
 }
 
@@ -564,6 +581,7 @@ async function narrateResolution(params) {
         exitsSection: buildExitsSection(canonWorld, position, save, resolution, view),
         turnSection: buildTurnSection(save, resolution),
         timeSection: buildTimeSection(save, resolution),
+        sheetSection: buildSheetSection(save, canonWorld),
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,
