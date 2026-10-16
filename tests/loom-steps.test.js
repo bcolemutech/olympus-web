@@ -488,13 +488,21 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
     const lock = { die: 20, difficulty: 15, against: 'the lock on the inner door' };
     expect(attempt('pick_lock', beside(), 15)).toEqual({
       outcome: 'success',
-      roll: { ...lock, value: 15, success: true }, // for the panel's roll card (L-726)
+      // For the panel's roll card (L-726), with the check (L-803): the
+      // lock's 15 is the fantasy system's Moderate rung.
+      roll: expect.objectContaining({
+        ...lock,
+        value: 15,
+        success: true,
+        rung: 'Moderate',
+        degree: 'success',
+      }),
       mutations: [doorTo('closed'), used],
       constraints: ['The lock gives way: the inner door is unlocked.'],
     });
     expect(attempt('force', beside(), 14)).toEqual({
       outcome: 'failure',
-      roll: { ...lock, value: 14, success: false },
+      roll: expect.objectContaining({ ...lock, value: 14, success: false, degree: 'failure' }),
       mutations: [used],
       constraints: ['The lock on the inner door holds.'],
     });

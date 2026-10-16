@@ -5,6 +5,7 @@ const maps = require('../loom-canon/maps');
 const { doorSides } = require('./steps');
 const { peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
+const checks = require('../loom-canon/checks');
 
 /**
  * Stage 2 — INTERPRET (design doc §5).
@@ -25,7 +26,7 @@ const clock = require('../loom-canon/clock');
 const MODEL_NAME = 'gemini-2.5-flash';
 const MAX_OUTPUT_TOKENS = 512;
 
-function buildSystemInstruction(knownEntities, save) {
+function buildSystemInstruction(knownEntities, save, canonWorld) {
   const entityList = knownEntities
     .map((e) => '- ' + e.id + ' (' + e.kind + '): ' + e.name)
     .join('\n');
@@ -52,6 +53,7 @@ function buildSystemInstruction(knownEntities, save) {
     '("to Daldockley by the King\'s Causeway"), target that way in.\n' +
     '- params: an object of any other relevant details (e.g. {"item": "sword"}). Use an ' +
     'empty object if there are none.\n\n' +
+    checksSection(canonWorld) +
     // Letting time pass (L-374; game time T12).
     'To let time pass ("wait an hour", "rest until evening", "sleep until dawn"), use the ' +
     'verb "wait" with params {"minutes": number} for a length of time, or {"until": part} ' +
@@ -59,6 +61,44 @@ function buildSystemInstruction(knownEntities, save) {
     'night; add {"how": "sleep"} or {"how": "rest"} when the player sleeps or rests.\n\n' +
     'Respond with ONLY a JSON object: { "verb": string, "targets": string[], "params": object }'
   );
+}
+
+// The world's game system's lists, to propose a check from (L-803; game
+// systems DC3, DC4): its skills (or attributes) and its difficulty rungs, by
+// name. The model picks a rung, never a number, and decides nothing.
+function checksSection(canonWorld) {
+  const system = checks.systemOf(canonWorld);
+  const sheet = system.sheet || {};
+  const skills = (sheet.optional || []).includes('skills') ? sheet.skills || [] : [];
+  const names = (list, show) => list.map(show).join(', ');
+  return (
+    'When the action’s outcome is uncertain and needs a roll (sneaking, climbing, ' +
+    'persuading, searching), add params.check: { "skill": id, "rung": name }, or ' +
+    '{ "attribute": id, "rung": name } when no skill fits, and "opposedBy": a character id ' +
+    'when someone resists it. Pick the rung for how hard it is; never give a number. ' +
+    'Leave check out for actions that need no roll.\n' +
+    (skills.length ? 'Skills: ' + names(skills, (k) => `${k.id} (${k.attribute})`) + '.\n' : '') +
+    'Attributes: ' +
+    names(sheet.attributes || [], (a) => `${a.id} (${a.name})`) +
+    '.\n' +
+    'Difficulty, easiest first: ' +
+    names(system.checks.ladder, (r) => r.name) +
+    '.\n\n'
+  );
+}
+
+// A proposed check as ADJUDICATE reads it (L-803): its known keys as text,
+// the person it is against resolved to an id; anything else dropped.
+function cleanCheck(check, resolve) {
+  if (!check || typeof check !== 'object') return undefined;
+  const out = {};
+  for (const key of ['skill', 'attribute', 'rung']) {
+    if (typeof check[key] === 'string' && check[key].trim()) out[key] = check[key].trim();
+  }
+  if (typeof check.opposedBy === 'string' && check.opposedBy.trim()) {
+    out.opposedBy = resolve(check.opposedBy.trim());
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 // The things on the battle map a save stands on (L-351), targeted as
@@ -230,7 +270,7 @@ async function interpretAction(params) {
   try {
     raw = await callGemini({
       modelName: MODEL_NAME,
-      systemInstruction: buildSystemInstruction(knownEntities, save),
+      systemInstruction: buildSystemInstruction(knownEntities, save, canonWorld),
       userMessage: actionText,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,
@@ -249,8 +289,15 @@ async function interpretAction(params) {
   return {
     verb: raw.verb.toLowerCase().slice(0, 50),
     targets: raw.targets.map(resolve),
-    params: raw.params && typeof raw.params === 'object' ? raw.params : {},
+    params: withCheck(raw.params && typeof raw.params === 'object' ? raw.params : {}, resolve),
   };
+}
+
+function withCheck(params, resolve) {
+  if (!('check' in params)) return params;
+  const { check, ...rest } = params;
+  const clean = cleanCheck(check, resolve);
+  return clean ? { ...rest, check: clean } : rest;
 }
 
 module.exports = { interpretAction, resolveTarget, buildKnownEntities, normalizeName: normalize };

@@ -59,7 +59,7 @@ const PLACE_NAMES = {
   sheet: [],
   modifier: [],
   check: CHECK_NAMES,
-  degree: CHECK_NAMES.concat(['result', 'difficulty']),
+  degree: CHECK_NAMES.concat(['result', 'difficulty', 'natural']),
 };
 // Words formulas use, which no sheet field may be named.
 const RESERVED_NAMES = formulaLanguage.FUNCTIONS.concat(PLACE_NAMES.degree, ['level']);
@@ -101,7 +101,10 @@ const PLACEHOLDER_FANTASY = {
   },
   checks: {
     formula: '1d20 + modifier + rank',
-    degrees: {},
+    // A natural 20 or 1 (L-803).
+    degrees: { criticalSuccess: 'natural = 20', criticalFailure: 'natural = 1' },
+    // Picking a lock (L-626 locks): Dexterity.
+    lock: { attribute: 'DEX' },
     ladder: [
       { name: 'Easy', value: 10 },
       { name: 'Moderate', value: 15 },
@@ -284,6 +287,17 @@ function validateSystem(input) {
       });
     }
     if (on.has('traits')) list(sheet.traits, 'sheet.traits', { field: false });
+    const lock = isObject(s.checks) && isObject(s.checks.lock) ? s.checks.lock : null;
+    if (lock) {
+      if (lock.skill !== undefined && !(sheet.skills || []).some((k) => k && k.id === lock.skill)) {
+        errors.push(`checks.lock.skill "${lock.skill}" isn't one of the system's skills.`);
+      }
+      if (lock.attribute !== undefined && !attributeIds.has(lock.attribute)) {
+        errors.push(
+          `checks.lock.attribute "${lock.attribute}" isn't one of the system's attributes.`
+        );
+      }
+    }
     if (on.has('conditions')) list(sheet.conditions, 'sheet.conditions', { field: false });
     if (on.has('derived')) {
       list(sheet.derived, 'sheet.derived', {
@@ -313,6 +327,14 @@ function validateSystem(input) {
           errors.push(`checks.degrees: "${degree}" isn't a degree (${DEGREES.join(', ')}).`);
         } else formula(value, `checks.degrees.${degree}`, 'degree');
       }
+    }
+    // Ties in opposed checks (DC8; L-803): the defender's, unless the attacker's.
+    if (checks.ties !== undefined && !['defender', 'attacker'].includes(checks.ties)) {
+      errors.push('checks.ties must be "defender" or "attacker".');
+    }
+    // What picking a lock rolls (L-803): a skill or an attribute; checked below.
+    if (checks.lock !== undefined && !isObject(checks.lock)) {
+      errors.push('checks.lock must be { skill } or { attribute }.');
     }
     const ladder = checks.ladder;
     if (!Array.isArray(ladder) || ladder.length < 2) {

@@ -166,7 +166,7 @@ test('the tools are offered, and update_world takes systemId', async () => {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name);
   expect(names).toEqual(
-    expect.arrayContaining(['list_systems', 'get_system', 'set_system', 'copy_system'])
+    expect.arrayContaining(['list_systems', 'get_system', 'set_system', 'copy_system', 'test_roll'])
   );
   const update = tools.find((t) => t.name === 'update_world');
   expect(Object.keys(update.inputSchema.properties)).toContain('systemId');
@@ -302,4 +302,54 @@ test('update_world sets a world’s system; get_world and its grading show it', 
     changed: false,
     updated: [],
   });
+});
+
+test('test_roll: a check for a sample character, with its breakdown (L-803)', async () => {
+  const roll = await ok('test_roll', {
+    systemId: 'd20-fantasy',
+    skill: 'Stealth',
+    rung: 'Hard',
+    sheet: { attributes: { DEX: 16 }, skills: { Stealth: 2 } },
+    seed: 42,
+  });
+  expect(roll).toMatchObject({
+    system: { id: 'd20-fantasy', version: 0 },
+    seed: 42,
+    formula: '1d20 + modifier + rank',
+    rolledWith: { attribute: 'DEX', skill: 'Stealth' },
+    rung: 'Hard',
+    difficulty: 20,
+    degree: expect.stringMatching(/^(criticalSuccess|success|failure|criticalFailure)$/),
+  });
+  // DEX 16 is +3, Stealth 2: the die and 5.
+  const die = roll.breakdown.terms[0];
+  expect(die).toMatchObject({ kind: 'dice', expr: '1d20' });
+  expect(roll.total).toBe(die.value + 3 + 2);
+  expect(roll.breakdown.shown).toBe(`${die.value} + 3 + 2`);
+  // The same seed, the same roll.
+  expect(
+    await ok('test_roll', {
+      systemId: 'd20-fantasy',
+      skill: 'Stealth',
+      rung: 'Hard',
+      sheet: { attributes: { DEX: 16 }, skills: { Stealth: 2 } },
+      seed: 42,
+    })
+  ).toEqual(roll);
+
+  // A dice-pool system, by attribute, with the defaults for the rest.
+  const pool = await ok('test_roll', { systemId: 'star-pool', attribute: 'Body', seed: 7 });
+  expect(pool).toMatchObject({
+    formula: 'count((attribute + rank)d10, >= 7)',
+    rolledWith: { attribute: 'Body', skill: null },
+    rung: 'Routine',
+  });
+  expect(pool.breakdown.terms.find((t) => t.kind === 'count').rolls).toHaveLength(3);
+
+  expect(await refused('test_roll', { systemId: 'd20-fantasy', skill: 'Juggling' })).toBe(
+    'There is no skill "Juggling" in this world’s rules.'
+  );
+  expect(await refused('test_roll', { systemId: 'nowhere' })).toBe(
+    'No system "nowhere". list_systems shows them.'
+  );
 });

@@ -20,6 +20,8 @@ const {
 // `systems` is the store: functions/loom-canon/systems.js over Firestore.
 
 const { systemId } = require('./schemas');
+const checks = require('../../../loom-canon/checks');
+const formula = require('../../../loom-canon/formula');
 
 // The formula language (L-802), as Claude needs it to write a system.
 const FORMULAS =
@@ -85,9 +87,69 @@ async function refusing(work) {
   }
 }
 
+// A sample character for test_roll: scores and ranks by id, and a level.
+const SAMPLE = z
+  .object({
+    attributes: z.record(z.number()).optional().describe('Attribute scores by id.'),
+    skills: z.record(z.number()).optional().describe('Skill ranks by id (0: untrained).'),
+    level: z.number().int().optional().describe('Its level.'),
+  })
+  .describe(
+    'A sample character’s sheet. Anything left out takes the system’s defaults: each ' +
+      'attribute at the middle of its range, untrained, the lowest level.'
+  );
+
 function systemTools({ systems }) {
   const readOnly = { readOnlyHint: true, openWorldHint: false };
   return [
+    {
+      name: 'test_roll',
+      title: 'Test a roll',
+      description:
+        'Roll a check in a game system for a sample character (FX3), to see a system’s check ' +
+        'formula, ladder and degrees at work: the total, its breakdown (every die, kept and ' +
+        'dropped, and each term), the rung and its number, and the degree it comes to ' +
+        '(criticalSuccess, success, successAtCost, failure, criticalFailure). Give a seed ' +
+        'to roll the same dice again. Nothing is saved.',
+      inputSchema: {
+        systemId,
+        skill: z.string().max(32).optional().describe('The skill rolled, from get_system.'),
+        attribute: z
+          .string()
+          .max(32)
+          .optional()
+          .describe('The attribute rolled, when no skill is (a skill uses its own).'),
+        rung: z.string().max(40).optional().describe('The difficulty rung, by name.'),
+        sheet: SAMPLE.optional(),
+        seed: z.number().int().min(0).optional().describe('A seed for the dice (any number).'),
+      },
+      annotations: readOnly,
+      handler: async (ctx, args) => {
+        const system = await systems.get(args.systemId);
+        if (!system) throw new ToolError(`No system "${args.systemId}". list_systems shows them.`);
+        const check = { skill: args.skill, attribute: args.attribute, rung: args.rung };
+        const why = checks.refusal(system, check);
+        if (why) throw new ToolError(why);
+        const seed = args.seed !== undefined ? args.seed : Math.floor(Math.random() * 2 ** 31);
+        const roll = checks.rollCheck(system, {
+          check,
+          character: { sheet: args.sheet || {} },
+          dice: formula.seeded(seed),
+        });
+        return {
+          system: { id: system.id, version: system.version || 0 },
+          seed,
+          formula: roll.formula,
+          rolledWith: { attribute: roll.attributeId, skill: roll.skillId },
+          total: roll.total,
+          rung: roll.rung,
+          difficulty: roll.difficulty,
+          degree: roll.degree,
+          success: roll.success,
+          breakdown: roll.breakdown,
+        };
+      },
+    },
     {
       name: 'list_systems',
       title: 'List game systems',

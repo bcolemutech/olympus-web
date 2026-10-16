@@ -169,7 +169,8 @@ describe('ADJUDICATE: out of sight, out of reach', () => {
     });
     const beside = act('open', 'feature:chest', standing(sq(3, 3)));
     expect(beside.outcome).toBe('success');
-    expect(beside.constraints).toEqual(['The attempt to open succeeds.']);
+    // A natural 20 in the built-in system: brilliantly (L-803).
+    expect(beside.constraints).toEqual(['The attempt to open succeeds brilliantly.']);
     expect(beside.mutations).toContainEqual(
       expect.objectContaining({
         path: 'turn',
