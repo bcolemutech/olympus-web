@@ -18,7 +18,7 @@ This is the one place that says what has shipped, what is in progress, and what 
 | **3 — Rapid worlds**          | #16       | [`the-cartographer-design.md`](./the-cartographer-design.md)           | ✅ Shipped (L-300 / #314, C-1 to C-7)         | An uploaded Azgaar map becomes a published, playable world; a later MCP fix reaches games on their next turn                                                                                                                     |
 | **3b — Layered worlds**       | #19       | [`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md)           | ✅ Shipped (L-320 to L-350)                   | Travel to an unbuilt place is turned back, and opens once built; a player walks from the world map into a town and across a battle map                                                                                           |
 | **3c — Movement and vision**  | #20       | [`the-loom-movement-and-vision.md`](./the-loom-movement-and-vision.md) | ✅ Shipped (L-600 to L-680, §2)               | Each epic's own exit criterion (§2)                                                                                                                                                                                              |
-| **3d — Time**                 | #21       | [`the-loom-game-time.md`](./the-loom-game-time.md), #421               | ✅ Shipped (L-371 to L-376, §3)               | Hatham to Daldockley by trail takes about 6 hours and the play view shows "Day 1, evening"                                                                                                                                      |
+| **3d — Time**                 | #21       | [`the-loom-game-time.md`](./the-loom-game-time.md), #421               | ✅ Shipped (L-371 to L-376, §3)               | Hatham to Daldockley by trail takes about 6 hours and the play view shows "Day 1, evening"                                                                                                                                       |
 | **6 — Studio and new worlds** | #22       | One per epic (§4)                                                      | ✅ L-700 and L-720 shipped (Build order)      | A world begun from a studio-made map image, its places pinned and its regions painted over MCP, is published and played with no Azgaar in the loop. A cross-country trip is stopped by an event in a painted forest, and goes on |
 | **7 — Map-first Loom**        | #23       | One per epic (§4)                                                      | 📋 Planned (§4)                               | A game is played from a full-window map: narration and rolls in a side panel, characters as round portrait tokens, and a click on ground, a place or a person offers what can be done there                                      |
 | **8 — People and trade**      | #24       | One per epic (§4)                                                      | 📋 Planned (§4)                               | A player buys a sword from the smith in the world's own coin; it lands in their inventory, and the shop's stock drops. A companion follows them out and speaks in a voice of their own                                           |
@@ -38,8 +38,9 @@ Phases are numbered in the order they were planned, not the order they are built
 3. **L-700 Image studio** (#523). **Shipped** (L-701 the library, L-702 the studio page, L-703 library tools, L-704 worlds use library images, L-705 today's art into the library, L-706 costs, L-707 generation, L-708 editing and L-709 styles).
 4. **L-720 UI rewrite** (#525), right after the studio, to show the new artwork well. It carries over the finished town views. **Shipped** (L-721 the shell, L-722 the map engine, L-723 the town level, L-724 the battle level, L-725 between levels, L-726 the panel's content, L-727 the art, L-728 phones and L-729 the look).
 5. **Phase 3d:** L-370 Game time (#421). **Shipped** (L-371 time in saves, L-372 route lengths, L-373 travel takes time, L-374 waiting, L-375 the GM knows the time and L-376 time in the play view).
-6. **Phase 9 — Game systems:** L-800 the system engine, then L-810 character sheets (decided 2026-10-14). New worlds then pick a system as they are made, and Phases 7 and 8 build on the sheet.
-7. **L-710 Worlds without Azgaar** (#524), then L-360 off-road travel (#418), then the rest of Phases 7 and 8 in their order (§4).
+6. **Phase 9 — Game systems:** L-800 the system engine, then L-810 character sheets (with L-815 effects), then L-820 combat and L-830 advancement (decided 2026-10-14, revised 2026-10-16). New worlds then pick a system as they are made, and Phases 7 and 8 build on the sheet.
+7. **L-900 Map levels to any depth**, designed now ([`scenarios.md`](./scenarios.md), decided 2026-10-16) and built with or just before L-710, so worlds aren't rebuilt twice. L-910 vehicles is designed alongside it.
+8. **L-710 Worlds without Azgaar** (#524), then L-360 off-road travel (#418), then the rest of Phases 7 and 8 in their order (§4). The dungeon epic (G6) comes early in this, as sword and sorcery is the first reference game.
 
 Phases are planned groups. This list, not the phase numbers, says what is built next.
 
@@ -76,8 +77,8 @@ Phases are planned groups. This list, not the phase numbers, says what is built 
 
 L-370 and its sub-issues (#499–504) moved from the Phase 3b milestone (#19) to their own, #21 (2026-10-14). L-690, which belongs to no phase, sits with the studio in Phase 6's milestone (#22).
 
-| Epic            | Issue | State                                                                                                                                                                | Depends on                                                                   |
-| --------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Epic            | Issue | State                                                                                                                                                                                         | Depends on                                                                   |
+| --------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | L-370 Game time | #421  | ✅ Shipped (2026-10-15). Designed in [`the-loom-game-time.md`](./the-loom-game-time.md) (decided 2026-10-08, revisited 2026-10-15 after the UI rewrite); sub-issues L-371 to L-376 (#499–504) | Phase 3c: turns become time (6 s a battle-map turn, about 5 min a town turn) |
 
 **Order:** Phase 3d follows L-690, L-700 and L-720 (Build order, above). Plan L-370's sub-issues before it starts.
@@ -130,7 +131,20 @@ Designed in [`game-systems.md`](./game-systems.md) (decided 2026-10-14). A world
 | ----------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | **L-800 The system engine** (#606)        | 1     | **Designed**; sub-issues L-801 to L-805 planned, filed when next. Systems as data with MCP tools; a safe formula language with dice, tables and breakdowns; checks with degrees, a named difficulty ladder, opposed rolls, INTERPRET proposing and ADJUDICATE rolling; a d20 fantasy and a dice-pool sci-fi system built in; tap-to-roll cards | L-720 (L-726 roll cards) |
 | **L-810 Character sheets** (#607)         | 2     | **Designed**; sub-issues L-811 to L-814 planned, filed when next. Attributes, resources and level in every system, with skills, traits, conditions and derived values optional; guided creation; NPC sheets and stat blocks; the Character panel (which L-730 later adds portraits to) and a strip on the map                                  | L-800                    |
-| **Modules**, each its own epic from L-820 | 3+    | Not yet designed. In order: combat (L-820), powers, social conflict, crafting, ship battle, chases, hacking, mass battle                                                                                                                                                                                                                       | L-810                    |
+| **L-820 Combat**                          | 3     | Not yet designed. The first module; also falling to 0 (system-set: down and dying, then saved, captured or dead), rests as waits that restore, and hostile creatures' fight behaviours                                                                                                                                                         | L-810                    |
+| **L-830 Advancement**                     | 4     | Not yet designed. Experience and levels, and improving by use                                                                                                                                                                                                                                                                                  | L-820                    |
+| **Modules**, each its own epic from L-840 | 5+    | Not yet designed. In order: powers, social conflict, crafting (alchemy, machines, repair, gathering), ship battle, chases, hacking, mass battle                                                                                                                                                                                                | L-810                    |
+
+### Reference games and architecture (planned 2026-10-16)
+
+Four reference games, in the order they should become playable: **sword and sorcery** with dungeon crawls, **steampunk** with guns, trains and airships, a **darker wizarding world**, and a **space odyssey** ([`scenarios.md`](./scenarios.md)). Every design is checked against them, and each gets a small test world used in exit criteria. Two architectural gaps are designed now:
+
+| Epic                                                  | State                                                                                                                                                                                                                                                    | Depends on |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **L-900 Map levels to any depth** _(design to write)_ | Decided in outline (LV1–LV6): any map can open into a map below; region, area and grid maps at any depth; each map its own units and travel; the build gate and zoom at every depth; templates for ordinary places (G9). Built with or just before L-710 | L-720      |
+| **L-910 Vehicles as places** _(design to write)_      | Decided in outline (VH1–VH6): a vehicle is a map that moves along the map above it; course by player, timetable or captain; a stat block with parts that take damage; owned; left where it stops or by smaller craft; a crew (G10)                       | L-900      |
+
+The other gaps, each designed when next: a **dungeon epic** (light, traps, secrets, searching, floor tools; after combat), a **calendar epic** (timetables, NPC routines, opening hours, dated events; before trains), and **quests** (after Phase 8).
 
 ## 5. Later
 
@@ -144,19 +158,19 @@ Designed in [`game-systems.md`](./game-systems.md) (decided 2026-10-14). A world
 
 Ideas from earlier phases with no epic yet. Each needs a home before it is planned.
 
-| Idea                                                                                                      | From                    | Likely home                              |
-| --------------------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------------- |
-| Quests and a journal: work taken on, from whom, and its progress                                          | L-750 (IN4)             | Its own epic, after Phase 8              |
-| Combat: initiative, other characters' turns, reactions, cover                                             | Movement and vision §11 | Phase 9: the combat module (L-820)       |
-| Theft: stealing from a shop's locked stock, and what follows                                              | L-780 intake            | After L-780                              |
-| Spending limits on image generation (L-700 only records cost at first)                                    | L-700 intake            | When costs call for it                   |
-| Light: darkness, torches, darkvision                                                                      | Movement and vision §11 | After L-370 (night needs time)           |
-| Hidden places; places learned of from a map or a conversation                                             | Movement and vision §11 | After L-670                              |
-| Fatigue and hunger                                                                                        | L-370 (#421)            | After L-370                              |
-| Building tools: a wall editor on the Cartographer page, walls from SVG art, Watabou City Generator import | Movement and vision §11 | A Cartographer epic                      |
-| Several maps per location (floors, parts of a large structure): tools and views                           | Layered worlds §2       | A Cartographer epic                      |
-| A cheaper model for INTERPRET (Flash-Lite), tried against recorded turns                                  | Movement and vision §11 | Its own story, any time                  |
-| Fixing World State and saves over MCP                                                                     | Cartographer §6         | Needs its own rules for live player data |
+| Idea                                                                                                      | From                    | Likely home                                      |
+| --------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------ |
+| Quests and a journal: work taken on, from whom, and its progress                                          | L-750 (IN4)             | Its own epic, after Phase 8                      |
+| Combat: initiative, other characters' turns, reactions, cover                                             | Movement and vision §11 | Phase 9: the combat module (L-820)               |
+| Theft: stealing from a shop's locked stock, and what follows                                              | L-780 intake            | After L-780                                      |
+| Spending limits on image generation (L-700 only records cost at first)                                    | L-700 intake            | When costs call for it                           |
+| Light: darkness, torches, darkvision                                                                      | Movement and vision §11 | The dungeon epic (scenarios.md, G6)              |
+| Hidden places; places learned of from a map or a conversation                                             | Movement and vision §11 | The dungeon epic (secrets), and later            |
+| Fatigue and hunger                                                                                        | L-370 (#421)            | After L-370                                      |
+| Building tools: a wall editor on the Cartographer page, walls from SVG art, Watabou City Generator import | Movement and vision §11 | A Cartographer epic                              |
+| Several maps per location (floors, parts of a large structure): tools and views                           | Layered worlds §2       | L-900 map levels; the dungeon epic's floor tools |
+| A cheaper model for INTERPRET (Flash-Lite), tried against recorded turns                                  | Movement and vision §11 | Its own story, any time                          |
+| Fixing World State and saves over MCP                                                                     | Cartographer §6         | Needs its own rules for live player data         |
 
 ---
 
