@@ -362,6 +362,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Game systems (L-801; planning/game-systems.md §4.1): written over MCP
+    // and read through the Loom's and the Cartographer's functions only.
+    match /loom_systems/{systemId} {
+      allow read, write: if false;
+    }
+
     // ── App registry ──────────────────────────────────────
 
     match /apps/{appId} {

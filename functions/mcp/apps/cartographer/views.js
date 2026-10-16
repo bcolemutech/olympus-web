@@ -225,6 +225,16 @@ function worldOverview(meta, world) {
     status: world.status,
     canonVersion: world.canonVersion,
     startingLocation: start ? ref(world.locations, start) : null,
+    // Its game system (L-801): the one it names, or the built-in it plays by
+    // until it names one.
+    system: world.system
+      ? {
+          id: world.system.id,
+          name: world.system.name,
+          version: world.system.version || 0,
+          ...(world.systemId ? {} : { notChosen: true }),
+        }
+      : { id: world.systemId, missing: true },
     readyToPublish: missing.length === 0,
     ...(missing.length ? { missing } : {}),
     map: {

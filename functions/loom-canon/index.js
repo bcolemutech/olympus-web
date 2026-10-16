@@ -117,6 +117,8 @@ function entitySnippet(world, entityId) {
 
 // ── Firestore-backed worlds ──────────────────────────────────────────────
 
+const systems = require('./systems');
+
 const WORLDS_COLLECTION = 'loom_worlds';
 const ENTITY_COLLECTIONS = [
   'locations',
@@ -176,6 +178,8 @@ async function readFirestoreWorld(db, worldId, meta) {
     cover: meta.cover || null,
     // The image studio's settings (L-709): its default style.
     studio: meta.studio || null,
+    // Its game system (L-801; planning/game-systems.md): set over MCP, or none.
+    systemId: meta.systemId || null,
     rules: meta.rules || {},
   };
   ENTITY_COLLECTIONS.forEach(function (name, i) {
@@ -202,14 +206,34 @@ async function loadWorld(worldId, { db, playableOnly = true } = {}) {
   if (LOADABLE_STATUSES.indexOf(meta.status) === -1) return null;
   if (playableOnly && meta.status !== 'published') return null;
 
+  // Its game system as it is now (L-801; SY2): read on every load, since a
+  // system changes without the world's canonVersion changing. The built-in
+  // fantasy system when the world names none (SY4); null when it names one
+  // that doesn't exist.
+  const system = await systems.loadSystem(db, meta.systemId || null);
+  const systemKey = system ? system.id + '@' + (system.version || 0) : 'none';
+
   const cached = worldCache.get(worldId);
-  if (cached && cached.canonVersion === meta.canonVersion && cached.world.status === meta.status) {
+  if (
+    cached &&
+    cached.canonVersion === meta.canonVersion &&
+    cached.world.status === meta.status &&
+    cached.systemKey === systemKey
+  ) {
     return cached.world;
   }
 
-  const world = await readFirestoreWorld(db, worldId, meta);
-  worldCache.set(worldId, { canonVersion: meta.canonVersion, world: world });
-  return world;
+  const world =
+    cached && cached.canonVersion === meta.canonVersion && cached.world.status === meta.status
+      ? cached.world
+      : await readFirestoreWorld(db, worldId, meta);
+  const withSystem = Object.freeze(Object.assign({}, world, { system: system }));
+  worldCache.set(worldId, {
+    canonVersion: meta.canonVersion,
+    systemKey: systemKey,
+    world: withSystem,
+  });
+  return withSystem;
 }
 
 /** Test hook: forget every cached Firestore world. */

@@ -1,6 +1,6 @@
 # The Loom — Game Systems and Modules — Design Document v0.1
 
-**Status:** Decided (2026-10-14). L-800's sub-issues filed (2026-10-16): L-801 to L-805 (#627–631). The gap sheet (§3) is answered. Epics and sub-issues are planned (§6) and are filed when this phase is next.
+**Status:** Decided (2026-10-14). L-800's sub-issues filed (2026-10-16): L-801 to L-805 (#627–631). The gap sheet (§3) is answered. In progress. Shipped: L-801, systems as data: `loom_systems` (server only) and `functions/loom-canon/systems.js` (the shape, its checks on save, the built-in `d20-fantasy` as a placeholder until L-804, copies); `world.systemId`, and `loadWorld` gives every world its system at its latest version (`world.system`); the MCP tools `list_systems`, `get_system`, `set_system`, `copy_system`, and `update_world`'s `systemId`; the world criterion `world.system` (weight 15, rubric version 6). L-802 is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** 9 — Game systems (milestone #25, [`roadmap.md`](./roadmap.md)). Built after Phase 3d and before L-710 (the Build order).
 **Replaces:** L-202 "richer rule sets" (#313). Its combat becomes this phase's first module; L-200, the world tick, stays in Phase 2.
