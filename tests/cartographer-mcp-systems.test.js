@@ -172,7 +172,7 @@ test('the tools are offered, and update_world takes systemId', async () => {
   expect(Object.keys(update.inputSchema.properties)).toContain('systemId');
 });
 
-test('list_systems: the built-in fantasy system, before any is written', async () => {
+test('list_systems: the two built-in systems, before any is written (L-804)', async () => {
   expect((await ok('list_systems')).systems).toEqual([
     {
       id: 'd20-fantasy',
@@ -180,6 +180,15 @@ test('list_systems: the built-in fantasy system, before any is written', async (
       version: 0,
       builtIn: true,
       attributes: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'],
+      optional: ['skills', 'traits'],
+      modules: [],
+    },
+    {
+      id: 'pool-scifi',
+      name: 'Dice-pool Sci-fi',
+      version: 0,
+      builtIn: true,
+      attributes: ['Body', 'Reflex', 'Mind', 'Presence'],
       optional: ['skills', 'traits'],
       modules: [],
     },
@@ -256,7 +265,9 @@ test('copy_system: a new, named system, independent of its source', async () => 
     version: 2,
     gmNotes: 'Sea mist.',
   });
-  expect((await ok('get_system', { systemId: 'd20-fantasy' })).system.gmNotes).toBe('');
+  expect((await ok('get_system', { systemId: 'd20-fantasy' })).system.gmNotes).toMatch(
+    /^Heroic fantasy/
+  );
   expect(
     await refused('copy_system', { fromSystemId: 'star-pool', id: 'isles-fantasy', name: 'X' })
   ).toMatch(/already a system "isles-fantasy"/);
@@ -318,8 +329,10 @@ test('test_roll: a check for a sample character, with its breakdown (L-803)', as
     formula: '1d20 + modifier + rank',
     rolledWith: { attribute: 'DEX', skill: 'Stealth' },
     rung: 'Hard',
-    difficulty: 20,
-    degree: expect.stringMatching(/^(criticalSuccess|success|failure|criticalFailure)$/),
+    difficulty: 16,
+    degree: expect.stringMatching(
+      /^(criticalSuccess|success|successAtCost|failure|criticalFailure)$/
+    ),
   });
   // DEX 16 is +3, Stealth 2: the die and 5.
   const die = roll.breakdown.terms[0];
@@ -345,7 +358,40 @@ test('test_roll: a check for a sample character, with its breakdown (L-803)', as
     rung: 'Routine',
   });
   expect(pool.breakdown.terms.find((t) => t.kind === 'count').rolls).toHaveLength(3);
+});
 
+test('test_roll: the built-in systems’ odds, rung by rung, over seeded rolls (L-804)', async () => {
+  // How often an untrained, middling character succeeds at each rung, at a
+  // cost or better: a bare d20 in the fantasy system, three d10s in the
+  // sci-fi one (where one success short is still a success, at a cost).
+  const expected = {
+    'd20-fantasy': [0.55, 0.4, 0.25, 0.1, 0.05],
+    'pool-scifi': [0.784, 0.784, 0.352, 0.064, 0],
+  };
+  const SEEDS = 120;
+  for (const [systemId, rates] of Object.entries(expected)) {
+    const { system } = await ok('get_system', { systemId });
+    for (const [i, rung] of system.checks.ladder.entries()) {
+      let wins = 0;
+      for (let seed = 0; seed < SEEDS; seed++) {
+        const roll = await ok('test_roll', {
+          systemId,
+          skill: system.checks.lock.skill,
+          rung: rung.name,
+          seed,
+        });
+        if (roll.success) wins += 1;
+      }
+      expect([systemId, rung.name, Math.abs(wins / SEEDS - rates[i]) <= 0.1]).toEqual([
+        systemId,
+        rung.name,
+        true,
+      ]);
+    }
+  }
+});
+
+test('test_roll refusals', async () => {
   expect(await refused('test_roll', { systemId: 'd20-fantasy', skill: 'Juggling' })).toBe(
     'There is no skill "Juggling" in this world’s rules.'
   );

@@ -160,7 +160,8 @@ describe('evaluate — generic (dice) verbs', () => {
       evaluate(makeProposedAction({ verb: 'search' }), {}, makeCharacterState(), dice, CANON_WORLD)
         .roll;
     // With no check proposed, a plain attempt at the system's easiest rung
-    // (L-803): the built-in fantasy system's Easy, 10.
+    // (L-803): the built-in fantasy system's Easy, 10; reached exactly, a
+    // success at a cost (L-804).
     expect(roll(DEFAULT_DIFFICULTY_CLASS)).toEqual({
       die: 20,
       value: DEFAULT_DIFFICULTY_CLASS,
@@ -170,7 +171,7 @@ describe('evaluate — generic (dice) verbs', () => {
       total: 10,
       formula: '1d20 + modifier + rank',
       rung: 'Easy',
-      degree: 'success',
+      degree: 'successAtCost',
       breakdown: {
         shown: '10 + 0 + 0',
         terms: [

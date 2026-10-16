@@ -489,13 +489,14 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
     expect(attempt('pick_lock', beside(), 15)).toEqual({
       outcome: 'success',
       // For the panel's roll card (L-726), with the check (L-803): the
-      // lock's 15 is the fantasy system's Moderate rung.
+      // lock's 15, named by the fantasy system's nearest rung, Hard (16);
+      // reaching it exactly is a success at a cost (L-804).
       roll: expect.objectContaining({
         ...lock,
         value: 15,
         success: true,
-        rung: 'Moderate',
-        degree: 'success',
+        rung: 'Hard',
+        degree: 'successAtCost',
       }),
       mutations: [doorTo('closed'), used],
       constraints: ['The lock gives way: the inner door is unlocked.'],

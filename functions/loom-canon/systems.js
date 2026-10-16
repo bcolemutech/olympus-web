@@ -34,9 +34,9 @@
  * Sheet field ids (attributes, resources, skills, derived values) are the
  * names formulas use, so they are unique across the sheet.
  *
- * A world without a system reads as the built-in fantasy system (SY4). Until
- * L-804 writes the built-in systems, `d20-fantasy` is a placeholder here with
- * the same id; built-in ids can't be set over MCP, only copied (SY5).
+ * A world without a system reads as the built-in fantasy system (SY4). The
+ * built-in systems, `d20-fantasy` and `pool-scifi`, are in ./built-in-systems.js
+ * (L-804); their ids can't be set over MCP, only copied (SY5).
  *
  * Every save uses a system's latest version (SY2): loading a world loads its
  * system as it is now. `misfits` is where L-811 says what of a sheet no
@@ -70,58 +70,10 @@ const MAX_LIST = 60;
 const MAX_FORMULA = 500;
 const MAX_TEXT = 4000;
 
-// The built-in fantasy system's placeholder (SY4), until L-804 writes it out.
-const PLACEHOLDER_FANTASY = {
-  id: DEFAULT_SYSTEM_ID,
-  name: 'd20 Fantasy',
-  credits: [{ source: 'The Loom', licence: 'Our own' }],
-  words: { health: 'Hit points', level: 'Level' },
-  sheet: {
-    attributes: [
-      ['STR', 'Strength'],
-      ['DEX', 'Dexterity'],
-      ['CON', 'Constitution'],
-      ['INT', 'Intelligence'],
-      ['WIS', 'Wisdom'],
-      ['CHA', 'Charisma'],
-    ].map(([id, name]) => ({ id, name, min: 1, max: 20, modifier: `floor((${id} - 10) / 2)` })),
-    resources: [{ id: 'health', name: 'Hit points', max: '8 + CON' }],
-    level: { min: 1, max: 20 },
-    optional: ['skills', 'traits'],
-    skills: [
-      ['Athletics', 'STR'],
-      ['Acrobatics', 'DEX'],
-      ['Stealth', 'DEX'],
-      ['Endurance', 'CON'],
-      ['Lore', 'INT'],
-      ['Perception', 'WIS'],
-      ['Persuasion', 'CHA'],
-    ].map(([id, attribute]) => ({ id, name: id, attribute })),
-    traits: [],
-  },
-  checks: {
-    formula: '1d20 + modifier + rank',
-    // A natural 20 or 1 (L-803).
-    degrees: { criticalSuccess: 'natural = 20', criticalFailure: 'natural = 1' },
-    // Picking a lock (L-626 locks): Dexterity.
-    lock: { attribute: 'DEX' },
-    ladder: [
-      { name: 'Easy', value: 10 },
-      { name: 'Moderate', value: 15 },
-      { name: 'Hard', value: 20 },
-      { name: 'Very hard', value: 25 },
-      { name: 'Nearly impossible', value: 30 },
-    ],
-  },
-  creation: { method: 'array', values: [15, 14, 13, 12, 10, 8] },
-  advancement: {},
-  modules: {},
-  gmNotes: '',
-};
-
-// Built-in systems by id: set by code (L-804), copied over MCP, never set there.
-const BUILT_IN = Object.freeze({ [DEFAULT_SYSTEM_ID]: PLACEHOLDER_FANTASY });
-const RESERVED_IDS = Object.freeze([DEFAULT_SYSTEM_ID, 'pool-scifi']);
+// The built-in systems (SY3; L-804): set in code, copied over MCP, never set there.
+const { FANTASY, SCIFI } = require('./built-in-systems');
+const BUILT_IN = Object.freeze({ [FANTASY.id]: FANTASY, [SCIFI.id]: SCIFI });
+const RESERVED_IDS = Object.freeze(Object.keys(BUILT_IN));
 
 class SystemError extends Error {
   constructor(errors) {
@@ -594,6 +546,16 @@ function misfits(system, sheet) {
   return [];
 }
 
+/**
+ * What a world made before systems needs to name one (SY4; L-804): the
+ * built-in fantasy system, which it already plays by, written down so it
+ * is chosen. `{ systemId }` for the world's document, or null when it names
+ * one already.
+ */
+function systemBackfill(world) {
+  return world && world.systemId ? null : { systemId: DEFAULT_SYSTEM_ID };
+}
+
 /** The store over Firestore, for the MCP tools: `getDb` is called lazily. */
 function createSystemStore(getDb) {
   return {
@@ -621,4 +583,5 @@ module.exports = {
   setSystem,
   copySystem,
   misfits,
+  systemBackfill,
 };

@@ -299,8 +299,8 @@ describe('a system’s formulas, checked on save', () => {
     s.sheet.skills.push({ id: 'd20', name: 'Dice', attribute: 'DEX' });
     s.sheet.skills.push({ id: 'rank', name: 'Rank', attribute: 'DEX' });
     expect(validateSystem(s).errors).toEqual([
-      'sheet.skills[7].id "d20" is a word formulas use; choose another.',
-      'sheet.skills[8].id "rank" is a word formulas use; choose another.',
+      'sheet.skills[13].id "d20" is a word formulas use; choose another.',
+      'sheet.skills[14].id "rank" is a word formulas use; choose another.',
     ]);
   });
 
@@ -327,9 +327,8 @@ describe('a system’s formulas, checked on save', () => {
     s.checks.formula = '2d6 + modifier';
     expect(validateSystem(s).warnings).toEqual([
       "Attribute WIS isn't used by any skill or formula.",
-      'checks.ladder: "Hard" (20) can never be reached; the check comes to at most 17.',
-      'checks.ladder: "Very hard" (25) can never be reached; the check comes to at most 17.',
-      'checks.ladder: "Nearly impossible" (30) can never be reached; the check comes to at most 17.',
+      'checks.ladder: "Very hard" (19) can never be reached; the check comes to at most 16.',
+      'checks.ladder: "Nearly impossible" (22) can never be reached; the check comes to at most 16.',
     ]);
     // Read through mod() elsewhere, it is used.
     s.sheet.resources[0].max = '8 + mod(WIS)';

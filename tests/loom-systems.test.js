@@ -231,11 +231,12 @@ describe('systems in Firestore', () => {
     );
   });
 
-  test('the list has every stored system and the built-in', async () => {
+  test('the list has every stored system and the built-ins', async () => {
     await systems.setSystem(db, pirates(), { uid: 'builder' });
     const list = await systems.listSystems(db);
     expect(list.map((s) => [s.id, s.version, Boolean(s.builtIn)])).toEqual([
       [DEFAULT_SYSTEM_ID, 0, true],
+      ['pool-scifi', 0, true],
       ['pirate-pool', 1, false],
     ]);
   });

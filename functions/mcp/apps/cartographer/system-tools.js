@@ -155,9 +155,10 @@ function systemTools({ systems }) {
       title: 'List game systems',
       description:
         'Every game system a world can play by: its id, name, version, attributes, the ' +
-        `optional sheet parts it switches on, and its modules. "${DEFAULT_SYSTEM_ID}" is ` +
-        'built in (worlds that name no system play by it); built-in systems are changed by ' +
-        'copying them (copy_system).',
+        'optional sheet parts it switches on, and its modules. Two are built in: ' +
+        `"${DEFAULT_SYSTEM_ID}", a d20 fantasy (worlds that name no system play by it), and ` +
+        '"pool-scifi", a dice-pool sci-fi; built-in systems are changed by copying them ' +
+        '(copy_system).',
       inputSchema: {},
       annotations: readOnly,
       handler: async () => ({ systems: (await systems.list()).map(row) }),
