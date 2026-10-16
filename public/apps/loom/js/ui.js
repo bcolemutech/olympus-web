@@ -107,6 +107,7 @@
       latestLine: '', // the latest narration, for the collapsed panel
       menu: null, // the menu bar's open menu
       menuButtons: [], // buttons later epics add to the menu bar
+      rules: false, // the rules reference is open (L-805)
     }),
   });
 

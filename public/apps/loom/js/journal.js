@@ -58,32 +58,77 @@
 
   // ── What a roll says ──────────────────────────────
 
-  function rollLine(roll) {
-    return (
-      'd' +
-      roll.die +
-      ' rolled ' +
-      roll.value +
-      ' against ' +
-      roll.against +
-      ' (' +
-      roll.difficulty +
-      '): ' +
-      (roll.success ? 'pass' : 'fail')
-    );
+  // A roll from loomPlayTurn (L-726, L-805): its dice, its line with each
+  // term named, and the degree in the system's words. Older rolls carry only
+  // the die and its value.
+  function diceOf(roll) {
+    if (roll.dice && roll.dice.length) return roll.dice;
+    return [{ sides: roll.die, value: roll.value, kept: true }];
   }
 
+  function verdictOf(roll) {
+    return roll.verdict || (roll.success ? 'Pass' : 'Fail');
+  }
+
+  // "d20 (14) + Dexterity (2) + Stealth (2) = 18"
+  function sumOf(roll) {
+    var line = roll.line || 'd' + roll.die + ' (' + roll.value + ')';
+    var total = roll.total !== undefined ? roll.total : roll.value;
+    return line + ' = ' + total;
+  }
+
+  // "vs Hard (16)"
+  function versus(roll) {
+    return 'vs ' + (roll.rung || roll.against) + ' (' + roll.difficulty + ')';
+  }
+
+  function rollLine(roll) {
+    return sumOf(roll) + ' ' + versus(roll) + ': ' + verdictOf(roll).toLowerCase();
+  }
+
+  var TUMBLE = 700; // ms the dice tumble before they land
+  var TUMBLE_STEP = 70; // ms between faces as they tumble
+
+  // One die: its face, and in a pool whether it counted; a die not kept
+  // (the lower of two d20s) is dimmed.
+  function Die(props) {
+    var die = props.die;
+    var classes = ['loom-die'];
+    if (props.rolling) classes.push('is-rolling');
+    else if (props.face === null) classes.push('is-waiting');
+    else {
+      if (die.kept === false) classes.push('is-dropped');
+      if (die.counted === true) classes.push('is-counted');
+      if (die.counted === false) classes.push('is-missed');
+    }
+    return html`<span class=${classes.join(' ')} data-sides=${die.sides}>
+      <span class="loom-die-face">${props.face === null ? '?' : props.face}</span>
+      <span class="loom-die-sides">d${die.sides}</span>
+    </span>`;
+  }
+
+  /**
+   * A roll card (DC5, DC6): the dice to tap. Tapping tumbles them and they
+   * land on the server's result, fixed when the turn ran; then the line with
+   * each term named, against the rung, and the degree. It collapses to one
+   * line once its turn is read; a click opens or closes it. `landed` false
+   * shows the dice waiting for the tap.
+   */
   function RollCard(props) {
     var roll = props.roll;
+    var dice = diceOf(roll);
     var pair = hooks.useState(true);
     var open = pair[0];
     var setOpen = pair[1];
+    var tumble = hooks.useState(null); // the faces shown while tumbling
+    var faces = tumble[0];
+    var setFaces = tumble[1];
     var touched = hooks.useRef(false);
 
     // Collapsed to one line once read: a little after its turn is shown.
     hooks.useEffect(
       function () {
-        if (!props.read || touched.current) return undefined;
+        if (!props.read || !props.landed || touched.current) return undefined;
         var timer = window.setTimeout(function () {
           setOpen(false);
         }, ROLL_READ);
@@ -91,30 +136,106 @@
           window.clearTimeout(timer);
         };
       },
-      [props.read]
+      [props.read, props.landed]
     );
 
-    var verdict = roll.success ? 'Pass' : 'Fail';
+    // Tumbling: random faces, then the server's.
+    hooks.useEffect(
+      function () {
+        if (!faces) return undefined;
+        var started = Date.now();
+        var timer = window.setInterval(function () {
+          if (Date.now() - started >= TUMBLE) {
+            window.clearInterval(timer);
+            setFaces(null);
+            props.onLand();
+            return;
+          }
+          setFaces(
+            dice.map(function (die) {
+              return 1 + Math.floor(Math.random() * die.sides);
+            })
+          );
+        }, TUMBLE_STEP);
+        return function () {
+          window.clearInterval(timer);
+        };
+      },
+      [Boolean(faces)]
+    );
+
+    var rolling = Boolean(faces);
+    var waiting = !props.landed && !rolling;
+    function startRolling() {
+      if (reducedMotion()) return props.onLand();
+      setFaces(
+        dice.map(function () {
+          return '?';
+        })
+      );
+    }
+
+    var degree = roll.degree || (roll.success ? 'success' : 'failure');
+    // Pass or fail shows only once the dice land.
+    var classes = ['loom-roll'];
+    if (props.landed) classes.push(roll.success ? 'is-pass' : 'is-fail', 'is-' + degree);
+    if (open || !props.landed) classes.push('is-open');
+    if (waiting) classes.push('is-waiting');
+    if (rolling) classes.push('is-rolling');
+
+    var label = waiting
+      ? 'Roll the dice: ' +
+        sumOf(roll)
+          .split(' = ')[0]
+          .replace(/ \(\d+\)/g, '') +
+        ' ' +
+        versus(roll)
+      : rolling
+        ? 'Rolling'
+        : rollLine(roll);
+
     return html`<button
-      class=${'loom-roll' + (roll.success ? ' is-pass' : ' is-fail') + (open ? ' is-open' : '')}
+      class=${classes.join(' ')}
       type="button"
-      aria-expanded=${String(open)}
-      aria-label=${rollLine(roll)}
+      aria-expanded=${String(open || !props.landed)}
+      aria-label=${label}
+      disabled=${rolling}
       onClick=${function (event) {
         event.stopPropagation();
+        if (waiting) return startRolling();
+        if (rolling) return;
         touched.current = true;
         setOpen(!open);
       }}
     >
-      ${open
-        ? html`<span class="loom-roll-die" aria-hidden="true">${roll.value}</span>
-            <span class="loom-roll-body" aria-hidden="true">
-              <span class="loom-roll-what">d${roll.die} against ${roll.against}</span>
-              <span class="loom-roll-need">needs ${roll.difficulty} or more</span>
+      ${open || !props.landed
+        ? html`<span class="loom-roll-dice" aria-hidden="true">
+              ${dice.map(function (die, i) {
+                return html`<${Die}
+                  key=${i}
+                  die=${die}
+                  rolling=${rolling}
+                  face=${rolling ? faces[i] : waiting ? null : die.value}
+                />`;
+              })}
             </span>
-            <span class="loom-roll-verdict" aria-hidden="true">${verdict}</span>`
+            <span class="loom-roll-body" aria-hidden="true">
+              ${waiting
+                ? html`<span class="loom-roll-tap">Tap to roll</span>
+                    <span class="loom-roll-need">${versus(roll)}</span>`
+                : rolling
+                  ? html`<span class="loom-roll-tap">Rolling…</span>`
+                  : html`<span class="loom-roll-what">${sumOf(roll)}</span>
+                      <span class="loom-roll-need">
+                        ${versus(roll)}${roll.rung && roll.against !== roll.rung
+                          ? ' · ' + roll.against
+                          : ''}
+                      </span>`}
+            </span>
+            ${props.landed &&
+            html`<span class="loom-roll-verdict" aria-hidden="true">${verdictOf(roll)}</span>`}`
         : html`<span class="loom-roll-line" aria-hidden="true">
-            d${roll.die} ${roll.value} vs ${roll.difficulty} · ${verdict}
+            ${sumOf(roll)} ${versus(roll)} · ${verdictOf(roll)}
           </span>`}
     </button>`;
   }
@@ -186,16 +307,50 @@
     var pair = hooks.useState(!props.latest);
     var read = pair[0];
     var setRead = pair[1];
+    // A new turn's roll waits for the tap (DC5), and its narration with it;
+    // with reduced motion, or for an older turn, it has landed already.
+    var landing = hooks.useState(!entry.roll || !entry.reveal || reducedMotion());
+    var landed = landing[0];
+    var setLanded = landing[1];
+
+    // Showing the rest at once (a click, Space, Escape, a new turn) lands it too.
+    hooks.useEffect(
+      function () {
+        if (landed) return undefined;
+        function land() {
+          stop();
+          setLanded(true);
+        }
+        function stop() {
+          finishers = finishers.filter(function (f) {
+            return f !== land;
+          });
+        }
+        finishers.push(land);
+        return stop;
+      },
+      [landed]
+    );
+
     return html`<div class="loom-log-entry">
       ${entry.action && html`<p class="loom-log-action">${'> ' + entry.action}</p>`}
-      ${entry.roll && html`<${RollCard} roll=${entry.roll} read=${read || !props.latest} />`}
-      <${Narration}
+      ${entry.roll &&
+      html`<${RollCard}
+        roll=${entry.roll}
+        landed=${landed}
+        onLand=${function () {
+          setLanded(true);
+        }}
+        read=${read || !props.latest}
+      />`}
+      ${landed &&
+      html`<${Narration}
         text=${entry.text}
         reveal=${entry.reveal}
         onDone=${function () {
           setRead(true);
         }}
-      />
+      />`}
     </div>`;
   }
 

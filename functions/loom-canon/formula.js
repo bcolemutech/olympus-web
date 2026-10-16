@@ -472,9 +472,11 @@ const tidy = (n) => Math.round(n * 1e9) / 1e9;
  * Evaluates a formula: `values` gives each name's number, `system` its
  * modifier formulas and tables, `dice(sides)` each die (seeded(...) in
  * tests, the server's own source in play). Returns `{ total, type,
- * breakdown: { terms, shown } }`: a comparison's total is 1 or 0.
+ * breakdown: { terms, shown, named } }`: a comparison's total is 1 or 0.
+ * `shown` is the formula with each term's value; `named` names them too,
+ * by `labels` where given ("d20 (14) + Dexterity (2) + Stealth (2)"; L-805).
  */
-function evaluate(text, { values = {}, system = null, dice } = {}) {
+function evaluate(text, { values = {}, system = null, dice, labels = {} } = {}) {
   if (typeof dice !== 'function') throw new Error('formula.evaluate needs a dice source');
   const tree = typeof text === 'object' && text && text.k ? text : parse(text);
   const terms = [];
@@ -487,10 +489,13 @@ function evaluate(text, { values = {}, system = null, dice } = {}) {
     return v;
   };
 
-  // Each node gives { value, shown, prec }: `shown` is what the roll card
-  // reads, terms replaced by their values; `prec` places brackets in it.
-  function roll(n) {
-    const count = Math.floor(walk(n.count).value);
+  // Each node gives { value, shown, named, prec }: `shown` is the formula
+  // with terms replaced by their values, `named` with each term named and its
+  // value after it, as the roll card reads; `prec` places brackets in both.
+  const label = (name) => labels[name] || name;
+  const diceName = (expr) => expr.replace(/^1d/, 'd');
+  function roll(n, counted = walk(n.count)) {
+    const count = Math.floor(counted.value);
     if (count < 0 || count > MAX_DICE) {
       throw new FormulaError(`Can't roll ${count} dice (0 to ${MAX_DICE}).`);
     }
@@ -514,20 +519,22 @@ function evaluate(text, { values = {}, system = null, dice } = {}) {
   function walk(n) {
     switch (n.k) {
       case 'num':
-        return { value: n.v, shown: String(n.v), prec: 3 };
+        return { value: n.v, shown: String(n.v), named: String(n.v), prec: 3 };
       case 'name': {
         const value = nameValue(n.v);
         terms.push({ kind: 'field', name: n.v, value });
-        return { value, shown: String(value), prec: 3 };
+        return { value, shown: String(value), named: `${label(n.v)} (${value})`, prec: 3 };
       }
       case 'dice': {
         const { rolls, expr } = roll(n);
         const value = rolls.filter((r) => r.kept).reduce((sum, r) => sum + r.value, 0);
         terms.push({ kind: 'dice', expr, rolls, value });
-        return { value, shown: String(value), prec: 3 };
+        return { value, shown: String(value), named: `${diceName(expr)} (${value})`, prec: 3 };
       }
       case 'count': {
-        const { rolls, expr } = roll(n.pool);
+        // The pool's size, named where it is worked out: (Mind (3) + Tech (1))d10.
+        const size = walk(n.pool.count);
+        const { rolls, expr } = roll(n.pool, size);
         const than = walk(n.than).value;
         const meets = (v) => compare(v, n.op, than);
         const value = rolls.filter((r) => r.kept && meets(r.value)).length;
@@ -539,11 +546,18 @@ function evaluate(text, { values = {}, system = null, dice } = {}) {
           rolls: rolls.map((r) => ({ ...r, counted: r.kept && meets(r.value) })),
           value,
         });
-        return { value, shown: String(value), prec: 3 };
+        const pool = n.pool.count.k === 'num' ? diceName(expr) : `(${size.named})d${n.pool.sides}`;
+        return {
+          value,
+          shown: String(value),
+          named: `${pool} ${SIGNS[n.op] || n.op} ${than} (${value})`,
+          prec: 3,
+        };
       }
       case 'neg': {
         const a = walk(n.a);
-        return { value: -a.value, shown: '-' + (a.prec < 3 ? `(${a.shown})` : a.shown), prec: 3 };
+        const wrap = (t) => '-' + (a.prec < 3 ? `(${t})` : t);
+        return { value: -a.value, shown: wrap(a.shown), named: wrap(a.named), prec: 3 };
       }
       case 'bin': {
         const p = PRECEDENCE[n.op];
@@ -561,9 +575,14 @@ function evaluate(text, { values = {}, system = null, dice } = {}) {
                       throw new FormulaError('Division by zero.');
                     })()
                   : a.value / b.value;
-        const left = a.prec < p ? `(${a.shown})` : a.shown;
-        const right = b.prec <= p && b.prec < 3 ? `(${b.shown})` : b.shown;
-        return { value: tidy(value), shown: `${left} ${n.op} ${right}`, prec: p };
+        const left = (t) => (a.prec < p ? `(${t})` : t);
+        const right = (t) => (b.prec <= p && b.prec < 3 ? `(${t})` : t);
+        return {
+          value: tidy(value),
+          shown: `${left(a.shown)} ${n.op} ${right(b.shown)}`,
+          named: `${left(a.named)} ${n.op} ${right(b.named)}`,
+          prec: p,
+        };
       }
       case 'cmp': {
         const a = walk(n.a);
@@ -571,6 +590,7 @@ function evaluate(text, { values = {}, system = null, dice } = {}) {
         return {
           value: compare(a.value, n.op, b.value) ? 1 : 0,
           shown: `${a.shown} ${n.op} ${b.shown}`,
+          named: `${a.named} ${n.op} ${b.named}`,
           prec: 0,
         };
       }
@@ -590,7 +610,12 @@ function evaluate(text, { values = {}, system = null, dice } = {}) {
         evaluate(attr.modifier, { values: { ...values, [attr.id]: score }, system, dice }).total
       );
       terms.push({ kind: 'mod', name: attr.id, score, value });
-      return { value, shown: String(value), prec: value < 0 ? 2.5 : 3 };
+      return {
+        value,
+        shown: String(value),
+        named: `${label(attr.id)} (${value})`,
+        prec: value < 0 ? 2.5 : 3,
+      };
     }
     if (n.fn === 'table') {
       const name = n.args[0].v;
@@ -604,21 +629,34 @@ function evaluate(text, { values = {}, system = null, dice } = {}) {
           ? { total: row.value, breakdown: { terms: [] } }
           : evaluate(row.value, { values, system, dice });
       terms.push({ kind: 'table', name, input, value: inner.total, terms: inner.breakdown.terms });
-      return { value: inner.total, shown: String(inner.total), prec: 3 };
+      return {
+        value: inner.total,
+        shown: String(inner.total),
+        named: `${name} (${inner.total})`,
+        prec: 3,
+      };
     }
     const args = n.args.map(walk);
     const fn = { min: Math.min, max: Math.max, floor: Math.floor, ceil: Math.ceil }[n.fn];
     const value = fn(...args.map((a) => a.value));
-    return { value, shown: `${n.fn}(${args.map((a) => a.shown).join(', ')})`, prec: 3 };
+    return {
+      value,
+      shown: `${n.fn}(${args.map((a) => a.shown).join(', ')})`,
+      named: `${n.fn}(${args.map((a) => a.named).join(', ')})`,
+      prec: 3,
+    };
   }
 
   const out = walk(tree);
   return {
     total: out.value,
     type: tree.k === 'cmp' ? 'bool' : 'number',
-    breakdown: { terms, shown: out.shown },
+    breakdown: { terms, shown: out.shown, named: out.named },
   };
 }
+
+// How a pool's count reads on the roll card: "4d10 ≥ 7 (2)".
+const SIGNS = { '>=': '≥', '<=': '≤' };
 
 function compare(a, op, b) {
   if (op === '<=') return a <= b;

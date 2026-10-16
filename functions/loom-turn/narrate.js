@@ -13,6 +13,7 @@ const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
 const { recordOf, squaresOf, peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
+const checks = require('../loom-canon/checks');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -46,7 +47,39 @@ const clock = require('../loom-canon/clock');
 const MODEL_NAME = 'gemini-2.5-flash';
 const MAX_OUTPUT_TOKENS = 1024;
 
-function buildSystemInstruction(knownEntities) {
+// What each degree asks of the narration (game systems DC2; L-805).
+const DEGREE_GUIDANCE = {
+  criticalSuccess: 'it works better than hoped: give a real extra benefit',
+  success: 'it works as intended',
+  successAtCost: 'it works, but it costs something real: name the cost',
+  failure: 'it does not work; the situation moves on',
+  criticalFailure: 'it goes badly wrong: give a real complication',
+};
+
+// The world's game system for the narrator (L-805; game-systems.md §4.4):
+// its name, the words it uses for things, how to narrate each degree, and
+// its GM notes on tone and pacing.
+function buildSystemSection(canonWorld) {
+  const system = checks.systemOf(canonWorld);
+  const words = Object.entries(system.words || {})
+    .filter(([thing]) => !checks.DEGREE_NAMES[thing])
+    .map(([thing, word]) => thing + ' is called "' + word + '"');
+  const degrees = Object.keys(DEGREE_GUIDANCE)
+    .map((d) => '- ' + checks.degreeName(system, d) + ': ' + DEGREE_GUIDANCE[d] + '.')
+    .join('\n');
+  return (
+    'THE GAME SYSTEM: ' +
+    system.name +
+    '. Use its words' +
+    (words.length ? ': ' + words.join(', ') : '') +
+    '.\n' +
+    'When a check was rolled, the ROLL line gives its degree. Narrate by that degree:\n' +
+    degrees +
+    (system.gmNotes ? '\nGM notes for this system: ' + system.gmNotes : '')
+  );
+}
+
+function buildSystemInstruction(knownEntities, canonWorld) {
   const entityList = knownEntities
     .map((e) => '- ' + e.id + ' (' + e.kind + '): ' + e.name)
     .join('\n');
@@ -71,6 +104,8 @@ function buildSystemInstruction(knownEntities) {
     'of midday, lanterns lit at night), and narrate any dusk or dawn it says came on the ' +
     'way. Never state a different time of day, or more or less time passing, than it ' +
     'says.\n\n' +
+    buildSystemSection(canonWorld) +
+    '\n\n' +
     'Optionally suggest 2-4 short next actions as plain phrases (e.g. "search the wreck"). ' +
     'Leave empty if nothing obvious suggests itself.\n\n' +
     'Respond with ONLY a JSON object: { "narration": string, "inventedEntities": string[], ' +
@@ -362,6 +397,30 @@ function buildTurnSection(save, resolution) {
   );
 }
 
+// The check rolled this turn, if one was (L-805): what it was, its total,
+// the rung, and the degree in the system's words.
+function buildRollSection(resolution, canonWorld) {
+  const roll = resolution.roll;
+  if (!roll) return null;
+  const system = checks.systemOf(canonWorld);
+  const line = (r) =>
+    (r.line || r.formula || 'd' + r.die) +
+    ' = ' +
+    r.total +
+    ' against ' +
+    r.against +
+    (r.rung && r.rung !== r.against ? ' (' + r.rung + ')' : '') +
+    ': ' +
+    checks.degreeName(system, r.degree || (r.success ? 'success' : 'failure'));
+  return (
+    'ROLL (final):\n' +
+    line(roll) +
+    (resolution.opposed && resolution.opposed.roll
+      ? '\nThe other side rolled: ' + line(resolution.opposed.roll)
+      : '')
+  );
+}
+
 function buildUserMessage(params) {
   const {
     actionText,
@@ -373,6 +432,7 @@ function buildUserMessage(params) {
     turnSection,
     timeSection,
   } = params;
+  const rollSection = buildRollSection(resolution, canonWorld);
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
@@ -390,6 +450,7 @@ function buildUserMessage(params) {
     'Hard facts:\n' +
     constraintsText +
     '\n\n' +
+    (rollSection ? rollSection + '\n\n' : '') +
     (timeSection ? timeSection + '\n\n' : '') +
     'ROLLING SUMMARY:\n' +
     (recentSummary || '(none yet)') +
@@ -493,7 +554,7 @@ async function narrateResolution(params) {
   try {
     raw = await callGemini({
       modelName: MODEL_NAME,
-      systemInstruction: buildSystemInstruction(knownEntities),
+      systemInstruction: buildSystemInstruction(knownEntities, canonWorld),
       userMessage: buildUserMessage({
         actionText,
         resolution,

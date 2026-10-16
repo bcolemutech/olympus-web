@@ -40,6 +40,22 @@ const { DEFAULT_SYSTEM_ID, BUILT_IN } = require('./systems');
 const DEGREE_ORDER = ['criticalSuccess', 'criticalFailure', 'success', 'successAtCost'];
 const SUCCEEDS = ['criticalSuccess', 'success', 'successAtCost'];
 
+// The five degrees by name, best first (DC2; L-805): what the roll card and
+// the rules reference call them, unless the system's words name them.
+const DEGREE_NAMES = {
+  criticalSuccess: 'Critical success',
+  success: 'Success',
+  successAtCost: 'Success at a cost',
+  failure: 'Failure',
+  criticalFailure: 'Critical failure',
+};
+
+/** A degree in the system's words, or by its own name. */
+function degreeName(system, degree) {
+  const words = (system && system.words) || {};
+  return words[degree] || DEGREE_NAMES[degree] || degree;
+}
+
 // The rungs a lock's number difficulty was written against (a d20 scale),
 // for a system whose ladder doesn't span it (L-626 locks; mapped by place).
 const REFERENCE_LADDER = [10, 15, 20, 25, 30];
@@ -149,6 +165,22 @@ function valuesFor(system, character, check, dice) {
   return { values, attributeId, skillId: skill ? skill.id : null };
 }
 
+// What the roll card calls each name a check reads (L-805): the sheet's
+// fields by their names, and `attribute`, `modifier` and `rank` by what the
+// check is rolled with.
+function labelsFor(system, attributeId, skillId) {
+  const sheet = sheetOf(system);
+  const labels = {};
+  for (const part of ['attributes', 'resources', 'skills', 'derived']) {
+    for (const field of sheet[part] || []) labels[field.id] = field.name;
+  }
+  labels.level = (system.words && system.words.level) || 'Level';
+  const attribute = (sheet.attributes || []).find((a) => a.id === attributeId);
+  if (attribute) labels.attribute = labels.modifier = attribute.name;
+  labels.rank = skillId ? labels[skillId] : 'Untrained';
+  return labels;
+}
+
 // The first die kept in a breakdown: a d20's natural 20, say.
 function naturalOf(breakdown) {
   for (const term of breakdown.terms) {
@@ -188,7 +220,8 @@ function degreeOf(system, { result, difficulty, natural, type, values, dice }) {
 function rollCheck(system, { check = {}, character = null, difficulty = null, dice }) {
   const rung = difficulty || rungByName(system, check.rung) || system.checks.ladder[0];
   const { values, attributeId, skillId } = valuesFor(system, character, check, dice);
-  const result = formula.evaluate(system.checks.formula, { values, system, dice });
+  const labels = labelsFor(system, attributeId, skillId);
+  const result = formula.evaluate(system.checks.formula, { values, system, dice, labels });
   const natural = naturalOf(result.breakdown);
   const degree = degreeOf(system, {
     result: result.total,
@@ -253,6 +286,70 @@ function rollOpposed(system, { check = {}, character, opponent, opponentCheck, d
   return { attacker, defender };
 }
 
+// A degree's formula in words for players: "the die is 20".
+const READABLE = {
+  natural: 'the die',
+  result: 'the result',
+  difficulty: 'the difficulty',
+  '>=': 'is at least',
+  '<=': 'is at most',
+  '=': 'is',
+  '>': 'is over',
+  '<': 'is under',
+};
+function readable(text) {
+  return String(text).replace(/\b(natural|result|difficulty)\b|>=|<=|=|>|</g, (w) => READABLE[w]);
+}
+
+/**
+ * The rules reference (SY7; L-805): the system as players read it, in its
+ * own words. Its attributes, resources and skills; the check, its ladder
+ * and its degrees, best first, each with when it happens. Nothing for the
+ * narrator alone (its GM notes) is in it.
+ */
+function rulesOf(system) {
+  const sheet = sheetOf(system);
+  const attributes = sheet.attributes || [];
+  const nameOf = (id) => (attributes.find((a) => a.id === id) || {}).name || id;
+  const ladder = system.checks.ladder;
+  const rising = ladder[ladder.length - 1].value > ladder[0].value;
+  const degrees = system.checks.degrees || {};
+  const order = ['criticalSuccess', 'success', 'successAtCost', 'failure', 'criticalFailure'];
+  return {
+    id: system.id,
+    name: system.name,
+    words: { ...(system.words || {}) },
+    attributes: attributes.map((a) => ({ id: a.id, name: a.name, min: a.min, max: a.max })),
+    resources: (sheet.resources || []).map((r) => ({ id: r.id, name: r.name })),
+    skills: skillsOn(system)
+      ? (sheet.skills || []).map((k) => ({
+          id: k.id,
+          name: k.name,
+          attribute: nameOf(k.attribute),
+        }))
+      : [],
+    level: { name: (system.words && system.words.level) || 'Level', ...(sheet.level || {}) },
+    check: system.checks.formula,
+    ladder: ladder.map((r) => ({ name: r.name, value: r.value })),
+    // How a check is read: reaching the difficulty is meeting or beating it,
+    // or rolling at or under it.
+    reach: rising ? 'at least' : 'at most',
+    degrees: order
+      .filter((d) => degrees[d] || d === 'success' || d === 'failure')
+      .map((d) => ({
+        id: d,
+        name: degreeName(system, d),
+        when: degrees[d]
+          ? readable(degrees[d])
+          : d === 'success'
+            ? rising
+              ? 'the result reaches the difficulty'
+              : 'the result is at or under the difficulty'
+            : 'otherwise',
+      })),
+  };
+}
+
 /** A dice source that rolls a fixed face on every die (clamped to the die). */
 function fixedDice(face) {
   return (sides) => Math.max(1, Math.min(sides, Math.round(face)));
@@ -260,7 +357,11 @@ function fixedDice(face) {
 
 module.exports = {
   DEGREE_ORDER,
+  DEGREE_NAMES,
   SUCCEEDS,
+  degreeName,
+  labelsFor,
+  rulesOf,
   REFERENCE_LADDER,
   systemOf,
   refusal,

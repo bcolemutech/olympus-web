@@ -172,8 +172,13 @@ describe('evaluate — generic (dice) verbs', () => {
       formula: '1d20 + modifier + rank',
       rung: 'Easy',
       degree: 'successAtCost',
+      // The card's line, with each term named, its dice and its verdict (L-805).
+      line: 'd20 (10) + Strength (0) + Untrained (0)',
+      dice: [{ sides: 20, value: 10, kept: true }],
+      verdict: 'Success at a cost',
       breakdown: {
         shown: '10 + 0 + 0',
+        named: 'd20 (10) + Strength (0) + Untrained (0)',
         terms: [
           { kind: 'dice', expr: '1d20', rolls: [{ value: 10, kept: true }], value: 10 },
           { kind: 'field', name: 'modifier', value: 0 },
