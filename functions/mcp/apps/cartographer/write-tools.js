@@ -4,7 +4,7 @@ const { z } = require('zod');
 const { FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const { normalizeName } = require('../../../loom-turn/interpret');
-const { worldId, entityId } = require('./schemas');
+const { worldId, entityId, systemId } = require('./schemas');
 const { SOURCES } = require('../../../cartographer/sources');
 const { isPlayable } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
@@ -547,7 +547,7 @@ function deleteFromDraft(e, kind, entity) {
 
 // ── The tools ──────────────────────────────────────────────────────────
 
-function writeTools({ writer }) {
+function writeTools({ writer, systems }) {
   const edit = (ctx, args, change) => writer.edit(args.worldId, ctx.uid, change);
   const additive = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
   const replacing = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
@@ -561,8 +561,10 @@ function writeTools({ writer }) {
       name: 'update_world',
       title: 'Update world',
       description:
-        'Change a world’s name, tagline, opening hook (the scene every new game opens with) ' +
-        'or starting location (where new games begin). Fields you omit are left unchanged. ' +
+        'Change a world’s name, tagline, opening hook (the scene every new game opens with), ' +
+        'starting location (where new games begin) or game system (systemId, from ' +
+        'list_systems: the rules every game in it plays by, at the system’s latest version). ' +
+        'Fields you omit are left unchanged. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -577,10 +579,17 @@ function writeTools({ writer }) {
         startingLocationId: entityId('location', 'find_locations')
           .optional()
           .describe('Where new games begin.'),
+        systemId: systemId.optional().describe('The game system it plays by, from list_systems.'),
       },
       annotations: replacing,
-      handler: (ctx, args) => {
-        requireSome(args, ['name', 'tagline', 'openingHook', 'startingLocationId']);
+      handler: async (ctx, args) => {
+        requireSome(args, ['name', 'tagline', 'openingHook', 'startingLocationId', 'systemId']);
+        // The system must exist (L-801), read before the edit's transaction.
+        const system =
+          args.systemId === undefined ? null : systems && (await systems.get(args.systemId));
+        if (args.systemId !== undefined && !system) {
+          throw new ToolError(`No system "${args.systemId}". list_systems shows them.`);
+        }
         return edit(ctx, args, (e) => {
           const { world } = e;
           const fields = {};
@@ -608,11 +617,13 @@ function writeTools({ writer }) {
               );
             }
           }
+          if (system && system.id !== world.systemId) fields.systemId = system.id;
           if (Object.keys(fields).length) e.updateWorld(fields);
           return {
             updated: Object.keys(fields).map((f) => f.replace('rules.', '')),
             world: {
               name: fields.name || world.name,
+              ...(system ? { system: { id: system.id, name: system.name } } : {}),
               ...(start
                 ? { startingLocation: { id: start, name: world.locations[start].name } }
                 : {}),

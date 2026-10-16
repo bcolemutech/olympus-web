@@ -44,8 +44,8 @@
 
 // 2: the Rich bar scales with a settlement's size; 3: a Rich settlement's town
 // has ground (L-655); 4: the score, its criteria and bands (L-691); 5: a
-// world's cover image (L-704).
-const RUBRIC_VERSION = 5;
+// world's cover image (L-704); 6: a world's game system (L-801).
+const RUBRIC_VERSION = 6;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -71,7 +71,7 @@ const WEIGHTS = Object.freeze({
   character: { description: 25, lore: 15, faction: 10 },
   battleMap: { layers: 30, art: 30, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
-  world: { mapArt: 20, lore: 20, hook: 10, cover: 15 },
+  world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15 },
 });
 const QUALITY = Object.freeze({
   // Words a description needs to count, and a lore entry to count anywhere.
@@ -685,6 +685,37 @@ const CRITERIA = Object.freeze([
         want: QUALITY.worldLore,
         message: `It needs ${QUALITY.worldLore} lore entries about its realms and regions (it has ${have}).`,
       };
+    },
+  },
+  {
+    // A game system (L-801; planning/game-systems.md §4.9): named, and
+    // passing its checks. A world without one plays by the built-in fantasy
+    // system (SY4), but hasn't chosen.
+    id: 'world.system',
+    kinds: ['world'],
+    weight: WEIGHTS.world.system,
+    feature: 'L-801',
+    label: 'A game system',
+    need: 'system',
+    tool: 'update_world',
+    check: (world) => {
+      if (!world.systemId) {
+        return {
+          progress: 0,
+          message:
+            'The world has no game system; choose one (list_systems) and set it with update_world.',
+        };
+      }
+      if (!world.system) {
+        return {
+          progress: 0,
+          message: `It names the game system "${world.systemId}", which doesn't exist.`,
+        };
+      }
+      const { errors } = require('./systems').validateSystem(world.system);
+      return errors.length
+        ? { progress: 0, message: `Its game system fails its checks: ${errors[0]}` }
+        : met();
     },
   },
   {

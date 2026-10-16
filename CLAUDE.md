@@ -215,6 +215,7 @@ npm run deploy            # Deploy hosting only (production)
 | `loom_worlds/{worldId}` | `hasApp('cartographer')`; `hasApp('loom')` for published only | Cartographer worlds; entity subcollections (`locations`, `factions`, `regions`, `characters`, `lore`, `places`) readable by `cartographer` only |
 | `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history; each save keeps its own clock, `time` in seconds from Day 1 (rules in `functions/loom-canon/clock.js`) |
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
+| `loom_systems/{systemId}` | Deny (server only) | Game systems as data (L-801; `functions/loom-canon/systems.js`): the sheet, checks and ladder, creation, modules, words; written over MCP (`set_system`, `copy_system`), named by `world.systemId` (the built-in `d20-fantasy` when none) |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
 | `studio_images/{imageId}` | `hasApp('cartographer')`, read only | The image studio's library: one record per image, with its kind, labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`) |
 | `studio_jobs/{jobId}` | `hasApp('cartographer')`, read only | The image studio's jobs, making an image or editing one: the request, its state (queued, running, done, failed), the image (and version) made, its cost or error |

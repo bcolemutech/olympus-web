@@ -15,4 +15,10 @@ const entityId = (what, from) =>
     .regex(/^[A-Za-z0-9_-]{1,80}$/, `must be a ${what} id`)
     .describe(`The ${what} id, from ${from}.`);
 
-module.exports = { worldId, entityId };
+// A game system (L-801).
+const systemId = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, 'a system id: lowercase letters, digits and dashes')
+  .describe('The system id, from list_systems.');
+
+module.exports = { worldId, entityId, systemId };

@@ -68,6 +68,12 @@ function world(overrides = {}) {
     // Its cover (L-704): a library image reference.
     cover: { imageId: 'img_00000000000000c0', link: 'https://x/c', width: 600, height: 300 },
     rules: { startingLocationId: 'port' },
+    // Its game system (L-801), set and passing its checks.
+    systemId: 'pirate-d20',
+    system: {
+      ...require('../functions/loom-canon/systems').BUILT_IN['d20-fantasy'],
+      id: 'pirate-d20',
+    },
     locations: {
       port: {
         id: 'port',
@@ -181,7 +187,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(5);
+    expect(RUBRIC_VERSION).toBe(6);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -412,6 +418,31 @@ describe('character, battle map, realm and world criteria', () => {
       have: 1,
       want: 2,
     });
+  });
+
+  test('the world: a game system, set and passing its checks (L-801)', () => {
+    const { BUILT_IN } = require('../functions/loom-canon/systems');
+    const fantasy = BUILT_IN['d20-fantasy'];
+    const w = world();
+    // None named: it plays by the built-in, but hasn't chosen.
+    const unset = { ...w, systemId: null, system: fantasy };
+    expect(check('world.system', unset, unset)).toMatchObject({
+      progress: 0,
+      message: expect.stringMatching(/no game system/),
+    });
+    const set = { ...w, systemId: 'pirate-d20', system: { ...fantasy, id: 'pirate-d20' } };
+    expect(check('world.system', set, set)).toEqual({ progress: 1 });
+    const missing = { ...w, systemId: 'gone', system: null };
+    expect(check('world.system', missing, missing)).toMatchObject({
+      progress: 0,
+      message: 'It names the game system "gone", which doesn\'t exist.',
+    });
+    const broken = { ...set, system: { ...set.system, checks: { formula: 'd20', ladder: [] } } };
+    expect(check('world.system', broken, broken)).toMatchObject({
+      progress: 0,
+      message: expect.stringMatching(/^Its game system fails its checks: checks\.ladder/),
+    });
+    expect(criterion('world.system')).toMatchObject({ weight: 15, tool: 'update_world' });
   });
 
   test('the world: map art, world-wide lore, its hook and tagline, and a cover', () => {

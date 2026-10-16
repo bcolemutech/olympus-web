@@ -1541,7 +1541,10 @@ describe('loom_* — Firestore Security Rules', function () {
 
     await testEnv.withSecurityRulesDisabled(async function (ctx) {
       var db = ctx.firestore();
-      await setDoc(doc(db, 'loom_worlds', 'world-001'), { name: 'Test World', status: 'published' });
+      await setDoc(doc(db, 'loom_worlds', 'world-001'), {
+        name: 'Test World',
+        status: 'published',
+      });
       await setDoc(doc(db, 'loom_worlds', 'draft-001'), { name: 'Draft World', status: 'draft' });
       await setDoc(doc(db, 'loom_worlds', 'world-001', 'locations', 'loc_1'), { name: 'Town' });
       await setDoc(doc(db, 'loom_worlds', 'world-001', 'battleMaps', 'bm_cellar'), {
@@ -1608,10 +1611,16 @@ describe('loom_* — Firestore Security Rules', function () {
     });
 
     it('lets a cartographer user read drafts and entity subcollections', async function () {
-      var builderDb = testEnv.authenticatedContext('builder-001', { apps: ['cartographer'] }).firestore();
+      var builderDb = testEnv
+        .authenticatedContext('builder-001', { apps: ['cartographer'] })
+        .firestore();
       await assertSucceeds(getDoc(doc(builderDb, 'loom_worlds', 'draft-001')));
-      await assertSucceeds(getDoc(doc(builderDb, 'loom_worlds', 'world-001', 'locations', 'loc_1')));
-      await assertFails(setDoc(doc(builderDb, 'loom_worlds', 'draft-001'), { status: 'published' }));
+      await assertSucceeds(
+        getDoc(doc(builderDb, 'loom_worlds', 'world-001', 'locations', 'loc_1'))
+      );
+      await assertFails(
+        setDoc(doc(builderDb, 'loom_worlds', 'draft-001'), { status: 'published' })
+      );
     });
 
     it('denies a loom player reading entity subcollections', async function () {
@@ -1621,11 +1630,11 @@ describe('loom_* — Firestore Security Rules', function () {
     // A player sees a battle map only through loomGetMap, which sends what
     // their character has seen of it (L-633): never the map document itself.
     it('denies a loom player reading or listing battle maps, even of a published world', async function () {
-      await assertFails(
-        getDoc(doc(loomDb, 'loom_worlds', 'world-001', 'battleMaps', 'bm_cellar'))
-      );
+      await assertFails(getDoc(doc(loomDb, 'loom_worlds', 'world-001', 'battleMaps', 'bm_cellar')));
       await assertFails(getDocs(collection(loomDb, 'loom_worlds', 'world-001', 'battleMaps')));
-      var builderDb = testEnv.authenticatedContext('builder-001', { apps: ['cartographer'] }).firestore();
+      var builderDb = testEnv
+        .authenticatedContext('builder-001', { apps: ['cartographer'] })
+        .firestore();
       await assertSucceeds(
         getDoc(doc(builderDb, 'loom_worlds', 'world-001', 'battleMaps', 'bm_cellar'))
       );
@@ -1642,9 +1651,7 @@ describe('loom_* — Firestore Security Rules', function () {
     });
 
     it('denies client write even with the loom claim', async function () {
-      await assertFails(
-        setDoc(doc(loomDb, 'loom_world_state', 'world-001'), { worldClock: 999 })
-      );
+      await assertFails(setDoc(doc(loomDb, 'loom_world_state', 'world-001'), { worldClock: 999 }));
     });
   });
 
@@ -1678,9 +1685,7 @@ describe('loom_* — Firestore Security Rules', function () {
 
     describe('loom_turns subcollection', function () {
       it('allows the owner to read their own turn log', async function () {
-        await assertSucceeds(
-          getDoc(doc(loomDb, 'loom_saves', SAVE_ID, 'loom_turns', 'turn-001'))
-        );
+        await assertSucceeds(getDoc(doc(loomDb, 'loom_saves', SAVE_ID, 'loom_turns', 'turn-001')));
       });
 
       it('denies read for a different loom-claimed user', async function () {
@@ -1823,7 +1828,10 @@ describe('mcp_* — Firestore Security Rules', function () {
       firestoreConfig.host = '127.0.0.1';
       firestoreConfig.port = 8080;
     }
-    testEnv = await initializeTestEnvironment({ projectId: PROJECT_ID, firestore: firestoreConfig });
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: firestoreConfig,
+    });
   });
 
   afterAll(async function () {
@@ -1869,7 +1877,10 @@ describe('studio_images — Firestore Security Rules (L-701)', function () {
       firestoreConfig.host = '127.0.0.1';
       firestoreConfig.port = 8080;
     }
-    testEnv = await initializeTestEnvironment({ projectId: PROJECT_ID, firestore: firestoreConfig });
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: firestoreConfig,
+    });
   });
 
   beforeEach(async function () {
@@ -1941,5 +1952,22 @@ describe('studio_images — Firestore Security Rules (L-701)', function () {
     await assertFails(getDoc(doc(editor, 'studio_costs_month', '2026-10')));
     await assertFails(getDoc(doc(editor, 'studio_costs', 'cost_1')));
     await assertFails(setDoc(doc(editor, 'studio_costs', 'cost_2'), { micros: 0 }));
+  });
+
+  it('keeps game systems server-only, editors and players included (L-801)', async function () {
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      await setDoc(doc(ctx.firestore(), 'loom_systems', 'pirate-d20'), { name: 'Pirates' });
+    });
+    for (var apps of [['cartographer'], ['loom'], ['cartographer', 'loom']]) {
+      var db = dbAs(apps);
+      await assertFails(getDoc(doc(db, 'loom_systems', 'pirate-d20')));
+      await assertFails(setDoc(doc(db, 'loom_systems', 'pirate-d20'), { name: 'Mine' }));
+      await assertFails(setDoc(doc(db, 'loom_systems', 'new-one'), { name: 'New' }));
+    }
+    var admin = testEnv.authenticatedContext('admin-001', { admin: true }).firestore();
+    await assertFails(getDoc(doc(admin, 'loom_systems', 'pirate-d20')));
+    await assertFails(
+      getDoc(doc(testEnv.unauthenticatedContext().firestore(), 'loom_systems', 'pirate-d20'))
+    );
   });
 });

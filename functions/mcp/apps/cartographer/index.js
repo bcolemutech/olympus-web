@@ -9,6 +9,7 @@ const { writeTools } = require('./write-tools');
 const { townTools } = require('./town-tools');
 const { mapTools } = require('./map-tools');
 const { studioTools } = require('./studio-tools');
+const { systemTools } = require('./system-tools');
 const artOf = require('../../../loom-canon/art');
 const { currentPath } = require('../../../studio/library');
 const { GRADES, BANDS } = require('../../../loom-canon/grading');
@@ -73,13 +74,14 @@ const NEEDS = [
   'people',
   'hook',
   'cover',
+  'system',
 ];
 const GRADE_HELP =
   'Grades: unbuilt (a layer it needs is missing), stub (import text only), playable ' +
   '(written up: players may enter). Past the gate, a score from 0 to 100 from weighted ' +
   'criteria puts it in a band: playable (under 40), rich (40), vivid (70), legendary (90).';
 
-function cartographerApp({ reader, writer, art, studio }) {
+function cartographerApp({ reader, writer, art, studio, systems }) {
   // Loads a world the tools can read, or explains why it can't.
   async function worldFor(id) {
     const loaded = await reader.loadWorld(id);
@@ -676,10 +678,12 @@ function cartographerApp({ reader, writer, art, studio }) {
           return { worldId: world.id, ...views.loreDetail(world, entry) };
         },
       },
-      ...writeTools({ writer }),
+      ...writeTools({ writer, systems }),
       ...townTools({ writer }),
       ...mapTools({ writer }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
+      // Game systems (L-801): list, get, set and copy them.
+      ...(systems ? systemTools({ systems }) : []),
     ],
     resources: [
       {
@@ -738,6 +742,8 @@ function register(registry) {
         styles: () => studio().styles,
         load: async (path) => (await getStorage().bucket().file(path).download())[0],
       },
+      // Game systems (L-801), in loom_systems.
+      systems: require('../../../loom-canon/systems').createSystemStore(getFirestore),
     })
   );
 }
