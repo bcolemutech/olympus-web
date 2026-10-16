@@ -2,7 +2,7 @@
 
 **Status:** Decided (2026-10-16). The gap sheet (§3) is answered. Sub-issues are planned (§6) and are filed when this epic is next.
 **Project:** Olympus (`olympus-dfa00`)
-**Epic:** L-910 _(to file)_
+**Epic:** L-910 (#626), milestone #26 (Phase 10 — Levels and Vehicles)
 **Built:** after the dungeon epic, when the steampunk reference game is next (the roadmap's Build order).
 **Depends on:**
 

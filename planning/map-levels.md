@@ -2,7 +2,7 @@
 
 **Status:** Decided (2026-10-16). The gap sheet (§3) is answered. Sub-issues are planned (§6) and are filed when this epic is next.
 **Project:** Olympus (`olympus-dfa00`)
-**Epic:** L-900 _(to file)_
+**Epic:** L-900 (#625), milestone #26 (Phase 10 — Levels and Vehicles)
 **Built:** just before L-710 (worlds without Azgaar), which then builds on it (the roadmap's Build order).
 **Depends on:** L-720 (the map engine), L-370 (game time, `timeRules`).
 **Related:** [`scenarios.md`](./scenarios.md) (G1, G9), [`vehicles.md`](./vehicles.md) (L-910), [`worlds-without-azgaar.md`](./worlds-without-azgaar.md), [`the-loom-layered-worlds.md`](./the-loom-layered-worlds.md), [`the-loom-grading.md`](./the-loom-grading.md)
