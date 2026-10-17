@@ -15,11 +15,18 @@
  *                                            climb): today's abilities (CS4),
  *                                            opening routes and places
  *     conditions: [{ id, ... }]              effects on them (L-815)
- *     speed:      number                     movement a turn (L-611)
+ *     speed:      number                     movement a turn (L-611), worked
+ *                                            out: see speedFor
  *
  * A sheet that no longer fits its system (an attribute removed, a skill
  * renamed, a score out of range) is not refused: `misfits` says what, for
  * NARRATE and the Character panel, and the GM repairs it in play (SY2).
+ *
+ * Speed is worked out, never chosen: the system's `sheet.speed` formula
+ * (its attributes, skill ranks and level) plus what the character's traits
+ * add (a system trait's `modifiers.speed`, taken at creation, L-812). It is
+ * worked out again whenever a save is loaded with its world (withSpeed), so
+ * a changed sheet or system moves the character at once.
  *
  * Saves made before sheets keep `character.abilities`, `speed` and
  * `condition` until the backfill moves them in (CS9): the readers here take
@@ -80,11 +87,47 @@ function maxima(system, sheet) {
 }
 
 /**
+ * A character's speed (L-611; L-811): the system's speed formula over the
+ * sheet, plus each of its traits' `modifiers.speed`, from 1 to MAX_SPEED.
+ * A system with no speed formula moves everyone at the default.
+ */
+function speedFor(system, sheet) {
+  const values = valuesOf(system, sheet || {});
+  const at = (text) => {
+    try {
+      return formula.evaluate(text, { values, system, dice: () => 1 }).total;
+    } catch {
+      return 0;
+    }
+  };
+  let speed = system.sheet.speed === undefined ? DEFAULT_SPEED : at(system.sheet.speed);
+  const has = new Set((sheet && Array.isArray(sheet.traits) && sheet.traits) || []);
+  for (const trait of system.sheet.traits || []) {
+    const bonus = trait.modifiers && trait.modifiers.speed;
+    if (has.has(trait.id) && bonus !== undefined) speed += at(bonus);
+  }
+  return Math.max(1, Math.min(MAX_SPEED, Math.floor(speed)));
+}
+
+/**
+ * A save with its character's speed worked out for its world's system: what
+ * every reader of the save sees (speedOf). A save without a sheet is as it was.
+ */
+function withSpeed(save, system) {
+  const sheet = sheetOf(save);
+  if (!sheet || !save.character) return save;
+  return {
+    ...save,
+    character: { ...save.character, sheet: { ...sheet, speed: speedFor(system, sheet) } },
+  };
+}
+
+/**
  * A new sheet with the system's defaults (CS9): each attribute at the middle
  * of its range, every skill untrained, the lowest level, every resource
- * full. `traits` and `speed` carry over what the character had.
+ * full, its speed worked out. `traits` carry over what the character could do.
  */
-function defaultSheet(system, { traits = [], speed = DEFAULT_SPEED } = {}) {
+function defaultSheet(system, { traits = [] } = {}) {
   const sheet = { attributes: {}, resources: {}, level: system.sheet.level.min };
   for (const a of system.sheet.attributes) sheet.attributes[a.id] = middle(a);
   if (skillsOn(system)) {
@@ -95,7 +138,7 @@ function defaultSheet(system, { traits = [], speed = DEFAULT_SPEED } = {}) {
   for (const r of system.sheet.resources) sheet.resources[r.id] = { current: max[r.id] || 0 };
   sheet.traits = [...new Set(traits.filter((t) => typeof t === 'string' && TRAIT_ID.test(t)))];
   sheet.conditions = [];
-  sheet.speed = Number.isInteger(speed) && speed > 0 && speed <= MAX_SPEED ? speed : DEFAULT_SPEED;
+  sheet.speed = speedFor(system, sheet);
   return sheet;
 }
 
@@ -177,7 +220,7 @@ function validateSheet(system, sheet) {
     }
   }
 
-  // Traits, conditions and speed.
+  // Traits and conditions (speed is worked out, not checked: speedFor).
   if (!Array.isArray(sheet.traits)) errors.push('traits must be a list.');
   else {
     if (sheet.traits.length > MAX_TRAITS) errors.push(`More than ${MAX_TRAITS} traits.`);
@@ -195,9 +238,6 @@ function validateSheet(system, sheet) {
         errors.push(`conditions[${i}] needs an id.`);
       }
     });
-  }
-  if (!whole(sheet.speed) || sheet.speed < 1 || sheet.speed > MAX_SPEED) {
-    errors.push(`The speed is ${sheet.speed}; it must be a whole number from 1 to ${MAX_SPEED}.`);
   }
   return errors;
 }
@@ -221,14 +261,13 @@ function traitsOf(state) {
 /**
  * The backfill for a save made before sheets (CS9): `null` when it has one,
  * else the fields to write: its world's system's defaults, its abilities as
- * traits and its speed, and the old fields removed (`DELETE` marks them).
+ * traits, its speed worked out, and the old fields removed (`DELETE` marks them).
  */
 function sheetBackfill(save, system, DELETE = null) {
   const character = (save && save.character) || {};
   if (isObject(character.sheet)) return null;
   const sheet = defaultSheet(system, {
     traits: Array.isArray(character.abilities) ? character.abilities : [],
-    speed: character.speed,
   });
   return {
     'character.sheet': sheet,
@@ -242,6 +281,8 @@ module.exports = {
   DEFAULT_SPEED,
   MAX_SPEED,
   defaultSheet,
+  speedFor,
+  withSpeed,
   validateSheet,
   maxima,
   sheetOf,

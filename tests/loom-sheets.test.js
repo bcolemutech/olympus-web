@@ -58,7 +58,6 @@ describe.each([
     sheet.level = 0;
     sheet.traits = ['swim', 'two words'];
     sheet.conditions = [{}];
-    sheet.speed = 0;
     expect(validateSheet(system, sheet)).toEqual([
       `${firstAttr.name} is ${firstAttr.max + 1}; it must be a whole number from ${firstAttr.min} to ${firstAttr.max}.`,
       'There is no attribute "Luck" in this world\'s rules.',
@@ -69,7 +68,6 @@ describe.each([
       'There is no resource "mana" in this world\'s rules.',
       'The trait "two words" isn\'t an id (letters, digits, - and _).',
       'conditions[0] needs an id.',
-      'The speed is 0; it must be a whole number from 1 to 1000.',
     ]);
     expect(validateSheet(system, null)).toEqual(['The sheet must be an object.']);
   });
@@ -131,10 +129,62 @@ describe.each([
   });
 });
 
+describe.each([
+  ['d20-fantasy', FANTASY],
+  ['pool-scifi', SCIFI],
+])('speed, worked out by formula under %s', (id, system) => {
+  const fantasy = id === 'd20-fantasy';
+  // A copy with a trait that adds speed, taken at creation (L-812).
+  const withFleet = () => {
+    const copy = JSON.parse(JSON.stringify(system));
+    copy.sheet.traits = [{ id: 'fleet', name: 'Fleet of foot', modifiers: { speed: '5' } }];
+    return copy;
+  };
+
+  test('from attributes and skill ranks: 20 at the defaults, more with training', () => {
+    const sheet = defaultSheet(system);
+    expect(sheets.speedFor(system, sheet)).toBe(20);
+    if (fantasy) {
+      sheet.attributes.DEX = 16; // +3
+      sheet.skills.Athletics = 4; // +2
+    } else {
+      sheet.attributes.Reflex = 5; // +4
+      sheet.skills.Athletics = 1; // +1
+    }
+    expect(sheets.speedFor(system, sheet)).toBe(25);
+  });
+
+  test('a trait adds what it says, only while held; a system checks its traits’ bonuses', () => {
+    const fleet = withFleet();
+    expect(require('../functions/loom-canon/systems').validateSystem(fleet).errors).toEqual([]);
+    expect(sheets.speedFor(fleet, defaultSheet(fleet, { traits: ['fleet'] }))).toBe(25);
+    expect(sheets.speedFor(fleet, defaultSheet(fleet))).toBe(20);
+    fleet.sheet.traits[0].modifiers = { charm: '2' };
+    expect(require('../functions/loom-canon/systems').validateSystem(fleet).errors).toEqual([
+      'sheet.traits[0].modifiers: "charm" isn\'t something a trait changes (speed).',
+    ]);
+  });
+
+  test('worked out again on load, whatever was stored; never below 1', () => {
+    const sheet = { ...defaultSheet(system), speed: 99 };
+    const save = { character: { name: 'Tam', sheet } };
+    expect(speedOf(sheets.withSpeed(save, system))).toBe(20);
+    const crawl = JSON.parse(JSON.stringify(system));
+    crawl.sheet.speed = '1 - level * 5';
+    expect(sheets.speedFor(crawl, sheet)).toBe(1);
+    // No speed formula: the default.
+    delete crawl.sheet.speed;
+    expect(sheets.speedFor(crawl, sheet)).toBe(20);
+    // A save without a sheet is as it was.
+    const older = { character: { name: 'Tam', speed: 4 } };
+    expect(sheets.withSpeed(older, system)).toBe(older);
+  });
+});
+
 describe('moved in: speed, traits and condition (CS4)', () => {
   const sheet = { ...defaultSheet(FANTASY, { traits: ['climbing'] }), speed: 6 };
 
-  test('speed and traits come from the sheet, or an older character’s own', () => {
+  test('speed (as worked out) and traits come from the sheet, or an older character’s own', () => {
     expect(speedOf({ character: { name: 'Tam', sheet } })).toBe(6);
     expect(speedOf({ character: { name: 'Tam', speed: 4 } })).toBe(4);
     expect(speedOf({ character: { name: 'Tam' } })).toBe(20);
@@ -206,11 +256,11 @@ describe('the backfill for older saves', () => {
       name: 'Tam',
       inventory: ['rope'],
       goals: [],
-      sheet: defaultSheet(system, { traits: ['swim'], speed: 8 }),
+      sheet: defaultSheet(system, { traits: ['swim'] }),
     });
     expect(validateSheet(system, after.character.sheet)).toEqual([]);
-    // It rolls and moves as it did.
-    expect(speedOf(after)).toBe(8);
+    // It rolls as it did; its speed is now worked out by its system's formula.
+    expect(speedOf(sheets.withSpeed(after, system))).toBe(20);
     expect(sheets.traitsOf(after)).toEqual(['swim']);
     // A second run changes nothing.
     expect(sheetBackfill(after, system)).toBeNull();
