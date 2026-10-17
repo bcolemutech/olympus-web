@@ -268,7 +268,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 | Workflow | Trigger | Action |
 |---|---|---|
 | `code-quality.yml` | Push/PR to main | ESLint + Prettier check |
-| `firebase-hosting-pull-request.yml` | Pull Request | Deploy preview channel, comment URL on PR |
+| `firebase-hosting-pull-request.yml` | Pull Request | Deploy preview channel (lives 1 hour; first deletes channels older than that and the oldest past 10), comment URL on PR |
 | `firebase-hosting-pr-cleanup.yml` | Pull Request closed | Delete the PR's preview channel, so the channel quota doesn't run out |
 | `firebase-hosting-merge.yml` | Push to main | Deploy hosting + Firestore rules/indexes + Storage rules + Cloud Functions |
 | `firestore-rules.yml` | Push/PR to main | Run the Jest suite against the Firestore and Storage emulators |
