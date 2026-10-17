@@ -1435,11 +1435,25 @@ body.loom-playing .app-divider {
   pointer-events: auto;
 }
 
-/* Top left: where you are, and a peek at another level. */
-.loom-map-where {
+/* Top left: where you are, and a peek at another level; under it, the
+   character's strip (L-814). */
+.loom-map-topleft {
   position: absolute;
   top: 0.6rem;
   left: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
+  max-width: 22rem;
+  pointer-events: none;
+}
+
+.loom-map-topleft > * {
+  pointer-events: auto;
+}
+
+.loom-map-where {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -1830,6 +1844,233 @@ body.loom-playing .app-divider {
 
   .loom-rules-skills {
     columns: 1;
+  }
+}
+
+/* The Character panel and the strip (CS8, EF9; L-814). The panel shares the
+   rules reference's frame; the strip sits top centre over the map, and on a
+   phone runs under the menu bar. */
+.loom-track {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.35rem 0;
+}
+
+.loom-track-name {
+  color: var(--loom-text);
+}
+
+.loom-track-bar {
+  position: relative;
+  height: 0.55rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--loom-edge-bright) 45%, transparent);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.loom-track-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--loom-accent) 70%, black),
+    var(--loom-accent)
+  );
+  transition: width 400ms ease;
+}
+
+.loom-track.is-low .loom-track-fill {
+  background: #e0604f;
+}
+
+.loom-track-amount {
+  min-width: 3.5rem;
+  color: var(--loom-text-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.loom-track.is-small {
+  grid-template-columns: auto 4.5rem auto;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.loom-track.is-small .loom-track-name {
+  color: var(--loom-muted);
+}
+
+.loom-track.is-small .loom-track-amount {
+  min-width: 0;
+}
+
+.loom-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.4rem 0.75rem;
+  color: var(--loom-text);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  background: rgba(10, 14, 26, 0.85);
+  border: 1px solid var(--loom-edge);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.loom-strip > * {
+  flex: none;
+}
+
+.loom-strip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--loom-accent) 60%, transparent);
+}
+
+.loom-strip-condition {
+  padding: 0.05rem 0.5rem;
+  color: #f0c27a;
+  font-size: 0.75rem;
+  border: 1px solid color-mix(in srgb, #f0c27a 45%, transparent);
+  border-radius: 999px;
+}
+
+.loom-strip-flag {
+  display: inline-grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--loom-on-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #e0604f;
+  border-radius: 50%;
+}
+
+.loom-character-level {
+  color: var(--loom-muted);
+  font-weight: normal;
+}
+
+.loom-character-misfits {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, #e0604f 60%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, #e0604f 12%, transparent);
+}
+
+.loom-character-misfits p {
+  margin: 0 0 0.3rem;
+}
+
+.loom-character-misfits ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--loom-text-soft);
+}
+
+.loom-character-attributes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.5rem;
+  margin: 0.3rem 0;
+}
+
+.loom-character-attribute {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--loom-edge) 70%, transparent);
+  border-radius: 8px;
+  background: var(--loom-raised);
+}
+
+.loom-character-attribute dt {
+  color: var(--loom-muted);
+  font-size: 0.78rem;
+}
+
+.loom-character-attribute dd {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin: 0.1rem 0 0;
+}
+
+.loom-character-score {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.loom-character-modifier {
+  color: var(--loom-accent);
+}
+
+.loom-character-skills thead th {
+  color: var(--loom-muted);
+  font-size: 0.78rem;
+}
+
+.loom-character-skills tbody tr:not(.is-trained) {
+  color: var(--loom-muted);
+}
+
+.loom-character-skills tbody tr.is-trained th,
+.loom-character-skills tbody tr.is-trained td {
+  color: var(--loom-text);
+}
+
+@media (max-width: 899px) {
+  /* The strip first, the width of the screen under the menu bar; where you
+     are under it. */
+  .loom-map-topleft {
+    top: 0;
+    right: 0;
+    left: 0;
+    max-width: none;
+  }
+
+  .loom-map-topleft .loom-map-where {
+    margin-left: 0.6rem;
+  }
+
+  /* One line, as many as fit, so what sits below knows where it ends. */
+  .loom-strip {
+    order: -1;
+    flex-wrap: nowrap;
+    align-self: stretch;
+    gap: 0.7rem;
+    height: 2.2rem;
+    padding: 0 0.6rem;
+    overflow: hidden;
+    border-width: 0 0 1px;
+    border-radius: 0;
+  }
+
+  /* Below the strip: the minimap, the card and the note. */
+  .loom-map-minimap {
+    top: 2.8rem;
+  }
+
+  .loom-map-pane .loom-map-info {
+    top: 8.2rem;
+  }
+
+  .loom-bigscreen-note {
+    top: 2.8rem;
+  }
+
+  .loom-track {
+    grid-template-columns: 6rem 1fr auto;
+  }
+
+  .loom-track.is-small {
+    grid-template-columns: auto 3rem auto;
   }
 }
 

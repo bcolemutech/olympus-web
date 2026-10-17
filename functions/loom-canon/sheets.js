@@ -34,6 +34,7 @@
  */
 
 const formula = require('./formula');
+const clock = require('./clock');
 
 const DEFAULT_SPEED = 20; // as loom-models' (L-611)
 const MAX_SPEED = 1000;
@@ -309,9 +310,114 @@ function sheetBackfill(save, system, DELETE = null) {
   };
 }
 
+// ── The sheet as the player reads it (CS8, EF9; L-814) ────────────────
+
+// What's left of a condition (EF9: "Poisoned · 2 turns"), from its duration
+// as L-815 keeps it: rounds and turns left, game time left since it began
+// (`since`, in the save's seconds), or until it's saved against. Null when
+// it says nothing.
+function leftOf(condition, now) {
+  const d = isObject(condition.duration) ? condition.duration : null;
+  if (!d) return null;
+  const count = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
+  if (Number.isFinite(d.rounds)) return count(Math.max(0, d.rounds), 'round');
+  if (Number.isFinite(d.turns)) return count(Math.max(0, d.turns), 'turn');
+  if (Number.isFinite(d.seconds)) {
+    const since = Number.isFinite(condition.since) ? condition.since : now;
+    return clock.duration(Math.max(0, since + d.seconds - now));
+  }
+  if (d.untilSaved) return 'until saved';
+  return null;
+}
+
+const titled = (id) => String(id).charAt(0).toUpperCase() + String(id).slice(1);
+
+/**
+ * A character's sheet for the Character panel and the strip on the map
+ * (planning/game-systems.md CS8, EF9, MD1b; L-814), drawn from the system
+ * and in its words, every number worked out here so the page never reads a
+ * formula: attributes with their modifiers, resources with their maximums,
+ * the level, skills with their ranks and attributes, traits and conditions
+ * by name (conditions with what's left), derived values, speed, and what no
+ * longer fits (SY2). `now` is the save's time. Null without a sheet.
+ */
+function characterView(system, character, now = 0) {
+  const sheet = sheetOf(character);
+  if (!sheet) return null;
+  const s = system.sheet;
+  const words = system.words || {};
+  const values = valuesOf(system, sheet);
+  const at = (text) => {
+    try {
+      return formula.evaluate(text, { values, system, dice: () => 1 }).total;
+    } catch {
+      return null;
+    }
+  };
+  const max = maxima(system, sheet);
+  const held = isObject(sheet.resources) ? sheet.resources : {};
+  const attributeName = (id) => ((s.attributes || []).find((a) => a.id === id) || {}).name || id;
+  const traitDefs = new Map((s.traits || []).map((t) => [t.id, t]));
+  const conditionDefs = new Map((s.conditions || []).map((c) => [c.id, c]));
+  const on = new Set(s.optional || []);
+  const misfits = validateSheet(system, sheet);
+
+  return {
+    name: (character && character.name) || '',
+    system: { id: system.id, name: system.name },
+    level: { name: words.level || 'Level', value: sheet.level },
+    attributes: (s.attributes || []).map((a) => ({
+      id: a.id,
+      name: a.name,
+      score: values[a.id],
+      modifier: at(a.modifier),
+    })),
+    resources: (s.resources || []).map((r) => {
+      const current = isObject(held[r.id]) ? held[r.id].current : null;
+      return {
+        id: r.id,
+        name: r.name,
+        current: Number.isFinite(current) ? current : null,
+        max: max[r.id],
+      };
+    }),
+    skills: skillsOn(system)
+      ? (s.skills || []).map((k) => ({
+          id: k.id,
+          name: k.name,
+          attribute: attributeName(k.attribute),
+          rank: values[k.id],
+        }))
+      : [],
+    rankName: words.rank || 'Rank',
+    traits: (Array.isArray(sheet.traits) ? sheet.traits : []).map((id) => {
+      const def = traitDefs.get(id) || {};
+      return {
+        id,
+        name: def.name || titled(id),
+        ...(def.description ? { description: def.description } : {}),
+      };
+    }),
+    conditions: (Array.isArray(sheet.conditions) ? sheet.conditions : [])
+      .filter((c) => isObject(c) && (c.id || c.condition))
+      .map((c) => {
+        const id = c.id || c.condition;
+        const def = conditionDefs.get(id) || {};
+        const left = leftOf(c, now);
+        return { id, name: def.name || c.name || titled(id), ...(left ? { left } : {}) };
+      }),
+    derived: on.has('derived')
+      ? (s.derived || []).map((d) => ({ id: d.id, name: d.name, value: at(d.formula) }))
+      : [],
+    speed: speedFor(system, sheet),
+    misfits,
+  };
+}
+
 module.exports = {
   DEFAULT_SPEED,
   MAX_SPEED,
+  characterView,
   defaultSheet,
   speedFor,
   withSpeed,

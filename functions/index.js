@@ -652,7 +652,8 @@ exports.loomPlayTurn = onCall(async (request) => {
  * (L-611 / #441).
  *
  * Data: { worldId: string, saveId: string }
- * Returns: { worldId, name, here, places[], links[], town, battleMap, map }
+ * Returns: { worldId, name, here, places[], links[], town, battleMap, turn, time, rules,
+ *            character, map }
  */
 exports.loomGetMap = onCall(async (request) => {
   const uid = requireLoomAuth(request);
