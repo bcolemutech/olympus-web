@@ -25,8 +25,7 @@
  * "Written" means a non-empty description whose recorded source isn't the
  * import: `sources.description` is 'import' (the Cartographer loader), 'mcp'
  * (the MCP write tools) or 'gemini' (reserved; nothing writes it). A description with no
- * recorded source counts as imported until the backfill stamps it
- * (scripts/backfill-description-sources.js).
+ * recorded source counts as imported.
  *
  * Layer requirements: LAYER_CHECKS.town and LAYER_CHECKS.battleMap say
  * whether a place has the layer it needs to be Playable (null while a layer

@@ -23,10 +23,9 @@ const systems = require('../functions/loom-canon/systems');
 const checks = require('../functions/loom-canon/checks');
 const formula = require('../functions/loom-canon/formula');
 const loomCanon = require('../functions/loom-canon');
-const { applyBackfill } = require('../functions/cartographer/backfill');
 const { DEFAULT_LOCK_DIFFICULTY } = require('../functions/loom-turn/adjudicate');
 
-const { BUILT_IN, RESERVED_IDS, DEFAULT_SYSTEM_ID, validateSystem, systemBackfill } = systems;
+const { BUILT_IN, RESERVED_IDS, DEFAULT_SYSTEM_ID, validateSystem } = systems;
 const FANTASY = BUILT_IN['d20-fantasy'];
 const SCIFI = BUILT_IN['pool-scifi'];
 
@@ -251,30 +250,15 @@ describe('worlds made before systems (SY4)', () => {
     loomCanon.clearWorldCache();
   });
 
-  test('play by the fantasy system, and the backfill writes it down', async () => {
+  test('play by the fantasy system; one that names a system plays by it', async () => {
     const worlds = db.collection('loom_worlds');
     await worlds.doc('old').set({ name: 'Old', status: 'published', canonVersion: 4, map: null });
     await worlds
       .doc('chosen')
       .set({ name: 'Chosen', status: 'draft', canonVersion: 2, map: null, systemId: 'pool-scifi' });
 
-    let old = await loomCanon.loadWorld('old', { db });
+    const old = await loomCanon.loadWorld('old', { db });
     expect(old).toMatchObject({ systemId: null, system: { id: 'd20-fantasy' } });
-
-    expect(systemBackfill((await worlds.doc('old').get()).data())).toEqual({
-      systemId: 'd20-fantasy',
-    });
-    expect(systemBackfill((await worlds.doc('chosen').get()).data())).toBeNull();
-
-    const result = await applyBackfill(db, 'old', {
-      writes: [],
-      worldFields: systemBackfill((await worlds.doc('old').get()).data()),
-    });
-    expect(result.canonVersion).toBe(5);
-    old = await loomCanon.loadWorld('old', { db });
-    expect(old).toMatchObject({ systemId: 'd20-fantasy', system: { id: 'd20-fantasy' } });
-    // Run twice, nothing more to do.
-    expect(systemBackfill((await worlds.doc('old').get()).data())).toBeNull();
 
     const chosen = await loomCanon.loadWorld('chosen', { db, playableOnly: false });
     expect(chosen.system).toMatchObject({ id: 'pool-scifi', builtIn: true, version: 0 });

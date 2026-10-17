@@ -45,8 +45,6 @@ const { getStorage } = require(
 );
 const { layOutTowns, gateId } = require('./helpers/towns');
 const loomCanon = require('../functions/loom-canon');
-const { planPositionBackfill } = require('../functions/cartographer/placing');
-const { applyBackfill } = require('../functions/cartographer/backfill');
 
 const db = getFirestore();
 const bucket = getStorage().bucket(BUCKET);
@@ -292,7 +290,7 @@ describe('cartographerPublish', () => {
     expect((await worldRef.get()).data().status).toBe('draft');
   });
 
-  test('everyone has a place: refused naming the unplaced; the backfill places them (L-683)', async () => {
+  test('everyone has a place: refused naming the unplaced, published once placed (L-683)', async () => {
     await writeUp(worldId, 'loc_1');
     const worldRef = db.collection('loom_worlds').doc(worldId);
     const seed = (id, fields) =>
@@ -321,20 +319,9 @@ describe('cartographerPublish', () => {
         'is a town: they need a town point (townPoint)).',
     });
 
-    // The backfill, as scripts/backfill-character-positions.js runs it.
-    const before = await loomCanon.loadWorld(worldId, { db, playableOnly: false });
-    const plan = planPositionBackfill(before);
-    expect(plan.placed.map((p) => p.id)).toEqual(['chr_mara']);
-    expect(plan.alreadyPlaced).toBe(2);
-    await applyBackfill(db, worldId, { writes: plan.writes });
-    const mara = (await worldRef.collection('characters').doc('chr_mara').get()).data();
-    expect(mara.townPoint).toEqual({ x: expect.any(Number), y: expect.any(Number) });
-    expect((await worldRef.collection('characters').doc('chr_ada').get()).data().townPoint).toEqual(
-      { x: 7, y: 8 }
-    );
-    // Run again: nothing left to do.
-    const after = await loomCanon.loadWorld(worldId, { db, playableOnly: false });
-    expect(planPositionBackfill(after).writes).toEqual([]);
+    // Placed about town, as update_character would.
+    await worldRef.collection('characters').doc('chr_mara').update({ townPoint: { x: 9, y: 8 } });
+    await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
 
     await expect(
       publishAs(BUILDER, { worldId, openingHook: 'A storm.', startingLocationId: 'loc_1' })

@@ -24,7 +24,7 @@ const town = require('../functions/loom-canon/town');
 
 const FANTASY = BUILT_IN['d20-fantasy'];
 const SCIFI = BUILT_IN['pool-scifi'];
-const { defaultSheet, validateSheet, sheetBackfill } = sheets;
+const { defaultSheet, validateSheet } = sheets;
 
 describe.each([
   ['d20-fantasy', FANTASY],
@@ -214,56 +214,6 @@ describe('moved in: speed, traits and condition (CS4)', () => {
     });
     expect(older.character).toMatchObject({ condition: 'healthy', abilities: ['swim'] });
     expect(validateSave(older).valid).toBe(true);
-  });
-});
-
-// ── The backfill (CS9), against the emulator ──────────────────────────
-
-describe('the backfill for older saves', () => {
-  const path = require('path');
-  const functionsDir = path.resolve(__dirname, '../functions');
-  const { initializeApp } = require(
-    require.resolve('firebase-admin/app', { paths: [functionsDir] })
-  );
-  const { getFirestore, FieldValue } = require(
-    require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
-  );
-  const app = initializeApp({ projectId: PROJECT }, 'loom-sheets-backfill');
-  const db = getFirestore(app);
-
-  beforeEach(() => db.recursiveDelete(db.collection('loom_saves')));
-
-  test.each([
-    ['d20-fantasy', FANTASY],
-    ['pool-scifi', SCIFI],
-  ])('an older save gets its world’s defaults (%s), once', async (id, system) => {
-    const ref = db.collection('loom_saves').doc('old-' + id);
-    await ref.set({
-      worldId: 'w',
-      character: {
-        name: 'Tam',
-        condition: 'healthy',
-        abilities: ['swim'],
-        speed: 8,
-        inventory: ['rope'],
-        goals: [],
-      },
-    });
-    const fields = sheetBackfill((await ref.get()).data(), system, FieldValue.delete());
-    await ref.update(fields);
-    const after = (await ref.get()).data();
-    expect(after.character).toEqual({
-      name: 'Tam',
-      inventory: ['rope'],
-      goals: [],
-      sheet: defaultSheet(system, { traits: ['swim'] }),
-    });
-    expect(validateSheet(system, after.character.sheet)).toEqual([]);
-    // It rolls as it did; its speed is now worked out by its system's formula.
-    expect(speedOf(sheets.withSpeed(after, system))).toBe(20);
-    expect(sheets.traitsOf(after)).toEqual(['swim']);
-    // A second run changes nothing.
-    expect(sheetBackfill(after, system)).toBeNull();
   });
 });
 
