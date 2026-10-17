@@ -435,3 +435,112 @@ test('update_world sets a premade character, checked against the world’s syste
     'startingSheet'
   );
 });
+
+test('set_sheet gives a named character a sheet; get_character, test_roll and list_work use it (L-813)', async () => {
+  // Hale, a sergeant, under the fantasy system.
+  const worldRef = db.collection('loom_worlds').doc(WORLD);
+  await worldRef
+    .collection('characters')
+    .doc('chr_hale')
+    .set({
+      id: 'chr_hale',
+      name: 'Sergeant Hale',
+      description: 'A sergeant of the watch.',
+      sources: { description: 'mcp' },
+    });
+  await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+  await ok('update_world', { worldId: WORLD, systemId: 'd20-fantasy' });
+
+  // A stat block: every attribute, the rest the defaults.
+  const block = {
+    attributes: { STR: 16, DEX: 12, CON: 14, INT: 8, WIS: 13, CHA: 10 },
+    skills: { Athletics: 4, Perception: 2 },
+    level: 3,
+  };
+  const set = await ok('set_sheet', { worldId: WORLD, characterId: 'chr_hale', statBlock: block });
+  expect(set).toMatchObject({
+    changed: true,
+    sheet: {
+      attributes: block.attributes,
+      level: 3,
+      resources: { health: { current: 24 } }, // 3 × (6 + 2)
+      speed: 23, // 20 + DEX's +1 + Athletics 4's +2
+    },
+  });
+  expect(set.sheet.skills).toMatchObject({ Athletics: 4, Perception: 2, Stealth: 0 });
+  const hale = await ok('get_character', { worldId: WORLD, characterId: 'chr_hale' });
+  expect(hale.sheet).toMatchObject({ attributes: block.attributes, speed: 23 });
+  expect(hale.sheet).not.toHaveProperty('misfits');
+  expect(hale.checklist.find((c) => c.id === 'character.sheet')).toMatchObject({ met: true });
+
+  // test_roll rolls their own sheet, by their world's system.
+  const roll = await ok('test_roll', {
+    worldId: WORLD,
+    characterId: 'chr_hale',
+    skill: 'Athletics',
+    seed: 5,
+  });
+  expect(roll).toMatchObject({
+    system: { id: 'd20-fantasy' },
+    character: { id: 'chr_hale', name: 'Sergeant Hale' },
+    rolledWith: { attribute: 'STR', skill: 'Athletics' },
+  });
+  expect(roll.breakdown.named).toMatch(/^d20 \(\d+\) \+ Strength \(3\) \+ Athletics \(4\)$/);
+  expect(
+    await refused('test_roll', { worldId: WORLD, characterId: 'chr_hale', systemId: 'pool-scifi' })
+  ).toBe('Sergeant Hale’s world plays by "d20-fantasy", not "pool-scifi".');
+
+  // Refused, each problem named.
+  expect(
+    await refused('set_sheet', {
+      worldId: WORLD,
+      characterId: 'chr_hale',
+      statBlock: { attributes: { STR: 30 }, skills: { Juggling: 1 } },
+    })
+  ).toMatch(
+    /^Sergeant Hale’s sheet doesn’t fit the world’s rules \(d20 Fantasy\):\n- Strength is 30; .*\n- Dexterity \(DEX\) has no score\./
+  );
+  expect(
+    await refused('set_sheet', {
+      worldId: WORLD,
+      characterId: 'chr_hale',
+      sheet: null,
+      statBlock: block,
+    })
+  ).toBe('Give either sheet (or null to remove it) or statBlock.');
+
+  // The world changes system: the sheet no longer fits, and list_work says so.
+  await ok('update_world', { worldId: WORLD, systemId: 'pool-scifi' });
+  const misfit = await ok('get_character', { worldId: WORLD, characterId: 'chr_hale' });
+  expect(misfit.sheet.misfits).toEqual(
+    expect.arrayContaining(['There is no attribute "STR" in this world\'s rules.'])
+  );
+  expect(misfit.checklist.find((c) => c.id === 'character.sheet')).toMatchObject({
+    met: false,
+    message: expect.stringMatching(/^Their sheet no longer fits the world’s rules: /),
+  });
+  const work = JSON.stringify(await ok('list_work', { worldId: WORLD, kind: 'character' }));
+  expect(work).toContain('Their sheet no longer fits');
+
+  // A sci-fi stat block, then a whole sheet; null removes it.
+  const scifi = await ok('set_sheet', {
+    worldId: WORLD,
+    characterId: 'chr_hale',
+    statBlock: { attributes: { Body: 4, Reflex: 3, Mind: 2, Presence: 2 }, skills: { Melee: 2 } },
+  });
+  expect(scifi.sheet).toMatchObject({ resources: { health: { current: 7 } }, speed: 20 });
+  const whole = { ...scifi.sheet, level: 2 };
+  expect(
+    (await ok('set_sheet', { worldId: WORLD, characterId: 'chr_hale', sheet: whole })).sheet
+  ).toMatchObject({ level: 2 });
+  expect(
+    (await ok('get_character', { worldId: WORLD, characterId: 'chr_hale' })).sheet
+  ).not.toHaveProperty('misfits');
+  expect(
+    await ok('set_sheet', { worldId: WORLD, characterId: 'chr_hale', sheet: null })
+  ).toMatchObject({
+    changed: true,
+    sheet: null,
+  });
+  expect((await ok('get_character', { worldId: WORLD, characterId: 'chr_hale' })).sheet).toBeNull();
+});

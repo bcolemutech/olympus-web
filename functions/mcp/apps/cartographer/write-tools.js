@@ -13,7 +13,7 @@ const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
-const { validateSheet } = require('../../../loom-canon/sheets');
+const { validateSheet, sheetFromStatBlock, speedFor } = require('../../../loom-canon/sheets');
 const { systemOf } = require('../../../loom-canon/checks');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
@@ -1161,6 +1161,77 @@ function writeTools({ writer, systems }) {
             }
           }
           return result;
+        });
+      },
+    },
+    {
+      name: 'set_sheet',
+      title: 'Set character sheet',
+      description:
+        'Give a named character their sheet (L-813), checked against the world’s game system ' +
+        '(get_system shows its attributes, skills and resources): a full sheet, or a stat ' +
+        'block, the short form, where every attribute is given and skills left out are ' +
+        'untrained, resources full and the level the lowest. Opposed checks against them ' +
+        'roll it (test_roll with characterId tries it). null removes it. A sheet that no ' +
+        'longer fits after the system changes shows in get_character and list_work. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        characterId: entityId('character', 'get_world'),
+        sheet: z
+          .object({})
+          .passthrough()
+          .nullable()
+          .optional()
+          .describe(
+            'The whole sheet: { attributes: { [id]: score }, skills: { [id]: rank }, ' +
+              'resources: { [id]: { current } }, level, traits: [id], conditions: [] }. ' +
+              'Speed is worked out by the system. null removes it.'
+          ),
+        statBlock: z
+          .object({})
+          .passthrough()
+          .optional()
+          .describe(
+            'Or the short form: { attributes (every one), skills?, resources?, level?, traits? }.'
+          ),
+      },
+      annotations: replacing,
+      handler: (ctx, args) => {
+        if ((args.sheet === undefined) === (args.statBlock === undefined)) {
+          throw new ToolError('Give either sheet (or null to remove it) or statBlock.');
+        }
+        return edit(ctx, args, (e) => {
+          const { world } = e;
+          const character = existing(world, 'character', args.characterId);
+          const ref = e.ref('characters', character.id);
+          if (args.sheet === null) {
+            if (character.sheet) e.update(ref, 'sheet', FieldValue.delete());
+            return {
+              character: { id: character.id, name: character.name },
+              changed: Boolean(character.sheet),
+              sheet: null,
+            };
+          }
+          const system = systemOf(world);
+          const given =
+            args.statBlock !== undefined
+              ? sheetFromStatBlock(system, args.statBlock)
+              : { ...args.sheet };
+          delete given.speed; // worked out by the system (L-811)
+          const problems = validateSheet(system, given);
+          if (problems.length) {
+            throw new ToolError(
+              `${character.name}’s sheet doesn’t fit the world’s rules (${system.name}):\n- ` +
+                problems.join('\n- ')
+            );
+          }
+          e.update(ref, 'sheet', given);
+          return {
+            character: { id: character.id, name: character.name },
+            changed: true,
+            sheet: { ...given, speed: speedFor(system, given) },
+          };
         });
       },
     },

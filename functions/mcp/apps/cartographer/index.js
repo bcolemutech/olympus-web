@@ -683,7 +683,7 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
       ...mapTools({ writer }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
       // Game systems (L-801): list, get, set and copy them.
-      ...(systems ? systemTools({ systems }) : []),
+      ...(systems ? systemTools({ systems, reader }) : []),
     ],
     resources: [
       {

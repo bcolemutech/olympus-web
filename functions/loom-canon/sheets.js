@@ -242,6 +242,38 @@ function validateSheet(system, sheet) {
   return errors;
 }
 
+// ── Stat blocks (CS7; L-813) ──────────────────────────────────────────
+//
+// The short form a template's figures carry (L-790), and a quick way to give
+// a named character a sheet: every attribute, and only what differs from the
+// defaults besides: `{ attributes, skills?, resources?, level?, traits? }`.
+// A skill left out is untrained, a resource left out full, the level the
+// lowest.
+
+/** What's wrong with a stat block for this system, each named. */
+function validateStatBlock(system, block) {
+  if (!isObject(block)) return ['The stat block must be an object.'];
+  return validateSheet(system, sheetFromStatBlock(system, block));
+}
+
+/** The full sheet a stat block stands for: its own values, the defaults for the rest. */
+function sheetFromStatBlock(system, block) {
+  const sheet = defaultSheet(system, { traits: Array.isArray(block.traits) ? block.traits : [] });
+  if (block.traits !== undefined && !Array.isArray(block.traits)) sheet.traits = block.traits;
+  sheet.attributes = isObject(block.attributes) ? { ...block.attributes } : block.attributes;
+  if (isObject(block.skills)) sheet.skills = { ...(sheet.skills || {}), ...block.skills };
+  else if (block.skills !== undefined) sheet.skills = block.skills;
+  if (block.level !== undefined) sheet.level = block.level;
+  // Every resource full for these scores, unless the block says otherwise.
+  if (isObject(sheet.attributes)) {
+    const full = maxima(system, sheet);
+    for (const r of system.sheet.resources) sheet.resources[r.id] = { current: full[r.id] || 0 };
+  }
+  if (isObject(block.resources)) Object.assign(sheet.resources, block.resources);
+  sheet.speed = speedFor(system, sheet);
+  return sheet;
+}
+
 /** A save's character's sheet, or null for one made before sheets. */
 function sheetOf(state) {
   const character = state && (state.character || state);
@@ -284,6 +316,8 @@ module.exports = {
   speedFor,
   withSpeed,
   validateSheet,
+  validateStatBlock,
+  sheetFromStatBlock,
   maxima,
   sheetOf,
   traitsOf,

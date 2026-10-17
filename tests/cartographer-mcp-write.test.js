@@ -202,6 +202,7 @@ test('exposes the write tools with honest hints', async () => {
     'set_art',
     'set_battle_map',
     'set_map_layers',
+    'set_sheet',
     'set_town_ground',
     'update_character',
     'update_faction',
