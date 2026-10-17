@@ -35,6 +35,7 @@
 
 const formula = require('./formula');
 const clock = require('./clock');
+const conditions = require('./conditions');
 
 const DEFAULT_SPEED = 20; // as loom-models' (L-611)
 const MAX_SPEED = 1000;
@@ -48,8 +49,9 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const skillsOn = (system) => ((system.sheet || {}).optional || []).includes('skills');
 const middle = (a) => Math.floor((a.min + a.max) / 2);
 
-// The values a sheet's formulas read: its scores, ranks and level.
-function valuesOf(system, sheet) {
+// The values a sheet's formulas read: its scores, ranks and level, with
+// what its conditions add to them (L-815) unless `bare`.
+function valuesOf(system, sheet, { bare = false } = {}) {
   const values = {};
   for (const a of system.sheet.attributes || []) {
     const score = sheet.attributes && sheet.attributes[a.id];
@@ -63,22 +65,37 @@ function valuesOf(system, sheet) {
   }
   values.level = Number.isFinite(sheet.level) ? sheet.level : system.sheet.level.min;
   for (const r of system.sheet.resources || []) values[r.id] = 0;
+  if (bare) return values;
+  const mods = conditions.modifiersOf(system, sheet, values);
+  for (const a of system.sheet.attributes || []) {
+    values[a.id] = Math.max(a.min, Math.min(a.max, values[a.id] + conditions.sumOf(mods, a.id)));
+  }
+  if (skillsOn(system)) {
+    for (const k of system.sheet.skills || []) {
+      values[k.id] = Math.max(0, values[k.id] + conditions.sumOf(mods, k.id));
+    }
+  }
   return values;
 }
 
 /**
  * Each resource's maximum for this sheet, from the system's formulas:
- * `{ [id]: max }`. A formula that can't be worked out (it reads something
- * the sheet no longer has) gives null.
+ * `{ [id]: max }`, with what its conditions add (L-815) unless `bare`. A
+ * formula that can't be worked out (it reads something the sheet no longer
+ * has) gives null.
  */
-function maxima(system, sheet) {
-  const values = valuesOf(system, sheet);
+function maxima(system, sheet, { bare = false } = {}) {
+  const values = valuesOf(system, sheet, { bare });
+  const mods = bare
+    ? {}
+    : conditions.modifiersOf(system, sheet, valuesOf(system, sheet, { bare: true }));
   const out = {};
   for (const r of system.sheet.resources || []) {
     try {
       out[r.id] = Math.max(
         0,
-        Math.floor(formula.evaluate(r.max, { values, system, dice: () => 1 }).total)
+        Math.floor(formula.evaluate(r.max, { values, system, dice: () => 1 }).total) +
+          conditions.sumOf(mods, r.id)
       );
     } catch {
       out[r.id] = null;
@@ -107,6 +124,10 @@ function speedFor(system, sheet) {
     const bonus = trait.modifiers && trait.modifiers.speed;
     if (has.has(trait.id) && bonus !== undefined) speed += at(bonus);
   }
+  // What its conditions add (L-815): Prone's −10. A condition that stops it
+  // moving (noMove) is the turn's business, not its speed's.
+  const bare = valuesOf(system, sheet || {}, { bare: true });
+  speed += conditions.sumOf(conditions.modifiersOf(system, sheet || {}, bare), 'speed');
   return Math.max(1, Math.min(MAX_SPEED, Math.floor(speed)));
 }
 
@@ -202,7 +223,9 @@ function validateSheet(system, sheet) {
   // Resources: every one, from 0 to its maximum.
   const resources = isObject(sheet.resources) ? sheet.resources : {};
   if (!isObject(sheet.resources)) errors.push('resources must map each resource to its current.');
-  const max = maxima(system, sheet);
+  // Against the maximum without conditions (L-815): one that lowers it for a
+  // while doesn't make the sheet a misfit.
+  const max = maxima(system, sheet, { bare: true });
   for (const r of system.sheet.resources) {
     const held = resources[r.id];
     const current = isObject(held) ? held.current : undefined;
@@ -235,8 +258,10 @@ function validateSheet(system, sheet) {
   else {
     if (sheet.conditions.length > MAX_CONDITIONS) errors.push('Too many conditions.');
     sheet.conditions.forEach((c, i) => {
-      if (!isObject(c) || typeof c.id !== 'string' || !c.id) {
-        errors.push(`conditions[${i}] needs an id.`);
+      const id = conditions.idOf(c);
+      if (typeof id !== 'string' || !id) errors.push(`conditions[${i}] needs its condition.`);
+      else if (conditions.conditionsOn(system) && !conditions.conditionOf(system, id)) {
+        errors.push(`There is no condition "${id}" in this world's rules.`);
       }
     });
   }

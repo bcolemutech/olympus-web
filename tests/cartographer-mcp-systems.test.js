@@ -180,7 +180,7 @@ test('list_systems: the two built-in systems, before any is written (L-804)', as
       version: 0,
       builtIn: true,
       attributes: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'],
-      optional: ['skills', 'traits'],
+      optional: ['skills', 'traits', 'conditions'],
       modules: [],
     },
     {
@@ -189,7 +189,7 @@ test('list_systems: the two built-in systems, before any is written (L-804)', as
       version: 0,
       builtIn: true,
       attributes: ['Body', 'Reflex', 'Mind', 'Presence'],
-      optional: ['skills', 'traits'],
+      optional: ['skills', 'traits', 'conditions'],
       modules: [],
     },
   ]);
