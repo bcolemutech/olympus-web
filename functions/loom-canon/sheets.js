@@ -28,9 +28,9 @@
  * worked out again whenever a save is loaded with its world (withSpeed), so
  * a changed sheet or system moves the character at once.
  *
- * Saves made before sheets keep `character.abilities`, `speed` and
- * `condition` until the backfill moves them in (CS9): the readers here take
- * either. Pure: no I/O.
+ * A character without a sheet (one made before sheets, as tests still make
+ * them) keeps `character.abilities`, `speed` and `condition`: the readers
+ * here take either. Pure: no I/O.
  */
 
 const formula = require('./formula');
@@ -316,25 +316,6 @@ function traitsOf(state) {
   return (state && ((state.character && state.character.abilities) || state.abilities)) || [];
 }
 
-/**
- * The backfill for a save made before sheets (CS9): `null` when it has one,
- * else the fields to write: its world's system's defaults, its abilities as
- * traits, its speed worked out, and the old fields removed (`DELETE` marks them).
- */
-function sheetBackfill(save, system, DELETE = null) {
-  const character = (save && save.character) || {};
-  if (isObject(character.sheet)) return null;
-  const sheet = defaultSheet(system, {
-    traits: Array.isArray(character.abilities) ? character.abilities : [],
-  });
-  return {
-    'character.sheet': sheet,
-    'character.abilities': DELETE,
-    'character.speed': DELETE,
-    'character.condition': DELETE,
-  };
-}
-
 // ── The sheet as the player reads it (CS8, EF9; L-814) ────────────────
 
 // What's left of a condition (EF9: "Poisoned · 2 turns"), from its duration
@@ -453,5 +434,4 @@ module.exports = {
   maxima,
   sheetOf,
   traitsOf,
-  sheetBackfill,
 };

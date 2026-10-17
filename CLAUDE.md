@@ -73,7 +73,7 @@ npm run format
 - **ESLint 9** — `eslint.config.js` with separate configs per zone
 - **Prettier 3** — `.prettierrc`, semi:true, singleQuote:true, printWidth:100
 - **Jest 29** — Rules, Cloud Functions, Loom, Cartographer and MCP tests against the Firestore and Storage emulators
-- **GitHub Actions** — 14 workflows for CI, preview deploys, production deploys and admin tasks
+- **GitHub Actions** — 9 workflows for CI, preview deploys, production deploys and admin tasks
 
 ---
 
@@ -104,7 +104,7 @@ olympus-web/
 │   ├── cartographer/              # Azgaar parse → map → load, import and publish service
 │   └── mcp/                       # MCP host, OAuth server, registry, apps/ (scriptorium, cartographer)
 ├── tests/                         # Jest suites (rules, Loom, Cartographer, MCP) + fixtures/
-├── scripts/                       # One-time admin utility scripts
+├── scripts/                       # Admin scripts the workflows run (set-admin, seed-categories, studio-generate)
 ├── planning/                      # Design docs per phase; roadmap.md orders the work
 ├── .github/workflows/             # CI/CD pipelines
 ├── firebase.json                  # Firebase configuration
@@ -274,11 +274,6 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 | `firestore-rules.yml` | Push/PR to main | Run the Jest suite against the Firestore and Storage emulators |
 | `set-admin.yml` | Manual dispatch | Grant or revoke admin claim |
 | `seed-categories.yml` | Manual dispatch | Populate Symposium categories |
-| `backfill-character-positions.yml` | Manual dispatch | Give characters made before L-680 a position (dry run, then apply) |
-| `backfill-art-library.yml` | Manual dispatch | Move world art from before the image studio into its library (dry run, then apply) |
-| `backfill-screen-copies.yml` | Manual dispatch | Make screen-sized copies for library images stored before L-727 (dry run, then apply) |
-| `backfill-world-systems.yml` | Manual dispatch | Give worlds made before game systems the built-in fantasy system's id (L-804; dry run, then apply) |
-| `backfill-character-sheets.yml` | Manual dispatch | Give saves made before character sheets their world's system's defaults, abilities as traits (L-811; dry run, then apply) |
 | `set-storage-cors.yml` | Manual dispatch | Apply `storage-cors.json` to the Storage bucket, so the Loom's map engine can draw art from it (dry run, then apply) |
 | `studio-generate.yml` | Manual dispatch | Make images with the real model by hand: one image, or the big-map trial; spends money, so it asks for confirm "spend" |
 

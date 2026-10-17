@@ -31,7 +31,6 @@ const sharp = fromFunctions('sharp');
 const { createLibrary, summary } = require('../functions/studio/library');
 const { readImage } = require('../functions/studio/formats');
 const { SCREEN_MAX, screenLinkOf } = require('../functions/studio/screen');
-const { planScreenBackfill, applyScreenBackfill } = require('../functions/studio/screen-backfill');
 const art = require('../functions/loom-canon/art');
 
 const db = getFirestore();
@@ -185,69 +184,5 @@ describe('a new version', () => {
       )
     ).toMatchObject({ svg: true, url: record.link });
     expect(screenLinkOf('https://example.com/elsewhere.png')).toBeNull();
-  });
-});
-
-describe('the backfill', () => {
-  // An image as L-727 found it: its versions without copies, no screen file.
-  async function fromBefore(bytes, title) {
-    const record = await add(bytes, title);
-    const versions = record.versions.map((v) => {
-      const old = { ...v };
-      delete old.screen;
-      return old;
-    });
-    await db.collection('studio_images').doc(record.id).update({ versions });
-    for (const v of record.versions) {
-      if (v.screen) await bucket.file(v.screen.path).delete();
-    }
-    await bucket.file(`studio/${record.id}/screen`).delete();
-    return { ...record, versions };
-  }
-
-  test('a dry run lists what it would make; apply makes it; a second run finds nothing', async () => {
-    const big = await fromBefore(await png(5504, 3072), 'Nisia');
-    const small = await fromBefore(await png(800, 600), 'A tavern');
-    expect(planScreenBackfill(big)).toEqual({ copies: [1] });
-    expect(planScreenBackfill(small)).toEqual({ copies: [] });
-
-    const dry = await applyScreenBackfill({ db, bucket, apply: false });
-    const byId = Object.fromEntries(dry.images.map((i) => [i.id, i]));
-    expect(byId[big.id]).toEqual({
-      id: big.id,
-      title: 'Nisia',
-      copies: [{ n: 1, from: '5504 × 3072', to: '2048 × 1143' }],
-      link: true,
-    });
-    expect(byId[small.id]).toEqual({ id: small.id, title: 'A tavern', copies: [], link: true });
-    // Nothing written.
-    expect(await exists(`studio/${big.id}/v1-screen.webp`)).toBe(false);
-    expect(await exists(`studio/${big.id}/screen`)).toBe(false);
-    const before = (await db.collection('studio_images').doc(big.id).get()).data();
-    expect(before.versions[0].screen).toBeUndefined();
-
-    const done = await applyScreenBackfill({ db, bucket, apply: true });
-    expect(done.images).toHaveLength(2);
-    expect(done.missing).toEqual([]);
-    const after = (await db.collection('studio_images').doc(big.id).get()).data();
-    expect(after.versions[0].screen).toMatchObject({ width: 2048, height: 1143, format: 'webp' });
-    const screen = await served(screenLinkOf(big.link));
-    expect(screen.tokenOk).toBe(true);
-    expect((await sharp(screen.bytes).metadata()).width).toBe(2048);
-    // The small one's screen link serves the image itself.
-    expect((await served(screenLinkOf(small.link))).bytes.equals(await png(800, 600))).toBe(true);
-
-    expect(await applyScreenBackfill({ db, bucket, apply: true })).toEqual({
-      images: [],
-      missing: [],
-    });
-  });
-
-  test('one image by its id', async () => {
-    const one = await fromBefore(await png(3000, 1000), 'One');
-    const other = await fromBefore(await png(3000, 1000), 'Other');
-    const done = await applyScreenBackfill({ db, bucket, apply: true, imageId: one.id });
-    expect(done.images.map((i) => i.id)).toEqual([one.id]);
-    expect(await exists(`studio/${other.id}/v1-screen.webp`)).toBe(false);
   });
 });

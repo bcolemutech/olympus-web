@@ -652,16 +652,6 @@ function misfits(system, sheet) {
   return require('./sheets').validateSheet(system, sheet);
 }
 
-/**
- * What a world made before systems needs to name one (SY4; L-804): the
- * built-in fantasy system, which it already plays by, written down so it
- * is chosen. `{ systemId }` for the world's document, or null when it names
- * one already.
- */
-function systemBackfill(world) {
-  return world && world.systemId ? null : { systemId: DEFAULT_SYSTEM_ID };
-}
-
 /** The store over Firestore, for the MCP tools: `getDb` is called lazily. */
 function createSystemStore(getDb) {
   return {
@@ -689,5 +679,4 @@ module.exports = {
   setSystem,
   copySystem,
   misfits,
-  systemBackfill,
 };
