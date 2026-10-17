@@ -65,8 +65,9 @@
         showTime(data.time);
         // A second action turned down (L-614) keeps the suggestions, too.
         var keep = (options.keep || data.refused) && !(data.suggestedActions || []).length;
-        // A walk that ends by going in or setting out (L-664) is narrated.
-        if (data.step && !data.step.entered && !data.step.left) {
+        // A walk that ends by going in or setting out (L-664), or by walking
+        // into a hazard (L-815), is narrated, its save a roll card.
+        if (data.step && !data.step.entered && !data.step.left && !data.step.hazard) {
           if (data.step.lines.length) journal.add(label, data.step.lines.join(' '));
           journal.setSuggestions(kept);
         } else {

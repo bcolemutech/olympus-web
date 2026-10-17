@@ -704,7 +704,12 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
       next: 'Check it with view_image.',
     });
     const { image } = await tavernMap();
-    expect(image).toMatchObject({ imageId: result.art.imageId, width: 12, height: 8, format: 'svg' });
+    expect(image).toMatchObject({
+      imageId: result.art.imageId,
+      width: 12,
+      height: 8,
+      format: 'svg',
+    });
     const stored = await libraryImage(image.imageId);
     expect(stored).toMatchObject({
       kind: 'battleMap',
@@ -1304,5 +1309,116 @@ describe('characters on squares (L-641)', () => {
       position: fen.townPoint,
       place: { id: market, name: 'The Fishmarket' },
     });
+  });
+});
+
+describe('hazards (L-815)', () => {
+  const W = LIVE;
+  // A long hall with a wall across it at x = 6 (no gap): gas at the west end.
+  const HALL = {
+    name: 'The gas hall',
+    width: 10,
+    height: 5,
+    entries: [{ id: 'in', x: 1, y: 2 }],
+    exits: [{ id: 'out', name: 'the hall door', x: 0, y: 2, to: 'out' }],
+    features: [],
+    walls: [
+      {
+        points: [
+          { x: 6, y: 0 },
+          { x: 6, y: 5 },
+        ],
+      },
+    ],
+  };
+  const GAS = {
+    id: 'gas',
+    name: 'the gas',
+    description: 'a yellow fog, low to the floor',
+    area: { shape: 'burst', x: 4, y: 2, radius: 3 },
+    effect: {
+      condition: 'poisoned',
+      duration: { turns: 2 },
+      save: { attribute: 'CON', against: 'Moderate', when: 'apply' },
+    },
+  };
+  let mapId;
+
+  test('set_hazards places one: its squares in line of effect, a wall stopping it', async () => {
+    mapId = (await ok('set_battle_map', { worldId: W, ...HALL })).map.id;
+    const result = await ok('set_hazards', { worldId: W, mapId, hazards: [GAS] });
+    expect(result.hazards).toEqual([
+      expect.objectContaining({ id: 'gas', name: 'the gas', conditionName: 'Poisoned' }),
+    ]);
+    const xs = result.hazards[0].squares.map((s) => s.x);
+    expect(Math.min(...xs)).toBe(1);
+    expect(Math.max(...xs)).toBe(5); // the wall at x = 6 stops it
+    // It covers the entry: arriving there isn't walking into it.
+    expect(result.warnings).toEqual([
+      expect.stringMatching(/covers the entry "in" at \(1, 2\): arriving there doesn't trigger it/),
+    ]);
+    expect((await mapDoc(W, mapId)).hazards).toEqual([GAS]);
+  });
+
+  test('get_battle_map reads them back, with their squares', async () => {
+    const map = await ok('get_battle_map', { worldId: W, mapId });
+    expect(map.hazards).toEqual([
+      expect.objectContaining({
+        ...GAS,
+        conditionName: 'Poisoned',
+        squares: expect.arrayContaining([
+          { x: 4, y: 2 },
+          { x: 5, y: 4 },
+        ]),
+      }),
+    ]);
+    expect(map.hazards[0].squares).toHaveLength(25);
+  });
+
+  test('a hazard that is wrong is refused, each problem named', async () => {
+    const bad = {
+      ...GAS,
+      area: { shape: 'cone', x: 4, y: 2, length: 3 },
+      effect: {
+        condition: 'frozen',
+        duration: { untilSaved: true },
+        save: { skill: 'Juggling', against: 'Moderate', when: 'apply' },
+      },
+    };
+    const text = await refused('set_hazards', { worldId: W, mapId, hazards: [bad] });
+    expect(text).toContain('area.facing must be one of north');
+    expect(text).toContain('There is no condition "frozen" in this world\'s rules');
+    expect(text).toContain('An effect until saved needs a save at the end of each turn');
+    expect(text).toContain('There is no skill "Juggling"');
+    // An aura can't be placed: the schema allows only what stays put.
+    const aura = await refused('set_hazards', {
+      worldId: W,
+      mapId,
+      hazards: [{ ...GAS, area: { shape: 'aura', x: 1, y: 1, radius: 1 } }],
+    });
+    expect(aura).toMatch(/shape/);
+    // Two of the same id.
+    expect(await refused('set_hazards', { worldId: W, mapId, hazards: [GAS, GAS] })).toContain(
+      'Two hazards are "gas".'
+    );
+    // Nothing was changed.
+    expect((await mapDoc(W, mapId)).hazards).toEqual([GAS]);
+  });
+
+  test('a new grid keeps them, saying when they no longer fit; an empty list clears them', async () => {
+    const smaller = await ok('set_battle_map', {
+      worldId: W,
+      mapId,
+      ...HALL,
+      width: 4,
+      walls: [],
+    });
+    expect((await mapDoc(W, mapId)).hazards).toEqual([GAS]);
+    expect(smaller.warnings).toContainEqual(
+      expect.stringMatching(/^Its hazards no longer fit it: .*Fix them with set_hazards\.$/)
+    );
+    const cleared = await ok('set_hazards', { worldId: W, mapId, hazards: [] });
+    expect(cleared.hazards).toEqual([]);
+    expect((await mapDoc(W, mapId)).hazards).toEqual([]);
   });
 });

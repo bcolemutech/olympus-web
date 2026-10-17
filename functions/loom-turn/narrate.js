@@ -15,6 +15,8 @@ const { recordOf, squaresOf, peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
 const { sheetOf, validateSheet } = require('../loom-canon/sheets');
+const conditions = require('../loom-canon/conditions');
+const effects = require('../loom-canon/effects');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -412,6 +414,55 @@ function buildSheetSection(save, canonWorld) {
   );
 }
 
+// Effects (L-815): a hazard walked into this turn, how it went, and the
+// conditions on the player once the turn is done, each with what it does
+// and what it has left; null when there are none.
+const HAZARD_WORDS = {
+  applied: 'it took hold',
+  replaced: 'it took hold again, worse',
+  kept: 'they were already suffering it',
+  resisted: 'they resisted it',
+};
+function buildEffectsSection(save, resolution, canonWorld) {
+  const system = checks.systemOf(canonWorld);
+  const set = (resolution.mutations || []).find(
+    (m) => m.target === 'save' && m.path === 'character.sheet'
+  );
+  const sheet = set ? set.value : sheetOf(save);
+  const now = clock.timeOf(save);
+  const lines = [];
+  const hazard = resolution.hazard;
+  if (hazard) {
+    lines.push(
+      'HAZARD: the player walked into ' +
+        hazard.name +
+        (hazard.description ? ' (' + hazard.description + ')' : '') +
+        ' and ' +
+        (HAZARD_WORDS[hazard.outcome] || hazard.outcome) +
+        (hazard.condition ? ': ' + hazard.condition + '.' : '.') +
+        ' Narrate it happening to them, by that outcome.'
+    );
+  }
+  const on = conditions.activeOn(system, sheet);
+  if (on.length) {
+    lines.push(
+      "THE PLAYER'S CONDITIONS (they feel them; never name rules or numbers):\n" +
+        on
+          .map(
+            ({ effect, condition }) =>
+              '- ' +
+              condition.name +
+              ', ' +
+              effects.leftWords(effect, now) +
+              ' left' +
+              (condition.description ? ': ' + condition.description : '')
+          )
+          .join('\n')
+    );
+  }
+  return lines.length ? lines.join('\n\n') : null;
+}
+
 // The check rolled this turn, if one was (L-805): what it was, its total,
 // the rung, and the degree in the system's words.
 function buildRollSection(resolution, canonWorld) {
@@ -449,6 +500,9 @@ function buildUserMessage(params) {
     sheetSection,
   } = params;
   const rollSection = buildRollSection(resolution, canonWorld);
+  const effectsSection = params.save
+    ? buildEffectsSection(params.save, resolution, canonWorld)
+    : null;
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
@@ -467,6 +521,7 @@ function buildUserMessage(params) {
     constraintsText +
     '\n\n' +
     (rollSection ? rollSection + '\n\n' : '') +
+    (effectsSection ? effectsSection + '\n\n' : '') +
     (timeSection ? timeSection + '\n\n' : '') +
     'ROLLING SUMMARY:\n' +
     (recentSummary || '(none yet)') +
@@ -582,6 +637,7 @@ async function narrateResolution(params) {
         turnSection: buildTurnSection(save, resolution),
         timeSection: buildTimeSection(save, resolution),
         sheetSection: buildSheetSection(save, canonWorld),
+        save,
       }),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,

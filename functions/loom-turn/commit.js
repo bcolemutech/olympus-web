@@ -8,6 +8,8 @@ const { doorStatesOf } = require('./steps');
 const { look } = require('./seen');
 const { lookInTown } = require('./town-seen');
 const clock = require('../loom-canon/clock');
+const effects = require('../loom-canon/effects');
+const { systemOf } = require('../loom-canon/checks');
 
 /**
  * Stage 5 — COMMIT (design doc §5, §8).
@@ -99,6 +101,12 @@ async function commitTurn(params) {
     applyStateMutations(worldState, worldMutations);
     // An older save gets its clock on its next turn (L-371): Day 1, 08:00.
     if (!clock.isTime(save.time)) save.time = clock.START;
+    // Conditions whose game time has run out by now end (L-815): a journey
+    // or a wait outlasts them.
+    const sheet = save.character && save.character.sheet;
+    if (canonWorld && sheet && (sheet.conditions || []).length) {
+      save.character.sheet = effects.expire(systemOf(canonWorld), sheet, save.time).sheet;
+    }
 
     // What the save now sees on its map, read before any write.
     const looked = saveMutations.some((m) => /^(mapId|cell|doors)(\.|$)/.test(m.path));

@@ -17,7 +17,8 @@
  *       skills:     [{ id, name, attribute }]            (with 'skills')
  *       traits:     [{ id, name, description?, modifiers? }] (with 'traits'):
  *                   modifiers { speed: formula } added while it's held
- *       conditions: [{ id, name, description? }]         (with 'conditions')
+ *       conditions: [{ id, name, description?, modifiers?, each?, noAction?, noMove? }]
+ *                   (with 'conditions'; L-815, ./conditions.js): what each does
  *       derived:    [{ id, name, formula }]              (with 'derived')
  *     checks:  { formula, degrees: { [degree]: formula }, ladder: [{ name, value }] }
  *     creation: { method: 'array' | 'pointBuy' | 'rolling', ...its settings }
@@ -50,10 +51,30 @@ const DEFAULT_SYSTEM_ID = 'd20-fantasy';
 const OPTIONAL_PARTS = ['skills', 'traits', 'conditions', 'derived'];
 const DEGREES = ['criticalFailure', 'failure', 'successAtCost', 'success', 'criticalSuccess'];
 const CREATION_METHODS = ['array', 'pointBuy', 'rolling'];
-// What a trait's modifiers may change (L-811); L-815's conditions add more.
+// What a trait's modifiers may change (L-811); a condition's (L-815) may
+// also change any attribute, skill or resource.
 const MODIFIER_TARGETS = ['speed'];
+const { MODIFIER_KINDS: CONDITION_TARGETS } = require('./conditions');
 
 const formulaLanguage = require('./formula');
+
+// Whether a formula rolls dice (a modifier holds while it lasts, so it can't).
+function rollsDice(text) {
+  if (typeof text !== 'string') return false;
+  let tree;
+  try {
+    tree = formulaLanguage.parse(text);
+  } catch {
+    return false; // the formula check says what's wrong
+  }
+  const walk = (n) =>
+    Boolean(n) &&
+    typeof n === 'object' &&
+    (n.k === 'dice' ||
+      n.k === 'count' ||
+      Object.values(n).some((v) => (Array.isArray(v) ? v.some(walk) : walk(v))));
+  return walk(tree);
+}
 
 // The names each place a formula is in may use besides the sheet's fields
 // (L-802): a check reads the attribute and skill it is rolled with, and a
@@ -276,7 +297,63 @@ function validateSystem(input) {
         );
       }
     }
-    if (on.has('conditions')) list(sheet.conditions, 'sheet.conditions', { field: false });
+    // Conditions (EF3; L-815): what each does while it lasts, as data:
+    // `modifiers` { target: formula } (checks, dice, speed, or an attribute,
+    // skill or resource), `each` { resource: formula } at the end of each
+    // turn, and the flags noAction and noMove. ./conditions.js reads them.
+    if (on.has('conditions')) {
+      const ids = (part) =>
+        new Set((Array.isArray(sheet[part]) ? sheet[part] : []).map((x) => x && x.id));
+      const fields = new Set([...ids('attributes'), ...ids('skills'), ...ids('resources')]);
+      const resources = ids('resources');
+      list(sheet.conditions, 'sheet.conditions', {
+        field: false,
+        each: (c, at) => {
+          if (c.modifiers !== undefined) {
+            if (!isObject(c.modifiers)) {
+              errors.push(
+                `${at}.modifiers must map what it changes to a formula ({ checks: '-2' }).`
+              );
+            } else {
+              for (const [target, value] of Object.entries(c.modifiers)) {
+                if (!CONDITION_TARGETS.includes(target) && !fields.has(target)) {
+                  errors.push(
+                    `${at}.modifiers: "${target}" isn't something a condition changes ` +
+                      `(${CONDITION_TARGETS.join(', ')}, or an attribute, skill or resource).`
+                  );
+                } else if (rollsDice(value)) {
+                  errors.push(
+                    `${at}.modifiers.${target} can't roll dice: it holds while it lasts.`
+                  );
+                } else formula(value, `${at}.modifiers.${target}`);
+              }
+              const pool = isObject(s.checks) && /\bcount\s*\(/.test(String(s.checks.formula));
+              if (c.modifiers.dice !== undefined && !pool) {
+                warnings.push(
+                  `${at}.modifiers.dice changes a pool's dice, and the check rolls no pool: ignored.`
+                );
+              }
+            }
+          }
+          if (c.each !== undefined) {
+            if (!isObject(c.each) || !Object.keys(c.each).length) {
+              errors.push(`${at}.each must map a resource to a formula ({ health: '-1d4' }).`);
+            } else {
+              for (const [target, value] of Object.entries(c.each)) {
+                if (!resources.has(target)) {
+                  errors.push(`${at}.each: "${target}" isn't one of the system's resources.`);
+                } else formula(value, `${at}.each.${target}`);
+              }
+            }
+          }
+          for (const flag of ['noAction', 'noMove']) {
+            if (c[flag] !== undefined && typeof c[flag] !== 'boolean') {
+              errors.push(`${at}.${flag} must be true or false.`);
+            }
+          }
+        },
+      });
+    }
     if (on.has('derived')) {
       list(sheet.derived, 'sheet.derived', {
         each: (d, at) => formula(d.formula, `${at}.formula`),

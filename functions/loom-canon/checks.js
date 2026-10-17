@@ -28,6 +28,12 @@
  * comparison itself for a check that is one (d100 <= Stealth). Otherwise it
  * fails.
  *
+ * Conditions (EF3; L-815, ./conditions.js) join a check while they last: one
+ * that changes an attribute or skill changes the score it reads; one that
+ * changes `checks` is a term of its own on the result (or, rolling under, on
+ * what it must be under), and one that changes `dice` a term in a pool's
+ * size, each named on the roll card: "d20 (14) + Dexterity (2) + Poisoned (-2)".
+ *
  * Opposed checks (DC8): both sides roll from their sheets; the higher result
  * wins, a tie going to the defender unless the system says
  * `checks.ties: 'attacker'`.
@@ -37,6 +43,7 @@
 
 const formula = require('./formula');
 const { maxima } = require('./sheets');
+const conditions = require('./conditions');
 const { DEFAULT_SYSTEM_ID, BUILT_IN } = require('./systems');
 
 const DEGREE_ORDER = ['criticalSuccess', 'criticalFailure', 'success', 'successAtCost'];
@@ -129,8 +136,10 @@ function canonRung(system, difficulty) {
 
 /**
  * The numbers a check reads for a character (a sheet, or the system's
- * defaults): every attribute, skill rank and level, and the check's own
- * `attribute`, `modifier` and `rank`. Returns `{ values, attributeId, skillId }`.
+ * defaults): every attribute, skill rank and level, with what the
+ * character's conditions add to them, and the check's own `attribute`,
+ * `modifier` and `rank`. Returns `{ values, attributeId, skillId, mods }`,
+ * `mods` what the conditions add, by target (./conditions.js modifiersOf).
  */
 function valuesFor(system, character, check, dice) {
   const sheet = sheetOf(system);
@@ -154,6 +163,18 @@ function valuesFor(system, character, check, dice) {
     values[r.id] =
       held && Number.isFinite(held.current) ? held.current : full[r.id] === null ? 0 : full[r.id];
   }
+  // What the conditions add (L-815), from the scores as they are without them.
+  const mods = conditions.modifiersOf(system, own, { ...values });
+  for (const a of sheet.attributes || []) {
+    const by = conditions.sumOf(mods, a.id);
+    if (by) values[a.id] = Math.max(a.min, Math.min(a.max, values[a.id] + by));
+  }
+  if (skillsOn(system)) {
+    for (const k of sheet.skills || []) {
+      const by = conditions.sumOf(mods, k.id);
+      if (by) values[k.id] = Math.max(0, values[k.id] + by);
+    }
+  }
   for (const d of (sheetOf(system).optional || []).includes('derived') ? sheet.derived || [] : []) {
     values[d.id] = formula.evaluate(d.formula, { values, system, dice }).total;
   }
@@ -170,7 +191,39 @@ function valuesFor(system, character, check, dice) {
     ? formula.evaluate(attribute.modifier, { values, system, dice }).total
     : 0;
   values.rank = skill ? values[skill.id] : 0;
-  return { values, attributeId, skillId: skill ? skill.id : null };
+  return { values, attributeId, skillId: skill ? skill.id : null, mods };
+}
+
+// The check formula with what conditions add to it (L-815), each a named
+// term: `checks` on the result (rolling under, on what it must be under),
+// `dice` in each pool's size. Their values and labels are added to `values`
+// and `labels`. Returns the formula's tree.
+function withConditions(text, mods, values, labels) {
+  let tree = formula.parse(text);
+  const add = (node, target) =>
+    (mods[target] || []).reduce((sum, m) => {
+      const name = `@${target}:${m.id}`;
+      values[name] = m.value;
+      labels[name] = m.name;
+      return { k: 'bin', op: '+', a: sum, b: { k: 'name', v: name } };
+    }, node);
+  if ((mods.dice || []).length) {
+    const pools = (n) => {
+      if (!n || typeof n !== 'object') return n;
+      if (n.k === 'count') return { ...n, pool: { ...n.pool, count: add(n.pool.count, 'dice') } };
+      const out = Array.isArray(n) ? [] : {};
+      for (const [k, v] of Object.entries(n)) out[k] = typeof v === 'object' ? pools(v) : v;
+      return out;
+    };
+    tree = pools(tree);
+  }
+  if ((mods.checks || []).length) {
+    if (tree.k === 'cmp') {
+      const under = tree.op === '<=' || tree.op === '<';
+      tree = under ? { ...tree, b: add(tree.b, 'checks') } : { ...tree, a: add(tree.a, 'checks') };
+    } else tree = add(tree, 'checks');
+  }
+  return tree;
 }
 
 // What the roll card calls each name a check reads (L-805): the sheet's
@@ -227,9 +280,10 @@ function degreeOf(system, { result, difficulty, natural, type, values, dice }) {
  */
 function rollCheck(system, { check = {}, character = null, difficulty = null, dice }) {
   const rung = difficulty || rungByName(system, check.rung) || system.checks.ladder[0];
-  const { values, attributeId, skillId } = valuesFor(system, character, check, dice);
+  const { values, attributeId, skillId, mods } = valuesFor(system, character, check, dice);
   const labels = labelsFor(system, attributeId, skillId);
-  const result = formula.evaluate(system.checks.formula, { values, system, dice, labels });
+  const tree = withConditions(system.checks.formula, mods, values, labels);
+  const result = formula.evaluate(tree, { values, system, dice, labels });
   const natural = naturalOf(result.breakdown);
   const degree = degreeOf(system, {
     result: result.total,

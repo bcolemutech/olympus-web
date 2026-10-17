@@ -336,6 +336,7 @@ describe('a visit to the Gull & Anchor', () => {
       doors: [],
       obstacles: [],
       people: [{ id: 'chr_brannoch', name: 'Brannoch the Innkeeper' }],
+      hazards: [], // none here (L-815)
       // Open ground, all in sight: 96 bits set, 12 bytes of 0xff (L-633).
       fog: { seen: '/'.repeat(16), inSight: '/'.repeat(16) },
     });

@@ -67,7 +67,7 @@ describe.each([
       `${system.sheet.resources[0].name} (health) has no current value.`,
       'There is no resource "mana" in this world\'s rules.',
       'The trait "two words" isn\'t an id (letters, digits, - and _).',
-      'conditions[0] needs an id.',
+      'conditions[0] needs its condition.',
     ]);
     expect(validateSheet(system, null)).toEqual(['The sheet must be an object.']);
   });

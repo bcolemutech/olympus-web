@@ -44,7 +44,7 @@ const FANTASY = {
     // Movement a turn (L-811): 20, quicker with Dexterity and training in
     // Athletics.
     speed: '20 + mod(DEX) + floor(Athletics / 2)',
-    optional: ['skills', 'traits'],
+    optional: ['skills', 'traits', 'conditions'],
     // A skill's rank is its proficiency bonus: 0 untrained, 2 to 6 trained.
     skills: [
       ['Athletics', 'Athletics', 'STR'],
@@ -63,6 +63,35 @@ const FANTASY = {
     ].map(([id, name, attribute]) => ({ id, name, attribute })),
     // Today's abilities (swim, climb) become traits with character sheets (CS4; L-811).
     traits: [],
+    // What effects can put on a character (EF3; L-815): hazards now, combat
+    // and powers later.
+    conditions: [
+      {
+        id: 'poisoned',
+        name: 'Poisoned',
+        description: 'Sick and shaking: −2 to every check.',
+        modifiers: { checks: '-2' },
+      },
+      {
+        id: 'prone',
+        name: 'Prone',
+        description: 'On the ground: −2 to every check, and 10 less movement.',
+        modifiers: { checks: '-2', speed: '-10' },
+      },
+      {
+        id: 'burning',
+        name: 'Burning',
+        description: 'On fire: 1d4 damage at the end of each turn.',
+        each: { health: '-1d4' },
+      },
+      {
+        id: 'stunned',
+        name: 'Stunned',
+        description: "Reeling: you can't act or move.",
+        noAction: true,
+        noMove: true,
+      },
+    ],
   },
   checks: {
     formula: '1d20 + modifier + rank',
@@ -129,7 +158,7 @@ const SCIFI = {
     // Movement a turn (L-811): 20 at Reflex 3, two more for each point of
     // Reflex above, and one for each rank of Athletics.
     speed: '14 + 2 * Reflex + Athletics',
-    optional: ['skills', 'traits'],
+    optional: ['skills', 'traits', 'conditions'],
     // A skill's rank adds dice: 0 untrained, 1 to 3 trained.
     skills: [
       ['Athletics', 'Athletics', 'Body'],
@@ -144,6 +173,34 @@ const SCIFI = {
       ['Command', 'Command', 'Presence'],
     ].map(([id, name, attribute]) => ({ id, name, attribute })),
     traits: [],
+    // What effects can put on a character (EF3; L-815).
+    conditions: [
+      {
+        id: 'stunned',
+        name: 'Stunned',
+        description: "Knocked senseless: you can't act or move.",
+        noAction: true,
+        noMove: true,
+      },
+      {
+        id: 'bleeding',
+        name: 'Bleeding',
+        description: 'Losing blood: 1 Health at the end of each turn.',
+        each: { health: '-1' },
+      },
+      {
+        id: 'burning',
+        name: 'Burning',
+        description: 'On fire: 1 Health and 1 Stress at the end of each turn.',
+        each: { health: '-1', stress: '-1' },
+      },
+      {
+        id: 'rattled',
+        name: 'Rattled',
+        description: 'Shaken: one die fewer in every pool.',
+        modifiers: { dice: '-1' },
+      },
+    ],
   },
   checks: {
     // Roll a die per point of attribute and skill; each 7 or more is a success.
