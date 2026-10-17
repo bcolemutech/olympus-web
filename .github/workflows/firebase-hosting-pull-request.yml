@@ -11,6 +11,11 @@ jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
+    # One preview deploy at a time, so two PRs can't both make room for one
+    # channel and go over the limit together. Queued, never cancelled.
+    concurrency:
+      group: preview-channels
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       # Pin Node to the last release before the v24.17.0 keep-alive regression
@@ -20,12 +25,46 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24.16.0
+      - uses: w9jds/setup-firebase@v1.0.0
+        with:
+          gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+      # Keeps the site's previews clear: none older than an hour (since its
+      # last deploy), and at most 10 with this PR's. Deletes the stale ones,
+      # then the oldest others until this PR's fits. This PR's own channel is
+      # never deleted here, since the deploy below replaces it.
+      - name: Prune preview channels
+        env:
+          OWN: pr${{ github.event.pull_request.number }}-
+          MAX_CHANNELS: 10
+          MAX_AGE_SECONDS: 3600
+        run: |
+          set -euo pipefail
+          firebase hosting:channel:list --project olympus-dfa00 --json > channels.json
+          doomed=$(jq -r --arg own "$OWN" --argjson max "$MAX_CHANNELS" \
+            --argjson age "$MAX_AGE_SECONDS" '
+            def secs: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+            [.result.channels[]?
+              | {id: (.name | sub(".*/channels/"; "")), at: ((.updateTime // .createTime) | secs),
+                 ends: ((.expireTime // "9999-12-31T00:00:00Z") | secs)}
+              | select(.id != "live" and (.id | startswith($own) | not))]
+            | (map(select(now - .at > $age or .ends < now)) | map(.id)) as $stale
+            | map(select(.id as $id | $stale | index($id) | not)) | sort_by(.at)
+            | (.[0:(length - ($max - 1) | if . < 0 then 0 else . end)] | map(.id)) as $over
+            | ($stale + $over)[]' channels.json)
+          if [ -z "$doomed" ]; then
+            echo "No preview channels to delete."
+            exit 0
+          fi
+          for channel in $doomed; do
+            echo "Deleting $channel"
+            firebase hosting:channel:delete "$channel" --project olympus-dfa00 --force
+          done
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
           projectId: olympus-dfa00
-          expires: 7d
+          expires: 1h
   test_firestore_rules:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest

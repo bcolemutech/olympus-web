@@ -1,8 +1,7 @@
 # Deletes a pull request's Firebase Hosting preview channel when the pull
 # request closes, merged or not. Each PR gets its own channel (pr<number>-
 # <branch>, made by firebase-hosting-pull-request.yml) that otherwise lives
-# out its 7 days, and the site's channel quota runs out when many PRs land
-# in a week.
+# out its hour. The deploy also prunes stale channels and keeps at most 10.
 
 name: Clean up Firebase preview on PR close
 on:
