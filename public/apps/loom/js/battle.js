@@ -20,6 +20,9 @@
   //   solid for this turn and dashed after, and a kept plan is dashed. After
   //   a move the token walks its path (K3; a click skips ahead, reduced
   //   motion jumps). Reach and paths cover only squares seen (L-635).
+  // - Hazards (L-815; EF9): the squares of each in sight, tinted, edged and
+  //   named. Walking into one stops the walk there; its save is the turn's
+  //   roll card.
   // - Every click opens the engine's menu (I2), no one-tap shortcuts: on a
   //   square, Move (step there, go to someone or a feature, go out by an
   //   exit; beyond this turn the rest is kept as the plan) and Look; on a
@@ -65,6 +68,7 @@
     you: 0xffffff,
     ring: 0xffb74d,
     label: 0xe0e0e0,
+    hazard: 0xce93d8, // a hazard's squares (L-815)
   };
   var FOG_DIM = 0.6; // seen before, out of sight now
   var FOG_SCALE = 4; // fog texture pixels a square, before it is stretched
@@ -672,6 +676,28 @@
       });
     });
 
+    // Hazards in sight (L-815; EF9): their squares tinted, their edge drawn
+    // where it meets squares outside them.
+    (d.hazards || []).forEach(function (hazard) {
+      var on = {};
+      hazard.squares.forEach(function (sq) {
+        on[sq.x + ',' + sq.y] = true;
+      });
+      hazard.squares.forEach(function (sq) {
+        var a = square(sq);
+        g.rect(a.x, a.y, CELL, CELL);
+      });
+      g.fill({ color: COLOURS.hazard, alpha: 0.28 });
+      hazard.squares.forEach(function (sq) {
+        var a = square(sq);
+        if (!on[sq.x + ',' + (sq.y - 1)]) g.moveTo(a.x, a.y).lineTo(a.x + CELL, a.y);
+        if (!on[sq.x + ',' + (sq.y + 1)]) g.moveTo(a.x, a.y + CELL).lineTo(a.x + CELL, a.y + CELL);
+        if (!on[sq.x - 1 + ',' + sq.y]) g.moveTo(a.x, a.y).lineTo(a.x, a.y + CELL);
+        if (!on[sq.x + 1 + ',' + sq.y]) g.moveTo(a.x + CELL, a.y).lineTo(a.x + CELL, a.y + CELL);
+      });
+      g.stroke({ width: 2 * px, color: COLOURS.hazard, alpha: 0.9 });
+    });
+
     // Entries, exits and features: what stands on a square seen before but
     // out of sight now is faded.
     var faded = function (cell) {
@@ -752,6 +778,11 @@
     });
     d.features.forEach(function (f) {
       label(f, f.name);
+    });
+    // A hazard's name under its middle square in sight (L-815).
+    (d.hazards || []).forEach(function (hazard) {
+      var mid = hazard.squares[Math.floor(hazard.squares.length / 2)];
+      if (mid) label(mid, hazard.name, COLOURS.hazard);
     });
     (d.people || []).forEach(function (person) {
       if (person.x !== undefined) label(person, person.name);
