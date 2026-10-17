@@ -54,7 +54,7 @@ npm run format
 ### Frontend
 - **Vanilla JavaScript** — IIFE namespace pattern (no bundler, no build step)
 - **React 18.3.1** — CDN via unpkg.com (used in JSX Runner applets only)
-- **Preact 10.29.8 + htm 3.1.1** — CDN via unpkg.com, no build (the Loom's play view: components in `window.Loom`, one store; `public/apps/loom/js/ui.js`, `shell.js` (the side panel, a bottom sheet on phones), the panel's content in `journal.js` (with the roll cards' dice to tap), the rules reference in `rules.js`; the look's tokens in `loom.css`, each world's accent in `theme.js`)
+- **Preact 10.29.8 + htm 3.1.1** — CDN via unpkg.com, no build (the Loom's play view: components in `window.Loom`, one store; `public/apps/loom/js/ui.js`, `shell.js` (the side panel, a bottom sheet on phones), the panel's content in `journal.js` (with the roll cards' dice to tap), the rules reference in `rules.js`, making a character for a new game in `creation.js`; the look's tokens in `loom.css`, each world's accent in `theme.js`)
 - **PixiJS 8.21.0** — CDN via unpkg.com (the Loom's map engine, `public/apps/loom/js/engine.js`: WebGL, canvas without it; the world map in `world.js`, towns in `town.js`, battle maps in `battle.js`, shared drawing in `draw.js`)
 - **Babel Standalone 7.26.10** — In-browser JSX transpilation (JSX Runner only)
 - **Firebase SDK v12.9** — CDN, compat mode (`firebase/compat/app`, etc.)
@@ -215,6 +215,7 @@ npm run deploy            # Deploy hosting only (production)
 | `loom_worlds/{worldId}` | `hasApp('cartographer')`; `hasApp('loom')` for published only | Cartographer worlds; entity subcollections (`locations`, `factions`, `regions`, `characters`, `lore`, `places`) readable by `cartographer` only |
 | `loom_saves/{saveId}` (+ `loom_turns`) | Owner with `hasApp('loom')`, read only | Game saves and turn history; each save keeps its own clock, `time` in seconds from Day 1 (rules in `functions/loom-canon/clock.js`); its character's sheet, shaped by the world's game system, at `character.sheet` (attributes, skills, resources, level, traits, conditions, speed; `functions/loom-canon/sheets.js`) |
 | `loom_world_state/{worldId}` | `hasApp('loom')`, read only | Shared world state |
+| `loom_creation_rolls/{rollId}` | Deny (server only) | Scores rolled for a new character (L-812): the player, the world and the values, used once by `loomCreateSave` |
 | `loom_systems/{systemId}` | Deny (server only) | Game systems as data (L-801; `functions/loom-canon/systems.js`): the sheet, checks and ladder, creation, modules, words; written over MCP (`set_system`, `copy_system`), named by `world.systemId` (the built-in `d20-fantasy` when none; `pool-scifi` is the other built-in, both in `built-in-systems.js`) |
 | `loom_softcanon/{entityId}` | `hasApp('loom')`, read only | Play-invented entities |
 | `studio_images/{imageId}` | `hasApp('cartographer')`, read only | The image studio's library: one record per image, with its kind, labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`) |
@@ -240,7 +241,9 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 | `inviteUser` | Admin only | Create new user account |
 | `manageAccess` | Admin only | Add/remove app from user's claims |
 | `setUserDisabled` | Admin only | Enable/disable a user |
-| `loomCreateSave` / `loomDeleteSave` | `loom` claim (own saves) | Start or delete a game |
+| `loomCreateSave` / `loomDeleteSave` | `loom` claim (own saves) | Start or delete a game; a new game's character is made from the player's choices by the world's system's method (`creation`, checked by `functions/loom-canon/creation.js`), or is the world's premade one (`rules.startingSheet`) |
+| `loomCreationRules` | `loom` claim | How a new character is made in a world, for the new-game form: the method and its settings, each score's modifier, the skills and traits to choose; or that it's premade |
+| `loomRollCharacter` | `loom` claim | Rolls a new character's scores with the server's dice, for a system that makes characters by rolling; kept in `loom_creation_rolls` for `loomCreateSave` to use once |
 | `loomPlayTurn` | `loom` claim (own saves) | Run one turn of the Loom pipeline (typed text, a move made on the map, continuing a plan, or ending the turn); steps on a battle map, and walks in a town with ground (with "Walk there"), are worked out without the model; a rolled action returns its `roll` for the panel's roll card (its dice, its line with each term named, the degree in the system's words), and NARRATE is told the degree and the world's game system; every answer carries the save's `time` |
 | `loomWorldRatings` | `loom` claim | Each published world's band (Playable, Rich, Vivid or Legendary) for the Loom's world list; the band's name only |
 | `loomGetMap` | `loom` claim (own saves) | The world map a save may see: its discovered places, links, and which are open; in a town, its places for the town view; each route out of here with how long the trip takes (`travel`); the save's time (`time`, for the map's clock: "Day 1, evening"); the save's turn; and the world's game system for the rules reference (`rules`) |

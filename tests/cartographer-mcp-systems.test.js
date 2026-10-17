@@ -96,7 +96,7 @@ const STARS = {
       { name: 'Legendary', value: 4 },
     ],
   },
-  creation: { method: 'pointBuy', budget: 6 },
+  creation: { method: 'pointBuy', budget: 6, costs: { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 } },
   gmNotes: 'Neon and vacuum.',
 };
 
@@ -397,5 +397,41 @@ test('test_roll refusals', async () => {
   );
   expect(await refused('test_roll', { systemId: 'nowhere' })).toBe(
     'No system "nowhere". list_systems shows them.'
+  );
+});
+
+test('update_world sets a premade character, checked against the world’s system (L-812)', async () => {
+  const { defaultSheet } = require('../functions/loom-canon/sheets');
+  const fantasy = BUILT_IN['d20-fantasy'];
+  const sheet = { ...defaultSheet(fantasy, { traits: ['swim'] }), speed: 99 };
+  sheet.attributes.DEX = 16;
+  // With the system it will play by, given together.
+  const set = await ok('update_world', {
+    worldId: WORLD,
+    systemId: 'd20-fantasy',
+    startingSheet: sheet,
+  });
+  expect(set).toMatchObject({ changed: true, updated: ['systemId', 'startingSheet'] });
+  const stored = (await db.collection('loom_worlds').doc(WORLD).get()).data().rules.startingSheet;
+  expect(stored.attributes.DEX).toBe(16);
+  expect(stored).not.toHaveProperty('speed'); // worked out by the system (L-811)
+  // One that doesn't fit is refused, each problem named.
+  expect(
+    await refused('update_world', {
+      worldId: WORLD,
+      startingSheet: { ...sheet, attributes: { ...sheet.attributes, DEX: 30 }, level: 0 },
+    })
+  ).toBe(
+    'The starting sheet doesn’t fit the world’s rules:\n' +
+      '- Dexterity is 30; it must be a whole number from 3 to 18.\n' +
+      '- The level is 0; it must be from 1 to 20.\n' +
+      '- Hit points is 6; it must be a whole number from 0 to 1.'
+  );
+  // null removes it.
+  expect(await ok('update_world', { worldId: WORLD, startingSheet: null })).toMatchObject({
+    updated: ['startingSheet'],
+  });
+  expect((await db.collection('loom_worlds').doc(WORLD).get()).data().rules).not.toHaveProperty(
+    'startingSheet'
   );
 });

@@ -90,7 +90,7 @@ const POOL = {
     lock: { skill: 'Thievery' },
     ties: 'attacker',
   },
-  creation: { method: 'pointBuy', budget: 6 },
+  creation: { method: 'pointBuy', budget: 6, costs: { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 } },
 };
 
 // Dice that come up as listed, in order.

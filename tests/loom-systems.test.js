@@ -53,7 +53,7 @@ function pirates(overrides = {}) {
         { name: 'Heroic', value: 3 },
       ],
     },
-    creation: { method: 'pointBuy', budget: 6 },
+    creation: { method: 'pointBuy', budget: 6, costs: { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 } },
     gmNotes: 'Salt, rum and close calls.',
     ...overrides,
   };
