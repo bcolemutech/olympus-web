@@ -1832,3 +1832,125 @@ body.loom-playing .app-divider {
     columns: 1;
   }
 }
+
+/* Making a character (L-812): the guided flow after the new game's names. */
+.loom-create {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 34rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--loom-edge);
+  border-radius: 10px;
+  background: var(--loom-panel-bg);
+}
+
+.loom-create-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.loom-create-help,
+.loom-create-points {
+  margin: 0;
+}
+
+.loom-create-dim {
+  margin: 0;
+  color: var(--loom-muted);
+  font-size: 0.85rem;
+}
+
+.loom-create-attrs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.loom-create-attr {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.loom-create-select {
+  width: 5.5rem;
+}
+
+.loom-create-step {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--loom-edge);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--loom-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.loom-create-step:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.loom-create-score {
+  min-width: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.loom-create-mod {
+  min-width: 2.2rem;
+  color: var(--loom-accent);
+  font-weight: 600;
+}
+
+.loom-create-rolls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.loom-create-roll {
+  cursor: default;
+}
+
+.loom-create-choose {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.3rem 1rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.loom-create-choose legend {
+  margin-bottom: 0.4rem;
+}
+
+.loom-create-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.loom-create-review {
+  margin: 0;
+}
+
+.loom-create-review-row {
+  display: flex;
+  gap: 1rem;
+  padding: 0.15rem 0;
+}
+
+.loom-create-review-row dt {
+  flex: 0 0 9rem;
+  font-weight: 600;
+}
+
+.loom-create-review-row dd {
+  margin: 0;
+}

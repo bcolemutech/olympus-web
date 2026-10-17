@@ -53,6 +53,7 @@
   }
 
   function hideNewSaveForm() {
+    Loom.creation.hide();
     Loom.getRef('loom-new-save-form').classList.add('hidden');
     Loom.getRef('loom-new-save-name').value = '';
     Loom.getRef('loom-new-character-name').value = '';
@@ -132,15 +133,47 @@
         var name = Loom.getRef('loom-new-save-name').value.trim();
         var characterName = Loom.getRef('loom-new-character-name').value.trim();
         if (!name || !characterName) return;
+        var worldId = state.worldId;
+        var form = Loom.getRef('loom-new-save-form');
+        var submit = Loom.getRef('loom-new-save-submit');
 
-        Loom.saves
-          .createSave(state.worldId, name, characterName)
-          .then(function (saveId) {
-            hideNewSaveForm();
-            showPlay(saveId, { recentSummary: '', character: { name: characterName } });
+        function create(choices) {
+          return Loom.saves
+            .createSave(worldId, name, characterName, choices)
+            .then(function (saveId) {
+              hideNewSaveForm();
+              showPlay(saveId, { recentSummary: '', character: { name: characterName } });
+            });
+        }
+
+        // The character is made by the world's system's method (L-812),
+        // unless the world gives one or there's nothing to choose.
+        submit.disabled = true;
+        Loom.creation
+          .rulesFor(worldId)
+          .then(function (rules) {
+            submit.disabled = false;
+            if (!Loom.creation.needsChoices(rules)) return create(null);
+            form.classList.add('hidden');
+            Loom.creation.show(Loom.getRef('loom-create-host'), {
+              worldId: worldId,
+              characterName: characterName,
+              rules: rules,
+              onCreate: create,
+              onCancel: function () {
+                Loom.creation.hide();
+                form.classList.remove('hidden');
+              },
+            });
           })
-          .catch(function () {
-            // Error already surfaced inline by createSave(); nothing more to do here.
+          .catch(function (err) {
+            submit.disabled = false;
+            // createSave() shows its own errors; the rules not loading is said here.
+            var errorEl = Loom.getRef('loom-new-save-error');
+            if (errorEl.classList.contains('hidden')) {
+              errorEl.textContent = 'Could not start a game: ' + (err.message || 'Unknown error');
+              errorEl.classList.remove('hidden');
+            }
           });
       });
     },

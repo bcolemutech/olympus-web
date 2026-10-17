@@ -424,6 +424,10 @@ function validateSystem(input) {
       }
     }
     unreachableRungs(s, checkType).forEach((w) => warnings.push(w));
+    // Its creation settings against its sheet (L-812).
+    require('./creation')
+      .validateCreation(s)
+      .forEach((e) => errors.push(e));
   }
 
   return { errors, warnings, system: errors.length ? null : s };

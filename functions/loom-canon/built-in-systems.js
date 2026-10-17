@@ -85,7 +85,12 @@ const FANTASY = {
       { name: 'Nearly impossible', value: 22 },
     ],
   },
-  creation: { method: 'array', values: [15, 14, 13, 12, 10, 8] },
+  // The standard array; four skills trained at +2, the starting proficiency.
+  creation: {
+    method: 'array',
+    values: [15, 14, 13, 12, 10, 8],
+    skills: { trained: 4, rank: 2 },
+  },
   advancement: {},
   modules: {},
   gmNotes:
@@ -161,7 +166,14 @@ const SCIFI = {
       { name: 'Nearly impossible', value: 5 },
     ],
   },
-  creation: { method: 'pointBuy', budget: 6, costs: { 1: 0, 2: 1, 3: 2, 4: 4, 5: 6 } },
+  // Point buy: 8 points buys 3 in everything, or a 5 at a cost elsewhere;
+  // three skills trained at 1.
+  creation: {
+    method: 'pointBuy',
+    budget: 8,
+    costs: { 1: 0, 2: 1, 3: 2, 4: 4, 5: 6 },
+    skills: { trained: 3, rank: 1 },
+  },
   advancement: {},
   modules: {},
   gmNotes:

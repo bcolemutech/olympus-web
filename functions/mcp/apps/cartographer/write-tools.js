@@ -13,6 +13,8 @@ const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
+const { validateSheet } = require('../../../loom-canon/sheets');
+const { systemOf } = require('../../../loom-canon/checks');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
 // design.md §4.1, §4.2; C-7 / #374): Claude adds to, fixes and changes worlds,
@@ -563,8 +565,9 @@ function writeTools({ writer, systems }) {
       description:
         'Change a world’s name, tagline, opening hook (the scene every new game opens with), ' +
         'starting location (where new games begin) or game system (systemId, from ' +
-        'list_systems: the rules every game in it plays by, at the system’s latest version). ' +
-        'Fields you omit are left unchanged. ' +
+        'list_systems: the rules every game in it plays by, at the system’s latest version), ' +
+        'or a premade character (startingSheet: every new game starts with this sheet and ' +
+        'skips making a character; null removes it). Fields you omit are left unchanged. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -580,10 +583,28 @@ function writeTools({ writer, systems }) {
           .optional()
           .describe('Where new games begin.'),
         systemId: systemId.optional().describe('The game system it plays by, from list_systems.'),
+        startingSheet: z
+          .object({})
+          .passthrough()
+          .nullable()
+          .optional()
+          .describe(
+            'A premade character’s sheet for every new game (L-812): { attributes: { [id]: ' +
+              'score }, skills: { [id]: rank }, resources: { [id]: { current } }, level, ' +
+              'traits: [id], conditions: [] }, checked against the world’s system. Speed is ' +
+              'worked out by the system. null removes it.'
+          ),
       },
       annotations: replacing,
       handler: async (ctx, args) => {
-        requireSome(args, ['name', 'tagline', 'openingHook', 'startingLocationId', 'systemId']);
+        requireSome(args, [
+          'name',
+          'tagline',
+          'openingHook',
+          'startingLocationId',
+          'systemId',
+          'startingSheet',
+        ]);
         // The system must exist (L-801), read before the edit's transaction.
         const system =
           args.systemId === undefined ? null : systems && (await systems.get(args.systemId));
@@ -618,6 +639,22 @@ function writeTools({ writer, systems }) {
             }
           }
           if (system && system.id !== world.systemId) fields.systemId = system.id;
+          // A premade character (L-812), checked against the system it will play by.
+          if (args.startingSheet === null) {
+            if ((world.rules || {}).startingSheet) {
+              fields['rules.startingSheet'] = FieldValue.delete();
+            }
+          } else if (args.startingSheet !== undefined) {
+            const sheet = { ...args.startingSheet };
+            delete sheet.speed; // worked out by the system (L-811)
+            const problems = validateSheet(system || systemOf(world), sheet);
+            if (problems.length) {
+              throw new ToolError(
+                'The starting sheet doesn’t fit the world’s rules:\n- ' + problems.join('\n- ')
+              );
+            }
+            fields['rules.startingSheet'] = sheet;
+          }
           if (Object.keys(fields).length) e.updateWorld(fields);
           return {
             updated: Object.keys(fields).map((f) => f.replace('rules.', '')),

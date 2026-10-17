@@ -13,6 +13,8 @@ const { arrivalPlace } = require('./loom-canon/town');
 const maps = require('./loom-canon/maps');
 const checks = require('./loom-canon/checks');
 const sheets = require('./loom-canon/sheets');
+const creation = require('./loom-canon/creation');
+const { rollDie } = require('./loom-turn/adjudicate');
 const { mapView } = require('./loom-turn/map-view');
 const { firstLook, seenRef } = require('./loom-turn/seen');
 const { seenTownRef } = require('./loom-turn/town-seen');
@@ -724,19 +726,29 @@ exports.loomWorldRatings = onCall(async (request) => {
   return { ratings };
 });
 
+// Rolled scores waiting to be used to make a character (L-812): server only.
+const CREATION_ROLLS = 'loom_creation_rolls';
+
 /**
  * loomCreateSave — creates a new save for the caller in a given world,
  * initializing the character from that world's canon defaults (starting
  * location, starting abilities). Callable by any signed-in user with the
  * `loom` app claim.
  *
- * Data: { worldId: string, name: string, characterName: string }
+ * The character is made by the world's system's method (L-812): `creation`
+ * is the player's choices, `{ attributes, skills, traits, rollId? }`, checked
+ * by ./loom-canon/creation.js and refused with each reason (rolled scores
+ * must be those loomRollCharacter rolled, `rollId`). A world with a premade
+ * character (`rules.startingSheet`, set over MCP) uses it; with neither, the
+ * system's defaults (L-811).
+ *
+ * Data: { worldId: string, name: string, characterName: string, creation?: object }
  * Returns: { saveId: string }
  */
 exports.loomCreateSave = onCall(async (request) => {
   const uid = requireLoomAuth(request);
 
-  const { worldId, name, characterName } = request.data || {};
+  const { worldId, name, characterName, creation: choices } = request.data || {};
 
   if (typeof worldId !== 'string' || worldId.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'worldId is required.');
@@ -769,19 +781,41 @@ exports.loomCreateSave = onCall(async (request) => {
 
   const saveRef = db.collection('loom_saves').doc();
 
+  // The character's sheet (L-811, L-812): premade, made, or the defaults.
+  const system = checks.systemOf(canonWorld);
+  const startingTraits = (canonWorld.rules && canonWorld.rules.startingAbilities) || [];
+  const premade = canonWorld.rules && canonWorld.rules.startingSheet;
+  let sheet = sheets.defaultSheet(system, { traits: startingTraits });
+  let rollRef = null;
+  if (premade) {
+    sheet = { ...premade, speed: sheets.speedFor(system, premade) };
+  } else if (choices !== undefined && choices !== null) {
+    if (typeof choices !== 'object' || Array.isArray(choices)) {
+      throw new HttpsError('invalid-argument', 'creation must be an object.');
+    }
+    let rolled = null;
+    if ((system.creation || {}).method === 'rolling') {
+      if (typeof choices.rollId !== 'string' || !choices.rollId) {
+        throw new HttpsError('invalid-argument', 'Roll the scores first.');
+      }
+      rollRef = db.collection(CREATION_ROLLS).doc(choices.rollId);
+      const roll = await rollRef.get();
+      if (!roll.exists || roll.data().uid !== uid || roll.data().worldId !== worldId.trim()) {
+        throw new HttpsError('failed-precondition', 'Those rolls are not yours; roll again.');
+      }
+      rolled = roll.data().values;
+    }
+    const built = creation.buildSheet(system, choices, { rolled, startingTraits });
+    if (built.errors.length) throw new HttpsError('invalid-argument', built.errors.join(' '));
+    sheet = built.sheet;
+  }
+
   const startPlace = arrivalPlace(canonWorld, start.id, null);
   const save = makeSave({
     ownerUid: uid,
     worldId: worldId.trim(),
     name: name.trim(),
-    // A sheet with the world's system's defaults (L-811; creation is L-812),
-    // the world's starting abilities as its traits.
-    character: {
-      name: characterName.trim(),
-      sheet: sheets.defaultSheet(checks.systemOf(canonWorld), {
-        traits: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
-      }),
-    },
+    character: { name: characterName.trim(), sheet },
     location: canonWorld.rules && canonWorld.rules.startingLocationId,
     // A start with a town layout (L-342) begins at its first open entrance,
     // and on its battle map if it has one (L-351).
@@ -803,6 +837,7 @@ exports.loomCreateSave = onCall(async (request) => {
     const batch = db.batch();
     batch.set(saveRef, save);
     if (seen) batch.set(seen.ref, seen.value);
+    if (rollRef) batch.delete(rollRef); // rolls are used once
     await batch.commit();
   } catch (err) {
     console.error('loomCreateSave error:', err);
@@ -810,6 +845,68 @@ exports.loomCreateSave = onCall(async (request) => {
   }
 
   return { saveId: saveRef.id };
+});
+
+// A published world a player may start a game in, or a refusal.
+async function playableWorld(worldId) {
+  if (typeof worldId !== 'string' || worldId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'worldId is required.');
+  }
+  const canonWorld = await loomCanon.loadWorld(worldId.trim(), { db: getFirestore() });
+  if (!canonWorld) throw new HttpsError('not-found', 'Unknown world.');
+  return canonWorld;
+}
+
+/**
+ * loomCreationRules — how a new character is made in a world (L-812;
+ * game systems CS5), for the new-game form: the system's name and words,
+ * its method and settings, each attribute with the modifier every score
+ * gives, the skills and traits to choose from and how many; `premade` when
+ * the world gives every new game its own character, so there's nothing to
+ * choose.
+ *
+ * Data: { worldId: string }
+ * Returns: { system: { id, name, words }, creation, premade }
+ */
+exports.loomCreationRules = onCall(async (request) => {
+  requireLoomAuth(request);
+  const canonWorld = await playableWorld((request.data || {}).worldId);
+  const system = checks.systemOf(canonWorld);
+  return {
+    system: { id: system.id, name: system.name, words: system.words || {} },
+    creation: creation.creationView(system),
+    premade: Boolean(canonWorld.rules && canonWorld.rules.startingSheet),
+  };
+});
+
+/**
+ * loomRollCharacter — rolls a new character's scores with the server's dice
+ * (L-812), for a world whose system makes characters by rolling: one score
+ * per attribute, each with its dice for a roll card. They are kept for
+ * loomCreateSave, which takes them by `rollId` once; rolling again starts a
+ * new set.
+ *
+ * Data: { worldId: string }
+ * Returns: { rollId, rolls: [{ total, line, dice }] }
+ */
+exports.loomRollCharacter = onCall(async (request) => {
+  const uid = requireLoomAuth(request);
+  const { worldId } = request.data || {};
+  const canonWorld = await playableWorld(worldId);
+  const system = checks.systemOf(canonWorld);
+  if ((system.creation || {}).method !== 'rolling') {
+    throw new HttpsError('failed-precondition', "This world's characters aren't rolled.");
+  }
+  const rolls = creation.rollAttributes(system, rollDie);
+  const ref = getFirestore().collection(CREATION_ROLLS).doc();
+  await ref.set({
+    uid,
+    worldId: worldId.trim(),
+    values: rolls.map((r) => r.total),
+    rolls,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { rollId: ref.id, rolls };
 });
 
 /**
