@@ -8,7 +8,11 @@ const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
 const clock = require('../loom-canon/clock');
 const travel = require('../loom-canon/travel');
 const checks = require('../loom-canon/checks');
-const { planStep, doorStatesOf, doorSides, hasKey, besideDoor } = require('./steps');
+const { planStep, heldBy, doorStatesOf, doorSides, hasKey, besideDoor } = require('./steps');
+const effects = require('../loom-canon/effects');
+const hazards = require('../loom-canon/hazards');
+const conditions = require('../loom-canon/conditions');
+const sheets = require('../loom-canon/sheets');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
 const ground = require('../loom-canon/ground');
@@ -62,6 +66,13 @@ const SIGHT_ONLY =
  * so no save is stranded. A world object with no status (only tests build
  * one) is exempt.
  *
+ * Effects (planning/game-systems.md §4.10; L-815): walking into a hazard on a
+ * battle map rolls its save with the server's dice and puts its condition
+ * on a failure (the save's roll is the turn's roll card); End turn ticks the
+ * character's conditions (damage each turn, saves to shake them off, a turn
+ * off each), and a wait ticks them for every turn it lasts; a condition
+ * that stops acting or moving (noAction, noMove) turns those down.
+ *
  * Towns (§8; L-342 / #396): inside a settlement with a town layout, moves
  * between places follow the town's own links and are gated the same way. A
  * move to any place in town walks the shortest open way there in one go
@@ -86,6 +97,56 @@ function diceSource(dice) {
 }
 
 const blocked = (message) => ({ outcome: 'blocked', mutations: [], constraints: [message] });
+
+// The character's sheet, or (a save from before sheets) the system's defaults.
+function sheetFor(system, characterState) {
+  return sheets.sheetOf(characterState) || sheets.defaultSheet(system);
+}
+const setSheet = (sheet) => ({
+  target: 'save',
+  op: 'set-flag',
+  path: 'character.sheet',
+  value: sheet,
+});
+
+// Walking into a hazard (L-815; ../loom-canon/hazards.js): its save, rolled
+// by the character, resists it; on a failure its condition goes on. Returns
+// the resolution's parts: `{ mutations, constraints, roll?, hazard }`.
+function hazardOutcome(canonWorld, characterState, hazard, dice) {
+  const system = checks.systemOf(canonWorld);
+  const now = clock.timeOf(characterState);
+  const result = effects.apply(
+    system,
+    sheetFor(system, characterState),
+    { ...hazard.effect, source: { kind: 'hazard', id: hazard.id, name: hazard.name } },
+    { now, dice, turnSeconds: clock.turnSeconds(canonWorld, true) }
+  );
+  const changed = result.outcome === 'applied' || result.outcome === 'replaced';
+  return {
+    mutations: changed ? [setSheet(result.sheet)] : [],
+    constraints: ['You walk into ' + hazard.name + '.', result.line],
+    ...(result.roll ? { roll: rolled(result.roll, 'save: ' + hazard.name, system) } : {}),
+    hazard: {
+      id: hazard.id,
+      name: hazard.name,
+      condition: result.name,
+      outcome: result.outcome,
+      ...(hazard.description ? { description: hazard.description } : {}),
+    },
+  };
+}
+
+// A hazard walked into by a step on the map (index.js runs this turn for it).
+function evaluateHazard(proposedAction, characterState, dice, canonWorld) {
+  const id = String((proposedAction.targets || [])[0] || '').replace(/^hazard:/, '');
+  const hazard = hazards.find(canonWorld, characterState.mapId, id);
+  if (!hazard) return blocked("There's no such hazard here.");
+  const out = hazardOutcome(canonWorld, characterState, hazard, dice);
+  return {
+    outcome: out.hazard.outcome === 'resisted' ? 'success' : 'failure',
+    ...out,
+  };
+}
 
 // The ability a place requires that the character lacks (the save's
 // character, or a bare character state), or null.
@@ -240,7 +301,7 @@ const exitNames = (exits) => nameList(exits.map((e) => ({ name: e.name })));
 // standing there in sight (L-642: the walk ends beside them). Stepping onto an exit leaves by it, out
 // to the town or the world, or onto the map it leads to. Anything else waits
 // until the player has left the map, as leaving a town waits for a gate.
-function evaluateMapMove(proposedAction, characterState, canonWorld, here, known) {
+function evaluateMapMove(proposedAction, characterState, canonWorld, here, known, dice) {
   const { map, cell: from } = here;
   const host = maps.hostOf(canonWorld, characterState);
   const hostName = host ? host.name : map.name;
@@ -319,6 +380,19 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
   }
   // The squares walked through, for what is seen on the way (L-632).
   const walked = step.walked;
+  // A hazard on the way stops the walk there and triggers (L-815).
+  const into = step.hazard ? hazards.find(canonWorld, map.id, step.hazard.id) : null;
+  if (into) {
+    const out = hazardOutcome(canonWorld, characterState, into, diceSource(dice));
+    return {
+      outcome: out.hazard.outcome === 'resisted' ? 'success' : 'failure',
+      mutations: mutations.concat(out.mutations),
+      constraints: out.constraints,
+      ...(out.roll ? { roll: out.roll } : {}),
+      hazard: out.hazard,
+      walked,
+    };
+  }
   if (step.turn.plan) {
     return {
       outcome: 'success',
@@ -398,7 +472,7 @@ function chosenWayIn(proposedAction, canonWorld) {
   return asked;
 }
 
-function evaluateMove(proposedAction, worldState, characterState, canonWorld, known, found) {
+function evaluateMove(proposedAction, worldState, characterState, canonWorld, known, found, dice) {
   const currentId = characterState.location;
 
   if (!currentId || !canonWorld.locations[currentId]) {
@@ -409,7 +483,7 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
   // it. A map with no exits holds nobody: it is passed over.
   const onMap = maps.positionOf(canonWorld, characterState);
   if (onMap.map && (onMap.map.exits || []).length) {
-    return evaluateMapMove(proposedAction, characterState, canonWorld, onMap, known);
+    return evaluateMapMove(proposedAction, characterState, canonWorld, onMap, known, dice);
   }
   if (proposedAction.params && proposedAction.params.cell) {
     return blocked("There's no map here to move on.");
@@ -679,9 +753,15 @@ function evaluateGeneric(proposedAction, dice, characterState, canonWorld) {
 // says how far the player moved this turn, since steps aren't recorded
 // (L-613 / #443). The turn takes its length of game time (L-371; game time
 // T4): 6 s on a battle map, 5 min anywhere else, from timeRules.
-function evaluateEndTurn(characterState, canonWorld) {
+function evaluateEndTurn(characterState, canonWorld, dice) {
   const spent = speedOf(characterState) - turnStateOf(characterState).movementLeft;
   const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
+  const ends = clock.timeOf(characterState) + clock.turnSeconds(canonWorld, Boolean(map));
+  // The character's conditions tick (L-815): damage each turn, a save to
+  // shake one off, a turn off each, game time's end.
+  const ticked = tickConditions(characterState, canonWorld, (system, sheet) =>
+    effects.endOfTurn(system, sheet, { now: ends, dice })
+  );
   let moved = '';
   if (map && spent > 0) {
     const feature = maps.at(map, cell).feature;
@@ -696,15 +776,28 @@ function evaluateEndTurn(characterState, canonWorld) {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
-      {
-        target: 'save',
-        op: 'set-flag',
-        path: 'time',
-        value: clock.timeOf(characterState) + clock.turnSeconds(canonWorld, Boolean(map)),
-      },
+      { target: 'save', op: 'set-flag', path: 'time', value: ends },
       { op: 'increment', path: 'worldClock', value: 1 },
+      ...ticked.mutations,
     ],
-    constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved],
+    constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved].concat(ticked.lines),
+    ...(ticked.roll ? { roll: ticked.roll } : {}),
+  };
+}
+
+// A character's conditions, ticked by `tick(system, sheet)` (./effects.js):
+// the sheet written back when anything changed, the lines, and the first
+// save rolled as the turn's roll card (L-815).
+function tickConditions(characterState, canonWorld, tick) {
+  const system = checks.systemOf(canonWorld);
+  const sheet = sheets.sheetOf(characterState);
+  if (!sheet || !(sheet.conditions || []).length) return { mutations: [], lines: [] };
+  const t = tick(system, sheet);
+  const first = t.rolls[0];
+  return {
+    mutations: JSON.stringify(t.sheet) === JSON.stringify(sheet) ? [] : [setSheet(t.sheet)],
+    lines: t.lines,
+    ...(first ? { roll: rolled(first.roll, 'save: ' + first.name, system) } : {}),
   };
 }
 
@@ -719,7 +812,7 @@ const HOW_LONG =
   'How long? Wait a number of minutes, or until dawn, morning, midday, afternoon, evening ' +
   'or night.';
 
-function evaluateWait(proposedAction, characterState) {
+function evaluateWait(proposedAction, characterState, canonWorld, dice) {
   const turn = turnStateOf(characterState);
   if (turn.actionUsed) return blocked(ACTED);
   const params = proposedAction.params || {};
@@ -745,14 +838,29 @@ function evaluateWait(proposedAction, characterState) {
     return blocked(HOW_LONG);
   }
   const time = travel.timeSpent(now, seconds);
+  // Its conditions tick for every turn the wait lasts (L-815): a long wait
+  // outlasts them.
+  const { map } = maps.positionOf(canonWorld || {}, characterState);
+  const turnSeconds = clock.turnSeconds(canonWorld, Boolean(map));
+  const ticked = tickConditions(characterState, canonWorld, (system, sheet) =>
+    effects.overTurns(system, sheet, {
+      from: now,
+      to: time.to,
+      turns: Math.min(100, Math.max(1, Math.floor(seconds / turnSeconds))),
+      turnSeconds,
+      dice,
+    })
+  );
   return {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
       { target: 'save', op: 'set-flag', path: 'time', value: time.to },
       { op: 'increment', path: 'worldClock', value: 1 },
+      ...ticked.mutations,
     ],
-    constraints: [said],
+    constraints: [said].concat(ticked.lines),
+    ...(ticked.roll ? { roll: ticked.roll } : {}),
     time,
   };
 }
@@ -815,6 +923,14 @@ function outOfSightOrReach(proposedAction, characterState, canonWorld) {
 function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   const turn = turnStateOf(characterState);
   if (turn.actionUsed) return blocked(ACTED);
+  // A condition that stops acting (L-815: Stunned) turns it down, unused.
+  const stopped = conditions.flagsOf(
+    checks.systemOf(canonWorld),
+    sheets.sheetOf(characterState)
+  ).noAction;
+  if (stopped.length) {
+    return { ...blocked("You can't act: you're " + stopped.join(' and ') + '.'), plain: true };
+  }
   const unreached = outOfSightOrReach(proposedAction, characterState, canonWorld);
   if (unreached) return blocked(unreached);
   const doorTarget = (proposedAction.targets || []).find(
@@ -926,12 +1042,25 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
 
 function evaluate(proposedAction, worldState, characterState, dice, canonWorld, known, found) {
   let resolution;
-  if (proposedAction.verb === 'move') {
-    resolution = evaluateMove(proposedAction, worldState, characterState, canonWorld, known, found);
+  const held = proposedAction.verb === 'move' ? heldBy(canonWorld, characterState) : null;
+  if (held) {
+    resolution = { ...blocked(held), plain: true };
+  } else if (proposedAction.verb === 'move') {
+    resolution = evaluateMove(
+      proposedAction,
+      worldState,
+      characterState,
+      canonWorld,
+      known,
+      found,
+      diceSource(dice)
+    );
   } else if (proposedAction.verb === 'end-turn') {
-    resolution = evaluateEndTurn(characterState, canonWorld);
+    resolution = evaluateEndTurn(characterState, canonWorld, diceSource(dice));
+  } else if (proposedAction.verb === 'hazard') {
+    resolution = evaluateHazard(proposedAction, characterState, diceSource(dice), canonWorld);
   } else if (WAIT_VERBS[proposedAction.verb]) {
-    resolution = evaluateWait(proposedAction, characterState);
+    resolution = evaluateWait(proposedAction, characterState, canonWorld, diceSource(dice));
   } else {
     resolution = evaluateAction(proposedAction, characterState, diceSource(dice), canonWorld);
   }
@@ -947,6 +1076,10 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     ...(resolution.roll ? { roll: Object.freeze({ ...resolution.roll }) } : {}),
     // The other side's roll in an opposed check (L-803).
     ...(resolution.opposed ? { opposed: Object.freeze({ ...resolution.opposed }) } : {}),
+    // Turned down plainly, unnarrated (L-815: held by a condition).
+    ...(resolution.plain ? { plain: true } : {}),
+    // A hazard walked into (L-815), for the GM.
+    ...(resolution.hazard ? { hazard: Object.freeze({ ...resolution.hazard }) } : {}),
     // The time it took and the dawns and dusks on the way (L-373), for the GM (L-375).
     ...(resolution.time ? { time: Object.freeze({ ...resolution.time }) } : {}),
     ...(resolution.walked ? { walked: Object.freeze(resolution.walked) } : {}),

@@ -5,7 +5,7 @@ const ground = require('../loom-canon/ground');
 const town = require('../loom-canon/town');
 const { isPlaceOpen } = require('../loom-canon/grading');
 const { turnStateOf } = require('../loom-models');
-const { OUT_OF_MOVEMENT } = require('./steps');
+const { OUT_OF_MOVEMENT, heldBy } = require('./steps');
 
 /**
  * Walking in a town with ground (planning/the-loom-movement-and-vision.md
@@ -72,6 +72,9 @@ function planTownStep(canonWorld, save, target) {
   const street = streetOf(canonWorld, save);
   if (!street) return { refused: 'There are no streets to walk here.' };
   const { settlement, from } = street;
+  // Held where you stand by a condition (L-815: Stunned).
+  const held = heldBy(canonWorld, save);
+  if (held) return { refused: held };
   const turn = turnStateOf(save);
 
   let placeId = target.placeId || null;

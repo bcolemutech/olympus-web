@@ -29,7 +29,7 @@
 
 const formula = require('./formula');
 const checks = require('./checks');
-const { maxima } = require('./sheets');
+const { maxima, leftOf } = require('./sheets');
 const conditions = require('./conditions');
 const clock = require('./clock');
 
@@ -181,12 +181,7 @@ function clamp(system, sheet) {
 
 /** "2 turns", "about an hour", "until saved": what an effect has left, in words. */
 function leftWords(effect, now) {
-  const d = (effect && effect.duration) || {};
-  const count = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
-  if (Number.isFinite(d.rounds)) return count(d.rounds, 'round');
-  if (Number.isFinite(d.turns)) return count(d.turns, 'turn');
-  if (Number.isFinite(d.seconds)) return clock.duration(remainingOf(effect, now, 0));
-  return 'until saved';
+  return leftOf(effect, now) || 'until saved';
 }
 
 /**
@@ -341,7 +336,38 @@ function endOfTurn(system, sheet, { now = 0, dice } = {}) {
   return { sheet: next, lines: lines.concat(timed.lines), rolls };
 }
 
+/**
+ * Many turns at once (a wait, a rest; L-374): End turn's tick, `turns`
+ * times from `from`, each a turn of `turnSeconds`, then game time's end at
+ * `to`; stops early once nothing is left on. The lines say what changed in
+ * all: each resource from and to, and what ended.
+ */
+function overTurns(system, sheet, { from = 0, to = from, turns = 1, turnSeconds = 6, dice } = {}) {
+  let next = copyOf(sheet || {});
+  const before = copyOf(next.resources || {});
+  const ended = [];
+  const rolls = [];
+  for (let i = 0; i < turns && (next.conditions || []).length; i++) {
+    const t = endOfTurn(system, next, { now: from + (i + 1) * turnSeconds, dice });
+    next = t.sheet;
+    rolls.push(...t.rolls);
+    ended.push(...t.lines.filter((line) => !/ (lost|back) \(/.test(line)));
+  }
+  const timed = expire(system, next, to);
+  next = timed.sheet;
+  const lines = [];
+  for (const r of system.sheet.resources || []) {
+    const was = before[r.id] && before[r.id].current;
+    const now = next.resources && next.resources[r.id] && next.resources[r.id].current;
+    if (Number.isFinite(was) && Number.isFinite(now) && was !== now) {
+      lines.push(`${r.name}: ${was} → ${now}.`);
+    }
+  }
+  return { sheet: next, lines: lines.concat(ended, timed.lines), rolls };
+}
+
 module.exports = {
+  overTurns,
   DURATIONS,
   WHEN,
   validateEffect,

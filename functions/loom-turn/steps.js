@@ -4,6 +4,10 @@ const gridPaths = require('../loom-canon/grid-paths');
 const maps = require('../loom-canon/maps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
+const hazards = require('../loom-canon/hazards');
+const conditions = require('../loom-canon/conditions');
+const { systemOf } = require('../loom-canon/checks');
+const { sheetOf } = require('../loom-canon/sheets');
 const { turnStateOf } = require('../loom-models');
 
 /**
@@ -42,12 +46,23 @@ const { turnStateOf } = require('../loom-models');
  * someone comes into view who wasn't in sight where it started, with a
  * plain line ("Old Mags is at the bar.") and the rest kept as the plan.
  *
+ * A walk into a hazard (L-815; ../loom-canon/hazards.js), from a square
+ * outside it to one inside, stops there, the rest kept as the plan, and
+ * says which (`hazard`): the caller has it triggered, narrated. A character
+ * whose conditions stop them moving (noMove: Stunned) doesn't step at all.
+ *
  * Pure: planStep reads a save and the canon world and says what the step
  * does; the caller writes it inside a transaction, so two moves at once
  * can't spend the same movement.
  */
 
 const OUT_OF_MOVEMENT = "You're out of movement. End your turn to go on.";
+
+/** Why a character can't move now (a condition with noMove, L-815), or null. */
+function heldBy(canonWorld, save) {
+  const names = conditions.flagsOf(systemOf(canonWorld), sheetOf(save)).noMove;
+  return names.length ? "You can't move: you're " + names.join(' and ') + '.' : null;
+}
 const UNSEEN = "You haven't seen that.";
 
 /** The states of a save's doors on a map, by door id (none: as the map has them). */
@@ -104,6 +119,8 @@ function storedPath(map, from, plan, cost) {
 function planStep(canonWorld, save, target, known) {
   const { map, cell: from } = maps.positionOf(canonWorld, save);
   if (!map || !(map.exits || []).length) return { refused: "There's no map here to move on." };
+  const held = heldBy(canonWorld, save);
+  if (held) return { refused: held };
   const turn = turnStateOf(save);
 
   let plan = null;
@@ -164,10 +181,21 @@ function planStep(canonWorld, save, target, known) {
     const now = sight.inSight(map, cell, states);
     return unseen.filter((p) => now[key(p.cell)]);
   };
+  // A hazard walked into stops the walk where it is entered (L-815).
+  let prev = from;
+  const intoHazard = (step) => {
+    const into = hazards.enteredBy(map, prev, step, doors);
+    prev = step;
+    return Boolean(into);
+  };
   const { walked, spent, rest, opened } = gridPaths.walk(path, turn.movementLeft, {
-    stop: (step) => cameIntoView(step, doors).length > 0,
+    stop: (step) => cameIntoView(step, doors).length > 0 || intoHazard(step),
     stand: (step) => !personAt(step),
   });
+  const last = walked.length ? walked[walked.length - 1] : null;
+  const before = walked.length > 1 ? walked[walked.length - 2] : from;
+  const hazard = last ? hazards.enteredBy(map, before, last, doors) : null;
+  const into = hazard ? { hazard: { id: hazard.id, name: hazard.name, mapId: map.id } } : {};
   const movementLeft = turn.movementLeft - spent;
   const squares = walked.map((step) => ({ x: step.x, y: step.y }));
   const door = opened ? (map.doors || []).find((d) => d.id === opened) : null;
@@ -191,11 +219,12 @@ function planStep(canonWorld, save, target, known) {
         .concat(seenLines),
       ...(seenLines.length ? { seenLines } : {}),
       walked: squares,
+      ...into,
     };
   }
   const lines = (door ? ['You open ' + (door.name || 'the door') + '.'] : [])
     .concat(seenLines)
-    .concat(!movementLeft || (!door && !seenLines.length) ? [OUT_OF_MOVEMENT] : []);
+    .concat(!movementLeft || (!door && !seenLines.length && !hazard) ? [OUT_OF_MOVEMENT] : []);
   return {
     cell: { x: stop.x, y: stop.y },
     turn: {
@@ -207,6 +236,7 @@ function planStep(canonWorld, save, target, known) {
     ...(seenLines.length ? { seenLines } : {}),
     walked: squares,
     ...(door ? { opened: { mapId: map.id, doorId: door.id } } : {}),
+    ...into,
   };
 }
 
@@ -286,6 +316,7 @@ function planDoor(canonWorld, save, doorId, open) {
 
 module.exports = {
   planStep,
+  heldBy,
   planDoor,
   planOn,
   doorStatesOf,

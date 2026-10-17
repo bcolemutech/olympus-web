@@ -23,6 +23,8 @@ const artOf = require('../../../loom-canon/art');
 const routes = require('../../../loom-canon/routes');
 const { validateSheet, speedFor } = require('../../../loom-canon/sheets');
 const { systemOf } = require('../../../loom-canon/checks');
+const hazards = require('../../../loom-canon/hazards');
+const { conditionOf } = require('../../../loom-canon/conditions');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -662,6 +664,24 @@ function battleMapRow(world, map) {
   };
 }
 
+// A map's hazards (L-815), each with the condition it puts on and the
+// squares it covers (doors as the map has them).
+function hazardRows(world, map) {
+  const system = systemOf(world);
+  return (map.hazards || []).map((h) => {
+    const condition = conditionOf(system, h.effect && h.effect.condition);
+    const squares = Object.keys(hazards.squaresOf(map, h)).map((k) => {
+      const [x, y] = k.split(',').map(Number);
+      return { x, y };
+    });
+    return {
+      ...h,
+      ...(condition ? { conditionName: condition.name } : {}),
+      squares,
+    };
+  });
+}
+
 function battleMapDetail(world, map) {
   const exitTo = (exit) => {
     if (!exit.to || exit.to === 'out') return 'out';
@@ -692,6 +712,8 @@ function battleMapDetail(world, map) {
     walls: map.walls || [],
     doors: map.doors || [],
     obstacles: map.obstacles || [],
+    // Its hazards (L-815), with their squares.
+    hazards: hazardRows(world, map),
     // Who stands where (L-641); on a generic map, at which place.
     characters: maps.standingOn(world, map).map(({ character, host, cell }) => ({
       id: character.id,
@@ -712,6 +734,7 @@ module.exports = {
   usersOf,
   battleMapRow,
   battleMapDetail,
+  hazardRows,
   worldRow,
   worldOverview,
   findLocations,

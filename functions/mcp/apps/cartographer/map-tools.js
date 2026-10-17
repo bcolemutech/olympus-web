@@ -6,6 +6,9 @@ const { ToolError } = require('../../registry');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
+const areas = require('../../../loom-canon/areas');
+const hazards = require('../../../loom-canon/hazards');
+const { systemOf } = require('../../../loom-canon/checks');
 const { worldId, entityId } = require('./schemas');
 const { helpers } = require('./write-tools');
 const views = require('./views');
@@ -30,6 +33,12 @@ const views = require('./views');
 //     place another map, or none, moves its characters to a position there
 //     (L-682): a free square near the new map's entry, or the place's door in
 //     town; a point of interest without a map needs none.
+//
+//   - Hazards (L-815; loom-canon/hazards.js): a gas cloud, a fire, thorns, set
+//     with set_hazards: an area on the grid, the effect it puts on (one of the
+//     world's system's conditions, with how long and its save), checked
+//     against the map and the system. Replacing a grid keeps them, warning
+//     about any that no longer fit it.
 //
 // Images can't be sent over MCP: they are uploaded on the Cartographer page.
 // Removing a map is retire_entity (type battleMap), in write-tools.js.
@@ -116,6 +125,90 @@ const obstacle = z.strictObject({
     .describe('Squares across; 1 if left out.'),
   h: z.number().int().min(1).max(maps.MAX_SIDE).optional().describe('Squares down; 1 if left out.'),
 });
+// Hazards (L-815): an area, the effect it puts on, and its save.
+const hazardArea = z
+  .strictObject({
+    shape: z
+      .enum(['burst', 'cone', 'line', 'square'])
+      .describe(
+        'burst: every square within radius (a diagonal step counts one, so a square of ' +
+          'squares); cone: a 90° wedge out from beside the origin, length long, toward facing; ' +
+          'line: a strip out from beside the origin, length long and width wide (1); square: ' +
+          'size × size squares with the origin its top-left.'
+      ),
+    x: coord.describe('The origin square.'),
+    y: coord,
+    radius: z.number().int().min(1).max(areas.MAX_REACH).optional().describe('burst'),
+    length: z.number().int().min(1).max(areas.MAX_REACH).optional().describe('cone, line'),
+    width: z.number().int().min(1).max(areas.MAX_REACH).optional().describe('line; 1 if left out'),
+    size: z.number().int().min(1).max(areas.MAX_REACH).optional().describe('square'),
+    facing: z.enum(Object.keys(areas.FACINGS)).optional().describe('cone, line (north is up)'),
+  })
+  .describe(
+    'Squares whose centre is inside, in line of effect from the origin: walls and closed ' +
+      'doors stop it.'
+  );
+const hazardEffect = z.strictObject({
+  condition: z
+    .string()
+    .min(1)
+    .max(40)
+    .describe("One of the world's system's conditions (get_system: sheet.conditions)."),
+  duration: z
+    .union([
+      z.strictObject({ rounds: z.number().int().min(1).max(100) }),
+      z.strictObject({ turns: z.number().int().min(1).max(100) }),
+      z.strictObject({
+        seconds: z
+          .number()
+          .int()
+          .min(1)
+          .max(30 * 86400),
+      }),
+      z.strictObject({ untilSaved: z.literal(true) }),
+    ])
+    .describe(
+      '{ turns } (End turn ticks them; a round is a turn until combat), { seconds } of game ' +
+        'time, or { untilSaved: true } (needs a save at the end of each turn).'
+    ),
+  save: z
+    .strictObject({
+      skill: z.string().min(1).max(40).optional(),
+      attribute: z.string().min(1).max(40).optional(),
+      against: z
+        .union([z.string().min(1).max(200), z.number()])
+        .describe(
+          'A rung of the ladder ("Moderate"), a number on the d20 scale locks use (placed on ' +
+            "the system's ladder), or a formula."
+        ),
+      when: z
+        .union([z.enum(['apply', 'endOfTurn']), z.array(z.enum(['apply', 'endOfTurn'])).min(1)])
+        .describe('apply: rolled when it lands, to resist it; endOfTurn: to shake it off.'),
+    })
+    .optional()
+    .describe('The check the character rolls against it (their skill or attribute).'),
+});
+const hazard = z.strictObject({
+  id: cellId,
+  name: label.describe('As players would say it: "the gas", "the burning oil".'),
+  description: z
+    .string()
+    .trim()
+    .max(300)
+    .optional()
+    .describe('What it looks like, for the narrator: "a yellow fog, low to the floor".'),
+  area: hazardArea,
+  effect: hazardEffect,
+});
+
+// A map's hazards against the world's system (loom-canon/hazards.js): its
+// errors as one tool error, its warnings returned.
+function checkHazards(world, map, list) {
+  const { errors, warnings } = hazards.validate(systemOf(world), map, list);
+  if (errors.length) throw new ToolError(errors.join(' '));
+  return warnings;
+}
+
 const LAYER_SHAPES = {
   walls: z.array(wall).max(200),
   doors: z.array(door).max(60),
@@ -358,6 +451,11 @@ function mapTools({ writer }) {
             def[layer] = args[layer] || (before && before[layer]) || [];
           }
           checkLayers(def);
+          // Its hazards are kept (L-815); any that no longer fit are said.
+          def.hazards = (before && before.hazards) || [];
+          const misfit = def.hazards.length
+            ? hazards.validate(systemOf(world), def, def.hazards).errors
+            : [];
           const doc = {
             id,
             ...def,
@@ -378,6 +476,11 @@ function mapTools({ writer }) {
           };
           if (!before) result.created = true;
           const warnings = [...layerWarnings(doc), ...standingWarnings(world, doc)];
+          if (misfit.length) {
+            warnings.push(
+              `Its hazards no longer fit it: ${misfit.join(' ')} Fix them with set_hazards.`
+            );
+          }
           if (before) {
             warnings.unshift(
               'Players who had explored it start over: what they had seen of it is forgotten.'
@@ -439,6 +542,45 @@ function mapTools({ writer }) {
             updated: given,
           };
           const warnings = [...layerWarnings(next), ...standingWarnings(world, next)];
+          if (warnings.length) result.warnings = warnings;
+          return result;
+        }),
+    },
+    {
+      name: 'set_hazards',
+      title: 'Set a battle map’s hazards',
+      description:
+        'Place hazards on a battle map (L-815): a gas cloud, a fire, a patch of thorns. Each is ' +
+        'an area (a burst, cone, line or square, in line of effect from its origin: walls and ' +
+        'closed doors stop it) and the effect it puts on whoever walks into it: one of the ' +
+        "world's system's conditions (get_system lists them, each with what it does), for how " +
+        'long, and the save that resists it (rolled when it lands) or shakes it off (at the end ' +
+        'of each turn). Walking from outside it into it triggers it: the Loom rolls the save ' +
+        'with its own dice and puts the condition on a failure, and the narrator is told. ' +
+        'Players see a hazard on the grid while it is in sight. The list replaces the map’s ' +
+        'hazards; an empty list clears them. get_battle_map shows them with their squares. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        mapId: entityId('battle map', 'list_battle_maps'),
+        hazards: z.array(hazard).max(hazards.MAX_HAZARDS),
+      },
+      annotations: replacing,
+      handler: (ctx, args) =>
+        edit(ctx, args, (e) => {
+          const { world } = e;
+          const map = live(world, 'battleMap', args.mapId);
+          const list = args.hazards.map((h) => JSON.parse(JSON.stringify(h)));
+          const warnings = checkHazards(world, map, list);
+          e.update(e.ref('battleMaps', map.id), { hazards: list });
+          const next = { ...map, hazards: list };
+          const result = {
+            map: views.battleMapRow(
+              { ...world, battleMaps: { ...world.battleMaps, [map.id]: next } },
+              next
+            ),
+            hazards: views.hazardRows(world, next),
+          };
           if (warnings.length) result.warnings = warnings;
           return result;
         }),

@@ -443,6 +443,7 @@ module.exports = {
   DEFAULT_SPEED,
   MAX_SPEED,
   characterView,
+  leftOf,
   defaultSheet,
   speedFor,
   withSpeed,

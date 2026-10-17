@@ -102,7 +102,10 @@ async function intake(params) {
  * worked out by the rules (./steps.js) inside a transaction, spends movement,
  * keeps the rest of the path as the plan, and answers with plain lines and
  * `step: { cell, movementLeft, plan, lines }`. Only a step that reaches an
- * exit goes on through the pipeline, to leave by it, narrated. Opening or
+ * exit goes on through the pipeline, to leave by it, narrated, and so does
+ * one that walks into a hazard (L-815): stopped there, it is triggered and
+ * narrated (`action: { verb: 'hazard', hazard }`), the step's lines first.
+ * Opening or
  * closing a door beside the player (`{ verb: 'door', door, open }`; L-625 /
  * #450) is answered the same way. A step goes only to and over ground the
  * save knows (L-635 / #458). What it sees on the way, and from where it
@@ -195,6 +198,25 @@ async function runTurnPipeline(params) {
       }
       return { ...planned, summary: fresh.recentSummary || '' };
     });
+    if (step.hazard) {
+      // Walked into a hazard (L-815): it triggers, narrated.
+      const struck = await runTurnPipeline({
+        ...params,
+        action: { verb: 'hazard', hazard: step.hazard.id, name: step.hazard.name },
+      });
+      const lines = step.lines || [];
+      return {
+        ...struck,
+        narration: [lines.join(' '), struck.narration].filter(Boolean).join(' '),
+        step: {
+          cell: step.cell,
+          movementLeft: step.turn.movementLeft,
+          plan: step.turn.plan,
+          lines,
+          hazard: step.hazard.id,
+        },
+      };
+    }
     if (!step.exit) {
       const lines = step.refused ? [step.refused] : step.lines;
       return {
@@ -224,6 +246,9 @@ async function runTurnPipeline(params) {
   if (action && action.verb === 'leave') {
     actionText = 'go out by ' + action.name;
     proposedAction = { verb: 'move', targets: ['exit:' + action.exit], params: { from: 'map' } };
+  } else if (action && action.verb === 'hazard') {
+    actionText = 'walk into ' + action.name;
+    proposedAction = { verb: 'hazard', targets: ['hazard:' + action.hazard], params: {} };
   } else if (action) {
     const target = canonWorld.locations[action.target] || (canonWorld.places || {})[action.target];
     actionText = 'travel to ' + (target ? target.name : action.target);
@@ -246,10 +271,13 @@ async function runTurnPipeline(params) {
     found,
   });
   // A second action in a turn is turned down plainly: not narrated, not
-  // recorded (L-614 / #444).
-  if (resolution.outcome === 'blocked' && resolution.constraints[0] === ACTED) {
+  // recorded (L-614 / #444); so is one a condition stops (L-815: Stunned).
+  if (
+    resolution.outcome === 'blocked' &&
+    (resolution.constraints[0] === ACTED || resolution.plain)
+  ) {
     return {
-      narration: ACTED,
+      narration: resolution.constraints[0],
       stateSummary: save.recentSummary || '',
       suggestedActions: [],
       time: clock.timeView(clock.timeOf(save)),

@@ -18,6 +18,8 @@ const travel = require('../loom-canon/travel');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
 const sheets = require('../loom-canon/sheets');
+const hazards = require('../loom-canon/hazards');
+const conditions = require('../loom-canon/conditions');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -379,6 +381,23 @@ function battleView(canonWorld, save, record) {
         state: layers.doorState(d, doors),
       })),
     obstacles: seenObstacles(map, on),
+    // Hazards in sight (L-815; EF9): the squares of each in sight now, to
+    // draw while it's seen, and the condition it puts on.
+    hazards: hazards.seenOn(map, inSight, doors).map(({ hazard, squares }) => {
+      const condition = conditions.conditionOf(
+        checks.systemOf(canonWorld),
+        hazard.effect && hazard.effect.condition
+      );
+      return {
+        id: hazard.id,
+        name: hazard.name,
+        ...(condition ? { condition: condition.name } : {}),
+        squares: squares.map((k) => {
+          const [x, y] = k.split(',').map(Number);
+          return { x, y };
+        }),
+      };
+    }),
     people,
     fog: {
       seen: seen.pack(known, map.width, map.height),
