@@ -55,9 +55,15 @@ jobs:
             echo "No preview channels to delete."
             exit 0
           fi
+          # An expired channel can still be listed and then be gone (404) by
+          # the time it's deleted; that's done, not a failure.
           for channel in $doomed; do
             echo "Deleting $channel"
-            firebase hosting:channel:delete "$channel" --project olympus-dfa00 --force
+            if ! out=$(firebase hosting:channel:delete "$channel" --project olympus-dfa00 --force 2>&1); then
+              echo "$out"
+              grep -q "Not Found" <<< "$out" || exit 1
+              echo "Already gone."
+            fi
           done
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
