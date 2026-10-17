@@ -21,6 +21,8 @@ const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
 const artOf = require('../../../loom-canon/art');
 const routes = require('../../../loom-canon/routes');
+const { validateSheet, speedFor } = require('../../../loom-canon/sheets');
+const { systemOf } = require('../../../loom-canon/checks');
 
 const LIST_CAP = 200;
 const TOP_SETTLEMENTS = 10;
@@ -561,6 +563,20 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
   };
 }
 
+// A named character's sheet as get_character shows it (L-813): null without
+// one; with one, its speed worked out by the world's system and, when the
+// system has changed under it, what no longer fits.
+function sheetView(world, character) {
+  if (!character.sheet) return null;
+  const system = systemOf(world);
+  const misfits = validateSheet(system, character.sheet);
+  return {
+    ...character.sheet,
+    speed: speedFor(system, character.sheet),
+    ...(misfits.length ? { misfits } : {}),
+  };
+}
+
 function characterDetail(world, character) {
   const result = {
     id: character.id,
@@ -574,6 +590,8 @@ function characterDetail(world, character) {
     position: positions.positionView(world, character),
     // Its score and band (L-692): characters are never gated.
     ...graded(gradeCharacter(world, character)),
+    // Their sheet (L-813), with its speed worked out and what no longer fits.
+    sheet: sheetView(world, character),
     lore: loreAbout(world, character.id),
   };
   if (character.retired) result.retired = true;

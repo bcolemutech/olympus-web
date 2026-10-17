@@ -37,6 +37,10 @@ const SQUARE = [
   { x: 200, y: 200 },
 ];
 // Layers without a town layout to build: these tests are about the score.
+// A sheet for the built-in fantasy system, the system Nisia plays by (L-813).
+const SHEET = require('../functions/loom-canon/sheets').defaultSheet(
+  require('../functions/loom-canon/systems').BUILT_IN['d20-fantasy']
+);
 const layers = { ...LAYER_CHECKS, town: () => true };
 
 const criterion = (id) => CRITERIA.find((c) => c.id === id);
@@ -187,7 +191,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(6);
+    expect(RUBRIC_VERSION).toBe(7);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -364,10 +368,24 @@ describe('point of interest and place criteria', () => {
 });
 
 describe('character, battle map, realm and world criteria', () => {
-  test('a character: a long description, lore about them, a realm', () => {
+  test('a character: a long description, lore about them, a realm, a sheet', () => {
     const w = world();
-    const mara = w.characters.chr_mara;
+    const mara = { ...w.characters.chr_mara, sheet: SHEET };
     expect(gradeCharacter(w, mara)).toMatchObject({ score: 100, band: 'legendary' });
+    // A sheet for the world's rules (L-813): none, or one they no longer fit.
+    const bare = { ...mara };
+    delete bare.sheet;
+    expect(gradeCharacter(w, bare)).toMatchObject({ score: 71.4, band: 'vivid' });
+    expect(check('character.sheet', w, bare)).toMatchObject({
+      progress: 0,
+      message: 'They have no sheet; give them one with set_sheet.',
+    });
+    const misfit = { ...mara, sheet: { ...SHEET, level: 0 } };
+    expect(check('character.sheet', w, misfit)).toMatchObject({
+      progress: 0,
+      message:
+        'Their sheet no longer fits the world’s rules: The level is 0; it must be from 1 to 20.',
+    });
     const thin = { ...mara, description: words(39), factionId: 'fac_gone' };
     expect(check('character.description', w, thin)).toMatchObject({ progress: 0, have: 39 });
     expect(check('character.faction', w, thin)).toMatchObject({
@@ -606,7 +624,9 @@ describe('the world’s score', () => {
 // lore, as counts (words, walls, features), read over MCP. Every one of its
 // settlements, and the places marked rubric2Rich, met rubric 2's Rich bar.
 
-function nisia() {
+// `sheets`: Nisia's people with their sheets (L-813, rubric 7), as a built
+// Nisia has them; without, as it was built before sheets.
+function nisia({ sheets = true } = {}) {
   const many = (n, make) => Array.from({ length: n || 0 }, (_, i) => make(i));
   const w = {
     id: 'nisia',
@@ -674,7 +694,11 @@ function nisia() {
     };
   }
   for (const c of NISIA.characters) {
-    w.characters[c.id] = { ...c, description: words(c.descriptionWords) };
+    w.characters[c.id] = {
+      ...c,
+      description: words(c.descriptionWords),
+      ...(sheets ? { sheet: SHEET } : {}),
+    };
   }
   for (const l of NISIA.lore) {
     w.lore[l.id] = { id: l.id, title: l.id, text: words(l.words), entityRefs: l.entityRefs };
@@ -701,6 +725,15 @@ describe('calibrated on Nisia', () => {
     expect(scores).toHaveLength(12);
     for (const [name, graded] of scores) {
       expect({ name, band: graded.band }).toEqual({ name, band: 'rich' });
+    }
+  });
+
+  test('its people’s sheets count: without them, every town scores lower (rubric 7)', () => {
+    const bare = nisia({ sheets: false });
+    for (const s of NISIA.settlements.filter((x) => x.rubric2Rich)) {
+      const withSheets = gradeLocation(w, w.locations[s.id], { layers }).score;
+      const without = gradeLocation(bare, bare.locations[s.id], { layers }).score;
+      expect([s.name, without < withSheets]).toEqual([s.name, true]);
     }
   });
 

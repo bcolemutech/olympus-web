@@ -101,7 +101,7 @@ const SAMPLE = z
       'attribute at the middle of its range, untrained, the lowest level.'
   );
 
-function systemTools({ systems }) {
+function systemTools({ systems, reader }) {
   const readOnly = { readOnlyHint: true, openWorldHint: false };
   return [
     {
@@ -112,9 +112,16 @@ function systemTools({ systems }) {
         'formula, ladder and degrees at work: the total, its breakdown (every die, kept and ' +
         'dropped, and each term), the rung and its number, and the degree it comes to ' +
         '(criticalSuccess, success, successAtCost, failure, criticalFailure). Give a seed ' +
-        'to roll the same dice again. Nothing is saved.',
+        'to roll the same dice again. Nothing is saved. Or roll a named character’s own sheet ' +
+        '(L-813): worldId and characterId, by that world’s system.',
       inputSchema: {
-        systemId,
+        systemId: systemId.optional(),
+        worldId: z.string().max(80).optional().describe('With characterId: their world.'),
+        characterId: z
+          .string()
+          .max(80)
+          .optional()
+          .describe('A named character whose sheet is rolled (set_sheet), in worldId.'),
         skill: z.string().max(32).optional().describe('The skill rolled, from get_system.'),
         attribute: z
           .string()
@@ -127,19 +134,42 @@ function systemTools({ systems }) {
       },
       annotations: readOnly,
       handler: async (ctx, args) => {
-        const system = await systems.get(args.systemId);
+        // A named character's sheet, by their world's system (L-813).
+        let who = null;
+        if (args.characterId !== undefined || args.worldId !== undefined) {
+          if (!args.characterId || !args.worldId || !reader) {
+            throw new ToolError('Give both worldId and characterId to roll a character’s sheet.');
+          }
+          const loaded = await reader.loadWorld(args.worldId);
+          if (!loaded) throw new ToolError(`No world "${args.worldId}". list_worlds shows them.`);
+          const found = (loaded.world.characters || {})[args.characterId];
+          if (!found) throw new ToolError(`No character "${args.characterId}" in that world.`);
+          if (!found.sheet) {
+            throw new ToolError(`${found.name} has no sheet yet; give them one with set_sheet.`);
+          }
+          who = { world: loaded.world, character: found };
+        } else if (args.systemId === undefined) {
+          throw new ToolError('Give systemId, or worldId and characterId.');
+        }
+        const system = who ? checks.systemOf(who.world) : await systems.get(args.systemId);
         if (!system) throw new ToolError(`No system "${args.systemId}". list_systems shows them.`);
+        if (who && args.systemId !== undefined && args.systemId !== system.id) {
+          throw new ToolError(
+            `${who.character.name}’s world plays by "${system.id}", not "${args.systemId}".`
+          );
+        }
         const check = { skill: args.skill, attribute: args.attribute, rung: args.rung };
         const why = checks.refusal(system, check);
         if (why) throw new ToolError(why);
         const seed = args.seed !== undefined ? args.seed : Math.floor(Math.random() * 2 ** 31);
         const roll = checks.rollCheck(system, {
           check,
-          character: { sheet: args.sheet || {} },
+          character: who ? who.character : { sheet: args.sheet || {} },
           dice: formula.seeded(seed),
         });
         return {
           system: { id: system.id, version: system.version || 0 },
+          ...(who ? { character: { id: who.character.id, name: who.character.name } } : {}),
           seed,
           formula: roll.formula,
           rolledWith: { attribute: roll.attributeId, skill: roll.skillId },

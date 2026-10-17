@@ -658,12 +658,14 @@ describe('get_character and get_lore', () => {
       location: { id: 'loc_1', name: 'Burdendal' },
       // Seeded before positions were required (L-683 places them).
       position: { problem: 'Burdendal is a town: they need a town point (townPoint)' },
-      // Their score (L-692): a realm, but a short description and no lore.
+      // Their score (L-692): a realm, but a short description, no lore and
+      // no sheet (L-813).
       grade: 'playable',
       band: 'playable',
-      score: 20,
+      score: 14.3,
       missing: [
         expect.objectContaining({ criterion: 'character.description', gain: 25 }),
+        expect.objectContaining({ criterion: 'character.sheet', gain: 20 }),
         expect.objectContaining({ criterion: 'character.lore', gain: 15 }),
       ],
       checklist: [
@@ -681,7 +683,14 @@ describe('get_character and get_lore', () => {
         },
         expect.objectContaining({ id: 'character.lore', weight: 15, met: false }),
         { id: 'character.faction', label: 'A realm', weight: 10, met: true, progress: 1 },
+        expect.objectContaining({
+          id: 'character.sheet',
+          weight: 20,
+          met: false,
+          tool: 'set_sheet',
+        }),
       ],
+      sheet: null,
       lore: [],
     });
     expect(await read('get_character', { worldId: LIVE, characterId: 'chr_ghost' })).toMatchObject({

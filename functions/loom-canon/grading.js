@@ -44,8 +44,9 @@
 
 // 2: the Rich bar scales with a settlement's size; 3: a Rich settlement's town
 // has ground (L-655); 4: the score, its criteria and bands (L-691); 5: a
-// world's cover image (L-704); 6: a world's game system (L-801).
-const RUBRIC_VERSION = 6;
+// world's cover image (L-704); 6: a world's game system (L-801); 7: a named
+// character's sheet (L-813).
+const RUBRIC_VERSION = 7;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -68,7 +69,7 @@ const IMPORT = 'import';
 const WEIGHTS = Object.freeze({
   settlement: { residents: 15, lore: 10, townArt: 15, description: 20, loreLinks: 5, ground: 10 },
   place: { ownMap: 15, mapArt: 10, someone: 15, lore: 30, description: 10 },
-  character: { description: 25, lore: 15, faction: 10 },
+  character: { description: 25, lore: 15, faction: 10, sheet: 20 },
   battleMap: { layers: 30, art: 30, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
   world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15 },
@@ -516,6 +517,33 @@ const CRITERIA = Object.freeze([
       live((world.factions || {})[character.factionId])
         ? met()
         : { progress: 0, message: 'They belong to no realm.' },
+  },
+  {
+    // A sheet that fits the world's game system (L-813; game systems GR3),
+    // so checks against them roll fairly; one the system no longer fits
+    // (SY2) is listed for repair.
+    id: 'character.sheet',
+    kinds: ['character'],
+    weight: WEIGHTS.character.sheet,
+    feature: 'L-813',
+    label: 'A sheet for the world’s rules',
+    need: 'sheet',
+    tool: 'set_sheet',
+    check: (world, character) => {
+      if (!character.sheet) {
+        return { progress: 0, message: 'They have no sheet; give them one with set_sheet.' };
+      }
+      const misfits = require('./sheets').validateSheet(
+        require('./checks').systemOf(world),
+        character.sheet
+      );
+      return misfits.length
+        ? {
+            progress: 0,
+            message: `Their sheet no longer fits the world’s rules: ${misfits[0]}`,
+          }
+        : met();
+    },
   },
 
   // Battle maps.
