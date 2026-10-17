@@ -262,7 +262,12 @@ describe('systems in Firestore', () => {
     expect(world.system).toBeNull();
   });
 
-  test('a sheet that no longer fits: nothing yet, until saves have sheets (L-811)', () => {
-    expect(systems.misfits(BUILT_IN[DEFAULT_SYSTEM_ID], {})).toEqual([]);
+  test('a sheet that no longer fits says what (L-811; ./loom-sheets for the rest)', () => {
+    const system = BUILT_IN[DEFAULT_SYSTEM_ID];
+    const sheet = require('../functions/loom-canon/sheets').defaultSheet(system);
+    expect(systems.misfits(system, sheet)).toEqual([]);
+    expect(systems.misfits(system, { ...sheet, traits: ['two words'] })).toEqual([
+      'The trait "two words" isn\'t an id (letters, digits, - and _).',
+    ]);
   });
 });

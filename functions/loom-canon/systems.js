@@ -12,9 +12,11 @@
  *       attributes: [{ id, name, min, max, modifier }]  modifier: a formula
  *       resources:  [{ id, name, max }]                  max: a formula
  *       level:      { min, max }
+ *       speed:      a formula: movement a turn (default 20), plus what traits add
  *       optional:   which optional parts are on: skills, traits, conditions, derived
  *       skills:     [{ id, name, attribute }]            (with 'skills')
- *       traits:     [{ id, name, description? }]         (with 'traits')
+ *       traits:     [{ id, name, description?, modifiers? }] (with 'traits'):
+ *                   modifiers { speed: formula } added while it's held
  *       conditions: [{ id, name, description? }]         (with 'conditions')
  *       derived:    [{ id, name, formula }]              (with 'derived')
  *     checks:  { formula, degrees: { [degree]: formula }, ladder: [{ name, value }] }
@@ -48,6 +50,8 @@ const DEFAULT_SYSTEM_ID = 'd20-fantasy';
 const OPTIONAL_PARTS = ['skills', 'traits', 'conditions', 'derived'];
 const DEGREES = ['criticalFailure', 'failure', 'successAtCost', 'success', 'criticalSuccess'];
 const CREATION_METHODS = ['array', 'pointBuy', 'rolling'];
+// What a trait's modifiers may change (L-811); L-815's conditions add more.
+const MODIFIER_TARGETS = ['speed'];
 
 const formulaLanguage = require('./formula');
 
@@ -238,7 +242,29 @@ function validateSystem(input) {
         },
       });
     }
-    if (on.has('traits')) list(sheet.traits, 'sheet.traits', { field: false });
+    // A trait may add to what the sheet works out (L-811): `modifiers`
+    // { speed: formula }, a bonus taken with the trait (at creation, L-812).
+    if (on.has('traits')) {
+      list(sheet.traits, 'sheet.traits', {
+        field: false,
+        each: (t, at) => {
+          if (t.modifiers === undefined) return;
+          if (!isObject(t.modifiers)) {
+            errors.push(`${at}.modifiers must map what it changes to a formula ({ speed: '5' }).`);
+            return;
+          }
+          for (const [target, value] of Object.entries(t.modifiers)) {
+            if (!MODIFIER_TARGETS.includes(target)) {
+              errors.push(
+                `${at}.modifiers: "${target}" isn't something a trait changes (${MODIFIER_TARGETS.join(', ')}).`
+              );
+            } else formula(value, `${at}.modifiers.${target}`);
+          }
+        },
+      });
+    }
+    // Speed (L-611; L-811): movement a turn, worked out from the sheet.
+    if (sheet.speed !== undefined) formula(sheet.speed, 'sheet.speed');
     const lock = isObject(s.checks) && isObject(s.checks.lock) ? s.checks.lock : null;
     if (lock) {
       if (lock.skill !== undefined && !(sheet.skills || []).some((k) => k && k.id === lock.skill)) {
@@ -538,12 +564,11 @@ async function copySystem(db, fromId, { id, name }, { uid, now = Date.now() } = 
 }
 
 /**
- * What of a character's sheet no longer fits its system (SY2): L-811 fills
- * this in when saves have sheets. Today there are none, so nothing.
+ * What of a character's sheet no longer fits its system (SY2; L-811): each
+ * problem named, or none. See ./sheets.js.
  */
-// eslint-disable-next-line no-unused-vars
 function misfits(system, sheet) {
-  return [];
+  return require('./sheets').validateSheet(system, sheet);
 }
 
 /**

@@ -41,6 +41,9 @@ const FANTASY = {
     // Hit points: 6 and the Constitution modifier per level, at least 1.
     resources: [{ id: 'health', name: 'Hit points', max: 'max(1, level * (6 + mod(CON)))' }],
     level: { min: 1, max: 20 },
+    // Movement a turn (L-811): 20, quicker with Dexterity and training in
+    // Athletics.
+    speed: '20 + mod(DEX) + floor(Athletics / 2)',
     optional: ['skills', 'traits'],
     // A skill's rank is its proficiency bonus: 0 untrained, 2 to 6 trained.
     skills: [
@@ -118,6 +121,9 @@ const SCIFI = {
       { id: 'stress', name: 'Stress', max: '3 + Presence' },
     ],
     level: { min: 1, max: 10 },
+    // Movement a turn (L-811): 20 at Reflex 3, two more for each point of
+    // Reflex above, and one for each rank of Athletics.
+    speed: '14 + 2 * Reflex + Athletics',
     optional: ['skills', 'traits'],
     // A skill's rank adds dice: 0 untrained, 1 to 3 trained.
     skills: [

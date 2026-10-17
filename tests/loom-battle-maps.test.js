@@ -33,7 +33,7 @@ const layers = require('../functions/loom-canon/layers');
 const fs = require('fs');
 const path = require('path');
 const functionsDir = path.resolve(__dirname, '../functions');
-const { getFirestore } = require(
+const { getFirestore, FieldValue } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
 );
 const { parseAzgaarExport } = require('../functions/cartographer/parse');
@@ -817,14 +817,18 @@ describe('moving without the GM (L-613)', () => {
   });
 
   test('Continue next turn walks the plan; End turn says how far you went', async () => {
-    // A character with a speed of 4: the hearth (8 away) takes two turns.
+    // A character with a speed of 4: its world's system works speed out as 4
+    // (L-811). The hearth (8 away) takes two turns.
+    const systems = require('../functions/loom-canon/systems');
+    const slow = { ...systems.BUILT_IN['d20-fantasy'], id: 'slow-d20', name: 'Slow d20' };
+    slow.sheet = { ...slow.sheet, speed: '4' };
+    await systems.setSystem(db, slow, { uid: 'test' });
+    const version = (await worldRef.get()).data().canonVersion;
+    await worldRef.update({ systemId: 'slow-d20', canonVersion: version + 1 });
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({
-        'character.speed': 4,
-        turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null },
-      });
+      .update({ turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null } });
     await stepTo(saveId, { x: 9, y: 1 });
     expect((await continueOn(saveId)).step.lines).toEqual([OUT_OF_MOVEMENT]);
     const before = (await saveOf(saveId)).time;
@@ -843,6 +847,10 @@ describe('moving without the GM (L-613)', () => {
       'You have no way planned. Tap where to go.',
     ]);
     expect(mockCallGemini).not.toHaveBeenCalled();
+    await worldRef.update({
+      systemId: FieldValue.delete(),
+      canonVersion: (await worldRef.get()).data().canonVersion + 1,
+    });
   });
 
   test('loomGetMap shows the plan only while it is for the map you stand on', async () => {

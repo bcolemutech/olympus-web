@@ -11,6 +11,8 @@ const { isPlayable, gradeWorld } = require('./loom-canon/grading');
 const { withNeighbours } = require('./loom-turn/discovery');
 const { arrivalPlace } = require('./loom-canon/town');
 const maps = require('./loom-canon/maps');
+const checks = require('./loom-canon/checks');
+const sheets = require('./loom-canon/sheets');
 const { mapView } = require('./loom-turn/map-view');
 const { firstLook, seenRef } = require('./loom-turn/seen');
 const { seenTownRef } = require('./loom-turn/town-seen');
@@ -663,13 +665,15 @@ exports.loomGetMap = onCall(async (request) => {
   const db = getFirestore();
   const snap = await db.collection('loom_saves').doc(saveId.trim()).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Save not found.');
-  const save = snap.data();
-  if (save.ownerUid !== uid) throw new HttpsError('permission-denied', 'This is not your save.');
-  if (save.worldId !== worldId.trim()) {
+  const stored = snap.data();
+  if (stored.ownerUid !== uid) throw new HttpsError('permission-denied', 'This is not your save.');
+  if (stored.worldId !== worldId.trim()) {
     throw new HttpsError('failed-precondition', 'worldId does not match this save.');
   }
   const canonWorld = await loomCanon.loadWorld(worldId.trim(), { db });
   if (!canonWorld) throw new HttpsError('not-found', 'Unknown world.');
+  // The character's speed, worked out for the world's system (L-811).
+  const save = sheets.withSpeed(stored, checks.systemOf(canonWorld));
   // On a battle map, only what the save has seen of it is sent (L-633).
   const record = save.mapId ? await seenRef(snap.ref, save.mapId).get() : null;
   // In a town, what the save has seen of it, for its fog (L-672).
@@ -770,9 +774,13 @@ exports.loomCreateSave = onCall(async (request) => {
     ownerUid: uid,
     worldId: worldId.trim(),
     name: name.trim(),
+    // A sheet with the world's system's defaults (L-811; creation is L-812),
+    // the world's starting abilities as its traits.
     character: {
       name: characterName.trim(),
-      abilities: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
+      sheet: sheets.defaultSheet(checks.systemOf(canonWorld), {
+        traits: (canonWorld.rules && canonWorld.rules.startingAbilities) || [],
+      }),
     },
     location: canonWorld.rules && canonWorld.rules.startingLocationId,
     // A start with a town layout (L-342) begins at its first open entrance,

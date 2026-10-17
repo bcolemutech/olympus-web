@@ -13,6 +13,8 @@ const { planTownStep, walksTown, townPlanOf } = require('./town-steps');
 const { lookInTown, townRecordOf } = require('./town-seen');
 const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const clock = require('../loom-canon/clock');
+const { systemOf } = require('../loom-canon/checks');
+const { withSpeed } = require('../loom-canon/sheets');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -44,11 +46,11 @@ async function intake(params) {
     throw new LoomTurnError('not-found', 'Save not found.');
   }
 
-  const save = saveSnap.data();
-  if (save.ownerUid !== uid) {
+  const stored = saveSnap.data();
+  if (stored.ownerUid !== uid) {
     throw new LoomTurnError('permission-denied', 'This is not your save.');
   }
-  if (save.worldId !== worldId) {
+  if (stored.worldId !== worldId) {
     throw new LoomTurnError('failed-precondition', 'worldId does not match this save.');
   }
 
@@ -58,6 +60,8 @@ async function intake(params) {
   if (!canonWorld) {
     throw new LoomTurnError('not-found', 'Unknown world.');
   }
+  // The character's speed, worked out for the world's system (L-811).
+  const save = withSpeed(stored, systemOf(canonWorld));
 
   const worldStateRef = db.collection('loom_world_state').doc(worldId);
   const worldStateSnap = await worldStateRef.get();
@@ -156,7 +160,7 @@ async function runTurnPipeline(params) {
   if (action && (action.cell || action.verb === 'continue' || action.verb === 'door')) {
     const target = action.cell ? { cell: action.cell } : { plan: true };
     const step = await db.runTransaction(async (transaction) => {
-      const fresh = (await transaction.get(saveRef)).data();
+      const fresh = withSpeed((await transaction.get(saveRef)).data(), systemOf(canonWorld));
       // What the save has seen on its map: the ground it may walk (L-635),
       // and the record its new sight is added to (L-632).
       const found = fresh.mapId ? await recordOf(transaction, saveRef, fresh.mapId) : null;
@@ -312,7 +316,7 @@ async function townStep(params, target) {
   const { db, uid, worldId, saveId } = params;
   const { saveRef, canonWorld } = await intake({ db, uid, worldId, saveId });
   const step = await db.runTransaction(async (transaction) => {
-    const fresh = (await transaction.get(saveRef)).data();
+    const fresh = withSpeed((await transaction.get(saveRef)).data(), systemOf(canonWorld));
     const planned = planTownStep(canonWorld, fresh, target);
     // What it sees along the way, added to what it has seen of the town
     // (L-671), read before the transaction's writes.

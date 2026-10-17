@@ -40,9 +40,11 @@ const SHAPE =
   '"Hull" }: names the Loom shows), sheet, checks, creation, advancement ({} for now), ' +
   'modules ({}: none are built yet) and gmNotes (tone and pacing for the narrator). ' +
   'sheet: attributes [{ id, name, min, max, modifier }] and resources [{ id, name, max }] ' +
-  '(at least one of each), level { min, max }, and optional: the optional parts it switches ' +
+  '(at least one of each), level { min, max }, speed (a formula: movement a turn, from ' +
+  'attributes, skill ranks and level; 20 if left out), and optional: the optional parts it switches ' +
   `on (${OPTIONAL_PARTS.join(', ')}), each then listed: skills [{ id, name, attribute }], ` +
-  'traits [{ id, name }], conditions [{ id, name }], derived [{ id, name, formula }]. Sheet ' +
+  'traits [{ id, name, modifiers? }] (modifiers { speed: formula }: what holding it adds), ' +
+  'conditions [{ id, name }], derived [{ id, name, formula }]. Sheet ' +
   'ids are the names formulas use, unique across the sheet. checks: formula, degrees ' +
   `({ ${DEGREES.join(', ')} }: formulas, optional) and ladder [{ name, value }], ` +
   'easiest first, in strict order. creation: { method: ' +

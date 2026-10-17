@@ -13,10 +13,11 @@
  *   rank       the skill's rank: 0 untrained, or with no skill
  *   ...and every sheet field and level, as the character has them.
  *
- * Before characters have sheets (L-811), a character rolls with the
- * system's defaults: each attribute at the middle of its range, untrained,
- * at the lowest level. A sheet, where there is one, is read as
- * `{ attributes: { [id]: score }, skills: { [id]: rank }, level }`.
+ * A character rolls from its sheet (L-811, ./sheets.js): `{ attributes:
+ * { [id]: score }, skills: { [id]: rank }, resources: { [id]: { current } },
+ * level }`. One without a sheet (an older save, an NPC until L-813) rolls
+ * with the system's defaults: each attribute at the middle of its range,
+ * untrained, at the lowest level, every resource full.
  *
  * Degrees (DC2): criticalSuccess, criticalFailure, success, successAtCost
  * and failure. The system's degree formulas are tried in that order (each a
@@ -35,6 +36,7 @@
  */
 
 const formula = require('./formula');
+const { maxima } = require('./sheets');
 const { DEFAULT_SYSTEM_ID, BUILT_IN } = require('./systems');
 
 const DEGREE_ORDER = ['criticalSuccess', 'criticalFailure', 'success', 'successAtCost'];
@@ -138,7 +140,6 @@ function valuesFor(system, character, check, dice) {
     const score = own.attributes && own.attributes[a.id];
     values[a.id] = Number.isFinite(score) ? score : baseScore(a);
   }
-  for (const r of sheet.resources || []) values[r.id] = 0;
   if (skillsOn(system)) {
     for (const k of sheet.skills || []) {
       const rank = own.skills && own.skills[k.id];
@@ -146,6 +147,13 @@ function valuesFor(system, character, check, dice) {
     }
   }
   values.level = Number.isFinite(own.level) ? own.level : (sheet.level || {}).min || 0;
+  // Each resource as the character has it now (L-811), or full.
+  const full = maxima(system, own);
+  for (const r of sheet.resources || []) {
+    const held = own.resources && own.resources[r.id];
+    values[r.id] =
+      held && Number.isFinite(held.current) ? held.current : full[r.id] === null ? 0 : full[r.id];
+  }
   for (const d of (sheetOf(system).optional || []).includes('derived') ? sheet.derived || [] : []) {
     values[d.id] = formula.evaluate(d.formula, { values, system, dice }).total;
   }
