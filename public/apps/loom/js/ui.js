@@ -108,6 +108,7 @@
       menu: null, // the menu bar's open menu
       menuButtons: [], // buttons later epics add to the menu bar
       rules: false, // the rules reference is open (L-805)
+      character: false, // the Character panel is open (L-814)
     }),
   });
 

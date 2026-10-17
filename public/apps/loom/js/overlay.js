@@ -5,7 +5,9 @@
   // L-725 / #596):
   //
   // - top left, where you are (and the time of day, once L-370 gives it),
-  //   and while you peek at another level, which one and Back to you;
+  //   and while you peek at another level, which one and Back to you; under
+  //   it, the character's strip (character.js; L-814), which on a phone runs
+  //   under the menu bar;
   // - bottom centre, the turn bar: the turn, movement left and the action,
   //   Continue for a kept plan and End turn (moved here off the panel);
   // - bottom right, a minimap of the level showing, with the view on it;
@@ -145,7 +147,9 @@
   }
 
   function Overlay() {
-    return html`<${Where} /><${TurnBar} /><${Minimap} />`;
+    var Strip = Loom.character && Loom.character.Strip; // L-814: health and the rest
+    return html`<div class="loom-map-topleft"><${Where} />${Strip && html`<${Strip} />`}</div>
+      <${TurnBar} /><${Minimap} />`;
   }
 
   // ── The minimap ───────────────────────────────────
