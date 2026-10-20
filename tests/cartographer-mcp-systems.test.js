@@ -181,7 +181,7 @@ test('list_systems: the two built-in systems, before any is written (L-804)', as
       builtIn: true,
       attributes: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'],
       optional: ['skills', 'traits', 'conditions'],
-      modules: [],
+      modules: ['combat'],
     },
     {
       id: 'pool-scifi',
@@ -190,7 +190,7 @@ test('list_systems: the two built-in systems, before any is written (L-804)', as
       builtIn: true,
       attributes: ['Body', 'Reflex', 'Mind', 'Presence'],
       optional: ['skills', 'traits', 'conditions'],
-      modules: [],
+      modules: ['combat'],
     },
   ]);
 });
