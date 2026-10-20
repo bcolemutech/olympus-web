@@ -2,7 +2,7 @@
 
 **Status:** Decided (2026-10-20). The gap sheet (§3) is answered. Sub-issues are planned (§6) and are filed when this epic is next.
 **Project:** Olympus (`olympus-dfa00`)
-**Epic:** L-820 _(to file)_, Phase 9 — Game systems (milestone #25)
+**Epic:** L-820 (#651), Phase 9 — Game systems (milestone #25)
 **Depends on:** L-810 (#607: sheets, NPC sheets, effects), L-800 (#606: systems, formulas, checks), L-720 (the map engine and click menu).
 **Related:** [`game-systems.md`](./game-systems.md) (MD4, §4.10 effects), [`scenarios.md`](./scenarios.md) (G5, G12), [`the-loom-movement-and-vision.md`](./the-loom-movement-and-vision.md), [`ai-characters.md`](./ai-characters.md) (L-790), [`inventory.md`](./inventory.md) (L-770)
 
