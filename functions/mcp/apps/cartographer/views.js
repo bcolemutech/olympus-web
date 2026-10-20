@@ -587,6 +587,8 @@ function characterDetail(world, character) {
     faction: character.factionId ? ref(world.factions, character.factionId) : null,
     location: character.locationId ? ref(world.locations, character.locationId) : null,
     ...(character.placeId ? { place: ref(world.places || {}, character.placeId) } : {}),
+    // Their side in a fight (L-821): party, hostile or neutral.
+    side: character.side || 'neutral',
     // Where they are (L-682): a square, a town point or a world point, or why
     // they have none yet.
     position: positions.positionView(world, character),

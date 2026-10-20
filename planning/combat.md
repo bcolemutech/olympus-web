@@ -1,6 +1,6 @@
 # The Loom — Combat — Design Document v0.1
 
-**Status:** Decided (2026-10-20). The gap sheet (§3) is answered. Sub-issues are planned (§6) and are filed when this epic is next.
+**Status:** In progress. Decided (2026-10-20); sub-issues filed (#653–#660). L-821 fights and rounds built: the module at `functions/loom-modules/combat/`, sides over MCP, fights starting on sight or an attack, rounds on End turn, ending by fleeing, talking down or foes standing down. The GM's and events' starts, and moving a fight onto a battle map (SE3), come with the stories that bring their callers (L-824, L-827).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-820 (#651), Phase 9 — Game systems (milestone #25)
 **Depends on:** L-810 (#607: sheets, NPC sheets, effects), L-800 (#606: systems, formulas, checks), L-720 (the map engine and click menu).
@@ -204,18 +204,18 @@ A fight runs from start to end on a battle map with no GM or AI deciding anythin
 
 ---
 
-## 6. Sub-issues (planned; filed when this epic is next)
+## 6. Sub-issues (filed 2026-10-20)
 
-| ID    | Story                                                                                                                                                                                                                | Depends on   | Model  |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
-| L-821 | **Fights and rounds:** the module, the system's combat settings and the built-ins'; `save.fight`; starting, surprise, initiative, rounds and their time; effects by round; ending                                    | —            | Opus   |
-| L-822 | **Attacks and damage:** attacks on sheets and stat blocks, hitting by defence or opposed, damage by degree, types and resistance, conditions on a hit, areas, ammunition, lethal and Subdue; the character criterion | L-821        | Opus   |
-| L-823 | **Position and reactions:** reach and range with sight, cover, flanking as an option, attacks on leaving reach and Withdraw, Ready, Defend, Dash, Dodge, Use                                                         | L-822        | Sonnet |
-| L-824 | **Foes and allies:** sides, figures from stat blocks (`place_figures`), roles and posture (`set_tactics`), tactics in code, morale, allies; the place criterion                                                      | L-822        | Opus   |
-| L-825 | **Named characters' turns:** a Flash call per named turn from the legal moves and play notes, checked by the rules, falling back to tactics                                                                          | L-824        | Sonnet |
-| L-826 | **Plausibility:** ordinary, improbable, extraordinary and complicated typed actions; asking how; refusals spend nothing; in and out of combat                                                                        | —            | Sonnet |
-| L-827 | **Falling to 0, and rest:** the system's down kinds, the world's death setting, the epilogue and a new character, foes knocked out, short and long rests with interruptions                                          | L-822        | Sonnet |
-| L-828 | **In the Loom:** the turn-order bar and the combat look, Attack and the other entries with reach, range and cover shown, Subdue, foes' turns played out with Faster, rule lines and narration at key moments         | L-823, L-824 | Sonnet |
+| ID           | Story                                                                                                                                                                                                                | Depends on   | Model  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
+| L-821 (#653) | **Fights and rounds:** the module, the system's combat settings and the built-ins'; `save.fight`; starting, surprise, initiative, rounds and their time; effects by round; ending                                    | —            | Opus   |
+| L-822 (#654) | **Attacks and damage:** attacks on sheets and stat blocks, hitting by defence or opposed, damage by degree, types and resistance, conditions on a hit, areas, ammunition, lethal and Subdue; the character criterion | L-821        | Opus   |
+| L-823 (#655) | **Position and reactions:** reach and range with sight, cover, flanking as an option, attacks on leaving reach and Withdraw, Ready, Defend, Dash, Dodge, Use                                                         | L-822        | Sonnet |
+| L-824 (#656) | **Foes and allies:** sides, figures from stat blocks (`place_figures`), roles and posture (`set_tactics`), tactics in code, morale, allies; the place criterion                                                      | L-822        | Opus   |
+| L-825 (#657) | **Named characters' turns:** a Flash call per named turn from the legal moves and play notes, checked by the rules, falling back to tactics                                                                          | L-824        | Sonnet |
+| L-826 (#658) | **Plausibility:** ordinary, improbable, extraordinary and complicated typed actions; asking how; refusals spend nothing; in and out of combat                                                                        | —            | Sonnet |
+| L-827 (#659) | **Falling to 0, and rest:** the system's down kinds, the world's death setting, the epilogue and a new character, foes knocked out, short and long rests with interruptions                                          | L-822        | Sonnet |
+| L-828 (#660) | **In the Loom:** the turn-order bar and the combat look, Attack and the other entries with reach, range and cover shown, Subdue, foes' turns played out with Faster, rule lines and narration at key moments         | L-823, L-824 | Sonnet |
 
 **Order:** L-821 first; L-826 any time. L-822 follows L-821; L-823, L-824 and L-827 follow L-822; L-825 follows L-824; L-828 comes last.
 

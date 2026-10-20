@@ -1,0 +1,297 @@
+'use strict';
+
+/**
+ * Fights in play (planning/combat.md §4.2; L-821 / #653): the combat
+ * module's fight (./fight.js) on a save, for ADJUDICATE. Who is in one,
+ * starting it, the rounds after each of the player's turns, and ending it,
+ * each as the save's mutations and plain lines: no model decides anything
+ * (CB0), and NARRATE is told only when a fight starts or ends.
+ *
+ * Sides (EN1): a character's `side` in canon, `party`, `hostile` or
+ * `neutral` (the default), set over MCP. A fight is on the battle map the
+ * player stands on, among the player, the hostile characters standing on it
+ * and those on the player's side; someone the player attacks joins it,
+ * hostile.
+ *
+ * Starting (SE1): a hostile seeing the player (`by: 'seen'`: they lie in
+ * wait, so the player rolls to notice them), the player attacking someone
+ * (`by: 'attack'`: the attacked roll to see it coming), or the GM or an
+ * event (`by: 'gm' | 'event'`), which the stories that bring them call.
+ *
+ * Ending (SE4): the player leaving the map (fled), a foe talked down by a
+ * social check against them, and, at each End turn, foes no longer on the
+ * map (gone) or no longer hostile (stood down). Foes falling (L-822),
+ * fleeing and surrendering (L-824) and the player falling (L-827) come with
+ * their stories.
+ */
+
+const maps = require('../../loom-canon/maps');
+const sight = require('../../loom-canon/sight');
+const checks = require('../../loom-canon/checks');
+const sheets = require('../../loom-canon/sheets');
+const fight = require('./fight');
+
+const { PLAYER } = fight;
+const SIDES = ['party', 'hostile', 'neutral'];
+
+// What the player can do to talk a foe out of a fight (SE4): a social check
+// against them that succeeds.
+const TALK_DOWN =
+  /^(persuade|convince|talk|reason|plead|negotiate|parley|intimidate|threaten|deceive|bluff|calm|reassure)/;
+// What starts a fight with someone not already in one (SE1).
+const ATTACK = /^(attack|strike|hit|stab|slash|shoot|punch|kick|fight|assault|ambush|charge|swing)/;
+
+const ORDINAL = ['1st', '2nd', '3rd'];
+const ordinal = (n) => ORDINAL[n - 1] || n + 'th';
+
+/** A character's side (EN1): party, hostile or neutral. */
+function sideOf(character) {
+  return SIDES.includes(character && character.side) ? character.side : 'neutral';
+}
+
+const setFight = (value) => ({ target: 'save', op: 'set-flag', path: 'fight', value });
+
+/** The save's fight, or null. */
+function fightOf(save) {
+  return (save && save.fight) || null;
+}
+
+// The characters standing on the map the save is on.
+function standingHere(world, save) {
+  const host = maps.hostOf(world, save);
+  return host ? maps.standingAt(world, host) : [];
+}
+
+/**
+ * The hostile characters standing on the save's battle map that it can see
+ * from where it stands (SE1), with its doors as they are.
+ */
+function hostilesInSight(world, save) {
+  const { map, cell } = maps.positionOf(world || {}, save);
+  if (!map || !cell) return [];
+  const seen = sight.inSight(map, cell, ((save && save.doors) || {})[map.id] || {});
+  return standingHere(world, save).filter(
+    (c) => sideOf(c) === 'hostile' && seen[c.cell.x + ',' + c.cell.y]
+  );
+}
+
+/**
+ * Starts a fight on the save's battle map (SE1–SE3): the player, every
+ * hostile and party character standing on it, and `joining` (ids of others
+ * who join hostile: someone the player attacks). Rolls initiative and
+ * surprise, then plays the turns before the player's first (`first`: the
+ * player's turn is first, their attack opening the fight).
+ *
+ * Returns `{ mutations, lines, roll, rounds, fight: { started, by, order,
+ * surprised } }` (`roll` the player's initiative, for the roll card; `rounds`
+ * the rounds that passed before their first turn, each 6 s), or null when
+ * there's no battle map here or nobody to fight.
+ */
+function begin(world, save, { by, ambushers = null, joining = [], first = false, dice }) {
+  const { map } = maps.positionOf(world || {}, save);
+  if (!map) return null;
+  const system = checks.systemOf(world);
+  const others = standingHere(world, save).filter(
+    (c) => sideOf(c) !== 'neutral' || joining.includes(c.id)
+  );
+  if (!others.some((c) => sideOf(c) === 'hostile' || joining.includes(c.id))) return null;
+  const combatants = [
+    {
+      id: PLAYER,
+      kind: PLAYER,
+      name: (save.character && save.character.name) || 'You',
+      sheet: sheets.sheetOf(save),
+    },
+  ].concat(
+    others.map((c) => ({
+      id: c.id,
+      kind: 'character',
+      side: joining.includes(c.id) ? 'hostile' : sideOf(c),
+      name: c.name,
+      sheet: c.sheet || null,
+    }))
+  );
+  const started = fight.start(system, {
+    id: 'fight-' + map.id + '-' + (Number.isFinite(save.time) ? save.time : 0),
+    mapId: map.id,
+    by,
+    combatants,
+    ambushers,
+    dice,
+  });
+  // Someone attacked joins hostile whatever their side in canon (SE1).
+  for (const id of joining) {
+    if (started.fight.combatants[id]) started.fight.combatants[id].joined = true;
+  }
+  const caught = started.surprise.surprised;
+  // The player's own attack opens it: theirs is the first turn (SE1).
+  const played = first
+    ? { fight: { ...started.fight, turn: PLAYER }, rounds: 0, passed: [] }
+    : fight.toPlayer(system, started.fight, { current: true });
+  const f = played.fight;
+  const nameOf = (id) => (id === PLAYER ? 'you' : f.combatants[id].name);
+  const place = f.order.indexOf(PLAYER) + 1;
+  const lines = [
+    'A fight breaks out. In order: ' +
+      f.order.map((id) => nameOf(id) + ' (' + f.combatants[id].initiative + ')').join(', ') +
+      '.',
+  ];
+  if (caught.includes(PLAYER)) lines.push("You're caught off guard: you lose the first round.");
+  const theyMissed = caught.filter((id) => id !== PLAYER).map(nameOf);
+  if (theyMissed.length) {
+    lines.push(
+      listed(theyMissed) + (theyMissed.length > 1 ? ' are' : ' is') + ' caught off guard.'
+    );
+  }
+  lines.push(...played.passed.map((id) => capitalised(nameOf(id)) + ' waits.'));
+  if (f.round > 1) lines.push('Round ' + f.round + '.');
+  const mine = started.initiative[PLAYER];
+  return {
+    mutations: [setFight(f)],
+    lines,
+    rounds: played.rounds,
+    roll: {
+      ...mine,
+      type: 'number',
+      natural: 0,
+      success: true,
+      degree: 'success',
+      rung: null,
+      difficulty: null,
+      verdict: ordinal(place) + ' of ' + f.order.length,
+    },
+    fight: {
+      started: true,
+      by,
+      order: f.order.map(nameOf),
+      surprised: caught.map(nameOf),
+    },
+  };
+}
+
+// The fight's end (SE4), as a line and what NARRATE is told.
+const ENDS = {
+  fled: 'fled',
+  down: 'fell',
+  surrendered: 'surrendered',
+  talkedDown: 'were talked down',
+  gone: 'are gone',
+  stoodDown: 'stood down',
+};
+function ending(f, result) {
+  const theirs = result.winner === 'party';
+  const how = result.how.filter(Boolean);
+  const line = theirs
+    ? 'The fight is over: your foes ' +
+      (how.map((h) => ENDS[h] || h).join(' or ') || 'are gone') +
+      '.'
+    : result.how.includes('fled')
+      ? 'You get away: the fight is over.'
+      : 'The fight is over.';
+  return {
+    mutations: [setFight(null)],
+    lines: [line],
+    fight: { ended: true, winner: result.winner, how, rounds: f.round },
+  };
+}
+
+/**
+ * After the player's End turn in a fight (TN1, SE4): foes no longer on the
+ * map, or no longer hostile, leave it; if a side is empty, it ends;
+ * otherwise everyone else takes their turn, to the player's next.
+ * Returns `{ mutations, lines, fight? }` (fight: its end, for NARRATE), or
+ * null with no fight.
+ */
+function afterTurn(world, save) {
+  let f = fightOf(save);
+  if (!f) return null;
+  const here = new Map(standingHere(world, save).map((c) => [c.id, c]));
+  for (const [id, c] of Object.entries(f.combatants)) {
+    if (id === PLAYER || c.out) continue;
+    const now = here.get(id);
+    if (!now) f = fight.leave(f, id, 'gone');
+    else if (c.side === 'hostile' && sideOf(now) !== 'hostile' && !c.joined) {
+      f = fight.leave(f, id, 'stoodDown');
+    }
+  }
+  const over = fight.endOf(f);
+  if (over) return ending(f, over);
+  const played = fight.toPlayer(checks.systemOf(world), f);
+  const g = played.fight;
+  const nameOf = (id) => g.combatants[id].name;
+  return {
+    mutations: [setFight(g)],
+    lines: played.passed
+      .map((id) => nameOf(id) + ' waits.')
+      .concat(played.rounds ? ['Round ' + g.round + '.'] : []),
+  };
+}
+
+/** The player leaving the fight's map (SE4: fled): `{ mutations, lines, fight }`, or null. */
+function leftMap(save, mapId) {
+  const f = fightOf(save);
+  if (!f || mapId === f.mapId) return null;
+  return ending(f, fight.endOf(fight.leave(f, PLAYER, 'fled')));
+}
+
+/**
+ * A foe talked out of the fight (SE4): a social check against a hostile in
+ * it that succeeded. `{ mutations, lines, fight? }`, or null when it isn't.
+ */
+function talkedDown(save, verb, targetId, success) {
+  const f = fightOf(save);
+  const c = f && f.combatants[targetId];
+  if (!c || c.out || c.side !== 'hostile' || !success || !TALK_DOWN.test(String(verb || ''))) {
+    return null;
+  }
+  const g = fight.leave(f, targetId, 'talkedDown');
+  const over = fight.endOf(g);
+  if (over) return ending(g, over);
+  return { mutations: [setFight(g)], lines: [c.name + ' backs down.'] };
+}
+
+/** Whether an action starts a fight with someone (SE1): an attack at them. */
+function isAttack(verb) {
+  return ATTACK.test(String(verb || ''));
+}
+
+/** The fight as the Loom shows it (for the map view and NARRATE), or null. */
+function viewOf(save) {
+  const f = fightOf(save);
+  if (!f) return null;
+  return {
+    round: f.round,
+    turn: f.turn,
+    order: f.order.map((id) => {
+      const c = f.combatants[id];
+      return {
+        id,
+        name: c.name,
+        side: c.side,
+        initiative: c.initiative,
+        ...(id === PLAYER ? { you: true } : {}),
+        ...(c.out ? { out: c.out } : {}),
+      };
+    }),
+  };
+}
+
+function listed(names) {
+  if (names.length < 2) return names.join('');
+  return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+}
+const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+module.exports = {
+  SIDES,
+  TALK_DOWN,
+  sideOf,
+  fightOf,
+  hostilesInSight,
+  begin,
+  afterTurn,
+  leftMap,
+  talkedDown,
+  isAttack,
+  viewOf,
+};

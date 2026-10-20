@@ -104,9 +104,12 @@
       turn.speed +
       (walkingTown ? ' (' + turn.movementLeft * 20 + ' m)' : '');
     var canContinue = Boolean(turn.plan) && turn.movementLeft > 0;
+    // In a fight (L-821): its round, until L-828's turn-order bar.
+    var fight = s.map && s.map.fight;
     return html`<div class="loom-map-turnbar loom-map-ui" role="group" aria-label="Turn">
       <span class="loom-map-turnbar-state">
-        Turn ${turn.n} · ${movement} · ${turn.actionUsed ? 'acted' : 'action ready'}
+        ${fight ? 'Round ' + fight.round + ' · ' : ''}Turn ${turn.n} · ${movement} ·
+        ${turn.actionUsed ? 'acted' : 'action ready'}
       </span>
       ${canContinue &&
       html`<button

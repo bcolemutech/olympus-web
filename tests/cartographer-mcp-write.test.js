@@ -557,6 +557,7 @@ describe('characters', () => {
       name: 'Mara Quill',
       location: { id: 'loc_1', name: 'Burdendal' },
       faction: { id: 'fac_1', name: 'Kingdom of Pendonia' },
+      side: 'neutral',
       position: { level: 'town', town: { id: 'loc_1', name: 'Burdendal' }, x: 500, y: 500 },
     });
     expect((await raw(worldId, 'locations', 'loc_1')).npcIds).toEqual(['chr_mara-quill']);
@@ -722,6 +723,41 @@ describe('every character has a position (L-682)', () => {
     expect(stored).toMatchObject({ locationId: 'loc_1', townPoint: { x: 10, y: 20 } });
     expect(stored).not.toHaveProperty('worldPoint');
     expect((await raw(worldId, 'locations', 'loc_1')).npcIds).toContain('chr_wanderer');
+  });
+
+  test('a side in a fight (L-821): neutral by default, set and cleared, refused if unknown', async () => {
+    expect((await ok('get_character', { worldId, characterId: 'chr_ada-brine' })).side).toBe(
+      'neutral'
+    );
+    const set = await ok('update_character', {
+      worldId,
+      characterId: 'chr_ada-brine',
+      side: 'hostile',
+    });
+    expect(set.updated).toEqual(['side']);
+    expect(await raw(worldId, 'characters', 'chr_ada-brine')).toMatchObject({ side: 'hostile' });
+    expect((await ok('get_character', { worldId, characterId: 'chr_ada-brine' })).side).toBe(
+      'hostile'
+    );
+    // Neutral is the default, so it isn't kept.
+    await ok('update_character', { worldId, characterId: 'chr_ada-brine', side: 'neutral' });
+    expect(await raw(worldId, 'characters', 'chr_ada-brine')).not.toHaveProperty('side');
+    const refused = await call('update_character', {
+      worldId,
+      characterId: 'chr_ada-brine',
+      side: 'grumpy',
+    });
+    expect(refused.isError).toBe(true);
+    const added = await ok('add_character', {
+      worldId,
+      name: 'Kell Ward',
+      description: 'A sellsword who fights for whoever pays.',
+      locationId: 'loc_1',
+      townPoint: { x: 300, y: 300 },
+      side: 'party',
+    });
+    expect(added.character.side).toBe('party');
+    expect(await raw(worldId, 'characters', added.character.id)).toMatchObject({ side: 'party' });
   });
 
   test('someone made before positions were required is warned about on any change', async () => {

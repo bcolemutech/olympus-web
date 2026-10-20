@@ -77,8 +77,9 @@
     return line + ' = ' + total;
   }
 
-  // "vs Hard (16)"
+  // "vs Hard (16)"; a roll against nothing (initiative, L-821) just says what it was.
   function versus(roll) {
+    if (roll.difficulty === null || roll.difficulty === undefined) return roll.against || '';
     return 'vs ' + (roll.rung || roll.against) + ' (' + roll.difficulty + ')';
   }
 
@@ -455,7 +456,8 @@
     if (!turn) return null;
     return html`<div class="loom-turn-bar" id="loom-turn-bar">
       <span class="loom-turn-state" id="loom-turn-state">
-        ${'Turn ' +
+        ${(props.fight ? 'Round ' + props.fight.round + ' · ' : '') +
+        'Turn ' +
         turn.n +
         ' · movement ' +
         turn.movementLeft +
@@ -495,6 +497,9 @@
     var turn = ui.useStore(function (s) {
       return s.turn;
     });
+    var fight = ui.useStore(function (s) {
+      return s.map && s.map.fight;
+    });
     var logRef = hooks.useRef(null);
     var last = j.entries[j.entries.length - 1];
 
@@ -524,7 +529,7 @@
       </div>
       <${Suggestions} actions=${j.suggestions} busy=${busy} />
       <${TurnBox} busy=${busy} />
-      <${TurnBar} turn=${turn} busy=${busy} />
+      <${TurnBar} turn=${turn} fight=${fight} busy=${busy} />
       ${busy &&
       html`<div class="app-loading" id="loom-turn-loading">
         <div class="app-spinner"></div>

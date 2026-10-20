@@ -23,7 +23,8 @@
  *     checks:  { formula, degrees: { [degree]: formula }, ladder: [{ name, value }] }
  *     creation: { method: 'array' | 'pointBuy' | 'rolling', ...its settings }
  *     advancement: {}                    empty for now (L-830)
- *     modules: { [module]: settings }    none are built yet (L-820 on)
+ *     modules: { [module]: settings }    combat (L-821, ../loom-modules/combat/);
+ *                                        others are kept, unused, with a warning
  *     tables:  { [name]: [{ min?, max?, value }] }   lookups for table(name, x)
  *     gmNotes: tone and pacing for NARRATE
  *
@@ -57,6 +58,9 @@ const MODIFIER_TARGETS = ['speed'];
 const { MODIFIER_KINDS: CONDITION_TARGETS } = require('./conditions');
 
 const formulaLanguage = require('./formula');
+
+// The modules built (MD1; ../loom-modules/): each checks its own settings.
+const MODULES = { combat: require('../loom-modules/combat/settings') };
 
 // Whether a formula rolls dice (a modifier holds while it lasts, so it can't).
 function rollsDice(text) {
@@ -463,8 +467,12 @@ function validateSystem(input) {
   s.modules = s.modules === undefined ? {} : s.modules;
   if (!isObject(s.modules)) errors.push('modules must map each module to its settings.');
   else {
-    for (const name of Object.keys(s.modules)) {
-      warnings.push(`modules.${name}: no module by that name is built yet; it is kept, unused.`);
+    for (const [name, settings] of Object.entries(s.modules)) {
+      const module = MODULES[name];
+      if (module) module.check(settings, { system: s, errors, warnings, formula });
+      else {
+        warnings.push(`modules.${name}: no module by that name is built yet; it is kept, unused.`);
+      }
     }
   }
 

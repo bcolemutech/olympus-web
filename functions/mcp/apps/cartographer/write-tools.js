@@ -68,6 +68,8 @@ const RELATIONS = [
 ];
 const INVERSE_RELATION = { vassal: 'suzerain', suzerain: 'vassal' };
 const DISPOSITIONS = ['friendly', 'neutral', 'hostile'];
+// A character's side in a fight (L-821; planning/combat.md EN1).
+const SIDES = ['party', 'hostile', 'neutral'];
 const COLLECTION = {
   location: 'locations',
   faction: 'factions',
@@ -557,6 +559,10 @@ function writeTools({ writer, systems }) {
   const editNote =
     'Works on drafts and published worlds; a change to a published world reaches games on ' +
     'their next turn.';
+  const sideNote =
+    'Their side in a fight (L-821): hostile starts one when the player comes into sight of ' +
+    'them on a battle map; party fights beside the player; neutral (the default) stays out ' +
+    'unless attacked.';
 
   return [
     {
@@ -982,6 +988,7 @@ function writeTools({ writer, systems }) {
           .optional()
           .describe('Where in that town they are found, if it has a layout.'),
         factionId: entityId('faction', 'get_world').optional().describe('Their realm or faction.'),
+        side: z.enum(SIDES).optional().describe(sideNote),
         cell: square.optional(),
         townPoint: townPoint.optional(),
         worldPoint: worldPoint.optional(),
@@ -1010,6 +1017,7 @@ function writeTools({ writer, systems }) {
             description: args.description,
             sources: { description: SOURCES.MCP },
             ...(faction ? { factionId: faction.id } : {}),
+            ...(args.side && args.side !== 'neutral' ? { side: args.side } : {}),
             ...fields,
           });
           if (home) e.update(e.ref('locations', home.id), 'npcIds', FieldValue.arrayUnion(id));
@@ -1020,6 +1028,7 @@ function writeTools({ writer, systems }) {
               location: home ? { id: home.id, name: home.name } : null,
               ...(place ? { place: { id: place.id, name: place.name } } : {}),
               faction: faction ? { id: faction.id, name: faction.name } : null,
+              side: args.side || 'neutral',
               position: view,
             },
             ...(warning ? { warnings: [warning] } : {}),
@@ -1033,7 +1042,7 @@ function writeTools({ writer, systems }) {
         'Change a character’s name, description, where they are found (moves them: locationId, ' +
         'or null for the wilderness; placeId in their town, or null for about town), their ' +
         'position there (cell, townPoint or worldPoint, as add_character), or realm (null ' +
-        'removes it). Moving them needs a position where they go, unless a point of interest ' +
+        'removes it), or side in a fight. Moving them needs a position where they go, unless a point of interest ' +
         'without a map; a refusal suggests one. Fields you omit are left unchanged. ' +
         editNote,
       inputSchema: {
@@ -1053,6 +1062,7 @@ function writeTools({ writer, systems }) {
           .nullable()
           .optional()
           .describe('Their realm or faction; null for none.'),
+        side: z.enum(SIDES).optional().describe(sideNote),
         cell: square.nullable().optional(),
         townPoint: townPoint.nullable().optional(),
         worldPoint: worldPoint.nullable().optional(),
@@ -1065,6 +1075,7 @@ function writeTools({ writer, systems }) {
           'locationId',
           'placeId',
           'factionId',
+          'side',
           ...POSITIONS,
         ]);
         return edit(ctx, args, (e) => {
@@ -1139,6 +1150,10 @@ function writeTools({ writer, systems }) {
           } else if (args.factionId && args.factionId !== character.factionId) {
             live(world, 'faction', args.factionId);
             fields.factionId = args.factionId;
+          }
+          // Their side (L-821): neutral is the default, so it isn't kept.
+          if (args.side !== undefined && args.side !== (character.side || 'neutral')) {
+            fields.side = args.side === 'neutral' ? FieldValue.delete() : args.side;
           }
           if (Object.keys(fields).length) e.update(e.ref('characters', id), fields);
           const result = {
