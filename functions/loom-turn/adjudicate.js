@@ -1005,15 +1005,18 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
     ? evaluateDoorAttempt(proposedAction, doorTarget.slice(5), characterState, dice, canonWorld)
     : evaluateGeneric(proposedAction, dice, characterState, canonWorld);
   if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return resolution;
-  // In a fight, a turn has the system's actions (L-821; TN3): one by default.
+  // In a fight, a turn has the system's actions (L-821; TN3): one by
+  // default, counted only when there are more.
   const allowed = inFight
     ? combat.settings.settingsOf(checks.systemOf(canonWorld)).economy.actions
     : 1;
   const used = (turn.actionsUsed || 0) + 1;
   const spent =
-    used >= allowed
-      ? { ...turn, actionUsed: true, actionsUsed: used }
-      : { ...turn, actionsUsed: used };
+    allowed === 1
+      ? { ...turn, actionUsed: true }
+      : used >= allowed
+        ? { ...turn, actionUsed: true, actionsUsed: used }
+        : { ...turn, actionsUsed: used };
   const fought = fightFrom(proposedAction, resolution, characterState, canonWorld, dice);
   return {
     ...resolution,

@@ -51,8 +51,9 @@ const at = (day, hour, minute = 0) => (day - 1) * clock.DAY + hour * clock.HOUR 
 const saveRef = (saveId) => db.collection('loom_saves').doc(saveId);
 const saveOf = async (saveId) => (await saveRef(saveId).get()).data();
 const lastTurn = async (saveId) =>
-  (await saveRef(saveId).collection('loom_turns').orderBy('index', 'desc').limit(1).get())
-    .docs[0]?.data();
+  (
+    await saveRef(saveId).collection('loom_turns').orderBy('index', 'desc').limit(1).get()
+  ).docs[0]?.data();
 
 async function seed(saveId, fields = {}) {
   const save = makeSave({
@@ -153,7 +154,10 @@ describe('letting time pass', () => {
   test('a wait with no length or time of day asks how long, and spends nothing', async () => {
     await seed('save-vague', { time: at(1, 9) });
     await typed('save-vague', 'wait a while', { verb: 'wait', params: {} });
-    await typed('save-vague', 'sleep until teatime', { verb: 'wait', params: { until: 'teatime' } });
+    await typed('save-vague', 'sleep until teatime', {
+      verb: 'wait',
+      params: { until: 'teatime' },
+    });
     const save = await saveOf('save-vague');
     expect(save.time).toBe(at(1, 9));
     expect(save.turn).toMatchObject({ n: 1, actionUsed: false });

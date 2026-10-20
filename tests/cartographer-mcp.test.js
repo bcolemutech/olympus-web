@@ -691,6 +691,7 @@ describe('get_character and get_lore', () => {
         }),
       ],
       sheet: null,
+      side: 'neutral',
       lore: [],
     });
     expect(await read('get_character', { worldId: LIVE, characterId: 'chr_ghost' })).toMatchObject({

@@ -17,7 +17,10 @@
   "jest": {
     "testEnvironment": "node",
     "testTimeout": 30000,
-    "modulePaths": ["<rootDir>", "<rootDir>/../functions/node_modules"],
+    "modulePaths": [
+      "<rootDir>",
+      "<rootDir>/../functions/node_modules"
+    ],
     "maxWorkers": 1
   }
 }

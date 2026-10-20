@@ -324,6 +324,7 @@ describe('a system’s formulas, checked on save', () => {
   test('warnings: an attribute nothing uses (its own modifier aside), a rung no check reaches', () => {
     const s = fantasy();
     s.sheet.skills = s.sheet.skills.filter((k) => k.attribute !== 'WIS');
+    s.modules = {}; // its combat settings notice with Perception, a WIS skill
     s.checks.formula = '2d6 + modifier';
     expect(validateSystem(s).warnings).toEqual([
       "Attribute WIS isn't used by any skill or formula.",

@@ -320,7 +320,10 @@ describe('cartographerPublish', () => {
     });
 
     // Placed about town, as update_character would.
-    await worldRef.collection('characters').doc('chr_mara').update({ townPoint: { x: 9, y: 8 } });
+    await worldRef
+      .collection('characters')
+      .doc('chr_mara')
+      .update({ townPoint: { x: 9, y: 8 } });
     await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
 
     await expect(
@@ -709,8 +712,7 @@ describe('cartographerMapImage (L-355)', () => {
     });
     const first = (await tavern()).image;
     expect(first).toMatchObject({ width: 1200, height: 800, imageId: expect.any(String) });
-    const usedIn = async (id) =>
-      (await db.collection('studio_images').doc(id).get()).data().usedIn;
+    const usedIn = async (id) => (await db.collection('studio_images').doc(id).get()).data().usedIn;
     expect(await usedIn(first.imageId)).toEqual([
       { worldId, target: 'battleMap', id: 'bm_tavern' },
     ]);
