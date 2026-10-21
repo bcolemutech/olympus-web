@@ -1422,3 +1422,156 @@ describe('hazards (L-815)', () => {
     expect((await mapDoc(W, mapId)).hazards).toEqual([]);
   });
 });
+
+describe('figures, tactics and danger (L-824)', () => {
+  const W = LIVE;
+  const HALL = {
+    name: 'The bandit hall',
+    width: 10,
+    height: 5,
+    entries: [{ id: 'in', x: 1, y: 2 }],
+    exits: [{ id: 'out', name: 'the hall door', x: 0, y: 2, to: 'out' }],
+    features: [],
+  };
+  const BANDITS = {
+    id: 'bandits',
+    name: 'Bandit',
+    statBlock: {
+      attributes: { STR: 12, DEX: 12, CON: 10, INT: 8, WIS: 8, CHA: 8 },
+      attacks: [
+        {
+          id: 'club',
+          name: 'Club',
+          reach: 1,
+          attack: '1d20 + mod(STR) + 2',
+          damage: '1d6 + mod(STR)',
+          type: 'bludgeoning',
+        },
+      ],
+    },
+    posture: 'cowardly',
+    cells: [
+      { x: 7, y: 1 },
+      { x: 7, y: 3 },
+    ],
+  };
+  let mapId;
+
+  test('a dangerous place is graded on foes; place_figures puts them there', async () => {
+    mapId = (await ok('set_battle_map', { worldId: W, ...HALL })).map.id;
+    await ok('assign_battle_map', { worldId: W, placeId: 'poi_1', mapId });
+    const calm = await ok('get_location', { worldId: W, locationId: 'poi_1' });
+    expect(calm.danger).toBe('none');
+    expect(calm.checklist.find((c) => c.id === 'place.foes')).toBeUndefined();
+    await ok('update_location', { worldId: W, locationId: 'poi_1', danger: 'high' });
+    const risky = await ok('get_location', { worldId: W, locationId: 'poi_1' });
+    expect(risky.danger).toBe('high');
+    expect(risky.checklist.find((c) => c.id === 'place.foes')).toMatchObject({
+      met: false,
+      weight: 10,
+      tool: 'place_figures',
+    });
+
+    const placed = await ok('place_figures', { worldId: W, mapId, figures: [BANDITS] });
+    expect(placed.figures).toEqual([
+      expect.objectContaining({
+        id: 'bandits',
+        side: 'hostile',
+        role: 'brute',
+        posture: 'cowardly',
+        named: [
+          { id: 'fig-bandits-1', name: 'Bandit 1', x: 7, y: 1 },
+          { id: 'fig-bandits-2', name: 'Bandit 2', x: 7, y: 3 },
+        ],
+      }),
+    ]);
+    expect((await mapDoc(W, mapId)).figures).toEqual([BANDITS]);
+    expect((await ok('get_battle_map', { worldId: W, mapId })).figures).toHaveLength(1);
+    const met = await ok('get_location', { worldId: W, locationId: 'poi_1' });
+    expect(met.checklist.find((c) => c.id === 'place.foes')).toMatchObject({ met: true });
+  });
+
+  test('figures that are wrong are refused, each problem named, nothing written', async () => {
+    const text = await refused('place_figures', {
+      worldId: W,
+      mapId,
+      figures: [
+        {
+          ...BANDITS,
+          statBlock: { attributes: { STR: 30 } },
+          cells: [
+            { x: 0, y: 2 },
+            { x: 1, y: 2 },
+          ],
+        },
+      ],
+    });
+    expect(text).toContain('figures[0].statBlock: Strength is 30');
+    expect(text).toContain('figures[0].cells[0] (0, 2) is an exit.');
+    expect(text).toContain('figures[0].cells[1] (1, 2) is an entry, where players arrive.');
+    expect(
+      await refused('place_figures', {
+        worldId: W,
+        mapId,
+        figures: [{ ...BANDITS, role: 'ninja' }],
+      })
+    ).toMatch(/role/);
+    expect((await mapDoc(W, mapId)).figures).toEqual([BANDITS]);
+  });
+
+  test('a new grid keeps them; an empty list clears them', async () => {
+    await ok('set_battle_map', { worldId: W, mapId, ...HALL });
+    expect((await mapDoc(W, mapId)).figures).toEqual([BANDITS]);
+    await ok('place_figures', { worldId: W, mapId, figures: [] });
+    expect((await mapDoc(W, mapId)).figures).toEqual([]);
+  });
+
+  test('set_tactics: a character’s role, posture and leader, with the defaults', async () => {
+    const { character } = await ok('add_character', {
+      worldId: W,
+      name: 'Marsh Captain',
+      description: 'Leads the marsh raiders from the back.',
+      locationId: 'loc_1',
+      townPoint: { x: 200, y: 200 },
+    });
+    const id = character.id;
+    const set = await ok('set_tactics', {
+      worldId: W,
+      characterId: id,
+      role: 'guard',
+      posture: 'bold',
+      leader: true,
+    });
+    expect(set).toMatchObject({
+      tactics: { role: 'guard', posture: 'bold', leader: true },
+      updated: expect.arrayContaining(['role', 'posture', 'leader']),
+    });
+    expect((await ok('get_character', { worldId: W, characterId: id })).tactics).toEqual({
+      role: 'guard',
+      posture: 'bold',
+      leader: true,
+    });
+    const cleared = await ok('set_tactics', {
+      worldId: W,
+      characterId: id,
+      role: null,
+      posture: null,
+      leader: false,
+    });
+    expect(cleared.tactics).toEqual({ role: 'brute', posture: 'steady' });
+    expect(
+      await refused('set_tactics', { worldId: W, characterId: id, posture: 'sleepy' })
+    ).toMatch(/posture/);
+  });
+
+  test('a place in town takes a danger too', async () => {
+    const result = await ok('update_place', {
+      worldId: W,
+      placeId: 'plc_1_the-gull-anchor',
+      danger: 'low',
+    });
+    expect(result.updated).toContain('danger');
+    const town = await ok('get_town', { worldId: W, locationId: 'loc_1' });
+    expect(town.places.find((p) => p.id === 'plc_1_the-gull-anchor').danger).toBe('low');
+  });
+});

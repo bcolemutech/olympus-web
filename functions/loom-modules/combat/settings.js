@@ -33,10 +33,15 @@
  *               sheet lists one of its id
  *   attacks     the attacks a player character starts with until L-770's
  *               weapons (decided 2026-10-21)
+ *   morale      { check, rungs } (L-824; EN4): when half a side is down or its
+ *               leader falls, each of the rest rolls `check` ({ skill } or
+ *               { attribute }) at the rung for their posture (`rungs`:
+ *               { cowardly, cautious, steady, bold, reckless }, each a rung's
+ *               name, or null: never breaks); failing, they flee or surrender.
+ *               With none, nobody breaks.
  *
- * The rest of §4.1 (cover, flanking, down, rests, morale) is read by the
- * stories that use it (L-823 to L-827): kept as given until then, with a
- * warning.
+ * The rest of §4.1 (cover, flanking, down, rests) is read by the stories
+ * that use it (L-823, L-827): kept as given until then, with a warning.
  *
  * Pure. `formula(value, where)` is the system check's own formula collector,
  * so the formulas here are checked with the rest of the system's.
@@ -52,11 +57,11 @@ const KEYS = [
   'subduePenalty',
   'unarmed',
   'attacks',
+  'morale',
 ];
 const LATER = {
   cover: 'L-823',
   flanking: 'L-823',
-  morale: 'L-824',
   down: 'L-827',
   rests: 'L-827',
 };
@@ -87,6 +92,7 @@ function settingsOf(system) {
     attack: attackOf(system, given.attack),
     health: healthOf(system, given.health),
     subduePenalty: given.subduePenalty === undefined ? null : given.subduePenalty,
+    morale: isObject(given.morale) && isObject(given.morale.check) ? given.morale : null,
   };
 }
 
@@ -242,6 +248,38 @@ function check(settings, { system, errors, warnings, formula }) {
   }
   if (settings.subduePenalty !== undefined) {
     formula(settings.subduePenalty, `${at}.subduePenalty`);
+  }
+  // Morale (L-824).
+  const morale = settings.morale;
+  if (morale !== undefined) {
+    const { POSTURES } = require('./figures');
+    const rungs = new Set((((system && system.checks) || {}).ladder || []).map((r) => r && r.name));
+    if (!isObject(morale)) errors.push(`${at}.morale must be { check, rungs }.`);
+    else {
+      const c = morale.check;
+      if (!isObject(c) || (!c.skill && !c.attribute)) {
+        errors.push(`${at}.morale.check must be { skill } or { attribute }.`);
+      } else if (c.skill !== undefined && !skills.has(c.skill)) {
+        errors.push(`${at}.morale.check.skill "${c.skill}" isn't one of the system's skills.`);
+      } else if (c.attribute !== undefined && !attributes.has(c.attribute)) {
+        errors.push(
+          `${at}.morale.check.attribute "${c.attribute}" isn't one of the system's attributes.`
+        );
+      }
+      if (!isObject(morale.rungs)) {
+        errors.push(`${at}.morale.rungs must map each posture to a rung (or null: never breaks).`);
+      } else {
+        for (const [posture, rung] of Object.entries(morale.rungs)) {
+          if (!POSTURES.includes(posture)) {
+            errors.push(
+              `${at}.morale.rungs: "${posture}" isn't a posture (${POSTURES.join(', ')}).`
+            );
+          } else if (rung !== null && !rungs.has(rung)) {
+            errors.push(`${at}.morale.rungs.${posture}: "${rung}" isn't a rung on the ladder.`);
+          }
+        }
+      }
+    }
   }
   // The attacks themselves are checked against the system once its shape is
   // known (./attacks.js; its formulas need the sheet's fields).

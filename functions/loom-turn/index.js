@@ -57,10 +57,13 @@ async function intake(params) {
 
   // Static or Firestore-backed; only published worlds are playable. Re-checked
   // every turn so canon edits (canonVersion) reach the game on its next turn.
-  const canonWorld = await loomCanon.loadWorld(worldId, { db });
-  if (!canonWorld) {
+  const loaded = await loomCanon.loadWorld(worldId, { db });
+  if (!loaded) {
     throw new LoomTurnError('not-found', 'Unknown world.');
   }
+  // The world as this save sees it (L-824): its map's figures among the
+  // characters, and everyone where the save has them.
+  const canonWorld = combat.figures.withFigures(loaded, stored);
   // The character's speed, worked out for the world's system (L-811).
   const save = withSpeed(stored, systemOf(canonWorld));
 

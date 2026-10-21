@@ -21,7 +21,8 @@ const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
 const artOf = require('../../../loom-canon/art');
 const routes = require('../../../loom-canon/routes');
-const { validateSheet, speedFor } = require('../../../loom-canon/sheets');
+const { validateSheet, speedFor, sheetFromStatBlock } = require('../../../loom-canon/sheets');
+const figures = require('../../../loom-modules/combat/figures');
 const { systemOf } = require('../../../loom-canon/checks');
 const hazards = require('../../../loom-canon/hazards');
 const { conditionOf } = require('../../../loom-canon/conditions');
@@ -364,6 +365,8 @@ function locationDetail(world, location) {
   if (geo.markerType) result.markerType = geo.markerType;
   // A point of interest's battle map (L-351, L-352): see get_battle_map.
   if (geo.kind !== 'settlement') result.battleMap = mapRef(world, location);
+  // How dangerous it is (L-824).
+  if (geo.kind !== 'settlement') result.danger = location.danger || 'none';
   // What Azgaar says about a town: the seeds for its layout (L-341).
   if (geo.seeds) result.seeds = geo.seeds;
   // Its town layout, if it has one (L-342, L-343): see get_town for the rest.
@@ -545,6 +548,8 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
         kind: place.kind || null,
         description: place.description || '',
         entranceFor: place.entrance ? (place.entrance.via || []).slice() : null,
+        // How dangerous it is (L-824).
+        danger: place.danger || 'none',
         grade: graded.grade,
         band: graded.band,
         score: graded.score,
@@ -587,8 +592,14 @@ function characterDetail(world, character) {
     faction: character.factionId ? ref(world.factions, character.factionId) : null,
     location: character.locationId ? ref(world.locations, character.locationId) : null,
     ...(character.placeId ? { place: ref(world.places || {}, character.placeId) } : {}),
-    // Their side in a fight (L-821): party, hostile or neutral.
+    // Their side in a fight (L-821): party, hostile or neutral; how they fight
+    // (L-824: set_tactics), with the defaults.
     side: character.side || 'neutral',
+    tactics: {
+      role: figures.roleOf(systemOf(world), character),
+      posture: figures.postureOf(character),
+      ...(character.leader ? { leader: true } : {}),
+    },
     // Where they are (L-682): a square, a town point or a world point, or why
     // they have none yet.
     position: positions.positionView(world, character),
@@ -684,6 +695,19 @@ function hazardRows(world, map) {
   });
 }
 
+// A map's figures (L-824), each group with its role, posture and squares,
+// and the names its figures go by in play.
+function figureRows(world, map) {
+  const system = systemOf(world);
+  return (map.figures || []).map((g) => ({
+    ...g,
+    side: g.side || 'hostile',
+    role: figures.roleOf(system, { ...g, sheet: sheetFromStatBlock(system, g.statBlock || {}) }),
+    posture: figures.postureOf(g),
+    named: figures.instancesOf(system, g).map((f) => ({ id: f.id, name: f.name, ...f.cell })),
+  }));
+}
+
 function battleMapDetail(world, map) {
   const exitTo = (exit) => {
     if (!exit.to || exit.to === 'out') return 'out';
@@ -716,6 +740,8 @@ function battleMapDetail(world, map) {
     obstacles: map.obstacles || [],
     // Its hazards (L-815), with their squares.
     hazards: hazardRows(world, map),
+    // Its figures (L-824), each numbered as players meet them.
+    figures: figureRows(world, map),
     // Who stands where (L-641); on a generic map, at which place.
     characters: maps.standingOn(world, map).map(({ character, host, cell }) => ({
       id: character.id,
@@ -737,6 +763,7 @@ module.exports = {
   battleMapRow,
   battleMapDetail,
   hazardRows,
+  figureRows,
   worldRow,
   worldOverview,
   findLocations,

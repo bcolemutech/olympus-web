@@ -13,6 +13,10 @@
  *   ./strike.js    an attack rolled: hitting, damage by degree and type,
  *                  effects on a hit, ammunition (pure)
  *   ./attack-turn.js  the player's attack as a turn, for ADJUDICATE
+ *   ./figures.js   figures placed from stat blocks, roles and postures, and
+ *                  the world as a save sees it (withFigures)
+ *   ./tactics.js   an unnamed fighter's turn by role and posture (pure)
+ *   ./others.js    everyone else's turns, morale, the player knocked out
  */
 
 module.exports = {
@@ -22,4 +26,7 @@ module.exports = {
   attacks: require('./attacks'),
   strike: require('./strike'),
   attackTurn: require('./attack-turn'),
+  figures: require('./figures'),
+  tactics: require('./tactics'),
+  others: require('./others'),
 };

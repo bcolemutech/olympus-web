@@ -68,8 +68,11 @@ const RELATIONS = [
 ];
 const INVERSE_RELATION = { vassal: 'suzerain', suzerain: 'vassal' };
 const DISPOSITIONS = ['friendly', 'neutral', 'hostile'];
-// A character's side in a fight (L-821; planning/combat.md EN1).
+// A character's side in a fight (L-821; planning/combat.md EN1), and how
+// they fight (L-824).
 const SIDES = ['party', 'hostile', 'neutral'];
+const figureRules = require('../../../loom-modules/combat/figures');
+const { ROLES, POSTURES } = figureRules;
 const COLLECTION = {
   location: 'locations',
   faction: 'factions',
@@ -686,7 +689,8 @@ function writeTools({ writer, systems }) {
         'Setting a description, even the current text, marks the place as written up. For a ' +
         'settlement, townSize sets how many metres its town’s 0–1000 square spans (null goes ' +
         'back to the default for its size: village 300, town 600, city 1200, great city 2500; ' +
-        'a capital one size larger); get_town shows it. ' +
+        'a capital one size larger); get_town shows it. danger (none, low, high) says how ' +
+        'dangerous it is. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -727,10 +731,17 @@ function writeTools({ writer, systems }) {
           .describe(
             'A settlement only: its town’s width in metres (L-651); null for the default by size.'
           ),
+        danger: z
+          .enum(['none', 'low', 'high'])
+          .optional()
+          .describe(
+            'How dangerous it is (L-824): a dangerous place is graded on having hostile figures ' +
+              'or characters placed there; none is the default.'
+          ),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description', 'factionIds', 'rules', 'townSize']);
+        requireSome(args, ['name', 'description', 'factionIds', 'rules', 'townSize', 'danger']);
         return edit(ctx, args, (e) => {
           const { world } = e;
           const place = existing(world, 'location', args.locationId);
@@ -743,6 +754,10 @@ function writeTools({ writer, systems }) {
             const ids = [...new Set(args.factionIds)];
             ids.forEach((id) => live(world, 'faction', id));
             if (ids.join() !== (place.factionIds || []).join()) fields.factionIds = ids;
+          }
+          // Its danger (L-824): none is the default, so it isn't kept.
+          if (args.danger !== undefined && args.danger !== (place.danger || 'none')) {
+            fields.danger = args.danger === 'none' ? FieldValue.delete() : args.danger;
           }
           const rules = place.rules || {};
           for (const [key, value] of Object.entries(args.rules || {})) {
@@ -1251,6 +1266,61 @@ function writeTools({ writer, systems }) {
             character: { id: character.id, name: character.name },
             changed: true,
             sheet: { ...given, speed: speedFor(system, given) },
+          };
+        });
+      },
+    },
+    {
+      name: 'set_tactics',
+      title: 'Set how a character fights',
+      description:
+        'Set how a named character fights when the rules play their turns (L-824): role ' +
+        '(brute: closes and strikes; skirmisher: strikes and steps back; archer: keeps its ' +
+        'distance and shoots; guard: holds its square; caster: areas first; leader: fights ' +
+        'as an archer or a brute, and its fall shakes the rest), posture (cowardly, ' +
+        'cautious, steady, bold, reckless: whom they go for and when they break), and ' +
+        'leader. null clears a role or posture back to its default (archer with a ranged ' +
+        'attack, else brute; steady). Figures placed with place_figures carry their own. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        characterId: entityId('character', 'get_world'),
+        role: z.enum(ROLES).nullable().optional(),
+        posture: z.enum(POSTURES).nullable().optional(),
+        leader: z.boolean().optional(),
+      },
+      annotations: replacing,
+      handler: (ctx, args) => {
+        requireSome(args, ['role', 'posture', 'leader']);
+        return edit(ctx, args, (e) => {
+          const { world } = e;
+          const character = existing(world, 'character', args.characterId);
+          const fields = {};
+          for (const part of ['role', 'posture']) {
+            if (args[part] === undefined) continue;
+            if (args[part] === null) {
+              if (character[part] !== undefined) fields[part] = FieldValue.delete();
+            } else if (args[part] !== character[part]) fields[part] = args[part];
+          }
+          if (args.leader !== undefined && args.leader !== Boolean(character.leader)) {
+            fields.leader = args.leader ? true : FieldValue.delete();
+          }
+          if (Object.keys(fields).length) e.update(e.ref('characters', character.id), fields);
+          // The character as they will be, for their tactics with the defaults.
+          const after = { ...character };
+          for (const part of ['role', 'posture']) {
+            if (args[part] === null) delete after[part];
+            else if (args[part] !== undefined) after[part] = args[part];
+          }
+          if (args.leader !== undefined) after.leader = args.leader;
+          return {
+            character: { id: character.id, name: character.name },
+            tactics: {
+              role: figureRules.roleOf(systemOf(world), after),
+              posture: figureRules.postureOf(after),
+              ...(after.leader ? { leader: true } : {}),
+            },
+            updated: changedFields(fields),
           };
         });
       },

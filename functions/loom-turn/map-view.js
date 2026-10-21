@@ -356,6 +356,10 @@ function battleView(canonWorld, save, record) {
             name: c.name,
             ...(c.cell ? { x: c.cell.x, y: c.cell.y } : {}),
             ...(down ? { down } : {}),
+            // Their side, when they have one (L-824); a figure placed from a
+            // stat block says so.
+            ...(c.side === 'hostile' || c.side === 'party' ? { side: c.side } : {}),
+            ...(c.figure ? { figure: true } : {}),
           };
         })
     : [];
