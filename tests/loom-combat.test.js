@@ -123,6 +123,7 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
         },
         health: 'health',
         subduePenalty: null,
+        morale: null,
       });
     });
   });

@@ -191,7 +191,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(8);
+    expect(RUBRIC_VERSION).toBe(9);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {

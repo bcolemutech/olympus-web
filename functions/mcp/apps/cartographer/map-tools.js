@@ -12,6 +12,7 @@ const { systemOf } = require('../../../loom-canon/checks');
 const { worldId, entityId } = require('./schemas');
 const { helpers } = require('./write-tools');
 const views = require('./views');
+const figures = require('../../../loom-modules/combat/figures');
 
 // The Cartographer's MCP battle-map tools (planning/the-loom-layered-worlds.md
 // §9; L-352 / #401): Claude draws the grids that points of interest and places
@@ -199,6 +200,38 @@ const hazard = z.strictObject({
     .describe('What it looks like, for the narrator: "a yellow fog, low to the floor".'),
   area: hazardArea,
   effect: hazardEffect,
+});
+
+// Figures placed from a stat block (L-824; loom-modules/combat/figures.js).
+const figureGroup = z.strictObject({
+  id: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,39}$/)
+    .describe('The group’s id: lowercase letters, digits and dashes ("bandits").'),
+  name: label.describe('What one is called: "Bandit". Several are numbered: "Bandit 3".'),
+  description: z.string().trim().max(300).optional().describe('What they look like.'),
+  statBlock: z
+    .object({})
+    .passthrough()
+    .describe(
+      'Their stat block, as set_sheet takes it: { attributes (every one), skills?, ' +
+        'resources?, level?, traits?, attacks? }.'
+    ),
+  side: z.enum(figures.SIDES).optional().describe('hostile (the default), party or neutral.'),
+  role: z
+    .enum(figures.ROLES)
+    .optional()
+    .describe('How they fight (default: archer with a ranged attack, else brute).'),
+  posture: z
+    .enum(figures.POSTURES)
+    .optional()
+    .describe('How much risk they take (default steady).'),
+  leader: z.boolean().optional().describe('Whether their fall shakes the rest.'),
+  cells: z
+    .array(z.strictObject({ x: coord, y: coord }))
+    .min(1)
+    .max(20)
+    .describe('The squares they stand on: one figure each.'),
 });
 
 // A map's hazards against the world's system (loom-canon/hazards.js): its
@@ -453,6 +486,8 @@ function mapTools({ writer }) {
           checkLayers(def);
           // Its hazards are kept (L-815); any that no longer fit are said.
           def.hazards = (before && before.hazards) || [];
+          // And its figures (L-824).
+          def.figures = (before && before.figures) || [];
           const misfit = def.hazards.length
             ? hazards.validate(systemOf(world), def, def.hazards).errors
             : [];
@@ -582,6 +617,43 @@ function mapTools({ writer }) {
             hazards: views.hazardRows(world, next),
           };
           if (warnings.length) result.warnings = warnings;
+          return result;
+        }),
+    },
+    {
+      name: 'place_figures',
+      title: 'Place figures on a battle map',
+      description:
+        'Place unnamed fighters on a battle map from a stat block (L-824): "bandit × 4". Each ' +
+        'group has a name, a stat block (as set_sheet takes it, with attacks), a side ' +
+        '(hostile by default: they start a fight when a player comes into sight), how they ' +
+        'fight (role: brute, skirmisher, archer, guard, caster or leader), how much risk they ' +
+        'take (posture: cowardly, cautious, steady, bold or reckless; it sets when they break ' +
+        'and flee), whether one is a leader whose fall shakes the rest, and one square each. ' +
+        'In play each is numbered ("Bandit 3"), with its own health in each save. The list ' +
+        'replaces the map’s figures; an empty list clears them. get_battle_map shows them. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        mapId: entityId('battle map', 'list_battle_maps'),
+        figures: z.array(figureGroup).max(figures.MAX_GROUPS),
+      },
+      annotations: replacing,
+      handler: (ctx, args) =>
+        edit(ctx, args, (e) => {
+          const { world } = e;
+          const map = live(world, 'battleMap', args.mapId);
+          const list = args.figures.map((g) => JSON.parse(JSON.stringify(g)));
+          const errors = figures.validateFigures(world, systemOf(world), map, list);
+          if (errors.length) throw new ToolError(errors.join(' '));
+          e.update(e.ref('battleMaps', map.id), { figures: list });
+          const next = { ...map, figures: list };
+          const result = { figures: views.figureRows(world, next) };
+          if (map.generic) {
+            result.warnings = [
+              `${map.name} is a generic map: its figures stand at every place that uses it.`,
+            ];
+          }
           return result;
         }),
     },

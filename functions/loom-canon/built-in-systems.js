@@ -153,6 +153,17 @@ const FANTASY = {
         type: 'bludgeoning',
         lethal: false,
       },
+      // Morale (L-824): Wisdom, at a rung by posture; the reckless never break.
+      morale: {
+        check: { attribute: 'WIS' },
+        rungs: {
+          cowardly: 'Hard',
+          cautious: 'Moderate',
+          steady: 'Easy',
+          bold: 'Easy',
+          reckless: null,
+        },
+      },
       // What a new character carries until L-770's weapons.
       attacks: [
         {
@@ -316,6 +327,17 @@ const SCIFI = {
         damage: '1',
         type: 'kinetic',
         lethal: false,
+      },
+      // Morale (L-824): Command, at a rung by posture; the reckless never break.
+      morale: {
+        check: { skill: 'Command' },
+        rungs: {
+          cowardly: 'Hard',
+          cautious: 'Moderate',
+          steady: 'Easy',
+          bold: 'Easy',
+          reckless: null,
+        },
       },
       // What a new character carries until L-770's weapons.
       attacks: [

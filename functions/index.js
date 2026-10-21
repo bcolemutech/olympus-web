@@ -12,6 +12,7 @@ const { withNeighbours } = require('./loom-turn/discovery');
 const { arrivalPlace } = require('./loom-canon/town');
 const maps = require('./loom-canon/maps');
 const checks = require('./loom-canon/checks');
+const combat = require('./loom-modules/combat');
 const sheets = require('./loom-canon/sheets');
 const creation = require('./loom-canon/creation');
 const { rollDie } = require('./loom-turn/adjudicate');
@@ -693,8 +694,11 @@ exports.loomGetMap = onCall(async (request) => {
   if (stored.worldId !== worldId.trim()) {
     throw new HttpsError('failed-precondition', 'worldId does not match this save.');
   }
-  const canonWorld = await loomCanon.loadWorld(worldId.trim(), { db });
-  if (!canonWorld) throw new HttpsError('not-found', 'Unknown world.');
+  const loaded = await loomCanon.loadWorld(worldId.trim(), { db });
+  if (!loaded) throw new HttpsError('not-found', 'Unknown world.');
+  // The world as this save sees it (L-824): its map's figures, and everyone
+  // where the save has them.
+  const canonWorld = combat.figures.withFigures(loaded, stored);
   // The character's speed, worked out for the world's system (L-811).
   const save = sheets.withSpeed(stored, checks.systemOf(canonWorld));
   // On a battle map, only what the save has seen of it is sent (L-633).

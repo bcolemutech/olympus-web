@@ -205,7 +205,8 @@ describe.each(Object.keys(mockCases))('fights under %s', (id) => {
     // Each End turn is a round: Grell's turn, then the player's again, 6 s,
     // and no model call.
     const round = await play(ref.id, { action: { verb: 'end-turn' } });
-    expect(round.narration).toContain('Grell waits.');
+    // Grell takes their turn: by their tactics, at the player (L-824).
+    expect(round.narration).toMatch(/Grell (misses|hits) you/);
     expect(round.narration).toContain('Round 2.');
     save = await saved(ref);
     expect(save.fight).toMatchObject({ round: 2, turn: 'player' });
@@ -325,7 +326,8 @@ describe.each(Object.keys(mockCases))('fights under %s', (id) => {
     );
     // Still neutral in canon, they stay in it.
     const round = await play(ref.id, { action: { verb: 'end-turn' } });
-    expect(round.narration).toContain('Grell waits.');
+    // Grell takes their turn: by their tactics, at the player (L-824).
+    expect(round.narration).toMatch(/Grell (misses|hits) you/);
     expect((await saved(ref)).fight.round).toBe(2);
   });
 });

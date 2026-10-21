@@ -273,13 +273,20 @@ function against(system, { roll, attack, subdue = false, target, attackerName, n
     );
     next = put.sheet;
     effect = { outcome: put.outcome, name: put.name, ...(put.roll ? { roll: put.roll } : {}) };
-    if (put.outcome === 'resisted') lines.push(`${who} resists: not ${put.name}.`);
-    else if (put.outcome !== 'kept') lines.push(`${who} is ${put.name}.`);
+    const you = target.id === 'player';
+    if (put.outcome === 'resisted') {
+      lines.push(you ? `You resist: not ${put.name}.` : `${who} resists: not ${put.name}.`);
+    } else if (put.outcome !== 'kept') {
+      lines.push(you ? `You're ${put.name}.` : `${who} is ${put.name}.`);
+    }
   }
   let down = null;
   if (after === 0 && health) {
     down = attack.lethal !== false && !subdue ? 'dead' : 'out';
-    lines.push(down === 'dead' ? `${who} falls, dead.` : `${who} falls, knocked out.`);
+    // The player's fall is said by whoever handles it (L-824; L-827).
+    if (target.id !== 'player') {
+      lines.push(down === 'dead' ? `${who} falls, dead.` : `${who} falls, knocked out.`);
+    }
   }
   return { ...base, damage, sheet: next, down, ...(effect ? { effect } : {}), lines };
 }

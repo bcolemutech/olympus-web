@@ -44,8 +44,9 @@
 // 2: the Rich bar scales with a settlement's size; 3: a Rich settlement's town
 // has ground (L-655); 4: the score, its criteria and bands (L-691); 5: a
 // world's cover image (L-704); 6: a world's game system (L-801); 7: a named
-// character's sheet (L-813); 8: a fighter's attacks (L-822).
-const RUBRIC_VERSION = 8;
+// character's sheet (L-813); 8: a fighter's attacks (L-822); 9: foes at a
+// dangerous place (L-824).
+const RUBRIC_VERSION = 9;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -67,7 +68,7 @@ const IMPORT = 'import';
  */
 const WEIGHTS = Object.freeze({
   settlement: { residents: 15, lore: 10, townArt: 15, description: 20, loreLinks: 5, ground: 10 },
-  place: { ownMap: 15, mapArt: 10, someone: 15, lore: 30, description: 10 },
+  place: { ownMap: 15, mapArt: 10, someone: 15, lore: 30, description: 10, foes: 10 },
   character: { description: 25, lore: 15, faction: 10, sheet: 20, attacks: 15 },
   battleMap: { layers: 30, art: 30, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
@@ -440,6 +441,36 @@ const CRITERIA = Object.freeze([
           ? `It wants ${want} people found here (it has ${have}).`
           : 'Nobody is found here.',
       };
+    },
+  },
+  {
+    // Foes at a dangerous place (L-824; combat GR1): one with danger set has
+    // hostile figures on its battle map or hostile characters found there.
+    // Encounter tables join it with wilderness travel and rests (L-827).
+    id: 'place.foes',
+    kinds: ['poi', 'place'],
+    weight: WEIGHTS.place.foes,
+    feature: 'L-824',
+    label: 'Foes at a dangerous place',
+    need: 'foes',
+    tool: 'place_figures',
+    applies: (world, entity) => entity.danger === 'low' || entity.danger === 'high',
+    check: (world, entity, { kind }) => {
+      const map = require('./maps').mapOf(world, entity);
+      const figures = ((map && map.figures) || []).filter(
+        (g) => (g.side || 'hostile') === 'hostile'
+      );
+      const people = peopleAt(world, entity, kind === 'place').filter(
+        (id) => ((world.characters || {})[id] || {}).side === 'hostile'
+      );
+      return figures.length || people.length
+        ? met()
+        : {
+            progress: 0,
+            message:
+              'It is dangerous but no foes are here: place some with place_figures, or make ' +
+              'someone here hostile (update_character side).',
+          };
     },
   },
   {

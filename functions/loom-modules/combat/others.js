@@ -1,0 +1,315 @@
+'use strict';
+
+/**
+ * Everyone else's turns (planning/combat.md §3 EN3, EN4, EN6, §4.6; L-824 /
+ * #656): after the player's turn, each other fighter in the fight takes
+ * theirs in order, to the player's next, by the rules alone (CB0): their
+ * tactics (./tactics.js) choose a move and an attack, the attack is rolled
+ * (./strike.js), their conditions tick (L-815), and morale is rolled when
+ * their side falters.
+ *
+ *   Morale (EN4)   when half of the hostile side is down, or its leader
+ *                  falls, each of the rest rolls the system's morale check at
+ *                  the rung for their posture (settings' `morale`), once for
+ *                  each; failing, they run for the nearest way off the map,
+ *                  or surrender with no way out. A cowardly fighter left with
+ *                  a quarter of its health or less runs without a roll.
+ *   The player at 0  is knocked out until L-827 (decided 2026-10-21): the
+ *                  fight ends, their foes the winners, and they come round an
+ *                  hour later with 1 health where they fell.
+ *
+ * Pure: the dice come from the caller. Works on copies and returns what
+ * changed, for ./play.js to write.
+ */
+
+const checks = require('../../loom-canon/checks');
+const sheets = require('../../loom-canon/sheets');
+const effects = require('../../loom-canon/effects');
+const conditions = require('../../loom-canon/conditions');
+const maps = require('../../loom-canon/maps');
+const clock = require('../../loom-canon/clock');
+const fight = require('./fight');
+const tactics = require('./tactics');
+const { strike, spendAmmo } = require('./strike');
+const { attacksOf } = require('./attacks');
+const { settingsOf } = require('./settings');
+const figures = require('./figures');
+
+const { PLAYER } = fight;
+const KNOCKED_OUT = clock.HOUR;
+const copyOf = (v) => JSON.parse(JSON.stringify(v));
+const key = (cell) => cell.x + ',' + cell.y;
+
+/**
+ * Plays the turns of everyone but the player, from the one after the current
+ * turn (or the current one itself, with `current`: a fight just begun) to the
+ * player's next. `save` is the save as it stands (its fight, figures, sheet
+ * and square); `now` the time the turns are played at.
+ *
+ * Returns `{ fight (null when it ended), figures, sheet (the player's, when
+ * changed), lines, rounds, turns: [{ id, path, attack? }], ended?: { winner,
+ * how }, knockedOut?: true }`.
+ */
+function playOthers(world, save, { dice, current = false, now = 0 }) {
+  const system = checks.systemOf(world);
+  const settings = settingsOf(system);
+  const health = settings.health;
+  const states = copyOf((save && save.figures) || {});
+  let sheet = copyOf(sheets.sheetOf(save) || sheets.defaultSheet(system));
+  let sheetChanged = false;
+  let f = copyOf(save.fight);
+  const lines = [];
+  const turns = [];
+  let rounds = 0;
+  let ended = null;
+  let knockedOut = false;
+  const { map, cell: playerCell } = maps.positionOf(world, save);
+  const doors = ((save && save.doors) || {})[map ? map.id : ''] || {};
+  const view = () => figures.withFigures(world, { ...save, figures: states });
+  const sheetOf = (id, character) =>
+    (states[id] && states[id].sheet) ||
+    (character && character.sheet) ||
+    sheets.defaultSheet(system);
+  const maxOf = (s) => (health ? sheets.maxima(system, s)[health] || 0 : 0);
+  const healthOf = (s) => {
+    const held = s && s.resources && s.resources[health];
+    return held && Number.isFinite(held.current) ? held.current : maxOf(s);
+  };
+
+  // Everyone in the fight still standing, where they are now.
+  const fighters = () => {
+    const world2 = view();
+    const out = [];
+    for (const id of f.order) {
+      const c = f.combatants[id];
+      if (!c || c.out) continue;
+      if (id === PLAYER) {
+        out.push({ id, name: 'you', side: 'party', cell: playerCell, sheet, max: maxOf(sheet) });
+        continue;
+      }
+      const character = world2.characters[id];
+      if (!character || character.retired || !character.cell) continue;
+      const s = sheetOf(id, character);
+      out.push({ ...character, id, side: c.side, cell: character.cell, sheet: s, max: maxOf(s) });
+    }
+    return out;
+  };
+
+  // Morale (EN4): when half the hostile side is down, or its leader falls.
+  const checkMorale = () => {
+    const morale = settings.morale;
+    if (!morale) return;
+    const hostile = Object.entries(f.combatants).filter(([, c]) => c.side === 'hostile');
+    const down = hostile.filter(([, c]) => c.out === 'down');
+    const leaderDown = hostile.some(([, c]) => c.leader && c.out === 'down');
+    const half = down.length * 2 >= hostile.length;
+    if (!half && !leaderDown) return;
+    const world2 = view();
+    for (const [id, c] of hostile) {
+      if (c.out || c.fleeing || c.moraleRolled) continue;
+      c.moraleRolled = true;
+      const character = world2.characters[id] || {};
+      const posture = figures.postureOf(character);
+      const rungName = (morale.rungs || {})[posture];
+      if (!rungName) continue;
+      const rung = system.checks.ladder.find((r) => r.name === rungName);
+      const roll = checks.rollCheck(system, {
+        check: morale.check,
+        character: { sheet: sheetOf(id, character) },
+        difficulty: rung,
+        dice,
+      });
+      if (roll.success) continue;
+      breakOf(id, c, character.name || c.name);
+    }
+  };
+
+  // Breaking (EN4): running for the nearest way out, or surrendering.
+  const breakOf = (id, c, name) => {
+    const way = map && (map.exits || []).length;
+    if (way) {
+      c.fleeing = true;
+      lines.push(`${name} breaks and runs.`);
+    } else {
+      f = fight.leave(f, id, 'surrendered');
+      lines.push(`${name} throws down their weapons.`);
+    }
+  };
+
+  // One fighter's turn.
+  const act = (id) => {
+    const c = f.combatants[id];
+    const world2 = view();
+    const character = world2.characters[id];
+    if (!character || character.retired || !character.cell) {
+      f = fight.leave(f, id, 'gone');
+      return;
+    }
+    let mine = sheetOf(id, character);
+    const flags = conditions.flagsOf(system, mine);
+    // A cowardly fighter nearly done for runs without a roll.
+    if (
+      !c.fleeing &&
+      c.side === 'hostile' &&
+      figures.postureOf(character) === 'cowardly' &&
+      healthOf(mine) * 4 <= maxOf(mine)
+    ) {
+      breakOf(id, c, character.name);
+      if (f.combatants[id].out) return;
+    }
+    const all = fighters();
+    const me = all.find((x) => x.id === id);
+    const foes = all.filter(
+      (x) => x.id !== id && (c.side === 'hostile' ? x.side !== 'hostile' : x.side === 'hostile')
+    );
+    const friends = all.filter((x) => x.id !== id && !foes.includes(x));
+    const occupied = new Set(
+      Object.values(world2.characters)
+        .filter((x) => !x.retired && x.cell && x.id !== id)
+        .filter(
+          (x) => (maps.characterHost(world2, x) || {}).id === (maps.hostOf(world2, save) || {}).id
+        )
+        .map((x) => key(x.cell))
+        .concat(playerCell ? [key(playerCell)] : [])
+    );
+    const usable = attacksOf(system, mine).filter((a) => !spendAmmo(system, mine, a).refused);
+    const plan = tactics.planTurn({
+      me: {
+        id,
+        cell: me.cell,
+        side: c.side,
+        role: figures.roleOf(system, { ...character, sheet: mine }),
+        posture: figures.postureOf(character),
+        fleeing: Boolean(c.fleeing),
+        attacks: usable,
+        speed: sheets.speedFor(system, mine),
+        noMove: flags.noMove.length > 0,
+        noAction: flags.noAction.length > 0,
+      },
+      foes,
+      friends,
+      occupied,
+      map,
+      doors,
+      health,
+    });
+    const record = { id, path: plan.path.concat(plan.back) };
+    const last = record.path.length ? record.path[record.path.length - 1] : null;
+    const moved = (cell) => {
+      states[id] = { ...(states[id] || {}), cell: { x: cell.x, y: cell.y } };
+    };
+    if (plan.path.length) moved(plan.path[plan.path.length - 1]);
+    if (plan.fled) {
+      states[id] = { ...(states[id] || {}), gone: 'fled' };
+      f = fight.leave(f, id, 'fled');
+      lines.push(`${character.name} flees.`);
+      turns.push(record);
+      return;
+    }
+    if (plan.attack) {
+      const { attack, target } = plan.attack;
+      const spent = spendAmmo(system, mine, attack);
+      mine = spent.sheet;
+      const targetSheet = target.id === PLAYER ? sheet : sheetOf(target.id, target);
+      const struck = strike(system, {
+        attacker: { name: character.name, sheet: mine },
+        attack,
+        targets: [
+          { id: target.id, name: target.id === PLAYER ? 'you' : target.name, sheet: targetSheet },
+        ],
+        now,
+        dice,
+      });
+      const r = struck.results[0];
+      lines.push(
+        ...r.lines.map((line, i) =>
+          i === 0
+            ? line.replace(/\.$/, '') +
+              ` (${struck.roll.total} against ${r.opposed ? r.opposed.total : r.difficulty}).`
+            : line
+        )
+      );
+      record.attack = {
+        attack: attack.id,
+        target: target.id,
+        hit: r.hit,
+        ...(r.damage ? { damage: r.damage.total } : {}),
+        roll: struck.roll.total,
+      };
+      if (target.id === PLAYER) {
+        sheet = r.sheet;
+        sheetChanged = true;
+        if (r.down) {
+          // Knocked out until L-827 (decided 2026-10-21).
+          sheet.resources[health] = { ...sheet.resources[health], current: 1 };
+          knockedOut = true;
+          f = fight.leave(f, PLAYER, 'down');
+          lines.push('You fall, knocked out. You come round an hour later, battered.');
+        }
+      } else {
+        states[target.id] = {
+          ...(states[target.id] || {}),
+          sheet: r.sheet,
+          ...(r.down ? { down: r.down } : {}),
+        };
+        if (r.down && f.combatants[target.id]) f = fight.leave(f, target.id, 'down');
+      }
+    }
+    if (plan.back.length) moved(plan.back[plan.back.length - 1]);
+    // Their conditions tick at the end of their turn (L-815).
+    if ((mine.conditions || []).length) {
+      const t = effects.endOfTurn(system, mine, { now, dice });
+      mine = t.sheet;
+      lines.push(
+        ...t.lines.map((line) =>
+          line.startsWith('You shake off')
+            ? line.replace('You shake off', `${character.name} shakes off`)
+            : `${character.name}: ${line}`
+        )
+      );
+    }
+    states[id] = { ...(states[id] || {}), sheet: mine };
+    if (last && !states[id].cell) moved(last);
+    turns.push(record);
+  };
+
+  const done = () => {
+    checkMorale();
+    const over = fight.endOf(f);
+    if (over) ended = over;
+    return Boolean(over) || knockedOut;
+  };
+
+  // What the player's turn did may have shaken their foes (a fall).
+  if (done()) return finish();
+  if (current && f.turn !== PLAYER && !f.combatants[f.turn].out) {
+    act(f.turn);
+    done();
+  }
+  for (let i = 0; !ended && !knockedOut && i < f.order.length * 3; i++) {
+    const step = fight.next(f, settings.economy);
+    f = step.fight;
+    if (step.newRound) rounds += 1;
+    if (f.turn === PLAYER) break;
+    act(f.turn);
+    if (done()) break;
+  }
+  return finish();
+
+  function finish() {
+    if (!ended && knockedOut) ended = { winner: 'hostile', how: ['down'] };
+    return {
+      fight: ended ? null : f,
+      endedFight: ended ? f : null,
+      figures: states,
+      ...(sheetChanged ? { sheet } : {}),
+      lines,
+      rounds,
+      turns,
+      ...(ended ? { ended } : {}),
+      ...(knockedOut ? { knockedOut: true, lost: KNOCKED_OUT } : {}),
+    };
+  }
+}
+
+module.exports = { playOthers, KNOCKED_OUT };

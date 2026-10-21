@@ -30,6 +30,7 @@ const sight = require('../../loom-canon/sight');
 const checks = require('../../loom-canon/checks');
 const sheets = require('../../loom-canon/sheets');
 const fight = require('./fight');
+const others = require('./others');
 
 const { PLAYER } = fight;
 const SIDES = ['party', 'hostile', 'neutral'];
@@ -103,15 +104,17 @@ function hostilesInSight(world, save) {
 
 /**
  * Starts a fight on the save's battle map (SE1–SE3): the player, every
- * hostile and party character standing on it, and `joining` (ids of others
- * who join hostile: someone the player attacks). Rolls initiative and
- * surprise, then plays the turns before the player's first (`first`: the
- * player's turn is first, their attack opening the fight).
+ * hostile and party fighter standing on it (characters and figures, L-824),
+ * and `joining` (ids of others who join hostile: someone the player
+ * attacks). Rolls initiative and surprise, then plays the turns before the
+ * player's first (./others.js; `first`: the player's turn is first, their
+ * attack opening the fight).
  *
- * Returns `{ mutations, lines, roll, rounds, fight: { started, by, order,
- * surprised } }` (`roll` the player's initiative, for the roll card; `rounds`
- * the rounds that passed before their first turn, each 6 s), or null when
- * there's no battle map here or nobody to fight.
+ * Returns `{ mutations, lines, roll, rounds, lost, fight: { started, by,
+ * order, surprised, ended? } }` (`roll` the player's initiative, for the
+ * roll card; `rounds` the rounds that passed before their first turn, each
+ * 6 s; `lost` more time lost, knocked out), or null when there's no battle
+ * map here or nobody to fight.
  */
 function begin(world, save, { by, ambushers = null, joining = [], first = false, dice }) {
   const { map } = maps.positionOf(world || {}, save);
@@ -134,7 +137,7 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
       kind: 'character',
       side: joining.includes(c.id) ? 'hostile' : sideOf(c),
       name: c.name,
-      sheet: c.sheet || null,
+      sheet: sheetFor(world, save, c),
     }))
   );
   const started = fight.start(system, {
@@ -149,12 +152,13 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
   for (const id of joining) {
     if (started.fight.combatants[id]) started.fight.combatants[id].joined = true;
   }
+  // A leader's fall shakes the rest (L-824; EN4).
+  for (const c of others) {
+    if (c.leader && started.fight.combatants[c.id]) started.fight.combatants[c.id].leader = true;
+  }
   const caught = started.surprise.surprised;
   // The player's own attack opens it: theirs is the first turn (SE1).
-  const played = first
-    ? { fight: { ...started.fight, turn: PLAYER }, rounds: 0, passed: [] }
-    : fight.toPlayer(system, started.fight, { current: true });
-  const f = played.fight;
+  const f = first ? { ...started.fight, turn: PLAYER } : started.fight;
   const nameOf = (id) => (id === PLAYER ? 'you' : f.combatants[id].name);
   const place = f.order.indexOf(PLAYER) + 1;
   const lines = [
@@ -169,13 +173,18 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
       listed(theyMissed) + (theyMissed.length > 1 ? ' are' : ' is') + ' caught off guard.'
     );
   }
-  lines.push(...played.passed.map((id) => capitalised(nameOf(id)) + ' waits.'));
-  if (f.round > 1) lines.push('Round ' + f.round + '.');
+  // Those before the player take their turns (L-824).
+  const played =
+    f.turn === PLAYER
+      ? { mutations: [setFight(f)], lines: [], rounds: 0, lost: 0 }
+      : othersPlay(world, save, f, { dice, current: true });
+  lines.push(...played.lines);
   const mine = started.initiative[PLAYER];
   return {
-    mutations: [setFight(f)],
+    mutations: played.mutations,
     lines,
     rounds: played.rounds,
+    lost: played.lost,
     roll: {
       ...mine,
       type: 'number',
@@ -187,11 +196,60 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
       verdict: ordinal(place) + ' of ' + f.order.length,
     },
     fight: {
+      ...(played.fight || {}),
       started: true,
       by,
       order: f.order.map(nameOf),
       surprised: caught.map(nameOf),
     },
+  };
+}
+
+/**
+ * Everyone else's turns (./others.js), from fight `f`, as the save's
+ * mutations and lines: the fight (or its end), every fighter's state in
+ * `save.figures`, the player's sheet when hurt, and the time lost to being
+ * knocked out (`lost`). Returns `{ mutations, lines, rounds, lost, turns,
+ * fight? }`, `fight` its end for NARRATE.
+ */
+function othersPlay(world, save, f, { dice, current = false }) {
+  const result = others.playOthers(
+    world,
+    { ...save, fight: f },
+    {
+      dice,
+      current,
+      now: Number.isFinite(save.time) ? save.time : 0,
+    }
+  );
+  const mutations = [{ target: 'save', op: 'set-flag', path: 'figures', value: result.figures }];
+  if (result.sheet) {
+    mutations.push({
+      target: 'save',
+      op: 'set-flag',
+      path: 'character.sheet',
+      value: result.sheet,
+    });
+  }
+  const lines = result.lines.slice();
+  let ended = null;
+  if (result.ended) {
+    ended = ending(result.endedFight, result.ended);
+    mutations.push(...ended.mutations);
+    lines.push(...ended.lines);
+  } else {
+    mutations.push(setFight(result.fight));
+    if (result.rounds) lines.push('Round ' + result.fight.round + '.');
+  }
+  return {
+    mutations,
+    lines,
+    rounds: result.rounds,
+    lost: result.lost || 0,
+    turns: result.turns,
+    ...(ended
+      ? { fight: { ...ended.fight, ...(result.knockedOut ? { knockedOut: true } : {}) } }
+      : {}),
   };
 }
 
@@ -224,11 +282,11 @@ function ending(f, result) {
 /**
  * After the player's End turn in a fight (TN1, SE4): foes no longer on the
  * map, or no longer hostile, leave it; if a side is empty, it ends;
- * otherwise everyone else takes their turn, to the player's next.
- * Returns `{ mutations, lines, fight? }` (fight: its end, for NARRATE), or
- * null with no fight.
+ * otherwise everyone else takes their turn, to the player's next (L-824:
+ * by their tactics). Returns `{ mutations, lines, lost, turns?, fight? }`
+ * (fight: its end, for NARRATE), or null with no fight.
  */
-function afterTurn(world, save) {
+function afterTurn(world, save, { dice } = {}) {
   let f = fightOf(save);
   if (!f) return null;
   const here = new Map(standingHere(world, save).map((c) => [c.id, c]));
@@ -241,16 +299,8 @@ function afterTurn(world, save) {
     }
   }
   const over = fight.endOf(f);
-  if (over) return ending(f, over);
-  const played = fight.toPlayer(checks.systemOf(world), f);
-  const g = played.fight;
-  const nameOf = (id) => g.combatants[id].name;
-  return {
-    mutations: [setFight(g)],
-    lines: played.passed
-      .map((id) => nameOf(id) + ' waits.')
-      .concat(played.rounds ? ['Round ' + g.round + '.'] : []),
-  };
+  if (over) return { lost: 0, ...ending(f, over) };
+  return othersPlay(world, save, f, { dice });
 }
 
 /** The player leaving the fight's map (SE4: fled): `{ mutations, lines, fight }`, or null. */
@@ -306,7 +356,6 @@ function listed(names) {
   if (names.length < 2) return names.join('');
   return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
 }
-const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
 module.exports = {
   figureOf,

@@ -773,7 +773,14 @@ function evaluateEndTurn(characterState, canonWorld, dice) {
     effects.endOfTurn(system, sheet, { now: ends, dice })
   );
   // In a fight, everyone else takes their turn, to the player's next (L-821).
-  const round = combat.play.afterTurn(canonWorld, characterState) || { mutations: [], lines: [] };
+  const tickedSheet = (ticked.mutations.find((m) => m.path === 'character.sheet') || {}).value;
+  const after = tickedSheet
+    ? { ...characterState, character: { ...characterState.character, sheet: tickedSheet } }
+    : characterState;
+  const round = combat.play.afterTurn(canonWorld, after, { dice }) || {
+    mutations: [],
+    lines: [],
+  };
   let moved = '';
   if (map && spent > 0) {
     const feature = maps.at(map, cell).feature;
@@ -788,9 +795,11 @@ function evaluateEndTurn(characterState, canonWorld, dice) {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
-      { target: 'save', op: 'set-flag', path: 'time', value: ends },
+      // Knocked out in the round (L-824), the time they lie there too.
+      { target: 'save', op: 'set-flag', path: 'time', value: ends + (round.lost || 0) },
       { op: 'increment', path: 'worldClock', value: 1 },
       ...ticked.mutations,
+      // The round after the conditions' tick: what it does to the sheet wins.
       ...round.mutations,
     ],
     constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved].concat(
@@ -826,7 +835,7 @@ function fightStarted(characterState, canonWorld, options) {
   const begun = combat.play.begin(canonWorld, characterState, options);
   if (!begun) return null;
   const system = checks.systemOf(canonWorld);
-  const lost = begun.rounds * clock.turnSeconds(canonWorld, true);
+  const lost = begun.rounds * clock.turnSeconds(canonWorld, true) + (begun.lost || 0);
   return {
     outcome: 'success',
     mutations: begun.mutations.concat(

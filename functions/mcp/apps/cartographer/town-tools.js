@@ -232,7 +232,8 @@ function townTools({ writer }) {
       description:
         'Change a place in town: its name, kind, description, whether it is a way in and out ' +
         '(entranceFor; null makes it an ordinary place), its rules (requiresAbility, null ' +
-        'removes it), or its position. Setting a description, even the current text, marks it ' +
+        'removes it), its position, or its danger (none, low, high). Setting a description, ' +
+        'even the current text, marks it ' +
         'written up. A town keeps at least one way in and out. ' +
         editNote,
       inputSchema: {
@@ -258,10 +259,25 @@ function townTools({ writer }) {
           })
           .optional(),
         position: position.nullable().optional(),
+        danger: z
+          .enum(['none', 'low', 'high'])
+          .optional()
+          .describe(
+            'How dangerous it is (L-824): a dangerous place is graded on having hostile figures ' +
+              'or characters placed there; none is the default.'
+          ),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'kind', 'description', 'entranceFor', 'rules', 'position']);
+        requireSome(args, [
+          'name',
+          'kind',
+          'description',
+          'entranceFor',
+          'rules',
+          'position',
+          'danger',
+        ]);
         return edit(ctx, args, (e) => {
           const { world } = e;
           const place = existing(world, 'place', args.placeId);
@@ -288,6 +304,10 @@ function townTools({ writer }) {
             fields['rules.requiresAbility'] = FieldValue.delete();
           } else if (ability && ability !== rules.requiresAbility) {
             fields['rules.requiresAbility'] = ability;
+          }
+          // Its danger (L-824): none is the default, so it isn't kept.
+          if (args.danger !== undefined && args.danger !== (place.danger || 'none')) {
+            fields.danger = args.danger === 'none' ? FieldValue.delete() : args.danger;
           }
           if (args.position === null && place.position) fields.position = FieldValue.delete();
           else if (args.position) fields.position = args.position;
