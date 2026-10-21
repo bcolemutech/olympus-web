@@ -15,6 +15,7 @@ const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const clock = require('../loom-canon/clock');
 const { systemOf } = require('../loom-canon/checks');
 const { withSpeed } = require('../loom-canon/sheets');
+const combat = require('../loom-modules/combat');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -105,7 +106,9 @@ async function intake(params) {
  * exit goes on through the pipeline, to leave by it, narrated, and so does
  * one that walks into a hazard (L-815): stopped there, it is triggered and
  * narrated (`action: { verb: 'hazard', hazard }`), the step's lines first.
- * Opening or
+ * A step that ends in sight of a hostile, out of a fight, starts one, narrated
+ * (`action: { verb: 'fight' }`; L-821), the step's lines first; an End turn
+ * that ends a fight is narrated too. Opening or
  * closing a door beside the player (`{ verb: 'door', door, open }`; L-625 /
  * #450) is answered the same way. A step goes only to and over ground the
  * save knows (L-635 / #458). What it sees on the way, and from where it
@@ -129,6 +132,21 @@ async function runTurnPipeline(params) {
   if (action && action.verb === 'end-turn') {
     const proposedAction = { verb: 'end-turn', targets: [], params: {} };
     const resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
+    // A fight that ends with this turn is narrated (L-821; EN5); any other
+    // End turn, rounds of a fight included, is plain lines.
+    const told =
+      resolution.fight && resolution.fight.ended
+        ? await narrateResolution({
+            actionText: 'end turn',
+            proposedAction,
+            resolution,
+            canonWorld: knownWorld(canonWorld, save, found),
+            save,
+            worldState,
+            saveRef,
+            known,
+          })
+        : null;
     return commitTurn({
       db,
       saveRef,
@@ -138,10 +156,12 @@ async function runTurnPipeline(params) {
       actionText: 'end turn',
       proposedAction,
       resolution,
-      narration: resolution.constraints.join(' '),
-      entityRefs: [],
-      inventedEntities: [],
-      suggestedActions: [],
+      narration: [resolution.constraints.join(' '), told && told.narration]
+        .filter(Boolean)
+        .join(' '),
+      entityRefs: told ? told.entityRefs : [],
+      inventedEntities: told ? told.inventedEntities : [],
+      suggestedActions: told ? told.suggestedActions : [],
     });
   }
 
@@ -196,7 +216,23 @@ async function runTurnPipeline(params) {
         });
         if (seen) transaction.set(seen.ref, seen.value);
       }
-      return { ...planned, summary: fresh.recentSummary || '' };
+      // Where it now stands, for a fight it walked into sight of (L-821).
+      const after = planned.cell
+        ? {
+            ...fresh,
+            cell: planned.cell,
+            turn: planned.turn,
+            ...(door
+              ? {
+                  doors: {
+                    ...fresh.doors,
+                    [door.mapId]: { ...doorStatesOf(fresh, door.mapId), [door.doorId]: door.state },
+                  },
+                }
+              : {}),
+          }
+        : fresh;
+      return { ...planned, summary: fresh.recentSummary || '', after };
     });
     if (step.hazard) {
       // Walked into a hazard (L-815): it triggers, narrated.
@@ -214,6 +250,29 @@ async function runTurnPipeline(params) {
           plan: step.turn.plan,
           lines,
           hazard: step.hazard.id,
+        },
+      };
+    }
+    const spotted =
+      !step.exit && !step.refused && !combat.play.fightOf(step.after)
+        ? combat.play.hostilesInSight(canonWorld, step.after)
+        : [];
+    if (spotted.length) {
+      // In sight of a hostile (L-821; SE1): a fight starts, narrated.
+      const fought = await runTurnPipeline({
+        ...params,
+        action: { verb: 'fight', names: spotted.map((c) => c.name) },
+      });
+      const lines = step.lines || [];
+      return {
+        ...fought,
+        narration: [lines.join(' '), fought.narration].filter(Boolean).join(' '),
+        step: {
+          cell: step.cell,
+          movementLeft: step.turn.movementLeft,
+          plan: step.turn.plan,
+          lines,
+          fight: true,
         },
       };
     }
@@ -246,6 +305,9 @@ async function runTurnPipeline(params) {
   if (action && action.verb === 'leave') {
     actionText = 'go out by ' + action.name;
     proposedAction = { verb: 'move', targets: ['exit:' + action.exit], params: { from: 'map' } };
+  } else if (action && action.verb === 'fight') {
+    actionText = 'come into sight of ' + (action.names || []).join(' and ');
+    proposedAction = { verb: 'fight', targets: [], params: { by: 'seen' } };
   } else if (action && action.verb === 'hazard') {
     actionText = 'walk into ' + action.name;
     proposedAction = { verb: 'hazard', targets: ['hazard:' + action.hazard], params: {} };

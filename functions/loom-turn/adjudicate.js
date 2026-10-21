@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
-const { turnStateOf, nextTurnState, speedOf } = require('../loom-models');
+const { turnStateOf, nextTurnState, speedOf, applyStateMutations } = require('../loom-models');
 const clock = require('../loom-canon/clock');
 const travel = require('../loom-canon/travel');
 const checks = require('../loom-canon/checks');
@@ -18,6 +18,7 @@ const sight = require('../loom-canon/sight');
 const ground = require('../loom-canon/ground');
 const { planTownStep, walksTown, nearestWayOut } = require('./town-steps');
 const { UNKNOWN } = require('./town-found');
+const combat = require('../loom-modules/combat');
 
 // A lock's difficulty when its door gives none (L-626).
 const DEFAULT_LOCK_DIFFICULTY = 15;
@@ -30,10 +31,11 @@ const ACTED = "You've acted this turn. End your turn first.";
 const NOT_SEEN = "You don't see that here.";
 const NOBODY_SEEN = "You don't see anyone like that here.";
 
-// Actions that need only sight (L-636): looking and talking. Anything else
-// aimed at something on a battle map is physical, and needs reach.
+// Actions that need only sight (L-636): looking and talking, persuading and
+// threatening among it (L-821: talking a foe down). Anything else aimed at
+// something on a battle map is physical, and needs reach.
 const SIGHT_ONLY =
-  /^(look|examine|inspect|study|watch|observe|read|peer|glance|talk|speak|ask|tell|say|greet|call|shout|whisper|listen|wave|signal|point|nod)/;
+  /^(look|examine|inspect|study|watch|observe|read|peer|glance|talk|speak|ask|tell|say|greet|call|shout|whisper|listen|wave|signal|point|nod|persuade|convince|reason|plead|negotiate|parley|intimidate|threaten|deceive|bluff|calm|reassure)/;
 
 /**
  * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
@@ -72,6 +74,14 @@ const SIGHT_ONLY =
  * character's conditions (damage each turn, saves to shake them off, a turn
  * off each), and a wait ticks them for every turn it lasts; a condition
  * that stops acting or moving (noAction, noMove) turns those down.
+ *
+ * Fights (planning/combat.md §4.2; L-821; ../loom-modules/combat/): one
+ * starts when the player comes into sight of a hostile on a battle map (a
+ * move, or `verb: 'fight'` after a step), or attacks someone there; its
+ * initiative and surprise are rolled with the server's dice. In a fight,
+ * each End turn is a round: everyone else takes their turn, to the
+ * player's next. Leaving the map, talking a foe down, and foes gone or no
+ * longer hostile end it. No rest or wait in a fight.
  *
  * Towns (§8; L-342 / #396): inside a settlement with a town layout, moves
  * between places follow the town's own links and are gated the same way. A
@@ -762,6 +772,8 @@ function evaluateEndTurn(characterState, canonWorld, dice) {
   const ticked = tickConditions(characterState, canonWorld, (system, sheet) =>
     effects.endOfTurn(system, sheet, { now: ends, dice })
   );
+  // In a fight, everyone else takes their turn, to the player's next (L-821).
+  const round = combat.play.afterTurn(canonWorld, characterState) || { mutations: [], lines: [] };
   let moved = '';
   if (map && spent > 0) {
     const feature = maps.at(map, cell).feature;
@@ -779,9 +791,59 @@ function evaluateEndTurn(characterState, canonWorld, dice) {
       { target: 'save', op: 'set-flag', path: 'time', value: ends },
       { op: 'increment', path: 'worldClock', value: 1 },
       ...ticked.mutations,
+      ...round.mutations,
     ],
-    constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved].concat(ticked.lines),
+    constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved].concat(
+      ticked.lines,
+      round.lines
+    ),
     ...(ticked.roll ? { roll: ticked.roll } : {}),
+    ...(round.fight ? { fight: round.fight } : {}),
+  };
+}
+
+// A fight starting where the player stands (L-821; SE1): hostiles in sight
+// after a step, who lie in wait, so the player rolls to notice them. The
+// rounds before the player's first turn (lost to surprise) take their time.
+function evaluateFightStart(characterState, canonWorld, dice) {
+  if (combat.play.fightOf(characterState)) {
+    return { outcome: 'no_op', mutations: [], constraints: ["You're already in a fight."] };
+  }
+  if (!combat.play.hostilesInSight(canonWorld, characterState).length) {
+    return { outcome: 'no_op', mutations: [], constraints: ['Nobody here wants a fight.'] };
+  }
+  return fightStarted(characterState, canonWorld, {
+    by: 'seen',
+    ambushers: 'hostile',
+    dice,
+  });
+}
+
+// A fight begun (../loom-modules/combat/play.js begin), as a resolution:
+// its lines, the player's initiative as the roll card, and the time of the
+// rounds lost before the player's first turn.
+function fightStarted(characterState, canonWorld, options) {
+  const begun = combat.play.begin(canonWorld, characterState, options);
+  if (!begun) return null;
+  const system = checks.systemOf(canonWorld);
+  const lost = begun.rounds * clock.turnSeconds(canonWorld, true);
+  return {
+    outcome: 'success',
+    mutations: begun.mutations.concat(
+      lost
+        ? [
+            {
+              target: 'save',
+              op: 'set-flag',
+              path: 'time',
+              value: clock.timeOf(characterState) + lost,
+            },
+          ]
+        : []
+    ),
+    constraints: begun.lines,
+    roll: { ...rolled(begun.roll, 'initiative', system), verdict: begun.roll.verdict },
+    fight: begun.fight,
   };
 }
 
@@ -808,6 +870,7 @@ function tickConditions(characterState, canonWorld, tick) {
 // wait is its time, so End turn's length isn't added too.
 const WAIT_VERBS = { wait: 'wait', rest: 'rest', sleep: 'sleep', nap: 'sleep', camp: 'rest' };
 const MAX_WAIT = 24 * clock.HOUR;
+const NO_REST = "You can't rest in the middle of a fight.";
 const HOW_LONG =
   'How long? Wait a number of minutes, or until dawn, morning, midday, afternoon, evening ' +
   'or night.';
@@ -815,6 +878,7 @@ const HOW_LONG =
 function evaluateWait(proposedAction, characterState, canonWorld, dice) {
   const turn = turnStateOf(characterState);
   if (turn.actionUsed) return blocked(ACTED);
+  if (combat.play.fightOf(characterState)) return { ...blocked(NO_REST), plain: true };
   const params = proposedAction.params || {};
   // Sleeping or resting, as the player put it ("sleep until dawn").
   const how = WAIT_VERBS[String(params.how || '').toLowerCase()] || WAIT_VERBS[proposedAction.verb];
@@ -923,6 +987,7 @@ function outOfSightOrReach(proposedAction, characterState, canonWorld) {
 function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   const turn = turnStateOf(characterState);
   if (turn.actionUsed) return blocked(ACTED);
+  const inFight = combat.play.fightOf(characterState);
   // A condition that stops acting (L-815: Stunned) turns it down, unused.
   const stopped = conditions.flagsOf(
     checks.systemOf(canonWorld),
@@ -940,13 +1005,67 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
     ? evaluateDoorAttempt(proposedAction, doorTarget.slice(5), characterState, dice, canonWorld)
     : evaluateGeneric(proposedAction, dice, characterState, canonWorld);
   if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return resolution;
+  // In a fight, a turn has the system's actions (L-821; TN3): one by
+  // default, counted only when there are more.
+  const allowed = inFight
+    ? combat.settings.settingsOf(checks.systemOf(canonWorld)).economy.actions
+    : 1;
+  const used = (turn.actionsUsed || 0) + 1;
+  const spent =
+    allowed === 1
+      ? { ...turn, actionUsed: true }
+      : used >= allowed
+        ? { ...turn, actionUsed: true, actionsUsed: used }
+        : { ...turn, actionsUsed: used };
+  const fought = fightFrom(proposedAction, resolution, characterState, canonWorld, dice);
   return {
     ...resolution,
     mutations: [
       ...resolution.mutations,
-      { target: 'save', op: 'set-flag', path: 'turn', value: { ...turn, actionUsed: true } },
+      { target: 'save', op: 'set-flag', path: 'turn', value: spent },
+      ...(fought ? fought.mutations : []),
     ],
+    constraints: resolution.constraints.concat(fought ? fought.constraints : []),
+    ...(fought && fought.fight ? { fight: fought.fight } : {}),
   };
+}
+
+// What an action does to a fight (L-821; SE1, SE4): an attack at someone on
+// the map, out of one, starts it (they join, hostile, and roll to see it
+// coming; the player's opening blow is their first turn); a social check
+// that succeeds against a foe in one talks them out of it.
+function fightFrom(proposedAction, resolution, characterState, canonWorld, dice) {
+  const current = combat.play.fightOf(characterState);
+  const params = proposedAction.params || {};
+  const target =
+    (params.check && params.check.opposedBy) ||
+    (proposedAction.targets || []).find((t) => (canonWorld.characters || {})[t]);
+  if (!target) return null;
+  if (current) {
+    const talked = combat.play.talkedDown(
+      characterState,
+      proposedAction.verb,
+      target,
+      resolution.outcome === 'success'
+    );
+    return talked
+      ? { mutations: talked.mutations, constraints: talked.lines, fight: talked.fight }
+      : null;
+  }
+  if (!combat.play.isAttack(proposedAction.verb)) return null;
+  const { map } = maps.positionOf(canonWorld || {}, characterState);
+  const person = map && mapTarget(canonWorld, characterState, map, target);
+  if (!person || !person.person) return null;
+  const begun = combat.play.begin(canonWorld, characterState, {
+    by: 'attack',
+    ambushers: 'party',
+    joining: [target],
+    first: true,
+    dice,
+  });
+  return begun
+    ? { mutations: begun.mutations, constraints: begun.lines, fight: begun.fight }
+    : null;
 }
 
 // A typed attempt at a door beside the player (L-626 / #451): with its key, a
@@ -1040,6 +1159,31 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
   };
 }
 
+// After a move (L-821): leaving the fight's map ends it (fled); arriving
+// in sight of a hostile, out of one, starts one. Its lines follow the move's,
+// and its roll card is the turn's when the move rolled none.
+function afterMove(resolution, characterState, canonWorld, dice) {
+  const after = JSON.parse(JSON.stringify(characterState));
+  applyStateMutations(
+    after,
+    resolution.mutations.filter((m) => m.target === 'save')
+  );
+  const current = combat.play.fightOf(characterState);
+  const changed = current
+    ? combat.play.leftMap(characterState, after.mapId)
+    : combat.play.hostilesInSight(canonWorld, after).length
+      ? fightStarted(after, canonWorld, { by: 'seen', ambushers: 'hostile', dice })
+      : null;
+  if (!changed) return resolution;
+  return {
+    ...resolution,
+    mutations: resolution.mutations.concat(changed.mutations),
+    constraints: resolution.constraints.concat(changed.constraints || changed.lines),
+    ...(!resolution.roll && changed.roll ? { roll: changed.roll } : {}),
+    fight: changed.fight,
+  };
+}
+
 function evaluate(proposedAction, worldState, characterState, dice, canonWorld, known, found) {
   let resolution;
   const held = proposedAction.verb === 'move' ? heldBy(canonWorld, characterState) : null;
@@ -1059,10 +1203,15 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     resolution = evaluateEndTurn(characterState, canonWorld, diceSource(dice));
   } else if (proposedAction.verb === 'hazard') {
     resolution = evaluateHazard(proposedAction, characterState, diceSource(dice), canonWorld);
+  } else if (proposedAction.verb === 'fight') {
+    resolution = evaluateFightStart(characterState, canonWorld, diceSource(dice));
   } else if (WAIT_VERBS[proposedAction.verb]) {
     resolution = evaluateWait(proposedAction, characterState, canonWorld, diceSource(dice));
   } else {
     resolution = evaluateAction(proposedAction, characterState, diceSource(dice), canonWorld);
+  }
+  if (proposedAction.verb === 'move' && resolution.outcome === 'success') {
+    resolution = afterMove(resolution, characterState, canonWorld, diceSource(dice));
   }
 
   // Resolution is immutable once produced — NARRATE (L-113) can color it, never change it.
@@ -1078,6 +1227,8 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     ...(resolution.opposed ? { opposed: Object.freeze({ ...resolution.opposed }) } : {}),
     // Turned down plainly, unnarrated (L-815: held by a condition).
     ...(resolution.plain ? { plain: true } : {}),
+    // A fight started or ended this turn (L-821), for the GM.
+    ...(resolution.fight ? { fight: Object.freeze({ ...resolution.fight }) } : {}),
     // A hazard walked into (L-815), for the GM.
     ...(resolution.hazard ? { hazard: Object.freeze({ ...resolution.hazard }) } : {}),
     // The time it took and the dawns and dusks on the way (L-373), for the GM (L-375).

@@ -463,6 +463,58 @@ function buildEffectsSection(save, resolution, canonWorld) {
   return lines.length ? lines.join('\n\n') : null;
 }
 
+// A fight (L-821; planning/combat.md EN5): NARRATE writes when one starts
+// and ends; the rules write each round. Told who is in it and how it went,
+// and never to invent blows or wounds the rules didn't roll.
+const FIGHT_ENDS = {
+  fled: 'fled',
+  down: 'fell',
+  surrendered: 'surrendered',
+  talkedDown: 'were talked down',
+  gone: 'left',
+  stoodDown: 'stood down',
+};
+function buildFightSection(save, resolution) {
+  const f = resolution.fight;
+  if (f && f.started) {
+    return (
+      'FIGHT STARTS: a fight breaks out' +
+      (f.by === 'attack' ? ' as the player attacks' : ' as the player comes into sight of foes') +
+      '. Turn order: ' +
+      f.order.join(', ') +
+      '.' +
+      (f.surprised.length ? ' Caught off guard: ' + f.surprised.join(', ') + '.' : '') +
+      ' Narrate the moment it breaks out. The rules decide every attack and wound: describe ' +
+      'none that the hard facts do not state.'
+    );
+  }
+  if (f && f.ended) {
+    const how = (f.how || []).map((h) => FIGHT_ENDS[h] || h).join(' or ');
+    return (
+      'FIGHT ENDS after ' +
+      f.rounds +
+      (f.rounds === 1 ? ' round' : ' rounds') +
+      ': ' +
+      (f.winner === 'party'
+        ? 'the player’s foes ' + (how || 'are gone')
+        : f.how && f.how.includes('fled')
+          ? 'the player got away'
+          : 'it is over') +
+      '. Narrate the moment it ends and the quiet after.'
+    );
+  }
+  const current = save && save.fight;
+  if (current) {
+    return (
+      'IN A FIGHT (round ' +
+      current.round +
+      '): the rules decide every attack and wound; describe none that the hard facts do ' +
+      'not state.'
+    );
+  }
+  return null;
+}
+
 // The check rolled this turn, if one was (L-805): what it was, its total,
 // the rung, and the degree in the system's words.
 function buildRollSection(resolution, canonWorld) {
@@ -503,6 +555,7 @@ function buildUserMessage(params) {
   const effectsSection = params.save
     ? buildEffectsSection(params.save, resolution, canonWorld)
     : null;
+  const fightSection = buildFightSection(params.save, resolution);
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
@@ -521,6 +574,7 @@ function buildUserMessage(params) {
     constraintsText +
     '\n\n' +
     (rollSection ? rollSection + '\n\n' : '') +
+    (fightSection ? fightSection + '\n\n' : '') +
     (effectsSection ? effectsSection + '\n\n' : '') +
     (timeSection ? timeSection + '\n\n' : '') +
     'ROLLING SUMMARY:\n' +

@@ -50,7 +50,12 @@ function makeTurn(index, entityRefs, overrides) {
 async function seedTurns(turns) {
   const batch = db.batch();
   turns.forEach((turn) => {
-    batch.set(saveRef().collection('loom_turns').doc('turn-' + turn.index), turn);
+    batch.set(
+      saveRef()
+        .collection('loom_turns')
+        .doc('turn-' + turn.index),
+      turn
+    );
   });
   await batch.commit();
 }
@@ -102,11 +107,7 @@ describe('getEntityHistory', () => {
   });
 
   it('respects a custom limit override', async () => {
-    await seedTurns([
-      makeTurn(0, ['npc']),
-      makeTurn(1, ['npc']),
-      makeTurn(2, ['npc']),
-    ]);
+    await seedTurns([makeTurn(0, ['npc']), makeTurn(1, ['npc']), makeTurn(2, ['npc'])]);
 
     const history = await getEntityHistory({ saveRef: saveRef(), entityId: 'npc', limit: 2 });
     expect(history.map((t) => t.index)).toEqual([1, 2]);
@@ -148,10 +149,7 @@ describe('retrieveEntityContext', () => {
 
 describe('retrieveContextForEntities', () => {
   it('returns a context entry per unique entity, deduplicating and skipping falsy ids', async () => {
-    await seedTurns([
-      makeTurn(0, ['captain-orla-vance']),
-      makeTurn(1, ['old-mireille']),
-    ]);
+    await seedTurns([makeTurn(0, ['captain-orla-vance']), makeTurn(1, ['old-mireille'])]);
     const save = { relationships: { 'captain-orla-vance': 'ally', 'old-mireille': 'wary' } };
 
     const contexts = await retrieveContextForEntities({
@@ -167,7 +165,11 @@ describe('retrieveContextForEntities', () => {
   });
 
   it('returns an empty array for an empty entity list', async () => {
-    const contexts = await retrieveContextForEntities({ saveRef: saveRef(), save: {}, entityIds: [] });
+    const contexts = await retrieveContextForEntities({
+      saveRef: saveRef(),
+      save: {},
+      entityIds: [],
+    });
     expect(contexts).toEqual([]);
   });
 });

@@ -53,7 +53,7 @@ test("a world with no scale takes the default, Azgaar's 3 mi a map unit", () => 
   }
 });
 
-test("a map in other units is turned into miles", () => {
+test('a map in other units is turned into miles', () => {
   expect(routes.milesPerMapUnit(world({ unit: 'km', perMapUnit: 5 }))).toBeCloseTo(3.106855, 5);
   expect(routes.milesPerMapUnit(world({ unit: 'lg', perMapUnit: 1 }))).toBe(3);
   expect(routes.milesPerMapUnit(world({ unit: 'nmi', perMapUnit: 2 }))).toBeCloseTo(2.30156, 5);

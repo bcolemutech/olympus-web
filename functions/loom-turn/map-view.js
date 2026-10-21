@@ -20,6 +20,7 @@ const checks = require('../loom-canon/checks');
 const sheets = require('../loom-canon/sheets');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
+const combat = require('../loom-modules/combat');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -44,7 +45,9 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * world's game system for the rules reference (../loom-canon/checks.js rulesOf).
  * `character` is the character's sheet as the player reads it, for the
  * Character panel and the strip on the map (L-814; ../loom-canon/sheets.js
- * characterView), or null for a save without one.
+ * characterView), or null for a save without one. `fight` is the fight
+ * the save is in (L-821; ../loom-modules/combat/play.js viewOf): the round,
+ * whose turn, and everyone in it in order, or null.
  */
 function mapView(canonWorld, save, record, townRecord) {
   const discovered = new Set(discoveredBy(canonWorld, save));
@@ -109,6 +112,7 @@ function mapView(canonWorld, save, record, townRecord) {
     // The turn (L-611 / #441): which it is, the movement left of the
     // character's speed, whether its action is used, and any plan kept.
     turn: turnView(save),
+    fight: combat.play.viewOf(save),
     // The save's time, for the map's clock (L-376): "Day 1, evening".
     time: clock.timeView(clock.timeOf(save)),
     // The world's game system as players read it, for the rules reference

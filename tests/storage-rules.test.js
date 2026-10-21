@@ -185,16 +185,16 @@ describe("the image studio's library (L-701)", () => {
     const SVG_TYPE = { contentType: 'image/svg+xml' };
     await assertSucceeds(builder().ref(uploadPath('studio.svg')).put(bytes(1024), SVG_TYPE));
     // Each name with its own type only, and the size limits.
-    await assertFails(
-      builder().ref(uploadPath('studio.jpg')).put(bytes(64), PNG_TYPE)
-    );
+    await assertFails(builder().ref(uploadPath('studio.jpg')).put(bytes(64), PNG_TYPE));
     await assertFails(
       builder()
         .ref(uploadPath('studio.webp'))
         .put(bytes(30 * 1024 * 1024 + 1), { contentType: 'image/webp' })
     );
     await assertFails(
-      builder().ref(uploadPath('studio.svg')).put(bytes(1024 * 1024 + 1), SVG_TYPE)
+      builder()
+        .ref(uploadPath('studio.svg'))
+        .put(bytes(1024 * 1024 + 1), SVG_TYPE)
     );
     await assertFails(
       storageAs(BUILDER, ['loom']).ref(uploadPath('studio.png')).put(bytes(64), PNG_TYPE)

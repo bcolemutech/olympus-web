@@ -121,7 +121,16 @@ const FANTASY = {
     skills: { trained: 4, rank: 2 },
   },
   advancement: {},
-  modules: {},
+  // Combat (L-821; planning/combat.md §4.1): d20 + Dexterity for initiative,
+  // one action and one reaction a turn; Stealth against Perception for
+  // surprise.
+  modules: {
+    combat: {
+      initiative: { formula: '1d20 + mod(DEX)', tieBreak: 'DEX' },
+      economy: { actions: 1, reactions: 1 },
+      surprise: { hide: { skill: 'Stealth' }, notice: { skill: 'Perception' } },
+    },
+  },
   gmNotes:
     'Heroic fantasy: swords, old roads, ruins and the people who live among them. Danger is ' +
     'real but heroes are capable. Call for a check only when failing would matter, and pick ' +
@@ -232,7 +241,16 @@ const SCIFI = {
     skills: { trained: 3, rank: 1 },
   },
   advancement: {},
-  modules: {},
+  // Combat (L-821; planning/combat.md §4.1): a Reflex pool for initiative,
+  // ties to the higher Reflex; one action and one reaction a turn; Stealth
+  // against Notice for surprise.
+  modules: {
+    combat: {
+      initiative: { formula: 'count((Reflex)d10, >= 7)', tieBreak: 'Reflex' },
+      economy: { actions: 1, reactions: 1 },
+      surprise: { hide: { skill: 'Stealth' }, notice: { skill: 'Notice' } },
+    },
+  },
   gmNotes:
     'Hard-edged science fiction: crews, ships, stations and the debts that bind them. Tech is ' +
     'everywhere and none of it is free. Call for a check when the outcome is uncertain and it ' +

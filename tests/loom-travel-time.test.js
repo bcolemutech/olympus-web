@@ -158,8 +158,7 @@ async function moveTo(saveId, target) {
   return lastResolution(saveId);
 }
 
-const mapOf = (saveId) =>
-  loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
+const mapOf = (saveId) => loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
 
 afterAll(async () => {
   await db.recursiveDelete(db.collection('loom_saves'));
@@ -261,7 +260,10 @@ describe("loomGetMap's estimates", () => {
       arrives: 'Day 1, afternoon',
     });
     expect(exits.daldockley.miles).toBeCloseTo(12.34, 2);
-    expect(exits.skerry).toMatchObject({ label: 'about 10 hours by sea', arrives: 'Day 1, evening' });
+    expect(exits.skerry).toMatchObject({
+      label: 'about 10 hours by sea',
+      arrives: 'Day 1, evening',
+    });
     // The world map's links out of here carry the same.
     const link = map.links.find((l) => [l.from, l.to].sort().join() === 'daldockley,hatham');
     expect(link.travel).toEqual(exits.daldockley);
@@ -352,9 +354,7 @@ describe('the GM knows the time (L-375)', () => {
       targets: ['plc_market'],
       params: {},
     });
-    expect(timeIn(prompts.narrate[0].userMessage)).toBe(
-      'Day 1, morning. About 3 minutes passed.'
-    );
+    expect(timeIn(prompts.narrate[0].userMessage)).toBe('Day 1, morning. About 3 minutes passed.');
   });
 
   test('a refused move: no time passed', async () => {
