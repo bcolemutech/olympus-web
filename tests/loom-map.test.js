@@ -201,7 +201,7 @@ describe('moves made on the map', () => {
     await expect(
       play({ actionText: 'go', action: { verb: 'move', target: 'loc_631' } })
     ).rejects.toMatchObject({ code: 'invalid-argument', message: /not both/ });
-    await expect(play({ action: { verb: 'attack', target: 'loc_631' } })).rejects.toMatchObject({
+    await expect(play({ action: { verb: 'dance', target: 'loc_631' } })).rejects.toMatchObject({
       code: 'invalid-argument',
     });
     await expect(play({ action: { verb: 'move', target: '../x' } })).rejects.toMatchObject({

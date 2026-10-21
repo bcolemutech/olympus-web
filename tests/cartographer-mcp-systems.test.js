@@ -180,7 +180,7 @@ test('list_systems: the two built-in systems, before any is written (L-804)', as
       version: 0,
       builtIn: true,
       attributes: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'],
-      optional: ['skills', 'traits', 'conditions'],
+      optional: ['skills', 'traits', 'conditions', 'derived'],
       modules: ['combat'],
     },
     {
@@ -489,6 +489,42 @@ test('set_sheet gives a named character a sheet; get_character, test_roll and li
   expect(
     await refused('test_roll', { worldId: WORLD, characterId: 'chr_hale', systemId: 'pool-scifi' })
   ).toBe('Sergeant Hale’s world plays by "d20-fantasy", not "pool-scifi".');
+
+  // A fighter (L-822): graded on attacks of their own, given in the stat block.
+  expect(hale.checklist.find((c) => c.id === 'character.attacks')).toBeUndefined();
+  await ok('update_character', { worldId: WORLD, characterId: 'chr_hale', side: 'hostile' });
+  const unarmed = await ok('get_character', { worldId: WORLD, characterId: 'chr_hale' });
+  expect(unarmed.checklist.find((c) => c.id === 'character.attacks')).toMatchObject({
+    met: false,
+    weight: 15,
+    tool: 'set_sheet',
+    message: 'They fight but have no attacks; give their sheet some with set_sheet.',
+  });
+  const halberd = {
+    id: 'halberd',
+    name: 'Halberd',
+    reach: 2,
+    attack: '1d20 + mod(STR) + 2',
+    damage: '1d10 + mod(STR)',
+    type: 'slashing',
+  };
+  const armed = await ok('set_sheet', {
+    worldId: WORLD,
+    characterId: 'chr_hale',
+    statBlock: { ...block, attacks: [halberd] },
+  });
+  expect(armed.sheet.attacks).toEqual([halberd]);
+  const fighter = await ok('get_character', { worldId: WORLD, characterId: 'chr_hale' });
+  expect(fighter.checklist.find((c) => c.id === 'character.attacks')).toMatchObject({ met: true });
+  expect(
+    await refused('set_sheet', {
+      worldId: WORLD,
+      characterId: 'chr_hale',
+      statBlock: { ...block, attacks: [{ ...halberd, type: 'cold', damage: '1d10 + Rage' }] },
+    })
+  ).toMatch(
+    /^Sergeant Hale’s sheet doesn’t fit the world’s rules \(d20 Fantasy\):\n- attacks\[0\]\.damage: Unknown name "Rage"\.\n- attacks\[0\]\.type must be one of the system's damage types/
+  );
 
   // Refused, each problem named.
   expect(

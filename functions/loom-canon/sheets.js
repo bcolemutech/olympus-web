@@ -15,6 +15,10 @@
  *                                            climb): today's abilities (CS4),
  *                                            opening routes and places
  *     conditions: [{ id, ... }]              effects on them (L-815)
+ *     attacks?:   [attack]                   what they strike with (L-822;
+ *                                            ../loom-modules/combat/attacks.js);
+ *                                            a player's without any has the
+ *                                            system's starting attacks
  *     speed:      number                     movement a turn (L-611), worked
  *                                            out: see speedFor
  *
@@ -36,6 +40,7 @@
 const formula = require('./formula');
 const clock = require('./clock');
 const conditions = require('./conditions');
+const attacks = require('../loom-modules/combat/attacks');
 
 const DEFAULT_SPEED = 20; // as loom-models' (L-611)
 const MAX_SPEED = 1000;
@@ -254,6 +259,8 @@ function validateSheet(system, sheet) {
       }
     });
   }
+  // Attacks (L-822): optional; checked against the system's combat settings.
+  if (sheet.attacks !== undefined) errors.push(...attacks.validateAttacks(system, sheet.attacks));
   if (!Array.isArray(sheet.conditions)) errors.push('conditions must be a list.');
   else {
     if (sheet.conditions.length > MAX_CONDITIONS) errors.push('Too many conditions.');
@@ -272,7 +279,8 @@ function validateSheet(system, sheet) {
 //
 // The short form a template's figures carry (L-790), and a quick way to give
 // a named character a sheet: every attribute, and only what differs from the
-// defaults besides: `{ attributes, skills?, resources?, level?, traits? }`.
+// defaults besides: `{ attributes, skills?, resources?, level?, traits?,
+// attacks? }`.
 // A skill left out is untrained, a resource left out full, the level the
 // lowest.
 
@@ -296,6 +304,7 @@ function sheetFromStatBlock(system, block) {
     for (const r of system.sheet.resources) sheet.resources[r.id] = { current: full[r.id] || 0 };
   }
   if (isObject(block.resources)) Object.assign(sheet.resources, block.resources);
+  if (block.attacks !== undefined) sheet.attacks = block.attacks;
   sheet.speed = speedFor(system, sheet);
   return sheet;
 }
@@ -344,10 +353,11 @@ const titled = (id) => String(id).charAt(0).toUpperCase() + String(id).slice(1);
  * and in its words, every number worked out here so the page never reads a
  * formula: attributes with their modifiers, resources with their maximums,
  * the level, skills with their ranks and attributes, traits and conditions
- * by name (conditions with what's left), derived values, speed, and what no
- * longer fits (SY2). `now` is the save's time. Null without a sheet.
+ * by name (conditions with what's left), derived values, speed, attacks
+ * (L-822; a player's starting ones when the sheet lists none, `player`), and
+ * what no longer fits (SY2). `now` is the save's time. Null without a sheet.
  */
-function characterView(system, character, now = 0) {
+function characterView(system, character, now = 0, { player = true } = {}) {
   const sheet = sheetOf(character);
   if (!sheet) return null;
   const s = system.sheet;
@@ -416,7 +426,37 @@ function characterView(system, character, now = 0) {
       ? (s.derived || []).map((d) => ({ id: d.id, name: d.name, value: at(d.formula) }))
       : [],
     speed: speedFor(system, sheet),
+    attacks: attacks.attacksOf(system, sheet, { player }).map((a) => attackView(system, a, values)),
     misfits,
+  };
+}
+
+// An attack as the player reads it: its name, reach or range, the damage it
+// does on a plain hit by this sheet ("2–9", worked out, never its formula),
+// and its type.
+function attackView(system, a, values) {
+  const type = attacks.damageTypesOf(system).find((t) => t.id === a.type);
+  const at = (dice) => {
+    try {
+      return Math.max(
+        1,
+        Math.trunc(formula.evaluate(String(a.damage), { values, system, dice }).total)
+      );
+    } catch {
+      return null;
+    }
+  };
+  const low = at(() => 1);
+  const high = at((sides) => sides);
+  return {
+    id: a.id,
+    name: a.name,
+    ...(a.range ? { range: { ...a.range } } : { reach: a.reach || 1 }),
+    damage: low === high ? String(low) : low + '–' + high,
+    ...(a.type ? { type: type ? type.name : a.type } : {}),
+    lethal: a.lethal !== false,
+    ...(a.ammo ? { ammo: a.ammo } : {}),
+    ...(a.area ? { area: { ...a.area } } : {}),
   };
 }
 

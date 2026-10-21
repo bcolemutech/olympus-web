@@ -12,20 +12,48 @@
  *   surprise    { hide, notice }        each { skill } or { attribute }: an
  *               ambushed side rolls `notice` against the ambushers' `hide`;
  *               with none, nobody is surprised
+ *   attack      how an attack hits and what its degree does (L-822; AT1, AT2):
+ *               { hit: 'defence', defence }  the attack's roll against the
+ *                 target's `defence`, a formula of their sheet ("Armour", a
+ *                 derived value), read as a check's degree; or
+ *               { hit: 'opposed', defend }   against the target's own roll,
+ *                 `defend`, a formula of their sheet: the higher wins, ties
+ *                 to the defender (checks.ties);
+ *               critical: 'doubleDice' (a critical doubles the damage dice)
+ *               or 'none'; extraSuccesses: 'addDie' (each success past what
+ *               was needed adds a die of damage) or 'none'. A success at a
+ *               cost is a plain hit for now (decided 2026-10-21).
+ *               With none: against the ladder's second rung.
+ *   damageTypes [{ id, name }]          the kinds of damage (AT3); traits and
+ *               conditions resist (half) or are weak to (double) them
+ *   health      the resource damage comes off (default 'health', else the first)
+ *   subduePenalty  a formula added to a lethal attack's roll when striking to
+ *               knock out (DF4), "-4"
+ *   unarmed     the attack every fighter has (./attacks.js), unless their
+ *               sheet lists one of its id
+ *   attacks     the attacks a player character starts with until L-770's
+ *               weapons (decided 2026-10-21)
  *
- * The rest of §4.1 (attack, damageTypes, cover, flanking, subduePenalty,
- * down, rests, morale) is read by the stories that use it (L-822 to L-827):
- * kept as given until then, with a warning.
+ * The rest of §4.1 (cover, flanking, down, rests, morale) is read by the
+ * stories that use it (L-823 to L-827): kept as given until then, with a
+ * warning.
  *
  * Pure. `formula(value, where)` is the system check's own formula collector,
  * so the formulas here are checked with the rest of the system's.
  */
 
-const KEYS = ['initiative', 'economy', 'surprise'];
+const KEYS = [
+  'initiative',
+  'economy',
+  'surprise',
+  'attack',
+  'damageTypes',
+  'health',
+  'subduePenalty',
+  'unarmed',
+  'attacks',
+];
 const LATER = {
-  attack: 'L-822',
-  damageTypes: 'L-822',
-  subduePenalty: 'L-822',
   cover: 'L-823',
   flanking: 'L-823',
   morale: 'L-824',
@@ -34,6 +62,11 @@ const LATER = {
 };
 const ECONOMY = { actions: [1, 1, 5], reactions: [1, 0, 5], quick: [0, 0, 5] };
 const DEFAULT_INITIATIVE = '1d20';
+
+const HITS = ['defence', 'opposed'];
+const CRITICALS = ['doubleDice', 'none'];
+const EXTRAS = ['addDie', 'none'];
+const TYPE_ID = /^[a-z][a-z0-9_-]{0,31}$/;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -51,7 +84,32 @@ function settingsOf(system) {
     },
     economy,
     surprise: isObject(given.surprise) ? given.surprise : null,
+    attack: attackOf(system, given.attack),
+    health: healthOf(system, given.health),
+    subduePenalty: given.subduePenalty === undefined ? null : given.subduePenalty,
   };
+}
+
+// How attacks hit, with the defaults: against the ladder's second rung.
+function attackOf(system, given) {
+  const a = isObject(given) ? given : {};
+  const ladder = (system && system.checks && system.checks.ladder) || [];
+  const rung = ladder[Math.min(1, ladder.length - 1)];
+  return {
+    hit: HITS.includes(a.hit) ? a.hit : 'defence',
+    defence: a.defence !== undefined ? a.defence : rung ? rung.value : 10,
+    defend: a.defend || null,
+    critical: CRITICALS.includes(a.critical) ? a.critical : 'none',
+    extraSuccesses: EXTRAS.includes(a.extraSuccesses) ? a.extraSuccesses : 'none',
+  };
+}
+
+// The resource damage comes off.
+function healthOf(system, given) {
+  const resources = ((system && system.sheet) || {}).resources || [];
+  if (given && resources.some((r) => r.id === given)) return given;
+  if (resources.some((r) => r.id === 'health')) return 'health';
+  return resources.length ? resources[0].id : null;
 }
 
 /**
@@ -133,6 +191,73 @@ function check(settings, { system, errors, warnings, formula }) {
       }
     }
   }
+
+  // Attacks (L-822).
+  const attack = settings.attack;
+  if (attack !== undefined) {
+    if (!isObject(attack)) errors.push(`${at}.attack must be { hit, defence | defend, ... }.`);
+    else {
+      if (!HITS.includes(attack.hit)) {
+        errors.push(`${at}.attack.hit must be one of ${HITS.join(', ')}.`);
+      } else if (attack.hit === 'defence') {
+        if (attack.defence === undefined) {
+          errors.push(`${at}.attack.defence is needed: the target's defence, a formula.`);
+        } else formula(attack.defence, `${at}.attack.defence`);
+      } else if (attack.defend === undefined) {
+        errors.push(`${at}.attack.defend is needed: the target's roll, a formula.`);
+      } else formula(attack.defend, `${at}.attack.defend`);
+      if (attack.critical !== undefined && !CRITICALS.includes(attack.critical)) {
+        errors.push(`${at}.attack.critical must be one of ${CRITICALS.join(', ')}.`);
+      }
+      if (attack.extraSuccesses !== undefined && !EXTRAS.includes(attack.extraSuccesses)) {
+        errors.push(`${at}.attack.extraSuccesses must be one of ${EXTRAS.join(', ')}.`);
+      }
+      const extra = Object.keys(attack).filter(
+        (k) => !['hit', 'defence', 'defend', 'critical', 'extraSuccesses'].includes(k)
+      );
+      if (extra.length) errors.push(`${at}.attack: "${extra[0]}" isn't part of how attacks hit.`);
+    }
+  }
+  const types = settings.damageTypes;
+  if (types !== undefined) {
+    if (!Array.isArray(types) || types.length > 30) {
+      errors.push(`${at}.damageTypes must be a list of at most 30 { id, name }.`);
+    } else {
+      const ids = new Set();
+      types.forEach((t, i) => {
+        if (!isObject(t) || typeof t.id !== 'string' || !TYPE_ID.test(t.id)) {
+          errors.push(`${at}.damageTypes[${i}].id must be lowercase letters, digits, - and _.`);
+        } else if (ids.has(t.id))
+          errors.push(`${at}.damageTypes[${i}].id "${t.id}" is used twice.`);
+        else ids.add(t.id);
+        if (!isObject(t) || typeof t.name !== 'string' || !t.name.trim()) {
+          errors.push(`${at}.damageTypes[${i}].name is required.`);
+        }
+      });
+    }
+  }
+  const resources = new Set((sheet.resources || []).map((r) => r && r.id));
+  if (settings.health !== undefined && !resources.has(settings.health)) {
+    errors.push(`${at}.health "${settings.health}" isn't one of the system's resources.`);
+  }
+  if (settings.subduePenalty !== undefined) {
+    formula(settings.subduePenalty, `${at}.subduePenalty`);
+  }
+  // The attacks themselves are checked against the system once its shape is
+  // known (./attacks.js; its formulas need the sheet's fields).
+  const attacks = require('./attacks');
+  if (settings.unarmed !== undefined) {
+    if (!isObject(settings.unarmed)) errors.push(`${at}.unarmed must be an attack.`);
+    else {
+      const unarmed = { ...attacks.UNARMED, ...settings.unarmed };
+      attacks.validateAttack(system, unarmed, `${at}.unarmed`).forEach((e) => errors.push(e));
+    }
+  }
+  if (settings.attacks !== undefined) {
+    attacks
+      .validateAttacks(system, settings.attacks, `${at}.attacks`)
+      .forEach((e) => errors.push(e));
+  }
 }
 
-module.exports = { KEYS, LATER, DEFAULT_INITIATIVE, settingsOf, check };
+module.exports = { KEYS, LATER, HITS, DEFAULT_INITIATIVE, settingsOf, check };

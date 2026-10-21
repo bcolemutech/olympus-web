@@ -9,9 +9,9 @@
   //
   // - The panel, from the menu bar's Character button: the level, resources
   //   as tracks, attributes with their modifiers, skills with their ranks,
-  //   traits, conditions with what's left, derived values and speed; a sheet
-  //   that no longer fits the world's rules says what (SY2). Escape or Close
-  //   shuts it.
+  //   traits, conditions with what's left, attacks (L-822), derived values
+  //   and speed; a sheet that no longer fits the world's rules says what
+  //   (SY2). Escape or Close shuts it.
   // - The strip, always on the map (overlay.js hosts it): each resource as a
   //   small track, as many as fit, and any conditions ("Poisoned · 2 turns").
   //   A press opens the panel. On a phone it runs under the menu bar.
@@ -249,6 +249,22 @@
                 </ul>`
               : html`<p class="loom-rules-note">None yet.</p>`}
           <//>
+          ${(c.attacks || []).length > 0 &&
+          html`<${Section} id="loom-character-attacks" title="Attacks">
+            <ul class="loom-rules-list">
+              ${c.attacks.map(function (a) {
+                var reach = a.range
+                  ? 'range ' + a.range.normal + '/' + a.range.long
+                  : 'reach ' + a.reach;
+                var damage = a.damage + (a.type ? ' ' + a.type.toLowerCase() : '');
+                return html`<li key=${a.id}>
+                  ${a.name}<span>
+                    ${' · ' + reach + ' · ' + damage + (a.lethal ? '' : ' · knocks out')}</span
+                  >
+                </li>`;
+              })}
+            </ul>
+          <//>`}
           <${Section} id="loom-character-derived" title="Worked out">
             <dl class="loom-character-attributes">
               ${c.derived.map(function (d) {

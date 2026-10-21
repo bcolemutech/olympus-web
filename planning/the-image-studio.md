@@ -42,16 +42,16 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 
 ### Models and generation
 
-| ID     | Question                                | Decision                                                                                                                                                    |
-| ------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M1** | How is the model picked?                | **Named tiers, `draft` and `final`**, mapped to models in config. **Claude can also name a model** outright                                                 |
+| ID     | Question                                | Decision                                                                                                                                                                                                                                                         |
+| ------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M1** | How is the model picked?                | **Named tiers, `draft` and `final`**, mapped to models in config. **Claude can also name a model** outright                                                                                                                                                      |
 | **M2** | Big world maps?                         | **A trial** in the generation story: the models' largest sizes, an upscale step, and extending outward, compared on a real map. **Decided 2026-10-14 after the trial (§4.3): a 1K draft, then Pro redraws it at 4K**, with no lettering asked for at either step |
-| **M3** | Reference images?                       | **Yes: any library images**, given by id                                                                                                                    |
-| **M4** | Named styles?                           | **Yes:** a style is saved prompt text plus reference images, made and changed over MCP. A world can name a default style                                    |
-| **M5** | Images per request?                     | **One.** Several at once means several jobs (T1)                                                                                                            |
-| **M6** | Images nobody chose?                    | **Kept.** Storage is cheap next to generation                                                                                                               |
-| **M7** | Who writes the prompt?                  | **Both:** Claude's prompt as given, plus an optional `from` (a location, town, battle map or character) that adds that thing's data                         |
-| **M8** | Battle-map and town art vs. the layout? | **Generate freely, then place to fit:** Claude sets walls, doors and places over the art, checking with `view_image`                                        |
+| **M3** | Reference images?                       | **Yes: any library images**, given by id                                                                                                                                                                                                                         |
+| **M4** | Named styles?                           | **Yes:** a style is saved prompt text plus reference images, made and changed over MCP. A world can name a default style                                                                                                                                         |
+| **M5** | Images per request?                     | **One.** Several at once means several jobs (T1)                                                                                                                                                                                                                 |
+| **M6** | Images nobody chose?                    | **Kept.** Storage is cheap next to generation                                                                                                                                                                                                                    |
+| **M7** | Who writes the prompt?                  | **Both:** Claude's prompt as given, plus an optional `from` (a location, town, battle map or character) that adds that thing's data                                                                                                                              |
+| **M8** | Battle-map and town art vs. the layout? | **Generate freely, then place to fit:** Claude sets walls, doors and places over the art, checking with `view_image`                                                                                                                                             |
 
 ### Editing
 
@@ -161,13 +161,13 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
   - **Shape by kind:** with no shape asked for (and none from `from`), a job takes its kind's usual shape (`DEFAULT_RATIOS` in `config.js`): world map 16:9, region map 4:3, town 1:1, cover 16:9, portrait 3:4, token 1:1, item 1:1, scene 16:9. Interface and other art are left to the model. Left to the model, the first portrait came back wide.
   - **The M2 trial** (2026-10-14, run through `studio_generate`; $1.07, the images labelled `m2 trial` in the library) made one world map three ways:
 
-    | Way | Result | Time | Cost |
-    | --- | --- | --- | --- |
-    | **a.** Pro at 4K, 16:9, in one go | 5504 × 3072. Clean, and it kept to "no text", but the detail is sparse for its size: thick lines and wide empty areas, so up close it reads as a small map enlarged. | ~55 s | $0.28 |
-    | **b.** A 1K Flash draft, then Pro redraws it at 4K | 5504 × 3072. Keeps the draft's layout, and is by far the richest: mountains, forests, towns and ships stay crisp up close. But the draft ignored "no text", and the redraw kept its invented labels as garbled lettering. | 14 s + ~50 s | $0.07 + $0.28 |
-    | **c.** A 2K Pro middle, then Pro extends it to 21:9 at 4K | 6336 × 2688, the widest. The style carries and the new land fits, but it drew a second compass rose, and the edges are patchier than the middle. | 30 s + ~55 s | $0.17 + $0.28 |
-
+    | Way                                                       | Result                                                                                                                                                                                                                    | Time         | Cost          |
+    | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------- |
+    | **a.** Pro at 4K, 16:9, in one go                         | 5504 × 3072. Clean, and it kept to "no text", but the detail is sparse for its size: thick lines and wide empty areas, so up close it reads as a small map enlarged.                                                      | ~55 s        | $0.28         |
+    | **b.** A 1K Flash draft, then Pro redraws it at 4K        | 5504 × 3072. Keeps the draft's layout, and is by far the richest: mountains, forests, towns and ships stay crisp up close. But the draft ignored "no text", and the redraw kept its invented labels as garbled lettering. | 14 s + ~50 s | $0.07 + $0.28 |
+    | **c.** A 2K Pro middle, then Pro extends it to 21:9 at 4K | 6336 × 2688, the widest. The style carries and the new land fits, but it drew a second compass rose, and the edges are patchier than the middle.                                                                          | 30 s + ~55 s | $0.17 + $0.28 |
     - **Decided (2026-10-14): b.** It gives the most detail per pixel, and drafts at about $0.07 let the layout be settled before paying for 4K. Extending outward (c) is kept for adding land to a finished map.
+
   - **How a big world map is made (M2):**
     1. Draft layouts with `studio_generate` (kind `worldMap`, tier `draft`; 16:9 by default) until one is right. Each costs about $0.07. **A draft with any lettering is not right:** the prompt alone didn't stop it in the trial, and the redraw keeps it. Draft again, or remove it first with `studio_edit` at the draft tier (about $0.07), and check the result with `studio_get`.
     2. Redraw the chosen draft with `studio_generate`: the draft as the only reference, model `gemini-3-pro-image` at size `4K`, the same shape, and a prompt asking for the same layout, redrawn in full detail. About $0.28 and a minute.

@@ -429,6 +429,8 @@ module.exports = {
   refusal,
   canonRung,
   valuesFor,
+  withConditions,
+  naturalOf,
   degreeOf,
   rollCheck,
   rollOpposed,

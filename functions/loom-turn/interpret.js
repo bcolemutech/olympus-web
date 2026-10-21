@@ -6,6 +6,8 @@ const { doorSides } = require('./steps');
 const { peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
+const sheets = require('../loom-canon/sheets');
+const { attacksOf } = require('../loom-modules/combat/attacks');
 
 /**
  * Stage 2 — INTERPRET (design doc §5).
@@ -54,6 +56,7 @@ function buildSystemInstruction(knownEntities, save, canonWorld) {
     '- params: an object of any other relevant details (e.g. {"item": "sword"}). Use an ' +
     'empty object if there are none.\n\n' +
     checksSection(canonWorld) +
+    attacksSection(canonWorld, save) +
     // Letting time pass (L-374; game time T12).
     'To let time pass ("wait an hour", "rest until evening", "sleep until dawn"), use the ' +
     'verb "wait" with params {"minutes": number} for a length of time, or {"until": part} ' +
@@ -84,6 +87,21 @@ function checksSection(canonWorld) {
     'Difficulty, easiest first: ' +
     names(system.checks.ladder, (r) => r.name) +
     '.\n\n'
+  );
+}
+
+// Attacking (L-822): the verb, the target, and which of the character's
+// attacks; the rules roll it, so no check.
+function attacksSection(canonWorld, save) {
+  const system = checks.systemOf(canonWorld);
+  const sheet = sheets.sheetOf(save) || sheets.defaultSheet(system);
+  const list = attacksOf(system, sheet, { player: true });
+  return (
+    'To attack someone, use the verb "attack", target their id, and add params.attack: ' +
+    'the id of the attack they use (' +
+    list.map((a) => `${a.id} (${a.name})`).join(', ') +
+    '; leave it out if they name none), and params.subdue: true when they mean to knock ' +
+    'out rather than kill. Never add a check to an attack.\n\n'
   );
 }
 

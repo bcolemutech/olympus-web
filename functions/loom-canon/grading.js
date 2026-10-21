@@ -44,8 +44,8 @@
 // 2: the Rich bar scales with a settlement's size; 3: a Rich settlement's town
 // has ground (L-655); 4: the score, its criteria and bands (L-691); 5: a
 // world's cover image (L-704); 6: a world's game system (L-801); 7: a named
-// character's sheet (L-813).
-const RUBRIC_VERSION = 7;
+// character's sheet (L-813); 8: a fighter's attacks (L-822).
+const RUBRIC_VERSION = 8;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -68,7 +68,7 @@ const IMPORT = 'import';
 const WEIGHTS = Object.freeze({
   settlement: { residents: 15, lore: 10, townArt: 15, description: 20, loreLinks: 5, ground: 10 },
   place: { ownMap: 15, mapArt: 10, someone: 15, lore: 30, description: 10 },
-  character: { description: 25, lore: 15, faction: 10, sheet: 20 },
+  character: { description: 25, lore: 15, faction: 10, sheet: 20, attacks: 15 },
   battleMap: { layers: 30, art: 30, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
   world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15 },
@@ -545,6 +545,37 @@ const CRITERIA = Object.freeze([
     },
   },
 
+  {
+    // A fighter's attacks (L-822; combat GR1): someone on a side in a fight,
+    // with or against the player, has attacks of their own on their sheet,
+    // not only the system's unarmed one. Neutral characters are not graded
+    // on it.
+    id: 'character.attacks',
+    kinds: ['character'],
+    weight: WEIGHTS.character.attacks,
+    feature: 'L-822',
+    label: 'Attacks for a fighter',
+    need: 'attacks',
+    tool: 'set_sheet',
+    applies: (world, character) => character.side === 'hostile' || character.side === 'party',
+    check: (world, character) => {
+      const list = character.sheet && character.sheet.attacks;
+      if (!Array.isArray(list) || !list.length) {
+        return {
+          progress: 0,
+          message: 'They fight but have no attacks; give their sheet some with set_sheet.',
+        };
+      }
+      const errors = require('../loom-modules/combat/attacks').validateAttacks(
+        require('./checks').systemOf(world),
+        list
+      );
+      return errors.length
+        ? { progress: 0, message: `Their attacks don’t fit the world’s rules: ${errors[0]}` }
+        : met();
+    },
+  },
+
   // Battle maps.
   {
     id: 'battleMap.layers',
@@ -780,6 +811,8 @@ function ownScore(world, kind, entity, layers) {
   const unmet = [];
   for (const criterion of CRITERIA) {
     if (!criterion.kinds.includes(kind)) continue;
+    // A criterion only some of a kind are graded on (L-822: fighters).
+    if (criterion.applies && !criterion.applies(world, entity)) continue;
     const result = criterion.check(world, entity, context);
     const progress = Math.max(0, Math.min(1, result.progress));
     total += criterion.weight;
