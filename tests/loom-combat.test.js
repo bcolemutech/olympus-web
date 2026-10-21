@@ -61,7 +61,7 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
       const result = validateSystem(sys);
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
-      expect(combat.settings.settingsOf(sys)).toEqual({
+      expect(combat.settings.settingsOf(sys)).toMatchObject({
         initiative: { formula: c.initiative, tieBreak: c.tieBreak },
         economy: { actions: 1, reactions: 1, quick: 0 },
         surprise: expect.objectContaining({ hide: { skill: 'Stealth' } }),
@@ -113,6 +113,16 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
         initiative: { formula: '1d20', tieBreak: null },
         economy: { actions: 1, reactions: 1, quick: 0 },
         surprise: null,
+        // Attacks against the ladder's second rung (L-822).
+        attack: {
+          hit: 'defence',
+          defence: sys.checks.ladder[1].value,
+          defend: null,
+          critical: 'none',
+          extraSuccesses: 'none',
+        },
+        health: 'health',
+        subduePenalty: null,
       });
     });
   });

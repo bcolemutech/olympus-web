@@ -491,6 +491,7 @@ function buildFightSection(save, resolution) {
   if (f && f.ended) {
     const how = (f.how || []).map((h) => FIGHT_ENDS[h] || h).join(' or ');
     return (
+      (f.startedNow ? 'A FIGHT STARTED AND ' : '') +
       'FIGHT ENDS after ' +
       f.rounds +
       (f.rounds === 1 ? ' round' : ' rounds') +

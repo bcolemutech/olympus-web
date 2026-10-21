@@ -135,19 +135,21 @@ describe.each([
 
   test('derived values, worked out (with "derived" on)', () => {
     const first = system.sheet.attributes[0];
+    const off = system.sheet.optional.filter((part) => part !== 'derived');
     const withDerived = {
       ...system,
       sheet: {
         ...system.sheet,
-        optional: [...system.sheet.optional, 'derived'],
+        optional: [...off, 'derived'],
         derived: [{ id: 'carry', name: 'Carrying', formula: `${first.id} * 10` }],
       },
     };
+    const without = { ...system, sheet: { ...system.sheet, optional: off } };
     const sheet = sheets.defaultSheet(withDerived);
     expect(sheets.characterView(withDerived, character(sheet)).derived).toEqual([
       { id: 'carry', name: 'Carrying', value: sheet.attributes[first.id] * 10 },
     ]);
-    expect(sheets.characterView(system, character(sheet)).derived).toEqual([]);
+    expect(sheets.characterView(without, character(sheet)).derived).toEqual([]);
   });
 
   test('a sheet that no longer fits says what (SY2)', () => {

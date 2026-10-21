@@ -996,6 +996,23 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   if (stopped.length) {
     return { ...blocked("You can't act: you're " + stopped.join(' and ') + '.'), plain: true };
   }
+  // An attack at someone on the map (L-822): by the combat module, its
+  // reach or range its own; ruled, not narrated, unless a fight starts or ends.
+  const attacked = attackOn(proposedAction, characterState, dice, canonWorld);
+  if (attacked) {
+    if (attacked.outcome === 'blocked') return { ...attacked, plain: true };
+    return {
+      ...attacked,
+      mutations: attacked.mutations.concat([
+        {
+          target: 'save',
+          op: 'set-flag',
+          path: 'turn',
+          value: spentAction(turn, inFight, canonWorld),
+        },
+      ]),
+    };
+  }
   const unreached = outOfSightOrReach(proposedAction, characterState, canonWorld);
   if (unreached) return blocked(unreached);
   const doorTarget = (proposedAction.targets || []).find(
@@ -1005,19 +1022,8 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
     ? evaluateDoorAttempt(proposedAction, doorTarget.slice(5), characterState, dice, canonWorld)
     : evaluateGeneric(proposedAction, dice, characterState, canonWorld);
   if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return resolution;
-  // In a fight, a turn has the system's actions (L-821; TN3): one by
-  // default, counted only when there are more.
-  const allowed = inFight
-    ? combat.settings.settingsOf(checks.systemOf(canonWorld)).economy.actions
-    : 1;
-  const used = (turn.actionsUsed || 0) + 1;
-  const spent =
-    allowed === 1
-      ? { ...turn, actionUsed: true }
-      : used >= allowed
-        ? { ...turn, actionUsed: true, actionsUsed: used }
-        : { ...turn, actionsUsed: used };
-  const fought = fightFrom(proposedAction, resolution, characterState, canonWorld, dice);
+  const spent = spentAction(turn, inFight, canonWorld);
+  const fought = fightFrom(proposedAction, resolution, characterState, canonWorld);
   return {
     ...resolution,
     mutations: [
@@ -1030,11 +1036,40 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   };
 }
 
-// What an action does to a fight (L-821; SE1, SE4): an attack at someone on
-// the map, out of one, starts it (they join, hostile, and roll to see it
-// coming; the player's opening blow is their first turn); a social check
-// that succeeds against a foe in one talks them out of it.
-function fightFrom(proposedAction, resolution, characterState, canonWorld, dice) {
+// The turn once an action is spent. In a fight, a turn has the system's
+// actions (L-821; TN3): one by default, counted only when there are more.
+function spentAction(turn, inFight, canonWorld) {
+  const allowed = inFight
+    ? combat.settings.settingsOf(checks.systemOf(canonWorld)).economy.actions
+    : 1;
+  const used = (turn.actionsUsed || 0) + 1;
+  return allowed === 1
+    ? { ...turn, actionUsed: true }
+    : used >= allowed
+      ? { ...turn, actionUsed: true, actionsUsed: used }
+      : { ...turn, actionsUsed: used };
+}
+
+// An attack at someone on the battle map (L-822; ../loom-modules/combat/
+// attack-turn.js), or null when the action isn't one.
+function attackOn(proposedAction, characterState, dice, canonWorld) {
+  if (!combat.play.isAttack(proposedAction.verb)) return null;
+  const params = proposedAction.params || {};
+  const targetId =
+    params.target || (proposedAction.targets || []).find((t) => (canonWorld.characters || {})[t]);
+  if (!targetId) return null;
+  return combat.attackTurn.attackTurn(canonWorld, characterState, {
+    targetId,
+    params,
+    dice,
+    rolled: (check, against) => rolled(check, against, checks.systemOf(canonWorld)),
+  });
+}
+
+// What an action does to a fight (L-821; SE1, SE4): a social check that
+// succeeds against a foe in one talks them out of it. (An attack starts
+// one: attackOn.)
+function fightFrom(proposedAction, resolution, characterState, canonWorld) {
   const current = combat.play.fightOf(characterState);
   const params = proposedAction.params || {};
   const target =
@@ -1052,20 +1087,7 @@ function fightFrom(proposedAction, resolution, characterState, canonWorld, dice)
       ? { mutations: talked.mutations, constraints: talked.lines, fight: talked.fight }
       : null;
   }
-  if (!combat.play.isAttack(proposedAction.verb)) return null;
-  const { map } = maps.positionOf(canonWorld || {}, characterState);
-  const person = map && mapTarget(canonWorld, characterState, map, target);
-  if (!person || !person.person) return null;
-  const begun = combat.play.begin(canonWorld, characterState, {
-    by: 'attack',
-    ambushers: 'party',
-    joining: [target],
-    first: true,
-    dice,
-  });
-  return begun
-    ? { mutations: begun.mutations, constraints: begun.lines, fight: begun.fight }
-    : null;
+  return null;
 }
 
 // A typed attempt at a door beside the player (L-626 / #451): with its key, a
@@ -1227,6 +1249,10 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     ...(resolution.opposed ? { opposed: Object.freeze({ ...resolution.opposed }) } : {}),
     // Turned down plainly, unnarrated (L-815: held by a condition).
     ...(resolution.plain ? { plain: true } : {}),
+    // Ruled by the combat module, not narrated (L-822; EN5).
+    ...(resolution.ruled ? { ruled: true } : {}),
+    // The attack made this turn (L-822), for the record and the GM.
+    ...(resolution.attack ? { attack: Object.freeze({ ...resolution.attack }) } : {}),
     // A fight started or ended this turn (L-821), for the GM.
     ...(resolution.fight ? { fight: Object.freeze({ ...resolution.fight }) } : {}),
     // A hazard walked into (L-815), for the GM.

@@ -15,9 +15,12 @@
  *       speed:      a formula: movement a turn (default 20), plus what traits add
  *       optional:   which optional parts are on: skills, traits, conditions, derived
  *       skills:     [{ id, name, attribute }]            (with 'skills')
- *       traits:     [{ id, name, description?, modifiers? }] (with 'traits'):
- *                   modifiers { speed: formula } added while it's held
- *       conditions: [{ id, name, description?, modifiers?, each?, noAction?, noMove? }]
+ *       traits:     [{ id, name, description?, modifiers?, resist?, weak? }]
+ *                   (with 'traits'): modifiers { speed: formula } added while
+ *                   it's held; resist and weak list damage types it halves or
+ *                   doubles (L-822, combat's damageTypes)
+ *       conditions: [{ id, name, description?, modifiers?, each?, noAction?, noMove?,
+ *                   resist?, weak? }]
  *                   (with 'conditions'; L-815, ./conditions.js): what each does
  *       derived:    [{ id, name, formula }]              (with 'derived')
  *     checks:  { formula, degrees: { [degree]: formula }, ladder: [{ name, value }] }
@@ -118,6 +121,27 @@ function deepFreeze(value) {
 }
 
 const copyOf = (value) => JSON.parse(JSON.stringify(value));
+
+// A trait's or condition's resistances and weaknesses (L-822; combat AT3):
+// lists of the system's damage types.
+function checkDamageTypes(item, at, system, errors) {
+  const combat = (system.modules && system.modules.combat) || {};
+  const types = Array.isArray(combat.damageTypes) ? combat.damageTypes.map((t) => t && t.id) : [];
+  for (const part of ['resist', 'weak']) {
+    if (item[part] === undefined) continue;
+    if (!Array.isArray(item[part]) || item[part].some((t) => typeof t !== 'string')) {
+      errors.push(`${at}.${part} must be a list of damage types.`);
+    } else {
+      const unknown = item[part].filter((t) => !types.includes(t));
+      if (unknown.length) {
+        errors.push(
+          `${at}.${part}: "${unknown[0]}" isn't one of the system's damage types` +
+            ` (${types.join(', ') || 'none set: modules.combat.damageTypes'}).`
+        );
+      }
+    }
+  }
+}
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v) => (typeof v === 'string' ? v.trim() : v);
 
@@ -273,6 +297,7 @@ function validateSystem(input) {
       list(sheet.traits, 'sheet.traits', {
         field: false,
         each: (t, at) => {
+          checkDamageTypes(t, at, s, errors);
           if (t.modifiers === undefined) return;
           if (!isObject(t.modifiers)) {
             errors.push(`${at}.modifiers must map what it changes to a formula ({ speed: '5' }).`);
@@ -313,6 +338,7 @@ function validateSystem(input) {
       list(sheet.conditions, 'sheet.conditions', {
         field: false,
         each: (c, at) => {
+          checkDamageTypes(c, at, s, errors);
           if (c.modifiers !== undefined) {
             if (!isObject(c.modifiers)) {
               errors.push(

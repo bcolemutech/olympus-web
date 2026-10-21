@@ -106,6 +106,9 @@ async function intake(params) {
  * exit goes on through the pipeline, to leave by it, narrated, and so does
  * one that walks into a hazard (L-815): stopped there, it is triggered and
  * narrated (`action: { verb: 'hazard', hazard }`), the step's lines first.
+ * An attack chosen on the map (`action: { verb: 'attack', target, attack?,
+ * subdue? }`; L-822) needs no model to read it; an attack in a fight that
+ * neither starts nor ends it is the rules' lines and roll card, unnarrated.
  * A step that ends in sight of a hostile, out of a fight, starts one, narrated
  * (`action: { verb: 'fight' }`; L-821), the step's lines first; an End turn
  * that ends a fight is narrated too. Opening or
@@ -305,6 +308,18 @@ async function runTurnPipeline(params) {
   if (action && action.verb === 'leave') {
     actionText = 'go out by ' + action.name;
     proposedAction = { verb: 'move', targets: ['exit:' + action.exit], params: { from: 'map' } };
+  } else if (action && action.verb === 'attack') {
+    // An attack chosen on the map (L-822): no model reads it.
+    const target = (canonWorld.characters || {})[action.target];
+    actionText = 'attack ' + (target ? target.name : action.target);
+    proposedAction = {
+      verb: 'attack',
+      targets: [String(action.target || '')],
+      params: {
+        ...(action.attack ? { attack: String(action.attack) } : {}),
+        ...(action.subdue ? { subdue: true } : {}),
+      },
+    };
   } else if (action && action.verb === 'fight') {
     actionText = 'come into sight of ' + (action.names || []).join(' and ');
     proposedAction = { verb: 'fight', targets: [], params: { by: 'seen' } };
@@ -345,6 +360,24 @@ async function runTurnPipeline(params) {
       time: clock.timeView(clock.timeOf(save)),
       refused: true,
     };
+  }
+  // A turn the rules wrote whole (L-822: an attack in a fight that neither
+  // starts nor ends it; EN5): its lines and roll card, not narrated.
+  if (resolution.ruled) {
+    return commitTurn({
+      db,
+      saveRef,
+      worldStateRef,
+      worldId,
+      canonWorld,
+      actionText,
+      proposedAction,
+      resolution,
+      narration: resolution.constraints.join(' '),
+      entityRefs: [],
+      inventedEntities: [],
+      suggestedActions: [],
+    });
   }
   const { narration, entityRefs, inventedEntities, suggestedActions } = await narrateResolution({
     actionText,

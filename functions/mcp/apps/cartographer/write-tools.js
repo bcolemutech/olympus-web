@@ -1187,8 +1187,12 @@ function writeTools({ writer, systems }) {
         '(get_system shows its attributes, skills and resources): a full sheet, or a stat ' +
         'block, the short form, where every attribute is given and skills left out are ' +
         'untrained, resources full and the level the lowest. Opposed checks against them ' +
-        'roll it (test_roll with characterId tries it). null removes it. A sheet that no ' +
-        'longer fits after the system changes shows in get_character and list_work. ' +
+        'roll it (test_roll with characterId tries it). A fighter lists their attacks ' +
+        '(L-822): [{ id, name, reach | range: { normal, long }, attack, damage, type, ' +
+        'lethal?, ammo?, onHit?, area? }], attack and damage formulas of their sheet, type ' +
+        'one of the system’s damage types (get_system: modules.combat). null removes it. A ' +
+        'sheet that no longer fits after the system changes shows in get_character and ' +
+        'list_work. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -1200,15 +1204,16 @@ function writeTools({ writer, systems }) {
           .optional()
           .describe(
             'The whole sheet: { attributes: { [id]: score }, skills: { [id]: rank }, ' +
-              'resources: { [id]: { current } }, level, traits: [id], conditions: [] }. ' +
-              'Speed is worked out by the system. null removes it.'
+              'resources: { [id]: { current } }, level, traits: [id], conditions: [], ' +
+              'attacks?: [attack] }. Speed is worked out by the system. null removes it.'
           ),
         statBlock: z
           .object({})
           .passthrough()
           .optional()
           .describe(
-            'Or the short form: { attributes (every one), skills?, resources?, level?, traits? }.'
+            'Or the short form: { attributes (every one), skills?, resources?, level?, traits?, ' +
+              'attacks? }.'
           ),
       },
       annotations: replacing,

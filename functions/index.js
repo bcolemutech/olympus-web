@@ -539,6 +539,10 @@ function requireLoomAuth(request) {
  *       a move to a place walks to its door and goes in
  *    or { worldId, saveId, action: { verb: 'walk-there', point | target } } —
  *       walks, ending each turn, until it arrives (L-662)
+ *    or { worldId, saveId, action: { verb: 'attack', target, attack?, subdue? } }
+ *       — attacks someone on the battle map (L-822): with one of the
+ *       character's attacks (by id; the first without), to knock out when
+ *       subdue; no model reads it
  * A walk in town is worked out without the model too, and returns step:
  * { townPoint, movementLeft, plan, lines } (plus `entered`, and `turns` for
  * walk-there).
@@ -589,13 +593,22 @@ exports.loomPlayTurn = onCall(async (request) => {
         : hasTarget
           ? goodTarget
           : action.verb === 'move' && isCell(action.cell));
-    if (!bare && !door && !moving) {
+    // An attack chosen on the map (L-822).
+    const attacking =
+      typeof action === 'object' &&
+      action.verb === 'attack' &&
+      goodTarget &&
+      (action.attack === undefined ||
+        (typeof action.attack === 'string' &&
+          /^[A-Za-z][A-Za-z0-9_-]{0,39}$/.test(action.attack))) &&
+      (action.subdue === undefined || typeof action.subdue === 'boolean');
+    if (!bare && !door && !moving && !attacking) {
       throw new HttpsError(
         'invalid-argument',
         'action must be { verb: "move", target: <place id> }, { verb: "move", cell: { x, y } }, ' +
           '{ verb: "move", point: { x, y } }, { verb: "walk-there", point | target }, ' +
-          '{ verb: "continue" }, { verb: "door", door: <door id>, open: true | false } or ' +
-          '{ verb: "end-turn" }.'
+          '{ verb: "continue" }, { verb: "door", door: <door id>, open: true | false }, ' +
+          '{ verb: "attack", target: <character id>, attack?, subdue? } or { verb: "end-turn" }.'
       );
     }
   } else {
@@ -618,13 +631,20 @@ exports.loomPlayTurn = onCall(async (request) => {
             action:
               action.verb === 'door'
                 ? { verb: 'door', door: action.door, open: action.open }
-                : action.verb === 'end-turn' || action.verb === 'continue'
-                  ? { verb: action.verb }
-                  : action.point !== undefined
-                    ? { verb: action.verb, point: { x: action.point.x, y: action.point.y } }
-                    : typeof action.target === 'string'
-                      ? { verb: action.verb, target: action.target }
-                      : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
+                : action.verb === 'attack'
+                  ? {
+                      verb: 'attack',
+                      target: action.target,
+                      ...(action.attack ? { attack: action.attack } : {}),
+                      ...(action.subdue ? { subdue: true } : {}),
+                    }
+                  : action.verb === 'end-turn' || action.verb === 'continue'
+                    ? { verb: action.verb }
+                    : action.point !== undefined
+                      ? { verb: action.verb, point: { x: action.point.x, y: action.point.y } }
+                      : typeof action.target === 'string'
+                        ? { verb: action.verb, target: action.target }
+                        : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
           }
         : { actionText: actionText.trim() }),
     });

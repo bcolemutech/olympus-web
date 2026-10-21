@@ -56,10 +56,36 @@ function fightOf(save) {
   return (save && save.fight) || null;
 }
 
-// The characters standing on the map the save is on.
+/**
+ * Someone's state in this save (L-822): `save.figures[id]`, `{ sheet, down? }`
+ * once they have been hurt, put down or had an effect put on them; their
+ * sheet there is their own from then on.
+ */
+function figureOf(save, id) {
+  return ((save && save.figures) || {})[id] || null;
+}
+
+/** Whether someone is down in this save: 'dead', 'out' (knocked out), or null. */
+function downOf(save, id) {
+  const f = figureOf(save, id);
+  return (f && f.down) || null;
+}
+
+/**
+ * Someone's sheet as this save has it (L-822): theirs in `save.figures`, else
+ * their canon sheet (L-813), else the system's defaults.
+ */
+function sheetFor(world, save, character) {
+  const f = figureOf(save, character.id);
+  if (f && f.sheet) return f.sheet;
+  if (character.sheet) return character.sheet;
+  return sheets.defaultSheet(checks.systemOf(world));
+}
+
+// The characters standing on the map the save is on, and not down in it.
 function standingHere(world, save) {
   const host = maps.hostOf(world, save);
-  return host ? maps.standingAt(world, host) : [];
+  return host ? maps.standingAt(world, host).filter((c) => !downOf(save, c.id)) : [];
 }
 
 /**
@@ -283,6 +309,11 @@ function listed(names) {
 const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
 module.exports = {
+  figureOf,
+  downOf,
+  sheetFor,
+  standingHere,
+  ending,
   SIDES,
   TALK_DOWN,
   sideOf,

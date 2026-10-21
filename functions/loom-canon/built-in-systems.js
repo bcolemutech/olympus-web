@@ -44,7 +44,7 @@ const FANTASY = {
     // Movement a turn (L-811): 20, quicker with Dexterity and training in
     // Athletics.
     speed: '20 + mod(DEX) + floor(Athletics / 2)',
-    optional: ['skills', 'traits', 'conditions'],
+    optional: ['skills', 'traits', 'conditions', 'derived'],
     // A skill's rank is its proficiency bonus: 0 untrained, 2 to 6 trained.
     skills: [
       ['Athletics', 'Athletics', 'STR'],
@@ -92,6 +92,9 @@ const FANTASY = {
         noMove: true,
       },
     ],
+    // Armour (L-822): what an attack must reach to hit, 10 and Dexterity
+    // until L-770's armour adds to it.
+    derived: [{ id: 'Armour', name: 'Armour', formula: '10 + mod(DEX)' }],
   },
   checks: {
     formula: '1d20 + modifier + rank',
@@ -129,6 +132,46 @@ const FANTASY = {
       initiative: { formula: '1d20 + mod(DEX)', tieBreak: 'DEX' },
       economy: { actions: 1, reactions: 1 },
       surprise: { hide: { skill: 'Stealth' }, notice: { skill: 'Perception' } },
+      // Attacks (L-822): a d20 against Armour, a critical doubling the dice;
+      // a blow meant to knock out with a lethal weapon is 4 harder.
+      attack: { hit: 'defence', defence: 'Armour', critical: 'doubleDice' },
+      damageTypes: [
+        { id: 'slashing', name: 'Slashing' },
+        { id: 'piercing', name: 'Piercing' },
+        { id: 'bludgeoning', name: 'Bludgeoning' },
+        { id: 'fire', name: 'Fire' },
+        { id: 'poison', name: 'Poison' },
+      ],
+      health: 'health',
+      subduePenalty: '-4',
+      unarmed: {
+        id: 'unarmed',
+        name: 'Unarmed',
+        reach: 1,
+        attack: '1d20 + mod(STR)',
+        damage: '1 + mod(STR)',
+        type: 'bludgeoning',
+        lethal: false,
+      },
+      // What a new character carries until L-770's weapons.
+      attacks: [
+        {
+          id: 'sword',
+          name: 'Sword',
+          reach: 1,
+          attack: '1d20 + mod(STR) + 2',
+          damage: '1d8 + mod(STR)',
+          type: 'slashing',
+        },
+        {
+          id: 'bow',
+          name: 'Bow',
+          range: { normal: 16, long: 64 },
+          attack: '1d20 + mod(DEX) + 2',
+          damage: '1d6 + mod(DEX)',
+          type: 'piercing',
+        },
+      ],
     },
   },
   gmNotes:
@@ -249,6 +292,50 @@ const SCIFI = {
       initiative: { formula: 'count((Reflex)d10, >= 7)', tieBreak: 'Reflex' },
       economy: { actions: 1, reactions: 1 },
       surprise: { hide: { skill: 'Stealth' }, notice: { skill: 'Notice' } },
+      // Attacks (L-822): the attacker's pool against the target's Reflex and
+      // Athletics, each success past theirs a die more of damage; striking to
+      // knock out with a lethal weapon costs a success.
+      attack: {
+        hit: 'opposed',
+        defend: 'count((Reflex + Athletics)d10, >= 7)',
+        extraSuccesses: 'addDie',
+      },
+      damageTypes: [
+        { id: 'kinetic', name: 'Kinetic' },
+        { id: 'energy', name: 'Energy' },
+        { id: 'fire', name: 'Fire' },
+        { id: 'toxic', name: 'Toxic' },
+      ],
+      health: 'health',
+      subduePenalty: '-1',
+      unarmed: {
+        id: 'unarmed',
+        name: 'Unarmed',
+        reach: 1,
+        attack: 'count((Body + Melee)d10, >= 7)',
+        damage: '1',
+        type: 'kinetic',
+        lethal: false,
+      },
+      // What a new character carries until L-770's weapons.
+      attacks: [
+        {
+          id: 'knife',
+          name: 'Knife',
+          reach: 1,
+          attack: 'count((Body + Melee)d10, >= 7)',
+          damage: '1d2',
+          type: 'kinetic',
+        },
+        {
+          id: 'pistol',
+          name: 'Pistol',
+          range: { normal: 10, long: 30 },
+          attack: 'count((Reflex + Shooting)d10, >= 7)',
+          damage: '1d3',
+          type: 'energy',
+        },
+      ],
     },
   },
   gmNotes:

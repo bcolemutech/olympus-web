@@ -348,7 +348,16 @@ function battleView(canonWorld, save, record) {
         )
         .filter((c) => !c.cell || Boolean(inSight[c.cell.x + ',' + c.cell.y]))
         // Their square, for their token (L-642); none for those without one.
-        .map((c) => ({ id: c.id, name: c.name, ...(c.cell ? { x: c.cell.x, y: c.cell.y } : {}) }))
+        .map((c) => {
+          // Down in this save (L-822): dead or knocked out where they fell.
+          const down = combat.play.downOf(save, c.id);
+          return {
+            id: c.id,
+            name: c.name,
+            ...(c.cell ? { x: c.cell.x, y: c.cell.y } : {}),
+            ...(down ? { down } : {}),
+          };
+        })
     : [];
   return {
     id: map.id,
