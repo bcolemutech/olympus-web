@@ -28,7 +28,7 @@ const { attacksOf } = require('../loom-modules/combat/attacks');
 const MODEL_NAME = 'gemini-2.5-flash';
 const MAX_OUTPUT_TOKENS = 512;
 
-function buildSystemInstruction(knownEntities, save, canonWorld) {
+function buildSystemInstruction(knownEntities, save, canonWorld, asked = null) {
   const entityList = knownEntities
     .map((e) => '- ' + e.id + ' (' + e.kind + '): ' + e.name)
     .join('\n');
@@ -56,6 +56,7 @@ function buildSystemInstruction(knownEntities, save, canonWorld) {
     '- params: an object of any other relevant details (e.g. {"item": "sword"}). Use an ' +
     'empty object if there are none.\n\n' +
     checksSection(canonWorld) +
+    plausibilitySection(canonWorld, save) +
     attacksSection(canonWorld, save) +
     // Letting time pass (L-374; game time T12).
     'To let time pass ("wait an hour", "rest until evening", "sleep until dawn"), use the ' +
@@ -64,6 +65,7 @@ function buildSystemInstruction(knownEntities, save, canonWorld) {
     'night; add {"how": "sleep"} or {"how": "rest"} when the player sleeps or rests. For a ' +
     'short rest or a long rest (to recover), use the verb "rest" with params {"rest": ' +
     '"short"} or {"rest": "long"}.\n\n' +
+    askedSection(asked) +
     'Respond with ONLY a JSON object: { "verb": string, "targets": string[], "params": object }'
   );
 }
@@ -89,6 +91,65 @@ function checksSection(canonWorld) {
     'Difficulty, easiest first: ' +
     names(system.checks.ladder, (r) => r.name) +
     '.\n\n'
+  );
+}
+
+// Plausibility (L-826; combat CB1): never make the improbable seem easy.
+// The model sorts each action into one of four kinds; ADJUDICATE holds it
+// to the kind: the hardest rung for the improbable, a refusal for the
+// extraordinary, a question for the complicated. It judges by the
+// character's sheet, so it's given what they are good at.
+const PLAUSIBILITY = ['ordinary', 'improbable', 'extraordinary', 'complicated'];
+function plausibilitySection(canonWorld, save) {
+  const system = checks.systemOf(canonWorld);
+  const sheet = sheets.sheetOf(save) || sheets.defaultSheet(system);
+  const attributes = Object.entries(sheet.attributes || {})
+    .map(([id, v]) => `${id} ${v}`)
+    .join(', ');
+  const trained = Object.entries(sheet.skills || {})
+    .filter(([, v]) => v > 0)
+    .map(([id, v]) => `${id} ${v}`)
+    .join(', ');
+  const traits = (sheet.traits || []).join(', ');
+  const top = system.checks.ladder[system.checks.ladder.length - 1].name;
+  return (
+    'PLAUSIBILITY: never make the improbable seem easy. Add params.plausibility to every ' +
+    'action, judged by what this character and this world allow:\n' +
+    '- "ordinary": something a capable person could do; pick the rung it deserves.\n' +
+    '- "improbable": possible but very unlikely (leaping a wide chasm, talking a sworn ' +
+    `enemy into surrender); the rules roll it at ${top}, whatever rung you pick.\n` +
+    '- "extraordinary": beyond what this character or this world allows (flying unaided, ' +
+    'lifting a ship, powers they lack); add params.why, one short sentence the player ' +
+    'reads. It is refused.\n' +
+    '- "complicated": a scheme of many steps, or a method left unclear ("I rig the ' +
+    'chandelier to fall on them"); add params.question, asking the player exactly how. ' +
+    'The rules ask it and try nothing yet.\n' +
+    'THE CHARACTER: ' +
+    [
+      attributes && 'attributes ' + attributes,
+      trained && 'trained in ' + trained,
+      traits && 'traits ' + traits,
+    ]
+      .filter(Boolean)
+      .join('; ') +
+    '.\n\n'
+  );
+}
+
+// The question a complicated action was answered with (L-826), when the
+// player was asked one last turn: what they type now is read as the answer.
+function askedSection(asked) {
+  if (!asked) return '';
+  return (
+    'EARLIER: the player tried "' +
+    asked.action +
+    '" and was asked: "' +
+    asked.question +
+    '". If this text answers that question, interpret the earlier action with this ' +
+    'explanation: its verb, targets and the check it now deserves, judged again for ' +
+    'plausibility; it can\'t be "complicated" again: if the answer still doesn\'t say ' +
+    'how, mark it "extraordinary" with params.why. If this text is something else ' +
+    'entirely, interpret it on its own.\n\n'
   );
 }
 
@@ -280,6 +341,8 @@ function fallbackProposedAction(actionText) {
  */
 async function interpretAction(params) {
   const { actionText, canonWorld, save, known } = params;
+  // A question asked of a complicated action last turn (L-826).
+  const asked = params.asked || null;
   const knownEntities = withPeopleInSight(
     buildKnownEntities(canonWorld, save, known),
     canonWorld,
@@ -296,7 +359,7 @@ async function interpretAction(params) {
   try {
     raw = await callGemini({
       modelName: MODEL_NAME,
-      systemInstruction: buildSystemInstruction(knownEntities, save, canonWorld),
+      systemInstruction: buildSystemInstruction(knownEntities, save, canonWorld, asked),
       userMessage: actionText,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       jsonMode: true,
@@ -312,10 +375,31 @@ async function interpretAction(params) {
     return fallbackProposedAction(actionText);
   }
 
+  const cleaned = withPlausibility(
+    withCheck(raw.params && typeof raw.params === 'object' ? raw.params : {}, resolve)
+  );
   return {
     verb: raw.verb.toLowerCase().slice(0, 50),
     targets: raw.targets.map(resolve),
-    params: withCheck(raw.params && typeof raw.params === 'object' ? raw.params : {}, resolve),
+    // Read as the answer to last turn's question (L-826): ADJUDICATE then
+    // won't ask again.
+    params: asked ? { ...cleaned, answering: true } : cleaned,
+  };
+}
+
+// The plausibility the model judged (L-826), one of the four kinds, with its
+// reason or question as short text; anything else dropped.
+function withPlausibility(params) {
+  const { plausibility, why, question, answering, ...rest } = params;
+  void answering; // only the pipeline says an action answers a question
+  const kind = typeof plausibility === 'string' ? plausibility.trim().toLowerCase() : '';
+  if (!PLAUSIBILITY.includes(kind)) return rest;
+  const text = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 300) : null);
+  return {
+    ...rest,
+    plausibility: kind,
+    ...(kind === 'extraordinary' && text(why) ? { why: text(why) } : {}),
+    ...(kind === 'complicated' && text(question) ? { question: text(question) } : {}),
   };
 }
 
@@ -326,4 +410,10 @@ function withCheck(params, resolve) {
   return clean ? { ...rest, check: clean } : rest;
 }
 
-module.exports = { interpretAction, resolveTarget, buildKnownEntities, normalizeName: normalize };
+module.exports = {
+  interpretAction,
+  resolveTarget,
+  buildKnownEntities,
+  normalizeName: normalize,
+  PLAUSIBILITY,
+};
