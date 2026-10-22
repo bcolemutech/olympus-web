@@ -47,6 +47,24 @@
     }
   }
 
+  var FASTER_KEY = 'loom.faster'; // Faster, per browser (L-828)
+
+  function readFaster() {
+    try {
+      return localStorage.getItem(FASTER_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function saveFaster(on) {
+    try {
+      localStorage.setItem(FASTER_KEY, on ? '1' : '0');
+    } catch {
+      // Not remembered this time; the setting still holds for this visit.
+    }
+  }
+
   function createStore(initial) {
     var current = initial;
     var listeners = [];
@@ -77,6 +95,7 @@
       setUi: function (patch) {
         merge('ui', patch);
         if ('panelWidth' in patch || 'panelCollapsed' in patch) savePanel(current.ui);
+        if ('faster' in patch) saveFaster(current.ui.faster);
       },
       subscribe: function (listener) {
         listeners.push(listener);
@@ -109,6 +128,8 @@
       menuButtons: [], // buttons later epics add to the menu bar
       rules: false, // the rules reference is open (L-805)
       character: false, // the Character panel is open (L-814)
+      subdue: false, // attacks strike to knock out (L-828; combat DF4)
+      faster: readFaster(), // foes' turns aren't played out (L-828; UI3)
     }),
   });
 

@@ -240,7 +240,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       c.dodging = true;
       lines.push(`${character.name} keeps their guard up.`);
     }
-    const record = { id, path: [] };
+    const record = { id, name: character.name, path: [] };
     // Walking, with the reactions it draws on the way (L-823: leaving
     // someone's reach, a readied attack). Struck down, they stop there.
     const walk = (path, from) => {
@@ -337,6 +337,15 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       );
       record.attack = {
         attack: attack.id,
+        // The roll, for its card in the Loom (L-828; UI3).
+        card: {
+          ...struck.roll,
+          difficulty: r.difficulty,
+          degree: r.degree,
+          success: r.hit,
+          name: attack.name,
+          against: target.id === PLAYER ? 'you' : target.name,
+        },
         target: target.id,
         hit: r.hit,
         ...(r.damage ? { damage: r.damage.total } : {}),
