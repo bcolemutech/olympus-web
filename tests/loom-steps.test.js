@@ -123,6 +123,12 @@ test('reaching an exit leaves by it; an exit is never on the way', () => {
     exit: ROOM.exits[0],
     spent: 3,
     turn: { n: 1, movementLeft: 3, actionUsed: false, plan: null },
+    // The squares walked to it, for the blows it draws in a fight (L-823).
+    walked: [
+      { x: 2, y: 3 },
+      { x: 1, y: 3 },
+      { x: 0, y: 3 },
+    ],
   });
   // Heading past the door, one square at a time: never onto it (that would
   // leave), and the plan goes around it.

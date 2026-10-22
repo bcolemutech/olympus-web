@@ -20,6 +20,9 @@
  *   ./down.js      what 0 means: dying saves, wounds, out; coming round,
  *                  death, fates
  *   ./rests.js     short and long rests, and what can interrupt them
+ *   ./position.js  reach and range, cover, flanking, Dodge, defending
+ *                  reactions (pure)
+ *   ./reactions.js what a walk draws: leaving reach, a readied attack (pure)
  */
 
 module.exports = {
@@ -34,4 +37,6 @@ module.exports = {
   others: require('./others'),
   down: require('./down'),
   rests: require('./rests'),
+  position: require('./position'),
+  reactions: require('./reactions'),
 };

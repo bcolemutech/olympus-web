@@ -109,7 +109,7 @@ function storedPath(map, from, plan, cost) {
 /**
  * What a move on a battle map does, for a save as it stands now:
  *   { refused: line }                          — nothing happens
- *   { exit, spent, turn }                      — it reaches an exit and leaves by it
+ *   { exit, spent, turn, walked? }             — it reaches an exit and leaves by it
  *   { cell, turn, lines, walked }              — a quiet step (or none: out of movement)
  * `target` is { cell } (a square) or { plan: true } (walk the plan). `turn` is
  * the save's turn after the move: movement spent, the plan set or cleared.
@@ -212,7 +212,8 @@ function planStep(canonWorld, save, target, known) {
   const seenLines = sighted.map((p) => inViewLine(map, p));
   if (!rest.length) {
     const { exit, feature } = maps.at(map, to);
-    if (exit) return { exit, spent, turn: { ...turn, movementLeft, plan: null } };
+    // The squares walked to it, for the reactions it draws in a fight (L-823).
+    if (exit) return { exit, spent, turn: { ...turn, movementLeft, plan: null }, walked: squares };
     return {
       cell: { x: to.x, y: to.y },
       turn: { ...turn, movementLeft, plan: null },

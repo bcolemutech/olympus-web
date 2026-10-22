@@ -97,14 +97,18 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
       expect(validateSystem(s).errors.join(' ')).toContain('must come to a number');
     });
 
-    test('settings for later stories are kept, with a warning', () => {
+    test('position settings are checked: cover, long range, Dodge, flanking (L-823)', () => {
       const s = { ...copyOf(sys), id: 'my-copy' };
-      s.modules.combat.cover = { partial: '-2' };
-      const result = validateSystem(s);
-      expect(result.errors).toEqual([]);
-      expect(result.warnings).toEqual([
-        'modules.combat.cover is used from L-823; it is kept, unused.',
+      s.modules.combat.cover = { partial: '2', total: '9' };
+      expect(validateSystem(s).errors).toEqual([
+        'modules.combat.cover: "total" isn\'t a kind of cover (partial, heavy).',
       ]);
+      s.modules.combat.cover = { partial: '2' };
+      s.modules.combat.longRange = '1d20 + Luck';
+      s.modules.combat.flanking = 'Luck';
+      const { errors } = validateSystem(s);
+      expect(errors.join(' ')).toContain('modules.combat.longRange');
+      expect(errors.join(' ')).toContain('modules.combat.flanking');
     });
 
     test('a system with no combat settings fights by the defaults', () => {
@@ -124,6 +128,11 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
         health: 'health',
         subduePenalty: null,
         morale: null,
+        // Position does nothing without settings (L-823).
+        cover: { partial: null, heavy: null },
+        longRange: null,
+        dodge: null,
+        flanking: null,
       });
     });
   });

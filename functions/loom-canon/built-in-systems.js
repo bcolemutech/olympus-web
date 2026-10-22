@@ -62,7 +62,15 @@ const FANTASY = {
       ['Intimidation', 'Intimidation', 'CHA'],
     ].map(([id, name, attribute]) => ({ id, name, attribute })),
     // Today's abilities (swim, climb) become traits with character sheets (CS4; L-811).
-    traits: [],
+    // Parry (L-823): a reaction nobody has unless their sheet lists it.
+    traits: [
+      {
+        id: 'parry',
+        name: 'Parry',
+        description: 'Turn a blade aside: once a round, +2 Armour against a melee hit.',
+        reaction: { defend: '2', against: 'melee' },
+      },
+    ],
     // What effects can put on a character (EF3; L-815): hazards now, combat
     // and powers later.
     conditions: [
@@ -178,6 +186,11 @@ const FANTASY = {
         short: { hours: 1, restore: { health: 'max(1, 1d6 + mod(CON))' } },
         long: { hours: 8, restore: { health: 'full' }, clears: ['poisoned'] },
       },
+      // Position (L-823): cover +2 or +5 Armour, -5 past a ranged attack's
+      // normal range, Dodge +5 Armour; no flanking.
+      cover: { partial: '2', heavy: '5' },
+      longRange: '-5',
+      dodge: '5',
       // What a new character carries until L-770's weapons.
       attacks: [
         {
@@ -249,7 +262,15 @@ const SCIFI = {
       ['Persuade', 'Persuade', 'Presence'],
       ['Command', 'Command', 'Presence'],
     ].map(([id, name, attribute]) => ({ id, name, attribute })),
-    traits: [],
+    // Combat Reflexes (L-823): a reaction nobody has unless their sheet lists it.
+    traits: [
+      {
+        id: 'combat_reflexes',
+        name: 'Combat Reflexes',
+        description: 'Once a round, a success more on your defence against a hit.',
+        reaction: { defend: '1', against: 'all' },
+      },
+    ],
     // What effects can put on a character (EF3; L-815).
     conditions: [
       {
@@ -378,6 +399,11 @@ const SCIFI = {
           clears: ['wounded', 'bleeding'],
         },
       },
+      // Position (L-823): cover a success or two more on the defence, a
+      // success fewer past normal range, Dodge two more; no flanking.
+      cover: { partial: '1', heavy: '2' },
+      longRange: '-1',
+      dodge: '2',
       // What a new character carries until L-770's weapons.
       attacks: [
         {

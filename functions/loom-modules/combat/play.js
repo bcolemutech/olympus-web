@@ -32,6 +32,7 @@ const sheets = require('../../loom-canon/sheets');
 const fight = require('./fight');
 const others = require('./others');
 const down = require('./down');
+const reactions = require('./reactions');
 
 const { PLAYER } = fight;
 const SIDES = ['party', 'hostile', 'neutral'];
@@ -353,8 +354,25 @@ function afterTurn(world, save, { dice } = {}) {
     }
   }
   const over = fight.endOf(f);
-  if (over) return { lost: 0, ...ending(f, over) };
-  return othersPlay(world, save, f, { dice });
+  if (!over) return othersPlay(world, save, f, { dice });
+  const end = ending(f, over);
+  if (!save.down) return { lost: 0, ...end };
+  // The player went down on their own turn (L-823: struck leaving reach).
+  const fallen = afterFall(world, save, {
+    f,
+    winner: over.winner,
+    sheet: sheets.sheetOf(save),
+    figures: save.figures,
+    down: save.down,
+    dice,
+  });
+  return {
+    lost: 0,
+    mutations: end.mutations.concat(fallen.mutations),
+    lines: end.lines.concat(fallen.lines),
+    fight: end.fight,
+    fallen: fallen.fallen,
+  };
 }
 
 /**
@@ -371,6 +389,69 @@ function afterFight(world, save, { dice } = {}) {
     down: save.down,
     dice,
   });
+}
+
+/**
+ * The player's walk in a fight (L-823; PS4): stepping out of a foe's reach
+ * draws its attack, unless they withdrew this turn (`turn.withdrawn`). A
+ * blow that drops them stops the walk where they were struck, and they fall
+ * by the system's down kind (./down.js). `walked` the squares stepped on.
+ *
+ * Returns null out of a fight or when nobody reacts; else `{ reached,
+ * fight, sheet, down, figures, lines }`: how many squares they walked, the
+ * fight (reactions spent; the player out if down), their sheet, their fall
+ * (`save.down`, or null), every reactor's state (`save.figures`).
+ */
+function walkReactions(world, save, walked, { dice }) {
+  const f = fightOf(save);
+  const { map, cell } = maps.positionOf(world || {}, save);
+  if (!f || !map || !cell || !walked.length || !f.combatants[PLAYER]) return null;
+  const system = checks.systemOf(world);
+  const fighters = standingHere(world, save)
+    .filter((c) => f.combatants[c.id] && !f.combatants[c.id].out)
+    .map((c) => ({
+      id: c.id,
+      side: f.combatants[c.id].side,
+      name: c.name,
+      cell: c.cell,
+      sheet: sheetFor(world, save, c),
+    }));
+  const r = reactions.reactToWalk(system, {
+    map,
+    doors: ((save && save.doors) || {})[map.id] || {},
+    fight: f,
+    mover: { id: PLAYER, side: 'party', name: 'you', you: true, sheet: sheets.sheetOf(save) },
+    from: cell,
+    path: walked,
+    fighters,
+    withdrawn: Boolean(save.turn && save.turn.withdrawn),
+    now: Number.isFinite(save.time) ? save.time : 0,
+    dice,
+  });
+  if (!r.struck.length) return null;
+  const states = JSON.parse(JSON.stringify((save && save.figures) || {}));
+  for (const [id, s] of Object.entries(r.sheets)) states[id] = { ...(states[id] || {}), sheet: s };
+  let next = r.fight;
+  let sheet = r.sheet;
+  let fell = null;
+  const lines = r.lines.slice();
+  if (r.down) {
+    const fall = down.fall(system, sheet);
+    sheet = fall.sheet;
+    lines.push(...fall.lines);
+    if (fall.down) {
+      fell = fall.down;
+      next = fight.leave(next, PLAYER, 'down');
+    }
+  }
+  return {
+    reached: fell ? r.reached : walked.length,
+    fight: next,
+    sheet,
+    down: fell,
+    figures: states,
+    lines,
+  };
 }
 
 /** The player leaving the fight's map (SE4: fled): `{ mutations, lines, fight }`, or null. */
@@ -417,6 +498,9 @@ function viewOf(save) {
         initiative: c.initiative,
         ...(id === PLAYER ? { you: true } : {}),
         ...(c.out ? { out: c.out } : {}),
+        // Dodging, or an attack readied (L-823).
+        ...(c.dodging ? { dodging: true } : {}),
+        ...(c.readied ? { readied: c.readied.attack } : {}),
       };
     }),
   };
@@ -441,6 +525,7 @@ module.exports = {
   begin,
   afterTurn,
   afterFight,
+  walkReactions,
   leftMap,
   talkedDown,
   isAttack,

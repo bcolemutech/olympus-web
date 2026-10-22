@@ -7,9 +7,11 @@
  * out of a fight starts one (L-821; the player's blow opens it); a foe who
  * falls leaves it, and the fight ends when the last does.
  *
- * Reach and range (L-822's part of PS1): a melee attack reaches someone
- * within its reach in squares (1: beside), a ranged one someone in sight
- * within its long range; range's penalty, cover and the rest are L-823's.
+ * Reach and range (PS1): a melee attack reaches someone within its reach in
+ * squares (1: beside), a ranged one someone in sight within its long range.
+ * Where the two stand adds to the roll (L-823; ./position.js): long range
+ * and flanking to the attack, cover and Dodge to the defence; a target with
+ * a defending reaction left uses it when it turns the hit into a miss.
  * An area attack (AT5) is placed at the target's square (a burst or square)
  * or out from the player towards them (a cone or line), and everyone it
  * catches, the target among them, is rolled against; the player is left out.
@@ -30,6 +32,7 @@ const { attacksOf } = require('./attacks');
 const { strike, spendAmmo } = require('./strike');
 const fight = require('./fight');
 const play = require('./play');
+const position = require('./position');
 
 const NOBODY = "You don't see anyone like that here.";
 
@@ -137,16 +140,49 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
     }
   }
 
+  // Where they stand (L-823): long range and flanking on the roll; cover
+  // and Dodge on the target's defence (not an area's: it fills the squares);
+  // each target's defending reaction, if they have one left.
+  const friends = standing.filter((c) => play.sideOf(c) === 'party').map((c) => c.cell);
+  const terms = position.termsFor(system, {
+    map,
+    doors,
+    attack,
+    from: cell,
+    to: person.cell,
+    friends,
+    dodging: Boolean(f && f.combatants[person.id] && f.combatants[person.id].dodging),
+  });
   const struck = strike(system, {
     attacker: { name: 'You', sheet: ammo.sheet },
     attack,
     subdue,
-    targets: targets.map((t) => ({ id: t.id, name: t.name, sheet: play.sheetFor(world, save, t) })),
+    bonus: terms.bonus,
+    targets: targets.map((t) => {
+      const sheet = play.sheetFor(world, save, t);
+      const theirs = (f && f.combatants[t.id]) || {};
+      const defend = theirs.reactionsLeft > 0 ? position.defendOf(system, sheet, attack) : null;
+      const guard = attack.area
+        ? position.termsFor(system, {
+            map,
+            doors,
+            attack,
+            from: t.cell,
+            to: t.cell,
+            dodging: Boolean(theirs.dodging),
+          }).guard
+        : terms.guard;
+      return { id: t.id, name: t.name, sheet, guard, ...(defend ? { reaction: defend } : {}) };
+    }),
     now: clock.timeOf(save),
     dice,
   });
   if (ammo.sheet !== mine) mutations.push(setSave('character.sheet', ammo.sheet));
   for (const r of struck.results) {
+    if (r.reacted && f && f.combatants[r.id]) {
+      f = JSON.parse(JSON.stringify(f));
+      f.combatants[r.id].reactionsLeft -= 1;
+    }
     lines.push(...r.lines);
     mutations.push(
       setSave('figures.' + r.id, { sheet: r.sheet, ...(r.down ? { down: r.down } : {}) })
@@ -169,7 +205,11 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
     {
       ...struck.roll,
       difficulty: first.difficulty,
-      rung: first.opposed ? null : defenceName(system),
+      rung: first.opposed
+        ? null
+        : terms.guard.length && !attack.area
+          ? first.defenceLine
+          : defenceName(system),
       degree: first.degree,
       success: first.hit,
     },
@@ -204,6 +244,8 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
       id: attack.id,
       name: attack.name,
       subdue,
+      ...(terms.band === 'long' ? { long: true } : {}),
+      ...(terms.cover ? { cover: terms.cover } : {}),
       targets: struck.results.map((r) => ({
         id: r.id,
         hit: r.hit,
@@ -214,4 +256,4 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
   };
 }
 
-module.exports = { attackTurn, facingTo };
+module.exports = { attackTurn, facingTo, chosen };
