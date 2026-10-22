@@ -39,9 +39,27 @@
  *               { cowardly, cautious, steady, bold, reckless }, each a rung's
  *               name, or null: never breaks); failing, they flee or surrender.
  *               With none, nobody breaks.
+ *   down        what 0 means for the player (L-827; DF1, DF2):
+ *               { kind, death, ... } with kind one of
+ *                 'dyingWithSaves'  dying: a save each round (`save`: { skill
+ *                                   or attribute, against: a rung }), `need`
+ *                                   (3) of one kind: stable, or dead
+ *                 'wounds'          a wound instead of falling, up to `wounds`
+ *                                   (3); past them, out
+ *                 'outAtOnce'       out at once
+ *               `death`: 'on' or 'off', the default for its worlds' rules.death
+ *               (no one to help: on, the character dies; off, they wake
+ *               captured, robbed or rescued); `stabilise` { skill or attribute,
+ *               against }: what an ally rolls to stabilise them; `injury`: a
+ *               condition put on when they come round; `hours` they lie out
+ *               (default 1). With none: out at once, death off.
+ *   rests       { short, long } (L-827; DF5): each { hours, restore: { resource:
+ *               formula or 'full' }, clears?: [condition] }; a long rest once
+ *               a day. With none: a short rest an hour restoring nothing, a
+ *               long one 8 hours restoring everything.
  *
- * The rest of §4.1 (cover, flanking, down, rests) is read by the stories
- * that use it (L-823, L-827): kept as given until then, with a warning.
+ * The rest of §4.1 (cover, flanking) is read by L-823: kept as given until
+ * then, with a warning.
  *
  * Pure. `formula(value, where)` is the system check's own formula collector,
  * so the formulas here are checked with the rest of the system's.
@@ -58,12 +76,12 @@ const KEYS = [
   'unarmed',
   'attacks',
   'morale',
+  'down',
+  'rests',
 ];
 const LATER = {
   cover: 'L-823',
   flanking: 'L-823',
-  down: 'L-827',
-  rests: 'L-827',
 };
 const ECONOMY = { actions: [1, 1, 5], reactions: [1, 0, 5], quick: [0, 0, 5] };
 const DEFAULT_INITIATIVE = '1d20';
@@ -93,6 +111,8 @@ function settingsOf(system) {
     health: healthOf(system, given.health),
     subduePenalty: given.subduePenalty === undefined ? null : given.subduePenalty,
     morale: isObject(given.morale) && isObject(given.morale.check) ? given.morale : null,
+    down: downOf(given.down),
+    rests: restsOf(given.rests),
   };
 }
 
@@ -108,6 +128,33 @@ function attackOf(system, given) {
     critical: CRITICALS.includes(a.critical) ? a.critical : 'none',
     extraSuccesses: EXTRAS.includes(a.extraSuccesses) ? a.extraSuccesses : 'none',
   };
+}
+
+// What 0 means (L-827), with the defaults: out at once, death off.
+const DOWN_KINDS = ['dyingWithSaves', 'wounds', 'outAtOnce'];
+function downOf(given) {
+  const d = isObject(given) ? given : {};
+  return {
+    kind: DOWN_KINDS.includes(d.kind) ? d.kind : 'outAtOnce',
+    death: d.death === 'on' ? 'on' : 'off',
+    save: isObject(d.save) ? d.save : null,
+    need: Number.isInteger(d.need) ? d.need : 3,
+    wounds: Number.isInteger(d.wounds) ? d.wounds : 3,
+    stabilise: isObject(d.stabilise) ? d.stabilise : null,
+    injury: typeof d.injury === 'string' ? d.injury : null,
+    hours: Number.isFinite(d.hours) ? d.hours : 1,
+  };
+}
+
+// Rests (L-827), with the defaults.
+function restsOf(given) {
+  const r = isObject(given) ? given : {};
+  const one = (x, hours, restore) => ({
+    hours: isObject(x) && Number.isFinite(x.hours) ? x.hours : hours,
+    restore: isObject(x) && isObject(x.restore) ? x.restore : restore,
+    clears: isObject(x) && Array.isArray(x.clears) ? x.clears : [],
+  });
+  return { short: one(r.short, 1, {}), long: one(r.long, 8, null) };
 }
 
 // The resource damage comes off.
@@ -281,6 +328,98 @@ function check(settings, { system, errors, warnings, formula }) {
       }
     }
   }
+  // What a check is rolled with: { skill } or { attribute }, and a rung.
+  const rungNames = new Set(
+    (((system && system.checks) || {}).ladder || []).map((r) => r && r.name)
+  );
+  const rolled = (c, where, { rung = true } = {}) => {
+    if (!isObject(c) || (!c.skill && !c.attribute)) {
+      return errors.push(`${where} must be { skill or attribute${rung ? ', against' : ''} }.`);
+    }
+    if (c.skill !== undefined && !skills.has(c.skill)) {
+      errors.push(`${where}.skill "${c.skill}" isn't one of the system's skills.`);
+    } else if (c.attribute !== undefined && !attributes.has(c.attribute)) {
+      errors.push(`${where}.attribute "${c.attribute}" isn't one of the system's attributes.`);
+    }
+    if (rung && !rungNames.has(c.against)) {
+      errors.push(`${where}.against must be a rung on the ladder.`);
+    }
+    return null;
+  };
+  const conditionIds = new Set(
+    ((sheet.optional || []).includes('conditions') ? sheet.conditions || [] : []).map(
+      (c) => c && c.id
+    )
+  );
+  // What 0 means (L-827).
+  const down = settings.down;
+  if (down !== undefined) {
+    if (!isObject(down)) errors.push(`${at}.down must be { kind, death, ... }.`);
+    else {
+      if (!DOWN_KINDS.includes(down.kind)) {
+        errors.push(`${at}.down.kind must be one of ${DOWN_KINDS.join(', ')}.`);
+      }
+      if (down.death !== undefined && !['on', 'off'].includes(down.death)) {
+        errors.push(`${at}.down.death must be on or off.`);
+      }
+      if (down.kind === 'dyingWithSaves') {
+        if (down.save === undefined) errors.push(`${at}.down.save is needed to roll each round.`);
+        else rolled(down.save, `${at}.down.save`);
+      }
+      if (down.stabilise !== undefined) rolled(down.stabilise, `${at}.down.stabilise`);
+      for (const n of ['need', 'wounds', 'hours']) {
+        if (
+          down[n] !== undefined &&
+          !(Number.isInteger(down[n]) && down[n] >= 1 && down[n] <= 24)
+        ) {
+          errors.push(`${at}.down.${n} must be a whole number from 1 to 24.`);
+        }
+      }
+      if (down.injury !== undefined && !conditionIds.has(down.injury)) {
+        errors.push(`${at}.down.injury "${down.injury}" isn't one of the system's conditions.`);
+      }
+    }
+  }
+  // Rests (L-827).
+  const rests = settings.rests;
+  if (rests !== undefined) {
+    if (!isObject(rests)) errors.push(`${at}.rests must be { short, long }.`);
+    else {
+      for (const [name, r] of Object.entries(rests)) {
+        const where = `${at}.rests.${name}`;
+        if (!['short', 'long'].includes(name)) {
+          errors.push(`${at}.rests: "${name}" isn't a rest (short, long).`);
+          continue;
+        }
+        if (!isObject(r)) {
+          errors.push(`${where} must be { hours, restore, clears? }.`);
+          continue;
+        }
+        if (!(Number.isInteger(r.hours) && r.hours >= 1 && r.hours <= 24)) {
+          errors.push(`${where}.hours must be a whole number from 1 to 24.`);
+        }
+        if (!isObject(r.restore)) errors.push(`${where}.restore must map resources to formulas.`);
+        else {
+          for (const [id, value] of Object.entries(r.restore)) {
+            if (!resources.has(id)) {
+              errors.push(`${where}.restore: "${id}" isn't one of the system's resources.`);
+            } else if (value !== 'full') formula(value, `${where}.restore.${id}`);
+          }
+        }
+        if (r.clears !== undefined) {
+          if (!Array.isArray(r.clears))
+            errors.push(`${where}.clears must be a list of conditions.`);
+          else {
+            r.clears
+              .filter((c) => !conditionIds.has(c))
+              .forEach((c) =>
+                errors.push(`${where}.clears: "${c}" isn't one of the system's conditions.`)
+              );
+          }
+        }
+      }
+    }
+  }
   // The attacks themselves are checked against the system once its shape is
   // known (./attacks.js; its formulas need the sheet's fields).
   const attacks = require('./attacks');
@@ -298,4 +437,4 @@ function check(settings, { system, errors, warnings, formula }) {
   }
 }
 
-module.exports = { KEYS, LATER, HITS, DEFAULT_INITIATIVE, settingsOf, check };
+module.exports = { KEYS, LATER, HITS, DOWN_KINDS, DEFAULT_INITIATIVE, settingsOf, check };

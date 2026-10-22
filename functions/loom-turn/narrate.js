@@ -474,6 +474,36 @@ const FIGHT_ENDS = {
   gone: 'left',
   stoodDown: 'stood down',
 };
+// The player down (L-827; combat DF1–DF3): coming round, dead (the
+// epilogue), or a fate for NARRATE to choose when death is off.
+const FATE_WORDS = {
+  captured: 'captured: taken by their foes or others, and held',
+  robbed: 'robbed: left where they fell, everything they carried taken',
+  rescued: 'rescued: found and carried to safety in the nearest settlement',
+};
+function buildFallenSection(resolution) {
+  const fallen = resolution.fallen;
+  if (!fallen) return null;
+  if (fallen.outcome === 'dead') {
+    return (
+      "DEATH: the player's character has died. Write their epilogue: how they fell, what " +
+      'they leave behind, and how the world they touched remembers them. This is the end of ' +
+      'their story; write no choices or suggestions.'
+    );
+  }
+  if (fallen.outcome === 'fate') {
+    return (
+      'FATE: the player fell and no one on their side was left standing; this world does not ' +
+      'kill them. Choose what happens and add "fate" to your JSON, one of: ' +
+      Object.entries(FATE_WORDS)
+        .map(([id, words]) => '"' + id + '" (' + words + ')')
+        .join(', ') +
+      '. Pick what fits their foes and the place. Narrate them coming round, hours later.'
+    );
+  }
+  return 'The player fell in the fight and came round afterwards, hurt: narrate it.';
+}
+
 function buildFightSection(save, resolution) {
   const f = resolution.fight;
   if (f && f.started) {
@@ -557,6 +587,7 @@ function buildUserMessage(params) {
     ? buildEffectsSection(params.save, resolution, canonWorld)
     : null;
   const fightSection = buildFightSection(params.save, resolution);
+  const fallenSection = buildFallenSection(resolution);
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
@@ -576,6 +607,7 @@ function buildUserMessage(params) {
     '\n\n' +
     (rollSection ? rollSection + '\n\n' : '') +
     (fightSection ? fightSection + '\n\n' : '') +
+    (fallenSection ? fallenSection + '\n\n' : '') +
     (effectsSection ? effectsSection + '\n\n' : '') +
     (timeSection ? timeSection + '\n\n' : '') +
     'ROLLING SUMMARY:\n' +
@@ -716,6 +748,8 @@ async function narrateResolution(params) {
     entityRefs,
     inventedEntities: sanitizeStringArray(raw.inventedEntities),
     suggestedActions: sanitizeStringArray(raw.suggestedActions),
+    // The fate it chose for a player down (L-827), when asked.
+    ...(Object.keys(FATE_WORDS).includes(raw.fate) ? { fate: raw.fate } : {}),
   };
 }
 

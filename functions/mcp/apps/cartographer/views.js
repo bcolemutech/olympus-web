@@ -240,6 +240,8 @@ function worldOverview(meta, world) {
           ...(world.systemId ? {} : { notChosen: true }),
         }
       : { id: world.systemId, missing: true },
+    // Whether a character down with no one to help dies (L-827).
+    death: require('../../../loom-modules/combat/down').deathOf(world),
     readyToPublish: missing.length === 0,
     ...(missing.length ? { missing } : {}),
     map: {

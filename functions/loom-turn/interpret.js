@@ -61,7 +61,9 @@ function buildSystemInstruction(knownEntities, save, canonWorld) {
     'To let time pass ("wait an hour", "rest until evening", "sleep until dawn"), use the ' +
     'verb "wait" with params {"minutes": number} for a length of time, or {"until": part} ' +
     'for a time of day, where part is one of dawn, morning, midday, afternoon, evening or ' +
-    'night; add {"how": "sleep"} or {"how": "rest"} when the player sleeps or rests.\n\n' +
+    'night; add {"how": "sleep"} or {"how": "rest"} when the player sleeps or rests. For a ' +
+    'short rest or a long rest (to recover), use the verb "rest" with params {"rest": ' +
+    '"short"} or {"rest": "long"}.\n\n' +
     'Respond with ONLY a JSON object: { "verb": string, "targets": string[], "params": object }'
   );
 }

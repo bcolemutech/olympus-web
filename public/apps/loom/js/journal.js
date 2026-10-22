@@ -411,6 +411,12 @@
   }
 
   function TurnBox(props) {
+    // A story that has ended (L-827: the character died) takes no more turns.
+    if (props.ended) {
+      return html`<p class="loom-turn-ended" id="loom-turn-ended">
+        Your story has ended. Start a new character in this world: what this one changed stays.
+      </p>`;
+    }
     function send(form) {
       var input = form.elements.namedItem('action');
       var text = input.value;
@@ -500,6 +506,9 @@
     var fight = ui.useStore(function (s) {
       return s.map && s.map.fight;
     });
+    var ended = ui.useStore(function (s) {
+      return Boolean(s.map && s.map.ended);
+    });
     var logRef = hooks.useRef(null);
     var last = j.entries[j.entries.length - 1];
 
@@ -528,7 +537,7 @@
         ${liveText(last)}
       </div>
       <${Suggestions} actions=${j.suggestions} busy=${busy} />
-      <${TurnBox} busy=${busy} />
+      <${TurnBox} busy=${busy} ended=${ended} />
       <${TurnBar} turn=${turn} fight=${fight} busy=${busy} />
       ${busy &&
       html`<div class="app-loading" id="loom-turn-loading">

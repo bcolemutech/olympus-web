@@ -22,6 +22,9 @@ const { FieldValue } = require('firebase-admin/firestore');
  * Thrown by pipeline stages to signal a specific HttpsError code the
  * loomPlayTurn callable (functions/index.js) should surface to the client.
  */
+const ENDED =
+  'Your story has ended. Start a new character in this world: what this one changed stays.';
+
 class LoomTurnError extends Error {
   constructor(code, message) {
     super(message);
@@ -135,11 +138,24 @@ async function runTurnPipeline(params) {
     saveId,
   });
 
+  // A story that has ended (L-827: the character died) takes no more turns.
+  if (save.ended) {
+    return {
+      narration: ENDED,
+      stateSummary: save.recentSummary || '',
+      suggestedActions: [],
+      time: clock.timeView(clock.timeOf(save)),
+      refused: true,
+      ended: true,
+    };
+  }
+
   if (action && action.verb === 'end-turn') {
     const proposedAction = { verb: 'end-turn', targets: [], params: {} };
     const resolution = await adjudicateAction({ proposedAction, canonWorld, save, worldState });
     // A fight that ends with this turn is narrated (L-821; EN5); any other
     // End turn, rounds of a fight included, is plain lines.
+    let resolution2 = resolution;
     const told =
       resolution.fight && resolution.fight.ended
         ? await narrateResolution({
@@ -153,6 +169,7 @@ async function runTurnPipeline(params) {
             known,
           })
         : null;
+    resolution2 = withFate(canonWorld, save, resolution, told);
     return commitTurn({
       db,
       saveRef,
@@ -161,8 +178,8 @@ async function runTurnPipeline(params) {
       canonWorld,
       actionText: 'end turn',
       proposedAction,
-      resolution,
-      narration: [resolution.constraints.join(' '), told && told.narration]
+      resolution: resolution2,
+      narration: [resolution2.constraints.join(' '), told && told.narration]
         .filter(Boolean)
         .join(' '),
       entityRefs: told ? told.entityRefs : [],
@@ -311,6 +328,10 @@ async function runTurnPipeline(params) {
   if (action && action.verb === 'leave') {
     actionText = 'go out by ' + action.name;
     proposedAction = { verb: 'move', targets: ['exit:' + action.exit], params: { from: 'map' } };
+  } else if (action && action.verb === 'rest') {
+    // A short or long rest chosen in the Loom (L-827): no model reads it.
+    actionText = 'take a ' + action.rest + ' rest';
+    proposedAction = { verb: 'rest', targets: [], params: { rest: action.rest } };
   } else if (action && action.verb === 'attack') {
     // An attack chosen on the map (L-822): no model reads it.
     const target = (canonWorld.characters || {})[action.target];
@@ -382,7 +403,7 @@ async function runTurnPipeline(params) {
       suggestedActions: [],
     });
   }
-  const { narration, entityRefs, inventedEntities, suggestedActions } = await narrateResolution({
+  const told = await narrateResolution({
     actionText,
     proposedAction,
     resolution,
@@ -392,6 +413,7 @@ async function runTurnPipeline(params) {
     saveRef,
     known,
   });
+  const { narration, entityRefs, inventedEntities, suggestedActions } = told;
 
   return commitTurn({
     db,
@@ -401,13 +423,35 @@ async function runTurnPipeline(params) {
     canonWorld,
     actionText,
     proposedAction,
-    resolution,
+    resolution: withFate(canonWorld, save, resolution, told),
     narration,
     entityRefs,
     inventedEntities,
     suggestedActions,
     discovered: newlyDiscovered(canonWorld, save, resolution),
   });
+}
+
+/**
+ * The player's fate, when they fell with no one to help and death is off
+ * (L-827; DF2): NARRATE chose captured, robbed or rescued (decided
+ * 2026-10-22), and the rules apply it (../loom-modules/combat/down.js). Any
+ * other resolution comes back as it is; the record keeps the fate, not the
+ * sheet it was worked from.
+ */
+function withFate(canonWorld, save, resolution, told) {
+  const fallen = resolution && resolution.fallen;
+  if (!fallen || fallen.outcome !== 'fate') return resolution;
+  const fate = combat.down.fateMutations(canonWorld, save, told && told.fate, {
+    sheet: fallen.sheet,
+    hours: fallen.hours,
+  });
+  return {
+    ...resolution,
+    mutations: resolution.mutations.concat(fate.mutations),
+    constraints: resolution.constraints.concat([fate.line]),
+    fallen: { outcome: 'fate', fate: fate.fate },
+  };
 }
 
 // What a town move heads for (L-662): a point, a place in this town, or the

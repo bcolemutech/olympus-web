@@ -8,8 +8,7 @@
  * attack by their tactics, with no model call, their squares and the
  * player's wounds in the save; loomGetMap shows them where they stand; the
  * player can attack one; when half of them are down the rest roll morale
- * and run, and the fight ends, narrated; at 0 the player is knocked out
- * (until L-827): an hour passes, 1 health left, the fight over.
+ * and run, and the fight ends, narrated. (The player at 0: loom-combat-down-play.)
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest loom-combat-foes-play --verbose"
@@ -259,30 +258,5 @@ describe.each(Object.keys(mockCases))('foes under %s', (id) => {
     // Gone from the map.
     const map = await view(ref);
     expect(map.battleMap.people.find((p) => p.id === 'fig-bandits-2')).toBeUndefined();
-  });
-
-  test('at 0 the player is knocked out: an hour passes, 1 health left, the fight over', async () => {
-    mockState.attributes = c.strong;
-    mockState.posture = 'reckless';
-    face = c.high;
-    const ref = await onTheMap(`${id}-out`);
-    await play(ref.id, { action: { verb: 'move', cell: { x: 2, y: 2 } } });
-    for (let i = 0; i < 6 && (await saved(ref)).fight; i++) {
-      await play(ref.id, { action: { verb: 'end-turn' } });
-    }
-    const save = await saved(ref);
-    expect(save.fight).toBeNull();
-    expect(save.character.sheet.resources.health.current).toBe(1);
-    const turns = await ref.collection('loom_turns').orderBy('index', 'desc').limit(1).get();
-    const last = turns.docs[0].data();
-    expect(last.resolution.constraints).toContain(
-      'You fall, knocked out. You come round an hour later, battered.'
-    );
-    expect(last.resolution.fight).toMatchObject({
-      ended: true,
-      winner: 'hostile',
-      knockedOut: true,
-    });
-    expect(save.time).toBeGreaterThanOrEqual(8 * 3600 + 3600);
   });
 });

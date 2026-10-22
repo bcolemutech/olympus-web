@@ -16,7 +16,10 @@
  *   ./figures.js   figures placed from stat blocks, roles and postures, and
  *                  the world as a save sees it (withFigures)
  *   ./tactics.js   an unnamed fighter's turn by role and posture (pure)
- *   ./others.js    everyone else's turns, morale, the player knocked out
+ *   ./others.js    everyone else's turns, morale, the player falling
+ *   ./down.js      what 0 means: dying saves, wounds, out; coming round,
+ *                  death, fates
+ *   ./rests.js     short and long rests, and what can interrupt them
  */
 
 module.exports = {
@@ -29,4 +32,6 @@ module.exports = {
   figures: require('./figures'),
   tactics: require('./tactics'),
   others: require('./others'),
+  down: require('./down'),
+  rests: require('./rests'),
 };

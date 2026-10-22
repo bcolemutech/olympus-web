@@ -2195,3 +2195,13 @@ body.loom-playing .app-divider {
 .loom-create-review-row dd {
   margin: 0;
 }
+
+/* A story that has ended (L-827). */
+.loom-turn-ended {
+  margin: 0;
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--loom-line, rgba(255, 255, 255, 0.15));
+  border-radius: 8px;
+  color: var(--text-muted, #b8b2a7);
+  font-style: italic;
+}

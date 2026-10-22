@@ -580,3 +580,18 @@ test('set_sheet gives a named character a sheet; get_character, test_roll and li
   });
   expect((await ok('get_character', { worldId: WORLD, characterId: 'chr_hale' })).sheet).toBeNull();
 });
+
+test('update_world sets whether a character down with no one to help dies (L-827)', async () => {
+  await ok('update_world', { worldId: WORLD, systemId: 'd20-fantasy' });
+  // The system's default: on in d20 Fantasy.
+  expect((await ok('get_world', { worldId: WORLD })).death).toBe('on');
+  const off = await ok('update_world', { worldId: WORLD, death: 'off' });
+  expect(off.updated).toEqual(['death']);
+  expect((await ok('get_world', { worldId: WORLD })).death).toBe('off');
+  await ok('update_world', { worldId: WORLD, death: null });
+  expect((await ok('get_world', { worldId: WORLD })).death).toBe('on');
+  await ok('update_world', { worldId: WORLD, systemId: 'pool-scifi' });
+  expect((await ok('get_world', { worldId: WORLD })).death).toBe('off');
+  const bad = await call('update_world', { worldId: WORLD, death: 'sometimes' });
+  expect(bad.isError).toBe(true);
+});

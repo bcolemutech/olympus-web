@@ -576,7 +576,9 @@ function writeTools({ writer, systems }) {
         'starting location (where new games begin) or game system (systemId, from ' +
         'list_systems: the rules every game in it plays by, at the system’s latest version), ' +
         'or a premade character (startingSheet: every new game starts with this sheet and ' +
-        'skips making a character; null removes it). Fields you omit are left unchanged. ' +
+        'skips making a character; null removes it), or death (on: a character with no one ' +
+        'to help dies; off: they come round captured, robbed or rescued; null: the system’s ' +
+        'default). Fields you omit are left unchanged. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -603,6 +605,15 @@ function writeTools({ writer, systems }) {
               'traits: [id], conditions: [] }, checked against the world’s system. Speed is ' +
               'worked out by the system. null removes it.'
           ),
+        death: z
+          .enum(['on', 'off'])
+          .nullable()
+          .optional()
+          .describe(
+            'Whether a character down with no one to help dies (L-827): on, the save ends ' +
+              'with an epilogue; off, they come round captured, robbed or rescued. null: the ' +
+              'system’s default (on in d20 Fantasy, off in Dice-pool Sci-fi).'
+          ),
       },
       annotations: replacing,
       handler: async (ctx, args) => {
@@ -613,6 +624,7 @@ function writeTools({ writer, systems }) {
           'startingLocationId',
           'systemId',
           'startingSheet',
+          'death',
         ]);
         // The system must exist (L-801), read before the edit's transaction.
         const system =
@@ -664,6 +676,11 @@ function writeTools({ writer, systems }) {
             }
             fields['rules.startingSheet'] = sheet;
           }
+          // Its death setting (L-827).
+          const death = (world.rules || {}).death;
+          if (args.death === null && death !== undefined) {
+            fields['rules.death'] = FieldValue.delete();
+          } else if (args.death && args.death !== death) fields['rules.death'] = args.death;
           if (Object.keys(fields).length) e.updateWorld(fields);
           return {
             updated: Object.keys(fields).map((f) => f.replace('rules.', '')),

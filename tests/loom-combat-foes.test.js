@@ -472,7 +472,7 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
       expect(lines.join(' ')).toMatch(/Guard hits Bandit with their/);
     });
 
-    test('the player at 0 is knocked out: the fight ends, an hour passes, 1 health left', () => {
+    test('the player at 0 falls by the system’s down kind; the fight ends, foes the winners', () => {
       const world = worldOf(system, [
         {
           id: 'brutes',
@@ -487,10 +487,17 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
       ]);
       const { lines, last, save } = fightOut(world, saveOf(system), faces(c.high), 6);
       expect(save.fight).toBeNull();
-      expect(lines).toContain('You fall, knocked out. You come round an hour later, battered.');
-      expect(save.character.sheet.resources.health.current).toBe(1);
-      expect(last.lost).toBe(3600);
-      expect(last.fight).toMatchObject({ ended: true, winner: 'hostile', knockedOut: true });
+      expect(last.fight).toMatchObject({ ended: true, winner: 'hostile' });
+      if (id === 'd20-fantasy') {
+        // Dying, death on: every save a 20 holds; left for dead, they come round.
+        expect(lines).toContain('You fall, dying.');
+        expect(lines).toContain('A dying save holds (3 of 3). You are stable.');
+        expect(last.fallen).toEqual({ outcome: 'wake' });
+      } else {
+        // Out at once, death off: a fate for NARRATE to choose.
+        expect(lines).toContain('You fall, out cold.');
+        expect(last.fallen).toMatchObject({ outcome: 'fate', hours: 4 });
+      }
     });
 
     test('morale: with half their side down, the rest roll; failing, they run', () => {

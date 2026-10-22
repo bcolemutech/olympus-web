@@ -23,6 +23,9 @@ const combat = require('../loom-modules/combat');
 // A lock's difficulty when its door gives none (L-626).
 const DEFAULT_LOCK_DIFFICULTY = 15;
 
+// Down (L-827): the player can only end their turn.
+const DOWN = "You're down: you can only end your turn.";
+
 // Turned down before narration (L-614): the turn's one action is used.
 const ACTED = "You've acted this turn. End your turn first.";
 
@@ -777,10 +780,41 @@ function evaluateEndTurn(characterState, canonWorld, dice) {
   const after = tickedSheet
     ? { ...characterState, character: { ...characterState.character, sheet: tickedSheet } }
     : characterState;
-  const round = combat.play.afterTurn(canonWorld, after, { dice }) || {
-    mutations: [],
-    lines: [],
-  };
+  // Dying (L-827): a save at the end of each of their turns; three of a kind
+  // decides it. Dead, the fight and the save end here.
+  const dying =
+    characterState.down && characterState.down.kind === 'dying' ? characterState.down : null;
+  let saved = null;
+  if (dying) {
+    saved = combat.down.deathSave(
+      checks.systemOf(canonWorld),
+      tickedSheet || sheets.sheetOf(characterState),
+      dying,
+      dice
+    );
+  }
+  const round =
+    saved && saved.outcome === 'dead'
+      ? {
+          mutations: combat.down.deathMutations(characterState),
+          lines: [],
+          fallen: { outcome: 'dead' },
+          fight: {
+            ended: true,
+            winner: 'hostile',
+            how: ['down'],
+            rounds: (characterState.fight || {}).round || 1,
+          },
+        }
+      : combat.play.afterTurn(canonWorld, saved ? { ...after, down: saved.down } : after, {
+          dice,
+        }) ||
+        (characterState.down
+          ? // Down with no fight (the fight just ended): what becomes of them.
+            combat.play.afterFight(canonWorld, saved ? { ...after, down: saved.down } : after, {
+              dice,
+            })
+          : { mutations: [], lines: [] });
   let moved = '';
   if (map && spent > 0) {
     const feature = maps.at(map, cell).feature;
@@ -795,19 +829,28 @@ function evaluateEndTurn(characterState, canonWorld, dice) {
     outcome: 'success',
     mutations: [
       { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
-      // Knocked out in the round (L-824), the time they lie there too.
-      { target: 'save', op: 'set-flag', path: 'time', value: ends + (round.lost || 0) },
+      { target: 'save', op: 'set-flag', path: 'time', value: ends },
       { op: 'increment', path: 'worldClock', value: 1 },
       ...ticked.mutations,
-      // The round after the conditions' tick: what it does to the sheet wins.
+      ...(saved && saved.outcome !== 'dead'
+        ? [{ target: 'save', op: 'set-flag', path: 'down', value: saved.down }]
+        : []),
+      // The round after the conditions' tick: what it does to the sheet (and
+      // the time, coming round) wins.
       ...round.mutations,
     ],
     constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved].concat(
       ticked.lines,
+      saved ? [saved.line] : [],
       round.lines
     ),
-    ...(ticked.roll ? { roll: ticked.roll } : {}),
+    ...(saved
+      ? { roll: rolled(saved.roll, 'dying save', checks.systemOf(canonWorld)) }
+      : ticked.roll
+        ? { roll: ticked.roll }
+        : {}),
     ...(round.fight ? { fight: round.fight } : {}),
+    ...(round.fallen ? { fallen: round.fallen } : {}),
   };
 }
 
@@ -835,24 +878,25 @@ function fightStarted(characterState, canonWorld, options) {
   const begun = combat.play.begin(canonWorld, characterState, options);
   if (!begun) return null;
   const system = checks.systemOf(canonWorld);
-  const lost = begun.rounds * clock.turnSeconds(canonWorld, true) + (begun.lost || 0);
+  const lost = begun.rounds * clock.turnSeconds(canonWorld, true);
   return {
     outcome: 'success',
-    mutations: begun.mutations.concat(
-      lost
-        ? [
-            {
-              target: 'save',
-              op: 'set-flag',
-              path: 'time',
-              value: clock.timeOf(characterState) + lost,
-            },
-          ]
-        : []
-    ),
+    // The rounds' time first: coming round after a fall (L-827) sets its own.
+    mutations: (lost
+      ? [
+          {
+            target: 'save',
+            op: 'set-flag',
+            path: 'time',
+            value: clock.timeOf(characterState) + lost,
+          },
+        ]
+      : []
+    ).concat(begun.mutations),
     constraints: begun.lines,
     roll: { ...rolled(begun.roll, 'initiative', system), verdict: begun.roll.verdict },
     fight: begun.fight,
+    ...(begun.fallen ? { fallen: begun.fallen } : {}),
   };
 }
 
@@ -884,11 +928,55 @@ const HOW_LONG =
   'How long? Wait a number of minutes, or until dawn, morning, midday, afternoon, evening ' +
   'or night.';
 
+// A short or long rest (L-827; DF5; ../loom-modules/combat/rests.js): its
+// hours, what it restores, once a day for a long one; somewhere dangerous it
+// may be broken, and hostiles there come for the player.
+function evaluateRest(kind, characterState, canonWorld, dice) {
+  const result = combat.rests.rest(canonWorld, characterState, kind, { dice });
+  if (result.refused) return { ...blocked(result.refused), plain: true };
+  const mutations = [
+    { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
+    { target: 'save', op: 'set-flag', path: 'time', value: result.to },
+    { op: 'increment', path: 'worldClock', value: 1 },
+    setSheet(result.sheet),
+    { target: 'save', op: 'set-flag', path: 'rested', value: result.rested },
+  ];
+  const resolution = {
+    outcome: result.interrupted ? 'failure' : 'success',
+    mutations,
+    constraints: result.lines,
+    time: travel.timeSpent(clock.timeOf(characterState), result.hours * clock.HOUR),
+    rest: { kind, hours: result.hours, ...(result.interrupted ? { interrupted: true } : {}) },
+  };
+  if (!result.interrupted) return resolution;
+  // Broken: hostiles at the place come for the player.
+  const after = {
+    ...characterState,
+    time: result.to,
+    character: { ...characterState.character, sheet: result.sheet },
+  };
+  const fought = fightStarted(after, canonWorld, { by: 'event', ambushers: 'hostile', dice });
+  if (!fought) return resolution;
+  return {
+    ...resolution,
+    mutations: mutations.concat(fought.mutations),
+    constraints: resolution.constraints.concat(fought.constraints),
+    roll: fought.roll,
+    fight: fought.fight,
+    ...(fought.fallen ? { fallen: fought.fallen } : {}),
+  };
+}
+
 function evaluateWait(proposedAction, characterState, canonWorld, dice) {
   const turn = turnStateOf(characterState);
   if (turn.actionUsed) return blocked(ACTED);
   if (combat.play.fightOf(characterState)) return { ...blocked(NO_REST), plain: true };
   const params = proposedAction.params || {};
+  // A short or long rest (L-827), by the system's rests.
+  const kind = String(params.rest || '').toLowerCase();
+  if (combat.rests.KINDS.includes(kind)) {
+    return evaluateRest(kind, characterState, canonWorld, dice);
+  }
   // Sleeping or resting, as the player put it ("sleep until dawn").
   const how = WAIT_VERBS[String(params.how || '').toLowerCase()] || WAIT_VERBS[proposedAction.verb];
   const now = clock.timeOf(characterState);
@@ -1217,6 +1305,15 @@ function afterMove(resolution, characterState, canonWorld, dice) {
 
 function evaluate(proposedAction, worldState, characterState, dice, canonWorld, known, found) {
   let resolution;
+  // Down (L-827): nothing but ending the turn.
+  if (characterState.down && proposedAction.verb !== 'end-turn') {
+    return Object.freeze({
+      ...blocked(DOWN),
+      mutations: Object.freeze([]),
+      constraints: Object.freeze([DOWN]),
+      plain: true,
+    });
+  }
   const held = proposedAction.verb === 'move' ? heldBy(canonWorld, characterState) : null;
   if (held) {
     resolution = { ...blocked(held), plain: true };
@@ -1262,10 +1359,15 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     ...(resolution.ruled ? { ruled: true } : {}),
     // The attack made this turn (L-822), for the record and the GM.
     ...(resolution.attack ? { attack: Object.freeze({ ...resolution.attack }) } : {}),
+    // What became of the player down (L-827): coming round, dead, or a fate
+    // for NARRATE to choose.
+    ...(resolution.fallen ? { fallen: Object.freeze({ ...resolution.fallen }) } : {}),
     // A fight started or ended this turn (L-821), for the GM.
     ...(resolution.fight ? { fight: Object.freeze({ ...resolution.fight }) } : {}),
     // A hazard walked into (L-815), for the GM.
     ...(resolution.hazard ? { hazard: Object.freeze({ ...resolution.hazard }) } : {}),
+    // A rest taken (L-827), for the GM.
+    ...(resolution.rest ? { rest: Object.freeze({ ...resolution.rest }) } : {}),
     // The time it took and the dawns and dusks on the way (L-373), for the GM (L-375).
     ...(resolution.time ? { time: Object.freeze({ ...resolution.time }) } : {}),
     ...(resolution.walked ? { walked: Object.freeze(resolution.walked) } : {}),

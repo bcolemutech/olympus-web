@@ -113,6 +113,9 @@ function mapView(canonWorld, save, record, townRecord) {
     // character's speed, whether its action is used, and any plan kept.
     turn: turnView(save),
     fight: combat.play.viewOf(save),
+    // The player down (L-827: dying, stable or out), and a story that ended.
+    down: save.down || null,
+    ended: save.ended || null,
     // The save's time, for the map's clock (L-376): "Day 1, evening".
     time: clock.timeView(clock.timeOf(save)),
     // The world's game system as players read it, for the rules reference

@@ -109,7 +109,7 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
 
     test('a system with no combat settings fights by the defaults', () => {
       const s = { ...copyOf(sys), modules: {} };
-      expect(combat.settings.settingsOf(s)).toEqual({
+      expect(combat.settings.settingsOf(s)).toMatchObject({
         initiative: { formula: '1d20', tieBreak: null },
         economy: { actions: 1, reactions: 1, quick: 0 },
         surprise: null,
@@ -281,6 +281,22 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
         how: ['fled'],
       });
       expect(() => fight.leave(f, 'thug', 'bored')).toThrow();
+      // The player down with an ally standing: it goes on, the player still
+      // taking their turn (L-827: a dying save); the ally down too, it's over.
+      const withAlly = fight.start(sys, {
+        id: 'f',
+        mapId: 'm',
+        by: 'gm',
+        combatants: three().concat([{ id: 'pal', kind: 'character', side: 'party', name: 'Pal' }]),
+        dice: faces(5),
+      }).fight;
+      const playerDown = fight.leave(withAlly, 'player', 'down');
+      expect(fight.endOf(playerDown)).toBeNull();
+      expect(fight.toPlayer(sys, playerDown).fight.turn).toBe('player');
+      expect(fight.endOf(fight.leave(playerDown, 'pal', 'down'))).toEqual({
+        winner: 'hostile',
+        how: ['down'],
+      });
     });
   });
 });

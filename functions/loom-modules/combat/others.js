@@ -14,9 +14,10 @@
  *                  each; failing, they run for the nearest way off the map,
  *                  or surrender with no way out. A cowardly fighter left with
  *                  a quarter of its health or less runs without a roll.
- *   The player at 0  is knocked out until L-827 (decided 2026-10-21): the
- *                  fight ends, their foes the winners, and they come round an
- *                  hour later with 1 health where they fell.
+ *   The player at 0  falls by the system's down kind (./down.js; L-827):
+ *                  dying, out, or a wound that keeps them up. Down, they leave
+ *                  the fight, which goes on while an ally of theirs stands;
+ *                  nobody targets them.
  *
  * Pure: the dice come from the caller. Works on copies and returns what
  * changed, for ./play.js to write.
@@ -27,16 +28,15 @@ const sheets = require('../../loom-canon/sheets');
 const effects = require('../../loom-canon/effects');
 const conditions = require('../../loom-canon/conditions');
 const maps = require('../../loom-canon/maps');
-const clock = require('../../loom-canon/clock');
 const fight = require('./fight');
 const tactics = require('./tactics');
 const { strike, spendAmmo } = require('./strike');
 const { attacksOf } = require('./attacks');
 const { settingsOf } = require('./settings');
 const figures = require('./figures');
+const down = require('./down');
 
 const { PLAYER } = fight;
-const KNOCKED_OUT = clock.HOUR;
 const copyOf = (v) => JSON.parse(JSON.stringify(v));
 const key = (cell) => cell.x + ',' + cell.y;
 
@@ -48,7 +48,7 @@ const key = (cell) => cell.x + ',' + cell.y;
  *
  * Returns `{ fight (null when it ended), figures, sheet (the player's, when
  * changed), lines, rounds, turns: [{ id, path, attack? }], ended?: { winner,
- * how }, knockedOut?: true }`.
+ * how }, down?: the player's state when they fell }`.
  */
 function playOthers(world, save, { dice, current = false, now = 0 }) {
   const system = checks.systemOf(world);
@@ -62,7 +62,7 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
   const turns = [];
   let rounds = 0;
   let ended = null;
-  let knockedOut = false;
+  let playerDown = null;
   const { map, cell: playerCell } = maps.positionOf(world, save);
   const doors = ((save && save.doors) || {})[map ? map.id : ''] || {};
   const view = () => figures.withFigures(world, { ...save, figures: states });
@@ -240,11 +240,14 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
         sheet = r.sheet;
         sheetChanged = true;
         if (r.down) {
-          // Knocked out until L-827 (decided 2026-10-21).
-          sheet.resources[health] = { ...sheet.resources[health], current: 1 };
-          knockedOut = true;
-          f = fight.leave(f, PLAYER, 'down');
-          lines.push('You fall, knocked out. You come round an hour later, battered.');
+          // At 0, by the system's down kind (L-827).
+          const fell = down.fall(system, sheet);
+          sheet = fell.sheet;
+          lines.push(...fell.lines);
+          if (fell.down) {
+            playerDown = fell.down;
+            f = fight.leave(f, PLAYER, 'down');
+          }
         }
       } else {
         states[target.id] = {
@@ -277,7 +280,7 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
     checkMorale();
     const over = fight.endOf(f);
     if (over) ended = over;
-    return Boolean(over) || knockedOut;
+    return Boolean(over);
   };
 
   // What the player's turn did may have shaken their foes (a fall).
@@ -286,7 +289,7 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
     act(f.turn);
     done();
   }
-  for (let i = 0; !ended && !knockedOut && i < f.order.length * 3; i++) {
+  for (let i = 0; !ended && i < f.order.length * 3; i++) {
     const step = fight.next(f, settings.economy);
     f = step.fight;
     if (step.newRound) rounds += 1;
@@ -297,7 +300,6 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
   return finish();
 
   function finish() {
-    if (!ended && knockedOut) ended = { winner: 'hostile', how: ['down'] };
     return {
       fight: ended ? null : f,
       endedFight: ended ? f : null,
@@ -307,9 +309,9 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
       rounds,
       turns,
       ...(ended ? { ended } : {}),
-      ...(knockedOut ? { knockedOut: true, lost: KNOCKED_OUT } : {}),
+      ...(playerDown ? { down: playerDown } : {}),
     };
   }
 }
 
-module.exports = { playOthers, KNOCKED_OUT };
+module.exports = { playOthers };
