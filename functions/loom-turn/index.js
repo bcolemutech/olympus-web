@@ -138,6 +138,10 @@ async function runTurnPipeline(params) {
     worldId,
     saveId,
   });
+  // A question asked of a complicated action last turn (L-826; CB1): what the
+  // player types next is read as the answer; anything they do drops it.
+  const asked = save.asked || null;
+  if (asked) await saveRef.update({ asked: FieldValue.delete() });
 
   // A story that has ended (L-827: the character died) takes no more turns.
   if (save.ended) {
@@ -419,6 +423,7 @@ async function runTurnPipeline(params) {
       save,
       worldState,
       known,
+      asked,
     });
   }
   const resolution = await adjudicateAction({
@@ -435,7 +440,13 @@ async function runTurnPipeline(params) {
     resolution.outcome === 'blocked' &&
     (resolution.constraints[0] === ACTED || resolution.plain)
   ) {
+    // A complicated action (L-826): its question, kept for the answer. Like
+    // a refusal, it spends nothing: no action, no time.
+    if (resolution.ask) {
+      await saveRef.update({ asked: { action: actionText, question: resolution.ask } });
+    }
     return {
+      ...(resolution.ask ? { asked: resolution.ask } : {}),
       narration: resolution.constraints[0],
       stateSummary: save.recentSummary || '',
       suggestedActions: [],
