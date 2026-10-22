@@ -258,10 +258,14 @@ function fateMutations(world, save, fate, { sheet, hours = FATE_HOURS }) {
       }
     }
     if (which === 'captured') mutations.push(setSave('privateFlags.captured', true));
-    line =
-      which === 'captured'
-        ? `You come round hours later in ${settlement ? settlement.name : 'a cell'}, a captive.`
-        : `You come round hours later in ${settlement ? settlement.name : 'safety'}: someone carried you there.`;
+    // With no settlement in the world, they come round where they fell.
+    line = !settlement
+      ? which === 'captured'
+        ? 'You come round hours later where you fell, bound.'
+        : 'You come round hours later where you fell; someone tended your wounds.'
+      : which === 'captured'
+        ? `You come round hours later in ${settlement.name}, a captive.`
+        : `You come round hours later in ${settlement.name}: someone carried you there.`;
   }
   return { mutations, line, fate: which };
 }

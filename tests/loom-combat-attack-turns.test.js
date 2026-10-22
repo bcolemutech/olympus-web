@@ -56,7 +56,8 @@ const mockCases = {
     system: SCIFI,
     melee: 'knife',
     ranged: 'pistol',
-    skills: { Melee: 2, Shooting: 2 },
+    // Athletics: Grell's blows (L-824: foes fight back) are dodged.
+    skills: { Melee: 2, Shooting: 2, Athletics: 2 },
     // Tough: 8 Health.
     grell: { attributes: { Body: 5, Reflex: 3, Mind: 3, Presence: 3 } },
   },
@@ -149,6 +150,7 @@ describe.each(Object.keys(mockCases))('attacks under %s', (id) => {
   async function onTheMap(saveId) {
     const sheet = sheets.defaultSheet(c.system);
     sheet.skills = { ...sheet.skills, ...c.skills };
+    sheet.attributes = { ...sheet.attributes, ...(c.attributes || {}) };
     await db
       .collection('loom_saves')
       .doc(saveId)
