@@ -14,6 +14,13 @@
  *                  each; failing, they run for the nearest way off the map,
  *                  or surrender with no way out. A cowardly fighter left with
  *                  a quarter of its health or less runs without a roll.
+ *   Position (L-823)  each attack by where the two stand (./position.js:
+ *                  range, cover, flanking, Dodge), and the target's
+ *                  defending reaction; each walk draws reactions (./
+ *                  reactions.js: leaving reach, the player's readied attack),
+ *                  and a fighter struck down on the way stops there. The
+ *                  player's Dodge and readied attack end when their turn
+ *                  comes round.
  *   The player at 0  falls by the system's down kind (./down.js; L-827):
  *                  dying, out, or a wound that keeps them up. Down, they leave
  *                  the fight, which goes on while an ally of theirs stands;
@@ -35,6 +42,8 @@ const { attacksOf } = require('./attacks');
 const { settingsOf } = require('./settings');
 const figures = require('./figures');
 const down = require('./down');
+const position = require('./position');
+const reactions = require('./reactions');
 
 const { PLAYER } = fight;
 const copyOf = (v) => JSON.parse(JSON.stringify(v));
@@ -47,7 +56,7 @@ const key = (cell) => cell.x + ',' + cell.y;
  * and square); `now` the time the turns are played at.
  *
  * Returns `{ fight (null when it ended), figures, sheet (the player's, when
- * changed), lines, rounds, turns: [{ id, path, attack? }], ended?: { winner,
+ * changed), lines, rounds, turns: [{ id, path, attack?, reactions? }], ended?: { winner,
  * how }, down?: the player's state when they fell }`.
  */
 function playOthers(world, save, { dice, current = false, now = 0 }) {
@@ -138,7 +147,7 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
 
   // One fighter's turn.
   const act = (id) => {
-    const c = f.combatants[id];
+    let c = f.combatants[id];
     const world2 = view();
     const character = world2.characters[id];
     if (!character || character.retired || !character.cell) {
@@ -193,37 +202,96 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
       doors,
       health,
     });
-    const record = { id, path: plan.path.concat(plan.back) };
-    const last = record.path.length ? record.path[record.path.length - 1] : null;
+    const record = { id, path: [] };
+    // Walking, with the reactions it draws on the way (L-823: leaving
+    // someone's reach, a readied attack). Struck down, they stop there.
+    const walk = (path, from) => {
+      if (!path.length) return { reached: 0, down: null };
+      const r = reactions.reactToWalk(system, {
+        map,
+        doors,
+        fight: f,
+        mover: { id, side: c.side, name: character.name, sheet: mine },
+        from,
+        path,
+        fighters: fighters().filter((x) => x.id !== id),
+        now,
+        dice,
+      });
+      f = r.fight;
+      c = f.combatants[id];
+      mine = r.sheet;
+      lines.push(...r.lines);
+      for (const [rid, s] of Object.entries(r.sheets)) {
+        if (rid === PLAYER) {
+          sheet = s;
+          sheetChanged = true;
+        } else states[rid] = { ...(states[rid] || {}), sheet: s };
+      }
+      if (r.struck.length) record.reactions = (record.reactions || []).concat(r.struck);
+      const walked = path.slice(0, r.reached);
+      record.path.push(...walked);
+      if (walked.length) moved(walked[walked.length - 1]);
+      return r;
+    };
     const moved = (cell) => {
       states[id] = { ...(states[id] || {}), cell: { x: cell.x, y: cell.y } };
     };
-    if (plan.path.length) moved(plan.path[plan.path.length - 1]);
-    if (plan.fled) {
-      states[id] = { ...(states[id] || {}), gone: 'fled' };
+    const fell = (how) => {
+      states[id] = { ...(states[id] || {}), sheet: mine, down: how };
+      f = fight.leave(f, id, 'down');
+      turns.push(record);
+    };
+    const there = walk(plan.path, me.cell);
+    if (there.down) return fell(there.down);
+    if (plan.fled && there.reached === plan.path.length) {
+      states[id] = { ...(states[id] || {}), sheet: mine, gone: 'fled' };
       f = fight.leave(f, id, 'fled');
       lines.push(`${character.name} flees.`);
       turns.push(record);
       return;
     }
-    if (plan.attack) {
+    const from = record.path.length ? record.path[record.path.length - 1] : me.cell;
+    if (plan.attack && !plan.fled) {
       const { attack, target } = plan.attack;
       const spent = spendAmmo(system, mine, attack);
       mine = spent.sheet;
       const targetSheet = target.id === PLAYER ? sheet : sheetOf(target.id, target);
+      // Where they stand (L-823): range, cover, flanking, Dodge; and the
+      // target's defending reaction, if they have one left.
+      const theirs = f.combatants[target.id] || {};
+      const terms = position.termsFor(system, {
+        map,
+        doors,
+        attack,
+        from,
+        to: target.cell,
+        friends: friends.filter((x) => x.cell).map((x) => x.cell),
+        dodging: Boolean(theirs.dodging),
+      });
+      const defend =
+        theirs.reactionsLeft > 0 ? position.defendOf(system, targetSheet, attack) : null;
       const struck = strike(system, {
         attacker: { name: character.name, sheet: mine },
         attack,
+        bonus: terms.bonus,
         targets: [
-          { id: target.id, name: target.id === PLAYER ? 'you' : target.name, sheet: targetSheet },
+          {
+            id: target.id,
+            name: target.id === PLAYER ? 'you' : target.name,
+            sheet: targetSheet,
+            guard: terms.guard,
+            ...(defend ? { reaction: defend } : {}),
+          },
         ],
         now,
         dice,
       });
       const r = struck.results[0];
+      if (r.reacted) f.combatants[target.id].reactionsLeft -= 1;
       lines.push(
         ...r.lines.map((line, i) =>
-          i === 0
+          i === 0 && !r.reacted
             ? line.replace(/\.$/, '') +
               ` (${struck.roll.total} against ${r.opposed ? r.opposed.total : r.difficulty}).`
             : line
@@ -234,6 +302,8 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
         target: target.id,
         hit: r.hit,
         ...(r.damage ? { damage: r.damage.total } : {}),
+        ...(terms.cover ? { cover: terms.cover } : {}),
+        ...(r.reacted ? { reacted: r.reacted.id } : {}),
         roll: struck.roll.total,
       };
       if (target.id === PLAYER) {
@@ -241,11 +311,11 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
         sheetChanged = true;
         if (r.down) {
           // At 0, by the system's down kind (L-827).
-          const fell = down.fall(system, sheet);
-          sheet = fell.sheet;
-          lines.push(...fell.lines);
-          if (fell.down) {
-            playerDown = fell.down;
+          const fall = down.fall(system, sheet);
+          sheet = fall.sheet;
+          lines.push(...fall.lines);
+          if (fall.down) {
+            playerDown = fall.down;
             f = fight.leave(f, PLAYER, 'down');
           }
         }
@@ -257,8 +327,10 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
         };
         if (r.down && f.combatants[target.id]) f = fight.leave(f, target.id, 'down');
       }
+      c = f.combatants[id];
     }
-    if (plan.back.length) moved(plan.back[plan.back.length - 1]);
+    const back = walk(plan.back, from);
+    if (back.down) return fell(back.down);
     // Their conditions tick at the end of their turn (L-815).
     if ((mine.conditions || []).length) {
       const t = effects.endOfTurn(system, mine, { now, dice });
@@ -272,7 +344,6 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
       );
     }
     states[id] = { ...(states[id] || {}), sheet: mine };
-    if (last && !states[id].cell) moved(last);
     turns.push(record);
   };
 
@@ -300,6 +371,12 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
   return finish();
 
   function finish() {
+    // The player's turn again: their Dodge and readied attack are over (L-823).
+    const mine = !ended && f.turn === PLAYER && f.combatants[PLAYER];
+    if (mine) {
+      delete mine.dodging;
+      delete mine.readied;
+    }
     return {
       fight: ended ? null : f,
       endedFight: ended ? f : null,

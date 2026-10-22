@@ -25,6 +25,12 @@
  *                   is spent by the caller (spendAmmo).
  *   At 0 (DF4)      a lethal attack kills, unless struck to subdue; a
  *                   non-lethal one knocks out.
+ *   Position (L-823) terms from where they stand (./position.js): `bonus`
+ *                   added to the attack's roll (long range, flanking),
+ *                   `guard` to the target's defence or roll (cover, Dodge),
+ *                   each named in the breakdown; and the target's defending
+ *                   reaction (a trait's), used only when it turns a hit
+ *                   into a miss, the caller spending their reaction.
  *
  * Pure: the dice come from the caller; every sheet returned is new.
  */
@@ -52,13 +58,26 @@ function valuesOf(system, sheet, dice) {
   return { values, mods, labels };
 }
 
+// A formula's tree with terms added (L-823), each a named value: `{ name,
+// value }`, the value a formula worked out on `values`.
+function withTerms(tree, terms, { values, labels, system, dice, prefix }) {
+  let out = tree;
+  (terms || []).forEach((term, i) => {
+    const id = `@${prefix}${i}`;
+    values[id] = formula.evaluate(String(term.value), { values, system, dice }).total;
+    labels[id] = term.name;
+    out = { k: 'bin', op: '+', a: out, b: { k: 'name', v: id } };
+  });
+  return out;
+}
+
 /**
  * The attack's roll (AT1): its formula on the attacker's sheet, with their
  * conditions and, striking to subdue with a lethal attack, the system's
  * penalty, each a named term. Returns `{ total, type, breakdown, natural,
  * formula, line }`.
  */
-function rollAttack(system, { sheet, attack, subdue = false, dice }) {
+function rollAttack(system, { sheet, attack, subdue = false, bonus = [], dice }) {
   const { values, mods, labels } = valuesOf(system, sheet, dice);
   let tree = checks.withConditions(String(attack.attack), mods, values, labels);
   const penalty = settingsOf(system).subduePenalty;
@@ -67,6 +86,7 @@ function rollAttack(system, { sheet, attack, subdue = false, dice }) {
     labels['@subdue'] = 'Subdue';
     tree = { k: 'bin', op: '+', a: tree, b: { k: 'name', v: '@subdue' } };
   }
+  tree = withTerms(tree, bonus, { values, labels, system, dice, prefix: 'bonus' });
   const result = formula.evaluate(tree, { values, system, dice, labels });
   return {
     total: result.total,
@@ -87,14 +107,33 @@ function hitOf(system, roll, target, dice) {
   const s = settingsOf(system).attack;
   const { values, mods, labels } = valuesOf(system, target.sheet, dice);
   const up = rising(system);
+  const guard = { values, labels, system, dice, prefix: 'guard' };
+  // A defending reaction (L-823): its value, added only if it saves them.
+  const reaction = target.reaction
+    ? {
+        ...target.reaction,
+        total: formula.evaluate(String(target.reaction.value), { values, system, dice }).total,
+      }
+    : null;
   if (s.hit === 'opposed' && s.defend) {
-    const tree = checks.withConditions(String(s.defend), mods, values, labels);
+    const tree = withTerms(
+      checks.withConditions(String(s.defend), mods, values, labels),
+      target.guard,
+      guard
+    );
     const theirs = formula.evaluate(tree, { values, system, dice, labels });
     const tieToAttacker = system.checks.ties === 'attacker';
-    const bar = up
-      ? theirs.total + (tieToAttacker ? 0 : 1)
-      : theirs.total - (tieToAttacker ? 0 : 1);
-    const hit = up ? roll.total >= bar : roll.total <= bar;
+    const barOf = (total) =>
+      up ? total + (tieToAttacker ? 0 : 1) : total - (tieToAttacker ? 0 : 1);
+    const hits = (bar) => (up ? roll.total >= bar : roll.total <= bar);
+    let bar = barOf(theirs.total);
+    let hit = hits(bar);
+    let reacted = null;
+    if (hit && reaction && !hits(barOf(theirs.total + reaction.total))) {
+      bar = barOf(theirs.total + reaction.total);
+      hit = false;
+      reacted = { id: reaction.id, name: reaction.name, value: reaction.total };
+    }
     const read = checks.degreeOf(system, {
       result: roll.total,
       difficulty: bar,
@@ -117,8 +156,9 @@ function hitOf(system, roll, target, dice) {
       degree,
       extra: hit ? Math.abs(roll.total - bar) : 0,
       difficulty: bar,
+      ...(reacted ? { reacted } : {}),
       opposed: {
-        total: theirs.total,
+        total: theirs.total + (reacted ? reacted.value : 0),
         type: theirs.type,
         breakdown: theirs.breakdown,
         natural: checks.naturalOf(theirs.breakdown),
@@ -127,21 +167,36 @@ function hitOf(system, roll, target, dice) {
       },
     };
   }
-  const difficulty = formula.evaluate(String(s.defence), { values, system, dice }).total;
-  const degree = checks.degreeOf(system, {
-    result: roll.total,
-    difficulty,
-    natural: roll.natural,
-    type: roll.type,
-    values,
-    dice,
-  });
+  const tree = withTerms(formula.parse(String(s.defence)), target.guard, guard);
+  const read = formula.evaluate(tree, { values, system, dice, labels });
+  const degreeAt = (difficulty) =>
+    checks.degreeOf(system, {
+      result: roll.total,
+      difficulty,
+      natural: roll.natural,
+      type: roll.type,
+      values,
+      dice,
+    });
+  let difficulty = read.total;
+  let degree = degreeAt(difficulty);
+  let reacted = null;
+  if (checks.SUCCEEDS.includes(degree) && reaction) {
+    const raised = degreeAt(difficulty + reaction.total);
+    if (!checks.SUCCEEDS.includes(raised)) {
+      difficulty += reaction.total;
+      degree = raised;
+      reacted = { id: reaction.id, name: reaction.name, value: reaction.total };
+    }
+  }
   return {
     hit: checks.SUCCEEDS.includes(degree),
     degree,
     extra: 0,
     difficulty,
     defence: difficulty,
+    defenceLine: read.breakdown.named,
+    ...(reacted ? { reacted } : {}),
   };
 }
 
@@ -235,10 +290,19 @@ function against(system, { roll, attack, subdue = false, target, attackerName, n
     degree: read.degree,
     difficulty: read.difficulty,
     ...(read.defence !== undefined ? { defence: read.defence } : {}),
+    ...(read.defenceLine !== undefined ? { defenceLine: read.defenceLine } : {}),
     ...(read.opposed ? { opposed: read.opposed } : {}),
+    ...(read.reacted ? { reacted: read.reacted } : {}),
   };
   if (!read.hit) {
-    return { ...base, sheet, down: null, lines: [`${by} miss${by === 'You' ? '' : 'es'} ${who}.`] };
+    const you = target.id === 'player';
+    const lines = read.reacted
+      ? [
+          `${you ? 'You' : who} use${you ? '' : 's'} ${read.reacted.name}: ` +
+            `${by === 'You' ? 'your' : by + "'s"} blow misses.`,
+        ]
+      : [`${by} miss${by === 'You' ? '' : 'es'} ${who}.`];
+    return { ...base, sheet, down: null, lines };
   }
   const damage = rollDamage(system, {
     sheet: target.attackerSheet,
@@ -294,10 +358,12 @@ function against(system, { roll, attack, subdue = false, target, attackerName, n
 /**
  * An attack (AT1–AT5): rolled once by the attacker, read against each target
  * (one, or everyone an area catches). `attacker` { name, sheet }, `targets`
- * [{ id, name, sheet }]. Returns `{ roll, results }`.
+ * [{ id, name, sheet, guard?, reaction? }] (L-823: their terms from where
+ * they stand, and a defending reaction they can use), `bonus` the attacker's
+ * terms. Returns `{ roll, results }`, a result's `reacted` the reaction used.
  */
-function strike(system, { attacker, attack, targets, subdue = false, now = 0, dice }) {
-  const roll = rollAttack(system, { sheet: attacker.sheet, attack, subdue, dice });
+function strike(system, { attacker, attack, targets, subdue = false, bonus = [], now = 0, dice }) {
+  const roll = rollAttack(system, { sheet: attacker.sheet, attack, subdue, bonus, dice });
   const results = targets.map((target) =>
     against(system, {
       roll,

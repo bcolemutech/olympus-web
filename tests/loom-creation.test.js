@@ -69,8 +69,9 @@ describe('a system’s creation settings, checked on save', () => {
     expect(
       bad({ method: 'array', values: [15, 14, 13, 12, 10, 8], skills: { trained: 99, rank: 2 } })
     ).toEqual(['creation.skills.trained must be a whole number from 0 to 13.']);
-    expect(bad({ method: 'array', values: [15, 14, 13, 12, 10, 8], traits: { pick: 1 } })).toEqual([
-      'creation.traits.pick must be a whole number from 0 to 0.',
+    // One trait to pick from (L-823: Parry).
+    expect(bad({ method: 'array', values: [15, 14, 13, 12, 10, 8], traits: { pick: 2 } })).toEqual([
+      'creation.traits.pick must be a whole number from 0 to 1.',
     ]);
   });
 });

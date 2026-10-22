@@ -103,7 +103,13 @@ function attacksSection(canonWorld, save) {
     'the id of the attack they use (' +
     list.map((a) => `${a.id} (${a.name})`).join(', ') +
     '; leave it out if they name none), and params.subdue: true when they mean to knock ' +
-    'out rather than kill. Never add a check to an attack.\n\n'
+    'out rather than kill. Never add a check to an attack.\n' +
+    // A fight's other actions (L-823): the rules', no check either.
+    'In a fight: to run further this turn, use the verb "dash"; to make themselves hard to ' +
+    'hit, "dodge"; to back away without drawing blows, "withdraw"; to wait with an attack ' +
+    'for a foe to come close, "ready" with params.attack and, if they name one, target ' +
+    'that foe; to work something beside them (a lever, a winch), "use" with targets ' +
+    '["feature:<id>"]. Never add a check to these.\n\n'
   );
 }
 

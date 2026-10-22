@@ -57,9 +57,21 @@
  *               formula or 'full' }, clears?: [condition] }; a long rest once
  *               a day. With none: a short rest an hour restoring nothing, a
  *               long one 8 hours restoring everything.
+ *   cover       { partial, heavy } (L-823; PS2): formulas added to the
+ *               defence (or the defender's roll) of someone behind a low
+ *               obstacle or a wall's end (partial), or a wall's corner or a
+ *               solid obstacle (heavy). With none, cover does nothing.
+ *   longRange   a formula added to a ranged attack past its normal range
+ *               (PS1), "-5". With none, nothing.
+ *   dodge       a formula added to the defence of someone who took the Dodge
+ *               action, until their next turn (TN5), "5". With none, nothing.
+ *   flanking    a formula added to a melee attack on someone with a friend of
+ *               the attacker on their far side (PS3), "2"; off (null) unless
+ *               set, as in both built-in systems.
  *
- * The rest of §4.1 (cover, flanking) is read by L-823: kept as given until
- * then, with a warning.
+ * Defending (TN4) isn't a setting: it is a reaction a trait gives
+ * (`reaction: { defend, against }`, ../../loom-canon/systems.js; decided
+ * 2026-10-22).
  *
  * Pure. `formula(value, where)` is the system check's own formula collector,
  * so the formulas here are checked with the rest of the system's.
@@ -78,11 +90,13 @@ const KEYS = [
   'morale',
   'down',
   'rests',
+  'cover',
+  'longRange',
+  'dodge',
+  'flanking',
 ];
-const LATER = {
-  cover: 'L-823',
-  flanking: 'L-823',
-};
+// Settings read by later stories: kept as given, with a warning.
+const LATER = {};
 const ECONOMY = { actions: [1, 1, 5], reactions: [1, 0, 5], quick: [0, 0, 5] };
 const DEFAULT_INITIATIVE = '1d20';
 
@@ -113,6 +127,12 @@ function settingsOf(system) {
     morale: isObject(given.morale) && isObject(given.morale.check) ? given.morale : null,
     down: downOf(given.down),
     rests: restsOf(given.rests),
+    cover: isObject(given.cover)
+      ? { partial: given.cover.partial ?? null, heavy: given.cover.heavy ?? null }
+      : { partial: null, heavy: null },
+    longRange: given.longRange ?? null,
+    dodge: given.dodge ?? null,
+    flanking: given.flanking ?? null,
   };
 }
 
@@ -418,6 +438,23 @@ function check(settings, { system, errors, warnings, formula }) {
           }
         }
       }
+    }
+  }
+  // Position (L-823): terms, each a formula.
+  const cover = settings.cover;
+  if (cover !== undefined) {
+    if (!isObject(cover)) errors.push(`${at}.cover must be { partial, heavy }.`);
+    else {
+      for (const key of Object.keys(cover)) {
+        if (!['partial', 'heavy'].includes(key)) {
+          errors.push(`${at}.cover: "${key}" isn't a kind of cover (partial, heavy).`);
+        } else formula(cover[key], `${at}.cover.${key}`);
+      }
+    }
+  }
+  for (const key of ['longRange', 'dodge', 'flanking']) {
+    if (settings[key] !== undefined && settings[key] !== null) {
+      formula(settings[key], `${at}.${key}`);
     }
   }
   // The attacks themselves are checked against the system once its shape is

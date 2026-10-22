@@ -15,10 +15,14 @@
  *       speed:      a formula: movement a turn (default 20), plus what traits add
  *       optional:   which optional parts are on: skills, traits, conditions, derived
  *       skills:     [{ id, name, attribute }]            (with 'skills')
- *       traits:     [{ id, name, description?, modifiers?, resist?, weak? }]
+ *       traits:     [{ id, name, description?, modifiers?, resist?, weak?,
+ *                   reaction? }]
  *                   (with 'traits'): modifiers { speed: formula } added while
  *                   it's held; resist and weak list damage types it halves or
- *                   doubles (L-822, combat's damageTypes)
+ *                   doubles (L-822, combat's damageTypes); reaction
+ *                   { defend, against? } a defending reaction it gives
+ *                   (L-823): the formula added to the holder's defence
+ *                   against melee, ranged or all attacks
  *       conditions: [{ id, name, description?, modifiers?, each?, noAction?, noMove?,
  *                   resist?, weak? }]
  *                   (with 'conditions'; L-815, ./conditions.js): what each does
@@ -58,6 +62,8 @@ const CREATION_METHODS = ['array', 'pointBuy', 'rolling'];
 // What a trait's modifiers may change (L-811); a condition's (L-815) may
 // also change any attribute, skill or resource.
 const MODIFIER_TARGETS = ['speed'];
+// What a trait's defending reaction works against (L-823).
+const REACTION_AGAINST = ['melee', 'ranged', 'all'];
 const { MODIFIER_KINDS: CONDITION_TARGETS } = require('./conditions');
 
 const formulaLanguage = require('./formula');
@@ -298,6 +304,23 @@ function validateSystem(input) {
         field: false,
         each: (t, at) => {
           checkDamageTypes(t, at, s, errors);
+          // A reaction it gives (L-823; combat TN4): defending, a term
+          // added to the holder's defence against an attack that would hit.
+          if (t.reaction !== undefined) {
+            const r = t.reaction;
+            if (!isObject(r) || r.defend === undefined) {
+              errors.push(`${at}.reaction must be { defend, against? }.`);
+            } else {
+              formula(r.defend, `${at}.reaction.defend`);
+              if (r.against !== undefined && !REACTION_AGAINST.includes(r.against)) {
+                errors.push(
+                  `${at}.reaction.against must be one of ${REACTION_AGAINST.join(', ')}.`
+                );
+              }
+              const extra = Object.keys(r).filter((k) => !['defend', 'against'].includes(k));
+              if (extra.length) errors.push(`${at}.reaction: "${extra[0]}" isn't part of one.`);
+            }
+          }
           if (t.modifiers === undefined) return;
           if (!isObject(t.modifiers)) {
             errors.push(`${at}.modifiers must map what it changes to a formula ({ speed: '5' }).`);

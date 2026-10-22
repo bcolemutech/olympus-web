@@ -3,7 +3,7 @@
 const loomCanon = require('../loom-canon');
 const { makeWorldState, turnStateOf } = require('../loom-models');
 const { interpretAction } = require('./interpret');
-const { adjudicateAction, ACTED } = require('./adjudicate');
+const { adjudicateAction, ACTED, rollDie } = require('./adjudicate');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
@@ -13,6 +13,7 @@ const { planTownStep, walksTown, townPlanOf } = require('./town-steps');
 const { lookInTown, townRecordOf } = require('./town-seen');
 const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const clock = require('../loom-canon/clock');
+const maps = require('../loom-canon/maps');
 const { systemOf } = require('../loom-canon/checks');
 const { withSpeed } = require('../loom-canon/sheets');
 const combat = require('../loom-modules/combat');
@@ -210,10 +211,41 @@ async function runTurnPipeline(params) {
       // What the save has seen on its map: the ground it may walk (L-635),
       // and the record its new sight is added to (L-632).
       const found = fresh.mapId ? await recordOf(transaction, saveRef, fresh.mapId) : null;
-      const planned =
+      let planned =
         action.verb === 'door'
           ? planDoor(canonWorld, fresh, action.door, action.open)
           : planStep(canonWorld, fresh, target, found && knownTo(canonWorld, fresh, found.record));
+      // In a fight, stepping out of a foe's reach draws its attack (L-823;
+      // PS4); struck down, the walk stops there.
+      const reacted =
+        planned.walked && (planned.cell || planned.exit)
+          ? combat.play.walkReactions(canonWorld, fresh, planned.walked, { dice: rollDie })
+          : null;
+      const struck = reacted
+        ? {
+            fight: reacted.fight,
+            figures: reacted.figures,
+            'character.sheet': reacted.sheet,
+            ...(reacted.down ? { down: reacted.down } : {}),
+          }
+        : {};
+      if (reacted) {
+        if (reacted.reached < planned.walked.length) {
+          const walked = planned.walked.slice(0, reacted.reached);
+          planned = {
+            cell: walked.length ? walked[walked.length - 1] : fresh.cell,
+            turn: { ...planned.turn, plan: null },
+            lines: reacted.lines,
+            walked,
+          };
+        } else if (planned.cell) {
+          planned = { ...planned, lines: reacted.lines.concat(planned.lines) };
+        } else {
+          // On to the way out: the blows written now, the leaving after.
+          transaction.update(saveRef, struck);
+          planned = { ...planned, reactionLines: reacted.lines };
+        }
+      }
       // A door opened on the way (L-624), or opened or closed by a tap
       // (L-625), stays so for this save.
       const door = planned.door || (planned.opened && { ...planned.opened, state: 'open' });
@@ -232,6 +264,7 @@ async function runTurnPipeline(params) {
           doorStatesOf(fresh, fresh.mapId)
         );
         transaction.update(saveRef, {
+          ...struck,
           cell: planned.cell,
           turn: planned.turn,
           ...(door ? { [`doors.${door.mapId}.${door.doorId}`]: door.state } : {}),
@@ -316,11 +349,16 @@ async function runTurnPipeline(params) {
       };
     }
     // The way out: walked there this turn, then left by, narrated (ADJUDICATE
-    // spends the walk, L-614).
-    return runTurnPipeline({
+    // spends the walk, L-614); the blows it drew on the way first (L-823).
+    const left = await runTurnPipeline({
       ...params,
       action: { verb: 'leave', exit: step.exit.id, name: step.exit.name },
     });
+    if (!step.reactionLines) return left;
+    return {
+      ...left,
+      narration: [step.reactionLines.join(' '), left.narration].filter(Boolean).join(' '),
+    };
   }
 
   let actionText = params.actionText;
@@ -332,6 +370,24 @@ async function runTurnPipeline(params) {
     // A short or long rest chosen in the Loom (L-827): no model reads it.
     actionText = 'take a ' + action.rest + ' rest';
     proposedAction = { verb: 'rest', targets: [], params: { rest: action.rest } };
+  } else if (action && ['dash', 'dodge', 'withdraw', 'ready', 'use'].includes(action.verb)) {
+    // A fight's other actions chosen in the Loom (L-823): no model reads them.
+    const target = action.target && (canonWorld.characters || {})[action.target];
+    const thing = action.feature && maps.positionOf(canonWorld, save).map;
+    const feature = thing && (thing.features || []).find((f) => f.id === action.feature);
+    actionText =
+      action.verb === 'use'
+        ? 'use ' + (feature ? feature.name : action.feature)
+        : action.verb + (target ? ' for ' + target.name : '');
+    proposedAction = {
+      verb: action.verb,
+      targets: action.feature
+        ? ['feature:' + action.feature]
+        : action.target
+          ? [String(action.target)]
+          : [],
+      params: action.attack ? { attack: String(action.attack) } : {},
+    };
   } else if (action && action.verb === 'attack') {
     // An attack chosen on the map (L-822): no model reads it.
     const target = (canonWorld.characters || {})[action.target];

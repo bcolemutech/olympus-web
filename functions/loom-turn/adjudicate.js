@@ -1093,6 +1093,19 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   if (stopped.length) {
     return { ...blocked("You can't act: you're " + stopped.join(' and ') + '.'), plain: true };
   }
+  // Dash, Dodge, Withdraw and Ready (L-823; TN5): the rules' own, unnarrated;
+  // Use something beside you, narrated.
+  const tactic = combatAction(proposedAction, characterState, canonWorld, inFight);
+  if (tactic) {
+    if (tactic.outcome === 'blocked') return { ...tactic, plain: true };
+    const spent = { ...spentAction(turn, inFight, canonWorld), ...(tactic.turn || {}) };
+    return {
+      ...tactic,
+      mutations: tactic.mutations.concat([
+        { target: 'save', op: 'set-flag', path: 'turn', value: spent },
+      ]),
+    };
+  }
   // An attack at someone on the map (L-822): by the combat module, its
   // reach or range its own; ruled, not narrated, unless a fight starts or ends.
   const attacked = attackOn(proposedAction, characterState, dice, canonWorld);
@@ -1130,6 +1143,93 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
     ],
     constraints: resolution.constraints.concat(fought ? fought.constraints : []),
     ...(fought && fought.fight ? { fight: fought.fight } : {}),
+  };
+}
+
+// The actions a fight offers besides attacking (L-823; TN5, PS4, TN4), each
+// spending the turn's action:
+//   dash      movement again, this turn (on a battle map, in a fight or not)
+//   dodge     harder to hit until the player's next turn (the system's dodge)
+//   withdraw  moving out of reach draws no attacks this turn
+//   ready     an attack (params.attack; their first by default) at the
+//             first foe (or targets[0]) to come into its reach or range,
+//             before the player's next turn
+//   use       something beside them on the map (a feature: a lever, a
+//             chest); what it does is the GM's to narrate (decided
+//             2026-10-22)
+// Returns a resolution, `turn` what to add to the turn, or null when the
+// action isn't one of these.
+const TACTICS = {
+  dash: 'dash',
+  sprint: 'dash',
+  dodge: 'dodge',
+  withdraw: 'withdraw',
+  disengage: 'withdraw',
+  ready: 'ready',
+  use: 'use',
+};
+const NO_FIGHT = "That's for a fight, and you aren't in one.";
+function combatAction(proposedAction, characterState, canonWorld, inFight) {
+  const kind = TACTICS[String(proposedAction.verb || '').toLowerCase()];
+  if (!kind) return null;
+  const params = proposedAction.params || {};
+  const { map } = maps.positionOf(canonWorld || {}, characterState);
+  const line = (text) => ({ outcome: 'success', mutations: [], constraints: [text], ruled: true });
+  const setFight = (f) => ({ target: 'save', op: 'set-flag', path: 'fight', value: f });
+  if (kind === 'use') {
+    const feature = (proposedAction.targets || []).find(
+      (t) => typeof t === 'string' && t.indexOf('feature:') === 0
+    );
+    if (!map || !feature) return null;
+    const unreached = outOfSightOrReach(proposedAction, characterState, canonWorld);
+    if (unreached) return blocked(unreached);
+    const thing = (map.features || []).find((f) => f.id === feature.slice(8));
+    if (!thing) return blocked(NOT_SEEN);
+    return { outcome: 'success', mutations: [], constraints: ['You use ' + thing.name + '.'] };
+  }
+  if (kind === 'dash') {
+    if (!map) return blocked('There is nowhere here to dash.');
+    const turn = turnStateOf(characterState);
+    const more = speedOf(characterState);
+    return {
+      ...line(`You dash: ${more} more squares of movement this turn.`),
+      turn: { movementLeft: turn.movementLeft + more },
+    };
+  }
+  if (!inFight) return blocked(NO_FIGHT);
+  const f = JSON.parse(JSON.stringify(inFight));
+  const me = f.combatants[combat.fight.PLAYER];
+  if (kind === 'dodge') {
+    me.dodging = true;
+    return {
+      ...line("You dodge: you're harder to hit until your next turn."),
+      mutations: [setFight(f)],
+    };
+  }
+  if (kind === 'withdraw') {
+    return {
+      ...line('You withdraw: moving away draws no attacks this turn.'),
+      turn: { withdrawn: true },
+    };
+  }
+  // Ready: which attack, and perhaps at whom.
+  const system = checks.systemOf(canonWorld);
+  const pick = combat.attackTurn.chosen(
+    system,
+    sheets.sheetOf(characterState) || sheets.defaultSheet(system),
+    params.attack
+  );
+  if (pick.refused) return blocked(pick.refused);
+  const target = (proposedAction.targets || []).find((t) => f.combatants[t] && t !== 'player');
+  me.readied = { attack: pick.attack.id, ...(target ? { target } : {}) };
+  const who = target ? ' for ' + f.combatants[target].name : '';
+  const reach = pick.attack.range ? 'range' : 'reach';
+  return {
+    ...line(
+      `You ready your ${pick.attack.name.toLowerCase()}${who}: ` +
+        `it strikes the first foe to come into its ${reach}.`
+    ),
+    mutations: [setFight(f)],
   };
 }
 
