@@ -31,6 +31,7 @@ const checks = require('../../loom-canon/checks');
 const sheets = require('../../loom-canon/sheets');
 const fight = require('./fight');
 const others = require('./others');
+const down = require('./down');
 
 const { PLAYER } = fight;
 const SIDES = ['party', 'hostile', 'neutral'];
@@ -195,6 +196,7 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
       difficulty: null,
       verdict: ordinal(place) + ' of ' + f.order.length,
     },
+    ...(played.fallen ? { fallen: played.fallen } : {}),
     fight: {
       ...(played.fight || {}),
       started: true,
@@ -208,9 +210,11 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
 /**
  * Everyone else's turns (./others.js), from fight `f`, as the save's
  * mutations and lines: the fight (or its end), every fighter's state in
- * `save.figures`, the player's sheet when hurt, and the time lost to being
- * knocked out (`lost`). Returns `{ mutations, lines, rounds, lost, turns,
- * fight? }`, `fight` its end for NARRATE.
+ * `save.figures`, the player's sheet when hurt, and their fall (`save.down`;
+ * L-827). A fight that ends with the player down has its aftermath
+ * (./down.js): coming round, death, or a fate for NARRATE to choose.
+ * Returns `{ mutations, lines, rounds, lost, turns, fight?, fallen? }`,
+ * `fight` its end for NARRATE, `fallen` what became of the player.
  */
 function othersPlay(world, save, f, { dice, current = false }) {
   const result = others.playOthers(
@@ -232,11 +236,26 @@ function othersPlay(world, save, f, { dice, current = false }) {
     });
   }
   const lines = result.lines.slice();
+  const fell = result.down || save.down || null;
+  if (result.down) mutations.push({ target: 'save', op: 'set-flag', path: 'down', value: fell });
   let ended = null;
+  let fallen = null;
   if (result.ended) {
     ended = ending(result.endedFight, result.ended);
     mutations.push(...ended.mutations);
     lines.push(...ended.lines);
+    if (fell) {
+      fallen = afterFall(world, save, {
+        f: result.endedFight,
+        winner: result.ended.winner,
+        sheet: result.sheet || sheets.sheetOf(save),
+        figures: result.figures,
+        down: fell,
+        dice,
+      });
+      mutations.push(...fallen.mutations);
+      lines.push(...fallen.lines);
+    }
   } else {
     mutations.push(setFight(result.fight));
     if (result.rounds) lines.push('Round ' + result.fight.round + '.');
@@ -245,11 +264,46 @@ function othersPlay(world, save, f, { dice, current = false }) {
     mutations,
     lines,
     rounds: result.rounds,
-    lost: result.lost || 0,
+    lost: 0,
     turns: result.turns,
-    ...(ended
-      ? { fight: { ...ended.fight, ...(result.knockedOut ? { knockedOut: true } : {}) } }
-      : {}),
+    ...(ended ? { fight: ended.fight } : {}),
+    ...(fallen ? { fallen: fallen.fallen } : {}),
+  };
+}
+
+/**
+ * The player down when a fight ends (DF1–DF3; ./down.js): their allies still
+ * standing tend them, or nobody does. Returns `{ mutations, lines, fallen:
+ * { outcome, sheet?, hours? } }`: coming round (written now), dead (the
+ * save ends; NARRATE writes the epilogue), or a fate for NARRATE to choose
+ * (written once it has, ../../loom-turn/index.js).
+ */
+function afterFall(world, save, { f, winner, sheet, figures: states, down: fell, dice }) {
+  const seen = require('./figures').withFigures(world, { ...save, figures: states || {} });
+  const allies = Object.entries(f.combatants)
+    .filter(([id, c]) => id !== PLAYER && c.side === 'party' && !c.out)
+    .map(([id]) =>
+      sheetFor(seen, { ...save, figures: states || {} }, seen.characters[id] || { id })
+    );
+  const after = down.aftermath(world, { sheet, down: fell, winner, allies, dice });
+  if (after.outcome === 'wake') {
+    return {
+      mutations: down.wakeMutations(world, save, { sheet, hours: after.hours }),
+      lines: after.lines,
+      fallen: { outcome: 'wake' },
+    };
+  }
+  if (after.outcome === 'dead') {
+    return {
+      mutations: down.deathMutations(save),
+      lines: after.lines,
+      fallen: { outcome: 'dead' },
+    };
+  }
+  return {
+    mutations: [{ target: 'save', op: 'set-flag', path: 'down', value: null }],
+    lines: after.lines,
+    fallen: { outcome: 'fate', sheet, hours: after.hours },
   };
 }
 
@@ -301,6 +355,22 @@ function afterTurn(world, save, { dice } = {}) {
   const over = fight.endOf(f);
   if (over) return { lost: 0, ...ending(f, over) };
   return othersPlay(world, save, f, { dice });
+}
+
+/**
+ * The player still down with no fight (L-827): nobody left to help, so what
+ * becomes of them is decided now. `{ mutations, lines, fallen }`.
+ */
+function afterFight(world, save, { dice } = {}) {
+  const f = { round: 1, combatants: {} };
+  return afterFall(world, save, {
+    f,
+    winner: 'hostile',
+    sheet: sheets.sheetOf(save),
+    figures: save.figures,
+    down: save.down,
+    dice,
+  });
 }
 
 /** The player leaving the fight's map (SE4: fled): `{ mutations, lines, fight }`, or null. */
@@ -370,6 +440,7 @@ module.exports = {
   hostilesInSight,
   begin,
   afterTurn,
+  afterFight,
   leftMap,
   talkedDown,
   isAttack,

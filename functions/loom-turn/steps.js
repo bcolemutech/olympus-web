@@ -60,6 +60,8 @@ const OUT_OF_MOVEMENT = "You're out of movement. End your turn to go on.";
 
 /** Why a character can't move now (a condition with noMove, L-815), or null. */
 function heldBy(canonWorld, save) {
+  // Down in a fight (L-827): no steps.
+  if (save && save.down) return "You're down: you can only end your turn.";
   const names = conditions.flagsOf(systemOf(canonWorld), sheetOf(save)).noMove;
   return names.length ? "You can't move: you're " + names.join(' and ') + '.' : null;
 }

@@ -121,10 +121,11 @@ function surprise(system, { ambushers, ambushed, dice }) {
 }
 
 // Whether a combatant takes a turn this round: in the fight, and not
-// surprised in the first round.
+// surprised in the first round. The player always has their turn, even down
+// (L-827: a dying save, or nothing but ending it).
 const acts = (fight, id) => {
   const c = fight.combatants[id];
-  return Boolean(c) && !c.out && !(fight.round === 1 && c.surprised);
+  return Boolean(c) && (!c.out || id === PLAYER) && !(fight.round === 1 && c.surprised);
 };
 
 /**
@@ -213,7 +214,7 @@ function toPlayer(system, fight, { current: includeCurrent = false } = {}) {
     const step = next(current, economy);
     current = step.fight;
     if (step.newRound) rounds += 1;
-    if (current.turn === PLAYER || current.combatants[PLAYER].out) break;
+    if (current.turn === PLAYER) break;
     passed.push(current.turn);
   }
   return { fight: current, rounds, passed };
@@ -237,7 +238,10 @@ function endOf(fight) {
   const all = Object.values(fight.combatants);
   const standing = (side) => all.filter((c) => c.side === side && !c.out);
   const player = fight.combatants[PLAYER];
-  if (player && player.out) return { winner: 'hostile', how: [player.out] };
+  // The player down with allies still standing: the fight goes on (L-827).
+  if (player && player.out && !(player.out === 'down' && standing('party').length)) {
+    return { winner: 'hostile', how: [player.out] };
+  }
   if (!standing('hostile').length) {
     const how = [...new Set(all.filter((c) => c.side === 'hostile').map((c) => c.out))];
     return { winner: 'party', how };

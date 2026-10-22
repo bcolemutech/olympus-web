@@ -164,6 +164,20 @@ const FANTASY = {
           reckless: null,
         },
       },
+      // At 0 (L-827): dying, a Constitution save each round, three of one
+      // kind; Wisdom stabilises; death on. Rests: a short one heals a die and
+      // Constitution, a long one everything.
+      down: {
+        kind: 'dyingWithSaves',
+        death: 'on',
+        save: { attribute: 'CON', against: 'Easy' },
+        need: 3,
+        stabilise: { attribute: 'WIS', against: 'Easy' },
+      },
+      rests: {
+        short: { hours: 1, restore: { health: 'max(1, 1d6 + mod(CON))' } },
+        long: { hours: 8, restore: { health: 'full' }, clears: ['poisoned'] },
+      },
       // What a new character carries until L-770's weapons.
       attacks: [
         {
@@ -263,6 +277,13 @@ const SCIFI = {
         description: 'Shaken: one die fewer in every pool.',
         modifiers: { dice: '-1' },
       },
+      // A lasting injury from going down (L-827), until a long rest.
+      {
+        id: 'wounded',
+        name: 'Wounded',
+        description: 'Hurt badly: one die fewer in every pool until a long rest.',
+        modifiers: { dice: '-1' },
+      },
     ],
   },
   checks: {
@@ -337,6 +358,24 @@ const SCIFI = {
           steady: 'Easy',
           bold: 'Easy',
           reckless: null,
+        },
+      },
+      // At 0 (L-827): out at once, waking with a wound; Medicine stabilises;
+      // death off. Rests: a short one eases Stress, a long one heals all and
+      // closes wounds.
+      down: {
+        kind: 'outAtOnce',
+        death: 'off',
+        injury: 'wounded',
+        hours: 1,
+        stabilise: { skill: 'Medicine', against: 'Easy' },
+      },
+      rests: {
+        short: { hours: 1, restore: { stress: '2' } },
+        long: {
+          hours: 8,
+          restore: { health: 'full', stress: 'full' },
+          clears: ['wounded', 'bleeding'],
         },
       },
       // What a new character carries until L-770's weapons.
