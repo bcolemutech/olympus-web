@@ -65,11 +65,17 @@
     path: 0xffb74d,
     selected: 0xffffff,
     person: 0x4db6ac,
+    foe: 0xe57373, // someone hostile (L-828)
+    friend: 0x81c784, // someone on your side (L-828)
     you: 0xffffff,
     ring: 0xffb74d,
     label: 0xe0e0e0,
     hazard: 0xce93d8, // a hazard's squares (L-815)
+    range: 0xef9a9a, // an attack's reach or range (L-828)
+    cover: 0x90caf9, // a target's cover (L-828)
+    card: 0xfff3e0, // a foe's card over its token while its turn plays out
   };
+  var CARD_MS = 1100; // how long a foe's card shows over its token (L-828)
   var FOG_DIM = 0.6; // seen before, out of sight now
   var FOG_SCALE = 4; // fog texture pixels a square, before it is stretched
   var FOG_BLUR = 3; // px of that texture: the feathered edge, about ¾ of a square
@@ -89,6 +95,7 @@
     preview: null, // the path to the selected cell: { path, walked, rest, cost, turns } or { none }
     pending: null, // a move sent: { mapId, from, path }, for the walk when it lands
     anim: null, // the token's walk: { cells, t0 }
+    playback: null, // everyone else's turns playing out (L-828): { steps, t0, end }
     version: 0, // bumped when what is drawn changes
     built: null, // what the drawing was last built for
     nodes: null, // the PixiJS objects
@@ -468,10 +475,11 @@
       labels: new PIXI.Container(),
       over: new PIXI.Graphics(), // the selected square and the way
       you: Loom.draw.token(),
+      cards: new PIXI.Container(), // foes' cards while their turns play out (L-828)
     };
     n.art.alpha = 0.95;
     n.scene.addChild(n.ground, n.art, n.fogDim, n.under, n.people, n.fogDark, n.mist);
-    n.scene.addChild(n.labels, n.over, n.you.container);
+    n.scene.addChild(n.labels, n.over, n.you.container, n.cards);
     container.addChild(n.scene);
     battle.nodes = n;
   }
@@ -747,12 +755,20 @@
       var c = centre(person);
       token.container.visible = true;
       token.container.scale.set(px);
+      // Their side shows in a fight's colours (L-828): foes red, friends
+      // green; someone down is faded.
+      token.container.alpha = person.down ? 0.45 : 1;
       token.update({
         x: c.x,
         y: c.y,
         radius: Math.max(5, cellPx * 0.32),
         name: person.name,
-        fill: COLOURS.person,
+        fill:
+          person.side === 'hostile'
+            ? COLOURS.foe
+            : person.side === 'party'
+              ? COLOURS.friend
+              : COLOURS.person,
       });
     });
     Object.keys(battle.tokens).forEach(function (id) {
@@ -784,8 +800,10 @@
       var mid = hazard.squares[Math.floor(hazard.squares.length / 2)];
       if (mid) label(mid, hazard.name, COLOURS.hazard);
     });
+    // (While everyone else's turns play out, names would stand where the
+    // tokens end, L-828: they come back when it's over.)
     (d.people || []).forEach(function (person) {
-      if (person.x !== undefined) label(person, person.name);
+      if (person.x !== undefined && !battle.playback) label(person, person.name);
     });
     battle.labels = n.labels.children.slice();
 
@@ -800,6 +818,46 @@
     var centres = function (cells) {
       return cells.map(centre);
     };
+    // Someone selected (L-828; UI2): your attacks' reach and range around
+    // you (long range dashed), and their cover from where you stand.
+    var target = battle.selected && personAt(battle.selected);
+    var combat = combatOf();
+    if (target && combat && !target.down) {
+      var around = function (r) {
+        var x0 = Math.max(0, d.here.x - r);
+        var y0 = Math.max(0, d.here.y - r);
+        var x1 = Math.min(d.width - 1, d.here.x + r);
+        var y1 = Math.min(d.height - 1, d.here.y + r);
+        var a = square({ x: x0, y: y0 });
+        var b = square({ x: x1 + 1, y: y1 + 1 });
+        return [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }, a];
+      };
+      combat.attacks.forEach(function (a) {
+        if (a.range) {
+          Loom.draw.polyline(o, around(a.range.normal));
+          o.stroke({ width: 2 * px, color: COLOURS.range, alpha: 0.8 });
+          Loom.draw.polyline(o, around(a.range.long), [4 * px, 6 * px]);
+          o.stroke({ width: 1.5 * px, color: COLOURS.range, alpha: 0.6 });
+        } else {
+          Loom.draw.polyline(o, around(a.reach || 1));
+          o.stroke({ width: 2 * px, color: COLOURS.range, alpha: 0.9 });
+        }
+      });
+      if (target.cover) {
+        var tb = box(target);
+        o.roundRect(tb[0], tb[1], tb[2], tb[3], tb[4]).stroke({
+          width: 3 * px,
+          color: COLOURS.cover,
+        });
+        var coverLabel = Loom.draw.label(target.cover + ' cover', 11);
+        coverLabel.style.fill = COLOURS.cover;
+        coverLabel.scale.set(px);
+        var tc = centre(target);
+        coverLabel.position.set(tc.x, tc.y - CELL / 2 - 16 * px);
+        n.labels.addChild(coverLabel);
+        battle.labels.push(coverLabel);
+      }
+    }
     var preview = battle.preview;
     var plan = battle.turn && battle.turn.plan;
     if (!battle.anim && preview && preview.path) {
@@ -825,6 +883,7 @@
       battle.selected ? battle.selected.x + ',' + battle.selected.y : '',
       battle.selectedDoor || '',
       battle.anim ? 1 : 0,
+      battle.playback ? 1 : 0, // names follow their tokens again once it's over
       reducedMotion() ? 'still' : '', // the mist shows only while it may drift
     ].join('|');
     if (key !== battle.built) {
@@ -833,6 +892,7 @@
     }
     n.scene.position.set(view.x, view.y);
     n.scene.scale.set(view.scale);
+    if (battle.playback) drawPlayback(view);
 
     // You: along your walk, or where you stand.
     var cellPx = CELL * view.scale;
@@ -1003,8 +1063,250 @@
     engine.openMenu(point, {
       title: about.title,
       subtitle: about.facts || undefined,
-      items: busy([moveItem(cell)]).concat([lookItem()]),
+      items: busy(itemsFor(cell)).concat([lookItem()]),
     });
+  }
+
+  // ── Fighting (L-828; combat UI2, TN5) ─────────────
+
+  function combatOf() {
+    var m = Loom.store.get().map;
+    return (m && m.combat) || null;
+  }
+
+  function fightOf() {
+    var m = Loom.store.get().map;
+    return (m && m.fight) || null;
+  }
+
+  function distance(a, b) {
+    return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  }
+
+  // How far an attack reaches someone from here: 'reach', 'normal' or
+  // 'long' (range), or null, as the server reads it (position.js bandOf).
+  function bandOf(attack, cell) {
+    var away = distance(battle.data.here, cell);
+    if (attack.range) {
+      if (away <= attack.range.normal) return 'normal';
+      return away <= attack.range.long ? 'long' : null;
+    }
+    return away <= (attack.reach || 1) ? 'reach' : null;
+  }
+
+  var BAND_WORDS = { reach: 'in reach', normal: 'in range', long: 'long range' };
+
+  // What a square offers: on yours, Dash and, in a fight, Dodge, Withdraw
+  // and Ready; on someone, Move and Attack with each of your attacks; on a
+  // feature beside you, Use; else Move.
+  function itemsFor(cell) {
+    var d = battle.data;
+    if (same(cell, d.here)) return selfItems();
+    var person = personAt(cell);
+    if (person) return [moveItem(cell)].concat(attackItems(person));
+    var feature = at(cell).feature;
+    return [moveItem(cell)].concat(feature ? useItems(feature) : []);
+  }
+
+  function acted() {
+    return Boolean(battle.turn && battle.turn.actionUsed);
+  }
+
+  /**
+   * Attack (UI2): each of your attacks at them, with whether it reaches
+   * (in reach, range, long range), their cover from here, and the roll; out
+   * of reach or range it can't be chosen. Not offered at someone down, or on
+   * your side.
+   */
+  function attackItems(person) {
+    var combat = combatOf();
+    if (!combat || person.down || person.side === 'party') return [];
+    var subdue = Boolean(Loom.store.get().ui.subdue);
+    return combat.attacks.map(function (a) {
+      var band = bandOf(a, person);
+      var why = acted()
+        ? "You've acted this turn."
+        : band
+          ? null
+          : a.range
+            ? 'Out of range (' + a.range.long + ' squares).'
+            : 'Out of reach: get closer.';
+      var note = [
+        band ? BAND_WORDS[band] : null,
+        person.cover ? person.cover + ' cover' : null,
+        a.attack,
+        subdue && a.lethal ? 'to subdue' : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      return {
+        label: 'Attack with ' + a.name.toLowerCase(),
+        disabled: Boolean(why),
+        note: why || note,
+        onSelect: function () {
+          Loom.play.attack(
+            person.id,
+            a.id,
+            'attack ' + person.name + ' with ' + a.name.toLowerCase()
+          );
+        },
+      };
+    });
+  }
+
+  // Your own square: Dash, and in a fight Dodge, Withdraw and Ready.
+  function selfItems() {
+    var combat = combatOf();
+    var fight = fightOf();
+    var why = acted() ? "You've acted this turn." : null;
+    var speed = battle.turn ? battle.turn.speed : 0;
+    var item = function (label, note, verb, extra, said) {
+      return {
+        label: label,
+        disabled: Boolean(why),
+        note: why || note,
+        onSelect: function () {
+          Loom.play.tactic(verb, extra, said);
+        },
+      };
+    };
+    var items = [item('Dash', '+' + speed + ' movement this turn', 'dash', null, 'dash')];
+    if (!fight) return items;
+    items.push(
+      item('Dodge', 'harder to hit until your next turn', 'dodge', null, 'dodge'),
+      item('Withdraw', 'move away without drawing blows', 'withdraw', null, 'withdraw')
+    );
+    ((combat && combat.attacks) || []).forEach(function (a) {
+      items.push(
+        item(
+          'Ready ' + a.name.toLowerCase(),
+          'strikes the first foe to come into its ' + (a.range ? 'range' : 'reach'),
+          'ready',
+          { attack: a.id },
+          'ready ' + a.name.toLowerCase()
+        )
+      );
+    });
+    return items;
+  }
+
+  // Use a feature beside you (TN5): the GM says what it does.
+  function useItems(feature) {
+    var beside = distance(battle.data.here, feature) <= 1;
+    var why = !beside ? 'Walk beside it to use it.' : acted() ? "You've acted this turn." : null;
+    return [
+      {
+        label: 'Use ' + feature.name,
+        disabled: Boolean(why),
+        note: why || 'your action',
+        onSelect: function () {
+          Loom.play.tactic('use', { feature: feature.id }, 'use ' + feature.name);
+        },
+      },
+    ];
+  }
+
+  // ── Everyone else's turns, played out (L-828; UI3) ─
+
+  /**
+   * Plays out everyone else's turns on the map: one after another, each
+   * fighter's token walks its path, then its card shows over it. Starts from
+   * where the tokens stand now (before the map reloads). Faster, or reduced
+   * motion, skips it.
+   */
+  function playOut(turns, faster) {
+    var d = battle.data;
+    if (!d || faster || reducedMotion()) return;
+    var where = {};
+    (d.people || []).forEach(function (p) {
+      if (p.x !== undefined) where[p.id] = { x: p.x, y: p.y };
+    });
+    var steps = [];
+    var t = 0;
+    turns.forEach(function (turn) {
+      var from = where[turn.id];
+      var path = turn.path || [];
+      if (!from && path.length) from = path[0];
+      if (!from) return;
+      var cells = [from].concat(path);
+      var walk = (cells.length - 1) * STEP_MS;
+      var card = turn.attack && turn.attack.card ? cardText(turn) : null;
+      steps.push({ id: turn.id, cells: cells, t0: t, walk: walk, card: card });
+      t += walk + (card ? CARD_MS : 0);
+      where[turn.id] = cells[cells.length - 1];
+    });
+    if (!steps.length) return;
+    battle.playback = { steps: steps, t0: now(), end: t, last: where };
+    window.requestAnimationFrame(playFrame);
+  }
+
+  // A foe's card over its token: the roll against what it needed, and the hit.
+  function cardText(turn) {
+    var a = turn.attack;
+    var c = a.card;
+    return (
+      c.total +
+      (c.difficulty !== null && c.difficulty !== undefined ? ' vs ' + c.difficulty : '') +
+      (a.hit ? ' · hit' + (a.damage ? ' ' + a.damage : '') : ' · miss')
+    );
+  }
+
+  function playFrame() {
+    var pb = battle.playback;
+    if (!pb) return;
+    if (now() - pb.t0 >= pb.end) {
+      battle.playback = null;
+      clearCards();
+      changed();
+      Loom.map.render();
+      return;
+    }
+    engine.draw();
+    window.requestAnimationFrame(playFrame);
+  }
+
+  // Where each token is now along the playback, and the card showing.
+  function drawPlayback(view) {
+    var pb = battle.playback;
+    var n = battle.nodes;
+    var t = now() - pb.t0;
+    clearCards();
+    var at = {};
+    pb.steps.forEach(function (st) {
+      if (t < st.t0) {
+        if (!at[st.id]) at[st.id] = centre(st.cells[0]);
+        return;
+      }
+      var u = Math.min(1, (t - st.t0) / Math.max(1, st.walk));
+      var span = (st.cells.length - 1) * u;
+      var i = Math.min(Math.floor(span), Math.max(0, st.cells.length - 2));
+      var f = st.cells.length > 1 ? Math.min(1, span - i) : 0;
+      var a = centre(st.cells[i]);
+      var b = centre(st.cells[Math.min(i + 1, st.cells.length - 1)]);
+      at[st.id] = { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+      if (st.card && t >= st.t0 + st.walk && t < st.t0 + st.walk + CARD_MS) {
+        var node = Loom.draw.label(st.card, 12);
+        node.style.fill = COLOURS.card;
+        node.scale.set(1 / view.scale);
+        node.position.set(at[st.id].x, at[st.id].y - CELL * 0.75);
+        n.cards.addChild(node);
+      }
+    });
+    Object.keys(at).forEach(function (id) {
+      var token = battle.tokens[id];
+      if (!token) return;
+      token.container.visible = true;
+      token.container.position.set(at[id].x, at[id].y);
+    });
+  }
+
+  function clearCards() {
+    var n = battle.nodes;
+    if (!n || !n.cards) return;
+    n.cards.children.slice().forEach(function (node) {
+      node.destroy();
+    });
+    n.cards.removeChildren();
   }
 
   // Look: the card shows what was clicked; nothing is played.
@@ -1183,6 +1485,11 @@
     tap: tap,
     hover: hover,
     continuePlan: continuePlan,
+    playOut: playOut,
+    /** Whether everyone else's turns are playing out on the map now (L-828). */
+    playing: function () {
+      return Boolean(battle.playback);
+    },
     minimap: minimap,
     renderInfo: renderInfo,
     current: function () {

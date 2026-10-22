@@ -203,6 +203,7 @@ function begin(
     },
     ...(played.fallen ? { fallen: played.fallen } : {}),
     ...(played.named && played.named.length ? { named: played.named } : {}),
+    ...(played.turns && played.turns.length ? { turns: played.turns } : {}),
     fight: {
       ...(played.fight || {}),
       started: true,

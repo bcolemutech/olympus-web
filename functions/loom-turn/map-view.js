@@ -47,7 +47,8 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * Character panel and the strip on the map (L-814; ../loom-canon/sheets.js
  * characterView), or null for a save without one. `fight` is the fight
  * the save is in (L-821; ../loom-modules/combat/play.js viewOf): the round,
- * whose turn, and everyone in it in order, or null.
+ * whose turn, and everyone in it in order, or null. `combat` is what the
+ * player fights with on a battle map (L-828), or null elsewhere.
  */
 function mapView(canonWorld, save, record, townRecord) {
   const discovered = new Set(discoveredBy(canonWorld, save));
@@ -113,6 +114,9 @@ function mapView(canonWorld, save, record, townRecord) {
     // character's speed, whether its action is used, and any plan kept.
     turn: turnView(save),
     fight: combat.play.viewOf(save),
+    // What the player fights with on a battle map (L-828; combat UI2): their
+    // attacks, for the click menu's Attack, and whether Subdue applies.
+    combat: combatView(canonWorld, save),
     // The player down (L-827: dying, stable or out), and a story that ended.
     down: save.down || null,
     ended: save.ended || null,
@@ -331,6 +335,32 @@ function fogOf(canonWorld, save, settlement, record, walks) {
  * whatever is in sight now, so a save with no record yet still sees where
  * it stands. The art is sent whole: the fog covers it. Null off a map.
  */
+/**
+ * The player's attacks as the Loom offers them (L-828; combat UI2): each
+ * one's id, name, reach or range, its roll's formula and whether it is
+ * lethal; and whether the system has a Subdue penalty (its toggle on the
+ * turn bar). Null off a battle map.
+ */
+function combatView(canonWorld, save) {
+  const { map } = maps.positionOf(canonWorld, save);
+  if (!map) return null;
+  const system = checks.systemOf(canonWorld);
+  const sheet = sheets.sheetOf(save) || sheets.defaultSheet(system);
+  return {
+    attacks: combat.attacks.attacksOf(system, sheet, { player: true }).map((a) => ({
+      id: a.id,
+      name: a.name,
+      ...(a.range
+        ? { range: { normal: a.range.normal, long: a.range.long } }
+        : { reach: a.reach || 1 }),
+      attack: String(a.attack),
+      lethal: a.lethal !== false,
+      ...(a.area ? { area: true } : {}),
+    })),
+    subdue: combat.settings.settingsOf(system).subduePenalty !== null,
+  };
+}
+
 function battleView(canonWorld, save, record) {
   const { map, cell } = maps.positionOf(canonWorld, save);
   if (!map) return null;
@@ -363,6 +393,11 @@ function battleView(canonWorld, save, record) {
             // stat block says so.
             ...(c.side === 'hostile' || c.side === 'party' ? { side: c.side } : {}),
             ...(c.figure ? { figure: true } : {}),
+            // The cover they have from where the player stands (L-828;
+            // combat PS2), for Attack's note and the grid.
+            ...(c.cell && combat.position.coverOf(map, doors, cell, c.cell)
+              ? { cover: combat.position.coverOf(map, doors, cell, c.cell) }
+              : {}),
           };
         })
     : [];

@@ -854,7 +854,45 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
     ...(round.fight ? { fight: round.fight } : {}),
     ...(round.fallen ? { fallen: round.fallen } : {}),
     ...(round.named && round.named.length ? { named: round.named } : {}),
+    ...(round.turns && round.turns.length
+      ? { playback: playbackOf(round.turns, characterState, canonWorld) }
+      : {}),
   };
+}
+
+// The turns everyone else played, for the Loom to play out on the map
+// (L-828; combat UI3): each fighter's walk, only the squares the player can
+// see once it's done, and their attack's roll as a card.
+function playbackOf(turns, characterState, canonWorld, after) {
+  if (!turns || !turns.length) return null;
+  const system = checks.systemOf(canonWorld);
+  const { map, cell } = maps.positionOf(canonWorld || {}, after || characterState);
+  const doors = map ? doorStatesOf(after || characterState, map.id) : {};
+  const seen = map && cell ? sight.inSight(map, cell, doors) : {};
+  return turns.map((t) => ({
+    id: t.id,
+    name: t.name,
+    path: (t.path || [])
+      .filter((step) => seen[step.x + ',' + step.y])
+      .map((step) => ({ x: step.x, y: step.y })),
+    ...(t.attack
+      ? {
+          attack: {
+            target: t.attack.target,
+            hit: t.attack.hit,
+            ...(t.attack.damage ? { damage: t.attack.damage } : {}),
+            ...(t.attack.card
+              ? {
+                  card: {
+                    ...rolled(t.attack.card, t.attack.card.against, system),
+                    name: t.attack.card.name,
+                  },
+                }
+              : {}),
+          },
+        }
+      : {}),
+  }));
 }
 
 // A fight starting where the player stands (L-821; SE1): hostiles in sight
@@ -902,6 +940,7 @@ function fightStarted(characterState, canonWorld, options) {
     fight: begun.fight,
     ...(begun.fallen ? { fallen: begun.fallen } : {}),
     ...(begun.named ? { named: begun.named } : {}),
+    ...(begun.turns ? { playback: playbackOf(begun.turns, characterState, canonWorld) } : {}),
   };
 }
 
@@ -975,6 +1014,7 @@ function evaluateRest(kind, characterState, canonWorld, dice, choose = null) {
     fight: fought.fight,
     ...(fought.fallen ? { fallen: fought.fallen } : {}),
     ...(fought.named ? { named: fought.named } : {}),
+    ...(fought.playback ? { playback: fought.playback } : {}),
   };
 }
 
@@ -1412,6 +1452,7 @@ function afterMove(resolution, characterState, canonWorld, dice, choose = null) 
     ...(!resolution.roll && changed.roll ? { roll: changed.roll } : {}),
     fight: changed.fight,
     ...(changed.named ? { named: changed.named } : {}),
+    ...(changed.playback ? { playback: changed.playback } : {}),
   };
 }
 
@@ -1487,6 +1528,8 @@ function evaluate(
     ...(resolution.fight ? { fight: Object.freeze({ ...resolution.fight }) } : {}),
     // A hazard walked into (L-815), for the GM.
     ...(resolution.hazard ? { hazard: Object.freeze({ ...resolution.hazard }) } : {}),
+    // Everyone else's turns, for the Loom to play out (L-828); not recorded.
+    ...(resolution.playback ? { playback: Object.freeze(resolution.playback.slice()) } : {}),
     // What the named characters chose in the fight (L-825), for the GM.
     ...(resolution.named ? { named: Object.freeze(resolution.named.slice()) } : {}),
     // A rest taken (L-827), for the GM.

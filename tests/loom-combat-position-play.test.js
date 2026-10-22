@@ -36,7 +36,8 @@ const mockHall = () => ({
   features: [{ id: 'winch', name: 'the winch', x: 4, y: 0 }],
   walls: [],
   doors: [],
-  obstacles: [],
+  // A crate just south of where Grell stands: cover from below.
+  obstacles: [{ id: 'crate', name: 'a crate', kind: 'low', x: 6, y: 3 }],
   hazards: [],
 });
 // Grell strikes hard with a club: every die high, it hits.
@@ -100,7 +101,7 @@ const { getFirestore } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
 );
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
-const { loomPlayTurn } = require('../functions/index');
+const { loomPlayTurn, loomGetMap } = require('../functions/index');
 const { makeSave } = require('../functions/loom-models');
 const db = getFirestore();
 const PLAYER = { uid: 'player-001', token: { apps: ['loom'] } };
@@ -238,5 +239,44 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain('You use the winch.');
     expect((await saved(near)).turn.actionUsed).toBe(true);
+  });
+  test('loomGetMap: the player’s attacks, Subdue, and the cover each person has (L-828)', async () => {
+    const ref = await onTheMap(`${id}-view`, { cell: { x: 6, y: 4 } });
+    const view = await loomGetMap.run({
+      data: { worldId: 'shattered-coast', saveId: ref.id },
+      auth: PLAYER,
+    });
+    expect(view.combat.subdue).toBe(true);
+    expect(view.combat.attacks).toContainEqual(
+      expect.objectContaining({ id: c.melee, reach: 1, lethal: true })
+    );
+    expect(view.combat.attacks.some((a) => a.range && a.range.long > a.range.normal)).toBe(true);
+    // Grell, behind the crate from below.
+    expect(view.battleMap.people).toContainEqual(
+      expect.objectContaining({ id: 'grell', cover: 'partial' })
+    );
+  });
+
+  test('End turn answers with everyone else’s turns to play out, each attack a card (L-828)', async () => {
+    const ref = await onTheMap(`${id}-playback`);
+    const answer = await loomPlayTurn.run({
+      data: { worldId: 'shattered-coast', saveId: ref.id, action: { verb: 'end-turn' } },
+      auth: PLAYER,
+    });
+    expect(answer.turns).toEqual([
+      expect.objectContaining({
+        id: 'grell',
+        name: 'Grell',
+        path: expect.any(Array),
+        attack: expect.objectContaining({
+          target: 'player',
+          hit: true,
+          card: expect.objectContaining({ against: 'you', name: 'Club', line: expect.any(String) }),
+        }),
+      }),
+    ]);
+    // Not kept in the turn's record.
+    const turns = await ref.collection('loom_turns').get();
+    expect(turns.docs[0].data().resolution.playback).toBeUndefined();
   });
 });

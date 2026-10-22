@@ -389,6 +389,20 @@
   margin-top: 0;
 }
 
+/* Everyone else's attacks this round (L-828): each card rolls itself. */
+.loom-log-foe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.3rem 0;
+}
+
+.loom-log-foe-name {
+  color: #ef9a9a;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
 .loom-log-entry + .loom-log-entry {
   margin-top: 1rem;
 }
@@ -1541,6 +1555,124 @@ body.loom-playing .app-divider {
   cursor: default;
 }
 
+/* Top right on a battle map: the turn-order bar (L-828; combat UI1). Who is
+   here; in a fight, everyone in order, whose turn, the round, in a plain
+   combat look. */
+.loom-map-order {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: calc(100% - 24rem);
+  padding: 0.3rem 0.7rem;
+  background: rgba(10, 14, 26, 0.88);
+  border: 1px solid var(--loom-edge);
+  border-radius: 999px;
+}
+
+/* The square's card sits under the order bar while it shows. */
+.loom-map-pane:has(.loom-map-order) .loom-map-info {
+  top: 3.6rem;
+}
+
+.loom-map-order.is-combat {
+  border-color: #e57373;
+  box-shadow: 0 0 0 1px rgba(229, 115, 115, 0.35);
+}
+
+.loom-map-order-round {
+  color: var(--loom-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.loom-map-order.is-combat .loom-map-order-round {
+  color: #ef9a9a;
+  font-weight: 700;
+}
+
+.loom-map-order-list {
+  display: flex;
+  gap: 0.3rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+}
+
+.loom-map-order-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.5rem 0.12rem 0.15rem;
+  color: var(--loom-text-soft);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+
+.loom-map-order-token {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.2rem;
+  color: #0a0e1a;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: #4db6ac;
+  border-radius: 999px;
+}
+
+.loom-map-order-chip.is-you .loom-map-order-token {
+  background: #ffffff;
+  box-shadow: 0 0 0 2px var(--loom-accent);
+}
+
+.loom-map-order-chip.is-hostile .loom-map-order-token {
+  background: #e57373;
+}
+
+.loom-map-order-chip.is-party .loom-map-order-token {
+  background: #81c784;
+}
+
+.loom-map-order-chip.is-now {
+  color: var(--loom-text);
+  border-color: var(--loom-accent);
+}
+
+.loom-map-order-chip.is-out {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.loom-map-order-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--loom-text-soft);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* The combat look (L-828): a red frame round the map in a fight. */
+.loom-map-combat-frame {
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(229, 115, 115, 0.65);
+  box-shadow: inset 0 0 24px rgba(229, 115, 115, 0.25);
+  pointer-events: none;
+}
+
 /* Bottom right: the minimap. */
 .loom-map-minimap {
   position: absolute;
@@ -1617,6 +1749,20 @@ body.loom-playing .app-divider {
     left: 0.6rem;
     width: auto;
     max-height: 30%;
+  }
+
+  /* On a phone the order bar sits over the level switcher and zoom, clear
+     of where you are and the card at the top. */
+  .loom-map-order {
+    top: auto;
+    right: 0.6rem;
+    bottom: calc(var(--loom-sheet-peek, 0px) + 7.4rem);
+    left: 0.6rem;
+    max-width: none;
+  }
+
+  .loom-map-order-name {
+    display: none;
   }
 
   .loom-map-turnbar {

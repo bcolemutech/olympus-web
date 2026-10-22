@@ -10,6 +10,9 @@
   //   under the menu bar;
   // - bottom centre, the turn bar: the turn, movement left and the action,
   //   Continue for a kept plan and End turn (moved here off the panel);
+  // - top right on a battle map, the turn-order bar (L-828): who is here,
+  //   or in a fight everyone in order, whose turn and the round, with the
+  //   Subdue and Faster toggles; a red frame round the map in a fight;
   // - bottom right, a minimap of the level showing, with the view on it;
   //   a click there moves the view.
   //
@@ -104,7 +107,7 @@
       turn.speed +
       (walkingTown ? ' (' + turn.movementLeft * 20 + ' m)' : '');
     var canContinue = Boolean(turn.plan) && turn.movementLeft > 0;
-    // In a fight (L-821): its round, until L-828's turn-order bar.
+    // In a fight (L-821): its round (the order bar has the rest, L-828).
     var fight = s.map && s.map.fight;
     return html`<div class="loom-map-turnbar loom-map-ui" role="group" aria-label="Turn">
       <span class="loom-map-turnbar-state">
@@ -137,6 +140,113 @@
     </div>`;
   }
 
+  // A name's initials, for its chip in the order bar: "Grell" → "G",
+  // "Bandit 2" → "B2".
+  function initials(name) {
+    var words = String(name || '?')
+      .split(/\s+/)
+      .filter(Boolean);
+    return words
+      .slice(0, 2)
+      .map(function (w) {
+        return /^\d+$/.test(w) ? w : w.charAt(0).toUpperCase();
+      })
+      .join('');
+  }
+
+  /**
+   * The turn-order bar across the top of the map (L-828; combat UI1). In a
+   * fight: everyone in it in order, whose turn it is, the round, with a
+   * plain combat look (a red frame, "Round 2"); those out of it greyed. Out
+   * of one, on a battle map: who is here in sight. Its toggles: Subdue
+   * (attacks strike to knock out, when the system has it) and Faster (foes'
+   * turns aren't played out).
+   */
+  function OrderBar() {
+    var s = useOverlayState();
+    var data = s.map;
+    var fight = data && data.fight;
+    var b = data && data.battleMap;
+    if (!b || s.ui.playerLevel !== 'battle') return null;
+    var save = Loom.store.get().save;
+    var you = (save && save.characterName) || 'You';
+    var chips = fight
+      ? fight.order.map(function (c) {
+          return {
+            id: c.id,
+            name: c.you ? you : c.name,
+            side: c.you ? 'you' : c.side,
+            now: fight.turn === c.id,
+            out: c.out || null,
+          };
+        })
+      : [{ id: 'player', name: you, side: 'you' }].concat(
+          (b.people || [])
+            .filter(function (p) {
+              return p.x !== undefined;
+            })
+            .map(function (p) {
+              return { id: p.id, name: p.name, side: p.side || 'neutral', out: p.down || null };
+            })
+        );
+    var combat = data.combat || {};
+    return html`<div
+      class=${'loom-map-order loom-map-ui' + (fight ? ' is-combat' : '')}
+      id="loom-order-bar"
+      role="group"
+      aria-label=${fight ? 'Turn order, round ' + fight.round : 'Who is here'}
+    >
+      <span class="loom-map-order-round">${fight ? 'Round ' + fight.round : 'Here'}</span>
+      <ol class="loom-map-order-list">
+        ${chips.map(function (c) {
+          return html`<li
+            key=${c.id}
+            class=${'loom-map-order-chip is-' +
+            c.side +
+            (c.now ? ' is-now' : '') +
+            (c.out ? ' is-out' : '')}
+            title=${c.name + (c.out ? ' (' + c.out + ')' : c.now ? ' (their turn)' : '')}
+            data-id=${c.id}
+          >
+            <span class="loom-map-order-token" aria-hidden="true">${initials(c.name)}</span>
+            <span class="loom-map-order-name">${c.name}</span>
+          </li>`;
+        })}
+      </ol>
+      ${combat.subdue &&
+      html`<label class="loom-map-order-toggle" title="Strike to knock out, not to kill">
+        <input
+          type="checkbox"
+          id="loom-toggle-subdue"
+          checked=${Boolean(s.ui.subdue)}
+          onChange=${function (event) {
+            Loom.store.setUi({ subdue: event.currentTarget.checked });
+          }}
+        />
+        Subdue
+      </label>`}
+      <label class="loom-map-order-toggle" title="Don't play out everyone else's turns">
+        <input
+          type="checkbox"
+          id="loom-toggle-faster"
+          checked=${Boolean(s.ui.faster)}
+          onChange=${function (event) {
+            Loom.store.setUi({ faster: event.currentTarget.checked });
+          }}
+        />
+        Faster
+      </label>
+    </div>`;
+  }
+
+  // The combat look (L-828; UI1): a red frame round the map in a fight.
+  function CombatFrame() {
+    var fight = ui.useStore(function (st) {
+      return Boolean(st.map && st.map.fight) && st.ui.playerLevel === 'battle';
+    });
+    return fight ? html`<div class="loom-map-combat-frame" aria-hidden="true"></div>` : null;
+  }
+
   function Minimap() {
     return html`<canvas
       class="loom-map-minimap loom-map-ui"
@@ -151,8 +261,9 @@
 
   function Overlay() {
     var Strip = Loom.character && Loom.character.Strip; // L-814: health and the rest
-    return html`<div class="loom-map-topleft"><${Where} />${Strip && html`<${Strip} />`}</div>
-      <${TurnBar} /><${Minimap} />`;
+    return html`<${CombatFrame} />
+      <div class="loom-map-topleft"><${Where} />${Strip && html`<${Strip} />`}</div>
+      <${OrderBar} /><${TurnBar} /><${Minimap} />`;
   }
 
   // ── The minimap ───────────────────────────────────

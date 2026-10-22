@@ -176,6 +176,15 @@
       );
     }
 
+    // A foe's card rolls itself (L-828; combat UI3), after `delay` ms.
+    hooks.useEffect(function () {
+      if (!props.auto || props.landed) return undefined;
+      var timer = window.setTimeout(startRolling, props.delay || 0);
+      return function () {
+        window.clearTimeout(timer);
+      };
+    }, []);
+
     var degree = roll.degree || (roll.success ? 'success' : 'failure');
     // Pass or fail shows only once the dice land.
     var classes = ['loom-roll'];
@@ -303,6 +312,31 @@
     </p>`;
   }
 
+  var FOE_GAP = 900; // ms between foes' cards rolling themselves (L-828)
+
+  // A foe's attack this round (L-828; combat UI3): whose and with what, and
+  // its roll as a card that rolls itself, one after another; with Faster
+  // (or reduced motion) it has landed already.
+  function FoeCard(props) {
+    var card = props.card;
+    var pair = hooks.useState(!props.auto || reducedMotion());
+    var landed = pair[0];
+    var setLanded = pair[1];
+    return html`<div class="loom-log-foe">
+      <span class="loom-log-foe-name">${card.name}</span>
+      <${RollCard}
+        roll=${card.roll}
+        landed=${landed}
+        auto=${props.auto}
+        delay=${props.delay}
+        onLand=${function () {
+          setLanded(true);
+        }}
+        read=${landed}
+      />
+    </div>`;
+  }
+
   function Entry(props) {
     var entry = props.entry;
     var pair = hooks.useState(!props.latest);
@@ -335,6 +369,14 @@
 
     return html`<div class="loom-log-entry">
       ${entry.action && html`<p class="loom-log-action">${'> ' + entry.action}</p>`}
+      ${(entry.cards || []).map(function (card, i) {
+        return html`<${FoeCard}
+          key=${i}
+          card=${card}
+          auto=${entry.reveal && !entry.faster}
+          delay=${i * FOE_GAP}
+        />`;
+      })}
       ${entry.roll &&
       html`<${RollCard}
         roll=${entry.roll}
@@ -614,11 +656,18 @@
   /**
    * A turn's line: what the player did, its roll (if it was rolled), and the
    * narration, revealed as it is read. A new turn shows the last one whole.
+   * `extra.cards`: everyone else's attack cards this round (L-828).
    */
-  function add(action, text, roll) {
+  function add(action, text, roll, extra) {
     finishReveal();
     var entry = { id: nextId++, action: action || '', text: text || '', roll: roll || null };
     entry.reveal = true;
+    // Foes' attack cards this round (L-828): [{ name, roll }], and whether
+    // they land at once (Faster).
+    if (extra && extra.cards && extra.cards.length) {
+      entry.cards = extra.cards;
+      entry.faster = Boolean(extra.faster);
+    }
     setJournal({ entries: journal().entries.concat([entry]), banner: null });
     Loom.shell.newLine(text); // the collapsed panel shows it, and opens
   }

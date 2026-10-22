@@ -69,11 +69,24 @@
         // into a hazard (L-815), or into sight of a foe (L-821), is narrated,
         // its roll a card.
         var told = data.step && (data.step.entered || data.step.left || data.step.hazard);
+        // Everyone else's turns (L-828; combat UI3): played out on the map,
+        // their attack cards rolling themselves; Faster skips the show.
+        var faster = Boolean(Loom.store.get().ui.faster);
+        var turns = data.turns || [];
+        if (turns.length && Loom.battle.playOut) Loom.battle.playOut(turns, faster);
+        var cards = turns
+          .filter(function (t) {
+            return t.attack && t.attack.card;
+          })
+          .map(function (t) {
+            return { name: t.name + ' · ' + t.attack.card.name, roll: t.attack.card };
+          });
         if (data.step && !told && !data.step.fight) {
           if (data.step.lines.length) journal.add(label, data.step.lines.join(' '));
           journal.setSuggestions(kept);
         } else {
-          journal.add(label, data.narration, data.roll); // the roll as a card (L4)
+          // The roll as a card (L4); the foes' after it.
+          journal.add(label, data.narration, data.roll, { cards: cards, faster: faster });
           journal.setSuggestions(keep ? kept : data.suggestedActions);
         }
         journal.setSummary(data.stateSummary);
@@ -133,6 +146,31 @@
     playTurn({ action: { verb: 'door', door: doorId, open: open } }, label);
   }
 
+  /**
+   * An attack at someone on the battle map (L-828; combat UI2): with one of
+   * the character's attacks, to knock out when the Subdue toggle is on.
+   */
+  function attack(targetId, attackId, label) {
+    var subdue = Boolean(Loom.store.get().ui.subdue);
+    playTurn(
+      {
+        action: Object.assign(
+          { verb: 'attack', target: targetId, attack: attackId },
+          subdue ? { subdue: true } : {}
+        ),
+      },
+      label + (subdue ? ' (to subdue)' : '')
+    );
+  }
+
+  /**
+   * A fight's other actions (L-828; combat TN5): Dash, Dodge, Withdraw, Ready
+   * (`extra`: { attack, target? }) and Use (`extra`: { feature }).
+   */
+  function tactic(verb, extra, label) {
+    playTurn({ action: Object.assign({ verb: verb }, extra || {}) }, label);
+  }
+
   /** Ends the turn: movement and the action refilled (L-611 / #441). */
   function endTurn() {
     playTurn({ action: { verb: 'end-turn' } }, 'end turn', { keep: true });
@@ -161,6 +199,8 @@
     walkTo: walkTo,
     walkThere: walkThere,
     doorAction: doorAction,
+    attack: attack,
+    tactic: tactic,
     endTurn: endTurn,
     showTurn: showTurn,
   };
