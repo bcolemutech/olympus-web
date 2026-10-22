@@ -98,6 +98,9 @@ const prompts = [];
 jest.mock('../functions/gemini', () => ({
   callGemini: async (options) => {
     if (options.systemInstruction.includes('summarizer')) return 'A summary.';
+    // Grell is a named character: his turns are the model's to choose
+    // (L-825). Here it answers nothing usable, so he fights by his role.
+    if (options.systemInstruction.includes('COMBAT TURN stage')) return {};
     if (options.systemInstruction.includes('INTERPRET stage')) {
       return mockState.intent || { verb: 'search', targets: [], params: {} };
     }
@@ -202,8 +205,8 @@ describe.each(Object.keys(mockCases))('fights under %s', (id) => {
     const turns = await ref.collection('loom_turns').get();
     expect(turns.docs[0].data().resolution.fight).toMatchObject({ started: true, by: 'seen' });
 
-    // Each End turn is a round: Grell's turn, then the player's again, 6 s,
-    // and no model call.
+    // Each End turn is a round: Grell's turn, then the player's again, 6 s;
+    // Grell is named, so each round is one narrated passage (L-825).
     const round = await play(ref.id, { action: { verb: 'end-turn' } });
     // Grell takes their turn: by their tactics, at the player (L-824).
     expect(round.narration).toMatch(/Grell (misses|hits) you/);
@@ -215,7 +218,8 @@ describe.each(Object.keys(mockCases))('fights under %s', (id) => {
     save = await saved(ref);
     expect(save.fight.round).toBe(3);
     expect(save.time).toBe(before + 12);
-    expect(prompts).toHaveLength(1);
+    expect(prompts).toHaveLength(3);
+    expect(prompts[1]).toContain('NAMED CHARACTERS ACTED this round');
 
     // loomGetMap sends it, for the turn bar.
     const view = await loomGetMap.run({

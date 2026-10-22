@@ -118,7 +118,11 @@ function hostilesInSight(world, save) {
  * 6 s; `lost` more time lost, knocked out), or null when there's no battle
  * map here or nobody to fight.
  */
-function begin(world, save, { by, ambushers = null, joining = [], first = false, dice }) {
+function begin(
+  world,
+  save,
+  { by, ambushers = null, joining = [], first = false, dice, choose = null }
+) {
   const { map } = maps.positionOf(world || {}, save);
   if (!map) return null;
   const system = checks.systemOf(world);
@@ -179,7 +183,7 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
   const played =
     f.turn === PLAYER
       ? { mutations: [setFight(f)], lines: [], rounds: 0, lost: 0 }
-      : othersPlay(world, save, f, { dice, current: true });
+      : othersPlay(world, save, f, { dice, current: true, choose });
   lines.push(...played.lines);
   const mine = started.initiative[PLAYER];
   return {
@@ -198,6 +202,7 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
       verdict: ordinal(place) + ' of ' + f.order.length,
     },
     ...(played.fallen ? { fallen: played.fallen } : {}),
+    ...(played.named && played.named.length ? { named: played.named } : {}),
     fight: {
       ...(played.fight || {}),
       started: true,
@@ -214,10 +219,11 @@ function begin(world, save, { by, ambushers = null, joining = [], first = false,
  * `save.figures`, the player's sheet when hurt, and their fall (`save.down`;
  * L-827). A fight that ends with the player down has its aftermath
  * (./down.js): coming round, death, or a fate for NARRATE to choose.
- * Returns `{ mutations, lines, rounds, lost, turns, fight?, fallen? }`,
- * `fight` its end for NARRATE, `fallen` what became of the player.
+ * Returns `{ mutations, lines, rounds, lost, turns, named, fight?, fallen? }`,
+ * `fight` its end for NARRATE, `fallen` what became of the player, `named`
+ * the named characters' choices (L-825; `choose`, ./others.js).
  */
-function othersPlay(world, save, f, { dice, current = false }) {
+function othersPlay(world, save, f, { dice, current = false, choose = null }) {
   const result = others.playOthers(
     world,
     { ...save, fight: f },
@@ -225,6 +231,7 @@ function othersPlay(world, save, f, { dice, current = false }) {
       dice,
       current,
       now: Number.isFinite(save.time) ? save.time : 0,
+      choose,
     }
   );
   const mutations = [{ target: 'save', op: 'set-flag', path: 'figures', value: result.figures }];
@@ -267,6 +274,7 @@ function othersPlay(world, save, f, { dice, current = false }) {
     rounds: result.rounds,
     lost: 0,
     turns: result.turns,
+    named: result.named,
     ...(ended ? { fight: ended.fight } : {}),
     ...(fallen ? { fallen: fallen.fallen } : {}),
   };
@@ -341,7 +349,7 @@ function ending(f, result) {
  * by their tactics). Returns `{ mutations, lines, lost, turns?, fight? }`
  * (fight: its end, for NARRATE), or null with no fight.
  */
-function afterTurn(world, save, { dice } = {}) {
+function afterTurn(world, save, { dice, choose = null } = {}) {
   let f = fightOf(save);
   if (!f) return null;
   const here = new Map(standingHere(world, save).map((c) => [c.id, c]));
@@ -354,7 +362,7 @@ function afterTurn(world, save, { dice } = {}) {
     }
   }
   const over = fight.endOf(f);
-  if (!over) return othersPlay(world, save, f, { dice });
+  if (!over) return othersPlay(world, save, f, { dice, choose });
   const end = ending(f, over);
   if (!save.down) return { lost: 0, ...end };
   // The player went down on their own turn (L-823: struck leaving reach).

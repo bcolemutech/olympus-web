@@ -102,6 +102,9 @@ const prompts = [];
 jest.mock('../functions/gemini', () => ({
   callGemini: async (options) => {
     if (options.systemInstruction.includes('summarizer')) return 'A summary.';
+    // Grell is a named character: his turns are the model's to choose
+    // (L-825). Here it answers nothing usable, so he fights by his role.
+    if (options.systemInstruction.includes('COMBAT TURN stage')) return {};
     if (options.systemInstruction.includes('INTERPRET stage')) {
       prompts.push({ interpret: options.systemInstruction });
       return mockState.intent || { verb: 'search', targets: [], params: {} };
@@ -211,18 +214,26 @@ describe.each(Object.keys(mockCases))('attacks under %s', (id) => {
       narration: "You've acted this turn. End your turn first.",
     });
 
-    // Round after round until Grell falls: no model call until the fight ends.
+    // Round after round until Grell falls: the player's attacks are never
+    // narrated; each round Grell (a named character, L-825) acts in is one
+    // passage, and so is the fight's end.
+    let rounds = 0;
     for (let round = 0; round < 6 && (await saved(ref)).fight; round++) {
       await play(ref.id, { action: { verb: 'end-turn' } });
+      rounds += 1;
       await attack(ref, { attack: c.ranged });
     }
     save = await saved(ref);
     expect(save.fight).toBeNull();
     expect(save.figures.grell).toMatchObject({ down: 'dead' });
     expect(healthOf(save)).toBe(0);
-    expect(narrated()).toHaveLength(1);
-    expect(narrated()[0]).toContain('FIGHT ENDS');
-    expect(narrated()[0]).toContain('Grell falls, dead.');
+    expect(narrated()).toHaveLength(rounds + 1);
+    narrated()
+      .slice(0, -1)
+      .forEach((p) => expect(p).toContain('NAMED CHARACTERS ACTED this round'));
+    const last = narrated()[narrated().length - 1];
+    expect(last).toContain('FIGHT ENDS');
+    expect(last).toContain('Grell falls, dead.');
 
     // The map shows them down; attacking them again is refused.
     const view = await loomGetMap.run({

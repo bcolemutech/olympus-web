@@ -546,6 +546,30 @@ function buildFightSection(save, resolution) {
   return null;
 }
 
+// What the named characters chose to do this round (L-825; EN5): one
+// passage for the round, in their character, the rules' lines its facts.
+function buildNamedSection(resolution) {
+  const named = resolution.named || [];
+  if (!named.length) return null;
+  return (
+    'NAMED CHARACTERS ACTED this round (the rules played their choices; the hard facts say ' +
+    'what came of them):\n' +
+    named
+      .map(
+        (n) =>
+          '- ' +
+          n.name +
+          // The choice as the menu put it to them ("strike the player with your club").
+          (n.did ? '’s choice: ' + n.did : ' fought by instinct') +
+          (n.reason ? ' ("' + n.reason + '")' : '') +
+          '.'
+      )
+      .join('\n') +
+    '\nNarrate the round as one short passage, giving each of them their character. Describe ' +
+    'no attack or wound the hard facts do not state.'
+  );
+}
+
 // The check rolled this turn, if one was (L-805): what it was, its total,
 // the rung, and the degree in the system's words.
 function buildRollSection(resolution, canonWorld) {
@@ -588,6 +612,7 @@ function buildUserMessage(params) {
     : null;
   const fightSection = buildFightSection(params.save, resolution);
   const fallenSection = buildFallenSection(resolution);
+  const namedSection = buildNamedSection(resolution);
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
@@ -608,6 +633,7 @@ function buildUserMessage(params) {
     (rollSection ? rollSection + '\n\n' : '') +
     (fightSection ? fightSection + '\n\n' : '') +
     (fallenSection ? fallenSection + '\n\n' : '') +
+    (namedSection ? namedSection + '\n\n' : '') +
     (effectsSection ? effectsSection + '\n\n' : '') +
     (timeSection ? timeSection + '\n\n' : '') +
     'ROLLING SUMMARY:\n' +

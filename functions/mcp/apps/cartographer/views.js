@@ -601,6 +601,9 @@ function characterDetail(world, character) {
       role: figures.roleOf(systemOf(world), character),
       posture: figures.postureOf(character),
       ...(character.leader ? { leader: true } : {}),
+      // How they fight in their own terms, for the model choosing their
+      // turns (L-825).
+      ...(character.combatNotes ? { combatNotes: character.combatNotes } : {}),
     },
     // Where they are (L-682): a square, a town point or a world point, or why
     // they have none yet.

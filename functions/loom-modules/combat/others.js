@@ -44,6 +44,7 @@ const figures = require('./figures');
 const down = require('./down');
 const position = require('./position');
 const reactions = require('./reactions');
+const menu = require('./menu');
 
 const { PLAYER } = fight;
 const copyOf = (v) => JSON.parse(JSON.stringify(v));
@@ -59,7 +60,7 @@ const key = (cell) => cell.x + ',' + cell.y;
  * changed), lines, rounds, turns: [{ id, path, attack?, reactions? }], ended?: { winner,
  * how }, down?: the player's state when they fell }`.
  */
-function playOthers(world, save, { dice, current = false, now = 0 }) {
+function playOthers(world, save, { dice, current = false, now = 0, choose = null }) {
   const system = checks.systemOf(world);
   const settings = settingsOf(system);
   const health = settings.health;
@@ -69,6 +70,7 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
   let f = copyOf(save.fight);
   const lines = [];
   const turns = [];
+  const named = [];
   let rounds = 0;
   let ended = null;
   let playerDown = null;
@@ -148,6 +150,8 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
   // One fighter's turn.
   const act = (id) => {
     let c = f.combatants[id];
+    // Their Dodge lasted until now (L-825).
+    delete c.dodging;
     const world2 = view();
     const character = world2.characters[id];
     if (!character || character.retired || !character.cell) {
@@ -182,7 +186,7 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
         .concat(playerCell ? [key(playerCell)] : [])
     );
     const usable = attacksOf(system, mine).filter((a) => !spendAmmo(system, mine, a).refused);
-    const plan = tactics.planTurn({
+    const input = {
       me: {
         id,
         cell: me.cell,
@@ -201,7 +205,41 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
       map,
       doors,
       health,
-    });
+    };
+    let plan = tactics.planTurn(input);
+    // A named character (not a figure) chooses their own turn from the whole
+    // turns the rules list (L-825; EN3b), unless they're running: `choose`
+    // answers `{ option, reason }`, or null (no answer: their role's tactics).
+    let dodge = false;
+    if (choose && !character.figure && !c.fleeing) {
+      const choices = menu.choicesFor(input);
+      const asked = choose(`${f.round}:${id}`, {
+        id,
+        name: character.name,
+        description: character.description || '',
+        combatNotes: character.combatNotes || '',
+        side: c.side,
+        round: f.round,
+        situation: situationOf(me, all, c.side, health),
+        choices: choices.map((o) => ({ id: o.id, text: o.text })),
+      });
+      const option = asked && choices.find((o) => o.id === asked.option);
+      if (option) {
+        plan = option.plan;
+        dodge = Boolean(option.dodge);
+      }
+      named.push({
+        id,
+        name: character.name,
+        did: option ? option.text : null,
+        ...(option && asked.reason ? { reason: String(asked.reason).slice(0, 300) } : {}),
+        ...(option ? {} : { fallback: asked ? 'illegal' : 'failed' }),
+      });
+    }
+    if (dodge) {
+      c.dodging = true;
+      lines.push(`${character.name} keeps their guard up.`);
+    }
     const record = { id, path: [] };
     // Walking, with the reactions it draws on the way (L-823: leaving
     // someone's reach, a readied attack). Struck down, they stop there.
@@ -385,10 +423,40 @@ function playOthers(world, save, { dice, current = false, now = 0 }) {
       lines,
       rounds,
       turns,
+      named,
       ...(ended ? { ended } : {}),
       ...(playerDown ? { down: playerDown } : {}),
     };
   }
+}
+
+const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+// How the fight looks to a fighter (L-825), for the model choosing their
+// turn: each other fighter standing, foe or friend, how far, how hurt.
+function situationOf(me, all, side, health) {
+  return all
+    .filter((x) => x.id !== me.id)
+    .map((x) => {
+      const foe = (side === 'hostile') !== (x.side === 'hostile');
+      const hp = x.sheet && x.sheet.resources && x.sheet.resources[health];
+      const hurt =
+        x.max && hp && Number.isFinite(hp.current)
+          ? hp.current * 2 <= x.max
+            ? ', badly hurt'
+            : hp.current < x.max
+              ? ', hurt'
+              : ''
+          : '';
+      return {
+        name: x.id === PLAYER ? 'the player' : x.name,
+        foe,
+        away: distance(me.cell, x.cell),
+        line:
+          `${x.id === PLAYER ? 'the player' : x.name} (${foe ? 'foe' : 'friend'}), ` +
+          `${distance(me.cell, x.cell)} squares away${hurt}`,
+      };
+    });
 }
 
 module.exports = { playOthers };
