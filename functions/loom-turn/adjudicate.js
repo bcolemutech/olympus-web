@@ -710,13 +710,42 @@ const DEGREE_WORDS = {
   criticalFailure: 'fails badly',
 };
 
+// Plausibility (L-826; combat CB1), as INTERPRET judged a typed action:
+// the extraordinary is refused, and the complicated asked how (once: a
+// second answer that still doesn't say is refused), each plainly, spending
+// nothing. A resolution, or null for an action to be tried.
+const NO_HOW = "Without a clear way to do it, you can't attempt it.";
+function plausibilityOf(proposedAction, characterState) {
+  const params = proposedAction.params || {};
+  // Nothing to ask while the turn's action is spent: End turn first.
+  if (params.plausibility === 'complicated' && turnStateOf(characterState).actionUsed) {
+    return blocked(ACTED);
+  }
+  if (params.plausibility === 'extraordinary') {
+    return { ...blocked(params.why || "That's beyond you."), plain: true };
+  }
+  if (params.plausibility === 'complicated') {
+    if (params.answering) return { ...blocked(NO_HOW), plain: true };
+    const question = params.question || 'How exactly do you do that?';
+    return { ...blocked(question), plain: true, ask: question };
+  }
+  return null;
+}
+
 // Anything else the player tries (L-803; game systems DC3): the check
 // INTERPRET proposed (`params.check`: a skill or attribute, a rung, perhaps
 // someone it is against), validated and rolled by the world's system; with
 // none, a plain attempt at the ladder's easiest rung.
 function evaluateGeneric(proposedAction, dice, characterState, canonWorld) {
   const system = checks.systemOf(canonWorld);
-  const proposed = (proposedAction.params && proposedAction.params.check) || null;
+  let proposed = (proposedAction.params && proposedAction.params.check) || null;
+  // Improbable (L-826; CB1): the ladder's hardest rung, whatever was
+  // proposed, and never against someone's easier roll.
+  if ((proposedAction.params || {}).plausibility === 'improbable') {
+    const { opposedBy, ...rest } = proposed || {};
+    void opposedBy;
+    proposed = { ...rest, rung: system.checks.ladder[system.checks.ladder.length - 1].name };
+  }
   if (proposed) {
     const why = checks.refusal(system, proposed);
     if (why) return blocked(why);
@@ -1477,7 +1506,10 @@ function evaluate(
     });
   }
   const held = proposedAction.verb === 'move' ? heldBy(canonWorld, characterState) : null;
-  if (held) {
+  const judged = plausibilityOf(proposedAction, characterState);
+  if (judged) {
+    resolution = judged;
+  } else if (held) {
     resolution = { ...blocked(held), plain: true };
   } else if (proposedAction.verb === 'move') {
     resolution = evaluateMove(
@@ -1517,6 +1549,8 @@ function evaluate(
     ...(resolution.opposed ? { opposed: Object.freeze({ ...resolution.opposed }) } : {}),
     // Turned down plainly, unnarrated (L-815: held by a condition).
     ...(resolution.plain ? { plain: true } : {}),
+    // A question for the player (L-826: a complicated action), asked plainly.
+    ...(resolution.ask ? { ask: resolution.ask } : {}),
     // Ruled by the combat module, not narrated (L-822; EN5).
     ...(resolution.ruled ? { ruled: true } : {}),
     // The attack made this turn (L-822), for the record and the GM.
