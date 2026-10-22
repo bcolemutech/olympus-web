@@ -1297,7 +1297,11 @@ function writeTools({ writer, systems }) {
         'as an archer or a brute, and its fall shakes the rest), posture (cowardly, ' +
         'cautious, steady, bold, reckless: whom they go for and when they break), and ' +
         'leader. null clears a role or posture back to its default (archer with a ranged ' +
-        'attack, else brute; steady). Figures placed with place_figures carry their own. ' +
+        'attack, else brute; steady). combatNotes (L-825): how they fight in their own ' +
+        'terms, for the model that chooses a named character’s turn from the moves the ' +
+        'rules allow ("protects the smith’s daughter first; never fights in the dark"); ' +
+        'null clears them. Their role’s tactics are what they fall back on. Figures placed ' +
+        'with place_figures carry their own. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -1305,10 +1309,11 @@ function writeTools({ writer, systems }) {
         role: z.enum(ROLES).nullable().optional(),
         posture: z.enum(POSTURES).nullable().optional(),
         leader: z.boolean().optional(),
+        combatNotes: z.string().trim().max(1000).nullable().optional(),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['role', 'posture', 'leader']);
+        requireSome(args, ['role', 'posture', 'leader', 'combatNotes']);
         return edit(ctx, args, (e) => {
           const { world } = e;
           const character = existing(world, 'character', args.characterId);
@@ -1322,6 +1327,12 @@ function writeTools({ writer, systems }) {
           if (args.leader !== undefined && args.leader !== Boolean(character.leader)) {
             fields.leader = args.leader ? true : FieldValue.delete();
           }
+          if (args.combatNotes !== undefined) {
+            const notes = args.combatNotes || null;
+            if (notes !== (character.combatNotes || null)) {
+              fields.combatNotes = notes || FieldValue.delete();
+            }
+          }
           if (Object.keys(fields).length) e.update(e.ref('characters', character.id), fields);
           // The character as they will be, for their tactics with the defaults.
           const after = { ...character };
@@ -1330,12 +1341,14 @@ function writeTools({ writer, systems }) {
             else if (args[part] !== undefined) after[part] = args[part];
           }
           if (args.leader !== undefined) after.leader = args.leader;
+          if (args.combatNotes !== undefined) after.combatNotes = args.combatNotes || null;
           return {
             character: { id: character.id, name: character.name },
             tactics: {
               role: figureRules.roleOf(systemOf(world), after),
               posture: figureRules.postureOf(after),
               ...(after.leader ? { leader: true } : {}),
+              ...(after.combatNotes ? { combatNotes: after.combatNotes } : {}),
             },
             updated: changedFields(fields),
           };

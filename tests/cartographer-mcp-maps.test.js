@@ -1564,6 +1564,34 @@ describe('figures, tactics and danger (L-824)', () => {
     ).toMatch(/posture/);
   });
 
+  test('set_tactics: combatNotes, for the model choosing a named character’s turns (L-825)', async () => {
+    const { character } = await ok('add_character', {
+      worldId: W,
+      name: 'Harbour Warden',
+      description: 'Keeps the quay; fights for the dockhands.',
+      locationId: 'loc_1',
+      townPoint: { x: 220, y: 220 },
+    });
+    const id = character.id;
+    const notes = 'Protects the dockhands first; never fights by the water.';
+    const set = await ok('set_tactics', { worldId: W, characterId: id, combatNotes: notes });
+    expect(set).toMatchObject({ tactics: { combatNotes: notes }, updated: ['combatNotes'] });
+    expect((await ok('get_character', { worldId: W, characterId: id })).tactics).toEqual({
+      role: 'brute',
+      posture: 'steady',
+      combatNotes: notes,
+    });
+    const cleared = await ok('set_tactics', { worldId: W, characterId: id, combatNotes: null });
+    expect(cleared.tactics).toEqual({ role: 'brute', posture: 'steady' });
+    expect((await ok('get_character', { worldId: W, characterId: id })).tactics).toEqual({
+      role: 'brute',
+      posture: 'steady',
+    });
+    expect(
+      await refused('set_tactics', { worldId: W, characterId: id, combatNotes: 'x'.repeat(1001) })
+    ).toMatch(/combatNotes/);
+  });
+
   test('a place in town takes a danger too', async () => {
     const result = await ok('update_place', {
       worldId: W,

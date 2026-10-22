@@ -157,8 +157,10 @@ async function runTurnPipeline(params) {
     // A fight that ends with this turn is narrated (L-821; EN5); any other
     // End turn, rounds of a fight included, is plain lines.
     let resolution2 = resolution;
+    // So is a round in which a named character acted (L-825; EN5): one
+    // passage for it.
     const told =
-      resolution.fight && resolution.fight.ended
+      (resolution.fight && resolution.fight.ended) || (resolution.named || []).length
         ? await narrateResolution({
             actionText: 'end turn',
             proposedAction,

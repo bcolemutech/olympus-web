@@ -23,6 +23,8 @@
  *   ./position.js  reach and range, cover, flanking, Dodge, defending
  *                  reactions (pure)
  *   ./reactions.js what a walk draws: leaving reach, a readied attack (pure)
+ *   ./menu.js      a named character's choices: the whole turns they can take
+ *                  (pure)
  */
 
 module.exports = {
@@ -39,4 +41,5 @@ module.exports = {
   rests: require('./rests'),
   position: require('./position'),
   reactions: require('./reactions'),
+  menu: require('./menu'),
 };

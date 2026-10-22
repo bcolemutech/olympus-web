@@ -84,8 +84,8 @@ function targetOf(me, foes, { posture, health }) {
 
 /**
  * A fighter's turn: `me` { id, cell, side, role, posture, fleeing?, attacks
- * (usable now), speed, noMove?, noAction? }, `foes` and `friends` [{ id,
- * cell, sheet, max }] (standing, not down), `occupied` every square someone
+ * (usable now), speed, noMove?, noAction?, focus? (the foe to go for, L-825)
+ * }, `foes` and `friends` [{ id, cell, sheet, max }] (standing, not down), `occupied` every square someone
  * stands on (the down too), `map` and its `doors`' states, `health` the
  * system's health resource.
  *
@@ -149,7 +149,10 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
     return plan;
   }
 
-  const target = targetOf(me, foes, { posture: me.posture, health });
+  // A foe chosen for them (L-825: a named character's menu), else by posture.
+  const target =
+    (me.focus && foes.find((f) => f.id === me.focus)) ||
+    targetOf(me, foes, { posture: me.posture, health });
   if (!target || me.noAction) return plan;
   // Only a caster throws an area, where it hits no friend; the rest use
   // their single attacks.

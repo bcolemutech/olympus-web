@@ -19,6 +19,7 @@ const ground = require('../loom-canon/ground');
 const { planTownStep, walksTown, nearestWayOut } = require('./town-steps');
 const { UNKNOWN } = require('./town-found');
 const combat = require('../loom-modules/combat');
+const { namedTurn } = require('./named-turns');
 
 // A lock's difficulty when its door gives none (L-626).
 const DEFAULT_LOCK_DIFFICULTY = 15;
@@ -766,7 +767,7 @@ function evaluateGeneric(proposedAction, dice, characterState, canonWorld) {
 // says how far the player moved this turn, since steps aren't recorded
 // (L-613 / #443). The turn takes its length of game time (L-371; game time
 // T4): 6 s on a battle map, 5 min anywhere else, from timeRules.
-function evaluateEndTurn(characterState, canonWorld, dice) {
+function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
   const spent = speedOf(characterState) - turnStateOf(characterState).movementLeft;
   const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
   const ends = clock.timeOf(characterState) + clock.turnSeconds(canonWorld, Boolean(map));
@@ -808,6 +809,7 @@ function evaluateEndTurn(characterState, canonWorld, dice) {
         }
       : combat.play.afterTurn(canonWorld, saved ? { ...after, down: saved.down } : after, {
           dice,
+          choose,
         }) ||
         (characterState.down
           ? // Down with no fight (the fight just ended): what becomes of them.
@@ -851,13 +853,14 @@ function evaluateEndTurn(characterState, canonWorld, dice) {
         : {}),
     ...(round.fight ? { fight: round.fight } : {}),
     ...(round.fallen ? { fallen: round.fallen } : {}),
+    ...(round.named && round.named.length ? { named: round.named } : {}),
   };
 }
 
 // A fight starting where the player stands (L-821; SE1): hostiles in sight
 // after a step, who lie in wait, so the player rolls to notice them. The
 // rounds before the player's first turn (lost to surprise) take their time.
-function evaluateFightStart(characterState, canonWorld, dice) {
+function evaluateFightStart(characterState, canonWorld, dice, choose = null) {
   if (combat.play.fightOf(characterState)) {
     return { outcome: 'no_op', mutations: [], constraints: ["You're already in a fight."] };
   }
@@ -868,6 +871,7 @@ function evaluateFightStart(characterState, canonWorld, dice) {
     by: 'seen',
     ambushers: 'hostile',
     dice,
+    choose,
   });
 }
 
@@ -897,6 +901,7 @@ function fightStarted(characterState, canonWorld, options) {
     roll: { ...rolled(begun.roll, 'initiative', system), verdict: begun.roll.verdict },
     fight: begun.fight,
     ...(begun.fallen ? { fallen: begun.fallen } : {}),
+    ...(begun.named ? { named: begun.named } : {}),
   };
 }
 
@@ -931,7 +936,7 @@ const HOW_LONG =
 // A short or long rest (L-827; DF5; ../loom-modules/combat/rests.js): its
 // hours, what it restores, once a day for a long one; somewhere dangerous it
 // may be broken, and hostiles there come for the player.
-function evaluateRest(kind, characterState, canonWorld, dice) {
+function evaluateRest(kind, characterState, canonWorld, dice, choose = null) {
   const result = combat.rests.rest(canonWorld, characterState, kind, { dice });
   if (result.refused) return { ...blocked(result.refused), plain: true };
   const mutations = [
@@ -955,7 +960,12 @@ function evaluateRest(kind, characterState, canonWorld, dice) {
     time: result.to,
     character: { ...characterState.character, sheet: result.sheet },
   };
-  const fought = fightStarted(after, canonWorld, { by: 'event', ambushers: 'hostile', dice });
+  const fought = fightStarted(after, canonWorld, {
+    by: 'event',
+    ambushers: 'hostile',
+    dice,
+    choose,
+  });
   if (!fought) return resolution;
   return {
     ...resolution,
@@ -964,10 +974,11 @@ function evaluateRest(kind, characterState, canonWorld, dice) {
     roll: fought.roll,
     fight: fought.fight,
     ...(fought.fallen ? { fallen: fought.fallen } : {}),
+    ...(fought.named ? { named: fought.named } : {}),
   };
 }
 
-function evaluateWait(proposedAction, characterState, canonWorld, dice) {
+function evaluateWait(proposedAction, characterState, canonWorld, dice, choose = null) {
   const turn = turnStateOf(characterState);
   if (turn.actionUsed) return blocked(ACTED);
   if (combat.play.fightOf(characterState)) return { ...blocked(NO_REST), plain: true };
@@ -975,7 +986,7 @@ function evaluateWait(proposedAction, characterState, canonWorld, dice) {
   // A short or long rest (L-827), by the system's rests.
   const kind = String(params.rest || '').toLowerCase();
   if (combat.rests.KINDS.includes(kind)) {
-    return evaluateRest(kind, characterState, canonWorld, dice);
+    return evaluateRest(kind, characterState, canonWorld, dice, choose);
   }
   // Sleeping or resting, as the player put it ("sleep until dawn").
   const how = WAIT_VERBS[String(params.how || '').toLowerCase()] || WAIT_VERBS[proposedAction.verb];
@@ -1381,7 +1392,7 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
 // After a move (L-821): leaving the fight's map ends it (fled); arriving
 // in sight of a hostile, out of one, starts one. Its lines follow the move's,
 // and its roll card is the turn's when the move rolled none.
-function afterMove(resolution, characterState, canonWorld, dice) {
+function afterMove(resolution, characterState, canonWorld, dice, choose = null) {
   const after = JSON.parse(JSON.stringify(characterState));
   applyStateMutations(
     after,
@@ -1391,7 +1402,7 @@ function afterMove(resolution, characterState, canonWorld, dice) {
   const changed = current
     ? combat.play.leftMap(characterState, after.mapId)
     : combat.play.hostilesInSight(canonWorld, after).length
-      ? fightStarted(after, canonWorld, { by: 'seen', ambushers: 'hostile', dice })
+      ? fightStarted(after, canonWorld, { by: 'seen', ambushers: 'hostile', dice, choose })
       : null;
   if (!changed) return resolution;
   return {
@@ -1400,10 +1411,20 @@ function afterMove(resolution, characterState, canonWorld, dice) {
     constraints: resolution.constraints.concat(changed.constraints || changed.lines),
     ...(!resolution.roll && changed.roll ? { roll: changed.roll } : {}),
     fight: changed.fight,
+    ...(changed.named ? { named: changed.named } : {}),
   };
 }
 
-function evaluate(proposedAction, worldState, characterState, dice, canonWorld, known, found) {
+function evaluate(
+  proposedAction,
+  worldState,
+  characterState,
+  dice,
+  canonWorld,
+  known,
+  found,
+  { choose = null } = {}
+) {
   let resolution;
   // Down (L-827): nothing but ending the turn.
   if (characterState.down && proposedAction.verb !== 'end-turn') {
@@ -1428,18 +1449,18 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
       diceSource(dice)
     );
   } else if (proposedAction.verb === 'end-turn') {
-    resolution = evaluateEndTurn(characterState, canonWorld, diceSource(dice));
+    resolution = evaluateEndTurn(characterState, canonWorld, diceSource(dice), choose);
   } else if (proposedAction.verb === 'hazard') {
     resolution = evaluateHazard(proposedAction, characterState, diceSource(dice), canonWorld);
   } else if (proposedAction.verb === 'fight') {
-    resolution = evaluateFightStart(characterState, canonWorld, diceSource(dice));
+    resolution = evaluateFightStart(characterState, canonWorld, diceSource(dice), choose);
   } else if (WAIT_VERBS[proposedAction.verb]) {
-    resolution = evaluateWait(proposedAction, characterState, canonWorld, diceSource(dice));
+    resolution = evaluateWait(proposedAction, characterState, canonWorld, diceSource(dice), choose);
   } else {
     resolution = evaluateAction(proposedAction, characterState, diceSource(dice), canonWorld);
   }
   if (proposedAction.verb === 'move' && resolution.outcome === 'success') {
-    resolution = afterMove(resolution, characterState, canonWorld, diceSource(dice));
+    resolution = afterMove(resolution, characterState, canonWorld, diceSource(dice), choose);
   }
 
   // Resolution is immutable once produced — NARRATE (L-113) can color it, never change it.
@@ -1466,6 +1487,8 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
     ...(resolution.fight ? { fight: Object.freeze({ ...resolution.fight }) } : {}),
     // A hazard walked into (L-815), for the GM.
     ...(resolution.hazard ? { hazard: Object.freeze({ ...resolution.hazard }) } : {}),
+    // What the named characters chose in the fight (L-825), for the GM.
+    ...(resolution.named ? { named: Object.freeze(resolution.named.slice()) } : {}),
     // A rest taken (L-827), for the GM.
     ...(resolution.rest ? { rest: Object.freeze({ ...resolution.rest }) } : {}),
     // The time it took and the dawns and dusks on the way (L-373), for the GM (L-375).
@@ -1475,7 +1498,23 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
   });
 }
 
+// A named character's turn reached with no choice yet (L-825): what to ask.
+class NeedChoice extends Error {
+  constructor(key, menu) {
+    super('A named character is to choose their turn: ' + key);
+    this.key = key;
+    this.menu = menu;
+  }
+}
+// At most this many named turns are asked of the model in one player's turn;
+// past it, the rest fight by their role's tactics.
+const MAX_NAMED_TURNS = 12;
+
 /**
+ * `decide(menu, { canonWorld, save })`, async, answers a named character's
+ * choice of turn (`{ option, reason }`, or null): by default the model's
+ * (./named-turns.js); `decide: null` leaves named characters to tactics.
+ *
  * `known` is the ground the save knows on its battle map, keyed "x,y" (L-635;
  * ./seen.js knownTo): a move there heads only for and over it.
  *
@@ -1486,7 +1525,42 @@ function evaluate(proposedAction, worldState, characterState, dice, canonWorld, 
  */
 async function adjudicateAction(params, rollFn = rollDie) {
   const { proposedAction, canonWorld, save, worldState, known, found } = params;
-  return evaluate(proposedAction, worldState, save, rollFn, canonWorld, known, found);
+  const decide = params.decide === undefined ? namedTurn : params.decide;
+  if (!decide) return evaluate(proposedAction, worldState, save, rollFn, canonWorld, known, found);
+  // Named characters' turns (L-825; EN3b): evaluate stays pure and
+  // synchronous, so a turn that reaches one stops there (NeedChoice), the
+  // model is asked, and the turn is worked out again from the start with the
+  // same dice, played back in order, and the choices made so far.
+  const choices = {};
+  const tape = [];
+  for (let asked = 0; ; asked++) {
+    let at = 0;
+    const dice =
+      typeof rollFn === 'function'
+        ? (sides) => {
+            if (at < tape.length) return tape[at++];
+            const face = rollFn(sides);
+            tape.push(face);
+            at += 1;
+            return face;
+          }
+        : rollFn;
+    const choose = (key, menu) => {
+      if (key in choices) return choices[key];
+      if (asked >= MAX_NAMED_TURNS) return null;
+      throw new NeedChoice(key, menu);
+    };
+    try {
+      return evaluate(proposedAction, worldState, save, dice, canonWorld, known, found, {
+        choose,
+      });
+    } catch (err) {
+      if (!(err instanceof NeedChoice)) throw err;
+      choices[err.key] = await Promise.resolve()
+        .then(() => decide(err.menu, { canonWorld, save }))
+        .catch(() => null);
+    }
+  }
 }
 
 module.exports = {
