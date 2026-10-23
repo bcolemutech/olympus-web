@@ -622,7 +622,14 @@ exports.loomPlayTurn = onCall(async (request) => {
           (action.attack === undefined || id(action.attack)) &&
           (action.target === undefined || goodTarget)) ||
         (action.verb === 'use' && id(action.feature)));
-    if (!bare && !door && !moving && !attacking && !resting && !tactic) {
+    // "What's here?" on a battle map (#672): a square, or a door.
+    const looking =
+      typeof action === 'object' &&
+      action.verb === 'look' &&
+      (action.door !== undefined
+        ? typeof action.door === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(action.door)
+        : isCell(action.cell));
+    if (!bare && !door && !moving && !attacking && !resting && !tactic && !looking) {
       throw new HttpsError(
         'invalid-argument',
         'action must be { verb: "move", target: <place id> }, { verb: "move", cell: { x, y } }, ' +
@@ -630,8 +637,8 @@ exports.loomPlayTurn = onCall(async (request) => {
           '{ verb: "continue" }, { verb: "door", door: <door id>, open: true | false }, ' +
           '{ verb: "attack", target: <character id>, attack?, subdue? }, ' +
           '{ verb: "rest", rest: "short" | "long" }, { verb: "dash" | "dodge" | "withdraw" }, ' +
-          '{ verb: "ready", attack?, target? }, { verb: "use", feature: <feature id> } ' +
-          'or { verb: "end-turn" }.'
+          '{ verb: "ready", attack?, target? }, { verb: "use", feature: <feature id> }, ' +
+          '{ verb: "look", cell: { x, y } | door: <door id> } or { verb: "end-turn" }.'
       );
     }
   } else {
@@ -652,31 +659,35 @@ exports.loomPlayTurn = onCall(async (request) => {
       ...(action
         ? {
             action:
-              action.verb === 'door'
-                ? { verb: 'door', door: action.door, open: action.open }
-                : action.verb === 'rest'
-                  ? { verb: 'rest', rest: action.rest }
-                  : ['dash', 'dodge', 'withdraw', 'ready', 'use'].includes(action.verb)
-                    ? {
-                        verb: action.verb,
-                        ...(action.attack ? { attack: action.attack } : {}),
-                        ...(action.target ? { target: action.target } : {}),
-                        ...(action.feature ? { feature: action.feature } : {}),
-                      }
-                    : action.verb === 'attack'
+              action.verb === 'look'
+                ? action.door !== undefined
+                  ? { verb: 'look', door: action.door }
+                  : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
+                : action.verb === 'door'
+                  ? { verb: 'door', door: action.door, open: action.open }
+                  : action.verb === 'rest'
+                    ? { verb: 'rest', rest: action.rest }
+                    : ['dash', 'dodge', 'withdraw', 'ready', 'use'].includes(action.verb)
                       ? {
-                          verb: 'attack',
-                          target: action.target,
+                          verb: action.verb,
                           ...(action.attack ? { attack: action.attack } : {}),
-                          ...(action.subdue ? { subdue: true } : {}),
+                          ...(action.target ? { target: action.target } : {}),
+                          ...(action.feature ? { feature: action.feature } : {}),
                         }
-                      : action.verb === 'end-turn' || action.verb === 'continue'
-                        ? { verb: action.verb }
-                        : action.point !== undefined
-                          ? { verb: action.verb, point: { x: action.point.x, y: action.point.y } }
-                          : typeof action.target === 'string'
-                            ? { verb: action.verb, target: action.target }
-                            : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
+                      : action.verb === 'attack'
+                        ? {
+                            verb: 'attack',
+                            target: action.target,
+                            ...(action.attack ? { attack: action.attack } : {}),
+                            ...(action.subdue ? { subdue: true } : {}),
+                          }
+                        : action.verb === 'end-turn' || action.verb === 'continue'
+                          ? { verb: action.verb }
+                          : action.point !== undefined
+                            ? { verb: action.verb, point: { x: action.point.x, y: action.point.y } }
+                            : typeof action.target === 'string'
+                              ? { verb: action.verb, target: action.target }
+                              : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
           }
         : { actionText: actionText.trim() }),
     });

@@ -670,10 +670,12 @@ function isValidRawNarration(raw) {
   );
 }
 
+// Without the model, a recap of the constraints, or the resolution's own
+// `fallback` line where its constraints are words for the model alone (#672).
 function fallbackNarration(actionText, resolution) {
   const constraintsText = (resolution.constraints || []).join(' ');
   return {
-    narration: ('You ' + actionText + '. ' + constraintsText).trim(),
+    narration: resolution.fallback || ('You ' + actionText + '. ' + constraintsText).trim(),
     inventedEntities: [],
     suggestedActions: [],
   };

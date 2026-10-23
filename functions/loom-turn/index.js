@@ -8,7 +8,9 @@ const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
 const { planStep, planDoor, doorStatesOf, OUT_OF_MOVEMENT } = require('./steps');
-const { recordOf, knownTo, added } = require('./seen');
+const seen = require('./seen');
+const { recordOf, knownTo, added } = seen;
+const { lookAt, lookTargetOf } = require('./looking');
 const { planTownStep, walksTown, townPlanOf } = require('./town-steps');
 const { lookInTown, townRecordOf } = require('./town-seen');
 const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
@@ -153,6 +155,11 @@ async function runTurnPipeline(params) {
       refused: true,
       ended: true,
     };
+  }
+
+  // "What's here?" on a battle map (#672): free, unrecorded.
+  if (action && action.verb === 'look') {
+    return lookTurn(params, { save, saveRef, canonWorld, known, found, worldState }, action);
   }
 
   if (action && action.verb === 'end-turn') {
@@ -426,6 +433,24 @@ async function runTurnPipeline(params) {
       asked,
     });
   }
+  // A typed look at something on the battle map (#672) is "What's here?";
+  // at something not seen, it goes on as before ("You don't see that here.").
+  const looked = lookTargetOf(canonWorld, save, proposedAction);
+  const lookable =
+    looked &&
+    !lookAt(canonWorld, save, looked, {
+      known,
+      inSight: seen.inSightNow(canonWorld, save).squares,
+    }).refused;
+  if (lookable) {
+    return lookTurn(
+      params,
+      { save, saveRef, canonWorld, known, found, worldState },
+      looked,
+      actionText
+    );
+  }
+
   // Setting out from a town with ground, from anywhere on its streets
   // (#669): the way out is walked turn after turn, as Walk there is, and the
   // journey begins there.
@@ -633,6 +658,58 @@ async function townStep(params, target) {
     narration: [lines.join(' '), entered.narration].filter(Boolean).join(' '),
     step: { ...answer.step, townPoint: null, entered: step.enter.id },
   };
+}
+
+/**
+ * "What's here?" (#672): the facts of a square or a door as the save knows
+ * them (./looking.js), described by NARRATE from those alone, or, for an
+ * empty square, the rules' plain line with no model. It spends nothing (no
+ * action, movement or time, in a fight or out) and isn't recorded as a turn.
+ */
+async function lookTurn(params, context, target, typed) {
+  const { save, saveRef, canonWorld, known, found } = context;
+  const inSight = seen.inSightNow(canonWorld, save).squares;
+  const look = lookAt(canonWorld, save, target, { known, inSight });
+  if (look.refused) return { ...refusal(save, look.refused), refused: true };
+  const plain = (narration) => ({
+    narration,
+    stateSummary: save.recentSummary || '',
+    suggestedActions: [],
+    time: clock.timeView(clock.timeOf(save)),
+    looked: true,
+  });
+  if (look.empty) return plain(look.line);
+  const actionText = typed || "what's here at " + look.at;
+  const told = await narrateResolution({
+    actionText,
+    proposedAction: { verb: 'look', targets: [], params: {} },
+    resolution: {
+      outcome: 'success',
+      mutations: [],
+      // Without the model: the facts themselves, plainly (#672).
+      fallback:
+        (look.inSight ? '' : 'When you last saw it: ') +
+        look.facts.join(' ').replace(/the player/g, 'you'),
+      constraints: [
+        look.inSight
+          ? 'The player looks at ' + look.at + ', in sight now. What is there:'
+          : 'The player thinks back to ' +
+            look.at +
+            ', out of sight now: describe it as remembered ("When you last saw it, …"). ' +
+            'What was there:',
+      ]
+        .concat(look.facts)
+        .concat([
+          'Describe only this spot, in two or three sentences, from these facts alone: ' +
+            'invent nothing there, and nothing happens. Taking a look costs no time.',
+        ]),
+    },
+    canonWorld: knownWorld(canonWorld, save, found),
+    save,
+    saveRef,
+    known,
+  });
+  return plain(told.narration);
 }
 
 // The most turns "Walk there" plays out in one request: far more than the
