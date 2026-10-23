@@ -56,7 +56,7 @@ Settled with the user in the session (one system per world, systems over MCP, fa
 | **CS3** | Skills                   | **A list per system, each tied to an attribute, with a rank or proficiency**                                                                                                                                                       |
 | **CS4** | Today's abilities        | **Become traits**, and still open routes and places as today                                                                                                                                                                       |
 | **CS5** | Making a character       | **The system picks a built-in method** (array, point buy or rolling), and the Loom walks the player through it                                                                                                                     |
-| **CS6** | Growing stronger         | **Not in the first epics.** The sheet has a level, and the system has room for an advancement method. Since 2026-10-16: L-830, after combat                                                                                        |
+| **CS6** | Growing stronger         | **Not in the first epics.** The sheet has a level, and the system has room for an advancement method. Since 2026-10-16: L-840, after combat                                                                                        |
 | **CS7** | NPCs                     | **Named characters get full sheets; generic templates (L-790) get a short stat block**, written once and used by every figure placed                                                                                               |
 | **CS8** | Where the sheet is shown | **The Character panel**, drawn from the system, **plus a compact strip on the map** with health and the main resources                                                                                                             |
 
@@ -245,8 +245,9 @@ Two worlds on different systems, a d20 fantasy and a dice-pool sci-fi. In each, 
 **After L-810** (revised 2026-10-16 from the reference games, [`scenarios.md`](./scenarios.md) §4):
 
 - **L-820 Combat**, the first module, designed in [`combat.md`](./combat.md) (2026-10-20). It also covers falling to 0 (the system decides: down and dying, then saved, captured or dead; a world can turn death off), short and long rests as waits that restore resources, and hostile creatures with fight behaviours (attack, guard, flee when hurt, call for help).
-- **L-830 Advancement:** experience and levels, and improving by use (not milestones or study). CS6 is no longer deferred.
-- **Then the other modules** in MD5's order, from L-840: powers, social conflict, crafting (alchemy, machines, repair, gathering), ship battle, chases, hacking, mass battle.
+- **L-830 Action points**, designed in [`action-points.md`](./action-points.md) (2026-10-23): one pool for moving, actions and reactions, replacing speed and combat's `economy`. Advancement moved from L-830 to L-840, and the modules after it to L-850 on.
+- **L-840 Advancement:** experience and levels, and improving by use (not milestones or study). CS6 is no longer deferred.
+- **Then the other modules** in MD5's order, from L-850: powers, social conflict, crafting (alchemy, machines, repair, gathering), ship battle, chases, hacking, mass battle.
 
 Each is designed when it is next.
 

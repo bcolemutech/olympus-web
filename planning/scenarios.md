@@ -39,7 +39,7 @@ A D&D-style game: a party travels a realm of roads and wilds, takes work in town
 | Conditions with durations, areas, saving throws            | —                                                           | ❓      |
 | Short and long rests; recovering resources                 | —                                                           | ❓      |
 | Falling to 0, dying, defeat                                | —                                                           | ❓      |
-| Experience and levels                                      | L-830 Advancement (§5)                                      | ❓      |
+| Experience and levels                                      | L-840 Advancement (§5)                                      | ❓      |
 | Quests and a journal                                       | "Not yet placed"                                            | ❓      |
 
 ### 2.2 Steampunk sword and sorcery: guns, machines, trains and airships
@@ -85,7 +85,7 @@ Loosely on the d20 rules. Magic exists, but **not everyone can use it**, and the
 | A copy of the d20 system, with magic at its centre                                  | Phase 9                                      | 📋     |
 | Being able to use magic, or not: a trait that opens spellcasting                    | Sheet traits (L-810)                         | 📋     |
 | Complex spells: schools, components, slots or mana, areas, durations, saves         | Powers module, on the effects engine         | ❓     |
-| Growing in magic: experience, and spells and skills improving with use              | Advancement (L-830)                          | ❓     |
+| Growing in magic: experience, and spells and skills improving with use              | Advancement (L-840)                          | ❓     |
 | Alchemy: ingredients, recipes, brewing over game time, potions with effects         | Crafting module, items (L-770)               | ❓     |
 | Gathering ingredients by terrain and place                                          | Crafting and gathering                       | ❓     |
 | Hostility between the magical and the mundane: factions, standing, hunters and mobs | Social conflict module; factions; combat     | ❓     |
@@ -186,7 +186,7 @@ Settled with the user through a questionnaire (2026-10-16). Every answer took th
 | G1 Map levels         | **L-900 Map levels** (design: [`map-levels.md`](./map-levels.md)), with G9's templates | Designed now; built with or just before L-710                       |
 | G2 Vehicles           | **L-910 Vehicles** (design: [`vehicles.md`](./vehicles.md)), with G10's crew           | Designed; built after the dungeon epic, when steampunk is next      |
 | G3 Effects            | **L-815 Effects**, in L-810                                                            | Phase 9, before combat                                              |
-| G4 Advancement        | **L-830 Advancement**                                                                  | Phase 9, after combat                                               |
+| G4 Advancement        | **L-840 Advancement**                                                                  | Phase 9, after combat                                               |
 | G5 Defeat, rests      | **L-820 Combat** (rests: a wait that restores)                                         | Phase 9                                                             |
 | G12 Hostile creatures | **L-820 Combat**                                                                       | Phase 9                                                             |
 | G6 Dungeon features   | **A dungeon epic** (light, traps, secrets, searching, floor tools)                     | After combat; first after Phase 9, as sword and sorcery comes first |
