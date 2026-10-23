@@ -4,6 +4,7 @@ const { PNG } = require('pngjs');
 const jpeg = require('jpeg-js');
 const { pngDimensions } = require('../../../cartographer/service');
 const { isSvg } = require('../../../cartographer/svg');
+const mapAreas = require('../../../loom-canon/map-areas');
 
 // Images Claude can see (planning/the-loom-layered-worlds.md §9; L-355 /
 // #417): a town's art, a battle map's art, or the world map, scaled down for
@@ -35,6 +36,8 @@ const COLOURS = {
   link: [255, 255, 255, 150],
   // People (L-684): the grid view's teal, as diamonds, apart from every place.
   person: [77, 182, 172, 255],
+  // Areas (#670): violet outlines, apart from every marker.
+  area: [179, 157, 219, 255],
   outline: [10, 14, 26, 255],
   // Layers (L-623): walls, doors and obstacles.
   wall: [255, 255, 255, 255],
@@ -401,6 +404,14 @@ function renderBattleMap(map, art, people = []) {
     }
   });
   (map.doors || []).forEach((d) => gridLine(base, d.from, d.to, cw, ch, COLOURS.door, thick + 2));
+  // Areas (#670): their outlines, dashed apart from the walls by colour.
+  const areaLine = Math.max(2, Math.round(thick / 2));
+  (map.areas || []).forEach((a) => {
+    const corners = a.polygon || [];
+    corners.forEach((p, i) => {
+      gridLine(base, p, corners[(i + 1) % corners.length], cw, ch, COLOURS.area, areaLine);
+    });
+  });
 
   const markers = [];
   const add = (type, item, shape, colour) => {
@@ -421,6 +432,14 @@ function renderBattleMap(map, art, people = []) {
   people.forEach((p) => {
     add('person', p, 'diamond', COLOURS.person);
     if (p.at) markers[markers.length - 1].at = p.at;
+  });
+  // Areas are numbered at their middle square.
+  (map.areas || []).forEach((a) => {
+    const at = mapAreas.labelSquare(mapAreas.squaresOf(map, a));
+    if (!at) return;
+    const n = markers.length + 1;
+    markers.push({ n, type: 'area', id: a.id, name: a.name, polygon: a.polygon });
+    number(base, n, at.x * cw + 3, at.y * ch + 3, ls);
   });
   // Doors are numbered at their middle, obstacles at their top-left corner.
   (map.doors || []).forEach((d) => {
@@ -467,7 +486,8 @@ function renderBattleMap(map, art, people = []) {
         'and amber bars doors, both on the grid lines between squares (corner (x, y) is the ' +
         'top-left of square (x, y)); obstacles are shaded by kind: solid filled dark, low ' +
         'hatched, difficult dotted. Doors are numbered at their middle, obstacles at their ' +
-        'top-left square.',
+        'top-left square. Violet outlines are areas, along the grid lines, numbered at their ' +
+        'middle square.',
       walls: (map.walls || []).length,
       markers,
     },

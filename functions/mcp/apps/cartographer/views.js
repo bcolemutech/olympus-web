@@ -16,6 +16,7 @@ const {
 } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
+const mapAreas = require('../../../loom-canon/map-areas');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
@@ -713,6 +714,19 @@ function figureRows(world, map) {
   }));
 }
 
+// Features whose names say a space more than a spot (#670): candidates to be
+// areas, which are labels and context rather than things to click.
+function areaWarnings(map) {
+  return (map.features || [])
+    .filter(mapAreas.soundsLikeAnArea)
+    .map(
+      (f) =>
+        `The feature "${f.name}" (${f.id}) sounds like a space more than a spot: if players are ` +
+        'anywhere in it rather than acting on one square, make it an area (areas, with ' +
+        'set_map_layers) and keep features for what they use.'
+    );
+}
+
 function battleMapDetail(world, map) {
   const exitTo = (exit) => {
     if (!exit.to || exit.to === 'out') return 'out';
@@ -743,6 +757,11 @@ function battleMapDetail(world, map) {
     walls: map.walls || [],
     doors: map.doors || [],
     obstacles: map.obstacles || [],
+    // Its areas (#670), with how many squares each holds.
+    areas: (map.areas || []).map((area) => ({
+      ...area,
+      squares: mapAreas.squaresOf(map, area).length,
+    })),
     // Its hazards (L-815), with their squares.
     hazards: hazardRows(world, map),
     // Its figures (L-824), each numbered as players meet them.
@@ -759,6 +778,7 @@ function battleMapDetail(world, map) {
     // Its score and band (L-692): battle maps are never gated.
     ...graded(gradeBattleMap(world, map)),
     ...(map.retired ? { retired: true } : {}),
+    ...(areaWarnings(map).length ? { warnings: areaWarnings(map) } : {}),
   };
 }
 
@@ -767,6 +787,7 @@ module.exports = {
   usersOf,
   battleMapRow,
   battleMapDetail,
+  areaWarnings,
   hazardRows,
   figureRows,
   worldRow,

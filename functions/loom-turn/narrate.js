@@ -5,6 +5,7 @@ const loomCanon = require('../loom-canon');
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
+const mapAreas = require('../loom-canon/map-areas');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
 const { turnStateOf, speedOf } = require('../loom-models');
@@ -217,6 +218,7 @@ function buildMapSection(canonWorld, position, save, resolution, view) {
       cell.y +
       ')' +
       (there.feature ? ', at ' + there.feature.name : '') +
+      (mapAreas.areaAt(map, cell) ? ', in ' + mapAreas.areaAt(map, cell).name : '') +
       '.',
     'The player knows only what is listed here: what is in sight, and what they remember ' +
       "seeing that's out of sight now. Never describe anything else on this map, nor anything " +
@@ -229,6 +231,17 @@ function buildMapSection(canonWorld, position, save, resolution, view) {
   if (featuresThen.length) {
     lines.push('Features remembered' + AWAY + featuresThen.map(spot).join('; ') + '.');
   }
+  // Its areas (#670): the stretches of the map the player can see into, and
+  // those they remember; where the player and the people in sight stand.
+  const square = (k) => ({ x: Number(k.split(',')[0]), y: Number(k.split(',')[1]) });
+  const areas = mapAreas.areasOf(map);
+  const areasNow = areas.filter(({ squares }) => squares.map(square).some(inSight));
+  const areasThen = areas.filter(
+    ({ squares }) => !squares.map(square).some(inSight) && squares.map(square).some(known)
+  );
+  const named = (list) => list.map(({ area }) => area.name).join('; ');
+  if (areasNow.length) lines.push('Areas in sight: ' + named(areasNow) + '.');
+  if (areasThen.length) lines.push('Areas remembered' + AWAY + named(areasThen) + '.');
   // Who stands in sight, and who is beside the player (L-643): talking needs
   // sight, a hand on someone needs them beside. Nobody is remembered.
   const people = peopleInSight(canonWorld, position, view ? view.inSight : null);
@@ -244,6 +257,7 @@ function buildMapSection(canonWorld, position, save, resolution, view) {
               ', ' +
               at.y +
               ')' +
+              (mapAreas.areaAt(map, at) ? ', in ' + mapAreas.areaAt(map, at).name : '') +
               (beside ? ', beside the player' : '')
           )
           .join('; ') +

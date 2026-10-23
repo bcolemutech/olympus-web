@@ -2,6 +2,7 @@
 
 const { callGemini } = require('../gemini');
 const maps = require('../loom-canon/maps');
+const mapAreas = require('../loom-canon/map-areas');
 const { doorSides } = require('./steps');
 const { peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
@@ -189,7 +190,8 @@ function cleanCheck(check, resolve) {
 }
 
 // The things on the battle map a save stands on (L-351), targeted as
-// "feature:<id>", "exit:<id>" and "door:<id>" (L-626): `seen` says whether
+// "feature:<id>", "exit:<id>", "door:<id>" (L-626) and "area:<id>" (#670):
+// `seen` says whether
 // the save has seen each (`known`, keyed "x,y", L-635; a door, from either
 // side; without it, all have been).
 function mapEntities(canonWorld, save, known) {
@@ -214,6 +216,17 @@ function mapEntities(canonWorld, save, known) {
       name: d.name || 'a door',
       kind: 'door here',
       seen: doorSides(d).some(at),
+    })),
+    // Its areas (#670), seen once any square of them is: "go to the back
+    // room" walks into one.
+    mapAreas.areasOf(onMap).map(({ area, squares }) => ({
+      id: 'area:' + area.id,
+      name: area.name,
+      kind: 'area of this map',
+      seen: squares.some((k) => {
+        const [x, y] = k.split(',').map(Number);
+        return at({ x, y });
+      }),
     }))
   );
 }

@@ -3,6 +3,7 @@
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
+const mapAreas = require('../loom-canon/map-areas');
 const { discoveredBy } = require('./discovery');
 const { speedOf, turnStateOf } = require('../loom-models');
 const { planOn, doorStatesOf, doorSides } = require('./steps');
@@ -324,6 +325,8 @@ function fogOf(canonWorld, save, settlement, record, walks) {
  *   - the obstacles on squares it has seen, cut down to those squares;
  *   - the entries, exits (and where each leads) and features on squares it
  *     has seen;
+ *   - its areas (#670) with any square seen, each cut down to the squares
+ *     seen, with the square to label it on and the area the save stands in;
  *   - the people found at the place: those standing on a square (`cell`,
  *     §6) only while it's in sight, with their square (`x`, `y`) for their
  *     token (L-642); the rest, who have no square yet, listed;
@@ -423,6 +426,9 @@ function battleView(canonWorld, save, record) {
     features: (map.features || [])
       .filter(on)
       .map((f) => ({ id: f.id, name: f.name, x: f.x, y: f.y })),
+    // Its areas (#670), as far as they've been seen: a label, never a target.
+    areas: seenAreas(map, known, takenSquares(map, cell, people)),
+    hereArea: (mapAreas.areaAt(map, cell) || {}).name || null,
     // Its layers (L-624), as far as they've been seen, each door in this
     // save's state, so the grid view's paths are the server's.
     walls: seenWalls(map, on),
@@ -459,6 +465,38 @@ function battleView(canonWorld, save, record) {
       inSight: seen.pack(inSight, map.width, map.height),
     },
   };
+}
+
+// A map's areas cut down to the squares seen (`known`), those with none
+// left out (#670): [{ id, name, squares: [{ x, y }], label: { x, y } }],
+// the label on a square clear of what's `taken`.
+function seenAreas(map, known, taken) {
+  return mapAreas
+    .areasOf(map)
+    .map(({ area, squares }) => ({ area, squares: squares.filter((k) => known[k]) }))
+    .filter(({ squares }) => squares.length)
+    .map(({ area, squares }) => ({
+      id: area.id,
+      name: area.name,
+      squares: squares.map((k) => {
+        const [x, y] = k.split(',').map(Number);
+        return { x, y };
+      }),
+      label: mapAreas.labelSquare(squares, taken),
+    }));
+}
+
+// The squares something stands on, that an area's label keeps clear of: the
+// player, entries, exits, features and the people in sight (`people`, as
+// sent: only they, so where a label goes gives nobody unseen away).
+function takenSquares(map, here, people) {
+  const at = (c) => c.x + ',' + c.y;
+  return new Set(
+    [here]
+      .concat(map.entries || [], map.exits || [], map.features || [])
+      .concat(people.filter((p) => p.x !== undefined))
+      .map(at)
+  );
 }
 
 // The runs of a map's walls along the sides of squares seen (`on`): each wall
