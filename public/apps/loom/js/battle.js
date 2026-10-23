@@ -74,6 +74,7 @@
     range: 0xef9a9a, // an attack's reach or range (L-828)
     cover: 0x90caf9, // a target's cover (L-828)
     card: 0xfff3e0, // a foe's card over its token while its turn plays out
+    area: 0x9fa8da, // an area's tint, edge and name (#670)
   };
   var CARD_MS = 1100; // how long a foe's card shows over its token (L-828)
   var FOG_DIM = 0.6; // seen before, out of sight now
@@ -133,6 +134,18 @@
       );
     };
     return { exit: find(d.exits), feature: find(d.features) };
+  }
+
+  // The area a seen square is in (#670): the smallest holding it, or null.
+  function areaAt(cell) {
+    var best = null;
+    (battle.data.areas || []).forEach(function (area) {
+      var hit = area.squares.some(function (sq) {
+        return same(sq, cell);
+      });
+      if (hit && (!best || area.squares.length < best.squares.length)) best = area;
+    });
+    return best;
   }
 
   // Who stands on a cell, of the people in sight (L-642), or null.
@@ -610,6 +623,29 @@
       g.fill({ color: COLOURS.reach, alpha: 0.12 });
     }
 
+    // Areas (#670), under everything else: a faint tint over the squares
+    // seen of each, its edge where it meets squares outside it. Never a
+    // target: a click on a square in one is a click on that square.
+    (d.areas || []).forEach(function (area) {
+      var on = {};
+      area.squares.forEach(function (sq) {
+        on[sq.x + ',' + sq.y] = true;
+      });
+      area.squares.forEach(function (sq) {
+        var a = square(sq);
+        g.rect(a.x, a.y, CELL, CELL);
+      });
+      g.fill({ color: COLOURS.area, alpha: 0.08 });
+      area.squares.forEach(function (sq) {
+        var a = square(sq);
+        if (!on[sq.x + ',' + (sq.y - 1)]) g.moveTo(a.x, a.y).lineTo(a.x + CELL, a.y);
+        if (!on[sq.x + ',' + (sq.y + 1)]) g.moveTo(a.x, a.y + CELL).lineTo(a.x + CELL, a.y + CELL);
+        if (!on[sq.x - 1 + ',' + sq.y]) g.moveTo(a.x, a.y).lineTo(a.x, a.y + CELL);
+        if (!on[sq.x + 1 + ',' + sq.y]) g.moveTo(a.x + CELL, a.y).lineTo(a.x + CELL, a.y + CELL);
+      });
+      g.stroke({ width: 1.5 * px, color: COLOURS.area, alpha: 0.45 });
+    });
+
     // The grid, when its squares are big enough to see.
     if (cellPx >= 6) {
       [false, true].forEach(function (major) {
@@ -789,6 +825,20 @@
     battle.labels.forEach(function (node) {
       node.destroy();
     });
+    // An area's name in its middle square seen (#670), in italics, set
+    // apart from the names of things.
+    (d.areas || []).forEach(function (area) {
+      if (!area.label) return;
+      var node = Loom.draw.label(area.name, 12);
+      var c = centre(area.label);
+      node.style.fill = COLOURS.area;
+      node.style.fontStyle = 'italic';
+      node.anchor.set(0.5, 0.5);
+      node.alpha = 0.9 * faded(area.label);
+      node.scale.set(px);
+      node.position.set(c.x, c.y);
+      n.labels.addChild(node);
+    });
     d.exits.forEach(function (e) {
       label(e, e.name, COLOURS.exitLabel);
     });
@@ -961,11 +1011,13 @@
       : 'to ' + exit.to.name;
   }
 
-  // What a square is: its title and facts, for the menu and the card.
+  // What a square is: its title and facts, for the menu and the card; the
+  // area it's in, if any (#670), after its square.
   function describe(cell) {
     var there = at(cell);
     var person = personAt(cell);
-    var coords = '(' + cell.x + ', ' + cell.y + ')';
+    var area = areaAt(cell);
+    var coords = '(' + cell.x + ', ' + cell.y + ')' + (area ? ' · in ' + area.name : '');
     if (person) {
       return {
         title: person.name,
@@ -987,7 +1039,12 @@
         go: 'Go to ' + there.feature.name,
       };
     }
-    return { title: 'Square ' + coords, facts: '', go: 'Move here', coords: coords };
+    return {
+      title: 'Square (' + cell.x + ', ' + cell.y + ')',
+      facts: area ? 'In ' + area.name : '',
+      go: 'Move here',
+      coords: '(' + cell.x + ', ' + cell.y + ')',
+    };
   }
 
   // Why a move to the selected square can't be made, or null.
@@ -1362,7 +1419,8 @@
         d.here.y +
         ')' +
         (here.feature ? ', at ' + here.feature.name : '') +
-        (d.host ? ' in ' + d.host.name : '') +
+        (areaAt(d.here) ? ', in ' + areaAt(d.here).name : '') +
+        (d.host ? (areaAt(d.here) ? ' of ' : ' in ') + d.host.name : '') +
         '. ';
       var ways = d.exits.length
         ? ' Ways out: ' +

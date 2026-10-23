@@ -1603,3 +1603,116 @@ describe('figures, tactics and danger (L-824)', () => {
     expect(town.places.find((p) => p.id === 'plc_1_the-gull-anchor').danger).toBe('low');
   });
 });
+
+describe('areas (#670)', () => {
+  const W = LIVE;
+  // A taproom 12 × 8: the back room in its top-left corner, an L-shaped hall
+  // round it, and a feature named like a space.
+  const TAPROOM = {
+    name: 'The taproom',
+    width: 12,
+    height: 8,
+    entries: [{ id: 'in', x: 6, y: 6 }],
+    exits: [{ id: 'out', name: 'the street door', x: 6, y: 7, to: 'out' }],
+    features: [
+      { id: 'lever', name: 'the cellar lever', x: 9, y: 5 },
+      { id: 'hearth', name: 'Behind the bar', x: 10, y: 1 },
+    ],
+  };
+  const rect = (x0, y0, x1, y1) => [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ];
+  const BACK = { id: 'back-room', name: 'the back room', polygon: rect(0, 0, 4, 3) };
+  const HALL = {
+    id: 'hall',
+    name: 'the hall',
+    polygon: [
+      { x: 0, y: 0 },
+      { x: 6, y: 0 },
+      { x: 6, y: 2 },
+      { x: 2, y: 2 },
+      { x: 2, y: 6 },
+      { x: 0, y: 6 },
+    ],
+  };
+  let mapId;
+
+  test('set_battle_map takes areas; get_battle_map shows each with its squares', async () => {
+    const made = await ok('set_battle_map', { worldId: W, ...TAPROOM, areas: [BACK, HALL] });
+    mapId = made.map.id;
+    // A feature named like a space is a candidate to be an area.
+    expect(made.warnings).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^The feature "Behind the bar" \(hearth\)/)])
+    );
+    const detail = await ok('get_battle_map', { worldId: W, mapId });
+    expect(detail.areas).toEqual([
+      { ...BACK, squares: 12 },
+      { ...HALL, squares: 20 },
+    ]);
+    expect(detail.warnings).toHaveLength(1);
+    expect((await mapDoc(W, mapId)).areas).toEqual([BACK, HALL]);
+  });
+
+  test('replacing the grid without areas keeps them; set_map_layers replaces or clears', async () => {
+    await ok('set_battle_map', { worldId: W, mapId, ...TAPROOM });
+    expect((await mapDoc(W, mapId)).areas).toEqual([BACK, HALL]);
+    const set = await ok('set_map_layers', { worldId: W, mapId, areas: [BACK] });
+    expect(set).toMatchObject({ updated: ['areas'], layers: { areas: 1 } });
+    expect((await mapDoc(W, mapId)).areas).toEqual([BACK]);
+    await ok('set_map_layers', { worldId: W, mapId, areas: [] });
+    expect((await mapDoc(W, mapId)).areas).toEqual([]);
+    await ok('set_map_layers', { worldId: W, mapId, areas: [BACK, HALL] });
+  });
+
+  test('a bad outline is refused, naming why, and nothing changes', async () => {
+    const before = await mapDoc(W, mapId);
+    const bad = async (areas) => refused('set_map_layers', { worldId: W, mapId, areas });
+    expect(
+      await bad([
+        {
+          id: 'bow',
+          name: 'the bow',
+          polygon: [
+            { x: 0, y: 0 },
+            { x: 4, y: 4 },
+            { x: 4, y: 0 },
+            { x: 0, y: 4 },
+          ],
+        },
+      ])
+    ).toMatch(/"the bow"'s outline crosses itself/);
+    expect(await bad([{ id: 'far', name: 'the yard', polygon: rect(10, 6, 13, 8) }])).toMatch(
+      /"the yard" has a corner \(13, 6\) that isn't a corner of the 12 × 8 grid/
+    );
+    expect(await bad([BACK, { ...HALL, id: 'back-room' }])).toMatch(
+      /Two areas have the id "back-room"/
+    );
+    expect(
+      await bad([
+        {
+          id: 'thin',
+          name: 'the crack',
+          polygon: [
+            { x: 1, y: 1 },
+            { x: 2, y: 1 },
+            { x: 3, y: 1 },
+          ],
+        },
+      ])
+    ).toMatch(/"the crack"/);
+    expect(await mapDoc(W, mapId)).toEqual(before);
+  });
+
+  test('view_image outlines each area and numbers it at its middle square', async () => {
+    const result = await call('view_image', { worldId: W, of: 'battleMap', id: mapId });
+    const areas = result.structuredContent.markers.filter((m) => m.type === 'area');
+    expect(areas).toEqual([
+      expect.objectContaining({ type: 'area', id: 'back-room', name: 'the back room' }),
+      expect.objectContaining({ type: 'area', id: 'hall', name: 'the hall' }),
+    ]);
+    expect(result.structuredContent.reading).toMatch(/Violet outlines are areas/);
+  });
+});

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
+const mapAreas = require('../loom-canon/map-areas');
 const { turnStateOf, nextTurnState, speedOf, applyStateMutations } = require('../loom-models');
 const clock = require('../loom-canon/clock');
 const travel = require('../loom-canon/travel');
@@ -309,8 +310,32 @@ function enterOrStay(place, characterState, canonWorld) {
 
 const exitNames = (exits) => nameList(exits.map((e) => ({ name: e.name })));
 
+// The square of an area to walk to (#670): the nearest of its squares (as
+// movement counts, then as the crow flies, then reading order) the save knows and can stand on and
+// get to. `{ cell }`, or `{ refused }` saying why none will do.
+const AREA_TRIES = 24;
+function nearestSquareIn(canonWorld, characterState, map, area, from, known) {
+  const squares = mapAreas
+    .squaresOf(map, area)
+    .map((k) => {
+      const [x, y] = k.split(',').map(Number);
+      const dx = x - from.x;
+      const dy = y - from.y;
+      return { x, y, d: Math.max(Math.abs(dx), Math.abs(dy)), e: dx * dx + dy * dy };
+    })
+    .filter((c) => !known || known[c.x + ',' + c.y])
+    .sort((a, b) => a.d - b.d || a.e - b.e || a.y - b.y || a.x - b.x);
+  if (!squares.length) return { refused: "You haven't seen " + area.name + '.' };
+  for (const c of squares.slice(0, AREA_TRIES)) {
+    const step = planStep(canonWorld, characterState, { cell: { x: c.x, y: c.y } }, known);
+    if (!step.refused) return { cell: { x: c.x, y: c.y } };
+  }
+  return { refused: "There's no way into " + area.name + ' from here.' };
+}
+
 // A move while the player is on a battle map: to a cell (from the grid), to a
-// feature or an exit (typed: "feature:bar", "exit:front-door"), along the
+// feature, an exit or an area (typed: "feature:bar", "exit:front-door",
+// "area:back-room", #670: its nearest square), along the
 // map's paths (L-624) over the ground the save knows (L-635), or to someone
 // standing there in sight (L-642: the walk ends beside them). Stepping onto an exit leaves by it, out
 // to the town or the world, or onto the map it leads to. Anything else waits
@@ -328,7 +353,8 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
   let cell = proposedAction.params && proposedAction.params.cell;
   let feature = named('feature:', map.features);
   let exit = named('exit:', map.exits);
-  if (feature === false || exit === false) {
+  const area = named('area:', map.areas);
+  if (feature === false || exit === false || area === false) {
     return {
       outcome: 'invalid_target',
       mutations: [],
@@ -336,6 +362,16 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
     };
   }
   if (feature) cell = { x: feature.x, y: feature.y };
+  // Into an area (#670): its nearest square the save can walk to.
+  if (area) {
+    const inArea = mapAreas.areaAt(map, from);
+    if (inArea && inArea.id === area.id) {
+      return { outcome: 'no_op', mutations: [], constraints: ["You're in " + area.name + '.'] };
+    }
+    const square = nearestSquareIn(canonWorld, characterState, map, area, from, known);
+    if (square.refused) return blocked(square.refused);
+    cell = square.cell;
+  }
   // Someone standing here (L-642): only if in sight now.
   const person =
     !cell && !exit && typeof target === 'string'
@@ -378,9 +414,11 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
     ? exit.name
     : feature
       ? feature.name
-      : person && person.person
-        ? person.name
-        : null;
+      : area
+        ? area.name
+        : person && person.person
+          ? person.name
+          : null;
   const mutations = [{ target: 'save', op: 'set-flag', path: 'cell', value: step.cell }, spend];
   if (step.opened) {
     // A door opened on the way stays open for this save (L-624).
@@ -420,9 +458,11 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
   const arrived =
     person && person.person
       ? 'You go over to ' + name + '.'
-      : name
-        ? 'You move to ' + name + '.'
-        : 'You move across ' + map.name + '.';
+      : area
+        ? 'You move into ' + name + '.'
+        : name
+          ? 'You move to ' + name + '.'
+          : 'You move across ' + map.name + '.';
   return {
     outcome: 'success',
     mutations,

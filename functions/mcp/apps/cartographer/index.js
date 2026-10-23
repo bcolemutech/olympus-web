@@ -426,7 +426,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
         description:
           'One battle map in full: its grid size, entries (where players arrive), exits (each ' +
           'leading out to the town or the world, or to an entry on another map), features (named ' +
-          'cells such as the bar), whether it is generic, whether it has an image (uploaded on ' +
+          'spots such as the lever), areas (named stretches such as the back room, each with how ' +
+          'many squares it holds), whether it is generic, whether it has an image (uploaded on ' +
           'the Cartographer page), which places use it and which characters stand where (set ' +
           'with add_character or update_character), and its score, band, what it is missing and ' +
           'its checklist (every criterion with its weight and progress). Cells are { x, y } ' +
@@ -452,8 +453,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'See an image as players will: a battle map, a town, or the world map, returned as an ' +
           'image you can look at (scaled to at most 1568 px on the long side). Use it to check ' +
           'that what you place lines up with the art. Battle maps come with their grid (every ' +
-          'fifth line labelled) and numbered markers for entries, exits, features and the people ' +
-          'standing on it; towns with numbered markers at their places’ positions, the people ' +
+          'fifth line labelled), numbered markers for entries, exits, features and the people ' +
+          'standing on it, and its areas outlined with their names; towns with numbered markers at their places’ positions, the people ' +
           'about town at their town points, their links, the 0–1000 grid, and their ground ' +
           '(set_town_ground: buildings, water, walls and crossings, see-through over the art); ' +
           'the world map with ' +

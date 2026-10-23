@@ -7,6 +7,7 @@ const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const areas = require('../../../loom-canon/areas');
+const mapAreas = require('../../../loom-canon/map-areas');
 const hazards = require('../../../loom-canon/hazards');
 const { systemOf } = require('../../../loom-canon/checks');
 const { worldId, entityId } = require('./schemas');
@@ -40,6 +41,12 @@ const figures = require('../../../loom-modules/combat/figures');
 //     world's system's conditions, with how long and its save), checked
 //     against the map and the system. Replacing a grid keeps them, warning
 //     about any that no longer fit it.
+//   - Areas (#670; loom-canon/map-areas.js): named stretches of the map (the
+//     back room, behind the bar), outlines on the grid's corners, for the
+//     player's label and the GM's sense of where they are; never clicked.
+//     Given with the grid or with set_map_layers; replacing a grid without
+//     them keeps them. A feature whose name sounds like a space is warned
+//     about, as a candidate to be an area.
 //
 // Images can't be sent over MCP: they are uploaded on the Cartographer page.
 // Removing a map is retire_entity (type battleMap), in write-tools.js.
@@ -82,6 +89,22 @@ const exit = z.strictObject({
 // (x, y) runs from corner (x, y) to (x + 1, y + 1), as in SVG art.
 const corner = z.number().int().min(0).max(maps.MAX_SIDE);
 const point = z.strictObject({ x: corner, y: corner });
+// Areas (#670): outlines on the same corners.
+const area = z.strictObject({
+  id: cellId,
+  name: label.describe('As players would say it: "the back room", "behind the bar".'),
+  polygon: z
+    .array(point)
+    .min(3)
+    .max(mapAreas.MAX_CORNERS)
+    .describe(
+      'Its outline: corners of the grid, in order around it (square (x, y) runs from corner ' +
+        '(x, y) to (x + 1, y + 1)), e.g. the 4 × 3 squares at the top-left are ' +
+        '[{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }]. A square is in it ' +
+        'when its centre is.'
+    ),
+});
+const AREAS = z.array(area).max(mapAreas.MAX_AREAS);
 const wall = z
   .strictObject({
     points: z
@@ -254,6 +277,13 @@ function checkLayers(map) {
   if (problems.length) throw new ToolError(problems.join(' '));
 }
 
+// A map's areas checked against its grid (#670): a ToolError naming every
+// problem, or nothing.
+function checkAreas(map) {
+  const errors = mapAreas.validate(map, map.areas || []);
+  if (errors.length) throw new ToolError(errors.join(' '));
+}
+
 // What to warn about once a map's layers pass: none at all, and features
 // nobody can get to (on or beside them) from an entry.
 function layerWarnings(map) {
@@ -289,6 +319,7 @@ const layerCounts = (map) => ({
   walls: (map.walls || []).length,
   doors: (map.doors || []).length,
   obstacles: (map.obstacles || []).length,
+  areas: (map.areas || []).length,
 });
 
 const generic = z
@@ -439,9 +470,10 @@ function mapTools({ writer }) {
         'Draw a battle map: a grid (at most 64 × 64 cells; { x, y } from the top-left, 0-based) ' +
         'with entries (where players arrive: the first, unless an exit names one), exits ' +
         '(stepping onto one leaves by it: "out" to the town or the world, or to an entry on ' +
-        'another map, for floors and wings) and features (named cells players can walk to: the ' +
-        'bar, the altar). Walls, doors and obstacles (see set_map_layers) can come with it; ' +
-        'replacing a grid without them keeps the ones it has. Leave out mapId to make a new ' +
+        'another map, for floors and wings), features (named spots players act on: the lever, ' +
+        'the altar) and areas (named stretches players are in: the back room, behind the bar; ' +
+        'see set_map_layers). Walls, doors, obstacles and areas (see set_map_layers) can come ' +
+        'with it; replacing a grid without them keeps the ones it has. Leave out mapId to make a new ' +
         'map; give it to replace that map’s grid (its image is kept, but players forget what ' +
         'they had seen of it). `generic` makes it ' +
         'reusable for any ' +
@@ -463,6 +495,7 @@ function mapTools({ writer }) {
         walls: LAYER_SHAPES.walls.optional(),
         doors: LAYER_SHAPES.doors.optional(),
         obstacles: LAYER_SHAPES.obstacles.optional(),
+        areas: AREAS.optional(),
         generic: generic.nullable().optional(),
       },
       annotations: replacing,
@@ -480,10 +513,11 @@ function mapTools({ writer }) {
             features: args.features || [],
           };
           checkMap(world, id, def);
-          for (const layer of ['walls', 'doors', 'obstacles']) {
+          for (const layer of ['walls', 'doors', 'obstacles', 'areas']) {
             def[layer] = args[layer] || (before && before[layer]) || [];
           }
           checkLayers(def);
+          checkAreas(def);
           // Its hazards are kept (L-815); any that no longer fit are said.
           def.hazards = (before && before.hazards) || [];
           // And its figures (L-824).
@@ -510,7 +544,11 @@ function mapTools({ writer }) {
             ),
           };
           if (!before) result.created = true;
-          const warnings = [...layerWarnings(doc), ...standingWarnings(world, doc)];
+          const warnings = [
+            ...layerWarnings(doc),
+            ...standingWarnings(world, doc),
+            ...views.areaWarnings(doc),
+          ];
           if (misfit.length) {
             warnings.push(
               `Its hazards no longer fit it: ${misfit.join(' ')} Fix them with set_hazards.`
@@ -532,9 +570,10 @@ function mapTools({ writer }) {
     },
     {
       name: 'set_map_layers',
-      title: 'Set a battle map’s walls, doors and obstacles',
+      title: 'Set a battle map’s walls, doors, obstacles and areas',
       description:
-        'Give a battle map what blocks movement and sight, without resending its grid. ' +
+        'Give a battle map what blocks movement and sight, and its areas, without resending its ' +
+        'grid. ' +
         'Coordinates: square (x, y) runs from corner (x, y) to corner (x + 1, y + 1), as in the ' +
         'map’s SVG art (viewBox one unit per square). Walls are lines along the grid lines ' +
         'between corners (each run straight across or down), e.g. the top of a 12-wide map is ' +
@@ -544,7 +583,13 @@ function mapTools({ writer }) {
         'and sight: a pillar), low (blocks movement only: a table, the bar, a pit) or difficult ' +
         '(costs 2 movement a square: rubble). A feature can sit on an obstacle (the bar on the ' +
         'bar); players stand beside it. Nothing that blocks may cover an entry or exit, and every ' +
-        'entry must reach an exit without a locked door. Each list given replaces that list; an ' +
+        'entry must reach an exit without a locked door. Areas are named stretches of the map ' +
+        'players are in rather than spots they act on (the back room, the hearth, behind the ' +
+        'bar): an outline of grid corners in order around it; a square is in it when its centre ' +
+        'is, and where areas overlap a square is in the smallest. Players see an area’s name on ' +
+        'the grid once they have seen any of it (it is never clicked), and the GM is told which ' +
+        'area they stand in and which they can see; "go to the back room" walks into it. Keep ' +
+        'features for what players use: the lever, the altar. Each list given replaces that list; an ' +
         'empty list clears it; one left out is kept. A place’s own map needs these to count in ' +
         'full toward its score. Check them against the art with view_image. ' +
         editNote,
@@ -554,19 +599,25 @@ function mapTools({ writer }) {
         walls: LAYER_SHAPES.walls.optional(),
         doors: LAYER_SHAPES.doors.optional(),
         obstacles: LAYER_SHAPES.obstacles.optional(),
+        areas: AREAS.optional(),
       },
       annotations: replacing,
       handler: (ctx, args) =>
         edit(ctx, args, (e) => {
           const { world } = e;
           const map = live(world, 'battleMap', args.mapId);
-          const given = ['walls', 'doors', 'obstacles'].filter((l) => args[l] !== undefined);
+          const given = ['walls', 'doors', 'obstacles', 'areas'].filter(
+            (l) => args[l] !== undefined
+          );
           if (!given.length) {
-            throw new ToolError('Give walls, doors or obstacles (an empty list clears them).');
+            throw new ToolError(
+              'Give walls, doors or obstacles, or areas (an empty list clears them).'
+            );
           }
           const fields = Object.fromEntries(given.map((l) => [l, args[l]]));
           const next = { ...map, ...fields };
           checkLayers(next);
+          checkAreas(next);
           e.update(e.ref('battleMaps', map.id), fields);
           const result = {
             map: views.battleMapRow(
@@ -576,7 +627,11 @@ function mapTools({ writer }) {
             layers: layerCounts(next),
             updated: given,
           };
-          const warnings = [...layerWarnings(next), ...standingWarnings(world, next)];
+          const warnings = [
+            ...layerWarnings(next),
+            ...standingWarnings(world, next),
+            ...views.areaWarnings(next),
+          ];
           if (warnings.length) result.warnings = warnings;
           return result;
         }),
