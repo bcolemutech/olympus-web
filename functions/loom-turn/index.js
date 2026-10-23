@@ -642,7 +642,8 @@ const WALK_THERE_TURNS = 20;
 /**
  * "Walk there" (L-662): walks, ends the turn, and walks on, until it
  * arrives (going in at a door), or something stops it: a refusal, or a
- * walk that ends with movement left but no arrival.
+ * walk that ends with movement left but no arrival. With no movement left
+ * this turn, it starts from the next (#671).
  */
 async function walkThere(params, target) {
   const lines = [];
@@ -651,6 +652,10 @@ async function walkThere(params, target) {
   let next = target;
   for (; turns < WALK_THERE_TURNS; turns++) {
     answer = await townStep(params, next);
+    if (answer.refused && turns === 0 && answer.step.lines[0] === OUT_OF_MOVEMENT) {
+      await runTurnPipeline({ ...params, action: { verb: 'end-turn' } });
+      continue;
+    }
     lines.push(...answer.step.lines.filter((line) => line !== OUT_OF_MOVEMENT));
     const { plan, movementLeft } = answer.step;
     const walking = plan && plan.layer === 'town';

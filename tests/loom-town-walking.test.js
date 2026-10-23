@@ -333,6 +333,19 @@ describe('"Walk there"', () => {
     expect(answer.narration).toMatch(/^You walk 400 m\. You walk 400 m\. You walk 1[01]\d m\.$/);
   });
 
+  test('with no movement left this turn, it starts from the next (#671)', async () => {
+    const saveId = await newGame();
+    await stepOffMap(saveId);
+    await db.collection('loom_saves').doc(saveId).update({ 'turn.movementLeft': 0 });
+    const before = (await saveOf(saveId)).turn.n;
+    const answer = await play(saveId, { verb: 'walk-there', point: pt(150, 850) });
+    expect(answer.refused).toBeUndefined();
+    expect(answer.step).toMatchObject({ townPoint: pt(150, 850), plan: null });
+    // The turn with nothing left was ended first, then three of walking.
+    expect((await saveOf(saveId)).turn.n).toBe(before + 3);
+    expect(answer.narration).not.toContain("You're out of movement");
+  });
+
   test('a refusal stops it at once', async () => {
     const saveId = await newGame();
     await stepOffMap(saveId);
