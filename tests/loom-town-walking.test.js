@@ -421,34 +421,53 @@ describe('typed moves follow the streets (L-663)', () => {
   test('"leave for the market town" from near the gate: walks to it and sets out', async () => {
     const saveId = await newGame();
     await standOnStreet(saveId, pt(400, 900));
-    await typed(saveId, 'set out for the market town', ['loc_631']);
-    const resolution = await lastResolution(saveId);
-    expect(resolution.constraints[0]).toBe('You make your way to The South Gate.');
-    expect(resolution.constraints.at(-1)).toMatch(/, you arrive at /);
+    const answer = await typed(saveId, 'set out for the market town', ['loc_631']);
+    expect(answer.narration).toMatch(/^You make your way to The South Gate\. /);
+    expect(answer.step.left).toBe('loc_631');
+    expect((await lastResolution(saveId)).constraints.at(-1)).toMatch(/, you arrive at /);
     expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
   });
 
-  test('from across town: walks toward the gate, and Continue sets out on arrival', async () => {
+  test('from across town: walks to the gate turn after turn, and sets out (#669)', async () => {
     const saveId = await newGame();
     await standOnStreet(saveId, pt(500, 150));
-    await typed(saveId, 'set out for the market town', ['loc_631']);
-    expect((await lastResolution(saveId)).constraints[0]).toMatch(
-      /^You head for The South Gate, on your way to /
-    );
-    expect((await saveOf(saveId)).turn.plan).toMatchObject({
-      layer: 'town',
-      leaveFor: 'loc_631',
-      to: pt(500, 950),
-    });
-    // "Walk there" along the plan: turn by turn to the gate, then out.
-    let answer;
-    for (let i = 0; i < 10; i++) {
-      await play(saveId, { verb: 'end-turn' });
-      answer = await play(saveId, { verb: 'continue' });
-      if (answer.step.left) break;
-    }
+    const before = (await saveOf(saveId)).turn.n;
+    const answer = await typed(saveId, 'set out for the market town', ['loc_631']);
+    expect(answer.narration).toMatch(/^You make your way to The South Gate\. /);
+    expect(answer.step.left).toBe('loc_631');
+    const save = await saveOf(saveId);
+    expect(save).toMatchObject({ location: 'loc_631', townPoint: null });
+    // The ends of turn on the way are played and recorded, as Walk there's are.
+    expect(save.turn.n).toBeGreaterThan(before + 1);
+  });
+
+  test('from the world map too: a move to a world place walks out and sets out (#669)', async () => {
+    const saveId = await newGame();
+    await standOnStreet(saveId, pt(500, 150));
+    const answer = await play(saveId, { verb: 'move', target: 'loc_631' });
     expect(answer.step.left).toBe('loc_631');
     expect(await where(saveId)).toMatchObject({ location: 'loc_631', townPoint: null });
+  });
+
+  test('a way out nobody can reach is refused before any walk (#669)', async () => {
+    const saveId = await newGame();
+    await standOnStreet(saveId, pt(500, 150));
+    await worldRef
+      .collection('locations')
+      .doc('loc_1')
+      .update({ 'town.ground': { ...GROUND, crossings: [] } });
+    await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+    try {
+      const before = await saveOf(saveId);
+      const answer = await play(saveId, { verb: 'move', target: 'loc_631' });
+      expect(answer.narration).toMatch(/go to The South Gate first\.$/);
+      const after = await saveOf(saveId);
+      expect(after.townPoint).toEqual(before.townPoint);
+      expect(after.turn).toEqual(before.turn);
+    } finally {
+      await worldRef.collection('locations').doc('loc_1').update({ 'town.ground': GROUND });
+      await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+    }
   });
 });
 

@@ -7,10 +7,12 @@
   // places and the paths between them, its fog, and you.
   //
   // - Every click opens the engine's menu (I2), with no one-tap shortcuts:
-  //   on a place, Move (walk there, go in, set out along a route from a way
-  //   out) and Look; in a town with ground (L-664), on the street too, with
-  //   Walk there to play out the turns. Moves are structured moves
-  //   (Loom.play), adjudicated and gated on the server like typed ones.
+  //   on a place, Move (walk there, go in) and Look, and on a way out, Set
+  //   out along each route it serves, from anywhere in town (#669), the
+  //   routes labelled where its stub of road leads off; in a town with
+  //   ground (L-664), on the street too, with Walk there to play out the
+  //   turns. Moves are structured moves (Loom.play), adjudicated and gated
+  //   on the server like typed ones.
   // - Walks are previewed with the server's own rules (town-paths.js): this
   //   turn's part solid, the rest dashed, with how far and how many turns;
   //   the token walks the way it went.
@@ -67,6 +69,7 @@
     you: 0xffffff,
     label: 0xe0e0e0,
     labelClosed: 0x9ca3af,
+    route: 0xffe0b2,
   };
 
   var town = {
@@ -81,6 +84,7 @@
     anim: null, // the token's walk: { points, units, t0 }
     nodes: null, // the PixiJS objects, built on first draw
     labels: {}, // place id → its label
+    routeLabels: {}, // way out id → the label of the routes it serves (#669)
     fog: { key: null, texture: null },
     mist: { key: null, texture: null, unseen: 0 }, // the mist over unseen ground (K3)
     mistAt: null, // where the mist is drawn this frame: { x, y, width, height }
@@ -525,12 +529,13 @@
       paths: new PIXI.Graphics(),
       pins: new PIXI.Graphics(),
       labels: new PIXI.Container(),
+      routes: new PIXI.Container(),
       walk: new PIXI.Graphics(),
       you: Loom.draw.token(),
     };
     n.art.alpha = 0.9;
     container.addChild(n.ground, n.art, n.shapes, n.shimmer, n.fog, n.mist);
-    container.addChild(n.paths, n.pins, n.labels, n.walk);
+    container.addChild(n.paths, n.pins, n.routes, n.labels, n.walk);
     container.addChild(n.you.container);
     town.nodes = n;
   }
@@ -605,6 +610,49 @@
       var t = toScreen(view, town.target.point);
       g.circle(t.x, t.y, 7).stroke({ width: 2, color: COLOURS.target });
     }
+  }
+
+  // The end of the stub of road leading out from a way out, on screen: away
+  // from the middle of town.
+  function stubEnd(view, place) {
+    var p = town.positions[place.id];
+    var s = M.toScreen(view, p.x, p.y);
+    var middle = M.toScreen(view, BOUNDS.width / 2, BOUNDS.height / 2);
+    var dx = s.x - middle.x;
+    var dy = s.y - middle.y;
+    var d = Math.hypot(dx, dy) || 1;
+    return { x: s.x + (dx / d) * STUB, y: s.y + (dy / d) * STUB, dx: dx / d, dy: dy / d };
+  }
+
+  // The places a way out's routes lead to, as a label beyond its stub
+  // (#669): "To Dunscombe · about 14½ hours by sea", one line a route, all
+  // dimmed when every one is closed. Null when it serves none the save
+  // knows of.
+  function routeLabelFor(place, end) {
+    var exits = exitsFrom(place.id);
+    var label = town.routeLabels[place.id];
+    if (!exits.length) return null;
+    if (!label) {
+      label = Loom.draw.label('', 11.5);
+      town.routeLabels[place.id] = label;
+      town.nodes.routes.addChild(label);
+    }
+    label.text = exits
+      .map(function (exit) {
+        var trip = exit.open && exit.travel && exit.travel.label;
+        return 'To ' + exit.name + (exit.open ? (trip ? ' · ' + trip : '') : ' (closed)');
+      })
+      .join('\n');
+    var open = exits.some(function (exit) {
+      return exit.open;
+    });
+    label.style.fill = open ? COLOURS.route : COLOURS.labelClosed;
+    label.style.align = 'center';
+    // Beyond the stub's end, on the side it leads away to.
+    label.anchor.set(0.5 - end.dx * 0.5, end.dy < -0.5 ? 1 : end.dy > 0.5 ? 0 : 0.5);
+    label.position.set(end.x + end.dx * 6, end.y + end.dy * 6);
+    label.visible = true;
+    return label;
   }
 
   function labelFor(place) {
@@ -688,7 +736,7 @@
     // paths between places, in a town without ground.
     var g = n.paths;
     g.clear();
-    var middle = M.toScreen(view, BOUNDS.width / 2, BOUNDS.height / 2);
+    var routesShown = {};
     data.places.forEach(function (place) {
       if (!place.entranceFor) return;
       var s = at(place.id);
@@ -696,10 +744,11 @@
         return exit.via;
       })[0];
       via = via || place.entranceFor[0];
-      var dx = s.x - middle.x;
-      var dy = s.y - middle.y;
-      var d = Math.hypot(dx, dy) || 1;
-      var end = { x: s.x + (dx / d) * STUB, y: s.y + (dy / d) * STUB };
+      var end = stubEnd(view, place);
+      // Where the routes lead (#669), at the end of the stub: a click there
+      // is a click on the way out.
+      var routes = routeLabelFor(place, end);
+      if (routes) routesShown[place.id] = true;
       Loom.draw.line(g, s, end);
       g.stroke({ width: 5.5, color: COLOURS.casing, alpha: 0.55, cap: 'round' });
       var colour = COLOURS[via] ? via : 'road';
@@ -756,6 +805,9 @@
     Object.keys(town.labels).forEach(function (id) {
       if (!shown[id]) town.labels[id].visible = false;
     });
+    Object.keys(town.routeLabels).forEach(function (id) {
+      if (!routesShown[id]) town.routeLabels[id].visible = false;
+    });
 
     // The walk and you.
     n.walk.clear();
@@ -786,7 +838,24 @@
       var d = Math.hypot(s.x - point.x, s.y - point.y);
       if (d <= HIT_RADIUS && (!best || d < best.d)) best = { id: p.id, d: d };
     });
-    return best ? placeById(best.id) : null;
+    if (best) return placeById(best.id);
+    // A way out's routes (#669): a click on the label is one on the way out.
+    var hit = null;
+    Object.keys(town.routeLabels).forEach(function (id) {
+      var label = town.routeLabels[id];
+      if (!label.visible || hit) return;
+      var b = label.getBounds();
+      var pad = 6;
+      if (
+        point.x >= b.x - pad &&
+        point.x <= b.x + b.width + pad &&
+        point.y >= b.y - pad &&
+        point.y <= b.y + b.height + pad
+      ) {
+        hit = id;
+      }
+    });
+    return hit ? placeById(hit) : null;
   }
 
   function factsOf(place) {
@@ -795,21 +864,27 @@
     return facts.join(' · ');
   }
 
-  // Setting out along the world routes from a way out you stand at.
-  function setOutItems(place) {
+  // Setting out along the world routes from a way out: from where you
+  // stand anywhere in town (#669), the server walking you there first (on
+  // the streets, turn after turn; through the town's places, in one go).
+  function setOutItems(place, away) {
+    if (place.retired || !place.open) return [];
     var items = [];
+    var first = away ? 'Walking to ' + place.name + ' first' : null;
     exitsFrom(place.id).forEach(function (exit) {
       var label = exit.name + (exit.via ? ' by ' + exit.via : '');
       if (!exit.open) {
         items.push({ label: 'Set out for ' + label, disabled: true, note: 'The way is closed.' });
         return;
       }
+      var note = [first, exit.travel && exit.travel.label].filter(Boolean).join(' · ') || undefined;
       var ways = exit.waysIn || [];
       if (ways.length > 1) {
         // Where to arrive (L-346): travelling to a way in arrives by it.
         ways.forEach(function (way) {
           items.push({
             label: 'Set out for ' + label + ', arriving by ' + way.name,
+            note: note,
             onSelect: function () {
               act(way.id, exit.name + ' by ' + way.name);
             },
@@ -818,6 +893,7 @@
       } else {
         items.push({
           label: 'Set out for ' + label,
+          note: note,
           onSelect: function () {
             act(exit.id, exit.name);
           },
@@ -877,7 +953,7 @@
       if (!place.open) {
         return [{ label: 'Move', disabled: true, note: 'Not built yet. The way is closed.' }];
       }
-      return walkItems();
+      return place.entranceFor ? walkItems().concat(setOutItems(place, true)) : walkItems();
     }
     if (here) {
       var stay = [{ label: 'Move', disabled: true, note: 'You are here.' }];
@@ -889,17 +965,15 @@
     if (!place.open) {
       return [{ label: 'Move', disabled: true, note: 'Not built yet. The way is closed.' }];
     }
-    if (!isNext(place.id)) {
-      return [{ label: 'Move', disabled: true, note: "There's no open way there from here." }];
-    }
-    return [
-      {
-        label: 'Move',
-        onSelect: function () {
-          act(place.id, place.name);
-        },
-      },
-    ];
+    var move = isNext(place.id)
+      ? {
+          label: 'Move',
+          onSelect: function () {
+            act(place.id, place.name);
+          },
+        }
+      : { label: 'Move', disabled: true, note: "There's no open way there from here." };
+    return place.entranceFor ? [move].concat(setOutItems(place, true)) : [move];
   }
 
   function busy(items) {

@@ -224,15 +224,26 @@ describe('world travel by route and speed', () => {
     await seed('save-refused', { placeId: 'plc_gate', time: at(1, 9) });
     const notLinked = await moveTo('save-refused', 'faraway');
     expect(notLinked.outcome).toBe('blocked');
-    // Leaving by the trail from the harbour: the wrong way out.
-    await saveRef('save-refused').update({ placeId: 'plc_harbour' });
-    const wrongWay = await moveTo('save-refused', 'daldockley');
-    expect(wrongWay.outcome).toBe('blocked');
-    for (const r of [notLinked, wrongWay]) {
-      expect(r.mutations.some((m) => m.path === 'time')).toBe(false);
-      expect(r.time).toBeUndefined();
-    }
+    expect(notLinked.mutations.some((m) => m.path === 'time')).toBe(false);
+    expect(notLinked.time).toBeUndefined();
     expect((await saveOf('save-refused')).time).toBe(at(1, 9));
+  });
+
+  test('leaving from the wrong way out walks to the right one first, its minutes first (#669)', async () => {
+    // From the harbour by the trail: through the market to the Trailhead
+    // (800 units, 6 minutes), then the trip as from the Trailhead then.
+    await seed('save-wrong-way', { placeId: 'plc_harbour', time: at(1, 8) });
+    const resolution = await moveTo('save-wrong-way', 'daldockley');
+    expect(resolution.outcome).toBe('success');
+    expect(resolution.constraints[0]).toBe(
+      'You make your way from The Harbour past Market Square to The Trailhead.'
+    );
+    await seed('save-right-way', { placeId: 'plc_gate', time: at(1, 8, 6) });
+    await moveTo('save-right-way', 'daldockley');
+    const wrong = await saveOf('save-wrong-way');
+    expect(wrong.location).toBe('daldockley');
+    expect(wrong.time).toBe((await saveOf('save-right-way')).time);
+    expect(resolution.time).toMatchObject({ from: at(1, 8), to: wrong.time });
   });
 });
 
