@@ -10,8 +10,8 @@
   //   on a place, Move (walk there, go in) and Look, and on a way out, Set
   //   out along each route it serves, from anywhere in town (#669), the
   //   routes labelled where its stub of road leads off; in a town with
-  //   ground (L-664), on the street too, with Walk there to play out the
-  //   turns. Moves are structured moves (Loom.play), adjudicated and gated
+  //   ground (L-664), on the street too. Move is one choice (#671): there
+  //   this turn, or there across the turns it takes. Moves are structured moves (Loom.play), adjudicated and gated
   //   on the server like typed ones.
   // - Walks are previewed with the server's own rules (town-paths.js): this
   //   turn's part solid, the rest dashed, with how far and how many turns;
@@ -444,15 +444,15 @@
 
   // ── Walks ─────────────────────────────────────────
 
-  // Sends a walk: as far as this turn goes (Walk), or all the way (Walk there).
+  // Sends a walk: there this turn, or all the way across the turns (Walk
+  // there's walk; #671).
   function sendWalk(there) {
     var target = town.target;
     var preview = town.preview;
     if (!target || !preview || !preview.path) return;
     var place = target.placeId ? placeById(target.placeId) : null;
     town.pending = { points: there || preview.thisTurn ? preview.path.points : preview.walked };
-    var label =
-      (there ? 'walk to ' : 'walk toward ') + (place ? place.name : 'a spot in the street');
+    var label = 'walk to ' + (place ? place.name : 'a spot in the street');
     var action = place ? { target: place.id } : { point: { x: target.point.x, y: target.point.y } };
     if (there) Loom.play.walkThere(action, label);
     else Loom.play.walkTo(action, label);
@@ -903,31 +903,23 @@
     return items;
   }
 
-  // The walk items: Move (as far as this turn goes) and Walk there.
+  // The one walk item (#671): Move, there this turn, or there across the
+  // turns it takes (Walk there's walk, which stops when something comes into
+  // view), from the next turn when this one has no movement left. To go only
+  // part of the way, tap a nearer spot: the preview shows this turn's reach.
   function walkItems() {
     var preview = town.preview;
     var no = walkRefusal(preview);
     if (no) return [{ label: 'Move', disabled: true, note: no }];
-    var items = [];
-    var line = walkLine(preview);
-    items.push({
-      label: 'Move',
-      disabled: !preview.walked.length,
-      note: preview.walked.length ? line : 'No movement left this turn.',
-      onSelect: function () {
-        sendWalk(false);
-      },
-    });
-    if (!preview.thisTurn) {
-      items.push({
-        label: 'Walk there',
-        note: line,
+    return [
+      {
+        label: 'Move',
+        note: walkLine(preview),
         onSelect: function () {
-          sendWalk(true);
+          sendWalk(!preview.thisTurn);
         },
-      });
-    }
-    return items;
+      },
+    ];
   }
 
   // What Move does for a place: walk there, go in, or why not.
