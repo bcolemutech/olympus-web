@@ -292,20 +292,38 @@ describe('a walk through Burdendal', () => {
   });
 
   test('leaving is only by a way out that serves the route', async () => {
-    await standAt(saveId, 'loc_1', 'plc_1_market');
-    expect((await moveTo(saveId, 'loc_631')).constraints).toEqual([
-      'To set out for Dunsmouth by trail, go to The North Gate first.',
-    ]);
     await standAt(saveId, 'loc_1', 'plc_1_gate');
-    expect((await moveTo(saveId, 'loc_229')).constraints).toEqual([
-      'To set out for Wisin by sea, go to The Harbour first.',
-    ]);
     expect(await moveTo(saveId, 'loc_631')).toMatchObject({ outcome: 'success' });
     // Dunsmouth's own town (tests/helpers/towns.js): arrival is at its gate.
     expect(await saveOf(saveId)).toMatchObject({
       location: 'loc_631',
       placeId: 'plc_631_town-gate',
     });
+    // By sea from the gate: the harbour is walked to first, through the
+    // town's places (#669), and the trip made from there.
+    await standAt(saveId, 'loc_1', 'plc_1_gate');
+    expect((await moveTo(saveId, 'loc_229')).constraints).toEqual([
+      'You make your way from The North Gate past Market Square to The Harbour.',
+      'After about 13½ hours at sea, you arrive at Wisin, at The Town Gate.',
+    ]);
+    expect(await saveOf(saveId)).toMatchObject({ location: 'loc_229' });
+  });
+
+  test('a way out no open way leads to is refused, naming it (#669)', async () => {
+    // The market, the only way from the gate to the harbour, is closed.
+    await standAt(saveId, 'loc_1', 'plc_1_gate');
+    const market = (await worldRef.collection('places').doc('plc_1_market').get()).data();
+    await worldRef.collection('places').doc('plc_1_market').update({ retired: true });
+    await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+    try {
+      expect((await moveTo(saveId, 'loc_229')).constraints).toEqual([
+        'To set out for Wisin by sea, go to The Harbour first.',
+      ]);
+      expect(await saveOf(saveId)).toMatchObject({ location: 'loc_1', placeId: 'plc_1_gate' });
+    } finally {
+      await worldRef.collection('places').doc('plc_1_market').set(market);
+      await worldRef.update({ canonVersion: (await worldRef.get()).data().canonVersion + 1 });
+    }
   });
 
   test('a closed destination is reported before the way out', async () => {
@@ -751,10 +769,16 @@ describe('choosing the way in (L-346)', () => {
     expect((await moveTo(saveId, 'plc_631_old-gate')).constraints).toEqual([
       'The way into Dunsmouth by The Old Gate is closed. Turn back.',
     ]);
+    // From elsewhere in town, it is walked to first (#669), and the way in
+    // chosen kept.
     await standAt(saveId, 'loc_1', 'plc_1_market');
-    expect((await moveTo(saveId, 'plc_631_west-gate')).constraints).toEqual([
-      'To set out for Dunsmouth by trail, go to The North Gate first.',
-    ]);
+    expect((await moveTo(saveId, 'plc_631_west-gate')).constraints[0]).toBe(
+      'You make your way to The North Gate.'
+    );
+    expect(await saveOf(saveId)).toMatchObject({
+      location: 'loc_631',
+      placeId: 'plc_631_west-gate',
+    });
   });
 
   test('a place in another town that is no way in cannot be reached directly', async () => {

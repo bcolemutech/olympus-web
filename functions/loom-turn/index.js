@@ -3,7 +3,7 @@
 const loomCanon = require('../loom-canon');
 const { makeWorldState, turnStateOf } = require('../loom-models');
 const { interpretAction } = require('./interpret');
-const { adjudicateAction, ACTED, rollDie } = require('./adjudicate');
+const { adjudicateAction, setOutWalk, ACTED, rollDie } = require('./adjudicate');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
@@ -426,6 +426,22 @@ async function runTurnPipeline(params) {
       asked,
     });
   }
+  // Setting out from a town with ground, from anywhere on its streets
+  // (#669): the way out is walked turn after turn, as Walk there is, and the
+  // journey begins there.
+  const out = action && action.enter ? null : setOutWalk(canonWorld, save, proposedAction);
+  if (out && out.refused) return refusal(save, out.refused);
+  if (out) {
+    const walked = await walkThere(params, out.target);
+    if (!walked.step || !walked.step.left) return walked;
+    return {
+      ...walked,
+      narration: ['You make your way to ' + out.way.name + '.', walked.step.setOut]
+        .filter(Boolean)
+        .join(' '),
+    };
+  }
+
   const resolution = await adjudicateAction({
     proposedAction,
     canonWorld,
@@ -602,7 +618,8 @@ async function townStep(params, target) {
     return {
       ...left,
       narration: [lines.join(' '), left.narration].filter(Boolean).join(' '),
-      step: { ...answer.step, townPoint: null, left: step.leave },
+      // The setting out's own account, for a walk out told whole (#669).
+      step: { ...answer.step, townPoint: null, left: step.leave, setOut: left.narration },
     };
   }
   if (!step.enter) return answer;

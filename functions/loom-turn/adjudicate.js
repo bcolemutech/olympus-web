@@ -510,62 +510,20 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
     if (found && !found.has(targetPlace.id)) return blocked(UNKNOWN);
     return evaluateTownMove(targetPlace, characterState, canonWorld);
   }
-  // A place in another town can only be reached as its way in, travelling there.
-  const wayIn = chosenWayIn(proposedAction, canonWorld);
-  if (targetPlace && !wayIn) return blocked("You can't get there directly from here.");
-  const targetId = wayIn ? wayIn.locationId : first;
+  const out = leavingTown(proposedAction, characterState, canonWorld);
+  if (out.result) return out.result;
+  const { targetId, targetLocation, wayIn, via, here, exits, atWayOut } = out;
 
-  if (!targetId || !canonWorld.locations[targetId]) {
-    return {
-      outcome: 'invalid_target',
-      mutations: [],
-      constraints: ["There's no such place to go."],
-    };
-  }
-
-  if (targetId === currentId) {
-    return enterOrStay(canonWorld.locations[currentId], characterState, canonWorld);
-  }
-
-  const currentLocation = canonWorld.locations[currentId];
-  if (currentLocation.connections.indexOf(targetId) === -1) {
-    return blocked("You can't get there directly from here.");
-  }
-
-  const targetLocation = canonWorld.locations[targetId];
-  // A retired place stays resolvable for saves already there, but nobody can
-  // travel to it (Firestore worlds also drop it from connections).
-  if (targetLocation.retired) return blocked("That place can't be reached anymore.");
-  if (!isPlayable(canonWorld, targetLocation)) {
-    return blocked('The way to ' + targetLocation.name + ' is closed. Turn back.');
-  }
-  const required = missingAbility(targetLocation, characterState);
-  if (required) {
-    return blocked('You lack what it takes to make that crossing (requires: ' + required + ').');
-  }
-
-  // Leaving a town (L-342): only from a way out that serves the route — a
-  // harbour for the sea, a gate for the roads and trails.
-  const via = town.routeBetween(canonWorld, currentId, targetId);
-  const { place: here, point } = town.positionOf(canonWorld, characterState);
-  const exits = town.entrancesOf(canonWorld, currentId).filter((p) => town.serves(p, via));
-  // Out of town only from a way out that serves the route: standing in it,
-  // or on the street at its door (L-662).
-  const atAWayOut = (p) =>
-    p.position && Math.hypot(point.x - p.position.x, point.y - p.position.y) < 0.5;
-  const atWayOut =
-    (here && town.isEntrance(here) && town.serves(here, via)) ||
-    (!here && point && exits.some(atAWayOut)) ||
-    (!here && !point);
   // In a town with ground, a typed move out walks to the nearest way out
-  // first (L-663), and sets out from there if it gets there this turn.
+  // first (L-663), and sets out from there if it gets there this turn. (The
+  // pipeline walks it on, turn after turn, first: setOutWalk, #669.)
   let walkedOut = null;
   if (!atWayOut && walksTown(canonWorld, characterState)) {
     const way = nearestWayOut(canonWorld, characterState, exits);
     if (!way) return blocked(leaveHint(targetLocation, exits, via));
     const step = planTownStep(canonWorld, characterState, {
       point: way.position,
-      leaveFor: targetId,
+      leaveFor: wayIn ? wayIn.id : targetId,
     });
     if (step.refused) return blocked(step.refused);
     const spend = { target: 'save', op: 'set-flag', path: 'turn', value: step.turn };
@@ -582,23 +540,20 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
         ].concat(step.lines),
       };
     }
-    walkedOut = { way, spend, lines: step.lines };
+    walkedOut = { way, passed: [], seconds: 0, spend, lines: step.lines };
   } else if (!atWayOut) {
-    return blocked(leaveHint(targetLocation, exits, via));
+    // In a town without ground, the way out is walked through the town's
+    // links first, in one go, as a move in town is (L-600; #669).
+    walkedOut = here && wayOutWalk(canonWorld, characterState, here, exits);
+    if (!walkedOut) return blocked(leaveHint(targetLocation, exits, via));
   }
 
-  // Arriving at a town lands at the way in the traveller chose (L-346), or
-  // else at the open entrance serving the route.
-  if (wayIn) {
-    const refused = refuseWayIn(wayIn, targetLocation, via, characterState, canonWorld);
-    if (refused) return refused;
-  }
   const arrival = wayIn || town.arrivalPlace(canonWorld, targetId, via);
   const mutations = [{ target: 'save', op: 'set-flag', path: 'location', value: targetId }];
-  if (characterState.townPoint || walkedOut) {
+  if (characterState.townPoint || (walkedOut && walkedOut.spend)) {
     mutations.push({ target: 'save', op: 'set-flag', path: 'townPoint', value: null });
   }
-  if (walkedOut) mutations.push(walkedOut.spend);
+  if (walkedOut && walkedOut.spend) mutations.push(walkedOut.spend);
   if (arrival || characterState.placeId) {
     mutations.push({
       target: 'save',
@@ -613,18 +568,148 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
   // The trip takes its time (L-373; game time T8–T10): the route's miles at
   // its speed, nights camped on land. The same trip() gives the map's
   // estimate before setting out (./map-view.js).
-  const trip = travel.trip(canonWorld, currentId, targetId, clock.timeOf(characterState));
-  if (trip) mutations.push({ target: 'save', op: 'set-flag', path: 'time', value: trip.to });
+  // The walk to the way out comes first (#669).
+  const start = clock.timeOf(characterState);
+  const walked = walkedOut ? walkedOut.seconds : 0;
+  const trip = travel.trip(canonWorld, currentId, targetId, start + walked);
+  const end = trip ? trip.to : start + walked;
+  if (end !== start) mutations.push({ target: 'save', op: 'set-flag', path: 'time', value: end });
   mutations.push({ op: 'increment', path: 'worldClock', value: 1 });
   const arrived =
     'you arrive at ' + targetLocation.name + (arrival ? ', at ' + arrival.name : '') + '.';
   return {
     outcome: 'success',
     mutations,
-    constraints: (walkedOut ? ['You make your way to ' + walkedOut.way.name + '.'] : []).concat(
+    constraints: (walkedOut ? [wayOutLine(here, walkedOut)] : []).concat(
       trip ? travel.tripLines(trip, arrived) : ['Y' + arrived.slice(1)]
     ),
-    ...(trip ? { time: travel.timeSpent(trip.from, trip.seconds) } : {}),
+    ...(end !== start ? { time: travel.timeSpent(start, end - start) } : {}),
+  };
+}
+
+// The way to a world place out of the current town, as far as the rules
+// allow it before setting out (#669): `{ result }`, an answer at once (no
+// such place, already there, or why not), or what leaving needs: the place
+// and the way in asked for, the route, where the save is, the ways out
+// serving the route and whether it stands at one.
+function leavingTown(proposedAction, characterState, canonWorld) {
+  const currentId = characterState.location;
+  const first = proposedAction.targets[0];
+  const targetPlace = first && (canonWorld.places || {})[first];
+  // A place in another town can only be reached as its way in, travelling there.
+  const wayIn = chosenWayIn(proposedAction, canonWorld);
+  if (targetPlace && !wayIn) return { result: blocked("You can't get there directly from here.") };
+  const targetId = wayIn ? wayIn.locationId : first;
+
+  if (!targetId || !canonWorld.locations[targetId]) {
+    return {
+      result: {
+        outcome: 'invalid_target',
+        mutations: [],
+        constraints: ["There's no such place to go."],
+      },
+    };
+  }
+
+  if (targetId === currentId) {
+    return { result: enterOrStay(canonWorld.locations[currentId], characterState, canonWorld) };
+  }
+
+  const currentLocation = canonWorld.locations[currentId];
+  if (currentLocation.connections.indexOf(targetId) === -1) {
+    return { result: blocked("You can't get there directly from here.") };
+  }
+
+  const targetLocation = canonWorld.locations[targetId];
+  // A retired place stays resolvable for saves already there, but nobody can
+  // travel to it (Firestore worlds also drop it from connections).
+  if (targetLocation.retired) return { result: blocked("That place can't be reached anymore.") };
+  if (!isPlayable(canonWorld, targetLocation)) {
+    return { result: blocked('The way to ' + targetLocation.name + ' is closed. Turn back.') };
+  }
+  const required = missingAbility(targetLocation, characterState);
+  if (required) {
+    return {
+      result: blocked('You lack what it takes to make that crossing (requires: ' + required + ').'),
+    };
+  }
+
+  // Leaving a town (L-342): only from a way out that serves the route — a
+  // harbour for the sea, a gate for the roads and trails.
+  const via = town.routeBetween(canonWorld, currentId, targetId);
+  // Arriving at a town lands at the way in the traveller chose (L-346), or
+  // else at the open entrance serving the route: a way in that won't do is
+  // turned down before any walk to the way out.
+  if (wayIn) {
+    const refused = refuseWayIn(wayIn, targetLocation, via, characterState, canonWorld);
+    if (refused) return { result: refused };
+  }
+  const { place: here, point } = town.positionOf(canonWorld, characterState);
+  const exits = town.entrancesOf(canonWorld, currentId).filter((p) => town.serves(p, via));
+  // Out of town only from a way out that serves the route: standing in it,
+  // or on the street at its door (L-662).
+  const atAWayOut = (p) =>
+    p.position && Math.hypot(point.x - p.position.x, point.y - p.position.y) < 0.5;
+  const atWayOut =
+    (here && town.isEntrance(here) && town.serves(here, via)) ||
+    (!here && point && exits.some(atAWayOut)) ||
+    (!here && !point);
+  return { targetId, targetLocation, wayIn, via, here, exits, atWayOut };
+}
+
+// The walk through a town's links (L-600) from a place in it to the nearest
+// way out of these that is open to the traveller (#669): { way, passed,
+// seconds }, or null when none can be reached.
+function wayOutWalk(canonWorld, characterState, here, exits) {
+  const canPass = town.passableFor(canonWorld, characterState);
+  let best = null;
+  for (const way of exits) {
+    if (way.retired || !canPass(way)) continue;
+    const walk = town.walkTo(canonWorld, here, way, canPass);
+    if (!walk) continue;
+    if (!best || walk.length < best.walk.length) best = { way, walk };
+  }
+  if (!best) return null;
+  const settlement = canonWorld.locations[characterState.location];
+  const { seconds } = travel.townWalk(canonWorld, settlement, here, best.walk);
+  return { way: best.way, passed: best.walk.slice(0, -1), seconds };
+}
+
+function wayOutLine(here, walkedOut) {
+  return walkedOut.passed.length
+    ? 'You make your way ' +
+        (here ? 'from ' + here.name + ' ' : '') +
+        'past ' +
+        andList(walkedOut.passed) +
+        ' to ' +
+        walkedOut.way.name +
+        '.'
+    : 'You make your way to ' + walkedOut.way.name + '.';
+}
+
+/**
+ * The walk out of a town with ground that a move to a world place needs
+ * before it can set out (#669), for the pipeline to walk turn after turn:
+ * `{ way, target: { point, leaveFor } }` (the nearest way out serving the
+ * route, and the world place or way in to set out for once there), `{ refused }`
+ * when the move can't be made, or null when no walk is needed (the save is
+ * at a way out, isn't on a town's streets, or the move isn't out of town).
+ */
+function setOutWalk(canonWorld, characterState, proposedAction) {
+  if (proposedAction.verb !== 'move' || !walksTown(canonWorld, characterState)) return null;
+  const first = proposedAction.targets[0];
+  const targetPlace = first && (canonWorld.places || {})[first];
+  if (!first || (targetPlace && targetPlace.locationId === characterState.location)) return null;
+  const out = leavingTown(proposedAction, characterState, canonWorld);
+  if (out.result) {
+    return out.result.outcome === 'success' ? null : { refused: out.result.constraints[0] };
+  }
+  if (out.atWayOut) return null;
+  const way = nearestWayOut(canonWorld, characterState, out.exits);
+  if (!way) return { refused: leaveHint(out.targetLocation, out.exits, out.via) };
+  return {
+    way,
+    target: { point: way.position, leaveFor: out.wayIn ? out.wayIn.id : out.targetId },
   };
 }
 
@@ -1643,6 +1728,7 @@ async function adjudicateAction(params, rollFn = rollDie) {
 module.exports = {
   evaluate,
   adjudicateAction,
+  setOutWalk,
   rollDie,
   DEFAULT_DIFFICULTY_CLASS,
   DEFAULT_LOCK_DIFFICULTY,
