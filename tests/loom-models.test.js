@@ -360,7 +360,7 @@ describe('the turn (L-611), on action points (L-832)', () => {
     ],
     [
       'the turn from before AP',
-      { n: 1, ap: 1, kept: 0, plan: null },
+      { n: 1, movementLeft: 1, actionUsed: false, plan: null },
       /turn\.ap/,
     ],
   ])('refuses a turn with %s', (_label, turn, message) => {
