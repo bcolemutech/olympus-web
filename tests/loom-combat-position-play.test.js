@@ -271,17 +271,16 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
       data: { worldId: 'shattered-coast', saveId: ref.id, action: { verb: 'end-turn' } },
       auth: PLAYER,
     });
+    const blow = expect.objectContaining({
+      target: 'player',
+      hit: true,
+      card: expect.objectContaining({ against: 'you', name: 'Club', line: expect.any(String) }),
+    });
+    // Beside the player with AP for two blows, Grell strikes twice (L-836):
+    // each its own card.
     expect(answer.turns).toEqual([
-      expect.objectContaining({
-        id: 'grell',
-        name: 'Grell',
-        path: expect.any(Array),
-        attack: expect.objectContaining({
-          target: 'player',
-          hit: true,
-          card: expect.objectContaining({ against: 'you', name: 'Club', line: expect.any(String) }),
-        }),
-      }),
+      expect.objectContaining({ id: 'grell', name: 'Grell', path: expect.any(Array), attack: blow }),
+      expect.objectContaining({ id: 'grell', name: 'Grell', path: [], attack: blow }),
     ]);
     // Not kept in the turn's record.
     const turns = await ref.collection('loom_turns').get();

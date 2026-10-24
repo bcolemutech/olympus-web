@@ -207,6 +207,8 @@ describe.each(Object.keys(mockCases))('turns on AP in play under %s', (id) => {
         goals: [],
         sheet: (() => {
           const { ap, ...rest } = sheets.defaultSheet(c.system);
+          // Tough enough to stand Grell's two blows (L-836).
+          for (const r of c.system.sheet.resources) rest.resources[r.id] = { current: 500 };
           return { ...rest, speed: ap };
         })(),
       },

@@ -33,6 +33,10 @@ function promptOf(menu) {
     `SIDE: ${menu.side === 'hostile' ? "against the player's side" : "on the player's side"}`,
     `HOW THEY FIGHT: ${menu.combatNotes || '(no notes: as their description suggests)'}`,
     `ROUND: ${menu.round}`,
+    // On AP (L-836): what the turn has to spend; each choice says its cost.
+    ...(Number.isFinite(menu.ap)
+      ? [`ACTION POINTS: ${menu.ap} this turn; what a turn doesn't spend is kept to react.`]
+      : []),
     'WHAT THEY SEE:',
     ...(menu.situation || []).map((s) => '- ' + s.line),
     'THEIR CHOICES:',
