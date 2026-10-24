@@ -19,6 +19,7 @@ process.env.GCLOUD_PROJECT = PROJECT;
 const crypto = require('crypto');
 const formula = require('../functions/loom-canon/formula');
 const checks = require('../functions/loom-canon/checks');
+const apRules = require('../functions/loom-canon/ap');
 const { BUILT_IN } = require('../functions/loom-canon/systems');
 const { evaluate } = require('../functions/loom-turn/adjudicate');
 const { mapView } = require('../functions/loom-turn/map-view');
@@ -152,7 +153,8 @@ describe.each([
 
   test('loomGetMap sends it with the map', () => {
     const view = mapView({ ...COAST, system }, { location: 'widows-reach' }, null, null);
-    expect(view.rules).toEqual(checks.rulesOf(system));
+    // With its action points for the reference (L-837).
+    expect(view.rules).toEqual({ ...checks.rulesOf(system), ap: apRules.rulesView(system) });
   });
 });
 
