@@ -192,7 +192,8 @@
           html`<${Section} id="loom-character-conditions" title="Conditions">
             <ul class="loom-rules-list">
               ${c.conditions.map(function (k) {
-                return html`<li key=${k.id}>${conditionText(k)}</li>`;
+                // With what it does to AP (L-834): "moving costs ×2".
+                return html`<li key=${k.id}>${conditionText(k) + (k.ap ? ' — ' + k.ap : '')}</li>`;
               })}
             </ul>
           <//>`}

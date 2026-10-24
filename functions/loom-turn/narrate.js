@@ -490,7 +490,11 @@ function buildEffectsSection(save, resolution, canonWorld) {
               ', ' +
               effects.leftWords(effect, now) +
               ' left' +
-              (condition.description ? ': ' + condition.description : '')
+              (condition.description ? ': ' + condition.description : '') +
+              // What it does to their action points, for the GM (L-834).
+              (conditions.apNoteOf(condition)
+                ? ' [the rules: ' + conditions.apNoteOf(condition) + ']'
+                : '')
           )
           .join('\n')
     );

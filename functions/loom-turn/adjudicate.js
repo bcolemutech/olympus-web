@@ -1035,7 +1035,19 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
   }
   // A long action under way carries into the next turn, unless the player
   // was hurt meanwhile (CT4): that interrupts it.
-  const next = nextTurnState(characterState);
+  // The next turn's pool is worked out from the sheet as the turn leaves it
+  // (L-834): a Stun just shaken off is gone, one a foe just landed counts.
+  const lastSheet = ticked.mutations
+    .concat(round.mutations)
+    .filter((m) => m.path === 'character.sheet' && m.value)
+    .pop();
+  const leaving = lastSheet
+    ? sheets.withAp(
+        { ...characterState, character: { ...characterState.character, sheet: lastSheet.value } },
+        checks.systemOf(canonWorld)
+      )
+    : characterState;
+  const next = nextTurnState(leaving);
   const hurt = next.long && hurtBy(characterState, ticked.mutations.concat(round.mutations));
   const interrupted = hurt ? ['Hurt, you stop ' + next.long.name + '.'] : [];
   if (hurt) delete next.long;
@@ -1643,6 +1655,7 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
 // The actions a fight offers besides attacking (L-823; TN5, PS4, TN4), each
 // paid for in AP (L-832; `priced`, what payFor charges):
 //   dash      retired: on AP, moving further is spending more on squares
+//   stand     standing up, ending Prone (a condition with standUp; L-834)
 //   dodge     harder to hit until the player's next turn (the system's dodge)
 //   withdraw  moving out of reach draws no attacks this turn
 //   ready     an attack (params.attack; their first by default) at the
@@ -1661,6 +1674,9 @@ const TACTICS = {
   disengage: 'withdraw',
   ready: 'ready',
   use: 'use',
+  stand: 'stand',
+  rise: 'stand',
+  get_up: 'stand',
 };
 const NO_FIGHT = "That's for a fight, and you aren't in one.";
 function combatAction(proposedAction, characterState, canonWorld, inFight) {
@@ -1690,6 +1706,23 @@ function combatAction(proposedAction, characterState, canonWorld, inFight) {
         long: thing.long,
         name: thing.name,
       },
+    };
+  }
+  // Standing up (L-834): ends what standing up ends (Prone), for its cost.
+  if (kind === 'stand') {
+    const system = checks.systemOf(canonWorld);
+    const sheet = sheets.sheetOf(characterState);
+    const down = conditions.activeOn(system, sheet).filter((a) => a.condition.standUp);
+    if (!down.length) return blocked("You're already on your feet.");
+    const ended = new Set(down.map((a) => a.condition.id));
+    const after = {
+      ...sheet,
+      conditions: (sheet.conditions || []).filter((e) => !ended.has(conditions.idOf(e))),
+    };
+    return {
+      ...line('You stand up.'),
+      mutations: [{ target: 'save', op: 'set-flag', path: 'character.sheet', value: after }],
+      priced: { spend: 'standUp', what: 'standing up' },
     };
   }
   if (kind === 'dash') {

@@ -25,8 +25,8 @@
  *                   { defend, against? } a defending reaction it gives
  *                   (L-823): the formula added to the holder's defence
  *                   against melee, ranged or all attacks
- *       conditions: [{ id, name, description?, modifiers?, each?, costs?, noAction?,
- *                   noMove?, resist?, weak? }]
+ *       conditions: [{ id, name, description?, modifiers?, each?, costs?, ap?,
+ *                   standUp?, resist?, weak? }]
  *                   (with 'conditions'; L-815, ./conditions.js): what each does
  *       derived:    [{ id, name, formula }]              (with 'derived')
  *     checks:  { formula, degrees: { [degree]: formula }, ladder: [{ name, value }] }
@@ -365,8 +365,10 @@ function validateSystem(given) {
     // Conditions (EF3; L-815): what each does while it lasts, as data:
     // `modifiers` { target: formula } (checks, dice, ap, or an attribute,
     // skill or resource), `each` { resource: formula } at the end of each
-    // turn, `costs` changing AP prices (L-831), and the flags noAction and
-    // noMove. ./conditions.js reads them.
+    // turn, `costs` changing AP prices (L-831; 'never' for what it stops),
+    // `ap` setting the pool (L-834: Stunned's 0), and `standUp`, ended by
+    // standing up (Prone). ./conditions.js reads them. (The flags noAction
+    // and noMove from before AP are converted first: ./ap.js convert.)
     if (on.has('conditions')) {
       const ids = (part) =>
         new Set((Array.isArray(sheet[part]) ? sheet[part] : []).map((x) => x && x.id));
@@ -414,10 +416,16 @@ function validateSystem(given) {
               }
             }
           }
-          for (const flag of ['noAction', 'noMove']) {
-            if (c[flag] !== undefined && typeof c[flag] !== 'boolean') {
-              errors.push(`${at}.${flag} must be true or false.`);
-            }
+          if (
+            c.ap !== undefined &&
+            !(Number.isInteger(c.ap) && c.ap >= 0 && c.ap <= apRules.MAX_POOL)
+          ) {
+            errors.push(
+              `${at}.ap must be a whole number from 0 to ${apRules.MAX_POOL}: the pool it sets.`
+            );
+          }
+          if (c.standUp !== undefined && typeof c.standUp !== 'boolean') {
+            errors.push(`${at}.standUp must be true or false.`);
           }
         },
       });

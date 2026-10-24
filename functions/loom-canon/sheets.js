@@ -134,11 +134,13 @@ function apFor(system, sheet) {
     const bonus = mods.ap !== undefined ? mods.ap : mods.speed;
     if (has.has(trait.id) && bonus !== undefined) ap += at(bonus);
   }
-  // What its conditions add (L-815): Prone's −10. A condition that stops it
-  // moving (noMove) is the turn's business, not its pool's.
+  // What its conditions add (L-815): Slowed's −10; or a pool one sets
+  // (L-834: Stunned's 0), the lowest, which nothing raises.
   const bare = valuesOf(system, sheet || {}, { bare: true });
   const mods = conditions.modifiersOf(system, sheet || {}, bare);
   ap += conditions.sumOf(mods, 'ap') + conditions.sumOf(mods, 'speed');
+  const set = conditions.poolSetBy(system, sheet || {});
+  if (set !== null) return Math.min(set, MAX_AP);
   return Math.max(1, Math.min(MAX_AP, Math.floor(ap)));
 }
 
@@ -434,7 +436,14 @@ function characterView(system, character, now = 0, { player = true } = {}) {
         const id = c.id || c.condition;
         const def = conditionDefs.get(id) || {};
         const left = leftOf(c, now);
-        return { id, name: def.name || c.name || titled(id), ...(left ? { left } : {}) };
+        // What it does to their AP, for the Character panel (L-834).
+        const note = conditions.apNoteOf(def);
+        return {
+          id,
+          name: def.name || c.name || titled(id),
+          ...(left ? { left } : {}),
+          ...(note ? { ap: note } : {}),
+        };
       }),
     derived: on.has('derived')
       ? (s.derived || []).map((d) => ({ id: d.id, name: d.name, value: at(d.formula) }))

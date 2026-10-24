@@ -75,14 +75,17 @@ function settingsOf(system) {
   };
 }
 
-// A cost override: a whole number (set), or "x2" / "×2" / "*2" (a multiple).
+// A cost override: a whole number (set), "x2" / "×2" / "*2" (a multiple),
+// or 'never': it can't be paid for at all (L-834: Restrained's moving).
 const MULTIPLE = /^\s*[x×*]\s*(\d+(?:\.\d+)?)\s*$/i;
+const NEVER = 'never';
 function overrideOk(value) {
-  if (whole(value)) return true;
+  if (whole(value) || value === NEVER) return true;
   const m = typeof value === 'string' && MULTIPLE.exec(value);
   return Boolean(m) && Number(m[1]) > 0 && Number(m[1]) <= 10;
 }
 function applyOverride(cost, value) {
+  if (value === NEVER) return Infinity;
   if (whole(value)) return value;
   const m = typeof value === 'string' && MULTIPLE.exec(value);
   return m ? Math.ceil(cost * Number(m[1])) : cost;
@@ -102,8 +105,8 @@ function checkCosts(costs, at, errors) {
       errors.push(`${at}: "${spend}" isn't something AP pays for (${SPENDS.join(', ')}).`);
     } else if (!overrideOk(value)) {
       errors.push(
-        `${at}.${spend} must be a cost (a whole number from 0 to ${MAX_COST}) or a multiple ` +
-          '("x2", up to x10).'
+        `${at}.${spend} must be a cost (a whole number from 0 to ${MAX_COST}), a multiple ` +
+          '("x2", up to x10), or "never".'
       );
     }
   }
@@ -232,6 +235,29 @@ function convert(input) {
       );
     });
   }
+  // Conditions' flags from before AP (L-834): noAction empties the pool,
+  // noMove makes moving cost 'never'.
+  ((sheet && Array.isArray(sheet.conditions) && sheet.conditions) || []).forEach((c, i) => {
+    if (!isObject(c) || (c.noAction === undefined && c.noMove === undefined)) return;
+    touch();
+    const out = s.sheet.conditions[i];
+    const said = [];
+    if (out.noAction === true && out.ap === undefined) {
+      out.ap = 0;
+      said.push('noAction is now ap: 0 (no AP while it lasts)');
+    }
+    if (out.noMove === true && out.ap !== 0) {
+      out.costs = { ...(isObject(out.costs) ? out.costs : {}), move: NEVER, difficult: NEVER };
+      said.push("noMove is now costs { move: 'never', difficult: 'never' }");
+    }
+    delete out.noAction;
+    delete out.noMove;
+    warnings.push(
+      `sheet.conditions[${i}] (${c.id}): ` +
+        (said.length ? said.join('; ') : 'noAction and noMove are retired; dropped') +
+        ' (L-834).'
+    );
+  });
   const combat = isObject(input.modules) && isObject(input.modules.combat) && input.modules.combat;
   if (combat && combat.economy !== undefined) {
     touch();
@@ -316,7 +342,10 @@ function pricesOf(system, sheet) {
  * you have 6."
  */
 function shortLine(what, cost, left) {
-  return `${what.charAt(0).toUpperCase() + what.slice(1)} costs ${cost} AP; you have ${left}.`;
+  const What = what.charAt(0).toUpperCase() + what.slice(1);
+  // One its conditions forbid (L-834: 'never').
+  if (!Number.isFinite(cost)) return `${What} isn't possible for you now.`;
+  return `${What} costs ${cost} AP; you have ${left}.`;
 }
 
 /** What a typed action of a tier costs (CT3): standard for any other. */

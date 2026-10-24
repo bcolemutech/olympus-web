@@ -166,7 +166,7 @@ function apOf(save) {
   const sheet = sheetOf(save);
   const own = save && save.character && save.character.speed;
   const pool = sheet ? (sheet.ap !== undefined ? sheet.ap : sheet.speed) : own;
-  return Number.isInteger(pool) && pool > 0 && pool <= MAX_AP ? pool : DEFAULT_AP;
+  return Number.isInteger(pool) && pool >= 0 && pool <= MAX_AP ? pool : DEFAULT_AP;
 }
 
 const whole = (n, max) => Number.isInteger(n) && n >= 0 && n <= max;
