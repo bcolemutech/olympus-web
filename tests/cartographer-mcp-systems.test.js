@@ -310,6 +310,21 @@ test('set_system takes AP settings; get_system shows them over the defaults (L-8
   expect(text).toContain('ap.keepLimit must be a whole number');
 });
 
+test('set_system takes ap: false; get_system shows AP off, with warnings for what is left (L-838)', async () => {
+  const offSystem = { ...STARS, id: 'star-off', ap: false };
+  const saved = await ok('set_system', { system: offSystem });
+  expect(saved.warnings).toBeUndefined();
+  expect((await ok('get_system', { systemId: 'star-off' })).system.ap).toBe(false);
+  // A pool formula left on it is kept, unused, and said.
+  const again = await ok('set_system', {
+    system: { ...offSystem, sheet: { ...STARS.sheet, ap: '20' } },
+  });
+  expect(again.warnings).toEqual(['sheet.ap is kept but unused: AP is off (ap: false).']);
+  expect(await refused('set_system', { system: { ...offSystem, ap: 'none' } })).toContain(
+    'ap must be { costs?, tiers?, keepLimit? }, or false to switch AP off.'
+  );
+});
+
 test('a system written before AP is converted on save and on read, with warnings (L-831)', async () => {
   const older = {
     ...STARS,

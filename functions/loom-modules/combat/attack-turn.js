@@ -192,7 +192,7 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
     if (r.reacted && f && f.combatants[r.id]) {
       f = JSON.parse(JSON.stringify(f));
       const paid = costs[r.id] || { cost: 0, sheet: null };
-      f.combatants[r.id].kept = reactions.keptOf(f, r.id, system, paid.sheet) - paid.cost;
+      reactions.pay(system, f, r.id, paid.sheet, paid.cost);
     }
     lines.push(...r.lines);
     mutations.push(

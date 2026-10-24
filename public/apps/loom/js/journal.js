@@ -559,10 +559,11 @@
         'Turn ' +
         turn.n +
         ' · ' +
-        turn.ap +
-        ' of ' +
-        turn.pool +
-        ' AP left'}
+        (turn.apOff
+          ? turn.acted
+            ? 'you have acted'
+            : 'your action is ready'
+          : turn.ap + ' of ' + turn.pool + ' AP left')}
       </span>
       <button
         class="app-btn loom-turn-end"
@@ -683,7 +684,7 @@
       Loom.play.endTurn();
     } else if (lower === 'c') {
       var turn = store.get().turn;
-      if (turn && turn.plan && turn.ap > 0) {
+      if (turn && turn.plan && (turn.apOff || turn.ap > 0)) {
         event.preventDefault();
         Loom.map.continuePlan();
       }

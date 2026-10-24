@@ -241,8 +241,10 @@
     return door ? door.name || 'a door' : 'a door';
   }
 
-  // The AP left this turn (L-832), what steps are paid from.
+  // The AP left this turn (L-832), what steps are paid from; with AP off
+  // (L-838) steps are free.
   function movementLeft() {
+    if (battle.turn && battle.turn.apOff) return Infinity;
     return battle.turn ? battle.turn.ap : 0;
   }
 
@@ -402,7 +404,7 @@
   // How many turns walking `path` takes with a full pool, from the next turn
   // (a door opened on the way ends a turn's walk).
   function turnsFor(path) {
-    var speed = battle.turn ? battle.turn.pool : 20;
+    var speed = battle.turn ? (battle.turn.apOff ? Infinity : battle.turn.pool) : 20;
     var openCost = pathOptions().openCost;
     var turns = 0;
     while (path.length) {
@@ -1186,8 +1188,9 @@
 
   // Turns run on AP (L-832): an action the AP left won't pay for is turned
   // down by the server, with its cost; the menu shows costs with L-837.
+  // With AP off (L-838), the turn's one action.
   function acted() {
-    return false;
+    return Boolean(battle.turn && battle.turn.apOff && battle.turn.acted);
   }
 
   /**

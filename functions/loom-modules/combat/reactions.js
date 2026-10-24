@@ -9,6 +9,10 @@
  * the system's), a defending reaction the system's `defend`. A readied
  * attack was paid for when readied (its AP set aside, KP3).
  *
+ * With AP off (L-838; `ap: false`) reactions count by the round instead:
+ * the combat module's `turn.reactions` each (`reactionsLeft`, refreshed as
+ * a round starts: ./fight.js), a readied attack using one too.
+ *
  *   Leaving reach (PS4)  someone who steps from within a foe's melee reach
  *                  to outside it is struck by that foe first, where they
  *                  stand, with its best melee attack; unless they withdrew
@@ -27,6 +31,7 @@
 const conditions = require('../../loom-canon/conditions');
 const apRules = require('../../loom-canon/ap');
 const sheets = require('../../loom-canon/sheets');
+const { settingsOf } = require('./settings');
 const { attacksOf } = require('./attacks');
 const { strike, spendAmmo } = require('./strike');
 const position = require('./position');
@@ -67,11 +72,35 @@ function keptOf(f, id, system, sheet) {
   return system ? sheets.apFor(system, sheet || {}) : 0;
 }
 
-// Whether a fighter can react now: in the fight, standing, its `cost` kept
-// (L-833), not caught off guard in the first round, and free to act.
+/** The reactions a fighter has left this round, with AP off (L-838). */
+function reactionsLeftOf(f, id, system) {
+  const c = f.combatants[id];
+  if (!c) return 0;
+  if (Number.isInteger(c.reactionsLeft)) return c.reactionsLeft;
+  return settingsOf(system).turn.reactions;
+}
+
+// Whether a fighter can pay for a reaction: its `cost` kept (L-833), or
+// with AP off a reaction left this round (L-838).
+function canPay(system, f, id, sheet, cost) {
+  return apRules.isOff(system)
+    ? reactionsLeftOf(f, id, system) > 0
+    : keptOf(f, id, system, sheet) >= cost;
+}
+
+/** Pays for a reaction on the fight `f` (changed in place): `cost` from what was kept, or a reaction. */
+function pay(system, f, id, sheet, cost) {
+  const c = f.combatants[id];
+  if (!c) return;
+  if (apRules.isOff(system)) c.reactionsLeft = reactionsLeftOf(f, id, system) - 1;
+  else c.kept = keptOf(f, id, system, sheet) - cost;
+}
+
+// Whether a fighter can react now: in the fight, standing, able to pay for
+// it, not caught off guard in the first round, and free to act.
 function canReact(system, f, fighter, cost = 0) {
   const c = f.combatants[fighter.id];
-  if (!c || c.out || keptOf(f, fighter.id, system, fighter.sheet) < cost) return false;
+  if (!c || c.out || !canPay(system, f, fighter.id, fighter.sheet, cost)) return false;
   if (f.round === 1 && c.surprised) return false;
   return !conditions.flagsOf(system, fighter.sheet).noAction.length;
 }
@@ -84,7 +113,7 @@ function defendingOf(system, f, id, sheet, attack) {
   const reaction = position.defendOf(system, sheet, attack);
   if (!reaction) return null;
   const cost = reactionCost(system, sheet, 'defend');
-  return keptOf(f, id, system, sheet) >= cost ? { reaction, cost } : null;
+  return canPay(system, f, id, sheet, cost) ? { reaction, cost } : null;
 }
 
 /**
@@ -116,12 +145,13 @@ function reactToWalk(
   // One reactor's attack at the mover standing on `at`, paid from what
   // they kept (`cost`; a readied attack's 0, paid when readied).
   const fire = (w, attack, at, line, cost) => {
-    const c = f.combatants[w.id];
     const own = sheets[w.id] || w.sheet;
     const spent = spendAmmo(system, own, attack);
     if (spent.refused) return false;
     if (spent.sheet !== own) sheets[w.id] = spent.sheet;
-    c.kept = keptOf(f, w.id, system, w.sheet) - cost;
+    // A readied attack (cost 0) was paid for when readied; with AP off it
+    // uses a reaction like any other (L-838).
+    if (cost || apRules.isOff(system)) pay(system, f, w.id, w.sheet, cost);
     const friends = fighters
       .filter((x) => x.id !== w.id && !opposed(x.side, w.side) && x.cell)
       .map((x) => x.cell);
@@ -153,7 +183,7 @@ function reactToWalk(
     });
     const r = result.results[0];
     if (r.reacted && f.combatants[mover.id]) {
-      f.combatants[mover.id].kept = keptOf(f, mover.id, system, mover.sheet) - defend.cost;
+      pay(system, f, mover.id, mover.sheet, defend.cost);
     }
     lines.push(line, ...r.lines);
     struck.push({
@@ -227,4 +257,6 @@ module.exports = {
   reactionCost,
   keptOf,
   defendingOf,
+  pay,
+  reactionsLeftOf,
 };

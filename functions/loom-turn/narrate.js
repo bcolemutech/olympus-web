@@ -15,6 +15,7 @@ const sight = require('../loom-canon/sight');
 const { recordOf, squaresOf, peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
+const apRules = require('../loom-canon/ap');
 const { sheetOf, validateSheet } = require('../loom-canon/sheets');
 const conditions = require('../loom-canon/conditions');
 const effects = require('../loom-canon/effects');
@@ -400,9 +401,19 @@ function buildTimeSection(save, resolution) {
 // Where the player is in their turn once this resolves (L-614 / #444): the
 // action points left (L-832) and any long action under way, for pacing;
 // the rules have already decided what they may do.
-function buildTurnSection(save, resolution) {
+function buildTurnSection(save, resolution, canonWorld = null) {
   const change = (resolution.mutations || []).find((m) => m.target === 'save' && m.path === 'turn');
   const turn = change ? change.value : turnStateOf(save);
+  // With AP off (L-838): whether the turn's action is used.
+  if (canonWorld && apRules.isOff(checks.systemOf(canonWorld))) {
+    return (
+      'THE TURN (for pacing only; the rules have decided what happens):\n' +
+      'Turn ' +
+      turn.n +
+      '. The player ' +
+      (turn.acted ? 'has used their action this turn.' : "hasn't acted yet this turn.")
+    );
+  }
   return (
     'THE TURN (for pacing only; the rules have decided what happens):\n' +
     'Turn ' +
@@ -800,7 +811,7 @@ async function narrateResolution(params) {
         entityContexts,
         recentSummary: save.recentSummary,
         exitsSection: buildExitsSection(canonWorld, position, save, resolution, view),
-        turnSection: buildTurnSection(save, resolution),
+        turnSection: buildTurnSection(save, resolution, canonWorld),
         timeSection: buildTimeSection(save, resolution),
         sheetSection: buildSheetSection(save, canonWorld),
         save,

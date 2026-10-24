@@ -26,6 +26,7 @@ const clock = require('../loom-canon/clock');
 const maps = require('../loom-canon/maps');
 const { systemOf } = require('../loom-canon/checks');
 const { withAp } = require('../loom-canon/sheets');
+const apRules = require('../loom-canon/ap');
 const combat = require('../loom-modules/combat');
 const { FieldValue } = require('firebase-admin/firestore');
 
@@ -781,7 +782,9 @@ async function previewTurn({ save, saveRef, canonWorld }, actionText, proposedAc
   // there's no walk to somewhere else first.
   const price =
     moving || (walk && walk.kind === 'town') ? null : priceOf(proposedAction, save, canonWorld);
-  if (price && price.long)
+  // With AP off (L-838) it is the turn's action, as before AP.
+  if (!moving && apRules.isOff(systemOf(canonWorld))) lines.push('Uses your action.');
+  else if (price && price.long)
     lines.push('Takes ' + price.long + ' AP, over more than one turn if need be.');
   else if (price) lines.push('Costs ' + price.cost + ' AP.');
   await saveRef.update({
