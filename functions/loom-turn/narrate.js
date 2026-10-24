@@ -8,7 +8,7 @@ const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
-const { turnStateOf, speedOf } = require('../loom-models');
+const { turnStateOf, apOf } = require('../loom-models');
 const { doorStatesOf, doorSides } = require('./steps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
@@ -398,8 +398,8 @@ function buildTimeSection(save, resolution) {
 }
 
 // Where the player is in their turn once this resolves (L-614 / #444): the
-// movement left and whether they've acted, for pacing; the rules have
-// already decided what they may do.
+// action points left (L-832) and any long action under way, for pacing;
+// the rules have already decided what they may do.
 function buildTurnSection(save, resolution) {
   const change = (resolution.mutations || []).find((m) => m.target === 'save' && m.path === 'turn');
   const turn = change ? change.value : turnStateOf(save);
@@ -407,12 +407,20 @@ function buildTurnSection(save, resolution) {
     'THE TURN (for pacing only; the rules have decided what happens):\n' +
     'Turn ' +
     turn.n +
-    '. Movement left: ' +
-    turn.movementLeft +
+    '. Action points left: ' +
+    turn.ap +
     ' of ' +
-    speedOf(save) +
-    '. The player ' +
-    (turn.actionUsed ? 'has used their action this turn.' : "hasn't acted yet this turn.")
+    apOf(save) +
+    '.' +
+    (turn.long
+      ? ' The player is ' +
+        turn.long.name +
+        ' (' +
+        turn.long.put +
+        ' of ' +
+        turn.long.need +
+        ' AP put in).'
+      : '')
   );
 }
 

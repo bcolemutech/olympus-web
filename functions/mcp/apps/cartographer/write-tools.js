@@ -13,7 +13,7 @@ const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
-const { validateSheet, sheetFromStatBlock, speedFor } = require('../../../loom-canon/sheets');
+const { validateSheet, sheetFromStatBlock, apFor } = require('../../../loom-canon/sheets');
 const { systemOf } = require('../../../loom-canon/checks');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
@@ -667,7 +667,8 @@ function writeTools({ writer, systems }) {
             }
           } else if (args.startingSheet !== undefined) {
             const sheet = { ...args.startingSheet };
-            delete sheet.speed; // worked out by the system (L-811)
+            delete sheet.speed; // worked out by the system (L-811; its pool, L-832)
+            delete sheet.ap;
             const problems = validateSheet(system || systemOf(world), sheet);
             if (problems.length) {
               throw new ToolError(
@@ -1270,7 +1271,8 @@ function writeTools({ writer, systems }) {
             args.statBlock !== undefined
               ? sheetFromStatBlock(system, args.statBlock)
               : { ...args.sheet };
-          delete given.speed; // worked out by the system (L-811)
+          delete given.speed; // worked out by the system (L-811; its pool, L-832)
+          delete given.ap;
           const problems = validateSheet(system, given);
           if (problems.length) {
             throw new ToolError(
@@ -1282,7 +1284,7 @@ function writeTools({ writer, systems }) {
           return {
             character: { id: character.id, name: character.name },
             changed: true,
-            sheet: { ...given, speed: speedFor(system, given) },
+            sheet: { ...given, ap: apFor(system, given) },
           };
         });
       },

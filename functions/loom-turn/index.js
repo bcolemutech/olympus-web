@@ -3,12 +3,19 @@
 const loomCanon = require('../loom-canon');
 const { makeWorldState, turnStateOf } = require('../loom-models');
 const { interpretAction } = require('./interpret');
-const { adjudicateAction, setOutWalk, needsNoRoll, ACTED, rollDie } = require('./adjudicate');
+const {
+  adjudicateAction,
+  setOutWalk,
+  needsNoRoll,
+  ACTED,
+  rollDie,
+  priceOf,
+} = require('./adjudicate');
 const { reachPlan } = require('./reach');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
-const { planStep, planDoor, doorStatesOf, OUT_OF_MOVEMENT } = require('./steps');
+const { planStep, planDoor, doorStatesOf, OUT_OF_MOVEMENT, OUT_OF_AP } = require('./steps');
 const seen = require('./seen');
 const { recordOf, knownTo, added } = seen;
 const { lookAt, lookTargetOf } = require('./looking');
@@ -18,7 +25,7 @@ const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const clock = require('../loom-canon/clock');
 const maps = require('../loom-canon/maps');
 const { systemOf } = require('../loom-canon/checks');
-const { withSpeed } = require('../loom-canon/sheets');
+const { withAp } = require('../loom-canon/sheets');
 const combat = require('../loom-modules/combat');
 const { FieldValue } = require('firebase-admin/firestore');
 
@@ -71,8 +78,8 @@ async function intake(params) {
   // The world as this save sees it (L-824): its map's figures among the
   // characters, and everyone where the save has them.
   const canonWorld = combat.figures.withFigures(loaded, stored);
-  // The character's speed, worked out for the world's system (L-811).
-  const save = withSpeed(stored, systemOf(canonWorld));
+  // The character's pool of action points, worked out for the world's system (L-811; L-832).
+  const save = withAp(stored, systemOf(canonWorld));
 
   const worldStateRef = db.collection('loom_world_state').doc(worldId);
   const worldStateSnap = await worldStateRef.get();
@@ -112,7 +119,7 @@ async function intake(params) {
  * 'continue' }` to walk the plan; L-613 / #443) needs no model either: it is
  * worked out by the rules (./steps.js) inside a transaction, spends movement,
  * keeps the rest of the path as the plan, and answers with plain lines and
- * `step: { cell, movementLeft, plan, lines }`. Only a step that reaches an
+ * `step: { cell, ap, plan, lines }` (`ap` the AP left, L-832). Only a step that reaches an
  * exit goes on through the pipeline, to leave by it, narrated, and so does
  * one that walks into a hazard (L-815): stopped there, it is triggered and
  * narrated (`action: { verb: 'hazard', hazard }`), the step's lines first.
@@ -228,7 +235,7 @@ async function runTurnPipeline(params) {
   if (action && (action.cell || action.verb === 'continue' || action.verb === 'door')) {
     const target = action.cell ? { cell: action.cell } : { plan: true };
     const step = await db.runTransaction(async (transaction) => {
-      const fresh = withSpeed((await transaction.get(saveRef)).data(), systemOf(canonWorld));
+      const fresh = withAp((await transaction.get(saveRef)).data(), systemOf(canonWorld));
       // What the save has seen on its map: the ground it may walk (L-635),
       // and the record its new sight is added to (L-632).
       const found = fresh.mapId ? await recordOf(transaction, saveRef, fresh.mapId) : null;
@@ -323,7 +330,7 @@ async function runTurnPipeline(params) {
         narration: [lines.join(' '), struck.narration].filter(Boolean).join(' '),
         step: {
           cell: step.cell,
-          movementLeft: step.turn.movementLeft,
+          ap: step.turn.ap,
           plan: step.turn.plan,
           lines,
           hazard: step.hazard.id,
@@ -346,7 +353,7 @@ async function runTurnPipeline(params) {
         narration: [lines.join(' '), fought.narration].filter(Boolean).join(' '),
         step: {
           cell: step.cell,
-          movementLeft: step.turn.movementLeft,
+          ap: step.turn.ap,
           plan: step.turn.plan,
           lines,
           fight: true,
@@ -363,7 +370,7 @@ async function runTurnPipeline(params) {
         time: clock.timeView(clock.timeOf(save)),
         step: {
           cell: step.cell || save.cell || null,
-          movementLeft: (step.turn || turnStateOf(save)).movementLeft,
+          ap: (step.turn || turnStateOf(save)).ap,
           plan: step.turn ? step.turn.plan : turnStateOf(save).plan,
           lines,
         },
@@ -518,8 +525,9 @@ async function runTurnPipeline(params) {
     known,
     found,
   });
-  // A second action in a turn is turned down plainly: not narrated, not
-  // recorded (L-614 / #444); so is one a condition stops (L-815: Stunned).
+  // An action the AP left won't pay for is turned down plainly: not
+  // narrated, not recorded (L-614 / #444; L-832); so is one a condition
+  // stops (L-815: Stunned).
   if (
     resolution.outcome === 'blocked' &&
     (resolution.constraints[0] === ACTED || resolution.plain)
@@ -626,7 +634,7 @@ function refusal(save, line) {
     time: clock.timeView(clock.timeOf(save)),
     step: {
       townPoint: save.townPoint || null,
-      movementLeft: turnStateOf(save).movementLeft,
+      ap: turnStateOf(save).ap,
       plan: turnStateOf(save).plan,
       lines: [line],
     },
@@ -639,7 +647,7 @@ async function townStep(params, target) {
   const { db, uid, worldId, saveId } = params;
   const { saveRef, canonWorld } = await intake({ db, uid, worldId, saveId });
   const step = await db.runTransaction(async (transaction) => {
-    const fresh = withSpeed((await transaction.get(saveRef)).data(), systemOf(canonWorld));
+    const fresh = withAp((await transaction.get(saveRef)).data(), systemOf(canonWorld));
     const planned = planTownStep(canonWorld, fresh, target);
     // What it sees along the way, added to what it has seen of the town
     // (L-671), read before the transaction's writes.
@@ -671,7 +679,7 @@ async function townStep(params, target) {
     time: clock.timeView(clock.timeOf(step.before)),
     step: {
       townPoint: step.point || step.before.townPoint || null,
-      movementLeft: (step.turn || turnStateOf(step.before)).movementLeft,
+      ap: (step.turn || turnStateOf(step.before)).ap,
       plan: step.turn ? step.turn.plan : turnStateOf(step.before).plan,
       lines,
     },
@@ -745,18 +753,8 @@ function rollWords(canonWorld, proposedAction) {
  * Do it (`{ verb: 'confirm' }`). Nothing is spent or recorded yet.
  */
 async function previewTurn({ save, saveRef, canonWorld }, actionText, proposedAction, walk) {
-  const turn = turnStateOf(save);
   const inFight = Boolean(combat.play.fightOf(save));
   const moving = MOVING.test(proposedAction.verb);
-  if (!moving && turn.actionUsed) {
-    return {
-      narration: ACTED,
-      stateSummary: save.recentSummary || '',
-      suggestedActions: [],
-      refused: true,
-      time: clock.timeView(clock.timeOf(save)),
-    };
-  }
   const squares = (n) => (n === 1 ? '1 square' : n + ' squares');
   const lines = [];
   if (walk && walk.kind === 'map') {
@@ -779,7 +777,13 @@ async function previewTurn({ save, saveRef, canonWorld }, actionText, proposedAc
     (walk ? 'Then: ' : '') + actionText.charAt(0).toUpperCase() + actionText.slice(1) + '.'
   );
   if (roll) lines.push(roll + '.');
-  if (!moving) lines.push(inFight ? 'Uses your action this turn.' : 'Uses your action.');
+  // What it costs in AP where it's done (L-832): on this battle map, when
+  // there's no walk to somewhere else first.
+  const price =
+    moving || (walk && walk.kind === 'town') ? null : priceOf(proposedAction, save, canonWorld);
+  if (price && price.long)
+    lines.push('Takes ' + price.long + ' AP, over more than one turn if need be.');
+  else if (price) lines.push('Costs ' + price.cost + ' AP.');
   await saveRef.update({
     pending: {
       actionText,
@@ -827,7 +831,7 @@ async function confirmTurn(params, { save, saveRef, canonWorld }, pending) {
         const step = await runTurnPipeline({ ...params, action: next });
         lines.push(
           ...((step.step && step.step.lines) || [step.narration]).filter(
-            (l) => l && l !== OUT_OF_MOVEMENT
+            (l) => l && l !== OUT_OF_MOVEMENT && l !== OUT_OF_AP
           )
         );
         const now = (await saveRef.get()).data();
@@ -956,9 +960,9 @@ async function walkThere(params, target) {
       continue;
     }
     lines.push(...answer.step.lines.filter((line) => line !== OUT_OF_MOVEMENT));
-    const { plan, movementLeft } = answer.step;
+    const { plan, ap } = answer.step;
     const walking = plan && plan.layer === 'town';
-    if (answer.refused || answer.step.entered || answer.step.left || !walking || movementLeft > 0) {
+    if (answer.refused || answer.step.entered || answer.step.left || !walking || ap > 0) {
       break;
     }
     await runTurnPipeline({ ...params, action: { verb: 'end-turn' } });

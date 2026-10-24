@@ -465,7 +465,7 @@ test('test_roll refusals', async () => {
 test('update_world sets a premade character, checked against the world’s system (L-812)', async () => {
   const { defaultSheet } = require('../functions/loom-canon/sheets');
   const fantasy = BUILT_IN['d20-fantasy'];
-  const sheet = { ...defaultSheet(fantasy, { traits: ['swim'] }), speed: 99 };
+  const sheet = { ...defaultSheet(fantasy, { traits: ['swim'] }), ap: 99, speed: 98 };
   sheet.attributes.DEX = 16;
   // With the system it will play by, given together.
   const set = await ok('update_world', {
@@ -476,7 +476,9 @@ test('update_world sets a premade character, checked against the world’s syste
   expect(set).toMatchObject({ changed: true, updated: ['systemId', 'startingSheet'] });
   const stored = (await db.collection('loom_worlds').doc(WORLD).get()).data().rules.startingSheet;
   expect(stored.attributes.DEX).toBe(16);
-  expect(stored).not.toHaveProperty('speed'); // worked out by the system (L-811)
+  // Its pool is worked out by the system (L-811; L-832), never stored.
+  expect(stored).not.toHaveProperty('speed');
+  expect(stored).not.toHaveProperty('ap');
   // One that doesn't fit is refused, each problem named.
   expect(
     await refused('update_world', {
@@ -526,12 +528,12 @@ test('set_sheet gives a named character a sheet; get_character, test_roll and li
       attributes: block.attributes,
       level: 3,
       resources: { health: { current: 24 } }, // 3 × (6 + 2)
-      speed: 23, // 20 + DEX's +1 + Athletics 4's +2
+      ap: 23, // 20 + DEX's +1 + Athletics 4's +2
     },
   });
   expect(set.sheet.skills).toMatchObject({ Athletics: 4, Perception: 2, Stealth: 0 });
   const hale = await ok('get_character', { worldId: WORLD, characterId: 'chr_hale' });
-  expect(hale.sheet).toMatchObject({ attributes: block.attributes, speed: 23 });
+  expect(hale.sheet).toMatchObject({ attributes: block.attributes, ap: 23 });
   expect(hale.sheet).not.toHaveProperty('misfits');
   expect(hale.checklist.find((c) => c.id === 'character.sheet')).toMatchObject({ met: true });
 
@@ -626,7 +628,7 @@ test('set_sheet gives a named character a sheet; get_character, test_roll and li
     characterId: 'chr_hale',
     statBlock: { attributes: { Body: 4, Reflex: 3, Mind: 2, Presence: 2 }, skills: { Melee: 2 } },
   });
-  expect(scifi.sheet).toMatchObject({ resources: { health: { current: 7 } }, speed: 20 });
+  expect(scifi.sheet).toMatchObject({ resources: { health: { current: 7 } }, ap: 20 });
   const whole = { ...scifi.sheet, level: 2 };
   expect(
     (await ok('set_sheet', { worldId: WORLD, characterId: 'chr_hale', sheet: whole })).sheet

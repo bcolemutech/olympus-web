@@ -189,13 +189,25 @@
 
   /**
    * The path rules for a map and a save's doors, as grid-paths.js options:
-   * exits are stepped onto, never through (`avoid`); a step costs 1, or 2
-   * onto difficult ground, and 1 more to open a closed door on the way
-   * (`cost`; Infinity where canStep says no, or past a locked door); and
-   * `opens` names the closed door a step opens, where a walk stops. The
-   * server and the Loom page share these, so a preview is the move.
+   * exits are stepped onto, never through (`avoid`); a step costs its price,
+   * by default 1, or 2 onto difficult ground, and 1 more to open a closed
+   * door on the way (`cost`; Infinity where canStep says no, or past a
+   * locked door); `opens` names the closed door a step opens, where a walk
+   * stops, and `openCost` what opening it costs. The server and the Loom
+   * page share these, so a preview is the move.
+   *
+   * `prices` (L-832; planning/action-points.md §4.2) are a character's in
+   * action points: { move, difficult, door }, `door` a number or a
+   * function of the door (its own `ap`), each defaulting as above.
    */
-  function pathOptions(map, states) {
+  function pathOptions(map, states, prices) {
+    var price = prices || {};
+    var move = price.move >= 1 ? price.move : 1;
+    var difficult = price.difficult >= 1 ? price.difficult : 2;
+    var doorCost = function (door) {
+      var c = typeof price.door === 'function' ? price.door(door) : price.door;
+      return typeof c === 'number' && c >= 0 ? c : 1;
+    };
     var passable = function (door) {
       return doorState(door, states) !== 'locked';
     };
@@ -203,16 +215,24 @@
       var door = between(map, a, b).door;
       return door && doorState(door, states) === 'closed' ? door : null;
     };
+    var byId = {};
+    (map.doors || []).forEach(function (door) {
+      byId[door.id] = door;
+    });
     return {
       avoid: map.exits || [],
       cost: function (a, b) {
         if (!canStep(map, a, b, passable)) return Infinity;
-        var base = groundAt(map, b) === 'difficult' ? 2 : 1;
-        return closedDoor(a, b) ? base + 1 : base;
+        var base = groundAt(map, b) === 'difficult' ? difficult : move;
+        var door = closedDoor(a, b);
+        return door ? base + doorCost(door) : base;
       },
       opens: function (a, b) {
         var door = closedDoor(a, b);
         return door ? door.id : null;
+      },
+      openCost: function (id) {
+        return byId[id] ? doorCost(byId[id]) : 1;
       },
     };
   }

@@ -10,7 +10,7 @@
  */
 
 const clock = require('./loom-canon/clock');
-const { DEFAULT_SPEED, MAX_SPEED, sheetOf } = require('./loom-canon/sheets');
+const { DEFAULT_AP, MAX_AP, sheetOf } = require('./loom-canon/sheets');
 
 // ── Mutation vocabulary (design doc §8, §10 L-401) ─────────────────────────
 // state_mutations are deltas, never whole-document overwrites, so retried
@@ -131,53 +131,104 @@ function validateWorldState(data) {
 
 // ── The turn (planning/the-loom-movement-and-vision.md §3; L-611 / #441) ──
 //
-// A character has a speed: movement points a turn (1 square on a battle map;
-// 20 m in town, later). A save has its turn: which turn it is, the movement
-// left, whether the turn's one action is used, and the plan (the rest of a
-// path, kept for the next turn). End turn refills movement and the action.
-// Older saves and characters have none: they read as a fresh turn and the
-// default speed. (A save's turn is not a turn record: see makeTurn.)
+// A character has a pool of action points (planning/action-points.md; L-830):
+// what a turn pays for moving (a square 1 AP on a battle map; 20 m a point
+// in town) and, on a grid, every action. A save has its turn (L-832; §4.3):
+//
+//   { n, ap, kept, plan, moved?, long?, withdrawn? }
+//     n          which turn it is
+//     ap         AP left this turn
+//     kept       AP kept from the last turn, for off-turn reactions (L-833)
+//     plan       the rest of a path, kept for the next turn
+//     moved      squares walked this turn, for End turn's line
+//     long       a long action under way (CT4): { key, name, put, need }
+//     withdrawn  moving out of reach draws no attacks this turn (L-823)
+//
+// End turn refills the pool and keeps the plan and any long action. Older
+// saves have none, or the turn from before AP ({ movementLeft, actionUsed }):
+// they read as a fresh turn, or as that one on AP, the movement left as AP.
+// (A save's turn is not a turn record: see makeTurn.)
 
 /**
- * A save's character's speed: its sheet's (L-811), an older character's own,
- * or the default.
+ * A save's character's pool of action points: its sheet's (L-832; `speed`
+ * on a sheet from before AP, L-811), an older character's own speed, or
+ * the default.
  */
-function speedOf(save) {
+function apOf(save) {
   const sheet = sheetOf(save);
-  const speed = sheet ? sheet.speed : save && save.character && save.character.speed;
-  return Number.isInteger(speed) && speed > 0 && speed <= MAX_SPEED ? speed : DEFAULT_SPEED;
+  const own = save && save.character && save.character.speed;
+  const pool = sheet ? (sheet.ap !== undefined ? sheet.ap : sheet.speed) : own;
+  return Number.isInteger(pool) && pool > 0 && pool <= MAX_AP ? pool : DEFAULT_AP;
 }
 
-/** What's wrong with a save's turn, given its character's speed. */
-function validateTurnState(turn, speed) {
+const whole = (n, max) => Number.isInteger(n) && n >= 0 && n <= max;
+const isObject = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/** What's wrong with a save's turn. */
+function validateTurnState(turn) {
   const errors = [];
-  if (!turn || typeof turn !== 'object' || Array.isArray(turn)) return ['turn must be an object'];
+  if (!isObject(turn)) return ['turn must be an object'];
   if (!Number.isInteger(turn.n) || turn.n < 1) errors.push('turn.n must be a whole number from 1');
-  if (!Number.isInteger(turn.movementLeft) || turn.movementLeft < 0 || turn.movementLeft > speed) {
-    errors.push('turn.movementLeft must be a whole number from 0 to the speed (' + speed + ')');
+  if (!whole(turn.ap, MAX_AP)) errors.push('turn.ap must be a whole number from 0 to ' + MAX_AP);
+  if (!whole(turn.kept, MAX_AP)) {
+    errors.push('turn.kept must be a whole number from 0 to ' + MAX_AP);
   }
-  if (typeof turn.actionUsed !== 'boolean') errors.push('turn.actionUsed must be true or false');
-  if (turn.plan !== null && (typeof turn.plan !== 'object' || Array.isArray(turn.plan))) {
+  if (turn.plan !== null && !isObject(turn.plan)) {
     errors.push('turn.plan must be an object or null');
+  }
+  if (turn.moved !== undefined && !whole(turn.moved, 100000)) {
+    errors.push('turn.moved must be a whole number of squares');
+  }
+  if (
+    turn.long !== undefined &&
+    turn.long !== null &&
+    !(
+      isObject(turn.long) &&
+      typeof turn.long.key === 'string' &&
+      whole(turn.long.put, 100000) &&
+      Number.isInteger(turn.long.need) &&
+      turn.long.need > 0
+    )
+  ) {
+    errors.push('turn.long must be { key, name, put, need } or null');
   }
   return errors;
 }
 
-/** A new turn `n`: full movement, the action unused, no plan. */
+/** A new turn `n`: a full pool, nothing kept, no plan. */
 function freshTurnState(save, n = 1) {
-  return { n, movementLeft: speedOf(save), actionUsed: false, plan: null };
+  return { n, ap: apOf(save), kept: 0, plan: null };
 }
 
-/** A save's turn, or a fresh one for an older save (or one that doesn't check out). */
+// A turn from before AP (L-611): its movement left becomes its AP (MG1).
+function fromMovement(turn) {
+  if (!isObject(turn) || turn.ap !== undefined) return null;
+  if (!Number.isInteger(turn.n) || turn.n < 1) return null;
+  if (!whole(turn.movementLeft, MAX_AP)) return null;
+  const plan = isObject(turn.plan) ? turn.plan : null;
+  return { n: turn.n, ap: turn.movementLeft, kept: 0, plan };
+}
+
+/**
+ * A save's turn: its own, one from before AP converted, or a fresh one for
+ * an older save (or one that doesn't check out).
+ */
 function turnStateOf(save) {
   const turn = save && save.turn;
-  return turn && !validateTurnState(turn, speedOf(save)).length ? turn : freshTurnState(save);
+  if (turn && !validateTurnState(turn).length) return turn;
+  return fromMovement(turn) || freshTurnState(save);
 }
 
-/** The turn after this one: movement and the action refilled, the plan kept. */
+/** The turn after this one: the pool refilled, the plan and any long action kept. */
 function nextTurnState(save) {
   const now = turnStateOf(save);
-  return { n: now.n + 1, movementLeft: speedOf(save), actionUsed: false, plan: now.plan };
+  return {
+    n: now.n + 1,
+    ap: apOf(save),
+    kept: 0,
+    plan: now.plan,
+    ...(now.long ? { long: now.long } : {}),
+  };
 }
 
 function validateCharacter(character) {
@@ -207,12 +258,13 @@ function validateCharacter(character) {
   if (!Array.isArray(character.goals)) {
     errors.push('character.goals must be an array');
   }
-  // Movement a turn (L-611); older characters have none and move at the default.
+  // Movement a turn (L-611), its pool of AP (L-832); older characters have
+  // none and move at the default.
   if (
     character.speed !== undefined &&
-    !(Number.isInteger(character.speed) && character.speed > 0 && character.speed <= MAX_SPEED)
+    !(Number.isInteger(character.speed) && character.speed > 0 && character.speed <= MAX_AP)
   ) {
-    errors.push('character.speed must be a whole number from 1 to ' + MAX_SPEED);
+    errors.push('character.speed must be a whole number from 1 to ' + MAX_AP);
   }
 
   return { valid: errors.length === 0, errors: errors };
@@ -312,7 +364,7 @@ function validateSave(data) {
   }
   // The save's turn (L-611); older saves have none and start a fresh one.
   if (data.turn !== undefined) {
-    errors.push.apply(errors, validateTurnState(data.turn, speedOf(data)));
+    errors.push.apply(errors, validateTurnState(data.turn));
   }
   // The save's clock (L-371): seconds since the game began; older saves have
   // none and read as Day 1, 08:00 until their next turn.
@@ -390,7 +442,7 @@ function makeWorldState(fields) {
 
 function makeCharacter(fields) {
   fields = fields || {};
-  // With a sheet (L-811): its condition, traits and speed are in it.
+  // With a sheet (L-811): its condition, traits and pool of AP are in it.
   if (fields.sheet) {
     return {
       name: fields.name,
@@ -405,7 +457,7 @@ function makeCharacter(fields) {
     inventory: fields.inventory || [],
     abilities: fields.abilities || [],
     goals: fields.goals || [],
-    speed: fields.speed === undefined ? DEFAULT_SPEED : fields.speed,
+    speed: fields.speed === undefined ? DEFAULT_AP : fields.speed,
   };
 }
 
@@ -474,8 +526,8 @@ module.exports = {
   makeCharacter,
   makeSave,
   makeTurn,
-  DEFAULT_SPEED,
-  speedOf,
+  DEFAULT_AP,
+  apOf,
   validateTurnState,
   freshTurnState,
   turnStateOf,

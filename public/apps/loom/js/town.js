@@ -197,12 +197,13 @@
     return Math.hypot(a.x - b.x, a.y - b.y) < 0.5;
   }
 
+  // The turn's points left (its AP, L-832): 20 m each in town.
   function movementLeft() {
-    return town.turn ? town.turn.movementLeft : 0;
+    return town.turn ? town.turn.ap : 0;
   }
 
   function metresPerTurn() {
-    return ((town.turn && town.turn.speed) || 20) * METRES_PER_POINT;
+    return ((town.turn && town.turn.pool) || 20) * METRES_PER_POINT;
   }
 
   function reducedMotion() {
@@ -1037,7 +1038,7 @@
     var turn = town.turn;
     var plan = planPath();
     if (plan && turn) {
-      var w = P.walk(plan, turn.movementLeft * METRES_PER_POINT);
+      var w = P.walk(plan, turn.ap * METRES_PER_POINT);
       town.pending = {
         points: w.arrived
           ? plan.points

@@ -77,12 +77,12 @@ describe('ending a turn', () => {
   test('a new save starts on turn 1 with its full speed', async () => {
     const save = await seed('save-new');
     expect(save.character.speed).toBe(20);
-    expect(save.turn).toEqual({ n: 1, movementLeft: 20, actionUsed: false, plan: null });
+    expect(save.turn).toEqual({ n: 1, ap: 20, kept: 0, plan: null });
   });
 
-  test('refills movement and the action, counts the turn, and keeps the plan', async () => {
+  test('refills the pool of AP, counts the turn, and keeps the plan', async () => {
     const plan = { layer: 'battleMap', to: { x: 9, y: 3 }, path: [{ x: 8, y: 3 }] };
-    await seed('save-spent', { turn: { n: 3, movementLeft: 0, actionUsed: true, plan } });
+    await seed('save-spent', { turn: { n: 3, ap: 0, kept: 0, plan } });
     const before = (await clock()) || 0;
     const result = await endTurn('save-spent');
     expect(result).toEqual({
@@ -92,12 +92,7 @@ describe('ending a turn', () => {
       // The time, for the map's clock (L-376): 08:00 and a 5-minute turn.
       time: { seconds: 8 * 3600 + 300, label: 'Day 1, morning' },
     });
-    expect((await saveOf('save-spent')).turn).toEqual({
-      n: 4,
-      movementLeft: 20,
-      actionUsed: false,
-      plan,
-    });
+    expect((await saveOf('save-spent')).turn).toEqual({ n: 4, ap: 20, kept: 0, plan });
     expect(await clock()).toBe(before + 1);
     expect(mockCallGemini).not.toHaveBeenCalled();
   });
@@ -115,13 +110,13 @@ describe('ending a turn', () => {
     expect(mockCallGemini).not.toHaveBeenCalled();
   });
 
-  test('a character with its own speed refills to it', async () => {
+  test('a character with its own pool refills to it', async () => {
     await seed('save-quick', {
       character: { name: 'Wren', speed: 30 },
-      turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null },
+      turn: { n: 1, ap: 4, kept: 0, plan: null },
     });
     await endTurn('save-quick');
-    expect((await saveOf('save-quick')).turn).toMatchObject({ n: 2, movementLeft: 30 });
+    expect((await saveOf('save-quick')).turn).toMatchObject({ n: 2, ap: 30 });
   });
 
   test('an older save, with no turn or speed, starts a fresh turn and plays', async () => {
@@ -130,12 +125,20 @@ describe('ending a turn', () => {
     delete older.character.speed;
     await db.collection('loom_saves').doc('save-old').set(older);
     await endTurn('save-old');
-    expect((await saveOf('save-old')).turn).toEqual({
-      n: 2,
-      movementLeft: 20,
-      actionUsed: false,
-      plan: null,
+    expect((await saveOf('save-old')).turn).toEqual({ n: 2, ap: 20, kept: 0, plan: null });
+  });
+
+  test('a turn from before AP is converted: its movement left is its AP, then a full pool', async () => {
+    const older = await seed('save-movement');
+    older.turn = { n: 5, movementLeft: 7, actionUsed: true, plan: null };
+    await db.collection('loom_saves').doc('save-movement').set(older);
+    const view = await loomGetMap.run({
+      data: { worldId: WORLD, saveId: 'save-movement' },
+      auth: PLAYER,
     });
+    expect(view.turn).toMatchObject({ n: 5, ap: 7, pool: 20, kept: 0 });
+    await endTurn('save-movement');
+    expect((await saveOf('save-movement')).turn).toEqual({ n: 6, ap: 20, kept: 0, plan: null });
   });
 
   test('anything else is still refused', async () => {
@@ -181,13 +184,20 @@ describe('game time (L-371)', () => {
 });
 
 describe('loomGetMap carries the turn', () => {
-  test('the turn number, movement left of the speed, the action and the plan', async () => {
-    await seed('save-view', { turn: { n: 7, movementLeft: 12, actionUsed: true, plan: null } });
+  test('the turn number, the AP left of the pool, the plan and what a step costs', async () => {
+    await seed('save-view', { turn: { n: 7, ap: 12, kept: 0, plan: null } });
     const view = await loomGetMap.run({
       data: { worldId: WORLD, saveId: 'save-view' },
       auth: PLAYER,
     });
-    expect(view.turn).toEqual({ n: 7, movementLeft: 12, speed: 20, actionUsed: true, plan: null });
+    expect(view.turn).toEqual({
+      n: 7,
+      ap: 12,
+      pool: 20,
+      kept: 0,
+      plan: null,
+      prices: { move: 1, difficult: 2, door: 2, doors: {} },
+    });
   });
 
   test('an older save shows a fresh turn', async () => {
@@ -198,6 +208,6 @@ describe('loomGetMap carries the turn', () => {
       data: { worldId: WORLD, saveId: 'save-view-old' },
       auth: PLAYER,
     });
-    expect(view.turn).toEqual({ n: 1, movementLeft: 20, speed: 20, actionUsed: false, plan: null });
+    expect(view.turn).toMatchObject({ n: 1, ap: 20, pool: 20, kept: 0, plan: null });
   });
 });

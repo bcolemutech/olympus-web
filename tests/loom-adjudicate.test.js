@@ -140,7 +140,8 @@ describe('evaluate — generic (dice) verbs', () => {
       CANON_WORLD
     );
     expect(resolution.outcome).toBe('success');
-    expect(resolution.mutations).toHaveLength(1); // the turn's action, used (L-614)
+    // Off a battle map an action costs nothing (L-832; action points WH2).
+    expect(resolution.mutations).toHaveLength(0);
   });
 
   it('fails when the roll is below the difficulty class', () => {
@@ -152,7 +153,7 @@ describe('evaluate — generic (dice) verbs', () => {
       CANON_WORLD
     );
     expect(resolution.outcome).toBe('failure');
-    expect(resolution.mutations).toHaveLength(1); // tried, so used all the same
+    expect(resolution.mutations).toHaveLength(0);
   });
 
   it('says what was rolled, against what, and whether it passed (L-726)', () => {
@@ -199,7 +200,7 @@ describe('evaluate — generic (dice) verbs', () => {
     expect(move.roll).toBeUndefined();
   });
 
-  it('a generic action changes nothing but the turn: its action is used, win or lose', () => {
+  it('a generic action off a battle map changes nothing, win or lose (L-832)', () => {
     [1, 20].forEach((dice) => {
       const resolution = evaluate(
         makeProposedAction({ verb: 'attack', targets: ['commandant-de-alva'] }),
@@ -208,30 +209,20 @@ describe('evaluate — generic (dice) verbs', () => {
         dice,
         CANON_WORLD
       );
-      expect(resolution.mutations).toEqual([
-        {
-          target: 'save',
-          op: 'set-flag',
-          path: 'turn',
-          value: { n: 1, movementLeft: 20, actionUsed: true, plan: null },
-        },
-      ]);
+      expect(resolution.mutations).toEqual([]);
     });
   });
 
-  it('a second action in the turn is turned down (L-614)', () => {
+  it('off a battle map, AP spent on the grid doesn’t stop an action (L-832; WH2)', () => {
     const resolution = evaluate(
       makeProposedAction({ verb: 'search' }),
       {},
-      { ...makeCharacterState(), turn: { n: 2, movementLeft: 5, actionUsed: true, plan: null } },
+      { ...makeCharacterState(), turn: { n: 2, ap: 0, kept: 0, plan: null } },
       20,
       CANON_WORLD
     );
-    expect(resolution).toEqual({
-      outcome: 'blocked',
-      mutations: [],
-      constraints: ["You've acted this turn. End your turn first."],
-    });
+    expect(resolution.outcome).toBe('success');
+    expect(resolution.mutations).toEqual([]);
   });
 });
 

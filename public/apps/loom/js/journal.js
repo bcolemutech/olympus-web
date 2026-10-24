@@ -558,12 +558,11 @@
         ${(props.fight ? 'Round ' + props.fight.round + ' · ' : '') +
         'Turn ' +
         turn.n +
-        ' · movement ' +
-        turn.movementLeft +
-        ' of ' +
-        turn.speed +
         ' · ' +
-        (turn.actionUsed ? 'you have acted' : 'your action is ready')}
+        turn.ap +
+        ' of ' +
+        turn.pool +
+        ' AP left'}
       </span>
       <button
         class="app-btn loom-turn-end"
@@ -684,7 +683,7 @@
       Loom.play.endTurn();
     } else if (lower === 'c') {
       var turn = store.get().turn;
-      if (turn && turn.plan && turn.movementLeft > 0) {
+      if (turn && turn.plan && turn.ap > 0) {
         event.preventDefault();
         Loom.map.continuePlan();
       }

@@ -136,7 +136,7 @@ const at = (placeId) => ({
   mapId: null,
   cell: null,
   character: { name: 'Tam', speed: 20 },
-  turn: { n: 1, movementLeft: 20, actionUsed: false, plan: null },
+  turn: { n: 1, ap: 20, kept: 0, plan: null },
   recentSummary: '',
 });
 const talkTo = (targets) => ({ verb: 'talk', targets, params: {} });

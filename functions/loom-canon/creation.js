@@ -21,7 +21,7 @@
  */
 
 const formula = require('./formula');
-const { defaultSheet, maxima, speedFor } = require('./sheets');
+const { defaultSheet, maxima, apFor } = require('./sheets');
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const whole = (v) => Number.isInteger(v);
@@ -209,7 +209,7 @@ function buildSheet(system, choices, { rolled = null, startingTraits = [] } = {}
   for (const id of skills) sheet.skills[id] = c.skills.rank;
   const max = maxima(system, sheet);
   for (const r of system.sheet.resources) sheet.resources[r.id] = { current: max[r.id] || 0 };
-  sheet.speed = speedFor(system, sheet);
+  sheet.ap = apFor(system, sheet);
   return { sheet, errors: [] };
 }
 

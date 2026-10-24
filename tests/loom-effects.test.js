@@ -236,7 +236,7 @@ describe('a condition that changes the sheet (both systems)', () => {
       condition: 'prone',
       duration: { turns: 1 },
     }).sheet;
-    expect(sheets.speedFor(FANTASY, prone)).toBe(10);
+    expect(sheets.apFor(FANTASY, prone)).toBe(10);
     const weak = {
       ...SCIFI,
       sheet: {

@@ -5,7 +5,8 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
-const { turnStateOf, nextTurnState, speedOf, applyStateMutations } = require('../loom-models');
+const { turnStateOf, nextTurnState, applyStateMutations } = require('../loom-models');
+const apRules = require('../loom-canon/ap');
 const clock = require('../loom-canon/clock');
 const travel = require('../loom-canon/travel');
 const checks = require('../loom-canon/checks');
@@ -29,6 +30,7 @@ const DEFAULT_LOCK_DIFFICULTY = 15;
 const DOWN = "You're down: you can only end your turn.";
 
 // Turned down before narration (L-614): the turn's one action is used.
+// Turns run on AP now (L-832), so this is for older answers only.
 const ACTED = "You've acted this turn. End your turn first.";
 
 // Turned down without using the action (L-636): aimed at something out of
@@ -864,12 +866,8 @@ const DEGREE_WORDS = {
 // second answer that still doesn't say is refused), each plainly, spending
 // nothing. A resolution, or null for an action to be tried.
 const NO_HOW = "Without a clear way to do it, you can't attempt it.";
-function plausibilityOf(proposedAction, characterState) {
+function plausibilityOf(proposedAction) {
   const params = proposedAction.params || {};
-  // Nothing to ask while the turn's action is spent: End turn first.
-  if (params.plausibility === 'complicated' && turnStateOf(characterState).actionUsed) {
-    return blocked(ACTED);
-  }
   if (params.plausibility === 'extraordinary') {
     return { ...blocked(params.why || "That's beyond you."), plain: true };
   }
@@ -955,7 +953,8 @@ function evaluateGeneric(proposedAction, dice, characterState, canonWorld) {
 // (L-613 / #443). The turn takes its length of game time (L-371; game time
 // T4): 6 s on a battle map, 5 min anywhere else, from timeRules.
 function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
-  const spent = speedOf(characterState) - turnStateOf(characterState).movementLeft;
+  // The squares walked this turn (L-832: the turn counts them).
+  const spent = turnStateOf(characterState).moved || 0;
   const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
   const ends = clock.timeOf(characterState) + clock.turnSeconds(canonWorld, Boolean(map));
   // The character's conditions tick (L-815): damage each turn, a save to
@@ -1014,10 +1013,16 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
       (feature ? ', to ' + feature.name : '') +
       '.';
   }
+  // A long action under way carries into the next turn, unless the player
+  // was hurt meanwhile (CT4): that interrupts it.
+  const next = nextTurnState(characterState);
+  const hurt = next.long && hurtBy(characterState, ticked.mutations.concat(round.mutations));
+  const interrupted = hurt ? ['Hurt, you stop ' + next.long.name + '.'] : [];
+  if (hurt) delete next.long;
   return {
     outcome: 'success',
     mutations: [
-      { target: 'save', op: 'set-flag', path: 'turn', value: nextTurnState(characterState) },
+      { target: 'save', op: 'set-flag', path: 'turn', value: next },
       { target: 'save', op: 'set-flag', path: 'time', value: ends },
       { op: 'increment', path: 'worldClock', value: 1 },
       ...ticked.mutations,
@@ -1031,7 +1036,8 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
     constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved].concat(
       ticked.lines,
       saved ? [saved.line] : [],
-      round.lines
+      round.lines,
+      interrupted
     ),
     ...(saved
       ? { roll: rolled(saved.roll, 'dying save', checks.systemOf(canonWorld)) }
@@ -1045,6 +1051,19 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
       ? { playback: playbackOf(round.turns, characterState, canonWorld) }
       : {}),
   };
+}
+
+// Whether mutations take any of the character's resources down (L-832):
+// damage, which interrupts a long action (CT4).
+function hurtBy(characterState, mutations) {
+  const sheet = sheets.sheetOf(characterState);
+  const set = mutations.filter((m) => m.path === 'character.sheet').pop();
+  if (!sheet || !set || !set.value) return false;
+  const now = sheet.resources || {};
+  const after = set.value.resources || {};
+  return Object.keys(now).some(
+    (id) => after[id] && now[id] && Number(after[id].current) < Number(now[id].current)
+  );
 }
 
 // The turns everyone else played, for the Loom to play out on the map
@@ -1206,8 +1225,6 @@ function evaluateRest(kind, characterState, canonWorld, dice, choose = null) {
 }
 
 function evaluateWait(proposedAction, characterState, canonWorld, dice, choose = null) {
-  const turn = turnStateOf(characterState);
-  if (turn.actionUsed) return blocked(ACTED);
   if (combat.play.fightOf(characterState)) return { ...blocked(NO_REST), plain: true };
   const params = proposedAction.params || {};
   // A short or long rest (L-827), by the system's rests.
@@ -1315,14 +1332,142 @@ function outOfSightOrReach(proposedAction, characterState, canonWorld) {
   return null;
 }
 
-// Anything typed that isn't a move uses the turn's one action (L-614 /
-// #444), whether it succeeds or not; a second is turned down. What is turned
-// down before it's tried (out of sight or reach; no such door; not beside it;
-// no lock to pick) uses nothing.
-function evaluateAction(proposedAction, characterState, dice, canonWorld) {
+// What an action costs in action points (L-832; planning/action-points.md
+// §4.2), by what it is: looking is free; a few words 2; handling an object
+// 5; a door 2 and a lock 5; Dodge, Withdraw and an attack their own;
+// anything else typed a standard action (its tier: L-835). A feature's or a
+// door's own `ap` and `long` count for what's done to it.
+const LOOKING = /^(look|examine|inspect|study|read|watch|observe|peer|glance|listen)/;
+// A few words (2 AP); persuading, threatening or deceiving someone is a
+// standard action, rolled.
+const SPEAKING =
+  /^(talk|speak|ask|tell|say|greet|chat|whisper|call|shout|wave|signal|point|nod|hail|answer)/;
+const HANDLING =
+  /^(take|pick|grab|get|give|hand|drop|throw|pass|use|eat|drink|pull|push|lift|carry|light|turn|press|open|close|shut)/;
+function spendOf(proposedAction, characterState, canonWorld, map) {
+  const verb = String(proposedAction.verb || '').toLowerCase();
+  const params = proposedAction.params || {};
+  const named = (prefix, list) => {
+    const t = (proposedAction.targets || []).find(
+      (x) => typeof x === 'string' && x.indexOf(prefix) === 0
+    );
+    return t ? (list || []).find((item) => item.id === t.slice(prefix.length)) || null : null;
+  };
+  const door = map && named('door:', map.doors);
+  if (door) {
+    const state = layers.doorState(door, doorStatesOf(characterState, map.id));
+    const picking = state === 'locked' && !hasKey(characterState, door);
+    return picking
+      ? { spend: 'lock', what: 'picking the lock', long: door.long, name: door.name }
+      : { spend: 'door', what: 'a door', own: door.ap, name: door.name };
+  }
+  const feature = map && named('feature:', map.features);
+  const long = params.long || (feature && feature.long);
+  if (LOOKING.test(verb) && !long) return { spend: null };
+  if (SPEAKING.test(verb) && !long) return { spend: 'speak', what: 'speaking' };
+  if (feature || HANDLING.test(verb)) {
+    return {
+      spend: 'object',
+      what: feature ? 'using ' + feature.name : 'that',
+      own: feature && feature.ap,
+      long,
+      name: feature && feature.name,
+    };
+  }
+  return { spend: 'standard', what: 'that', long };
+}
+
+// The cost of a spend for this character (their traits and conditions).
+function costFor(characterState, canonWorld, spend, own) {
+  const system = checks.systemOf(canonWorld);
+  if (spend === 'standard') return apRules.tierCost(system, 'standard');
+  return apRules.pricesOf(system, sheets.sheetOf(characterState)).of(spend, own);
+}
+
+/**
+ * Paying for an action (L-832; CT4): `{ turn }` the turn with its cost
+ * spent; `{ refused }` when it costs more than the AP left; or, for a long
+ * action (`long: { ap }`), `{ turn, working }` while the AP put in falls
+ * short of what it needs (kept on `turn.long` till the next turn), and
+ * `{ turn }` once it's done. Starting anything else drops a long action
+ * under way. Off a battle map actions cost nothing (WH2).
+ */
+function payFor(characterState, canonWorld, map, priced, key) {
   const turn = turnStateOf(characterState);
-  if (turn.actionUsed) return blocked(ACTED);
+  if (!map || !priced.spend) return { turn, free: true };
+  const { long: under, ...rest } = turn;
+  const own = Number.isInteger(priced.own) ? priced.own : undefined;
+  const need = priced.long && Number.isInteger(priced.long.ap) ? priced.long.ap : null;
+  if (need) {
+    const going = under && under.key === key ? under : null;
+    const put = going ? going.put : 0;
+    const more = Math.min(turn.ap, need - put);
+    if (more < 1) return { refused: "You've no AP left this turn. End your turn to go on." };
+    const name = (going && going.name) || 'working at ' + (priced.name || 'it');
+    if (put + more < need) {
+      return {
+        turn: { ...rest, ap: turn.ap - more, long: { key, name, put: put + more, need } },
+        working: `You keep at it: ${put + more} of ${need} AP put in. Carry on next turn.`,
+        dropped: under && !going ? under : null,
+      };
+    }
+    return { turn: { ...rest, ap: turn.ap - more, long: null }, dropped: going ? null : under };
+  }
+  const cost = costFor(characterState, canonWorld, priced.spend, own);
+  if (turn.ap < cost) return { refused: apRules.shortLine(priced.what, cost, turn.ap) };
+  return { turn: { ...rest, ap: turn.ap - cost, long: null }, dropped: under || null };
+}
+
+/**
+ * What an action would cost the character where they stand, in AP (L-832),
+ * for the confirm card: a number, or null where it costs nothing (looking,
+ * a move, off a battle map). A long action says what it needs in all.
+ */
+function priceOf(proposedAction, characterState, canonWorld) {
+  const { map } = maps.positionOf(canonWorld || {}, characterState);
+  if (!map) return null;
+  let priced;
+  if (attackTargetOf(proposedAction, canonWorld)) {
+    const system = checks.systemOf(canonWorld);
+    const pick = combat.attackTurn.chosen(
+      system,
+      sheets.sheetOf(characterState) || sheets.defaultSheet(system),
+      (proposedAction.params || {}).attack
+    );
+    priced = { spend: 'attack', own: pick.attack && pick.attack.ap };
+  } else {
+    priced = spendOf(proposedAction, characterState, canonWorld, map);
+  }
+  if (!priced.spend) return null;
+  if (priced.long && Number.isInteger(priced.long.ap)) return { long: priced.long.ap };
+  return {
+    cost: costFor(
+      characterState,
+      canonWorld,
+      priced.spend,
+      Number.isInteger(priced.own) ? priced.own : undefined
+    ),
+  };
+}
+
+const longKey = (proposedAction) =>
+  [String(proposedAction.verb || '').toLowerCase()]
+    .concat((proposedAction.targets || []).map(String))
+    .join(' ');
+
+// A turn mutation, and the line for a long action dropped by starting another.
+const turnSet = (turn) => ({ target: 'save', op: 'set-flag', path: 'turn', value: turn });
+const droppedLines = (paid) => (paid.dropped ? ['You stop ' + paid.dropped.name + '.'] : []);
+
+// Anything typed that isn't a move is paid for in AP on a battle map (L-832;
+// was the turn's one action, L-614), whether it succeeds or not, and is
+// turned down, spending nothing, when the AP left won't cover it. What is
+// turned down before it's tried (out of sight or reach; no such door; not
+// beside it; no lock to pick) spends nothing. Off a battle map, actions cost
+// nothing (WH2).
+function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   const inFight = combat.play.fightOf(characterState);
+  const { map } = maps.positionOf(canonWorld || {}, characterState);
   // A condition that stops acting (L-815: Stunned) turns it down, unused.
   const stopped = conditions.flagsOf(
     checks.systemOf(canonWorld),
@@ -1331,62 +1476,103 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   if (stopped.length) {
     return { ...blocked("You can't act: you're " + stopped.join(' and ') + '.'), plain: true };
   }
-  // Dash, Dodge, Withdraw and Ready (L-823; TN5): the rules' own, unnarrated;
-  // Use something beside you, narrated.
+  // Dodge, Withdraw and Ready (L-823; TN5): the rules' own, unnarrated;
+  // Use something beside you, narrated. Each its cost (L-832).
   const tactic = combatAction(proposedAction, characterState, canonWorld, inFight);
   if (tactic) {
     if (tactic.outcome === 'blocked') return { ...tactic, plain: true };
-    const spent = { ...spentAction(turn, inFight, canonWorld), ...(tactic.turn || {}) };
+    const paid = payFor(characterState, canonWorld, map, tactic.priced, longKey(proposedAction));
+    if (paid.refused) return { ...blocked(paid.refused), plain: true };
+    if (paid.working) {
+      return {
+        outcome: 'success',
+        mutations: [turnSet(paid.turn)],
+        constraints: droppedLines(paid).concat([paid.working]),
+        ruled: true,
+      };
+    }
+    const { priced, ...told } = tactic;
+    void priced;
     return {
-      ...tactic,
-      mutations: tactic.mutations.concat([
-        { target: 'save', op: 'set-flag', path: 'turn', value: spent },
-      ]),
+      ...told,
+      mutations: tactic.mutations.concat([turnSet({ ...paid.turn, ...(tactic.turn || {}) })]),
+      constraints: droppedLines(paid).concat(tactic.constraints),
     };
   }
   // An attack at someone on the map (L-822): by the combat module, its
-  // reach or range its own; ruled, not narrated, unless a fight starts or ends.
-  const attacked = attackOn(proposedAction, characterState, dice, canonWorld);
-  if (attacked) {
-    if (attacked.outcome === 'blocked') return { ...attacked, plain: true };
-    return {
-      ...attacked,
-      mutations: attacked.mutations.concat([
-        {
-          target: 'save',
-          op: 'set-flag',
-          path: 'turn',
-          value: spentAction(turn, inFight, canonWorld),
-        },
-      ]),
-    };
+  // reach or range its own; ruled, not narrated, unless a fight starts or
+  // ends. Its cost is the attack's own, or the system's (L-832).
+  if (attackTargetOf(proposedAction, canonWorld)) {
+    const system = checks.systemOf(canonWorld);
+    const pick = combat.attackTurn.chosen(
+      system,
+      sheets.sheetOf(characterState) || sheets.defaultSheet(system),
+      (proposedAction.params || {}).attack
+    );
+    const priced = { spend: 'attack', what: 'an attack', own: pick.attack && pick.attack.ap };
+    const paid = payFor(characterState, canonWorld, map, priced, longKey(proposedAction));
+    const attacked = attackOn(proposedAction, characterState, dice, canonWorld);
+    if (attacked && paid.refused) return { ...blocked(paid.refused), plain: true };
+    if (attacked && attacked.outcome === 'blocked') return { ...attacked, plain: true };
+    if (attacked) {
+      return {
+        ...attacked,
+        mutations: attacked.mutations.concat(paid.free ? [] : [turnSet(paid.turn)]),
+        constraints: droppedLines(paid).concat(attacked.constraints),
+      };
+    }
   }
   const unreached = outOfSightOrReach(proposedAction, characterState, canonWorld);
   if (unreached) return blocked(unreached);
   const doorTarget = (proposedAction.targets || []).find(
     (t) => typeof t === 'string' && t.indexOf('door:') === 0
   );
+  // No such door, or not beside it: turned down by the door's own rules,
+  // spending nothing.
+  const door = doorTarget && map && (map.doors || []).find((d) => d.id === doorTarget.slice(5));
+  if (doorTarget && !(door && besideDoor(door, maps.positionOf(canonWorld, characterState).cell))) {
+    return evaluateDoorAttempt(
+      proposedAction,
+      doorTarget.slice(5),
+      characterState,
+      dice,
+      canonWorld
+    );
+  }
+  const priced = spendOf(proposedAction, characterState, canonWorld, map);
+  const paid = payFor(characterState, canonWorld, map, priced, longKey(proposedAction));
+  if (paid.refused) return { ...blocked(paid.refused), plain: true };
+  if (paid.working) {
+    return {
+      outcome: 'success',
+      mutations: [turnSet(paid.turn)],
+      constraints: droppedLines(paid).concat([paid.working]),
+      ruled: true,
+    };
+  }
   const resolution = doorTarget
     ? evaluateDoorAttempt(proposedAction, doorTarget.slice(5), characterState, dice, canonWorld)
     : evaluateGeneric(proposedAction, dice, characterState, canonWorld);
   if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return resolution;
-  const spent = spentAction(turn, inFight, canonWorld);
   const fought = fightFrom(proposedAction, resolution, characterState, canonWorld);
   return {
     ...resolution,
     mutations: [
       ...resolution.mutations,
-      { target: 'save', op: 'set-flag', path: 'turn', value: spent },
+      ...(paid.free ? [] : [turnSet(paid.turn)]),
       ...(fought ? fought.mutations : []),
     ],
-    constraints: resolution.constraints.concat(fought ? fought.constraints : []),
+    constraints: droppedLines(paid).concat(
+      resolution.constraints,
+      fought ? fought.constraints : []
+    ),
     ...(fought && fought.fight ? { fight: fought.fight } : {}),
   };
 }
 
 // The actions a fight offers besides attacking (L-823; TN5, PS4, TN4), each
-// spending the turn's action:
-//   dash      movement again, this turn (on a battle map, in a fight or not)
+// paid for in AP (L-832; `priced`, what payFor charges):
+//   dash      retired: on AP, moving further is spending more on squares
 //   dodge     harder to hit until the player's next turn (the system's dodge)
 //   withdraw  moving out of reach draws no attacks this turn
 //   ready     an attack (params.attack; their first by default) at the
@@ -1395,8 +1581,8 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
 //   use       something beside them on the map (a feature: a lever, a
 //             chest); what it does is the GM's to narrate (decided
 //             2026-10-22)
-// Returns a resolution, `turn` what to add to the turn, or null when the
-// action isn't one of these.
+// Returns a resolution, `turn` what to add to the turn and `priced` what it
+// costs, or null when the action isn't one of these.
 const TACTICS = {
   dash: 'dash',
   sprint: 'dash',
@@ -1423,16 +1609,23 @@ function combatAction(proposedAction, characterState, canonWorld, inFight) {
     if (unreached) return blocked(unreached);
     const thing = (map.features || []).find((f) => f.id === feature.slice(8));
     if (!thing) return blocked(NOT_SEEN);
-    return { outcome: 'success', mutations: [], constraints: ['You use ' + thing.name + '.'] };
+    return {
+      outcome: 'success',
+      mutations: [],
+      constraints: ['You use ' + thing.name + '.'],
+      priced: {
+        spend: 'object',
+        what: 'using ' + thing.name,
+        own: thing.ap,
+        long: thing.long,
+        name: thing.name,
+      },
+    };
   }
   if (kind === 'dash') {
-    if (!map) return blocked('There is nowhere here to dash.');
-    const turn = turnStateOf(characterState);
-    const more = speedOf(characterState);
-    return {
-      ...line(`You dash: ${more} more squares of movement this turn.`),
-      turn: { movementLeft: turn.movementLeft + more },
-    };
+    return blocked(
+      'There is no dashing: every square costs its AP, so walk as far as your AP takes you.'
+    );
   }
   if (!inFight) return blocked(NO_FIGHT);
   const f = JSON.parse(JSON.stringify(inFight));
@@ -1442,12 +1635,14 @@ function combatAction(proposedAction, characterState, canonWorld, inFight) {
     return {
       ...line("You dodge: you're harder to hit until your next turn."),
       mutations: [setFight(f)],
+      priced: { spend: 'dodge', what: 'dodging' },
     };
   }
   if (kind === 'withdraw') {
     return {
       ...line('You withdraw: moving away draws no attacks this turn.'),
       turn: { withdrawn: true },
+      priced: { spend: 'withdraw', what: 'withdrawing' },
     };
   }
   // Ready: which attack, and perhaps at whom.
@@ -1468,31 +1663,28 @@ function combatAction(proposedAction, characterState, canonWorld, inFight) {
         `it strikes the first foe to come into its ${reach}.`
     ),
     mutations: [setFight(f)],
+    // The attack's cost, paid now (set aside from kept AP: L-833).
+    priced: { spend: 'attack', what: 'readying an attack', own: pick.attack.ap },
   };
-}
-
-// The turn once an action is spent. In a fight, a turn has the system's
-// actions (L-821; TN3): one by default, counted only when there are more.
-function spentAction(turn, inFight, canonWorld) {
-  const allowed = inFight
-    ? combat.settings.settingsOf(checks.systemOf(canonWorld)).economy.actions
-    : 1;
-  const used = (turn.actionsUsed || 0) + 1;
-  return allowed === 1
-    ? { ...turn, actionUsed: true }
-    : used >= allowed
-      ? { ...turn, actionUsed: true, actionsUsed: used }
-      : { ...turn, actionsUsed: used };
 }
 
 // An attack at someone on the battle map (L-822; ../loom-modules/combat/
 // attack-turn.js), or null when the action isn't one.
-function attackOn(proposedAction, characterState, dice, canonWorld) {
+// Whom an attack is at (L-822), or null when the action isn't one.
+function attackTargetOf(proposedAction, canonWorld) {
   if (!combat.play.isAttack(proposedAction.verb)) return null;
   const params = proposedAction.params || {};
-  const targetId =
-    params.target || (proposedAction.targets || []).find((t) => (canonWorld.characters || {})[t]);
+  return (
+    params.target ||
+    (proposedAction.targets || []).find((t) => ((canonWorld || {}).characters || {})[t]) ||
+    null
+  );
+}
+
+function attackOn(proposedAction, characterState, dice, canonWorld) {
+  const targetId = attackTargetOf(proposedAction, canonWorld);
   if (!targetId) return null;
+  const params = proposedAction.params || {};
   return combat.attackTurn.attackTurn(canonWorld, characterState, {
     targetId,
     params,
@@ -1664,7 +1856,7 @@ function evaluate(
     });
   }
   const held = proposedAction.verb === 'move' ? heldBy(canonWorld, characterState) : null;
-  const judged = plausibilityOf(proposedAction, characterState);
+  const judged = plausibilityOf(proposedAction);
   if (judged) {
     resolution = judged;
   } else if (held) {
@@ -1809,6 +2001,7 @@ module.exports = {
   DEFAULT_DIFFICULTY_CLASS,
   DEFAULT_LOCK_DIFFICULTY,
   ACTED,
+  priceOf,
   NOT_SEEN,
   NOBODY_SEEN,
 };

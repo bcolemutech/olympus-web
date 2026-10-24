@@ -22,7 +22,7 @@ const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
 const artOf = require('../../../loom-canon/art');
 const routes = require('../../../loom-canon/routes');
-const { validateSheet, speedFor, sheetFromStatBlock } = require('../../../loom-canon/sheets');
+const { validateSheet, apFor, sheetFromStatBlock } = require('../../../loom-canon/sheets');
 const figures = require('../../../loom-modules/combat/figures');
 const { systemOf } = require('../../../loom-canon/checks');
 const hazards = require('../../../loom-canon/hazards');
@@ -574,15 +574,17 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
 }
 
 // A named character's sheet as get_character shows it (L-813): null without
-// one; with one, its speed worked out by the world's system and, when the
+// one; with one, its pool of action points worked out by the world's system (L-832) and, when the
 // system has changed under it, what no longer fits.
 function sheetView(world, character) {
   if (!character.sheet) return null;
   const system = systemOf(world);
   const misfits = validateSheet(system, character.sheet);
+  const { speed, ...sheet } = character.sheet;
+  void speed;
   return {
-    ...character.sheet,
-    speed: speedFor(system, character.sheet),
+    ...sheet,
+    ap: apFor(system, character.sheet),
     ...(misfits.length ? { misfits } : {}),
   };
 }

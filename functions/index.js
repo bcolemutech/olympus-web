@@ -550,10 +550,10 @@ function requireLoomAuth(request) {
  *       { verb: 'ready', attack?, target? } or { verb: 'use', feature } — a
  *       fight's other actions (L-823); no model reads them but Use's
  * A walk in town is worked out without the model too, and returns step:
- * { townPoint, movementLeft, plan, lines } (plus `entered`, and `turns` for
+ * { townPoint, ap, plan, lines } (plus `entered`, and `turns` for
  * walk-there).
  * A step on a battle map (a cell, or continue) is worked out without the
- * model and also returns step: { cell, movementLeft, plan, lines }.
+ * model and also returns step: { cell, ap, plan, lines }.
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
  */
 exports.loomPlayTurn = onCall(async (request) => {
@@ -778,8 +778,8 @@ exports.loomGetMap = onCall(async (request) => {
   // The world as this save sees it (L-824): its map's figures, and everyone
   // where the save has them.
   const canonWorld = combat.figures.withFigures(loaded, stored);
-  // The character's speed, worked out for the world's system (L-811).
-  const save = sheets.withSpeed(stored, checks.systemOf(canonWorld));
+  // The character's pool of action points, worked out for the world's system (L-811; L-832).
+  const save = sheets.withAp(stored, checks.systemOf(canonWorld));
   // On a battle map, only what the save has seen of it is sent (L-633).
   const record = save.mapId ? await seenRef(snap.ref, save.mapId).get() : null;
   // In a town, what the save has seen of it, for its fog (L-672).
@@ -892,7 +892,7 @@ exports.loomCreateSave = onCall(async (request) => {
   let sheet = sheets.defaultSheet(system, { traits: startingTraits });
   let rollRef = null;
   if (premade) {
-    sheet = { ...premade, speed: sheets.speedFor(system, premade) };
+    sheet = sheets.withPool(system, premade);
   } else if (choices !== undefined && choices !== null) {
     if (typeof choices !== 'object' || Array.isArray(choices)) {
       throw new HttpsError('invalid-argument', 'creation must be an object.');

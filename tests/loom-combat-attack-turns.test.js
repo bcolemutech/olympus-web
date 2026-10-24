@@ -191,7 +191,8 @@ describe.each(Object.keys(mockCases))('attacks under %s', (id) => {
     const far = await attack(ref, { attack: c.melee });
     expect(far).toMatchObject({ refused: true });
     expect(far.narration).toMatch(/^Grell is out of reach of your \w+: get closer\.$/);
-    expect((await saved(ref)).turn.actionUsed).toBe(false);
+    const before = (await saved(ref)).turn.ap;
+    expect(before).toBeGreaterThanOrEqual(10);
 
     // From here, the ranged attack: its roll is the card, the damage in the save.
     const full = grellsFull();
@@ -200,19 +201,25 @@ describe.each(Object.keys(mockCases))('attacks under %s', (id) => {
     expect(shot.narration).toMatch(/^You hit Grell with your \w+ for \d+ \w+/);
     let save = await saved(ref);
     expect(healthOf(save)).toBeLessThan(full);
-    expect(save.turn.actionUsed).toBe(true);
+    // An attack costs 10 AP (L-832).
+    expect(save.turn.ap).toBe(before - 10);
     const turns = await ref.collection('loom_turns').orderBy('index', 'desc').get();
     expect(turns.docs[0].data().resolution).toMatchObject({
       ruled: true,
       attack: { id: c.ranged, targets: [expect.objectContaining({ id: 'grell', hit: true })] },
     });
 
-    // A second attack this turn is refused.
-    const again = await attack(ref, { attack: c.ranged });
-    expect(again).toMatchObject({
-      refused: true,
-      narration: "You've acted this turn. End your turn first.",
-    });
+    // Another, if the AP left pays for it; once it won't, refused.
+    while ((await saved(ref)).fight && (await saved(ref)).turn.ap >= 10) {
+      await attack(ref, { attack: c.ranged });
+    }
+    const left = (await saved(ref)).turn.ap;
+    if ((await saved(ref)).fight) {
+      expect(await attack(ref, { attack: c.ranged })).toMatchObject({
+        refused: true,
+        narration: `An attack costs 10 AP; you have ${left}.`,
+      });
+    }
 
     // Round after round until Grell falls: the player's attacks are never
     // narrated; each round Grell (a named character, L-825) acts in is one

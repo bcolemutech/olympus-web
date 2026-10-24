@@ -219,7 +219,7 @@ describe('walking to the temple: partway, Continue, arrive and go in', () => {
     const answer = await play(saveId, { verb: 'move', target: 'plc_1_temple' });
     expect(answer.narration).toBe('You walk 400 m. ' + OUT_OF_MOVEMENT);
     expect(answer.step).toMatchObject({
-      movementLeft: 0,
+      ap: 0,
       plan: { layer: 'town', locationId: 'loc_1', placeId: 'plc_1_temple', to: pt(500, 150) },
       lines: ['You walk 400 m.', OUT_OF_MOVEMENT],
     });
@@ -295,7 +295,7 @@ describe('walking to a point', () => {
     await stepOffMap(saveId);
     // 112 units from the gate: 280 m, inside a turn's 400.
     const near = await play(saveId, { verb: 'move', point: pt(400, 900) });
-    expect(near.step).toMatchObject({ townPoint: pt(400, 900), plan: null, movementLeft: 6 });
+    expect(near.step).toMatchObject({ townPoint: pt(400, 900), plan: null, ap: 6 });
     expect((await play(saveId, { verb: 'move', point: pt(500, 650) })).narration).toBe(
       "You can't stand there."
     );
@@ -336,7 +336,7 @@ describe('"Walk there"', () => {
   test('with no movement left this turn, it starts from the next (#671)', async () => {
     const saveId = await newGame();
     await stepOffMap(saveId);
-    await db.collection('loom_saves').doc(saveId).update({ 'turn.movementLeft': 0 });
+    await db.collection('loom_saves').doc(saveId).update({ 'turn.ap': 0 });
     const before = (await saveOf(saveId)).turn.n;
     const answer = await play(saveId, { verb: 'walk-there', point: pt(150, 850) });
     expect(answer.refused).toBeUndefined();
@@ -390,7 +390,7 @@ describe('typed moves follow the streets (L-663)', () => {
     expect(save).toMatchObject({ placeId: null, mapId: null });
     expect(save.townPoint.y).toBeLessThan(950);
     expect(save.turn).toMatchObject({
-      movementLeft: 0,
+      ap: 0,
       plan: { layer: 'town', placeId: 'plc_1_temple', to: pt(500, 150) },
     });
     // Continue picks it up, as from a tap.
@@ -409,7 +409,7 @@ describe('typed moves follow the streets (L-663)', () => {
       mapId: GATEWAY.id,
       townPoint: null,
     });
-    expect((await saveOf(saveId)).turn.movementLeft).toBe(20 - 17); // 325 m: 17 points of 20 m
+    expect((await saveOf(saveId)).turn.ap).toBe(20 - 17); // 325 m: 17 points of 20 m
   });
 
   test('a place across the river with no way over is refused', async () => {

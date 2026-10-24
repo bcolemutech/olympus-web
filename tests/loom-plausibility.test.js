@@ -117,7 +117,9 @@ describe.each(Object.keys(mockCases))('plausibility under %s', (id) => {
     narrated.length = 0;
   });
 
-  const intent = (verb, params) => ({ verb, targets: [], params });
+  // The AP a turn has spent (L-832): a typed action is a standard one, 10.
+const spentOf = (save) => save.character.sheet.ap - save.turn.ap;
+const intent = (verb, params) => ({ verb, targets: [], params });
   async function saveOf(saveId, { fight = false } = {}) {
     await db
       .collection('loom_saves')
@@ -205,7 +207,7 @@ describe.each(Object.keys(mockCases))('plausibility under %s', (id) => {
     expect(told).toContain('THE CHARACTER: attributes ');
   });
 
-  test('improbable, typed: rolled at the top rung, the action spent', async () => {
+  test('improbable, typed: rolled at the top rung, its AP spent', async () => {
     mockState.intent = intent('leap', {
       plausibility: 'improbable',
       check: { attribute: c.attribute, rung: ladder[0].name },
@@ -213,7 +215,7 @@ describe.each(Object.keys(mockCases))('plausibility under %s', (id) => {
     const ref = await saveOf(`${id}-improbable`);
     const answer = await type(ref, 'leap across the chasm');
     expect(answer.roll).toMatchObject({ rung: top.name, difficulty: top.value });
-    expect((await saved(ref)).turn.actionUsed).toBe(true);
+    expect(spentOf(await saved(ref))).toBe(10);
   });
 
   test('extraordinary: refused with its reason, nothing spent', async () => {
@@ -269,7 +271,7 @@ describe.each(Object.keys(mockCases))('plausibility under %s', (id) => {
     expect(tried.roll).toMatchObject({ rung: ladder[1].name });
     save = await saved(ref);
     expect(save.asked).toBeUndefined();
-    expect(save.turn.actionUsed).toBe(true);
+    expect(spentOf(save)).toBe(10);
   });
 
   test('a second vague answer is refused; anything else drops the question', async () => {
@@ -285,7 +287,7 @@ describe.each(Object.keys(mockCases))('plausibility under %s', (id) => {
     });
     let save = await saved(ref);
     expect(save.asked).toBeUndefined();
-    expect(save.turn.actionUsed).toBe(false);
+    expect(spentOf(save)).toBe(0);
 
     // Asked again, then the player does something else: the question goes.
     await type(ref, 'rig a trap');
@@ -311,7 +313,7 @@ describe.each(Object.keys(mockCases))('plausibility under %s', (id) => {
       asked: 'How?',
     });
     const save = await saved(ref);
-    expect(save.turn.actionUsed).toBe(false);
+    expect(spentOf(save)).toBe(0);
     expect(save.fight).toMatchObject({ round: 1, turn: 'player' });
     mockState.intent = intent('vault', {
       plausibility: 'improbable',
@@ -319,6 +321,6 @@ describe.each(Object.keys(mockCases))('plausibility under %s', (id) => {
     });
     const vault = await type(ref, 'vault over Grell');
     expect(vault.roll).toMatchObject({ rung: top.name });
-    expect((await saved(ref)).turn.actionUsed).toBe(true);
+    expect(spentOf(await saved(ref))).toBe(10);
   });
 });

@@ -133,7 +133,7 @@ describe('loomCreateSave', () => {
     const { defaultSheet, validateSheet } = require('../functions/loom-canon/sheets');
     expect(save.character.sheet).toEqual(defaultSheet(system, { traits: ['seaworthy-vessel'] }));
     expect(validateSheet(system, save.character.sheet)).toEqual([]);
-    expect(save.character.sheet).toMatchObject({ traits: ['seaworthy-vessel'], speed: 20 });
+    expect(save.character.sheet).toMatchObject({ traits: ['seaworthy-vessel'], ap: 20 });
     expect(save.character).not.toHaveProperty('abilities');
     expect(save.location).toBe('widows-reach');
     expect(save.recentSummary).toBe('');

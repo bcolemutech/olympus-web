@@ -74,12 +74,24 @@ const ownAp = z
   .max(apRules.MAX_COST)
   .optional()
   .describe("Its own cost in action points, in place of the system's (a rusted portcullis 10).");
+// A long action (L-832; action points CT4): one that takes more AP than a
+// turn has, put in over several turns until it's done.
+const longAction = (example) =>
+  z
+    .strictObject({
+      ap: z.number().int().min(1).max(1000).describe('The AP it takes in all.'),
+    })
+    .optional()
+    .describe(
+      `Makes it a long action, worked at over several turns until its AP are put in (${example}).`
+    );
 const feature = z.strictObject({
   id: cellId,
   name: label.describe('As players would say it: "the bar".'),
   x: coord,
   y: coord,
   ap: ownAp,
+  long: longAction('a ritual circle: { ap: 40 }'),
 });
 const exit = z.strictObject({
   id: cellId,
@@ -132,6 +144,7 @@ const door = z.strictObject({
   to: point.describe('The other end: the next corner along the grid line (one square long).'),
   locked: z.boolean().optional().describe('Locked doors stop players until opened.'),
   ap: ownAp,
+  long: longAction('picking a hard lock: { ap: 30 }'),
   key: label.optional().describe('The inventory item that opens it when locked.'),
   difficulty: z
     .number()

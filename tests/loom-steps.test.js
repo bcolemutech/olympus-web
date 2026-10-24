@@ -9,13 +9,7 @@
  * Run: cd tests && npx jest loom-steps --verbose
  */
 
-const {
-  planStep,
-  planDoor,
-  planOn,
-  OUT_OF_MOVEMENT,
-  UNSEEN,
-} = require('../functions/loom-turn/steps');
+const { planStep, planDoor, planOn, OUT_OF_AP, UNSEEN } = require('../functions/loom-turn/steps');
 
 const ROOM = {
   id: 'bm_room',
@@ -31,13 +25,13 @@ const standing = (cell, turn = {}) => ({
   mapId: 'bm_room',
   cell,
   character: { name: 'Tam', speed: 6 },
-  turn: { n: 1, movementLeft: 6, actionUsed: false, plan: null, ...turn },
+  turn: { n: 1, ap: 6, kept: 0, plan: null, ...turn },
 });
 
 test('a move in reach arrives; at a feature it says so; it lists the squares walked', () => {
   expect(planStep(WORLD, standing({ x: 2, y: 2 }), { cell: { x: 8, y: 1 } })).toEqual({
     cell: { x: 8, y: 1 },
-    turn: { n: 1, movementLeft: 0, actionUsed: false, plan: null },
+    turn: { n: 1, ap: 0, kept: 0, plan: null, moved: 6 },
     lines: ["You're at the chest."],
     walked: [
       { x: 3, y: 2 },
@@ -51,7 +45,7 @@ test('a move in reach arrives; at a feature it says so; it lists the squares wal
 });
 
 test('a move past reach lists only the squares walked this turn', () => {
-  const step = planStep(WORLD, standing({ x: 1, y: 5 }, { movementLeft: 2 }), {
+  const step = planStep(WORLD, standing({ x: 1, y: 5 }, { ap: 2 }), {
     cell: { x: 9, y: 5 },
   });
   expect(step.walked).toEqual([
@@ -61,12 +55,12 @@ test('a move past reach lists only the squares walked this turn', () => {
 });
 
 test('a move past reach stops partway; the rest is the plan', () => {
-  const step = planStep(WORLD, standing({ x: 1, y: 5 }, { movementLeft: 2 }), {
+  const step = planStep(WORLD, standing({ x: 1, y: 5 }, { ap: 2 }), {
     cell: { x: 9, y: 5 },
   });
   expect(step.cell).toEqual({ x: 3, y: 5 });
-  expect(step.lines).toEqual([OUT_OF_MOVEMENT]);
-  expect(step.turn).toMatchObject({ movementLeft: 0 });
+  expect(step.lines).toEqual([OUT_OF_AP]);
+  expect(step.turn).toMatchObject({ ap: 0 });
   expect(step.turn.plan).toMatchObject({
     layer: 'battleMap',
     mapId: 'bm_room',
@@ -76,19 +70,19 @@ test('a move past reach stops partway; the rest is the plan', () => {
 });
 
 test('Continue walks the stored plan; a stale one is found afresh', () => {
-  const first = planStep(WORLD, standing({ x: 1, y: 5 }, { movementLeft: 2 }), {
+  const first = planStep(WORLD, standing({ x: 1, y: 5 }, { ap: 2 }), {
     cell: { x: 9, y: 5 },
   });
-  const next = { ...standing(first.cell), turn: { ...first.turn, movementLeft: 6 } };
+  const next = { ...standing(first.cell), turn: { ...first.turn, ap: 6 } };
   expect(planStep(WORLD, next, { plan: true })).toMatchObject({
     cell: { x: 9, y: 5 },
-    turn: { movementLeft: 0, plan: null },
+    turn: { ap: 0, plan: null },
   });
   // Standing elsewhere now: the stored path no longer starts here.
   const moved = { ...next, cell: { x: 5, y: 0 } };
   expect(planStep(WORLD, moved, { plan: true })).toMatchObject({
     cell: { x: 9, y: 5 },
-    turn: { movementLeft: 1 },
+    turn: { ap: 1 },
   });
 });
 
@@ -101,7 +95,7 @@ test('Continue follows the stored path, not one found afresh', () => {
     { x: 5, y: 1, cost: 4 },
   ];
   const plan = { layer: 'battleMap', mapId: 'bm_room', to: { x: 5, y: 1 }, path };
-  const step = planStep(WORLD, standing({ x: 1, y: 1 }, { movementLeft: 1, plan }), {
+  const step = planStep(WORLD, standing({ x: 1, y: 1 }, { ap: 1, plan }), {
     plan: true,
   });
   expect(step.cell).toEqual({ x: 2, y: 2 });
@@ -122,7 +116,7 @@ test('reaching an exit leaves by it; an exit is never on the way', () => {
   expect(step).toEqual({
     exit: ROOM.exits[0],
     spent: 3,
-    turn: { n: 1, movementLeft: 3, actionUsed: false, plan: null },
+    turn: { n: 1, ap: 3, kept: 0, plan: null, moved: 3 },
     // The squares walked to it, for the blows it draws in a fight (L-823).
     walked: [
       { x: 2, y: 3 },
@@ -132,7 +126,7 @@ test('reaching an exit leaves by it; an exit is never on the way', () => {
   });
   // Heading past the door, one square at a time: never onto it (that would
   // leave), and the plan goes around it.
-  const around = planStep(WORLD, standing({ x: 0, y: 4 }, { movementLeft: 1 }), {
+  const around = planStep(WORLD, standing({ x: 0, y: 4 }, { ap: 1 }), {
     cell: { x: 0, y: 0 },
   });
   expect(around.cell).toEqual({ x: 1, y: 3 });
@@ -169,7 +163,7 @@ describe('only on ground the save knows (L-635)', () => {
     expect(step.cell).toEqual({ x: 8, y: 2 });
     expect(step.walked).toContainEqual({ x: 5, y: 5 });
     expect(step.walked.every((s) => known[s.x + ',' + s.y])).toBe(true);
-    expect(step.turn.movementLeft).toBe(0); // round by (5, 5) is 6, as the straight way is
+    expect(step.turn.ap).toBe(0); // round by (5, 5) is 6, as the straight way is
   });
 
   test('with no known way, there is no way', () => {
@@ -181,8 +175,8 @@ describe('only on ground the save knows (L-635)', () => {
 
   test('Continue keeps to the known ground the plan was made on', () => {
     const known = knownBut(...column5(0, 1, 2, 3, 4));
-    const first = planStep(WORLD, standing({ x: 2, y: 2 }, { movementLeft: 2 }), across, known);
-    const next = { ...standing(first.cell), turn: { ...first.turn, movementLeft: 6 } };
+    const first = planStep(WORLD, standing({ x: 2, y: 2 }, { ap: 2 }), across, known);
+    const next = { ...standing(first.cell), turn: { ...first.turn, ap: 6 } };
     const step = planStep(WORLD, next, { plan: true }, known);
     expect(step.cell).toEqual({ x: 8, y: 2 });
     expect(step.walked).toContainEqual({ x: 5, y: 5 });
@@ -229,7 +223,7 @@ describe('people on squares (L-642)', () => {
       { x: 3, y: 4 },
       { x: 4, y: 4 },
     ]);
-    expect(step.turn.movementLeft).toBe(3);
+    expect(step.turn.ap).toBe(3);
   });
 
   test("a way to someone's square ends on the last free square before it, beside them", () => {
@@ -243,11 +237,11 @@ describe('people on squares (L-642)', () => {
   });
 
   test("a walk whose movement runs out on someone's square backs off; the plan goes on", () => {
-    const step = planStep(PEOPLE, at({ x: 1, y: 4 }, { movementLeft: 2 }), {
+    const step = planStep(PEOPLE, at({ x: 1, y: 4 }, { ap: 2 }), {
       cell: { x: 4, y: 4 },
     });
     expect(step.cell).toEqual({ x: 2, y: 4 });
-    expect(step.turn.movementLeft).toBe(1);
+    expect(step.turn.ap).toBe(1);
     expect(step.turn.plan.path).toEqual([
       { x: 3, y: 4, cost: 1 },
       { x: 4, y: 4, cost: 2 },
@@ -256,18 +250,18 @@ describe('people on squares (L-642)', () => {
 
   test('walking stops where someone comes into view, with a line and the plan kept', () => {
     // Round the end of the wall: Old Mags comes into view at (4, 4).
-    const step = planStep(PEOPLE, at({ x: 3, y: 1 }, { movementLeft: 20 }), {
+    const step = planStep(PEOPLE, at({ x: 3, y: 1 }, { ap: 20 }), {
       cell: { x: 8, y: 5 },
     });
     expect(step.cell).toEqual({ x: 4, y: 4 });
     expect(step.lines).toEqual(['You see Old Mags.']);
     expect(step.seenLines).toEqual(['You see Old Mags.']);
-    expect(step.turn.movementLeft).toBeGreaterThan(0);
+    expect(step.turn.ap).toBeGreaterThan(0);
     expect(step.turn.plan).toMatchObject({ to: { x: 8, y: 5 } });
     // Next turn, Continue goes on: she is in sight already, so nothing stops it.
     const on = planStep(
       PEOPLE,
-      { ...at(step.cell), turn: { ...step.turn, movementLeft: 6 } },
+      { ...at(step.cell), turn: { ...step.turn, ap: 6 } },
       { plan: true }
     );
     expect(on.cell).toEqual({ x: 8, y: 5 });
@@ -279,7 +273,7 @@ describe('people on squares (L-642)', () => {
       ...PEOPLE,
       characters: { chr_mags: { ...PEOPLE.characters.chr_mags, cell: { x: 7, y: 2 } } },
     };
-    const step = planStep(world, at({ x: 3, y: 1 }, { movementLeft: 20 }), {
+    const step = planStep(world, at({ x: 3, y: 1 }, { ap: 20 }), {
       cell: { x: 8, y: 5 },
     });
     expect(step.lines).toEqual(['Old Mags is at the chest.']);
@@ -335,10 +329,10 @@ describe('walls and doors (L-624)', () => {
     },
   };
 
-  test('a closed door on the way is opened (1), and the walk stops there', () => {
+  test('a closed door on the way is opened (2 AP), and the walk stops there', () => {
     const step = planStep(WALLED, standing({ x: 3, y: 2 }), { cell: { x: 8, y: 1 } });
     expect(step.cell).toEqual({ x: 4, y: 2 });
-    expect(step.turn.movementLeft).toBe(4); // 1 to (4, 2), 1 to open the door
+    expect(step.turn.ap).toBe(3); // 1 to (4, 2), 2 to open the door (L-832)
     expect(step.lines).toEqual(['You open the inner door.']);
     expect(step.opened).toEqual({ mapId: 'bm_room', doorId: 'inner' });
     expect(step.turn.plan.to).toEqual({ x: 8, y: 1 });
@@ -347,7 +341,7 @@ describe('walls and doors (L-624)', () => {
   test('with the door open, Continue walks through it', () => {
     const first = planStep(WALLED, standing({ x: 3, y: 2 }), { cell: { x: 8, y: 1 } });
     const after = {
-      ...standing(first.cell, { ...first.turn, movementLeft: 6 }),
+      ...standing(first.cell, { ...first.turn, ap: 6 }),
       doors: { bm_room: { inner: 'open' } },
     };
     const next = planStep(WALLED, after, { plan: true });
@@ -368,10 +362,10 @@ describe('walls and doors (L-624)', () => {
       ...(doors ? { doors: { bm_room: doors } } : {}),
     });
 
-    test('opens from either side, for 1 movement', () => {
+    test('opens from either side, for its cost: 2 AP (L-832)', () => {
       expect(planDoor(WALLED, at({ x: 4, y: 2 }), 'inner', true)).toEqual({
         cell: { x: 4, y: 2 },
-        turn: { n: 1, movementLeft: 5, actionUsed: false, plan: null },
+        turn: { n: 1, ap: 4, kept: 0, plan: null },
         lines: ['You open the inner door.'],
         door: { mapId: 'bm_room', doorId: 'inner', state: 'open' },
       });
@@ -397,7 +391,12 @@ describe('walls and doors (L-624)', () => {
       ],
       ['already shut', at({ x: 4, y: 2 }), false, 'The inner door is already shut.'],
       ['locked', at({ x: 4, y: 2 }, { inner: 'locked' }), true, 'The inner door is locked.'],
-      ['out of movement', at({ x: 4, y: 2 }, null, { movementLeft: 0 }), true, OUT_OF_MOVEMENT],
+      [
+        'short of AP',
+        at({ x: 4, y: 2 }, null, { ap: 1 }),
+        true,
+        'Opening the inner door costs 2 AP; you have 1.',
+      ],
     ])('is refused %s', (_label, save, open, line) => {
       expect(planDoor(WALLED, save, 'inner', open)).toEqual({ refused: line });
     });
@@ -463,33 +462,34 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
     path: 'doors.bm_room.inner',
     value,
   });
-  const used = {
+  // The turn with the AP an action cost spent (L-832): a door 2, a lock 5.
+  const used = (left) => ({
     target: 'save',
     op: 'set-flag',
     path: 'turn',
-    value: expect.objectContaining({ actionUsed: true }),
-  };
+    value: expect.objectContaining({ ap: left }),
+  });
 
-  test('a tap opens it with its key, for 1 movement; without, it stays locked', () => {
+  test('a tap opens it with its key, for its cost; without, it stays locked', () => {
     expect(planDoor(LOCKED(), beside(['A Brass Key']), 'inner', true)).toMatchObject({
       lines: ['You unlock the inner door with the brass key and open it.'],
       door: { state: 'open' },
-      turn: { movementLeft: 5 },
+      turn: { ap: 4 },
     });
     expect(planDoor(LOCKED(), beside(['a lantern']), 'inner', true)).toEqual({
       refused: 'The inner door is locked.',
     });
   });
 
-  test('typed with the key: unlocked and opened, no roll; it uses the action', () => {
+  test('typed with the key: unlocked and opened, no roll; it costs the door’s 2 AP', () => {
     expect(attempt('unlock', beside(['brass key']), 1)).toEqual({
       outcome: 'success',
-      mutations: [doorTo('open'), used],
+      mutations: [doorTo('open'), used(4)],
       constraints: ['You unlock the inner door with the brass key and open it.'],
     });
   });
 
-  test('picked or forced: a roll against the lock; a success unlocks it, either way the action is used', () => {
+  test('picked or forced: a roll against the lock; a success unlocks it, either way it costs 5 AP', () => {
     expect(DEFAULT_LOCK_DIFFICULTY).toBe(15);
     const lock = { die: 20, difficulty: 15, against: 'the lock on the inner door' };
     expect(attempt('pick_lock', beside(), 15)).toEqual({
@@ -504,13 +504,13 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
         rung: 'Hard',
         degree: 'successAtCost',
       }),
-      mutations: [doorTo('closed'), used],
+      mutations: [doorTo('closed'), used(1)],
       constraints: ['The lock gives way: the inner door is unlocked.'],
     });
     expect(attempt('force', beside(), 14)).toEqual({
       outcome: 'failure',
       roll: expect.objectContaining({ ...lock, value: 14, success: false, degree: 'failure' }),
-      mutations: [used],
+      mutations: [used(1)],
       constraints: ['The lock on the inner door holds.'],
     });
     // The lock's own difficulty, when it has one.
@@ -532,12 +532,12 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
     const unlocked = beside([], { doors: { bm_room: { inner: 'closed' } } });
     expect(attempt('open', unlocked, 1)).toMatchObject({
       outcome: 'success',
-      mutations: [doorTo('open'), used],
+      mutations: [doorTo('open'), used(4)],
       constraints: ['You open the inner door.'],
     });
     const open = beside([], { doors: { bm_room: { inner: 'open' } } });
     expect(attempt('close', open, 1)).toMatchObject({
-      mutations: [doorTo('closed'), used],
+      mutations: [doorTo('closed'), used(4)],
       constraints: ['You close the inner door.'],
     });
   });
@@ -559,11 +559,45 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
     ).toMatchObject({ outcome: 'invalid_target', mutations: [] });
   });
 
-  test('a second attempt in one turn is turned down', () => {
-    const acted = beside([], { turn: { n: 1, movementLeft: 6, actionUsed: true, plan: null } });
-    expect(attempt('pick_lock', acted, 20).constraints).toEqual([
-      "You've acted this turn. End your turn first.",
-    ]);
+  test('an attempt the AP left won’t pay for is turned down, spending nothing (L-832)', () => {
+    const spent = beside([], { turn: { n: 1, ap: 4, kept: 0, plan: null } });
+    expect(attempt('pick_lock', spent, 20)).toEqual({
+      outcome: 'blocked',
+      mutations: [],
+      constraints: ['Picking the lock costs 5 AP; you have 4.'],
+      plain: true,
+    });
+  });
+
+  test('a hard lock as a long action: put in over three turns, then rolled (CT4)', () => {
+    const { nextTurnState } = require('../functions/loom-models');
+    const world = LOCKED({ long: { ap: 15 } });
+    let save = beside();
+    const turnOf = (r) => r.mutations.find((m) => m.path === 'turn').value;
+    const first = attempt('pick_lock', save, 20, world);
+    expect(first.constraints).toEqual(['You keep at it: 6 of 15 AP put in. Carry on next turn.']);
+    expect(first.roll).toBeUndefined();
+    save = { ...save, turn: nextTurnState({ ...save, turn: turnOf(first) }) };
+    expect(save.turn.long).toMatchObject({ put: 6, need: 15 });
+    const second = attempt('pick_lock', save, 20, world);
+    expect(second.constraints).toEqual(['You keep at it: 12 of 15 AP put in. Carry on next turn.']);
+    save = { ...save, turn: nextTurnState({ ...save, turn: turnOf(second) }) };
+    // The third turn puts in the last 3 and the lock is rolled.
+    const third = attempt('pick_lock', save, 20, world);
+    expect(third.constraints).toEqual(['The lock gives way: the inner door is unlocked.']);
+    expect(turnOf(third)).toMatchObject({ ap: 3, long: null });
+  });
+
+  test('a long action is dropped by starting another, or by walking off (CT4)', () => {
+    const world = LOCKED({ long: { ap: 15 } });
+    const long = { key: 'pick_lock door:inner', name: 'picking the lock', put: 6, need: 15 };
+    const working = beside([], { turn: { n: 2, ap: 6, kept: 0, plan: null, long } });
+    const shouted = evaluate({ verb: 'shout', targets: [], params: {} }, {}, working, 20, world);
+    expect(shouted.constraints[0]).toBe('You stop picking the lock.');
+    expect(shouted.mutations.find((m) => m.path === 'turn').value).toMatchObject({ long: null });
+    const walked = planStep(world, working, { cell: { x: 2, y: 2 } });
+    expect(walked.lines[0]).toBe('You stop picking the lock.');
+    expect(walked.turn.long).toBeNull();
   });
 
   test('the interpreter knows the doors as targets', () => {

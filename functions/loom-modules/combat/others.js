@@ -195,7 +195,8 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         posture: figures.postureOf(character),
         fleeing: Boolean(c.fleeing),
         attacks: usable,
-        speed: sheets.speedFor(system, mine),
+        // Squares a turn: their pool, a square 1 AP (foes on AP: L-836).
+        speed: sheets.apFor(system, mine),
         noMove: flags.noMove.length > 0,
         noAction: flags.noAction.length > 0,
       },

@@ -324,7 +324,8 @@ describe.each(Object.keys(mockCases))('fights under %s', (id) => {
       turn: 'player',
       combatants: { grell: { side: 'hostile', joined: true } },
     });
-    expect(save.turn.actionUsed).toBe(true);
+    // The blow cost its 10 AP (L-832), after the squares walked to it.
+    expect(save.turn.ap).toBe(save.character.sheet.ap - (save.turn.moved || 0) - 10);
     expect(prompts[prompts.length - 1]).toContain(
       'FIGHT STARTS: a fight breaks out as the player attacks'
     );

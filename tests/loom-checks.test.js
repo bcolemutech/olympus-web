@@ -277,7 +277,7 @@ describe.each(Object.keys(CASES))('checks under %s (the two-configuration rule)'
       mapId: 'bm_room',
       cell: { x: 4, y: 2 },
       character,
-      turn: { n: 1, movementLeft: 6, actionUsed: false, plan: null },
+      turn: { n: 1, ap: 20, kept: 0, plan: null },
     };
     const act = (params, dice, targets = []) =>
       evaluate({ verb: 'sneak', targets, params }, {}, save, dice, world);
@@ -417,7 +417,7 @@ describe.each([D20, POOL])('a typed check through loomPlayTurn under $id', (syst
     expect(turn.proposedAction.params.check).toEqual({ skill: 'Stealth', rung: 'Easy' });
   });
 
-  test('an unknown skill is refused, no roll, and the action isn’t used', async () => {
+  test('an unknown skill is refused, no roll, and nothing is spent', async () => {
     faces = [];
     const { answer, turn } = await typed(`s-${system.id}-2`, 'juggle', {
       check: { skill: 'Juggling', rung: 'Hard' },
@@ -427,6 +427,8 @@ describe.each([D20, POOL])('a typed check through loomPlayTurn under $id', (syst
       outcome: 'blocked',
       constraints: ['There is no skill "Juggling" in this world’s rules.'],
     });
-    expect((await saveRef(`s-${system.id}-2`).get()).data().turn.actionUsed).toBe(false);
+    // Nothing spent (L-832): the turn's AP is the full pool still.
+    const after = (await saveRef(`s-${system.id}-2`).get()).data();
+    expect(after.turn.ap).toBe(require('../functions/loom-models').apOf(after));
   });
 });
