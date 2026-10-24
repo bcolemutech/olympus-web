@@ -970,9 +970,11 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
   // In a fight, the AP left is kept for reactions until the player's next
   // turn (L-833; action points KP1, KP2): their entry in the fight.
   const inFight = combat.play.fightOf(characterState);
-  const kept = inFight
-    ? combat.others.keptFrom(checks.systemOf(canonWorld), turnStateOf(characterState).ap)
-    : 0;
+  // (With AP off, L-838, nothing is kept: reactions count by the round.)
+  const kept =
+    inFight && !apRules.isOff(checks.systemOf(canonWorld))
+      ? combat.others.keptFrom(checks.systemOf(canonWorld), turnStateOf(characterState).ap)
+      : 0;
   const after = inFight
     ? {
         ...ticking,
@@ -1245,6 +1247,10 @@ function evaluateRest(kind, characterState, canonWorld, dice, choose = null) {
 
 function evaluateWait(proposedAction, characterState, canonWorld, dice, choose = null) {
   if (combat.play.fightOf(characterState)) return { ...blocked(NO_REST), plain: true };
+  // With AP off (L-838), waiting is the turn's action, as before AP.
+  if (apRules.isOff(checks.systemOf(canonWorld)) && turnStateOf(characterState).acted) {
+    return blocked(ACTED);
+  }
   const params = proposedAction.params || {};
   // A short or long rest (L-827), by the system's rests.
   const kind = String(params.rest || '').toLowerCase();
@@ -1412,6 +1418,9 @@ function costFor(characterState, canonWorld, spend, own) {
  * under way. Off a battle map actions cost nothing (WH2).
  */
 function payFor(characterState, canonWorld, map, priced, key) {
+  if (apRules.isOff(checks.systemOf(canonWorld))) {
+    return payWithoutAp(characterState, canonWorld, priced, key);
+  }
   const turn = turnStateOf(characterState);
   if (!map || !priced.spend) return { turn, free: true };
   const { long: under, ...rest } = turn;
@@ -1435,6 +1444,44 @@ function payFor(characterState, canonWorld, map, priced, key) {
   const cost = costFor(characterState, canonWorld, priced.spend, own);
   if (turn.ap < cost) return { refused: apRules.shortLine(priced.what, cost, turn.ap) };
   return { turn: { ...rest, ap: turn.ap - cost, long: null }, dropped: under || null };
+}
+
+/**
+ * Paying for an action with AP off (L-838; `ap: false`): it uses the turn's
+ * action, anywhere, as before AP (L-614); a second is refused. In a fight,
+ * the combat module's turn rule says how many a turn has. A long action
+ * takes a turn's action for each 10 of its AP. Looking is free.
+ */
+function payWithoutAp(characterState, canonWorld, priced, key) {
+  const turn = turnStateOf(characterState);
+  if (!priced.spend) return { turn, free: true };
+  if (turn.acted) return { refused: ACTED };
+  const inFight = combat.play.fightOf(characterState);
+  const allowed = inFight
+    ? combat.settings.settingsOf(checks.systemOf(canonWorld)).turn.actions
+    : 1;
+  const { long: under, ...rest } = turn;
+  const used = (turn.actionsUsed || 0) + 1;
+  const spent =
+    used >= allowed
+      ? { ...rest, acted: true, ...(allowed > 1 ? { actionsUsed: used } : {}) }
+      : { ...rest, actionsUsed: used };
+  const need = priced.long && Number.isInteger(priced.long.ap) ? priced.long.ap : null;
+  if (need) {
+    const going = under && under.key === key ? under : null;
+    const put = (going ? going.put : 0) + 10;
+    const name = (going && going.name) || 'working at ' + (priced.name || 'it');
+    const turns = Math.ceil(need / 10);
+    if (put < need) {
+      return {
+        turn: { ...spent, long: { key, name, put, need } },
+        working: `You keep at it: ${put / 10} of ${turns} turns' work done. Carry on next turn.`,
+        dropped: under && !going ? under : null,
+      };
+    }
+    return { turn: { ...spent, long: null }, dropped: going ? null : under };
+  }
+  return { turn: { ...spent, long: null }, dropped: under || null };
 }
 
 /**

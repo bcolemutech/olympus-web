@@ -351,8 +351,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       });
       const r = struck.results[0];
       if (r.reacted) {
-        f.combatants[target.id].kept =
-          reactions.keptOf(f, target.id, system, targetSheet) - defend.cost;
+        reactions.pay(system, f, target.id, targetSheet, defend.cost);
       }
       lines.push(
         ...r.lines.map((line, i) =>
@@ -437,7 +436,8 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
     done();
   }
   for (let i = 0; !ended && i < f.order.length * 3; i++) {
-    const step = fight.next(f);
+    // With AP off (L-838), reactions refresh as a round starts.
+    const step = fight.next(f, apRules.isOff(system) ? settings.turn.reactions : null);
     f = step.fight;
     if (step.newRound) rounds += 1;
     if (f.turn === PLAYER) break;

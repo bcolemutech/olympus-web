@@ -52,7 +52,9 @@ const SHAPE =
   apRules.SPENDS.map((k) => `${k}: ${apRules.COSTS[k]}`).join(', ') +
   ' } (the defaults; change any), tiers { minor: 3, standard: 10, major: 20 } for typed ' +
   'actions, keepLimit the most kept off your turn (null: none). An attack, a map feature ' +
-  'or a door can have its own ap. A system written with speed or combat economy is ' +
+  'or a door can have its own ap. ap: false switches AP off: no pool, free steps on a grid, ' +
+  'one action a turn, and combat on its own turn rule (modules.combat.turn: { actions, ' +
+  'reactions }, one each). A system written with speed or combat economy is ' +
   'converted, with warnings. Sheet ' +
   'ids are the names formulas use, unique across the sheet. checks: formula, degrees ' +
   `({ ${DEGREES.join(', ')} }: formulas, optional) and ladder [{ name, value }], ` +
@@ -77,7 +79,8 @@ const view = (s) => {
   return {
     ...rest,
     // What AP pays for (L-831), the system's own over the defaults.
-    ap: apRules.settingsOf(s),
+    // Off (L-838: `ap: false`), or the system's own over the defaults.
+    ap: apRules.isOff(s) ? false : apRules.settingsOf(s),
     version: s.version || 0,
     ...(iso(createdAtMs) ? { createdAt: iso(createdAtMs) } : {}),
     ...(iso(updatedAtMs) ? { updatedAt: iso(updatedAtMs) } : {}),

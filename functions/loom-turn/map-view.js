@@ -18,6 +18,7 @@ const seen = require('./seen');
 const travel = require('../loom-canon/travel');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
+const apRules = require('../loom-canon/ap');
 const sheets = require('../loom-canon/sheets');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
@@ -571,7 +572,20 @@ function seenObstacles(map, on) {
 // The plan shows only while it's for the map the save stands on (L-613), or
 // the town it walks (L-664).
 function turnView(save, canonWorld) {
-  const { n, ap, kept, long, reserved } = turnStateOf(save);
+  const { n, ap, kept, long, reserved, acted } = turnStateOf(save);
+  // With AP off (L-838): whether the turn's action is used, no pool or prices.
+  if (canonWorld && apRules.isOff(checks.systemOf(canonWorld))) {
+    return {
+      n,
+      apOff: true,
+      acted: Boolean(acted),
+      // A town walk's points still go by the pool (20 m each).
+      ap,
+      pool: apOf(save),
+      ...(long ? { long: { name: long.name, put: long.put, need: long.need } } : {}),
+      plan: planOn(save) || townPlanOf(save),
+    };
+  }
   return {
     n,
     ap,

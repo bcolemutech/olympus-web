@@ -36,6 +36,7 @@ const formula = require('../../loom-canon/formula');
 const checks = require('../../loom-canon/checks');
 const { settingsOf } = require('./settings');
 const sheets = require('../../loom-canon/sheets');
+const apRules = require('../../loom-canon/ap');
 
 const PLAYER = 'player';
 const SIDES = ['party', 'hostile'];
@@ -155,6 +156,8 @@ function start(system, { id, mapId, by, combatants, ambushers = null, dice }) {
       initiative: roll.total,
       tie: roll.tie,
       kept: sheets.apFor(system, c.sheet || {}),
+      // With AP off (L-838): reactions by the round, the module's turn rule.
+      ...(apRules.isOff(system) ? { reactionsLeft: settingsOf(system).turn.reactions } : {}),
     };
   }
   const sides = (side) => combatants.filter((c) => sideOf(c) === side);
@@ -175,10 +178,11 @@ function start(system, { id, mapId, by, combatants, ambushers = null, dice }) {
 /**
  * The next turn (TN1): the next in the order still in the fight; past the
  * last, a new round, surprise over. (Reactions are paid from kept AP, L-833:
- * nothing refreshes by the round.) Returns `{ fight, newRound }`. A fight
+ * nothing refreshes by the round; with AP off, L-838, `reactions` is what
+ * each has again as a round starts.) Returns `{ fight, newRound }`. A fight
  * nobody can act in stays as it is.
  */
-function next(fight) {
+function next(fight, reactions = null) {
   const out = copyOf(fight);
   const live = out.order.filter((id) => !out.combatants[id].out);
   if (!live.length) return { fight: out, newRound: false };
@@ -190,7 +194,10 @@ function next(fight) {
       at = 0;
       out.round += 1;
       newRound = true;
-      for (const c of Object.values(out.combatants)) delete c.surprised;
+      for (const c of Object.values(out.combatants)) {
+        delete c.surprised;
+        if (reactions !== null) c.reactionsLeft = reactions;
+      }
     }
     if (acts(out, out.order[at])) break;
   }
@@ -210,9 +217,9 @@ function toPlayer(system, fight, { current: includeCurrent = false } = {}) {
   let rounds = 0;
   const passed = includeCurrent && fight.turn !== PLAYER ? [fight.turn] : [];
   if (includeCurrent && fight.turn === PLAYER) return { fight, rounds, passed };
-  void system;
+  const reactions = apRules.isOff(system) ? settingsOf(system).turn.reactions : null;
   for (let i = 0; i < current.order.length * 3; i++) {
-    const step = next(current);
+    const step = next(current, reactions);
     current = step.fight;
     if (step.newRound) rounds += 1;
     if (current.turn === PLAYER) break;

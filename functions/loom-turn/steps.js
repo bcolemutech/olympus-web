@@ -208,7 +208,9 @@ function planStep(canonWorld, save, target, known) {
     prev = step;
     return Boolean(into);
   };
-  const { walked, spent, rest, opened } = gridPaths.walk(path, turn.ap, {
+  // With AP off (L-838) the walk is free: it goes to the end of its path.
+  const apOff = apRules.isOff(systemOf(canonWorld));
+  const { walked, spent, rest, opened } = gridPaths.walk(path, apOff ? Infinity : turn.ap, {
     stop: (step) => cameIntoView(step, doors).length > 0 || intoHazard(step),
     stand: (step) => !personAt(step),
     openCost: rules.openCost,
@@ -221,7 +223,7 @@ function planStep(canonWorld, save, target, known) {
   // What the walk leaves of the turn: its AP, the squares walked, and any
   // long action, ended by walking off.
   const off = walkedOff(turn, squares.length > 0);
-  const ap = turn.ap - spent;
+  const ap = apOff ? turn.ap : turn.ap - spent;
   const after = { ...off.turn, ap, moved: (turn.moved || 0) + squares.length };
   const door = opened ? (map.doors || []).find((d) => d.id === opened) : null;
   const stop = walked.length ? walked[walked.length - 1] : from;
@@ -252,7 +254,7 @@ function planStep(canonWorld, save, target, known) {
   const lines = off.lines
     .concat(door ? ['You open ' + (door.name || 'the door') + '.'] : [])
     .concat(seenLines)
-    .concat(!ap || (!door && !seenLines.length && !hazard) ? [OUT_OF_AP] : []);
+    .concat(!apOff && (!ap || (!door && !seenLines.length && !hazard)) ? [OUT_OF_AP] : []);
   return {
     cell: { x: stop.x, y: stop.y },
     turn: {
@@ -329,7 +331,8 @@ function planDoor(canonWorld, save, doorId, open) {
   }
   if (!open && state !== 'open') return { refused: capitalised(name) + ' is already shut.' };
   const turn = turnStateOf(save);
-  const cost = pricesFor(canonWorld, save).door(door);
+  // Free with AP off (L-838).
+  const cost = apRules.isOff(systemOf(canonWorld)) ? 0 : pricesFor(canonWorld, save).door(door);
   const doing = (open ? 'opening ' : 'closing ') + name;
   if (turn.ap < cost) return { refused: apRules.shortLine(doing, cost, turn.ap) };
   return {

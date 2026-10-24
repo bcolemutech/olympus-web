@@ -21,6 +21,10 @@
  *                                     difficult ground 1; Prone doubles
  *                                     movement)
  *
+ * `ap: false` switches AP off (L-838; game systems MD9): no pool, steps on
+ * a grid free, one action a turn, and combat on its own turn rule
+ * (modules.combat.turn). A system with no `ap` plays on AP, by the defaults.
+ *
  * Systems written before AP had `sheet.speed`, traits' and conditions'
  * `modifiers.speed` and combat's `economy`; `convert` turns them into AP,
  * saying what it did. Pure.
@@ -55,6 +59,11 @@ const TIER_NAMES = Object.keys(TIERS);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const whole = (n, max = MAX_COST) => Number.isInteger(n) && n >= 0 && n <= max;
 const copyOf = (value) => JSON.parse(JSON.stringify(value));
+
+/** Whether a system has switched AP off (`ap: false`; L-838). */
+function isOff(system) {
+  return Boolean(system) && system.ap === false;
+}
 
 /** A system's AP settings, its own over the defaults. */
 function settingsOf(system) {
@@ -103,11 +112,15 @@ function checkCosts(costs, at, errors) {
 /**
  * A system's `ap` block checked (on save, L-801): errors and warnings pushed.
  */
-function check(system, { errors }) {
+function check(system, { errors, warnings = [] }) {
   const ap = system.ap;
   if (ap === undefined) return;
+  if (ap === false) {
+    offWarnings(system).forEach((w) => warnings.push(w));
+    return;
+  }
   if (!isObject(ap)) {
-    errors.push('ap must be { costs?, tiers?, keepLimit? }.');
+    errors.push('ap must be { costs?, tiers?, keepLimit? }, or false to switch AP off.');
     return;
   }
   for (const key of Object.keys(ap)) {
@@ -146,6 +159,29 @@ function check(system, { errors }) {
   if (ap.keepLimit !== undefined && ap.keepLimit !== null && !whole(ap.keepLimit, MAX_POOL)) {
     errors.push(`ap.keepLimit must be a whole number from 0 to ${MAX_POOL}, or null for none.`);
   }
+}
+
+// AP settings left on a system with AP off (L-838): kept, unused.
+function offWarnings(system) {
+  const out = [];
+  const sheet = (isObject(system.sheet) && system.sheet) || {};
+  const unused = ' is kept but unused: AP is off (ap: false).';
+  if (sheet.ap !== undefined) out.push('sheet.ap' + unused);
+  for (const part of ['traits', 'conditions']) {
+    (Array.isArray(sheet[part]) ? sheet[part] : []).forEach((item, i) => {
+      if (!isObject(item)) return;
+      if (item.costs !== undefined) out.push(`sheet.${part}[${i}].costs` + unused);
+      if (isObject(item.modifiers) && item.modifiers.ap !== undefined) {
+        out.push(`sheet.${part}[${i}].modifiers.ap` + unused);
+      }
+    });
+  }
+  const combat = isObject(system.modules) && isObject(system.modules.combat);
+  const attacks = combat && Array.isArray(system.modules.combat.attacks);
+  (attacks ? system.modules.combat.attacks : []).forEach((a, i) => {
+    if (isObject(a) && a.ap !== undefined) out.push(`modules.combat.attacks[${i}].ap` + unused);
+  });
+  return out;
 }
 
 /** Whether an attack's, a door's or a feature's own `ap` will do. */
@@ -297,6 +333,7 @@ module.exports = {
   DEFAULT_POOL,
   MAX_POOL,
   MAX_COST,
+  isOff,
   settingsOf,
   check,
   checkCosts,

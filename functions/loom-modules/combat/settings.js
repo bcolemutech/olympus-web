@@ -9,9 +9,10 @@
  *               score in `tieBreak` (an attribute), then the player
  *   (economy    retired with action points, L-831: actions and reactions
  *               are paid in AP, ../../loom-canon/ap.js; a system that
- *               still gives it is converted, the setting dropped. Until
- *               turns and reactions run on AP (L-832, L-833) a turn has one
- *               action and a round one reaction.)
+ *               still gives it is converted, the setting dropped.)
+ *   turn        { actions, reactions }  read only with AP off (L-838;
+ *               `ap: false`): the actions a turn has and the reactions a
+ *               round, one each by default; with AP on, kept, unused
  *   surprise    { hide, notice }        each { skill } or { attribute }: an
  *               ambushed side rolls `notice` against the ambushers' `hide`;
  *               with none, nobody is surprised
@@ -96,7 +97,10 @@ const KEYS = [
   'longRange',
   'dodge',
   'flanking',
+  'turn',
 ];
+// The turn without AP (L-838): one action a turn, one reaction a round.
+const TURN = { actions: 1, reactions: 1 };
 // Settings read by later stories: kept as given, with a warning.
 const LATER = {};
 const DEFAULT_INITIATIVE = '1d20';
@@ -129,6 +133,11 @@ function settingsOf(system) {
     longRange: given.longRange ?? null,
     dodge: given.dodge ?? null,
     flanking: given.flanking ?? null,
+    turn: {
+      actions: isObject(given.turn) && given.turn.actions !== undefined ? given.turn.actions : 1,
+      reactions:
+        isObject(given.turn) && given.turn.reactions !== undefined ? given.turn.reactions : 1,
+    },
   };
 }
 
@@ -226,6 +235,29 @@ function check(settings, { system, errors, warnings, formula }) {
     warnings.push(
       `${at}.economy is retired (L-830): every action and reaction is paid in AP, from ap.costs.`
     );
+  }
+
+  // The turn without AP (L-838).
+  const turn = settings.turn;
+  if (turn !== undefined) {
+    if (!isObject(turn)) errors.push(`${at}.turn must be { actions?, reactions? }.`);
+    else {
+      for (const key of Object.keys(turn)) {
+        if (!Object.keys(TURN).includes(key)) {
+          errors.push(`${at}.turn: "${key}" isn't part of a turn (actions, reactions).`);
+        }
+      }
+      const whole = (n, lo) => Number.isInteger(n) && n >= lo && n <= 5;
+      if (turn.actions !== undefined && !whole(turn.actions, 1)) {
+        errors.push(`${at}.turn.actions must be a whole number from 1 to 5.`);
+      }
+      if (turn.reactions !== undefined && !whole(turn.reactions, 0)) {
+        errors.push(`${at}.turn.reactions must be a whole number from 0 to 5.`);
+      }
+      if (!(system && system.ap === false)) {
+        warnings.push(`${at}.turn is read only with AP off (ap: false); it is kept, unused.`);
+      }
+    }
   }
 
   const surprise = settings.surprise;

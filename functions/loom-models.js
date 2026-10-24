@@ -147,6 +147,10 @@ function validateWorldState(data) {
 //     moved      squares walked this turn, for End turn's line
 //     long       a long action under way (CT4): { key, name, put, need }
 //     withdrawn  moving out of reach draws no attacks this turn (L-823)
+//     acted      with AP off (L-838; `ap: false`): the turn's action is
+//                used; `actionsUsed` counts them when a fight's turn rule
+//                gives more than one. `ap` is then only the town walk's
+//                points (20 m each); grid steps and actions cost no AP
 //
 // End turn refills the pool and keeps the plan and any long action. Older
 // saves have none, or the turn from before AP ({ movementLeft, actionUsed }):
@@ -179,6 +183,12 @@ function validateTurnState(turn) {
   }
   if (turn.plan !== null && !isObject(turn.plan)) {
     errors.push('turn.plan must be an object or null');
+  }
+  if (turn.acted !== undefined && typeof turn.acted !== 'boolean') {
+    errors.push('turn.acted must be true or false');
+  }
+  if (turn.actionsUsed !== undefined && !whole(turn.actionsUsed, 5)) {
+    errors.push('turn.actionsUsed must be a whole number from 0 to 5');
   }
   if (turn.reserved !== undefined && !whole(turn.reserved, MAX_AP)) {
     errors.push('turn.reserved must be a whole number from 0 to ' + MAX_AP);

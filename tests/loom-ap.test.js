@@ -101,7 +101,9 @@ describe.each([
       ])
     );
     s.ap = 'cheap';
-    expect(validateSystem(s).errors).toContain('ap must be { costs?, tiers?, keepLimit? }.');
+    expect(validateSystem(s).errors).toContain(
+      'ap must be { costs?, tiers?, keepLimit? }, or false to switch AP off.'
+    );
     s.ap = undefined;
     s.sheet.ap = '20 + Luck';
     expect(validateSystem(s).errors.join(' ')).toContain('sheet.ap');

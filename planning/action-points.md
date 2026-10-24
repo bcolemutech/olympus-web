@@ -1,6 +1,6 @@
 # The Loom — Action Points — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-23: the gap sheet (§3) is answered. Sub-issues filed 2026-10-24 (#681–#687, §6); L-831 shipped (#688); L-832 shipped (#690); L-833 in progress.
+**Status:** In progress. Decided 2026-10-23: the gap sheet (§3) is answered. Sub-issues filed 2026-10-24 (#681–#687, §6); L-831 shipped (#688); L-832 shipped (#690); L-833 shipped (#691); L-838 (#692, AP off) in progress.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-830 (#675), Phase 9 — Game systems (milestone #25). Built before advancement (now L-840); the modules after it start at L-850 (renumbered 2026-10-23).
 **Depends on:** L-820 (#651, combat), L-810 (#607, sheets and effects), L-610 (turns and movement).
@@ -84,7 +84,7 @@ Settled with the user through a questionnaire (2026-10-23); every answer took th
 - **`ap.tiers`**: `{ minor, standard, major }` for typed actions (CT3).
 - **`ap.keepLimit`**: none by default (KP2).
 - **`modules.combat.economy`** is retired: actions and reactions are paid in AP.
-- **AP can be off** (MD9, 2026-10-24): a system with no `ap` plays without a pool. Steps on a grid are then free and each turn takes one action, judged as today; modules that need AP (combat) are off with it, or set their own turn rule.
+- **AP can be off** (MD9, 2026-10-24): a system with `ap: false` plays without a pool (decided 2026-10-24: switched off explicitly, so a system with no `ap` keeps the defaults). Steps on a grid are then free and each turn takes one action, as before AP; combat sets its own turn rule (`modules.combat.turn: { actions, reactions }`, one each), reactions counting by the round (L-838).
 
 ### 4.2 Default costs (CT1), the same in both built-ins
 
@@ -171,7 +171,8 @@ In both built-in systems, a player crosses difficult ground at double cost, open
 | L-835 (#685) | **Typed actions by tier:** INTERPRET proposes a tier, ADJUDICATE charges it, with plausibility first                                                                                                                          | L-832      | Sonnet |
 | L-836 (#686) | **Foes and named characters on AP:** tactics plan turns that fit the pool by role and posture; named characters choose from whole turns that fit                                                                              | L-833      | Opus   |
 | L-837 (#687) | **In the Loom:** the AP bar with kept AP, costs on menu entries (greyed when unaffordable), path previews with their cost                                                                                                     | L-832      | Sonnet |
+| L-838 (#692) | **AP off (MD9):** `ap: false` switches AP off; free steps on a grid, one action a turn, combat's own turn rule (`modules.combat.turn`), reactions by the round; warnings for AP settings left on it                           | L-833      | Opus   |
 
-**Order:** L-831, then L-832. L-833, L-834, L-835 and L-837 follow; L-836 after L-833.
+**Order:** L-831, then L-832. L-833, L-834, L-835 and L-837 follow; L-836 after L-833; L-838 (filed 2026-10-24 for MD9) after L-833.
 
 Tests: pure-module tests for costs, overrides and long actions in both built-in systems (MD2); the `grid-paths.js` copies still match; pipeline tests for a turn spending AP, reactions from kept AP, a readied action, Stunned at 0; headless Chrome for the bar, the menu costs and the path preview.
