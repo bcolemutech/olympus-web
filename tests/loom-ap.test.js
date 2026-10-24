@@ -212,4 +212,18 @@ describe.each([
     expect(saved.sheet.speed).toBeUndefined();
     expect(warnings).toEqual([expect.stringContaining('sheet.speed is retired')]);
   });
+
+  test('the rules reference reads the pool, each cost and the tiers (L-837)', () => {
+    const view = ap.rulesView(system);
+    expect(view.pool).toBe(system.sheet.ap);
+    expect(view.costs.map((c) => c.id)).toEqual(ap.SPENDS);
+    expect(view.costs.find((c) => c.id === 'dodge')).toMatchObject({ name: 'Dodge', ap: 8 });
+    expect(view.tiers).toEqual([
+      { id: 'minor', ap: 3 },
+      { id: 'standard', ap: 10 },
+      { id: 'major', ap: 20 },
+    ]);
+    expect(view.keepLimit).toBeNull();
+    expect(ap.rulesView({ ...mine(), ap: false })).toEqual({ off: true });
+  });
 });

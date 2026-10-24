@@ -248,6 +248,36 @@
     return battle.turn ? battle.turn.ap : 0;
   }
 
+  // What an action costs this character (L-837), from the turn's prices:
+  // `id` one of its actions (dodge, withdraw, standUp, object…); null with
+  // AP off, or when it isn't known.
+  function actionCost(id) {
+    var turn = battle.turn;
+    if (!turn || turn.apOff || !turn.prices || !turn.prices.actions) return null;
+    var n = turn.prices.actions[id];
+    return n === undefined ? null : n;
+  }
+
+  // A cost as the menu says it: "10 AP"; '' with AP off.
+  function apText(cost) {
+    if (cost === undefined || battle.turn == null || battle.turn.apOff) return '';
+    return cost === null ? 'not possible now' : cost + ' AP';
+  }
+
+  // Why the AP left won't pay for `cost`, or null (L-837): "Costs 10 AP; you
+  // have 6." A cost of null (a condition's 'never') can't be paid at all.
+  function short(cost) {
+    var turn = battle.turn;
+    if (!turn || turn.apOff || cost === undefined) return null;
+    if (cost === null) return "You can't do that now.";
+    return cost > turn.ap ? 'Costs ' + cost + ' AP; you have ' + turn.ap + '.' : null;
+  }
+
+  // A menu item's note: its cost first, then the rest.
+  function noted(cost, rest) {
+    return [apText(cost), rest].filter(Boolean).join(' · ');
+  }
+
   function reducedMotion() {
     return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
@@ -937,10 +967,35 @@
       var from = preview.walked.length ? preview.walked[preview.walked.length - 1] : d.here;
       Loom.draw.polyline(o, centres([from].concat(preview.rest)), [2 * px, 7 * px]);
       o.stroke({ width: 3 * px, color: COLOURS.path, alpha: 0.85, cap: 'round' });
+      // Its cost at the end, and where the AP left runs out (L-837; UI1).
+      if (battle.turn && !battle.turn.apOff) {
+        var end = preview.path[preview.path.length - 1];
+        pathLabel(n, px, end, preview.cost + ' AP');
+        if (preview.rest.length) {
+          var stop = centre(from);
+          o.circle(stop.x, stop.y, CELL * 0.22).stroke({ width: 2.5 * px, color: COLOURS.path });
+          o.moveTo(stop.x - CELL * 0.16, stop.y - CELL * 0.16)
+            .lineTo(stop.x + CELL * 0.16, stop.y + CELL * 0.16)
+            .stroke({ width: 2.5 * px, color: COLOURS.path });
+          if (preview.walked.length) pathLabel(n, px, from, 'AP runs out', true);
+        }
+      }
     } else if (!battle.anim && !battle.selected && plan) {
       Loom.draw.polyline(o, centres([d.here].concat(plan.path)), [2 * px, 7 * px]);
       o.stroke({ width: 3 * px, color: COLOURS.path, alpha: 0.5, cap: 'round' });
     }
+  }
+
+  // A label over a square of the path preview (L-837): its cost; or, under
+  // it (`below`), where the AP runs out.
+  function pathLabel(n, px, cell, text, below) {
+    var node = Loom.draw.label(text, 11);
+    node.style.fill = COLOURS.path;
+    node.scale.set(px);
+    var c = centre(cell);
+    node.position.set(c.x, below ? c.y + CELL / 2 + 2 * px : c.y - CELL / 2 - 14 * px);
+    n.labels.addChild(node);
+    battle.labels.push(node);
   }
 
   /** Draws the map for the camera's view: rebuilt when needed, else just moved. */
@@ -1014,11 +1069,22 @@
           ? 'Try ' + name + ' (locked)'
           : 'Open ' + name;
     var beside = besideDoor(door);
+    // Its cost (L-837): the door's own or the system's; a lock's to try one.
+    var prices = (battle.turn && battle.turn.prices) || null;
+    var cost =
+      !prices || (battle.turn && battle.turn.apOff)
+        ? undefined
+        : door.state === 'locked'
+          ? actionCost('lock')
+          : typeof (prices.doors || {})[door.id] === 'number'
+            ? prices.doors[door.id]
+            : prices.door;
+    var why = !beside ? 'Walk beside it to open or close it.' : short(cost);
     return [
       {
         label: capitalise(text),
-        disabled: !beside,
-        note: beside ? '1 movement' : 'Walk beside it to open or close it.',
+        disabled: Boolean(why),
+        note: why || noted(cost, battle.turn && battle.turn.apOff ? 'free' : ''),
         onSelect: function () {
           Loom.play.doorAction(door.id, open, (open ? 'open ' : 'close ') + name);
         },
@@ -1174,8 +1240,8 @@
 
   var BAND_WORDS = { reach: 'in reach', normal: 'in range', long: 'long range' };
 
-  // What a square offers: on yours, Dash and, in a fight, Dodge, Withdraw
-  // and Ready; on someone, Move and Attack with each of your attacks; on a
+  // What a square offers: on yours, Stand up when lying down and, in a
+  // fight, Dodge, Withdraw and Ready; on someone, Move and Attack with each of your attacks; on a
   // feature beside you, Use; else Move.
   function itemsFor(cell) {
     var d = battle.data;
@@ -1186,9 +1252,9 @@
     return [moveItem(cell)].concat(feature ? useItems(feature) : []);
   }
 
-  // Turns run on AP (L-832): an action the AP left won't pay for is turned
-  // down by the server, with its cost; the menu shows costs with L-837.
-  // With AP off (L-838), the turn's one action.
+  // Turns run on AP (L-832): each menu entry shows its cost, greyed out
+  // with the reason when the AP left won't pay for it (L-837). With AP off
+  // (L-838), the turn's one action.
   function acted() {
     return Boolean(battle.turn && battle.turn.apOff && battle.turn.acted);
   }
@@ -1208,11 +1274,12 @@
       var why = acted()
         ? "You've acted this turn."
         : band
-          ? null
+          ? short(a.ap)
           : a.range
             ? 'Out of range (' + a.range.long + ' squares).'
             : 'Out of reach: get closer.';
       var note = [
+        apText(a.ap),
         band ? BAND_WORDS[band] : null,
         person.cover ? person.cover + ' cover' : null,
         a.attack,
@@ -1240,31 +1307,57 @@
   function selfItems() {
     var combat = combatOf();
     var fight = fightOf();
-    var why = acted() ? "You've acted this turn." : null;
-    var item = function (label, note, verb, extra, said) {
+    var item = function (label, note, verb, extra, said, cost) {
+      // Its cost (L-837), greyed out with the reason when it can't be paid.
+      var why = acted() ? "You've acted this turn." : short(cost);
       return {
         label: label,
         disabled: Boolean(why),
-        note: why || note,
+        note: why || noted(cost, note),
         onSelect: function () {
           Loom.play.tactic(verb, extra, said);
         },
       };
     };
     var items = [];
+    // Prone or the like (L-834): standing up, for its cost.
+    var character = (Loom.store.get().map || {}).character;
+    var lying = ((character && character.conditions) || []).some(function (c) {
+      return /standing up/.test(c.ap || '');
+    });
+    if (lying) {
+      items.push(
+        item('Stand up', 'ends lying down', 'stand', null, 'stand up', actionCost('standUp'))
+      );
+    }
     if (!fight) return items;
     items.push(
-      item('Dodge', 'harder to hit until your next turn', 'dodge', null, 'dodge'),
-      item('Withdraw', 'move away without drawing blows', 'withdraw', null, 'withdraw')
+      item(
+        'Dodge',
+        'harder to hit until your next turn',
+        'dodge',
+        null,
+        'dodge',
+        actionCost('dodge')
+      ),
+      item(
+        'Withdraw',
+        'move away without drawing blows',
+        'withdraw',
+        null,
+        'withdraw',
+        actionCost('withdraw')
+      )
     );
     ((combat && combat.attacks) || []).forEach(function (a) {
       items.push(
         item(
           'Ready ' + a.name.toLowerCase(),
-          'strikes the first foe to come into its ' + (a.range ? 'range' : 'reach'),
+          'set aside: strikes the first foe to come into its ' + (a.range ? 'range' : 'reach'),
           'ready',
           { attack: a.id },
-          'ready ' + a.name.toLowerCase()
+          'ready ' + a.name.toLowerCase(),
+          a.ap
         )
       );
     });
@@ -1274,12 +1367,27 @@
   // Use a feature beside you (TN5): the GM says what it does.
   function useItems(feature) {
     var beside = distance(battle.data.here, feature) <= 1;
-    var why = !beside ? 'Walk beside it to use it.' : acted() ? "You've acted this turn." : null;
+    var prices = battle.turn && !battle.turn.apOff && battle.turn.prices;
+    var own = prices && prices.features ? prices.features[feature.id] : undefined;
+    var cost = !prices ? undefined : own !== undefined ? own : actionCost('object');
+    // A long action (CT4) is put in over turns: what this turn pays is what's left.
+    var long = feature.long && feature.long.ap;
+    var why = !beside
+      ? 'Walk beside it to use it.'
+      : acted()
+        ? "You've acted this turn."
+        : long
+          ? null
+          : short(cost);
     return [
       {
         label: 'Use ' + feature.name,
         disabled: Boolean(why),
-        note: why || 'your action',
+        note:
+          why ||
+          (long
+            ? noted(undefined, long + ' AP of work, over turns')
+            : noted(cost, battle.turn && battle.turn.apOff ? 'your action' : '')),
         onSelect: function () {
           Loom.play.tactic('use', { feature: feature.id }, 'use ' + feature.name);
         },
@@ -1505,8 +1613,8 @@
       when = preview.turns === 1 ? 'next turn' : preview.turns + ' turns, from next turn';
     } else when = preview.turns + ' turns';
     return (
-      preview.cost +
-      ' movement · ' +
+      (battle.turn && battle.turn.apOff ? preview.path.length + ' squares' : preview.cost + ' AP') +
+      ' · ' +
       when +
       (preview.doors.length ? ' · opens ' + listOf(preview.doors).replace(/ or /, ' and ') : '')
     );

@@ -127,7 +127,11 @@ function mapView(canonWorld, save, record, townRecord) {
     time: clock.timeView(clock.timeOf(save)),
     // The world's game system as players read it, for the rules reference
     // (L-805; game systems SY7).
-    rules: checks.rulesOf(checks.systemOf(canonWorld)),
+    rules: {
+      ...checks.rulesOf(checks.systemOf(canonWorld)),
+      // Its action points: the pool, each cost and the tiers (L-837).
+      ap: apRules.rulesView(checks.systemOf(canonWorld)),
+    },
     // The sheet, in the system's words, every number worked out (L-814; CS8).
     character: sheets.characterView(
       checks.systemOf(canonWorld),
@@ -351,6 +355,7 @@ function combatView(canonWorld, save) {
   if (!map) return null;
   const system = checks.systemOf(canonWorld);
   const sheet = sheets.sheetOf(save) || sheets.defaultSheet(system);
+  const prices = apRules.pricesOf(system, sheet);
   return {
     attacks: combat.attacks.attacksOf(system, sheet, { player: true }).map((a) => ({
       id: a.id,
@@ -359,6 +364,8 @@ function combatView(canonWorld, save) {
         ? { range: { normal: a.range.normal, long: a.range.long } }
         : { reach: a.reach || 1 }),
       attack: String(a.attack),
+      // What it costs this character (L-837): for the menu's Attack and Ready.
+      ...(apRules.isOff(system) ? {} : { ap: prices.of('attack', a.ap) }),
       lethal: a.lethal !== false,
       ...(a.area ? { area: true } : {}),
     })),
@@ -425,9 +432,14 @@ function battleView(canonWorld, save, record) {
         to: next ? { map: next.id, name: next.name } : 'out',
       };
     }),
-    features: (map.features || [])
-      .filter(on)
-      .map((f) => ({ id: f.id, name: f.name, x: f.x, y: f.y })),
+    features: (map.features || []).filter(on).map((f) => ({
+      id: f.id,
+      name: f.name,
+      x: f.x,
+      y: f.y,
+      // A long action's AP (CT4), for the menu's Use (L-837).
+      ...(f.long && Number.isInteger(f.long.ap) ? { long: { ap: f.long.ap } } : {}),
+    })),
     // Its areas (#670), as far as they've been seen: a label, never a target.
     areas: seenAreas(map, known, takenSquares(map, cell, people)),
     hereArea: (mapAreas.areaAt(map, cell) || {}).name || null,
@@ -606,7 +618,23 @@ function pricesView(canonWorld, save) {
   const { map } = maps.positionOf(canonWorld, save);
   const doors = {};
   for (const door of (map && map.doors) || []) doors[door.id] = prices.door(door);
-  return { move: prices.move, difficult: prices.difficult, door: prices.door(null), doors };
+  // And each action's, for the click menu (L-837): a feature's own cost by
+  // id; Infinity (a condition's 'never') is sent as null.
+  const finite = (n) => (Number.isFinite(n) ? n : null);
+  const features = {};
+  for (const f of (map && map.features) || []) features[f.id] = finite(prices.of('object', f.ap));
+  const actions = {};
+  for (const id of ['speak', 'standUp', 'lock', 'object', 'withdraw', 'dodge', 'attack']) {
+    actions[id] = finite(prices.of(id));
+  }
+  return {
+    move: prices.move,
+    difficult: prices.difficult,
+    door: prices.door(null),
+    doors,
+    features,
+    actions,
+  };
 }
 
 module.exports = { mapView, townView, battleView, turnView };

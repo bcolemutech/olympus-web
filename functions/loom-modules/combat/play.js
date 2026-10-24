@@ -220,7 +220,8 @@ function begin(
  * `save.figures`, the player's sheet when hurt, and their fall (`save.down`;
  * L-827). A fight that ends with the player down has its aftermath
  * (./down.js): coming round, death, or a fate for NARRATE to choose.
- * Returns `{ mutations, lines, rounds, lost, turns, named, fight?, fallen? }`,
+ * Returns `{ mutations, lines, rounds, lost, turns, named, keptLeft?, fight?,
+ * fallen? }`,
  * `fight` its end for NARRATE, `fallen` what became of the player, `named`
  * the named characters' choices (L-825; `choose`, ./others.js).
  */
@@ -276,6 +277,7 @@ function othersPlay(world, save, f, { dice, current = false, choose = null }) {
     lost: 0,
     turns: result.turns,
     named: result.named,
+    ...(Number.isInteger(result.keptLeft) ? { keptLeft: result.keptLeft } : {}),
     ...(ended ? { fight: ended.fight } : {}),
     ...(fallen ? { fallen: fallen.fallen } : {}),
   };

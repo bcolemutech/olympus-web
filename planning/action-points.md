@@ -1,6 +1,6 @@
 # The Loom — Action Points — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-23: the gap sheet (§3) is answered. Sub-issues filed 2026-10-24 (#681–#687, §6); L-831 shipped (#688); L-832 shipped (#690); L-833 shipped (#691); L-838 shipped (#693); L-834 shipped (#694); L-835 shipped (#695); L-836 in progress.
+**Status:** Shipped (2026-10-24): L-831 to L-838 built. Decided 2026-10-23: the gap sheet (§3) is answered. Sub-issues filed 2026-10-24 (#681–#687, §6); L-831 shipped (#688); L-832 shipped (#690); L-833 shipped (#691); L-838 shipped (#693); L-834 shipped (#694); L-835 shipped (#695); L-836 shipped (#696); L-837 (the AP bar, costs in the menu and on path previews, the rules' costs and tiers) with this epic's close-out.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-830 (#675), Phase 9 — Game systems (milestone #25). Built before advancement (now L-840); the modules after it start at L-850 (renumbered 2026-10-23).
 **Depends on:** L-820 (#651, combat), L-810 (#607, sheets and effects), L-610 (turns and movement).

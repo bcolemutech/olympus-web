@@ -1083,6 +1083,11 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
     ...(round.turns && round.turns.length
       ? { playback: playbackOf(round.turns, characterState, canonWorld) }
       : {}),
+    // The AP the player kept, and what the others' turns left of it, for
+    // the turn bar (L-837; UI1).
+    ...(kept && Number.isInteger(round.keptLeft)
+      ? { held: { kept, left: Math.max(0, Math.min(kept, round.keptLeft)) } }
+      : {}),
   };
 }
 
@@ -2021,6 +2026,9 @@ function evaluate(
     ...(resolution.hazard ? { hazard: Object.freeze({ ...resolution.hazard }) } : {}),
     // Everyone else's turns, for the Loom to play out (L-828); not recorded.
     ...(resolution.playback ? { playback: Object.freeze(resolution.playback.slice()) } : {}),
+    // The AP the player kept for reactions, and what was left of it (L-837);
+    // not recorded.
+    ...(resolution.held ? { held: Object.freeze({ ...resolution.held }) } : {}),
     // What the named characters chose in the fight (L-825), for the GM.
     ...(resolution.named ? { named: Object.freeze(resolution.named.slice()) } : {}),
     // A rest taken (L-827), for the GM.
