@@ -31,7 +31,7 @@
  * formula (its attributes, skill ranks and level) plus what the character's
  * traits and conditions add (`modifiers.ap`; a trait taken at creation,
  * L-812). They are worked out again whenever a save is loaded with its world
- * (withSpeed), so a changed sheet or system changes them at once.
+ * (withAp), so a changed sheet or system changes them at once.
  *
  * A character without a sheet (one made before sheets, as tests still make
  * them) keeps `character.abilities`, `speed` and `condition`: the readers
@@ -43,8 +43,8 @@ const clock = require('./clock');
 const conditions = require('./conditions');
 const attacks = require('../loom-modules/combat/attacks');
 
-const DEFAULT_SPEED = 20; // as loom-models' (L-611)
-const MAX_SPEED = 1000;
+const DEFAULT_AP = 20; // as loom-models' (L-611; L-831)
+const MAX_AP = 1000;
 const MAX_RANK = 20;
 const MAX_LEVEL = 1000;
 const TRAIT_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/i;
@@ -113,7 +113,7 @@ function maxima(system, sheet, { bare = false } = {}) {
 /**
  * A character's action points a turn (L-831; planning/action-points.md
  * AP1): the system's `sheet.ap` formula over the sheet, plus each held
- * trait's and each condition's `modifiers.ap`, from 1 to MAX_SPEED. A system
+ * trait's and each condition's `modifiers.ap`, from 1 to MAX_AP. A system
  * with no formula gives everyone the default. (A system from before AP is
  * read with `sheet.speed` as its pool: ./ap.js convert.)
  */
@@ -127,38 +127,46 @@ function apFor(system, sheet) {
     }
   };
   const pool = system.sheet.ap !== undefined ? system.sheet.ap : system.sheet.speed;
-  let speed = pool === undefined ? DEFAULT_SPEED : at(pool);
+  let ap = pool === undefined ? DEFAULT_AP : at(pool);
   const has = new Set((sheet && Array.isArray(sheet.traits) && sheet.traits) || []);
   for (const trait of system.sheet.traits || []) {
     const mods = trait.modifiers || {};
     const bonus = mods.ap !== undefined ? mods.ap : mods.speed;
-    if (has.has(trait.id) && bonus !== undefined) speed += at(bonus);
+    if (has.has(trait.id) && bonus !== undefined) ap += at(bonus);
   }
   // What its conditions add (L-815): Prone's −10. A condition that stops it
   // moving (noMove) is the turn's business, not its pool's.
   const bare = valuesOf(system, sheet || {}, { bare: true });
   const mods = conditions.modifiersOf(system, sheet || {}, bare);
-  speed += conditions.sumOf(mods, 'ap') + conditions.sumOf(mods, 'speed');
-  return Math.max(1, Math.min(MAX_SPEED, Math.floor(speed)));
+  ap += conditions.sumOf(mods, 'ap') + conditions.sumOf(mods, 'speed');
+  return Math.max(1, Math.min(MAX_AP, Math.floor(ap)));
 }
 
 /**
- * A save with its character's speed worked out for its world's system: what
- * every reader of the save sees (speedOf). A save without a sheet is as it was.
+ * A sheet with its pool of action points worked out (`ap`, L-832), in place
+ * of the `speed` a sheet from before AP kept.
  */
-function withSpeed(save, system) {
+function withPool(system, sheet) {
+  const { speed, ...rest } = sheet;
+  void speed;
+  return { ...rest, ap: apFor(system, sheet) };
+}
+
+/**
+ * A save with its character's pool of action points worked out for its
+ * world's system: what every reader of the save sees (apOf). A save without
+ * a sheet is as it was.
+ */
+function withAp(save, system) {
   const sheet = sheetOf(save);
   if (!sheet || !save.character) return save;
-  return {
-    ...save,
-    character: { ...save.character, sheet: { ...sheet, speed: apFor(system, sheet) } },
-  };
+  return { ...save, character: { ...save.character, sheet: withPool(system, sheet) } };
 }
 
 /**
  * A new sheet with the system's defaults (CS9): each attribute at the middle
  * of its range, every skill untrained, the lowest level, every resource
- * full, its speed worked out. `traits` carry over what the character could do.
+ * full, its pool of action points worked out. `traits` carry over what the character could do.
  */
 function defaultSheet(system, { traits = [] } = {}) {
   const sheet = { attributes: {}, resources: {}, level: system.sheet.level.min };
@@ -171,7 +179,7 @@ function defaultSheet(system, { traits = [] } = {}) {
   for (const r of system.sheet.resources) sheet.resources[r.id] = { current: max[r.id] || 0 };
   sheet.traits = [...new Set(traits.filter((t) => typeof t === 'string' && TRAIT_ID.test(t)))];
   sheet.conditions = [];
-  sheet.speed = apFor(system, sheet);
+  sheet.ap = apFor(system, sheet);
   return sheet;
 }
 
@@ -255,7 +263,7 @@ function validateSheet(system, sheet) {
     }
   }
 
-  // Traits and conditions (speed is worked out, not checked: speedFor).
+  // Traits and conditions (the pool is worked out, not checked: apFor).
   if (!Array.isArray(sheet.traits)) errors.push('traits must be a list.');
   else {
     if (sheet.traits.length > MAX_TRAITS) errors.push(`More than ${MAX_TRAITS} traits.`);
@@ -311,7 +319,7 @@ function sheetFromStatBlock(system, block) {
   }
   if (isObject(block.resources)) Object.assign(sheet.resources, block.resources);
   if (block.attacks !== undefined) sheet.attacks = block.attacks;
-  sheet.speed = apFor(system, sheet);
+  sheet.ap = apFor(system, sheet);
   return sheet;
 }
 
@@ -431,7 +439,7 @@ function characterView(system, character, now = 0, { player = true } = {}) {
     derived: on.has('derived')
       ? (s.derived || []).map((d) => ({ id: d.id, name: d.name, value: at(d.formula) }))
       : [],
-    speed: apFor(system, sheet),
+    ap: apFor(system, sheet),
     attacks: attacks.attacksOf(system, sheet, { player }).map((a) => attackView(system, a, values)),
     misfits,
   };
@@ -467,15 +475,14 @@ function attackView(system, a, values) {
 }
 
 module.exports = {
-  DEFAULT_SPEED,
-  MAX_SPEED,
+  DEFAULT_AP,
+  MAX_AP,
   characterView,
   leftOf,
   defaultSheet,
   apFor,
-  // A turn's movement is its action points until turns run on AP (L-832).
-  speedFor: apFor,
-  withSpeed,
+  withPool,
+  withAp,
   validateSheet,
   validateStatBlock,
   sheetFromStatBlock,

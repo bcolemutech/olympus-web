@@ -100,19 +100,15 @@
     var busy = s.ui.busy;
     var walkingTown =
       s.ui.playerLevel === 'town' && s.map && s.map.town && s.map.town.ground && s.map.town.walks;
+    // Action points left of the pool (L-832); in town, a point walks 20 m.
     var movement =
-      'movement ' +
-      turn.movementLeft +
-      '/' +
-      turn.speed +
-      (walkingTown ? ' (' + turn.movementLeft * 20 + ' m)' : '');
-    var canContinue = Boolean(turn.plan) && turn.movementLeft > 0;
+      turn.ap + '/' + turn.pool + ' AP' + (walkingTown ? ' (' + turn.ap * 20 + ' m)' : '');
+    var canContinue = Boolean(turn.plan) && turn.ap > 0;
     // In a fight (L-821): its round (the order bar has the rest, L-828).
     var fight = s.map && s.map.fight;
     return html`<div class="loom-map-turnbar loom-map-ui" role="group" aria-label="Turn">
       <span class="loom-map-turnbar-state">
-        ${fight ? 'Round ' + fight.round + ' · ' : ''}Turn ${turn.n} · ${movement} ·
-        ${turn.actionUsed ? 'acted' : 'action ready'}
+        ${fight ? 'Round ' + fight.round + ' · ' : ''}Turn ${turn.n} · ${movement}
       </span>
       ${canContinue &&
       html`<button

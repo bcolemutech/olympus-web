@@ -28,14 +28,14 @@ const EXPECT = {
     health: { id: 'health', name: 'Hit points', current: 6, max: 6 },
     level: { name: 'Level', value: 1 },
     rankName: 'Proficiency',
-    speed: 20,
+    ap: 20,
   },
   'pool-scifi': {
     attribute: { id: 'Reflex', name: 'Reflex', score: 3, modifier: 3 },
     health: { id: 'health', name: 'Health', current: 6, max: 6 },
     level: { name: 'Rank', value: 1 },
     rankName: 'Training',
-    speed: 20,
+    ap: 20,
   },
 };
 
@@ -45,7 +45,7 @@ describe.each([
 ])('the sheet as the player reads it under %s', (id, system) => {
   const character = (sheet) => ({ name: 'Tam', sheet });
 
-  test('drawn from the system: attributes, resources, level, skills, speed', () => {
+  test('drawn from the system: attributes, resources, level, skills, AP', () => {
     const view = sheets.characterView(system, character(sheets.defaultSheet(system)));
     expect(view.name).toBe('Tam');
     expect(view.system).toEqual({ id: system.id, name: system.name });
@@ -63,7 +63,7 @@ describe.each([
       attribute: id === 'd20-fantasy' ? 'Dexterity' : 'Reflex',
       rank: 0,
     });
-    expect(view.speed).toBe(EXPECT[id].speed);
+    expect(view.ap).toBe(EXPECT[id].ap);
     expect(view.misfits).toEqual([]);
     expect(view.conditions).toEqual([]);
     // No formulas reach the page.

@@ -95,9 +95,9 @@ describe.each([
     skills.forEach((id) => expect(sheet.skills[id]).toBe(rank));
     expect(sheet.skills[fantasy ? 'Persuasion' : 'Persuade']).toBe(0);
     expect(sheet.traits).toEqual(['swim']);
-    // Full health for these scores, and speed by the formula.
+    // Full health for these scores, and the pool of AP by the formula.
     expect(sheet.resources.health.current).toBe(fantasy ? 8 : 6); // CON 14: 6 + 2; Body 3: 3 + 3
-    expect(sheet.speed).toBe(fantasy ? 23 : 24); // DEX 15 and Athletics 2: 20 + 2 + 1; Reflex 5: 14 + 10
+    expect(sheet.ap).toBe(fantasy ? 23 : 24); // DEX 15 and Athletics 2: 20 + 2 + 1; Reflex 5: 14 + 10
   });
 
   test('choices that break the method are refused, with the reason', () => {
@@ -160,12 +160,12 @@ describe('rolling', () => {
     });
   });
 
-  test('the rolled scores, assigned; a changed one is refused; a trait adds its speed', () => {
+  test('the rolled scores, assigned; a changed one is refused; a trait adds its AP', () => {
     const rolled = [16, 12, 11, 10, 9, 7];
     const attributes = { STR: 7, DEX: 16, CON: 12, INT: 11, WIS: 10, CHA: 9 };
     const made = creation.buildSheet(ROLLING, { attributes, traits: ['fleet'] }, { rolled });
     expect(made.errors).toEqual([]);
-    expect(made.sheet.speed).toBe(20 + 3 + 5);
+    expect(made.sheet.ap).toBe(20 + 3 + 5);
     expect(
       creation.buildSheet(ROLLING, { attributes: { ...attributes, DEX: 18 } }, { rolled }).errors
     ).toEqual(['Use each rolled score once: 16, 12, 11, 10, 9, 7.']);

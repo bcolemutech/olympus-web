@@ -134,18 +134,20 @@ function planTownStep(canonWorld, save, target) {
     size: town.townSize(settlement).metres,
   });
   if (!path) return { refused: "There's no way there from here." };
-  if (turn.movementLeft < 1) return { refused: OUT_OF_MOVEMENT };
+  // In town the pool walks 20 m a point, and actions cost nothing (L-832;
+  // action points WH2).
+  if (turn.ap < 1) return { refused: OUT_OF_MOVEMENT };
 
-  const step = townPaths.walk(path, turn.movementLeft * METRES_PER_POINT);
+  const step = townPaths.walk(path, turn.ap * METRES_PER_POINT);
   const spent = step.arrived
-    ? Math.min(turn.movementLeft, Math.ceil(step.walked / METRES_PER_POINT - 1e-9))
-    : turn.movementLeft;
-  const movementLeft = turn.movementLeft - spent;
+    ? Math.min(turn.ap, Math.ceil(step.walked / METRES_PER_POINT - 1e-9))
+    : turn.ap;
+  const ap = turn.ap - spent;
   const lines = [walkedLine(step.walked)];
   if (step.arrived) {
     return {
       point: { x: to.x, y: to.y },
-      turn: { ...turn, movementLeft, plan: null },
+      turn: { ...turn, ap, plan: null },
       lines,
       walked: path.points,
       ...(place ? { enter: place } : {}),
@@ -156,7 +158,7 @@ function planTownStep(canonWorld, save, target) {
     point: { x: round(step.to.x), y: round(step.to.y) },
     turn: {
       ...turn,
-      movementLeft,
+      ap,
       plan: {
         layer: 'town',
         locationId: settlement.id,

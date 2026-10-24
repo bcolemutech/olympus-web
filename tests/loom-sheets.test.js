@@ -19,7 +19,7 @@ process.env.GCLOUD_PROJECT = PROJECT;
 const sheets = require('../functions/loom-canon/sheets');
 const checks = require('../functions/loom-canon/checks');
 const { BUILT_IN } = require('../functions/loom-canon/systems');
-const { speedOf, makeSave, validateSave } = require('../functions/loom-models');
+const { apOf, makeSave, validateSave } = require('../functions/loom-models');
 const town = require('../functions/loom-canon/town');
 
 const FANTASY = BUILT_IN['d20-fantasy'];
@@ -44,7 +44,7 @@ describe.each([
     expect(sheet.resources).toEqual(
       fantasy ? { health: { current: 6 } } : { health: { current: 6 }, stress: { current: 6 } }
     );
-    expect(sheet).toMatchObject({ traits: ['swim', 'climb'], conditions: [], speed: 20 });
+    expect(sheet).toMatchObject({ traits: ['swim', 'climb'], conditions: [], ap: 20 });
   });
 
   test('a bad sheet is refused, each problem named', () => {
@@ -132,9 +132,9 @@ describe.each([
 describe.each([
   ['d20-fantasy', FANTASY],
   ['pool-scifi', SCIFI],
-])('speed, worked out by formula under %s', (id, system) => {
+])('the pool of action points, worked out by formula under %s', (id, system) => {
   const fantasy = id === 'd20-fantasy';
-  // A copy with a trait that adds speed, taken at creation (L-812).
+  // A copy with a trait that adds AP, taken at creation (L-812).
   const withFleet = () => {
     const copy = JSON.parse(JSON.stringify(system));
     copy.sheet.traits = [{ id: 'fleet', name: 'Fleet of foot', modifiers: { ap: '5' } }];
@@ -143,7 +143,7 @@ describe.each([
 
   test('from attributes and skill ranks: 20 at the defaults, more with training', () => {
     const sheet = defaultSheet(system);
-    expect(sheets.speedFor(system, sheet)).toBe(20);
+    expect(sheets.apFor(system, sheet)).toBe(20);
     if (fantasy) {
       sheet.attributes.DEX = 16; // +3
       sheet.skills.Athletics = 4; // +2
@@ -151,14 +151,14 @@ describe.each([
       sheet.attributes.Reflex = 5; // +4
       sheet.skills.Athletics = 1; // +1
     }
-    expect(sheets.speedFor(system, sheet)).toBe(25);
+    expect(sheets.apFor(system, sheet)).toBe(25);
   });
 
   test('a trait adds what it says, only while held; a system checks its traits’ bonuses', () => {
     const fleet = withFleet();
     expect(require('../functions/loom-canon/systems').validateSystem(fleet).errors).toEqual([]);
-    expect(sheets.speedFor(fleet, defaultSheet(fleet, { traits: ['fleet'] }))).toBe(25);
-    expect(sheets.speedFor(fleet, defaultSheet(fleet))).toBe(20);
+    expect(sheets.apFor(fleet, defaultSheet(fleet, { traits: ['fleet'] }))).toBe(25);
+    expect(sheets.apFor(fleet, defaultSheet(fleet))).toBe(20);
     fleet.sheet.traits[0].modifiers = { charm: '2' };
     expect(require('../functions/loom-canon/systems').validateSystem(fleet).errors).toEqual([
       'sheet.traits[0].modifiers: "charm" isn\'t something a trait changes (ap).',
@@ -166,28 +166,31 @@ describe.each([
   });
 
   test('worked out again on load, whatever was stored; never below 1', () => {
-    const sheet = { ...defaultSheet(system), speed: 99 };
+    const sheet = { ...defaultSheet(system), ap: 99, speed: 98 };
     const save = { character: { name: 'Tam', sheet } };
-    expect(speedOf(sheets.withSpeed(save, system))).toBe(20);
+    const loaded = sheets.withAp(save, system);
+    expect(apOf(loaded)).toBe(20);
+    // A sheet from before AP has its speed dropped once worked out (L-832).
+    expect(loaded.character.sheet.speed).toBeUndefined();
     const crawl = JSON.parse(JSON.stringify(system));
     crawl.sheet.ap = '1 - level * 5';
-    expect(sheets.speedFor(crawl, sheet)).toBe(1);
+    expect(sheets.apFor(crawl, sheet)).toBe(1);
     // No AP formula: the default.
     delete crawl.sheet.ap;
-    expect(sheets.speedFor(crawl, sheet)).toBe(20);
+    expect(sheets.apFor(crawl, sheet)).toBe(20);
     // A save without a sheet is as it was.
     const older = { character: { name: 'Tam', speed: 4 } };
-    expect(sheets.withSpeed(older, system)).toBe(older);
+    expect(sheets.withAp(older, system)).toBe(older);
   });
 });
 
-describe('moved in: speed, traits and condition (CS4)', () => {
-  const sheet = { ...defaultSheet(FANTASY, { traits: ['climbing'] }), speed: 6 };
+describe('moved in: the pool, traits and condition (CS4)', () => {
+  const sheet = { ...defaultSheet(FANTASY, { traits: ['climbing'] }), ap: 6 };
 
-  test('speed (as worked out) and traits come from the sheet, or an older character’s own', () => {
-    expect(speedOf({ character: { name: 'Tam', sheet } })).toBe(6);
-    expect(speedOf({ character: { name: 'Tam', speed: 4 } })).toBe(4);
-    expect(speedOf({ character: { name: 'Tam' } })).toBe(20);
+  test('the pool (as worked out) and traits come from the sheet, or an older character’s own', () => {
+    expect(apOf({ character: { name: 'Tam', sheet } })).toBe(6);
+    expect(apOf({ character: { name: 'Tam', speed: 4 } })).toBe(4);
+    expect(apOf({ character: { name: 'Tam' } })).toBe(20);
     expect(sheets.traitsOf({ character: { sheet } })).toEqual(['climbing']);
     expect(sheets.traitsOf({ character: { abilities: ['swim'] } })).toEqual(['swim']);
     const tower = { rules: { requiresAbility: 'climbing' } };
@@ -268,7 +271,7 @@ describe('a sheet that no longer fits, in play', () => {
       'character.sheet.attributes.STR': 30,
       'character.sheet.skills.Juggling': 2,
     });
-    await ref.update({ 'turn.actionUsed': false });
+    await ref.update({ 'turn.ap': 20 });
     mockNarrate.length = 0;
     await loomPlayTurn.run({
       data: { worldId: 'shattered-coast', saveId, actionText: 'look again' },

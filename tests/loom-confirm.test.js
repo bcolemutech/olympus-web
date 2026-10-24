@@ -203,7 +203,7 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
       'Walk 6 squares to Mira.',
       'Then: Talk to Mira.',
       'No roll.',
-      'Uses your action.',
+      'Costs 2 AP.',
     ]);
     let save = await saved(ref);
     expect(save.cell).toEqual(before.cell);
@@ -216,7 +216,8 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
     save = await saved(ref);
     expect(beside(save.cell, { x: 9, y: 1 })).toBe(true);
     expect(save.pending).toBeUndefined();
-    expect(save.turn.actionUsed).toBe(true);
+    // The 6 squares walked and the 2 AP the words cost (L-832).
+    expect(save.turn.ap).toBe(20 - 6 - 2);
     expect(done.narration).toMatch(/She looks up\.$/);
     // Talking rolls nothing, and INTERPRET was asked once, when typed.
     expect(done.roll).toBeUndefined();
@@ -254,12 +255,12 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
       action: { verb: 'suggested', text: 'greet Mira', act: { verb: 'greet', target: 'mira' } },
     });
     expect(mockState.interprets).toBe(0);
-    expect(asked.confirm.lines).toEqual(['Greet Mira.', 'No roll.', 'Uses your action.']);
-    expect((await saved(ref)).turn.actionUsed).toBe(false);
+    expect(asked.confirm.lines).toEqual(['Greet Mira.', 'No roll.', 'Costs 2 AP.']);
+    expect((await saved(ref)).turn.ap).toBe(20);
     const done = await confirm(ref);
     expect(done.narration).toBe('She looks up.');
     expect(done.roll).toBeUndefined();
-    expect((await saved(ref)).turn.actionUsed).toBe(true);
+    expect((await saved(ref)).turn.ap).toBe(18);
     expect(mockState.interprets).toBe(0);
   });
 
@@ -302,7 +303,7 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
       `${id}-fight`,
       { x: 1, y: 5 },
       {
-        turn: { n: 1, movementLeft: 2, speed: 20, actionUsed: false, plan: null },
+        turn: { n: 1, ap: 2, kept: 0, plan: null },
         fight: {
           id: 'fight-1',
           mapId: 'bm_inn',
@@ -337,7 +338,8 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
     const done = await confirm(ref);
     expect(done.narration).toMatch(/The rest of the way to the ale tap is kept for next turn\.$/);
     const save = await saved(ref);
-    expect(save.turn.actionUsed).toBe(false);
+    // Its 2 AP walked, the action not taken.
+    expect(save.turn).toMatchObject({ ap: 0, moved: 2 });
     expect(save.cell).not.toEqual({ x: 1, y: 5 });
   });
 
@@ -366,7 +368,8 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
     expect(save.placeId).toBe('plc_tavern');
     // The walk there and the talk, each told.
     expect(done.narration).toBe('She looks up. She looks up.');
-    expect(save.turn.actionUsed).toBe(true);
+    // In town, talking costs no AP (L-832; WH2).
+    expect(save.turn.ap).toBe(20);
     expect((await turns(ref)).map((t) => t.actionText)).toEqual([
       'travel to The Lantern',
       'ask Bram about the lamps',

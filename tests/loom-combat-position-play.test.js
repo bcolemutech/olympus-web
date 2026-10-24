@@ -177,7 +177,7 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
     expect(prompts).toHaveLength(0);
   });
 
-  test('Withdraw first: stepping away draws nothing, and the action is spent', async () => {
+  test('Withdraw first: stepping away draws nothing; it costs 5 AP', async () => {
     const ref = await onTheMap(`${id}-withdraw`);
     const withdrew = await play(ref.id, { action: { verb: 'withdraw' } });
     expect(withdrew.narration).toBe('You withdraw: moving away draws no attacks this turn.');
@@ -185,29 +185,34 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
     expect(step.step.lines.join(' ')).not.toContain('reach');
     const save = await saved(ref);
     expect(healthOf(save)).toBe(full);
-    expect(save.turn).toMatchObject({ actionUsed: true, withdrawn: true });
-    // A second action this turn is turned down.
+    expect(save.turn).toMatchObject({ withdrawn: true, moved: 2 });
+    expect(save.turn.ap).toBe(20 - 5 - 2);
+    // More, while the AP left pays for it (L-832): a Dodge is 8; then not again.
+    await play(ref.id, { action: { verb: 'dodge' } });
+    expect((await saved(ref)).turn.ap).toBe(5);
     const again = await play(ref.id, { action: { verb: 'dodge' } });
-    expect(again).toMatchObject({ refused: true });
+    expect(again).toMatchObject({ refused: true, narration: 'Dodging costs 8 AP; you have 5.' });
   });
 
-  test('Dash: movement again, the action spent, unnarrated', async () => {
+  test('Dash is retired: moving further is spending AP on squares (L-832)', async () => {
     const ref = await onTheMap(`${id}-dash`);
     const before = (await saved(ref)).turn;
     const dashed = await play(ref.id, { action: { verb: 'dash' } });
-    expect(dashed.narration).toMatch(/^You dash: \d+ more squares of movement this turn\.$/);
-    const save = await saved(ref);
-    expect(save.turn.actionUsed).toBe(true);
-    expect(save.turn.movementLeft).toBeGreaterThan(before.movementLeft);
+    expect(dashed).toMatchObject({
+      refused: true,
+      narration:
+        'There is no dashing: every square costs its AP, so walk as far as your AP takes you.',
+    });
+    expect((await saved(ref)).turn.ap).toBe(before.ap);
     expect(prompts).toHaveLength(0);
   });
 
-  test('Dodge and Ready: on the fight, the action spent; Dodge out of a fight refused', async () => {
+  test('Dodge and Ready: on the fight, each its AP; Dodge out of a fight refused', async () => {
     const ref = await onTheMap(`${id}-dodge`);
     await play(ref.id, { action: { verb: 'dodge' } });
     let save = await saved(ref);
     expect(save.fight.combatants.player.dodging).toBe(true);
-    expect(save.turn.actionUsed).toBe(true);
+    expect(save.turn.ap).toBe(20 - 8);
 
     const ready = await onTheMap(`${id}-ready`);
     const readied = await play(ready.id, {
@@ -216,6 +221,8 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
     expect(readied.narration).toContain(`You ready your ${c.melee} for Grell`);
     save = await saved(ready);
     expect(save.fight.combatants.player.readied).toEqual({ attack: c.melee, target: 'grell' });
+    // The attack's cost, paid now (set aside from kept AP with L-833).
+    expect(save.turn.ap).toBe(20 - 10);
     expect(prompts).toHaveLength(0);
 
     const calm = await onTheMap(`${id}-calm`, { inFight: false, cell: { x: 2, y: 2 } });
@@ -224,21 +231,21 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
       refused: true,
       narration: "That's for a fight, and you aren't in one.",
     });
-    expect((await saved(calm)).turn.actionUsed).toBe(false);
+    expect((await saved(calm)).turn.ap).toBe(20);
   });
 
-  test('Use: something beside you, narrated, the action spent; from afar, refused', async () => {
+  test('Use: something beside you, narrated, 5 AP; from afar, refused', async () => {
     const far = await onTheMap(`${id}-use-far`, { cell: { x: 4, y: 3 } });
     const refused = await play(far.id, { action: { verb: 'use', feature: 'winch' } });
     expect(refused.narration).toBe('You need to be beside the winch.');
-    expect((await saved(far)).turn.actionUsed).toBe(false);
+    expect((await saved(far)).turn.ap).toBe(20);
 
     const near = await onTheMap(`${id}-use`, { cell: { x: 4, y: 1 } });
     const used = await play(near.id, { action: { verb: 'use', feature: 'winch' } });
     expect(used.narration).toBe('The winch groans.');
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain('You use the winch.');
-    expect((await saved(near)).turn.actionUsed).toBe(true);
+    expect((await saved(near)).turn.ap).toBe(20 - 5);
   });
   test('loomGetMap: the player’s attacks, Subdue, and the cover each person has (L-828)', async () => {
     const ref = await onTheMap(`${id}-view`, { cell: { x: 6, y: 4 } });

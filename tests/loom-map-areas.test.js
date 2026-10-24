@@ -289,7 +289,7 @@ describe.each(Object.keys(mockCases))('areas in play under %s', (id) => {
       await ref.collection('loom_turns').orderBy('index', 'desc').limit(1).get()
     ).docs[0].data();
     expect(turn.resolution.constraints[0]).toBe('You move into the taproom.');
-    await ref.update({ 'turn.actionUsed': false });
+    await ref.update({ 'turn.ap': 20 });
     const again = await type(ref, 'go to the taproom');
     save = (await ref.get()).data();
     expect(save.cell).toEqual({ x: 2, y: 1 });

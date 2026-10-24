@@ -10,7 +10,7 @@
   // - The panel, from the menu bar's Character button: the level, resources
   //   as tracks, attributes with their modifiers, skills with their ranks,
   //   traits, conditions with what's left, attacks (L-822), derived values
-  //   and speed; a sheet that no longer fits the world's rules says what
+  //   and action points (L-832); a sheet that no longer fits the world's rules says what
   //   (SY2). Escape or Close shuts it.
   // - The strip, always on the map (overlay.js hosts it): each resource as a
   //   small track, as many as fit, and any conditions ("Poisoned · 2 turns").
@@ -274,8 +274,8 @@
                 </div>`;
               })}
               <div class="loom-character-attribute">
-                <dt>Speed</dt>
-                <dd><span class="loom-character-score">${c.speed}</span></dd>
+                <dt>AP</dt>
+                <dd><span class="loom-character-score">${c.ap}</span></dd>
               </div>
             </dl>
           <//>

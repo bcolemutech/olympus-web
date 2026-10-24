@@ -208,8 +208,10 @@
    * How far `budget` takes you along a path (pathTo's): the squares walked,
    * the cost spent, and the rest, its costs counted afresh from where you
    * stop, as a plan for the next turn. A step that `opens` something (a
-   * closed door) stops the walk before it: with 1 to spare it's opened
-   * (`opened`, and 1 spent), and the rest goes on through it from there.
+   * closed door) stops the walk before it: with its cost to spare it's
+   * opened (`opened`, and that spent), and the rest goes on through it from
+   * there. Opening costs `openCost(id)` (L-832: the door's price in action
+   * points, from pathOptions), or 1.
    *
    * Options (L-642): `stop(step)` ends the walk on a step once it's taken
    * (someone came into view there); `stand(step)` says whether a walk may end
@@ -223,9 +225,10 @@
     for (var i = 0; i < path.length; i++) {
       var step = path[i];
       if (step.opens) {
-        if (spent + 1 <= budget) {
+        var open = options && options.openCost ? options.openCost(step.opens) : 1;
+        if (spent + open <= budget) {
           opened = step.opens;
-          spent += 1;
+          spent += open;
         }
         break;
       }

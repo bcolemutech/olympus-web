@@ -26,6 +26,8 @@
  * saying what it did. Pure.
  */
 
+const conditions = require('./conditions');
+
 const DEFAULT_POOL = 20;
 const MAX_POOL = 200;
 const MAX_COST = 200;
@@ -256,6 +258,31 @@ function costOf(system, sheet, spend, { own, conditionsHeld } = {}) {
   return cost;
 }
 
+/**
+ * A character's prices (L-832): `of(spend, own)` what a spend costs them,
+ * with their traits and current conditions; `move`, `difficult` and
+ * `door(door)` (its own `ap` first) for the paths on a battle map
+ * (layers.pathOptions).
+ */
+function pricesOf(system, sheet) {
+  const held = conditions.activeOn(system, sheet).map((a) => a.condition);
+  const of = (spend, own) => costOf(system, sheet, spend, { own, conditionsHeld: held });
+  return {
+    of,
+    move: of('move'),
+    difficult: of('difficult'),
+    door: (door) => of('door', door && door.ap),
+  };
+}
+
+/**
+ * The line for an action AP can't pay for (CT4): "An attack costs 10 AP;
+ * you have 6."
+ */
+function shortLine(what, cost, left) {
+  return `${what.charAt(0).toUpperCase() + what.slice(1)} costs ${cost} AP; you have ${left}.`;
+}
+
 /** What a typed action of a tier costs (CT3): standard for any other. */
 function tierCost(system, tier) {
   const tiers = settingsOf(system).tiers;
@@ -276,5 +303,7 @@ module.exports = {
   ownCostOk,
   convert,
   costOf,
+  pricesOf,
+  shortLine,
   tierCost,
 };

@@ -87,13 +87,13 @@ afterAll(async () => {
 });
 
 describe('letting time pass', () => {
-  test('"wait 30 minutes" adds 30 minutes, uses the action and ends the turn', async () => {
+  test('"wait 30 minutes" adds 30 minutes and ends the turn', async () => {
     await seed('save-30', { time: at(1, 9) });
     await typed('save-30', 'wait 30 minutes', { verb: 'wait', params: { minutes: 30 } });
     const save = await saveOf('save-30');
     expect(save.time).toBe(at(1, 9, 30));
     // The turn ends: the next one starts fresh.
-    expect(save.turn).toMatchObject({ n: 2, actionUsed: false, movementLeft: 20 });
+    expect(save.turn).toMatchObject({ n: 2, ap: 20 });
     const turn = await lastTurn('save-30');
     expect(turn.resolution.constraints).toEqual(['You wait for about 30 minutes.']);
     expect(turn.resolution.time).toMatchObject({ seconds: 30 * 60, crossed: [] });
@@ -132,23 +132,18 @@ describe('letting time pass', () => {
     ]);
   });
 
-  test('a wait after the turn’s action is used is turned down like any second action', async () => {
+  test('a wait off a battle map needs no AP: it waits with none left (L-832; WH2)', async () => {
     await seed('save-acted', {
       time: at(1, 9),
-      turn: { n: 4, movementLeft: 20, actionUsed: true, plan: null },
+      turn: { n: 4, ap: 0, kept: 0, plan: null },
     });
-    const result = await typed('save-acted', 'rest an hour', {
+    await typed('save-acted', 'rest an hour', {
       verb: 'wait',
       params: { minutes: 60, how: 'rest' },
     });
-    expect(result).toMatchObject({
-      narration: "You've acted this turn. End your turn first.",
-      refused: true,
-    });
     const save = await saveOf('save-acted');
-    expect(save.time).toBe(at(1, 9));
-    expect(save.turn).toMatchObject({ n: 4, actionUsed: true });
-    expect(await lastTurn('save-acted')).toBeUndefined();
+    expect(save.time).toBe(at(1, 10));
+    expect(save.turn).toMatchObject({ n: 5, ap: 20 });
   });
 
   test('a wait with no length or time of day asks how long, and spends nothing', async () => {
@@ -160,7 +155,7 @@ describe('letting time pass', () => {
     });
     const save = await saveOf('save-vague');
     expect(save.time).toBe(at(1, 9));
-    expect(save.turn).toMatchObject({ n: 1, actionUsed: false });
+    expect(save.turn).toMatchObject({ n: 1, ap: 20 });
     expect((await lastTurn('save-vague')).resolution).toMatchObject({
       outcome: 'blocked',
       constraints: [expect.stringMatching(/^How long\?/)],

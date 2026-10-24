@@ -9,24 +9,28 @@ const conditions = require('../loom-canon/conditions');
 const { systemOf } = require('../loom-canon/checks');
 const { sheetOf } = require('../loom-canon/sheets');
 const { turnStateOf } = require('../loom-models');
+const apRules = require('../loom-canon/ap');
 
 /**
  * Moving without the GM (planning/the-loom-movement-and-vision.md §3;
  * L-613 / #443): a move on a battle map, to a square or along the plan, is
  * worked out by the rules alone. The save walks the cheapest path as far as
- * its movement allows (grid-paths.js), and the rest of the path becomes its
- * plan, which `continue` picks up next turn. Nothing is narrated: a step
+ * its action points allow (grid-paths.js; L-832), and the rest of the path
+ * becomes its plan, which `continue` picks up next turn. Nothing is narrated: a step
  * answers with plain lines, and isn't written to the turn history.
  *
  * A path that reaches an exit leaves by it, as before, and that is narrated
  * (the caller runs the rest of the pipeline). Paths never cross an exit on
  * the way somewhere else, since stepping onto one leaves.
  *
- * Paths go around the map's walls, locked doors and obstacles, and pay 2
- * for difficult ground (L-624 / #449; layers.pathOptions). A closed door on
- * the way is opened (1 movement) and the walk stops there, the rest kept as
- * the plan, so the player sees what's beyond before going on; the save
- * remembers the door open (`save.doors[mapId][doorId]`).
+ * Paths go around the map's walls, locked doors and obstacles (L-624 /
+ * #449; layers.pathOptions), each step priced in AP by the system's cost
+ * table as the character pays it (L-832; ../loom-canon/ap.js pricesOf): a
+ * square 1, difficult ground 2, by default. A closed door on the way is
+ * opened (its door cost) and the walk stops there, the rest kept as the
+ * plan, so the player sees what's beyond before going on; the save
+ * remembers the door open (`save.doors[mapId][doorId]`). Walking off ends a
+ * long action under way (CT4).
  *
  * Only ground the save knows is walked (planning/the-loom-movement-and-
  * vision.md §5; L-635 / #458): what it has seen there, and what is in sight
@@ -35,8 +39,8 @@ const { turnStateOf } = require('../loom-models');
  * never gives away a hidden wall: it goes around, or there's no way.
  *
  * A door beside the player (on either side of it) opens or closes with a tap
- * (planDoor; L-625 / #450), for 1 movement; a locked one opens only with its
- * key in the character's inventory (L-626 / #451).
+ * (planDoor; L-625 / #450), for its door cost in AP; a locked one opens
+ * only with its key in the character's inventory (L-626 / #451).
  *
  * People standing on squares (planning/the-loom-movement-and-vision.md §6;
  * L-642 / #461) are walked through at the normal cost, but a move never
@@ -53,10 +57,24 @@ const { turnStateOf } = require('../loom-models');
  *
  * Pure: planStep reads a save and the canon world and says what the step
  * does; the caller writes it inside a transaction, so two moves at once
- * can't spend the same movement.
+ * can't spend the same AP.
  */
 
 const OUT_OF_MOVEMENT = "You're out of movement. End your turn to go on.";
+// On a battle map, where the steps are paid in AP (L-832).
+const OUT_OF_AP = "That's as far as your AP takes you. End your turn to go on.";
+
+/** A character's prices in AP on a battle map (L-832). */
+function pricesFor(canonWorld, save) {
+  return apRules.pricesOf(systemOf(canonWorld), sheetOf(save));
+}
+
+// A long action under way (CT4) ends when the player walks off.
+function walkedOff(turn, walked) {
+  if (!turn.long || !walked) return { turn, lines: [] };
+  const { long, ...rest } = turn;
+  return { turn: { ...rest, long: null }, lines: ['You stop ' + long.name + '.'] };
+}
 
 /** Why a character can't move now (a condition with noMove, L-815), or null. */
 function heldBy(canonWorld, save) {
@@ -144,7 +162,7 @@ function planStep(canonWorld, save, target, known) {
 
   // The map's rules (layers.js), for this save's doors, on the ground it
   // knows. An exit is only stepped on to leave by it: it's never on the way.
-  const rules = layers.pathOptions(map, doorStatesOf(save, map.id));
+  const rules = layers.pathOptions(map, doorStatesOf(save, map.id), pricesFor(canonWorld, save));
   const options = known
     ? { ...rules, cost: (step, next) => (seen(next) ? rules.cost(step, next) : Infinity) }
     : rules;
@@ -190,16 +208,21 @@ function planStep(canonWorld, save, target, known) {
     prev = step;
     return Boolean(into);
   };
-  const { walked, spent, rest, opened } = gridPaths.walk(path, turn.movementLeft, {
+  const { walked, spent, rest, opened } = gridPaths.walk(path, turn.ap, {
     stop: (step) => cameIntoView(step, doors).length > 0 || intoHazard(step),
     stand: (step) => !personAt(step),
+    openCost: rules.openCost,
   });
   const last = walked.length ? walked[walked.length - 1] : null;
   const before = walked.length > 1 ? walked[walked.length - 2] : from;
   const hazard = last ? hazards.enteredBy(map, before, last, doors) : null;
   const into = hazard ? { hazard: { id: hazard.id, name: hazard.name, mapId: map.id } } : {};
-  const movementLeft = turn.movementLeft - spent;
   const squares = walked.map((step) => ({ x: step.x, y: step.y }));
+  // What the walk leaves of the turn: its AP, the squares walked, and any
+  // long action, ended by walking off.
+  const off = walkedOff(turn, squares.length > 0);
+  const ap = turn.ap - spent;
+  const after = { ...off.turn, ap, moved: (turn.moved || 0) + squares.length };
   const door = opened ? (map.doors || []).find((d) => d.id === opened) : null;
   const stop = walked.length ? walked[walked.length - 1] : from;
   // Who came into view: on the way, or from where it ends, through a door
@@ -213,11 +236,12 @@ function planStep(canonWorld, save, target, known) {
   if (!rest.length) {
     const { exit, feature } = maps.at(map, to);
     // The squares walked to it, for the reactions it draws in a fight (L-823).
-    if (exit) return { exit, spent, turn: { ...turn, movementLeft, plan: null }, walked: squares };
+    if (exit) return { exit, spent, turn: { ...after, plan: null }, walked: squares };
     return {
       cell: { x: to.x, y: to.y },
-      turn: { ...turn, movementLeft, plan: null },
-      lines: (feature ? ["You're at " + feature.name + '.'] : [])
+      turn: { ...after, plan: null },
+      lines: off.lines
+        .concat(feature ? ["You're at " + feature.name + '.'] : [])
         .concat(meeting ? ["You're beside " + meeting.name + '.'] : [])
         .concat(seenLines),
       ...(seenLines.length ? { seenLines } : {}),
@@ -225,14 +249,14 @@ function planStep(canonWorld, save, target, known) {
       ...into,
     };
   }
-  const lines = (door ? ['You open ' + (door.name || 'the door') + '.'] : [])
+  const lines = off.lines
+    .concat(door ? ['You open ' + (door.name || 'the door') + '.'] : [])
     .concat(seenLines)
-    .concat(!movementLeft || (!door && !seenLines.length && !hazard) ? [OUT_OF_MOVEMENT] : []);
+    .concat(!ap || (!door && !seenLines.length && !hazard) ? [OUT_OF_AP] : []);
   return {
     cell: { x: stop.x, y: stop.y },
     turn: {
-      ...turn,
-      movementLeft,
+      ...after,
       plan: { layer: 'battleMap', mapId: map.id, to: { x: to.x, y: to.y }, path: rest },
     },
     lines,
@@ -282,7 +306,8 @@ function besideDoor(door, cell) {
 }
 
 /**
- * Opening (`open` true) or closing a door beside the save, for 1 movement:
+ * Opening (`open` true) or closing a door beside the save, for its door cost
+ * in AP (L-832; its own `ap`, else the system's):
  *   { refused: line }                          — nothing happens
  *   { cell, turn, lines, door: { mapId, doorId, state } }
  */
@@ -304,10 +329,12 @@ function planDoor(canonWorld, save, doorId, open) {
   }
   if (!open && state !== 'open') return { refused: capitalised(name) + ' is already shut.' };
   const turn = turnStateOf(save);
-  if (turn.movementLeft < 1) return { refused: OUT_OF_MOVEMENT };
+  const cost = pricesFor(canonWorld, save).door(door);
+  const doing = (open ? 'opening ' : 'closing ') + name;
+  if (turn.ap < cost) return { refused: apRules.shortLine(doing, cost, turn.ap) };
   return {
     cell: { x: cell.x, y: cell.y },
-    turn: { ...turn, movementLeft: turn.movementLeft - 1 },
+    turn: { ...turn, ap: turn.ap - cost },
     lines: [
       withKey
         ? 'You unlock ' + name + ' with ' + door.key + ' and open it.'
@@ -327,5 +354,7 @@ module.exports = {
   hasKey,
   besideDoor,
   OUT_OF_MOVEMENT,
+  OUT_OF_AP,
+  pricesFor,
   UNSEEN,
 };

@@ -20,7 +20,7 @@ const {
   makeCharacter,
   makeSave,
   makeTurn,
-  speedOf,
+  apOf,
   turnStateOf,
   nextTurnState,
 } = require('../functions/loom-models');
@@ -299,7 +299,7 @@ describe('makeSave', () => {
     expect(save.privateFlags).toEqual({});
     expect(save.relationships).toEqual({});
     expect(save.recentSummary).toBe('');
-    expect(save.turn).toEqual({ n: 1, movementLeft: 20, actionUsed: false, plan: null });
+    expect(save.turn).toEqual({ n: 1, ap: 20, kept: 0, plan: null });
   });
 
   it('throws when the character is missing a name', () => {
@@ -332,59 +332,77 @@ describe('makeTurn', () => {
   });
 });
 
-describe('the turn (L-611)', () => {
+describe('the turn (L-611), on action points (L-832)', () => {
   const save = (fields = {}) =>
     makeSave({ ownerUid: 'u', worldId: 'w', name: 'n', character: { name: 'Tam' }, ...fields });
 
-  it("a fresh turn uses the character's speed", () => {
+  it("a fresh turn has the character's pool, nothing kept", () => {
     expect(save({ character: { name: 'Wren', speed: 30 } }).turn).toEqual({
       n: 1,
-      movementLeft: 30,
-      actionUsed: false,
+      ap: 30,
+      kept: 0,
       plan: null,
     });
   });
 
   it.each([
-    ['n 0', { n: 0, movementLeft: 1, actionUsed: false, plan: null }, /turn\.n/],
-    ['n not whole', { n: 1.5, movementLeft: 1, actionUsed: false, plan: null }, /turn\.n/],
-    ['movement below 0', { n: 1, movementLeft: -1, actionUsed: false, plan: null }, /movementLeft/],
+    ['n 0', { n: 0, ap: 1, kept: 0, plan: null }, /turn\.n/],
+    ['n not whole', { n: 1.5, ap: 1, kept: 0, plan: null }, /turn\.n/],
+    ['AP below 0', { n: 1, ap: -1, kept: 0, plan: null }, /turn\.ap/],
+    ['AP not whole', { n: 1, ap: 2.5, kept: 0, plan: null }, /turn\.ap/],
+    ['kept not a number', { n: 1, ap: 1, kept: 'some', plan: null }, /turn\.kept/],
+    ['the plan a list', { n: 1, ap: 1, kept: 0, plan: [] }, /plan/],
+    ['no plan field', { n: 1, ap: 1, kept: 0 }, /plan/],
     [
-      'movement over the speed',
-      { n: 1, movementLeft: 21, actionUsed: false, plan: null },
-      /movementLeft/,
+      'a long action without its need',
+      { n: 1, ap: 1, kept: 0, plan: null, long: { key: 'x', put: 3 } },
+      /turn\.long/,
     ],
     [
-      'the action not a flag',
-      { n: 1, movementLeft: 1, actionUsed: 'yes', plan: null },
-      /actionUsed/,
+      'the turn from before AP',
+      { n: 1, ap: 1, kept: 0, plan: null },
+      /turn\.ap/,
     ],
-    ['the plan a list', { n: 1, movementLeft: 1, actionUsed: false, plan: [] }, /plan/],
-    ['no plan field', { n: 1, movementLeft: 1, actionUsed: false }, /plan/],
   ])('refuses a turn with %s', (_label, turn, message) => {
     expect(() => save({ turn })).toThrow(message);
   });
 
-  it.each([[0], [-3], [2.5], [1001], ['fast']])('refuses a speed of %p', (speed) => {
+  it.each([[0], [-3], [2.5], [1001], ['fast']])('refuses a pool of %p', (speed) => {
     expect(() => save({ character: { name: 'Tam', speed } })).toThrow(/character\.speed/);
   });
 
-  it('an older save, with no turn or speed, is valid and reads as a fresh turn', () => {
+  it('an older save, with no turn or pool, is valid and reads as a fresh turn', () => {
     const older = save();
     delete older.turn;
     delete older.character.speed;
     expect(validateSave(older)).toEqual({ valid: true, errors: [] });
-    expect(speedOf(older)).toBe(20);
-    expect(turnStateOf(older)).toEqual({ n: 1, movementLeft: 20, actionUsed: false, plan: null });
+    expect(apOf(older)).toBe(20);
+    expect(turnStateOf(older)).toEqual({ n: 1, ap: 20, kept: 0, plan: null });
   });
 
-  it('the next turn refills movement and the action and keeps the plan', () => {
+  it('a turn from before AP reads as one on AP: its movement left is its AP (MG1)', () => {
     const plan = { layer: 'battleMap', to: { x: 2, y: 3 }, path: [] };
+    const older = { character: { name: 'Wren', speed: 30 } };
+    older.turn = { n: 3, ap: 12, kept: 0, plan };
+    expect(turnStateOf(older)).toEqual({ n: 3, ap: 12, kept: 0, plan });
+    // Its next turn has the full pool.
+    expect(nextTurnState(older)).toEqual({ n: 4, ap: 30, kept: 0, plan });
+  });
+
+  it('a sheet’s pool is its AP; a sheet from before AP has it as speed', () => {
+    expect(apOf({ character: { name: 'Tam', sheet: { ap: 24 } } })).toBe(24);
+    expect(apOf({ character: { name: 'Tam', sheet: { speed: 22 } } })).toBe(22);
+    expect(apOf({ character: { name: 'Tam', sheet: {} } })).toBe(20);
+  });
+
+  it('the next turn refills the pool and keeps the plan and any long action', () => {
+    const plan = { layer: 'battleMap', to: { x: 2, y: 3 }, path: [] };
+    const long = { key: 'pick door:cellar', name: 'picking the lock', put: 12, need: 30 };
     const now = save({
       character: { name: 'Wren', speed: 30 },
-      turn: { n: 4, movementLeft: 0, actionUsed: true, plan },
+      turn: { n: 4, ap: 0, kept: 0, plan, moved: 6, long },
     });
-    expect(nextTurnState(now)).toEqual({ n: 5, movementLeft: 30, actionUsed: false, plan });
+    expect(nextTurnState(now)).toEqual({ n: 5, ap: 30, kept: 0, plan, long });
   });
 });
 

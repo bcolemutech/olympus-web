@@ -78,7 +78,7 @@ const standing = (cell = sq(1, 2), doors = {}) => ({
   cell,
   doors: { bm_vault: doors },
   character: { name: 'Tam', speed: 20 },
-  turn: { n: 1, movementLeft: 20, actionUsed: false, plan: null },
+  turn: { n: 1, ap: 20, kept: 0, plan: null },
   recentSummary: '',
 });
 // Every square, as if all of the vault had been seen before.
@@ -171,10 +171,11 @@ describe('ADJUDICATE: out of sight, out of reach', () => {
     expect(beside.outcome).toBe('success');
     // A natural 20 in the built-in system: brilliantly (L-803).
     expect(beside.constraints).toEqual(['The attempt to open succeeds brilliantly.']);
+    // Handling an object costs 5 AP (L-832).
     expect(beside.mutations).toContainEqual(
       expect.objectContaining({
         path: 'turn',
-        value: expect.objectContaining({ actionUsed: true }),
+        value: expect.objectContaining({ ap: 15 }),
       })
     );
     // On its square counts too.

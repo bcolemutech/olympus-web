@@ -5,8 +5,8 @@ const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
 const { discoveredBy } = require('./discovery');
-const { speedOf, turnStateOf } = require('../loom-models');
-const { planOn, doorStatesOf, doorSides } = require('./steps');
+const { apOf, turnStateOf } = require('../loom-models');
+const { planOn, doorStatesOf, doorSides, pricesFor } = require('./steps');
 const { walksTown, townPlanOf, streetOf } = require('./town-steps');
 const ground = require('../loom-canon/ground');
 const artOf = require('../loom-canon/art');
@@ -41,8 +41,8 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * for the town view (townView below); elsewhere it is null. On a battle map,
  * `battleMap` is what the save has seen of that map, for the grid view
  * (battleView below; `record` is the save's seen record for it, ./seen.js);
- * else null. `turn` is the save's turn (L-611 / #441): `{ n, movementLeft,
- * speed, actionUsed, plan }`, a fresh one for an older save. `rules` is the
+ * else null. `turn` is the save's turn (L-611 / #441; on AP, L-832): `{ n,
+ * ap, pool, kept, long?, plan, prices }`, a fresh one for an older save. `rules` is the
  * world's game system for the rules reference (../loom-canon/checks.js rulesOf).
  * `character` is the character's sheet as the player reads it, for the
  * Character panel and the strip on the map (L-814; ../loom-canon/sheets.js
@@ -111,9 +111,10 @@ function mapView(canonWorld, save, record, townRecord) {
     links,
     town: townView(canonWorld, save, discovered, townRecord),
     battleMap: battleView(canonWorld, save, record),
-    // The turn (L-611 / #441): which it is, the movement left of the
-    // character's speed, whether its action is used, and any plan kept.
-    turn: turnView(save),
+    // The turn (L-611 / #441; L-832): which it is, the AP left of the
+    // character's pool, any long action under way, any plan kept, and what
+    // a step costs them.
+    turn: turnView(save, canonWorld),
     fight: combat.play.viewOf(save),
     // What the player fights with on a battle map (L-828; combat UI2): their
     // attacks, for the click menu's Attack, and whether Subdue applies.
@@ -569,15 +570,27 @@ function seenObstacles(map, on) {
 
 // The plan shows only while it's for the map the save stands on (L-613), or
 // the town it walks (L-664).
-function turnView(save) {
-  const { n, movementLeft, actionUsed } = turnStateOf(save);
+function turnView(save, canonWorld) {
+  const { n, ap, kept, long } = turnStateOf(save);
   return {
     n,
-    movementLeft,
-    speed: speedOf(save),
-    actionUsed,
+    ap,
+    pool: apOf(save),
+    kept,
+    ...(long ? { long: { name: long.name, put: long.put, need: long.need } } : {}),
     plan: planOn(save) || townPlanOf(save),
+    // What a step costs this character on a battle map (L-832), for the
+    // path preview: { move, difficult, door } (a door's own `ap` first, by id).
+    ...(canonWorld ? { prices: pricesView(canonWorld, save) } : {}),
   };
+}
+
+function pricesView(canonWorld, save) {
+  const prices = pricesFor(canonWorld, save);
+  const { map } = maps.positionOf(canonWorld, save);
+  const doors = {};
+  for (const door of (map && map.doors) || []) doors[door.id] = prices.door(door);
+  return { move: prices.move, difficult: prices.difficult, door: prices.door(null), doors };
 }
 
 module.exports = { mapView, townView, battleView, turnView };

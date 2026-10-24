@@ -1025,9 +1025,9 @@ describe('exit criterion: build with Claude, play, fix, keep playing', () => {
     });
   });
 
-  // Each look is a new turn of play: the action is refilled first (L-614).
+  // Each look is a new turn of play: the AP refilled first (L-614; L-832).
   const turn = async (worldId, saveId) => {
-    await db.collection('loom_saves').doc(saveId).update({ 'turn.actionUsed': false });
+    await db.collection('loom_saves').doc(saveId).update({ 'turn.ap': 20 });
     return loomPlayTurn.run({ data: { worldId, saveId, actionText: 'look around' }, auth: PLAYER });
   };
 

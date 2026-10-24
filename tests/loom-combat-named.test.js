@@ -135,7 +135,7 @@ describe.each(Object.keys(CASES))('named turns under %s', (id) => {
     mapId: 'bm',
     cell: { x: 2, y: 3 },
     time: 1000,
-    turn: { n: 1, movementLeft: 6, actionUsed: false, plan: null },
+    turn: { n: 1, ap: 6, kept: 0, plan: null },
     character: { name: 'Tam', sheet: sheets.defaultSheet(system) },
     fight,
   });

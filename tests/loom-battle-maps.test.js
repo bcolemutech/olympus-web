@@ -24,7 +24,7 @@ jest.mock('../functions/gemini', () => ({
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
 const { layOutTowns, mapPlaces, offMap, GATEWAY } = require('./helpers/towns');
 const { loomCreateSave, loomDeleteSave, loomPlayTurn, loomGetMap } = require('../functions/index');
-const { OUT_OF_MOVEMENT } = require('../functions/loom-turn/steps');
+const { OUT_OF_AP } = require('../functions/loom-turn/steps');
 const { unpack, withSquares } = require('../functions/loom-turn/seen');
 const sight = require('../functions/loom-canon/sight');
 const gridPaths = require('../functions/loom-canon/grid-paths');
@@ -784,13 +784,13 @@ describe('moving without the GM (L-613)', () => {
       time: { seconds: 8 * 3600, label: 'Day 1, morning' },
       step: {
         cell: { x: 9, y: 1 },
-        movementLeft: 12,
+        ap: 12,
         plan: null,
         lines: ["You're at the hearth."],
       },
     });
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 9, y: 1 } });
-    expect(await turnOf()).toEqual({ n: 1, movementLeft: 12, actionUsed: false, plan: null });
+    expect(await turnOf()).toEqual({ n: 1, ap: 12, kept: 0, plan: null, moved: 8 });
     expect(await recorded()).toBe(before);
     expect(mockCallGemini).not.toHaveBeenCalled();
   });
@@ -799,11 +799,11 @@ describe('moving without the GM (L-613)', () => {
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({ turn: { n: 1, movementLeft: 3, actionUsed: false, plan: null } });
+      .update({ turn: { n: 1, ap: 3, kept: 0, plan: null } });
     const { step } = await stepTo(saveId, { x: 9, y: 4 });
     expect(step.cell).toEqual({ x: 4, y: 4 });
-    expect(step.movementLeft).toBe(0);
-    expect(step.lines).toEqual(["You're out of movement. End your turn to go on."]);
+    expect(step.ap).toBe(0);
+    expect(step.lines).toEqual(["That's as far as your AP takes you. End your turn to go on."]);
     expect(step.plan).toMatchObject({ layer: 'battleMap', mapId: 'bm_tavern', to: { x: 9, y: 4 } });
     expect(step.plan.path.map((s) => [s.x, s.cost])).toEqual([
       [5, 1],
@@ -814,7 +814,7 @@ describe('moving without the GM (L-613)', () => {
     ]);
     // With no movement left, a move goes nowhere but is planned.
     const again = await stepTo(saveId, { x: 4, y: 1 });
-    expect(again.step).toMatchObject({ cell: { x: 4, y: 4 }, movementLeft: 0 });
+    expect(again.step).toMatchObject({ cell: { x: 4, y: 4 }, ap: 0 });
     expect(again.step.plan.to).toEqual({ x: 4, y: 1 });
     expect(mockCallGemini).not.toHaveBeenCalled();
   });
@@ -831,21 +831,21 @@ describe('moving without the GM (L-613)', () => {
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({ turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null } });
+      .update({ turn: { n: 1, ap: 4, kept: 0, plan: null } });
     await stepTo(saveId, { x: 9, y: 1 });
-    expect((await continueOn(saveId)).step.lines).toEqual([OUT_OF_MOVEMENT]);
+    expect((await continueOn(saveId)).step.lines).toEqual([OUT_OF_AP]);
     const before = (await saveOf(saveId)).time;
     expect(before).toBe(8 * 3600); // a game made by loomCreateSave starts on Day 1, 08:00
     expect((await endTurn(saveId)).narration).toBe('Turn 1 ends. You moved 4 squares.');
     // A battle-map turn is 6 seconds of game time (L-371; game time T4).
     expect((await saveOf(saveId)).time).toBe(before + 6);
     const { step } = await continueOn(saveId);
-    expect(step).toMatchObject({ cell: { x: 9, y: 1 }, movementLeft: 0, plan: null });
+    expect(step).toMatchObject({ cell: { x: 9, y: 1 }, ap: 0, plan: null });
     expect(step.lines).toEqual(["You're at the hearth."]);
     expect((await endTurn(saveId)).narration).toBe(
       'Turn 2 ends. You moved 4 squares, to the hearth.'
     );
-    expect(await turnOf()).toEqual({ n: 3, movementLeft: 4, actionUsed: false, plan: null });
+    expect(await turnOf()).toEqual({ n: 3, ap: 4, kept: 0, plan: null });
     expect((await continueOn(saveId)).step.lines).toEqual([
       'You have no way planned. Tap where to go.',
     ]);
@@ -860,10 +860,10 @@ describe('moving without the GM (L-613)', () => {
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({ turn: { n: 1, movementLeft: 1, actionUsed: false, plan: null } });
+      .update({ turn: { n: 1, ap: 1, kept: 0, plan: null } });
     await stepTo(saveId, { x: 6, y: 4 });
     const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
-    expect(view.turn).toMatchObject({ movementLeft: 0, plan: { to: { x: 6, y: 4 } } });
+    expect(view.turn).toMatchObject({ ap: 0, plan: { to: { x: 6, y: 4 } } });
     await standAt(saveId, 'plc_1_tavern', 'bm_cellar', { x: 5, y: 5 });
     const elsewhere = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
     expect(elsewhere.turn.plan).toBeNull();
@@ -875,7 +875,7 @@ describe('moving without the GM (L-613)', () => {
     expect(answer.step).toBeUndefined();
     expect(answer.narration).toBe('You go on.');
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_cellar', cell: { x: 5, y: 5 } });
-    expect((await turnOf()).movementLeft).toBe(10);
+    expect((await turnOf()).ap).toBe(10);
     expect(await lastResolution(saveId)).toMatchObject({
       outcome: 'success',
       constraints: ['You go by the cellar stairs to The cellar.'],
@@ -888,7 +888,7 @@ describe('moving without the GM (L-613)', () => {
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({ turn: { n: 1, movementLeft: 1, actionUsed: false, plan: null } });
+      .update({ turn: { n: 1, ap: 1, kept: 0, plan: null } });
     const { step } = await stepTo(saveId, { x: 0, y: 5 });
     expect(step.cell).toEqual({ x: 1, y: 4 });
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 1, y: 4 } });
@@ -898,15 +898,15 @@ describe('moving without the GM (L-613)', () => {
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({ turn: { n: 1, movementLeft: 6, actionUsed: false, plan: null } });
+      .update({ turn: { n: 1, ap: 6, kept: 0, plan: null } });
     const [a, b] = await Promise.all([
       stepTo(saveId, { x: 6, y: 4 }),
       stepTo(saveId, { x: 1, y: 0 }),
     ]);
     // The moves cost 5 and 4. Whichever went first, the other had only what
     // was left (1 or 2) and stopped partway: all 6 spent, never 9.
-    expect((await turnOf()).movementLeft).toBe(0);
-    const stopped = [a, b].filter((r) => r.step.lines[0] === OUT_OF_MOVEMENT);
+    expect((await turnOf()).ap).toBe(0);
+    const stopped = [a, b].filter((r) => r.step.lines[0] === OUT_OF_AP);
     expect(stopped).toHaveLength(1);
   });
 });
@@ -962,30 +962,35 @@ describe('typed actions and the turn (L-614)', () => {
     const turns = await db.collection('loom_saves').doc(saveId).collection('loom_turns').get();
     const last = turns.docs.map((d) => d.data()).sort((a, b) => b.index - a.index)[0];
     expect(last.resolution.roll).toEqual(acted.roll);
-    expect((await turnOf()).actionUsed).toBe(true);
+    // A typed action costs a standard action's 10 AP (L-832; its tier: L-835).
+    expect((await turnOf()).ap).toBe(10);
+    // Another, while the AP left pays for it; then one it won't, turned down.
+    await type('ask about the cellar');
+    expect((await turnOf()).ap).toBe(0);
     const before = await recorded();
-    expect(await type('ask about the cellar')).toEqual({
-      narration: "You've acted this turn. End your turn first.",
+    expect(await type('ask about the stables')).toEqual({
+      narration: 'That costs 10 AP; you have 0.',
       stateSummary: '',
       suggestedActions: [],
       refused: true,
       time: { seconds: 8 * 3600, label: 'Day 1, morning' },
     });
-    expect(calls).toEqual({ interpret: 2, narrate: 1 }); // read, but not narrated
+    expect(calls).toEqual({ interpret: 3, narrate: 2 }); // read, but not narrated
     expect(await recorded()).toBe(before); // nor recorded
   });
 
-  test('after acting, moving still works, and End turn gives the action back', async () => {
+  test('after acting, moving still works, and End turn refills the AP', async () => {
     playerTypes('search');
     await type('search the floor');
     playerTypes('move', 'feature:bar');
     expect((await type('go to the bar')).narration).toBe('You go on.');
     expect(await where(saveId)).toMatchObject({ cell: { x: 3, y: 2 } });
-    expect(await turnOf()).toMatchObject({ actionUsed: true, movementLeft: 18 });
+    // The search's 10 AP, and the 2 squares to the bar.
+    expect(await turnOf()).toMatchObject({ ap: 8, moved: 2 });
     await endTurn(saveId);
     playerTypes('search');
     await type('search the bar');
-    expect(await turnOf()).toMatchObject({ n: 2, actionUsed: true });
+    expect(await turnOf()).toMatchObject({ n: 2, ap: 10 });
     expect(calls.narrate).toBe(3); // the search, the walk, and the next turn's search
   });
 
@@ -997,22 +1002,22 @@ describe('typed actions and the turn (L-614)', () => {
       constraints: ['You move to the hearth.'],
     });
     expect(await where(saveId)).toMatchObject({ cell: { x: 9, y: 1 } });
-    expect(await turnOf()).toEqual({ n: 1, movementLeft: 12, actionUsed: false, plan: null });
+    expect(await turnOf()).toEqual({ n: 1, ap: 12, kept: 0, plan: null, moved: 8 });
   });
 
   test('past reach, a typed move heads that way and keeps the plan', async () => {
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({ turn: { n: 1, movementLeft: 3, actionUsed: false, plan: null } });
+      .update({ turn: { n: 1, ap: 3, kept: 0, plan: null } });
     playerTypes('move', 'feature:hearth');
     await type('go to the hearth');
     expect((await lastResolution(saveId)).constraints).toEqual([
       'You head for the hearth.',
-      OUT_OF_MOVEMENT,
+      OUT_OF_AP,
     ]);
     const turn = await turnOf();
-    expect(turn.movementLeft).toBe(0);
+    expect(turn.ap).toBe(0);
     expect(turn.plan).toMatchObject({ mapId: 'bm_tavern', to: { x: 9, y: 1 } });
   });
 
@@ -1020,7 +1025,7 @@ describe('typed actions and the turn (L-614)', () => {
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({ turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null } });
+      .update({ turn: { n: 1, ap: 4, kept: 0, plan: null } });
     playerTypes('move', 'exit:cellar-stairs');
     await type('take the cellar stairs');
     expect((await lastResolution(saveId)).constraints[0]).toBe('You head for the cellar stairs.');
@@ -1031,15 +1036,14 @@ describe('typed actions and the turn (L-614)', () => {
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_cellar', cell: { x: 5, y: 5 } });
   });
 
-  test('the narrator is told the turn: movement left, and whether they have acted', async () => {
+  test('the narrator is told the turn: the AP left of the pool', async () => {
     playerTypes('move', 'feature:bar');
     await type('go to the bar');
-    expect(prompts.narrate.at(-1)).toContain(
-      "Turn 1. Movement left: 18 of 20. The player hasn't acted yet this turn."
-    );
+    expect(prompts.narrate.at(-1)).toContain('Turn 1. Action points left: 18 of 20.');
     playerTypes('talk', 'chr_brannoch');
     await type('hail the innkeeper');
-    expect(prompts.narrate.at(-1)).toContain('The player has used their action this turn.');
+    // A few words cost 2 (L-832).
+    expect(prompts.narrate.at(-1)).toContain('Turn 1. Action points left: 16 of 20.');
   });
 
   test('standing on an exit, leaving by it costs nothing', async () => {
@@ -1047,7 +1051,7 @@ describe('typed actions and the turn (L-614)', () => {
     playerTypes('move', 'exit:aisle-out');
     await type('leave the stall');
     expect(await where(saveId)).toMatchObject({ placeId: 'plc_1_market', mapId: null });
-    expect((await turnOf()).movementLeft).toBe(20);
+    expect((await turnOf()).ap).toBe(20);
   });
 });
 
@@ -1098,8 +1102,8 @@ describe('walls and doors on the way (L-624)', () => {
     expect(step.plan).toMatchObject({ to: { x: 9, y: 1 } });
     const save = await saveOf(saveId);
     expect(save.doors).toEqual({ bm_tavern: { 'kitchen-door': 'open' } });
-    // 4 squares to the door, and 1 to open it.
-    expect(save.turn.movementLeft).toBe(15);
+    // 4 squares to the door, and 2 to open it (L-832).
+    expect(save.turn.ap).toBe(14);
     const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
     expect(view.battleMap.doors).toEqual([
       {
@@ -1147,10 +1151,10 @@ describe('walls and doors on the way (L-624)', () => {
       auth: PLAYER,
     });
 
-  test('a tap beside the door opens it (1 movement); the way through is then clear', async () => {
+  test('a tap beside the door opens it (2 AP); the way through is then clear', async () => {
     await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 3 });
     const { step } = await tapDoor(saveId, true);
-    expect(step).toMatchObject({ movementLeft: 19, lines: ['You open the kitchen door.'] });
+    expect(step).toMatchObject({ ap: 18, lines: ['You open the kitchen door.'] });
     expect((await saveOf(saveId)).doors).toEqual({ bm_tavern: { 'kitchen-door': 'open' } });
     expect((await stepTo(saveId, { x: 9, y: 1 })).step.lines).toEqual(["You're at the hearth."]);
   });
@@ -1303,7 +1307,8 @@ describe('locked doors (L-626)', () => {
       constraints: ['You unlock the kitchen door with the pantry key and open it.'],
     });
     expect(prompts.narrate.at(-1)).toContain('Doors: the kitchen door (open).');
-    expect((await saveOf(saveId)).turn.actionUsed).toBe(true);
+    // Opening it with the key costs the door's 2 AP (L-832).
+    expect((await saveOf(saveId)).turn.ap).toBe(18);
   });
 });
 
@@ -1472,12 +1477,12 @@ describe('what a save has seen (L-632)', () => {
       await turn(saveId);
       expect(told.join('\n')).not.toMatch(/the hearth|feature:hearth|cellar stairs|cellar-stairs/);
       // The hearth, named, is matched on the server and turned down unseen,
-      // without using the action.
+      // spending nothing.
       expect(await lastResolution(saveId)).toMatchObject({
         outcome: 'blocked',
         constraints: ["You don't see that here."],
       });
-      expect((await saveOf(saveId)).turn.actionUsed).toBe(false);
+      expect((await saveOf(saveId)).turn.ap).toBe(20);
     });
 
     test('through the open door the kitchen is told; shut again, remembered', async () => {
@@ -1517,7 +1522,7 @@ describe('what a save has seen (L-632)', () => {
       const { step } = await stepTo(saveId, { x: 9, y: 1 });
       expect(step).toMatchObject({
         cell: { x: 1, y: 4 },
-        movementLeft: 20,
+        ap: 20,
         lines: ["You haven't seen that."],
       });
     });
@@ -1553,7 +1558,7 @@ describe('what a save has seen (L-632)', () => {
       await db
         .collection('loom_saves')
         .doc(saveId)
-        .update({ turn: { n: 1, movementLeft: 4, actionUsed: false, plan: null } });
+        .update({ turn: { n: 1, ap: 4, kept: 0, plan: null } });
       const { step } = await stepTo(saveId, { x: 3, y: 7 });
       expect(step.cell).toEqual({ x: 2, y: 4 });
       expect(step.plan.path.map(({ x, y }) => [x, y])).toEqual([
@@ -1686,7 +1691,7 @@ describe('people on the map (L-642)', () => {
     await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 4 });
     const { step } = await stepTo(saveId, { x: 5, y: 4 });
     expect(step.cell).toEqual({ x: 5, y: 4 });
-    expect(step.movementLeft).toBe(16);
+    expect(step.ap).toBe(16);
   });
 
   test("but can't stop on them: a way to Wim ends beside him", async () => {
@@ -1712,7 +1717,7 @@ describe('people on the map (L-642)', () => {
     const { step } = await stepTo(saveId, { x: 10, y: 6 });
     expect(step.lines).toEqual(['Old Mags is at the hearth.']);
     expect(step.plan).toMatchObject({ to: { x: 10, y: 6 } });
-    expect(step.movementLeft).toBeGreaterThan(0);
+    expect(step.ap).toBeGreaterThan(0);
     const sees = sight.inSight((await tavernRef().get()).data(), step.cell, {});
     expect(sees['9,2']).toBe(true);
     expect(await peopleOn()).toEqual(

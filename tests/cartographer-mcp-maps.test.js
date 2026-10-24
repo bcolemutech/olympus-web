@@ -956,7 +956,7 @@ describe('walls, doors and obstacles (L-622)', () => {
     await ok('set_map_layers', { worldId: W, mapId, doors: DOORS });
   });
 
-  test('a door and a feature can have their own AP cost; a bad one is refused (L-831)', async () => {
+  test('a door and a feature can have their own AP cost and be long actions (L-831, L-832)', async () => {
     const stiff = [{ ...DOORS[0], ap: 10 }];
     await ok('set_map_layers', { worldId: W, mapId, doors: stiff });
     expect((await mapDoc(W, mapId)).doors).toEqual(stiff);
@@ -965,7 +965,12 @@ describe('walls, doors and obstacles (L-622)', () => {
       expect(bad.isError).toBe(true);
     }
     await ok('set_map_layers', { worldId: W, mapId, doors: DOORS });
-    const lever = [{ ...ROOM.features[0], ap: 8 }];
+    // A long action (L-832): its AP in all, kept as given.
+    const long = [{ ...DOORS[0], long: { ap: 30 } }];
+    await ok('set_map_layers', { worldId: W, mapId, doors: long });
+    expect((await mapDoc(W, mapId)).doors).toEqual(long);
+    await ok('set_map_layers', { worldId: W, mapId, doors: DOORS });
+    const lever = [{ ...ROOM.features[0], ap: 8, long: { ap: 40 } }];
     await ok('set_battle_map', { worldId: W, mapId, ...ROOM, features: lever });
     expect((await mapDoc(W, mapId)).features).toEqual(lever);
     const bad = await call('set_battle_map', {

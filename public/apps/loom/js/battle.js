@@ -164,20 +164,35 @@
   }
 
   // The server's own path rules (layers.js; L-624): around walls, locked
-  // doors and obstacles, 2 a square on difficult ground, 1 more to open a
-  // closed door (where a walk stops), and exits stepped onto, never through.
-  // Doors are as this save has them, and only ground it knows is walked
-  // (L-635): what it has seen, as the server does.
+  // doors and obstacles, each step at this character's price in action
+  // points (L-832: the turn's `prices`, a square 1 and difficult ground 2
+  // by default), a closed door's cost to open it (where a walk stops), and
+  // exits stepped onto, never through. Doors are as this save has them, and
+  // only ground it knows is walked (L-635): what it has seen, as the server
+  // does.
   function pathOptions() {
     var states = {};
     (battle.data.doors || []).forEach(function (door) {
       states[door.id] = door.state;
     });
-    var rules = L.pathOptions(battle.data, states);
+    var prices = (battle.turn && battle.turn.prices) || null;
+    var rules = L.pathOptions(
+      battle.data,
+      states,
+      prices && {
+        move: prices.move,
+        difficult: prices.difficult,
+        door: function (door) {
+          var own = prices.doors && prices.doors[door.id];
+          return typeof own === 'number' ? own : prices.door;
+        },
+      }
+    );
     if (!battle.known) return rules;
     return {
       avoid: rules.avoid,
       opens: rules.opens,
+      openCost: rules.openCost,
       cost: function (from, to) {
         return known(to) ? rules.cost(from, to) : Infinity;
       },
@@ -226,8 +241,9 @@
     return door ? door.name || 'a door' : 'a door';
   }
 
+  // The AP left this turn (L-832), what steps are paid from.
   function movementLeft() {
-    return battle.turn ? battle.turn.movementLeft : 0;
+    return battle.turn ? battle.turn.ap : 0;
   }
 
   function reducedMotion() {
@@ -383,13 +399,14 @@
     battle.reach = { runs: runs };
   }
 
-  // How many turns walking `path` takes at full speed, from the next turn
+  // How many turns walking `path` takes with a full pool, from the next turn
   // (a door opened on the way ends a turn's walk).
   function turnsFor(path) {
-    var speed = battle.turn ? battle.turn.speed : 20;
+    var speed = battle.turn ? battle.turn.pool : 20;
+    var openCost = pathOptions().openCost;
     var turns = 0;
     while (path.length) {
-      var w = P.walk(path, speed);
+      var w = P.walk(path, speed, { openCost: openCost });
       if (!w.walked.length && !w.opened) return Infinity;
       path = w.rest;
       turns += 1;
@@ -426,6 +443,7 @@
       stand: function (step) {
         return !personAt(step);
       },
+      openCost: pathOptions().openCost,
     });
     var doors = path
       .filter(function (step) {
@@ -1166,8 +1184,10 @@
     return [moveItem(cell)].concat(feature ? useItems(feature) : []);
   }
 
+  // Turns run on AP (L-832): an action the AP left won't pay for is turned
+  // down by the server, with its cost; the menu shows costs with L-837.
   function acted() {
-    return Boolean(battle.turn && battle.turn.actionUsed);
+    return false;
   }
 
   /**
@@ -1212,12 +1232,12 @@
     });
   }
 
-  // Your own square: Dash, and in a fight Dodge, Withdraw and Ready.
+  // Your own square: in a fight, Dodge, Withdraw and Ready (Dash went with
+  // action points, L-832: moving further is spending AP on squares).
   function selfItems() {
     var combat = combatOf();
     var fight = fightOf();
     var why = acted() ? "You've acted this turn." : null;
-    var speed = battle.turn ? battle.turn.speed : 0;
     var item = function (label, note, verb, extra, said) {
       return {
         label: label,
@@ -1228,7 +1248,7 @@
         },
       };
     };
-    var items = [item('Dash', '+' + speed + ' movement this turn', 'dash', null, 'dash')];
+    var items = [];
     if (!fight) return items;
     items.push(
       item('Dodge', 'harder to hit until your next turn', 'dodge', null, 'dodge'),
