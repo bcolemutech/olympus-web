@@ -47,7 +47,7 @@ const SHAPE =
   `on (${OPTIONAL_PARTS.join(', ')}), each then listed: skills [{ id, name, attribute }], ` +
   'traits [{ id, name, modifiers?, costs? }] (modifiers { ap: formula }: what holding it ' +
   'adds to the pool; costs { spend: n | "x2" }: what it changes a price to, or multiplies ' +
-  'it by), conditions [{ id, name, modifiers?, costs?, ap?, standUp? }] (ap: the pool it sets, 0 for Stunned; costs 'never' for what it stops, as Restrained's moving; standUp: ended by standing up, as Prone), derived [{ id, name, formula }]. ' +
+  'it by), conditions [{ id, name, modifiers?, costs?, ap?, standUp? }] (ap: the pool it sets, 0 for Stunned; costs "never" for what it stops, as moving for Restrained; standUp: ended by standing up, as Prone), derived [{ id, name, formula }]. ' +
   'ap: { costs?, tiers?, keepLimit? }: costs { ' +
   apRules.SPENDS.map((k) => `${k}: ${apRules.COSTS[k]}`).join(', ') +
   ' } (the defaults; change any), tiers { minor: 3, standard: 10, major: 20 } for typed ' +
