@@ -2377,7 +2377,7 @@ body.loom-playing .app-divider {
   font-style: italic;
 }
 
-.loom-confirm-cancel {
+.loom-confirm .loom-confirm-cancel {
   background: transparent;
   color: var(--loom-accent);
   border: 1px solid color-mix(in srgb, var(--loom-accent) 40%, transparent);
