@@ -147,6 +147,14 @@
   }
 
   /**
+   * "What's here?" on the battle map (#672): the GM describes a square, or a
+   * door, from what the player knows of it. Free: the suggestions stay.
+   */
+  function lookAt(target, label) {
+    playTurn({ action: Object.assign({ verb: 'look' }, target) }, label, { keep: true });
+  }
+
+  /**
    * An attack at someone on the battle map (L-828; combat UI2): with one of
    * the character's attacks, to knock out when the Subdue toggle is on.
    */
@@ -199,6 +207,7 @@
     walkTo: walkTo,
     walkThere: walkThere,
     doorAction: doorAction,
+    lookAt: lookAt,
     attack: attack,
     tactic: tactic,
     endTurn: endTurn,

@@ -25,8 +25,9 @@
   //   roll card.
   // - Every click opens the engine's menu (I2), no one-tap shortcuts: on a
   //   square, Move (step there, go to someone or a feature, go out by an
-  //   exit; beyond this turn the rest is kept as the plan) and Look; on a
-  //   door, Open, Close or Try it from beside it, and Look.
+  //   exit; beyond this turn the rest is kept as the plan) and What's here?
+  //   (#672: the GM describes it, free); on a door, Open, Close or Try it
+  //   from beside it, and What's here?.
   //
   // The map is drawn in map coordinates (CELL units a square, PAD around
   // the grid) in a container the camera moves, so panning only moves it; it
@@ -1105,7 +1106,7 @@
       engine.openMenu(point, {
         title: capitalise(door.name || 'the door'),
         subtitle: 'Door · ' + doorStateWord(door),
-        items: busy(doorItems(door)).concat([lookItem()]),
+        items: busy(doorItems(door).concat([lookItem({ door: door.id, name: door.name })])),
       });
       return;
     }
@@ -1120,7 +1121,7 @@
     engine.openMenu(point, {
       title: about.title,
       subtitle: about.facts || undefined,
-      items: busy(itemsFor(cell)).concat([lookItem()]),
+      items: busy(itemsFor(cell).concat([lookItem({ cell: cell })])),
     });
   }
 
@@ -1366,12 +1367,22 @@
     n.cards.removeChildren();
   }
 
-  // Look: the card shows what was clicked; nothing is played.
-  function lookItem() {
+  // What's here? (#672): the GM describes the square or door, from what the
+  // player knows of it; free. A square never seen has nothing to tell.
+  function lookItem(target) {
+    var cell = target.cell;
+    var unseen = cell && battle.known && !battle.known(cell.y * battle.data.width + cell.x);
+    if (unseen) {
+      return { label: "What's here?", disabled: true, note: "You haven't seen that spot." };
+    }
+    var label = cell
+      ? "what's here at (" + cell.x + ', ' + cell.y + ')'
+      : 'look at ' + (target.name || 'the door');
     return {
-      label: 'Look',
+      label: "What's here?",
+      note: 'Free',
       onSelect: function () {
-        Loom.map.render();
+        Loom.play.lookAt(cell ? { cell: { x: cell.x, y: cell.y } } : { door: target.door }, label);
       },
     };
   }
