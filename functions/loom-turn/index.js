@@ -834,7 +834,8 @@ async function confirmTurn(params, { save, saveRef, canonWorld }, pending) {
         if (now.cell && now.cell.x === walk.cell.x && now.cell.y === walk.cell.y) break;
         const plan = turnStateOf(now).plan;
         const onIt = plan && plan.layer === 'battleMap';
-        if (step.refused || !onIt || now.fight || now.mapId !== save.mapId) {
+        const fightStarted = Boolean(now.fight) && !combat.play.fightOf(save);
+        if (step.refused || !onIt || fightStarted || now.mapId !== save.mapId) {
           return stoppedShort('You stop short of ' + walk.name + '.');
         }
         if (combat.play.fightOf(save)) {
