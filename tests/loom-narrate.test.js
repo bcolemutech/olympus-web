@@ -115,7 +115,7 @@ describe('narrateResolution', () => {
 
     expect(result.narration).toBe('The captain nods grimly.');
     expect(result.inventedEntities).toEqual(['a barkeep named Doral']);
-    expect(result.suggestedActions).toEqual(['ask about the job']);
+    expect(result.suggestedActions).toEqual([{ text: 'ask about the job' }]); // #673: objects
   });
 
   it('includes resolved scene entities in entityRefs', async () => {
@@ -168,7 +168,7 @@ describe('narrateResolution', () => {
     });
     const result = await narrateResolution(makeParams());
     expect(result.inventedEntities).toEqual(['Real Name']);
-    expect(result.suggestedActions).toEqual(['do a thing']);
+    expect(result.suggestedActions).toEqual([{ text: 'do a thing' }]);
   });
 
   it('calls retrieveContextForEntities with the resolved scene entity ids', async () => {

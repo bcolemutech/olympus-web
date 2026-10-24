@@ -181,9 +181,9 @@ describe('ADJUDICATE: out of sight, out of reach', () => {
     expect(act('open', 'feature:chest', standing(sq(4, 4))).outcome).toBe('success');
   });
 
-  test('looking and talking need only sight', () => {
+  test('looking needs only sight; talking, out of a fight, needs them beside you (#673)', () => {
     expect(act('look', 'feature:chest').outcome).toBe('success');
-    expect(act('talk', 'chr_hermit').outcome).toBe('success');
+    expect(act('talk', 'chr_hermit').constraints).toEqual(['You need to be beside the hermit.']);
     expect(act('shove', 'chr_hermit').constraints).toEqual(['You need to be beside the hermit.']);
   });
 
@@ -313,10 +313,12 @@ describe('the GM knows who is where (L-643)', () => {
     expect(entityRefs).toEqual(['chr_ghost']);
   });
 
-  test('beside counts as reach for a hand on someone; across the room only talk', () => {
+  test('beside counts as reach for a hand on someone, and for talk (#673)', () => {
     expect(act('shove', 'chr_hermit', standing(sq(1, 3))).outcome).toBe('success');
     expect(act('shove', 'chr_hermit').constraints).toEqual(['You need to be beside the hermit.']);
-    expect(act('talk', 'chr_hermit').outcome).toBe('success');
+    // Talking too, out of a fight (#673): beside them, not across the room.
+    expect(act('talk', 'chr_hermit', standing(sq(1, 3))).outcome).toBe('success');
+    expect(act('talk', 'chr_hermit').constraints).toEqual(['You need to be beside the hermit.']);
     expect(act('talk', 'chr_ghost', standing(sq(1, 3))).constraints).toEqual([NOBODY_SEEN]);
   });
 });

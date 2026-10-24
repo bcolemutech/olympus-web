@@ -52,6 +52,7 @@
     journal.setError(null);
     journal.finishReveal();
     journal.setSuggestions([]);
+    journal.setConfirm(null); // a confirm card is for the turn before (#673)
     Loom.engine.closeMenu(); // a click menu's choices are for before the turn
     Loom.map.render(); // the cards' buttons disable while a turn runs
 
@@ -81,7 +82,11 @@
           .map(function (t) {
             return { name: t.name + ' · ' + t.attack.card.name, roll: t.attack.card };
           });
-        if (data.step && !told && !data.step.fight) {
+        if (data.confirm) {
+          // What it would do, to confirm first (#673): nothing done yet.
+          journal.setConfirm(data.confirm);
+          journal.setSuggestions(kept);
+        } else if (data.step && !told && !data.step.fight) {
           if (data.step.lines.length) journal.add(label, data.step.lines.join(' '));
           journal.setSuggestions(kept);
         } else {
@@ -102,6 +107,25 @@
         journal.setSuggestions(kept);
         journal.setError('The Loom faltered: ' + (err.message || 'Unknown error'));
       });
+  }
+
+  /**
+   * One of the GM's suggestions (#673), `{ text, verb?, target? }` or plain
+   * text: the server answers with what it would do, to confirm first.
+   */
+  function suggest(suggestion) {
+    var text = typeof suggestion === 'string' ? suggestion : suggestion.text;
+    var action = { verb: 'suggested', text: text };
+    if (suggestion.verb) {
+      action.act = { verb: suggestion.verb };
+      if (suggestion.target) action.act.target = suggestion.target;
+    }
+    playTurn({ action: action }, text, { keep: true });
+  }
+
+  /** Do it (#673): the action on the confirm card, walked to and done. */
+  function confirm(label) {
+    playTurn({ action: { verb: 'confirm' } }, label);
   }
 
   function submitTurn(actionText) {
@@ -207,6 +231,8 @@
     walkTo: walkTo,
     walkThere: walkThere,
     doorAction: doorAction,
+    suggest: suggest,
+    confirm: confirm,
     lookAt: lookAt,
     attack: attack,
     tactic: tactic,
