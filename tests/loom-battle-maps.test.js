@@ -820,11 +820,11 @@ describe('moving without the GM (L-613)', () => {
   });
 
   test('Continue next turn walks the plan; End turn says how far you went', async () => {
-    // A character with a speed of 4: its world's system works speed out as 4
+    // A character with a speed of 4: its world's system works its AP pool out as 4
     // (L-811). The hearth (8 away) takes two turns.
     const systems = require('../functions/loom-canon/systems');
     const slow = { ...systems.BUILT_IN['d20-fantasy'], id: 'slow-d20', name: 'Slow d20' };
-    slow.sheet = { ...slow.sheet, speed: '4' };
+    slow.sheet = { ...slow.sheet, ap: '4' };
     await systems.setSystem(db, slow, { uid: 'test' });
     const version = (await worldRef.get()).data().canonVersion;
     await worldRef.update({ systemId: 'slow-d20', canonVersion: version + 1 });
