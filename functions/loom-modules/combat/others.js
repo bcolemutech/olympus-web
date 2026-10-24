@@ -45,6 +45,15 @@ const down = require('./down');
 const position = require('./position');
 const reactions = require('./reactions');
 const menu = require('./menu');
+const apRules = require('../../loom-canon/ap');
+const layers = require('../../loom-canon/layers');
+
+/** What a fighter keeps of `left` AP for reactions: none below 0, the system's limit above (KP2). */
+function keptFrom(system, left) {
+  const limit = apRules.settingsOf(system).keepLimit;
+  const kept = Math.max(0, Math.floor(left));
+  return limit === null ? kept : Math.min(kept, limit);
+}
 
 const { PLAYER } = fight;
 const copyOf = (v) => JSON.parse(JSON.stringify(v));
@@ -150,8 +159,10 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
   // One fighter's turn.
   const act = (id) => {
     let c = f.combatants[id];
-    // Their Dodge lasted until now (L-825).
+    // Their Dodge lasted until now (L-825); what they kept is gone, their
+    // pool full for this turn (L-833).
     delete c.dodging;
+    c.kept = 0;
     const world2 = view();
     const character = world2.characters[id];
     if (!character || character.retired || !character.cell) {
@@ -237,8 +248,15 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         ...(option ? {} : { fallback: asked ? 'illegal' : 'failed' }),
       });
     }
+    // What this turn spends of their pool (L-833): what's left is kept for
+    // their reactions until their next turn (planning their turn on AP is
+    // L-836).
+    const pool = sheets.apFor(system, mine);
+    const prices = apRules.pricesOf(system, mine);
+    let spentAp = 0;
     if (dodge) {
       c.dodging = true;
+      spentAp += prices.of('dodge');
       lines.push(`${character.name} keeps their guard up.`);
     }
     const record = { id, name: character.name, path: [] };
@@ -269,6 +287,11 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       }
       if (r.struck.length) record.reactions = (record.reactions || []).concat(r.struck);
       const walked = path.slice(0, r.reached);
+      const rules = layers.pathOptions(map, doors, prices);
+      walked.forEach((step, k) => {
+        const cost = rules.cost(k ? walked[k - 1] : from, step);
+        spentAp += Number.isFinite(cost) ? cost : prices.move;
+      });
       record.path.push(...walked);
       if (walked.length) moved(walked[walked.length - 1]);
       return r;
@@ -299,6 +322,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       // Where they stand (L-823): range, cover, flanking, Dodge; and the
       // target's defending reaction, if they have one left.
       const theirs = f.combatants[target.id] || {};
+      spentAp += reactions.reactionCost(system, mine, 'attack', attack);
       const terms = position.termsFor(system, {
         map,
         doors,
@@ -308,8 +332,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         friends: friends.filter((x) => x.cell).map((x) => x.cell),
         dodging: Boolean(theirs.dodging),
       });
-      const defend =
-        theirs.reactionsLeft > 0 ? position.defendOf(system, targetSheet, attack) : null;
+      const defend = reactions.defendingOf(system, f, target.id, targetSheet, attack);
       const struck = strike(system, {
         attacker: { name: character.name, sheet: mine },
         attack,
@@ -320,14 +343,17 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
             name: target.id === PLAYER ? 'you' : target.name,
             sheet: targetSheet,
             guard: terms.guard,
-            ...(defend ? { reaction: defend } : {}),
+            ...(defend ? { reaction: defend.reaction } : {}),
           },
         ],
         now,
         dice,
       });
       const r = struck.results[0];
-      if (r.reacted) f.combatants[target.id].reactionsLeft -= 1;
+      if (r.reacted) {
+        f.combatants[target.id].kept =
+          reactions.keptOf(f, target.id, system, targetSheet) - defend.cost;
+      }
       lines.push(
         ...r.lines.map((line, i) =>
           i === 0 && !r.reacted
@@ -392,6 +418,8 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       );
     }
     states[id] = { ...(states[id] || {}), sheet: mine };
+    // What they didn't spend, kept for their reactions (L-833; KP1, KP2).
+    if (f.combatants[id]) f.combatants[id].kept = keptFrom(system, pool - spentAp);
     turns.push(record);
   };
 
@@ -409,7 +437,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
     done();
   }
   for (let i = 0; !ended && i < f.order.length * 3; i++) {
-    const step = fight.next(f, settings.economy);
+    const step = fight.next(f);
     f = step.fight;
     if (step.newRound) rounds += 1;
     if (f.turn === PLAYER) break;
@@ -419,11 +447,13 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
   return finish();
 
   function finish() {
-    // The player's turn again: their Dodge and readied attack are over (L-823).
+    // The player's turn again: their Dodge and readied attack are over
+    // (L-823), and what they kept is gone, the pool full again (L-833).
     const mine = !ended && f.turn === PLAYER && f.combatants[PLAYER];
     if (mine) {
       delete mine.dodging;
       delete mine.readied;
+      mine.kept = 0;
     }
     return {
       fight: ended ? null : f,
@@ -469,4 +499,7 @@ function situationOf(me, all, side, health) {
     });
 }
 
-module.exports = { playOthers };
+module.exports = {
+  keptFrom,
+  playOthers,
+};

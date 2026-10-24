@@ -99,8 +99,6 @@ const KEYS = [
 ];
 // Settings read by later stories: kept as given, with a warning.
 const LATER = {};
-// One action a turn and one reaction a round, until AP pays for them (L-832, L-833).
-const ECONOMY = { actions: 1, reactions: 1, quick: 0 };
 const DEFAULT_INITIATIVE = '1d20';
 
 const HITS = ['defence', 'opposed'];
@@ -110,16 +108,14 @@ const TYPE_ID = /^[a-z][a-z0-9_-]{0,31}$/;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** The settings with their defaults filled in (none set: a d20, one action, one reaction). */
+/** The settings with their defaults filled in (none set: a d20). Actions and reactions are paid in AP (L-832, L-833). */
 function settingsOf(system) {
   const given = (system && system.modules && system.modules.combat) || {};
-  const economy = { ...ECONOMY };
   return {
     initiative: {
       formula: (given.initiative && given.initiative.formula) || DEFAULT_INITIATIVE,
       tieBreak: (given.initiative && given.initiative.tieBreak) || null,
     },
-    economy,
     surprise: isObject(given.surprise) ? given.surprise : null,
     attack: attackOf(system, given.attack),
     health: healthOf(system, given.health),

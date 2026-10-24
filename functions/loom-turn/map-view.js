@@ -571,12 +571,14 @@ function seenObstacles(map, on) {
 // The plan shows only while it's for the map the save stands on (L-613), or
 // the town it walks (L-664).
 function turnView(save, canonWorld) {
-  const { n, ap, kept, long } = turnStateOf(save);
+  const { n, ap, kept, long, reserved } = turnStateOf(save);
   return {
     n,
     ap,
     pool: apOf(save),
     kept,
+    // Set aside for a readied attack (L-833).
+    ...(reserved ? { reserved } : {}),
     ...(long ? { long: { name: long.name, put: long.put, need: long.need } } : {}),
     plan: planOn(save) || townPlanOf(save),
     // What a step costs this character on a battle map (L-832), for the
