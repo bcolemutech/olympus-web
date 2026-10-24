@@ -153,9 +153,11 @@ describe.each(Object.keys(CASES))('named turns under %s', (id) => {
     expect(new Set(asked.menu.choices.map((o) => o.id)).size).toBe(texts.length);
     expect(texts).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/shoot the player with your sling$/),
+        expect.stringMatching(/^shoot the player with your sling, then ready your sling \(20 AP\)$/),
         expect.stringMatching(/the player/),
-        'stay where you are and Dodge: harder to hit until your next turn',
+        // Each with its cost, keeping the rest to react (L-836).
+        'stay where you are and Dodge: harder to hit until your next turn (8 AP, keeping 12 to react)',
+        'stay where you are (0 AP, keeping 20 to react)',
         expect.stringMatching(/^run for the way out/),
       ])
     );
@@ -180,7 +182,7 @@ describe.each(Object.keys(CASES))('named turns under %s', (id) => {
       {
         id: 'grell',
         name: 'Grell',
-        did: 'stay where you are and Dodge: harder to hit until your next turn',
+        did: 'stay where you are and Dodge: harder to hit until your next turn (8 AP, keeping 12 to react)',
         reason: 'Let him come to me.',
       },
     ]);

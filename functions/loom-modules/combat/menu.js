@@ -15,9 +15,14 @@
  *   Dodge            stay put, harder to hit until their next turn
  *   Flee             run for the nearest way out
  *
- * Each choice is `{ id ('o1', 'o2', ...), text, plan, dodge? }`, `plan` as
- * tactics.planTurn returns it. Choices that come to the same thing are
- * listed once.
+ * On AP (L-836; action points FP2) each is planned within the fighter's
+ * pool, says what it costs ("(20 AP)") and keeps the rest for reactions;
+ * Dodge only when they can pay for it, and one more choice: keeping it all
+ * to react. Only turns that fit are listed.
+ *
+ * Each choice is `{ id ('o1', 'o2', ...), text, plan, dodge?, ap? }`,
+ * `plan` as tactics.planTurn returns it, `ap` what it costs. Choices that
+ * come to the same thing are listed once.
  *
  * Pure.
  */
@@ -27,13 +32,18 @@ const tactics = require('./tactics');
 const MAX_CHOICES = 24;
 const squares = (n) => (n === 1 ? '1 square' : n + ' squares');
 
-// What a plan comes to: where it ends, what it strikes, where it steps back to.
+const TIMES = ['', ' twice', ' three times', ' four times'];
+const times = (n) => (n === 1 ? '' : TIMES[n - 1] || ` ${n} times`);
+
+// What a plan comes to: where it ends, what it strikes and how often, where
+// it steps back to, what it readies.
 function signature(plan, dodge) {
   const end = (path) => (path.length ? path[path.length - 1] : null);
   return JSON.stringify([
     end(plan.path),
-    plan.attack ? [plan.attack.attack.id, plan.attack.target.id] : null,
+    plan.attack ? [plan.attack.attack.id, plan.attack.target.id, plan.repeat || 0] : null,
     end(plan.back),
+    plan.ready ? plan.ready.id : null,
     plan.fled,
     Boolean(dodge),
   ]);
@@ -46,14 +56,30 @@ function signature(plan, dodge) {
  */
 function choicesFor(input) {
   const { me, foes } = input;
+  const onAp = Number.isFinite(me.ap);
+  const pool = onAp ? Math.max(0, Math.floor(me.ap)) : 0;
+  const dodgeAp = onAp ? (Number.isFinite(me.dodgeAp) ? me.dodgeAp : 0) : 0;
   const out = [];
   const seen = new Set();
   const add = (text, plan, dodge = false) => {
     const key = signature(plan, dodge);
     if (seen.has(key) || out.length >= MAX_CHOICES) return;
+    // On AP, only a turn that fits, its cost said (L-836).
+    const cost = onAp ? (plan.spent || 0) + (dodge ? dodgeAp : 0) : null;
+    if (onAp && cost > pool) return;
     seen.add(key);
-    out.push({ id: 'o' + (out.length + 1), text, plan, ...(dodge ? { dodge: true } : {}) });
+    const said = onAp ? `${text}${readied(plan)} (${cost} AP${keeps(cost)})` : text;
+    out.push({
+      id: 'o' + (out.length + 1),
+      text: said,
+      plan,
+      ...(dodge ? { dodge: true } : {}),
+      ...(onAp ? { ap: cost } : {}),
+    });
   };
+  const readied = (plan) =>
+    plan.ready ? `, then ready your ${plan.ready.name.toLowerCase()}` : '';
+  const keeps = (cost) => (pool - cost > 0 ? `, keeping ${pool - cost} to react` : '');
   const planned = (patch) =>
     tactics.planTurn({ ...input, me: { ...me, fleeing: false, ...patch } });
   const moved = (plan) => (plan.path.length ? `move ${squares(plan.path.length)} and ` : '');
@@ -71,7 +97,8 @@ function choicesFor(input) {
         const using =
           attack.id === 'unarmed' ? ' unarmed' : ` with your ${attack.name.toLowerCase()}`;
         if (plan.attack) {
-          add(`${moved(plan)}${attack.range ? 'shoot' : 'strike'} ${who}${using}`, plan);
+          const often = times(1 + (plan.repeat || 0));
+          add(`${moved(plan)}${attack.range ? 'shoot' : 'strike'} ${who}${often}${using}`, plan);
         } else if (plan.path.length) {
           add(`close on ${who} (${squares(plan.path.length)}), out of reach this turn`, {
             ...plan,
@@ -102,7 +129,11 @@ function choicesFor(input) {
         hold
       );
     }
-    add('stay where you are and Dodge: harder to hit until your next turn', emptyPlan(), true);
+    if (!onAp || dodgeAp <= pool) {
+      add('stay where you are and Dodge: harder to hit until your next turn', emptyPlan(), true);
+    }
+    // Holding it all back, to react (L-836).
+    if (onAp && pool > 0) add('stay where you are', emptyPlan());
   }
   if ((input.map.exits || []).length && !me.noMove) {
     const flight = tactics.planTurn({ ...input, me: { ...me, fleeing: true } });
@@ -114,6 +145,14 @@ function choicesFor(input) {
   return out;
 }
 
-const emptyPlan = () => ({ path: [], attack: null, back: [], fled: false });
+const emptyPlan = () => ({
+  path: [],
+  attack: null,
+  repeat: 0,
+  back: [],
+  ready: null,
+  fled: false,
+  spent: 0,
+});
 
 module.exports = { choicesFor, MAX_CHOICES };

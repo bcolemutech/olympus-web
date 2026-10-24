@@ -55,6 +55,24 @@ function keptFrom(system, left) {
   return limit === null ? kept : Math.min(kept, limit);
 }
 
+/**
+ * What tactics plan a turn within (L-836): a fighter's pool, what each of
+ * their `attacks` and a step costs them, and Dodge's cost; nothing with AP
+ * off (L-838).
+ */
+function apInputOf(system, sheet, attacks) {
+  if (apRules.isOff(system)) return {};
+  const prices = apRules.pricesOf(system, sheet);
+  return {
+    ap: sheets.apFor(system, sheet),
+    attackAp: Object.fromEntries(
+      attacks.map((a) => [a.id, reactions.reactionCost(system, sheet, 'attack', a)])
+    ),
+    prices,
+    dodgeAp: prices.of('dodge'),
+  };
+}
+
 const { PLAYER } = fight;
 const copyOf = (v) => JSON.parse(JSON.stringify(v));
 const key = (cell) => cell.x + ',' + cell.y;
@@ -160,8 +178,10 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
   const act = (id) => {
     let c = f.combatants[id];
     // Their Dodge lasted until now (L-825); what they kept is gone, their
-    // pool full for this turn (L-833).
+    // pool full for this turn (L-833), and a shot they readied never fired
+    // is lost (L-836).
     delete c.dodging;
+    delete c.readied;
     c.kept = 0;
     const world2 = view();
     const character = world2.characters[id];
@@ -206,7 +226,9 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         posture: figures.postureOf(character),
         fleeing: Boolean(c.fleeing),
         attacks: usable,
-        // Squares a turn: their pool, a square 1 AP (foes on AP: L-836).
+        // Their pool, what each attack and step costs them (L-836); with AP
+        // off (L-838), squares a turn as before.
+        ...apInputOf(system, mine, usable),
         speed: sheets.apFor(system, mine),
         noMove: flags.noMove.length > 0,
         noAction: flags.noAction.length > 0,
@@ -233,6 +255,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         side: c.side,
         round: f.round,
         situation: situationOf(me, all, c.side, health),
+        ...(Number.isFinite(input.me.ap) ? { ap: input.me.ap } : {}),
         choices: choices.map((o) => ({ id: o.id, text: o.text })),
       });
       const option = asked && choices.find((o) => o.id === asked.option);
@@ -248,9 +271,9 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         ...(option ? {} : { fallback: asked ? 'illegal' : 'failed' }),
       });
     }
-    // What this turn spends of their pool (L-833): what's left is kept for
-    // their reactions until their next turn (planning their turn on AP is
-    // L-836).
+    // What this turn spends of their pool (L-833), planned to fit it
+    // (L-836): what's left is kept for their reactions until their next
+    // turn.
     const pool = sheets.apFor(system, mine);
     const prices = apRules.pricesOf(system, mine);
     let spentAp = 0;
@@ -314,9 +337,11 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       return;
     }
     const from = record.path.length ? record.path[record.path.length - 1] : me.cell;
-    if (plan.attack && !plan.fled) {
-      const { attack, target } = plan.attack;
+    // One blow at `target` from `from`; returns its record, or null when
+    // the attack can't be made (out of ammunition).
+    const strikeAt = (attack, target) => {
       const spent = spendAmmo(system, mine, attack);
+      if (spent.refused) return null;
       mine = spent.sheet;
       const targetSheet = target.id === PLAYER ? sheet : sheetOf(target.id, target);
       // Where they stand (L-823): range, cover, flanking, Dodge; and the
@@ -361,7 +386,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
             : line
         )
       );
-      record.attack = {
+      const made = {
         attack: attack.id,
         // The roll, for its card in the Loom (L-828; UI3).
         card: {
@@ -401,7 +426,34 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         if (r.down && f.combatants[target.id]) f = fight.leave(f, target.id, 'down');
       }
       c = f.combatants[id];
+      return made;
+    };
+    // Again and again while the AP lasts (L-836: a brute's), each blow one
+    // more turn to play out; at another foe in reach once theirs falls.
+    const blows = [];
+    if (plan.attack && !plan.fled) {
+      const { attack } = plan.attack;
+      let target = plan.attack.target;
+      for (let n = 0; n <= (plan.repeat || 0); n++) {
+        if (n > 0) {
+          if (fight.endOf(f)) break;
+          const theirs = f.combatants[target.id];
+          if (!theirs || theirs.out) {
+            target = fighters().find(
+              (x) =>
+                foes.some((foe) => foe.id === x.id) && tactics.canHit(map, doors, attack, from, x)
+            );
+            if (!target) break;
+          } else {
+            target = fighters().find((x) => x.id === target.id) || target;
+          }
+        }
+        const made = strikeAt(attack, target);
+        if (!made) break;
+        blows.push(made);
+      }
     }
+    if (blows.length) record.attack = blows[0];
     const back = walk(plan.back, from);
     if (back.down) return fell(back.down);
     // Their conditions tick at the end of their turn (L-815).
@@ -416,10 +468,18 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         )
       );
     }
+    // A readied shot (L-836: an archer's), its AP set aside: it goes off at
+    // the first foe to come into its range before their next turn.
+    if (plan.ready && f.combatants[id] && !plan.fled) {
+      f.combatants[id].readied = { attack: plan.ready.id };
+      spentAp += reactions.reactionCost(system, mine, 'attack', plan.ready);
+    }
     states[id] = { ...(states[id] || {}), sheet: mine };
     // What they didn't spend, kept for their reactions (L-833; KP1, KP2).
     if (f.combatants[id]) f.combatants[id].kept = keptFrom(system, pool - spentAp);
     turns.push(record);
+    for (const more of blows.slice(1))
+      turns.push({ id, name: character.name, path: [], attack: more });
   };
 
   const done = () => {
@@ -500,6 +560,7 @@ function situationOf(me, all, side, health) {
 }
 
 module.exports = {
+  apInputOf,
   keptFrom,
   playOthers,
 };

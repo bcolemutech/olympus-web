@@ -186,7 +186,7 @@ describe.each(Object.keys(mockCases))('named turns in play under %s', (id) => {
     expect(narrated[0]).toContain('NAMED CHARACTERS ACTED this round');
     expect(narrated[0]).toContain(
       '- Grell’s choice: stay where you are and Dodge: harder to hit until your next turn ' +
-        '("Patience wins.").'
+        '(8 AP, keeping 12 to react) ("Patience wins.").'
     );
     expect(answer.narration).toContain('Grell keeps their guard up.');
     expect(answer.narration).toMatch(/Grell circles, wary\.$/);
