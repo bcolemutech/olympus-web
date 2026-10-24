@@ -8,6 +8,7 @@ const { peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
 const sheets = require('../loom-canon/sheets');
+const apRules = require('../loom-canon/ap');
 const { attacksOf } = require('../loom-modules/combat/attacks');
 
 /**
@@ -58,6 +59,7 @@ function buildSystemInstruction(knownEntities, save, canonWorld, asked = null) {
     'empty object if there are none.\n\n' +
     checksSection(canonWorld) +
     plausibilitySection(canonWorld, save) +
+    tierSection(canonWorld) +
     attacksSection(canonWorld, save) +
     // Letting time pass (L-374; game time T12).
     'To let time pass ("wait an hour", "rest until evening", "sleep until dawn"), use the ' +
@@ -134,6 +136,26 @@ function plausibilitySection(canonWorld, save) {
       .filter(Boolean)
       .join('; ') +
     '.\n\n'
+  );
+}
+
+// How long an action takes, by tier (L-835; action points CT3): the model
+// names one, never a number; the rules charge the system's cost for it.
+// With AP off (L-838) there are no tiers to name.
+function tierSection(canonWorld) {
+  const system = checks.systemOf(canonWorld);
+  if (apRules.isOff(system)) return '';
+  const t = apRules.settingsOf(system).tiers;
+  return (
+    'TIER: add params.tier to every action that is not a move, a look, an attack or ' +
+    'a wait: how much of a turn it takes, as a word, never a number.\n' +
+    `- "minor" (${t.minor} AP): a moment's work: drawing or sheathing a blade, ` +
+    'calling out a warning, pulling a lever already in hand, a quick glance at a note.\n' +
+    `- "standard" (${t.standard} AP): most things: searching a chest, persuading ` +
+    'someone, climbing onto a table, forcing a stuck window.\n' +
+    `- "major" (${t.major} AP): a whole turn's effort: barricading a door, binding a ` +
+    'wound properly, hauling someone up a wall, searching a whole room.\n' +
+    'When unsure, "standard".\n\n'
   );
 }
 
@@ -389,8 +411,10 @@ async function interpretAction(params) {
     return fallbackProposedAction(actionText);
   }
 
-  const cleaned = withPlausibility(
-    withCheck(raw.params && typeof raw.params === 'object' ? raw.params : {}, resolve)
+  const cleaned = withTier(
+    withPlausibility(
+      withCheck(raw.params && typeof raw.params === 'object' ? raw.params : {}, resolve)
+    )
   );
   return {
     verb: raw.verb.toLowerCase().slice(0, 50),
@@ -415,6 +439,14 @@ function withPlausibility(params) {
     ...(kind === 'extraordinary' && text(why) ? { why: text(why) } : {}),
     ...(kind === 'complicated' && text(question) ? { question: text(question) } : {}),
   };
+}
+
+// The tier the model named (L-835), one of the three; anything else dropped
+// (the rules then charge a standard action).
+function withTier(params) {
+  const { tier, ...rest } = params;
+  const named = typeof tier === 'string' ? tier.trim().toLowerCase() : '';
+  return apRules.TIER_NAMES.includes(named) ? { ...rest, tier: named } : rest;
 }
 
 function withCheck(params, resolve) {
