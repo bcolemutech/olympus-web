@@ -42,6 +42,30 @@ const NOBODY_SEEN = "You don't see anyone like that here.";
 const SIGHT_ONLY =
   /^(look|examine|inspect|study|watch|observe|read|peer|glance|talk|speak|ask|tell|say|greet|call|shout|whisper|listen|wave|signal|point|nod|persuade|convince|reason|plead|negotiate|parley|intimidate|threaten|deceive|bluff|calm|reassure)/;
 
+// Actions that need no roll unless someone resists them (#673): looking at
+// what's in plain view, and talking. Persuading, deceiving and searching
+// aren't among them.
+const PLAIN =
+  /^(look|examine|inspect|study|read|watch|observe|peer|glance|listen|talk|speak|ask|tell|say|greet|chat|whisper|call|wave|nod)/;
+
+// Actions done at someone's side (#673): talking with them, and looking
+// closely at a thing. Out of a fight they need the player beside the target,
+// as anything physical does; in a fight, words carry (L-821: talking a foe
+// down) and only the physical needs reach.
+const CLOSE =
+  /^(talk|speak|ask|tell|say|greet|chat|whisper|question|haggle|bargain|examine|inspect|study|read)/;
+
+/** Whether an action needs no roll unless someone resists it (#673). */
+function needsNoRoll(verb) {
+  return PLAIN.test(String(verb || ''));
+}
+
+/** Whether an action needs the player beside what it is aimed at (#673). */
+function needsBeside(verb, inFight) {
+  const v = String(verb || '');
+  return !SIGHT_ONLY.test(v) || (!inFight && CLOSE.test(v));
+}
+
 /**
  * Stage 3 — ADJUDICATE (design doc §5, §10 L-140).
  *
@@ -898,6 +922,15 @@ function evaluateGeneric(proposedAction, dice, characterState, canonWorld) {
       ],
     };
   }
+  // No roll the rules don't call for (#673): looking at what's in plain
+  // view, or talking with someone, just happens; persuading, deceiving,
+  // searching and the like still roll, as does anything someone resists.
+  if (
+    PLAIN.test(String(verb || '')) &&
+    (proposedAction.params || {}).plausibility !== 'improbable'
+  ) {
+    return { outcome: 'success', mutations: [], constraints: [] };
+  }
   const roll = checks.rollCheck(system, { check: proposed || {}, character, dice });
   return {
     outcome: roll.success ? 'success' : 'failure',
@@ -1270,7 +1303,7 @@ function outOfSightOrReach(proposedAction, characterState, canonWorld) {
   const inSight = sight.inSight(map, cell, doorStatesOf(characterState, map.id));
   const seen = (square) => Boolean(inSight[square.x + ',' + square.y]);
   const near = (square) => Math.max(Math.abs(square.x - cell.x), Math.abs(square.y - cell.y)) <= 1;
-  const physical = !SIGHT_ONLY.test(String(proposedAction.verb || ''));
+  const physical = needsBeside(proposedAction.verb, Boolean(combat.play.fightOf(characterState)));
   for (const target of proposedAction.targets || []) {
     const thing = mapTarget(canonWorld, characterState, map, target);
     if (!thing) continue;
@@ -1769,6 +1802,9 @@ module.exports = {
   evaluate,
   adjudicateAction,
   setOutWalk,
+  needsBeside,
+  needsNoRoll,
+  mapTarget,
   rollDie,
   DEFAULT_DIFFICULTY_CLASS,
   DEFAULT_LOCK_DIFFICULTY,

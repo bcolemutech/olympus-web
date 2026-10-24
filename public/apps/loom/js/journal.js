@@ -433,23 +433,74 @@
 
   // ── The panel ─────────────────────────────────────
 
+  // A suggestion's words: `{ text, verb?, target? }` (#673), or a plain
+  // string from an older turn.
+  function suggestionText(action) {
+    return typeof action === 'string' ? action : action.text;
+  }
+
+  // The GM's suggestions (#673): choosing one shows what it would do first.
   function Suggestions(props) {
     if (!props.actions.length) return null;
     return html`<div class="loom-suggested-actions" id="loom-suggested-actions">
       ${props.actions.map(function (action, i) {
+        var text = suggestionText(action);
         return html`<button
-          key=${i + ':' + action}
+          key=${i + ':' + text}
           class="loom-suggested-action-chip"
           type="button"
           disabled=${props.busy}
           onClick=${function () {
-            Loom.play.submitTurn(action);
+            Loom.play.suggest(action);
           }}
         >
-          ${i < 9 && html`<span class="loom-chip-key" aria-hidden="true">${i + 1}</span>`} ${action}
+          ${i < 9 && html`<span class="loom-chip-key" aria-hidden="true">${i + 1}</span>`} ${text}
         </button>`;
       })}
     </div>`;
+  }
+
+  // What an action would do, to confirm before anything is spent (#673):
+  // the walk there, the action, any roll and its cost; Do it or Cancel.
+  function Confirm(props) {
+    var c = props.confirm;
+    if (!c) return null;
+    return html`<div class="loom-confirm" id="loom-confirm" role="group" aria-label="Confirm">
+      <p class="loom-confirm-title">${capitalised(c.action)}?</p>
+      <ul class="loom-confirm-lines">
+        ${c.lines.map(function (line, i) {
+          return html`<li key=${i}>${line}</li>`;
+        })}
+      </ul>
+      <div class="loom-confirm-actions">
+        <button
+          class="app-btn"
+          id="loom-confirm-do"
+          type="button"
+          disabled=${props.busy}
+          onClick=${function () {
+            Loom.play.confirm(c.action);
+          }}
+        >
+          Do it
+        </button>
+        <button
+          class="app-btn loom-confirm-cancel"
+          id="loom-confirm-cancel"
+          type="button"
+          disabled=${props.busy}
+          onClick=${function () {
+            setJournal({ confirm: null });
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>`;
+  }
+
+  function capitalised(text) {
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
   }
 
   function TurnBox(props) {
@@ -578,6 +629,7 @@
       >
         ${liveText(last)}
       </div>
+      <${Confirm} confirm=${j.confirm} busy=${busy} />
       <${Suggestions} actions=${j.suggestions} busy=${busy} />
       <${TurnBox} busy=${busy} ended=${ended} />
       <${TurnBar} turn=${turn} fight=${fight} busy=${busy} />
@@ -640,7 +692,7 @@
       var action = journal().suggestions[Number(key) - 1];
       if (action) {
         event.preventDefault();
-        Loom.play.submitTurn(action);
+        Loom.play.suggest(action);
       }
     }
   }
@@ -650,7 +702,14 @@
   /** A new save: an empty journal with its summary. */
   function reset(summary) {
     finishReveal();
-    setJournal({ entries: [], suggestions: [], summary: summary || '', error: null, banner: null });
+    setJournal({
+      entries: [],
+      suggestions: [],
+      confirm: null,
+      summary: summary || '',
+      error: null,
+      banner: null,
+    });
   }
 
   /**
@@ -712,6 +771,10 @@
     focusInput: focusInput,
     setSuggestions: function (actions) {
       setJournal({ suggestions: (actions || []).slice() });
+    },
+    /** The confirm card (#673), or null to take it away. */
+    setConfirm: function (confirm) {
+      setJournal({ confirm: confirm || null });
     },
     suggestions: function () {
       return journal().suggestions.slice();

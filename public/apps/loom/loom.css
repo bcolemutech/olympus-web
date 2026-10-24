@@ -639,6 +639,31 @@
   opacity: 0.5;
 }
 
+/* What an action would do, to confirm first (#673). */
+.loom-confirm {
+  border: 1px solid color-mix(in srgb, var(--loom-accent) 40%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--loom-accent) 8%, transparent);
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.loom-confirm-title {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+}
+
+.loom-confirm-lines {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}
+
+.loom-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .loom-suggested-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2350,4 +2375,10 @@ body.loom-playing .app-divider {
   border-radius: 8px;
   color: var(--text-muted, #b8b2a7);
   font-style: italic;
+}
+
+.loom-confirm-cancel {
+  background: transparent;
+  color: var(--loom-accent);
+  border: 1px solid color-mix(in srgb, var(--loom-accent) 40%, transparent);
 }

@@ -115,7 +115,14 @@
     // The panel's content (L-726): the turns' lines ({ id, action, text,
     // roll, reveal }), the suggested actions, the save's summary, the last
     // error, and the arrival banner ({ name, image }).
-    journal: { entries: [], suggestions: [], summary: '', error: null, banner: null },
+    journal: {
+      entries: [],
+      suggestions: [],
+      confirm: null, // an action to confirm before it's done (#673)
+      summary: '',
+      error: null,
+      banner: null,
+    },
     ui: Object.assign(readPanel(), {
       hasMap: false, // the save has a map to show
       phone: false, // a narrow screen: the panel is a bottom sheet (L7)

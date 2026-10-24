@@ -48,7 +48,7 @@ const { systemOf } = require('../loom-canon/checks');
  *   narration: string,
  *   entityRefs: string[],
  *   inventedEntities: string[],
- *   suggestedActions: string[],
+ *   suggestedActions: [{ text, verb?, target? }],
  *   discovered?: string[],   — places this turn revealed (./discovery.js)
  * }} params
  * @returns {Promise<{ narration: string, stateSummary: string, suggestedActions: string[] }>}

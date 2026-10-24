@@ -942,7 +942,9 @@ describe('typed actions and the turn (L-614)', () => {
   });
 
   test('acting uses the action; a second action is turned down plainly', async () => {
-    playerTypes('talk', 'chr_brannoch');
+    // Persuading rolls, and carries across the room (talking needs no roll,
+    // and needs him beside you: #673).
+    playerTypes('persuade', 'chr_brannoch');
     const acted = await type('ask about rooms');
     expect(acted.narration).toBe('You go on.');
     // The die comes back for the panel's roll card (L-726), and is recorded.

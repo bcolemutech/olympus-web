@@ -3,7 +3,8 @@
 const loomCanon = require('../loom-canon');
 const { makeWorldState, turnStateOf } = require('../loom-models');
 const { interpretAction } = require('./interpret');
-const { adjudicateAction, setOutWalk, ACTED, rollDie } = require('./adjudicate');
+const { adjudicateAction, setOutWalk, needsNoRoll, ACTED, rollDie } = require('./adjudicate');
+const { reachPlan } = require('./reach');
 const { narrateResolution } = require('./narrate');
 const { commitTurn } = require('./commit');
 const { newlyDiscovered } = require('./discovery');
@@ -144,6 +145,11 @@ async function runTurnPipeline(params) {
   // player types next is read as the answer; anything they do drops it.
   const asked = save.asked || null;
   if (asked) await saveRef.update({ asked: FieldValue.delete() });
+  // An action waiting on the player's say-so (#673): Do it plays it, and
+  // anything else drops it.
+  const pending = save.pending || null;
+  const confirming = Boolean(action && action.verb === 'confirm');
+  if (pending && !confirming) await saveRef.update({ pending: FieldValue.delete() });
 
   // A story that has ended (L-827: the character died) takes no more turns.
   if (save.ended) {
@@ -156,6 +162,8 @@ async function runTurnPipeline(params) {
       ended: true,
     };
   }
+
+  if (confirming) return confirmTurn(params, { save, saveRef, canonWorld }, pending);
 
   // "What's here?" on a battle map (#672): free, unrecorded.
   if (action && action.verb === 'look') {
@@ -419,10 +427,29 @@ async function runTurnPipeline(params) {
   } else if (action && action.verb === 'hazard') {
     actionText = 'walk into ' + action.name;
     proposedAction = { verb: 'hazard', targets: ['hazard:' + action.hazard], params: {} };
+  } else if (action && action.verb === 'suggested') {
+    // One of the GM's suggestions (#673): read from its verb and target when
+    // it names them and needs no roll worked out, else by INTERPRET as typed.
+    actionText = action.text;
+    const act = action.act || {};
+    proposedAction =
+      act.verb && DIRECT.test(act.verb)
+        ? { verb: act.verb, targets: act.target ? [act.target] : [], params: {} }
+        : await interpretAction({
+            actionText,
+            canonWorld: knownWorld(canonWorld, save, found),
+            save,
+            worldState,
+            known,
+            asked,
+          });
   } else if (action) {
     const target = canonWorld.locations[action.target] || (canonWorld.places || {})[action.target];
     actionText = 'travel to ' + (target ? target.name : action.target);
     proposedAction = { verb: 'move', targets: [action.target], params: { from: 'map' } };
+  } else if (params.proposed) {
+    // Confirmed (#673): read when it was asked.
+    proposedAction = params.proposed;
   } else {
     proposedAction = await interpretAction({
       actionText,
@@ -449,6 +476,22 @@ async function runTurnPipeline(params) {
       looked,
       actionText
     );
+  }
+
+  // Out of reach, or one of the GM's suggestions (#673): what it would do
+  // is shown first, for the player to confirm, and nothing is spent yet.
+  const suggested = Boolean(action && action.verb === 'suggested');
+  if (!params.confirmed && (suggested || !action)) {
+    const plan = reachPlan(canonWorld, save, proposedAction, known);
+    if (plan && plan.refused && suggested) return { ...refusal(save, plan.refused), refused: true };
+    if (suggested || (plan && !plan.refused)) {
+      return previewTurn(
+        { save, saveRef, canonWorld },
+        actionText,
+        proposedAction,
+        plan && !plan.refused ? plan : null
+      );
+    }
   }
 
   // Setting out from a town with ground, from anywhere on its streets
@@ -657,6 +700,184 @@ async function townStep(params, target) {
     ...entered,
     narration: [lines.join(' '), entered.narration].filter(Boolean).join(' '),
     step: { ...answer.step, townPoint: null, entered: step.enter.id },
+  };
+}
+
+// The verbs a suggestion is taken at its word for (#673): no roll to work
+// out, so no INTERPRET.
+const DIRECT =
+  /^(talk|speak|ask|greet|chat|examine|inspect|study|read|look|watch|move|go|travel|use)$/;
+const MOVING = /^(move|go|travel|walk)$/;
+
+// What a check would be, in the system's words, for the confirm card (#673):
+// "A roll: Wisdom, Medium", "No roll", or null (a move).
+function rollWords(canonWorld, proposedAction) {
+  const verb = proposedAction.verb;
+  if (MOVING.test(verb) || /^look/.test(verb)) return null;
+  const check = (proposedAction.params || {}).check || null;
+  if (needsNoRoll(verb) && (proposedAction.params || {}).plausibility !== 'improbable') {
+    return 'No roll';
+  }
+  const system = systemOf(canonWorld);
+  const sheet = system.sheet || {};
+  const find = (list, id) => (list || []).find((x) => x.id === id);
+  const skill = check && check.skill && find(sheet.skills, check.skill);
+  const attribute = check && check.attribute && find(sheet.attributes, check.attribute);
+  const named = skill ? skill.name || skill.id : attribute ? attribute.name || attribute.id : null;
+  const ladder = system.checks.ladder;
+  const top = ladder[ladder.length - 1].name;
+  const rung =
+    (proposedAction.params || {}).plausibility === 'improbable'
+      ? top
+      : (check && check.rung) || ladder[0].name;
+  const against = check && check.opposedBy && (canonWorld.characters || {})[check.opposedBy];
+  return (
+    'A roll' +
+    (named ? ': ' + named + ', ' : ', ') +
+    rung +
+    (against ? ' against ' + against.name : '')
+  );
+}
+
+/**
+ * The confirm card for an action (#673): the walk there, if it needs one,
+ * the action, any roll and what it spends; kept on the save as `pending` for
+ * Do it (`{ verb: 'confirm' }`). Nothing is spent or recorded yet.
+ */
+async function previewTurn({ save, saveRef, canonWorld }, actionText, proposedAction, walk) {
+  const turn = turnStateOf(save);
+  const inFight = Boolean(combat.play.fightOf(save));
+  const moving = MOVING.test(proposedAction.verb);
+  if (!moving && turn.actionUsed) {
+    return {
+      narration: ACTED,
+      stateSummary: save.recentSummary || '',
+      suggestedActions: [],
+      refused: true,
+      time: clock.timeView(clock.timeOf(save)),
+    };
+  }
+  const squares = (n) => (n === 1 ? '1 square' : n + ' squares');
+  const lines = [];
+  if (walk && walk.kind === 'map') {
+    lines.push(
+      'Walk ' +
+        squares(walk.squares) +
+        ' to ' +
+        walk.name +
+        (walk.thisTurn
+          ? '.'
+          : inFight
+            ? ': more than this turn, so you stop partway and act next turn.'
+            : ': more than this turn, so the walk goes on into the next.')
+    );
+  } else if (walk && walk.kind === 'town') {
+    lines.push('Go to ' + walk.placeName + ', where ' + walk.name + ' is.');
+  }
+  const roll = rollWords(canonWorld, proposedAction);
+  lines.push(
+    (walk ? 'Then: ' : '') + actionText.charAt(0).toUpperCase() + actionText.slice(1) + '.'
+  );
+  if (roll) lines.push(roll + '.');
+  if (!moving) lines.push(inFight ? 'Uses your action this turn.' : 'Uses your action.');
+  await saveRef.update({
+    pending: {
+      actionText,
+      proposedAction: JSON.parse(JSON.stringify(proposedAction)),
+      walk: walk || null,
+    },
+  });
+  return {
+    narration: lines.join(' '),
+    stateSummary: save.recentSummary || '',
+    suggestedActions: [],
+    time: clock.timeView(clock.timeOf(save)),
+    refused: true,
+    confirm: { action: actionText, lines },
+  };
+}
+
+// The most walks Do it takes to get there (#673): a town place, then its map.
+const CONFIRM_HOPS = 3;
+// And the most turns a walk on a map goes on into, out of a fight.
+const CONFIRM_TURNS = 10;
+
+/**
+ * Do it (#673): the action kept by its confirm card, walked to and then
+ * played. The walk is a move like any other (in a fight it stops at this
+ * turn's movement; out of one it goes on turn after turn); if it's stopped
+ * short (someone comes into view, a fight starts, a hazard, a refusal), the
+ * action isn't played and the journal says why.
+ */
+async function confirmTurn(params, { save, saveRef, canonWorld }, pending) {
+  if (!pending) return { ...refusal(save, 'There is nothing waiting to be done.'), refused: true };
+  await saveRef.update({ pending: FieldValue.delete() });
+  const lines = [];
+  let walk = pending.walk;
+  const stoppedShort = (why) => ({
+    narration: lines.concat(why ? [why] : []).join(' '),
+    stateSummary: save.recentSummary || '',
+    suggestedActions: [],
+    time: clock.timeView(clock.timeOf(save)),
+  });
+  for (let hop = 0; walk && hop < CONFIRM_HOPS; hop++) {
+    if (walk.kind === 'map') {
+      let next = { verb: 'move', cell: walk.cell };
+      for (let t = 0; t < CONFIRM_TURNS; t++) {
+        const step = await runTurnPipeline({ ...params, action: next });
+        lines.push(
+          ...((step.step && step.step.lines) || [step.narration]).filter(
+            (l) => l && l !== OUT_OF_MOVEMENT
+          )
+        );
+        const now = (await saveRef.get()).data();
+        if (now.cell && now.cell.x === walk.cell.x && now.cell.y === walk.cell.y) break;
+        const plan = turnStateOf(now).plan;
+        const onIt = plan && plan.layer === 'battleMap';
+        if (step.refused || !onIt || now.fight || now.mapId !== save.mapId) {
+          return stoppedShort('You stop short of ' + walk.name + '.');
+        }
+        if (combat.play.fightOf(save)) {
+          return stoppedShort('The rest of the way to ' + walk.name + ' is kept for next turn.');
+        }
+        await runTurnPipeline({ ...params, action: { verb: 'end-turn' } });
+        next = { verb: 'continue' };
+      }
+    } else {
+      const fresh = (await saveRef.get()).data();
+      const answer =
+        canonWorld && walksTown(canonWorld, fresh)
+          ? await walkThere(params, { placeId: walk.placeId })
+          : await runTurnPipeline({ ...params, action: { verb: 'move', target: walk.placeId } });
+      if (answer.narration) lines.push(answer.narration);
+      const now = (await saveRef.get()).data();
+      if (now.placeId !== walk.placeId) return stoppedShort('You stop short of ' + walk.name + '.');
+    }
+    // Once there, there may be a map to cross too (a place's own).
+    const {
+      save: now,
+      canonWorld: world,
+      known,
+    } = await intake({
+      db: params.db,
+      uid: params.uid,
+      worldId: params.worldId,
+      saveId: params.saveId,
+    });
+    const after = reachPlan(world, now, pending.proposedAction, known);
+    if (after && after.refused) return stoppedShort(after.refused);
+    walk = after;
+  }
+  const acted = await runTurnPipeline({
+    ...params,
+    action: undefined,
+    actionText: pending.actionText,
+    proposed: pending.proposedAction,
+    confirmed: true,
+  });
+  return {
+    ...acted,
+    narration: lines.concat([acted.narration]).filter(Boolean).join(' '),
   };
 }
 

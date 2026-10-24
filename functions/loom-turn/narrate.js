@@ -110,10 +110,12 @@ function buildSystemInstruction(knownEntities, canonWorld) {
     'says.\n\n' +
     buildSystemSection(canonWorld) +
     '\n\n' +
-    'Optionally suggest 2-4 short next actions as plain phrases (e.g. "search the wreck"). ' +
-    'Leave empty if nothing obvious suggests itself.\n\n' +
+    'Optionally suggest 2-4 next actions the player might take, each an object: { "text": ' +
+    'a short phrase (e.g. "talk to the innkeeper"), "verb": one word (talk, examine, use, ' +
+    'move, look, search, …), "target": the exact id from the known-entities list it is ' +
+    'aimed at, if any }. Leave the list empty if nothing obvious suggests itself.\n\n' +
     'Respond with ONLY a JSON object: { "narration": string, "inventedEntities": string[], ' +
-    '"suggestedActions": string[] }'
+    '"suggestedActions": [{ "text": string, "verb": string, "target"?: string }] }'
   );
 }
 
@@ -681,6 +683,33 @@ function fallbackNarration(actionText, resolution) {
   };
 }
 
+/**
+ * NARRATE's suggestions (#673), checked: each `{ text, verb?, target? }`, at
+ * most 4, its target kept only when it is a known entity's id (one the save
+ * may know: on a battle map, one it has seen), its verb only when it is one
+ * word. A plain string, from an older model answer, is its text alone.
+ */
+const MAX_SUGGESTIONS = 4;
+function sanitizeSuggestions(value, knownEntities) {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set((knownEntities || []).map((e) => e.id));
+  const out = [];
+  for (const item of value) {
+    const raw = typeof item === 'string' ? { text: item } : item;
+    if (!raw || typeof raw !== 'object' || typeof raw.text !== 'string') continue;
+    const text = raw.text.trim().slice(0, 120);
+    if (!text) continue;
+    const verb =
+      typeof raw.verb === 'string' && /^[a-z][a-z_-]{1,20}$/.test(raw.verb.trim().toLowerCase())
+        ? raw.verb.trim().toLowerCase()
+        : null;
+    const target = typeof raw.target === 'string' && ids.has(raw.target) ? raw.target : null;
+    out.push({ text, ...(verb ? { verb } : {}), ...(verb && target ? { target } : {}) });
+    if (out.length >= MAX_SUGGESTIONS) break;
+  }
+  return out;
+}
+
 function sanitizeStringArray(value) {
   return Array.isArray(value)
     ? value.filter((v) => typeof v === 'string' && v.trim().length > 0)
@@ -736,7 +765,7 @@ function resolveSceneEntityIds(canonWorld, save, proposedAction, hidden) {
  *   narration: string,
  *   entityRefs: string[],
  *   inventedEntities: string[],
- *   suggestedActions: string[],
+ *   suggestedActions: [{ text, verb?, target? }],
  * }>}
  */
 async function narrateResolution(params) {
@@ -789,10 +818,10 @@ async function narrateResolution(params) {
     narration: raw.narration,
     entityRefs,
     inventedEntities: sanitizeStringArray(raw.inventedEntities),
-    suggestedActions: sanitizeStringArray(raw.suggestedActions),
+    suggestedActions: sanitizeSuggestions(raw.suggestedActions, knownEntities),
     // The fate it chose for a player down (L-827), when asked.
     ...(Object.keys(FATE_WORDS).includes(raw.fate) ? { fate: raw.fate } : {}),
   };
 }
 
-module.exports = { narrateResolution, resolveSceneEntityIds };
+module.exports = { narrateResolution, resolveSceneEntityIds, sanitizeSuggestions };
