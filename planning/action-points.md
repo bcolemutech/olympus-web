@@ -84,6 +84,7 @@ Settled with the user through a questionnaire (2026-10-23); every answer took th
 - **`ap.tiers`**: `{ minor, standard, major }` for typed actions (CT3).
 - **`ap.keepLimit`**: none by default (KP2).
 - **`modules.combat.economy`** is retired: actions and reactions are paid in AP.
+- **AP can be off** (MD9, 2026-10-24): a system with no `ap` plays without a pool. Steps on a grid are then free and each turn takes one action, judged as today; modules that need AP (combat) are off with it, or set their own turn rule.
 
 ### 4.2 Default costs (CT1), the same in both built-ins
 
@@ -161,8 +162,8 @@ In both built-in systems, a player crosses difficult ground at double cost, open
 
 ## 6. Sub-issues (filed 2026-10-24)
 
-| ID    | Story                                                                                                                                                                                                                         | Depends on | Model  |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
+| ID           | Story                                                                                                                                                                                                                         | Depends on | Model  |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
 | L-831 (#681) | **The pool and costs as data:** `sheet.ap`, `ap.costs`, `ap.tiers`, `ap.keepLimit`; overrides on attacks, map features, traits and conditions; checked on save; the built-ins; retiring speed and economy, converting systems | —          | Opus   |
 | L-832 (#682) | **Turns on AP:** `save.turn` with `ap`; steps priced by the table (both `grid-paths.js` copies); every action charged; refused when short; long actions; converting saves                                                     | L-831      | Opus   |
 | L-833 (#683) | **Off your turn:** kept AP until your next turn, reactions paid from it, Ready reserving its cost                                                                                                                             | L-832      | Sonnet |
