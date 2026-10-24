@@ -65,6 +65,38 @@ function isOff(system) {
   return Boolean(system) && system.ap === false;
 }
 
+// What each spend is, in the rules reference (L-837).
+const SPEND_NAMES = Object.freeze({
+  move: 'A square',
+  difficult: 'A square of difficult ground',
+  door: 'Opening or closing a door',
+  speak: 'A few words',
+  standUp: 'Standing up',
+  lock: 'Trying a lock',
+  object: 'Handling or using an object',
+  withdraw: 'Withdraw',
+  defend: 'A defending reaction',
+  dodge: 'Dodge',
+  attack: 'An attack (unless it has its own cost)',
+});
+
+/**
+ * A system's AP as the rules reference reads it (L-837; UI1): the pool's
+ * formula, each cost named, the tiers of typed actions and the keep limit;
+ * or `{ off: true }` with AP off (L-838).
+ */
+function rulesView(system) {
+  if (isOff(system)) return { off: true };
+  const { costs, tiers, keepLimit } = settingsOf(system);
+  const pool = system && system.sheet && system.sheet.ap;
+  return {
+    pool: pool === undefined ? String(DEFAULT_POOL) : String(pool),
+    costs: SPENDS.map((id) => ({ id, name: SPEND_NAMES[id], ap: costs[id] })),
+    tiers: TIER_NAMES.map((id) => ({ id, ap: tiers[id] })),
+    keepLimit,
+  };
+}
+
 /** A system's AP settings, its own over the defaults. */
 function settingsOf(system) {
   const ap = (system && isObject(system.ap) && system.ap) || {};
@@ -355,6 +387,7 @@ function tierCost(system, tier) {
 }
 
 module.exports = {
+  rulesView,
   COSTS,
   SPENDS,
   TIERS,

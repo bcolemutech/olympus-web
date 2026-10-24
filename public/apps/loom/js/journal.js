@@ -558,13 +558,10 @@
         ${(props.fight ? 'Round ' + props.fight.round + ' · ' : '') +
         'Turn ' +
         turn.n +
-        ' · ' +
-        (turn.apOff
-          ? turn.acted
-            ? 'you have acted'
-            : 'your action is ready'
-          : turn.ap + ' of ' + turn.pool + ' AP left')}
+        (turn.apOff ? (turn.acted ? ' · you have acted' : ' · your action is ready') : '')}
       </span>
+      ${!turn.apOff &&
+      html`<${Loom.overlay.ApMeter} turn=${turn} held=${props.held} id="loom-turn-ap" />`}
       <button
         class="app-btn loom-turn-end"
         id="loom-turn-end"
@@ -602,6 +599,9 @@
     var ended = ui.useStore(function (s) {
       return Boolean(s.map && s.map.ended);
     });
+    var held = ui.useStore(function (s) {
+      return s.held;
+    });
     var logRef = hooks.useRef(null);
     var last = j.entries[j.entries.length - 1];
 
@@ -632,7 +632,7 @@
       <${Confirm} confirm=${j.confirm} busy=${busy} />
       <${Suggestions} actions=${j.suggestions} busy=${busy} />
       <${TurnBox} busy=${busy} ended=${ended} />
-      <${TurnBar} turn=${turn} fight=${fight} busy=${busy} />
+      <${TurnBar} turn=${turn} fight=${fight} busy=${busy} held=${held} />
       ${busy &&
       html`<div class="app-loading" id="loom-turn-loading">
         <div class="app-spinner"></div>

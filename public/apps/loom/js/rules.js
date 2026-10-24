@@ -5,8 +5,9 @@
   // a panel from the menu bar, made from the world's game system as
   // loomGetMap sends it (`rules`, functions/loom-canon/checks.js rulesOf),
   // in the system's own words: the check and what it reads, the difficulty
-  // ladder, the degrees and when each happens, the attributes, the skills
-  // and what the sheet tracks. Escape or Close shuts it.
+  // ladder, the degrees and when each happens, the attributes, the skills,
+  // action points (L-837: the pool, the costs and the tiers) and what the
+  // sheet tracks. Escape or Close shuts it.
 
   var Loom = window.Loom;
   var ui = Loom.ui;
@@ -44,6 +45,58 @@
       <h3 class="loom-rules-heading">${props.title}</h3>
       ${props.children}
     </section>`;
+  }
+
+  var TIER_WORDS = {
+    minor: 'a quick thing: a glance, a shout, a door kicked shut',
+    standard: 'most things you do',
+    major: 'a big effort: a barricade, a long climb, a ritual',
+  };
+
+  // Action points (L-837; action points UI1): the pool, what each thing
+  // costs and the tiers of anything else typed; or that the turn is one
+  // action, with AP off (L-838).
+  function ApSection(props) {
+    var ap = props.ap;
+    if (!ap) return null;
+    if (ap.off) {
+      return html`<${Section} title="Turns">
+        <p id="loom-rules-ap">
+          Each turn you may move and take one action. End turn gives the action back.
+        </p>
+      <//>`;
+    }
+    return html`<${Section} title="Action points">
+      <p>
+        Each turn you have a pool of action points (AP):
+        <code class="loom-rules-formula">${ap.pool}</code>. Moving and every action spend them; End
+        turn fills the pool again. In a fight, what you don't spend is kept for reactions until your
+        next
+        turn${ap.keepLimit !== null && ap.keepLimit !== undefined ? ', up to ' + ap.keepLimit : ''}.
+      </p>
+      <table class="loom-rules-table" id="loom-rules-ap">
+        <tbody>
+          ${ap.costs.map(function (c) {
+            return html`<tr key=${c.id}>
+              <th scope="row">${c.name}</th>
+              <td>${c.ap} AP</td>
+            </tr>`;
+          })}
+        </tbody>
+      </table>
+      <p>Anything else you type costs by how big it is:</p>
+      <table class="loom-rules-table" id="loom-rules-tiers">
+        <tbody>
+          ${ap.tiers.map(function (t) {
+            return html`<tr key=${t.id}>
+              <th scope="row">${t.id.charAt(0).toUpperCase() + t.id.slice(1)}</th>
+              <td>${t.ap} AP</td>
+              <td class="loom-rules-note">${TIER_WORDS[t.id] || ''}</td>
+            </tr>`;
+          })}
+        </tbody>
+      </table>
+    <//>`;
   }
 
   function Rules() {
@@ -147,6 +200,7 @@
               })}
             </ul>
           <//>`}
+          <${ApSection} ap=${rules.ap} />
           <${Section} title="Your sheet">
             <p>
               ${rules.resources

@@ -85,7 +85,8 @@ const key = (cell) => cell.x + ',' + cell.y;
  *
  * Returns `{ fight (null when it ended), figures, sheet (the player's, when
  * changed), lines, rounds, turns: [{ id, path, attack?, reactions? }], ended?: { winner,
- * how }, down?: the player's state when they fell }`.
+ * how }, down?: the player's state when they fell, keptLeft?: what the
+ * player had left of the AP they kept once the others were done (L-837) }`.
  */
 function playOthers(world, save, { dice, current = false, now = 0, choose = null }) {
   const system = checks.systemOf(world);
@@ -510,6 +511,8 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
     // The player's turn again: their Dodge and readied attack are over
     // (L-823), and what they kept is gone, the pool full again (L-833).
     const mine = !ended && f.turn === PLAYER && f.combatants[PLAYER];
+    // What the player had left of the AP they kept, before it goes (L-837).
+    const left = f.combatants[PLAYER] ? f.combatants[PLAYER].kept : undefined;
     if (mine) {
       delete mine.dodging;
       delete mine.readied;
@@ -524,6 +527,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       rounds,
       turns,
       named,
+      ...(Number.isInteger(left) ? { keptLeft: left } : {}),
       ...(ended ? { ended } : {}),
       ...(playerDown ? { down: playerDown } : {}),
     };

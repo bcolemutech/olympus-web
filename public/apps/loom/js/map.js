@@ -306,7 +306,7 @@
     Loom.town.reset();
     Loom.battle.reset();
     ref('loom-map-info').innerHTML = '';
-    Loom.store.set({ map: null, turn: null });
+    Loom.store.set({ map: null, turn: null, held: null });
     Loom.store.setUi({ level: 'world', levels: [], selection: null });
     setAvailable(false);
   }

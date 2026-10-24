@@ -6,7 +6,9 @@
  * player ends their turn between Grell, a skirmisher, and Bruno, a guard.
  * Grell strikes and steps back out of reach; Bruno strikes once and keeps
  * the rest of his AP. The player then walks out of Bruno's reach, and his
- * kept AP pays for the blow.
+ * kept AP pays for the blow. And what the Loom is sent to show AP (L-837 /
+ * #687): the costs on the map view and in the rules, and after End turn the
+ * AP the player held for reactions, with what was left of it.
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest loom-foes-ap-play --verbose"
@@ -104,7 +106,7 @@ const { getFirestore } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
 );
 const functionsTest = require('firebase-functions-test')({ projectId: PROJECT }, null);
-const { loomPlayTurn } = require('../functions/index');
+const { loomPlayTurn, loomGetMap } = require('../functions/index');
 const { makeSave } = require('../functions/loom-models');
 const db = getFirestore();
 const PLAYER = { uid: 'player-001', token: { apps: ['loom'] } };
@@ -127,8 +129,8 @@ describe.each(Object.keys(mockCases))('foes on AP in play under %s', (id) => {
     mockState.id = id;
   });
 
-  // The player between Grell and Bruno, in a fight, their turn spent.
-  async function inTheFight(saveId) {
+  // The player between Grell and Bruno, in a fight, `ap` left of their turn.
+  async function inTheFight(saveId, ap = 0) {
     const ref = db.collection('loom_saves').doc(saveId);
     const sheet = sheets.defaultSheet(c.system);
     for (const r of c.system.sheet.resources) sheet.resources[r.id] = { current: 500 };
@@ -144,7 +146,7 @@ describe.each(Object.keys(mockCases))('foes on AP in play under %s', (id) => {
       }),
       mapId: 'bm_hall',
       cell: { x: 5, y: 2 },
-      turn: { n: 1, ap: 0, kept: 0, plan: null },
+      turn: { n: 1, ap, kept: 0, plan: null },
       fight: {
         id: 'fight-1',
         mapId: 'bm_hall',
@@ -196,5 +198,32 @@ describe.each(Object.keys(mockCases))('foes on AP in play under %s', (id) => {
     expect(walked.step.lines[1]).toMatch(/^Bruno hits you with their club/);
     const save = (await ref.get()).data();
     expect(save.fight.combatants.bruno.kept).toBe(0);
+  });
+
+  test('the Loom is sent every cost, and after End turn the AP held with what was left (L-837)', async () => {
+    const ref = await inTheFight(`${id}-view`, 15);
+    const view = await loomGetMap.run({
+      data: { worldId: 'shattered-coast', saveId: ref.id },
+      auth: PLAYER,
+    });
+    // The menu's costs: each action, each attack.
+    expect(view.turn.prices.actions).toMatchObject({ dodge: 8, withdraw: 5, standUp: 5, object: 5 });
+    expect(view.combat.attacks.every((a) => a.ap === 10)).toBe(true);
+    // The rules reference: the pool, each cost and the tiers.
+    expect(view.rules.ap.pool).toBe(c.system.sheet.ap);
+    expect(view.rules.ap.costs).toEqual(
+      expect.arrayContaining([{ id: 'attack', name: expect.any(String), ap: 10 }])
+    );
+    expect(view.rules.ap.tiers).toEqual([
+      { id: 'minor', ap: 3 },
+      { id: 'standard', ap: 10 },
+      { id: 'major', ap: 20 },
+    ]);
+    // End turn with 15 kept: Grell steps out of the player's reach, and the
+    // player's blow at him spends 10 of it.
+    const answer = await play(ref, { verb: 'end-turn' });
+    expect(answer.held).toEqual({ kept: 15, left: 5 });
+    const turns = await ref.collection('loom_turns').get();
+    expect(turns.docs[0].data().resolution.held).toBeUndefined();
   });
 });

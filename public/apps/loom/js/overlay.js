@@ -38,6 +38,9 @@
       ui: ui.useStore(function (s) {
         return s.ui;
       }),
+      held: ui.useStore(function (s) {
+        return s.held;
+      }),
     };
   }
 
@@ -93,6 +96,59 @@
     </div>`;
   }
 
+  /**
+   * The AP bar (L-837; action points UI1): what's left of the pool, any set
+   * aside for a readied attack, and after End turn in a fight the AP kept
+   * for reactions, shown as held, with what the others' turns left of it.
+   * `town`, a town walk's metres.
+   */
+  function ApMeter(props) {
+    var turn = props.turn;
+    var pool = Math.max(1, turn.pool || 0);
+    var left = Math.max(0, Math.min(pool, turn.ap || 0));
+    var set = Math.max(0, Math.min(pool - left, turn.reserved || 0));
+    var held = props.held;
+    var heldText = held
+      ? held.kept +
+        ' AP held' +
+        (held.left < held.kept ? ', ' + (held.kept - held.left) + ' spent reacting' : '')
+      : null;
+    var apText =
+      left +
+      ' / ' +
+      turn.pool +
+      ' AP' +
+      (set ? ' · ' + set + ' readied' : '') +
+      (props.town ? ' (' + props.town + ')' : '');
+    var pct = function (n) {
+      return (n / pool) * 100 + '%';
+    };
+    return html`<span class="loom-ap" id=${props.id}>
+      <span
+        class="loom-ap-bar"
+        role="meter"
+        aria-label="Action points"
+        aria-valuemin="0"
+        aria-valuemax=${pool}
+        aria-valuenow=${left}
+        aria-valuetext=${left + ' of ' + pool + ' AP left'}
+      >
+        <span class="loom-ap-fill" style=${'width:' + pct(left)}></span>
+        ${set > 0 &&
+        html`<span
+          class="loom-ap-set"
+          style=${'left:' + pct(left) + ';width:' + pct(set)}
+          title=${set + ' AP set aside for a readied attack'}
+        ></span>`}
+      </span>
+      <span class="loom-ap-text">${apText}</span>
+      ${heldText &&
+      html`<span class="loom-ap-held" title="Kept for reactions in the last round"
+        >${heldText}</span
+      >`}
+    </span>`;
+  }
+
   function TurnBar() {
     var s = useOverlayState();
     var turn = s.turn;
@@ -100,19 +156,30 @@
     var busy = s.ui.busy;
     var walkingTown =
       s.ui.playerLevel === 'town' && s.map && s.map.town && s.map.town.ground && s.map.town.walks;
-    // Action points left of the pool (L-832); in town, a point walks 20 m.
-    // With AP off (L-838): whether the turn's action is used.
+    // Action points left of the pool, as a bar (L-832, L-837); in town, a
+    // point walks 20 m. With AP off (L-838): whether the turn's action is
+    // used.
     var movement = turn.apOff
       ? (turn.acted ? 'acted' : 'action ready') +
         (walkingTown ? ' (' + turn.ap * 20 + ' m to walk)' : '')
-      : turn.ap + '/' + turn.pool + ' AP' + (walkingTown ? ' (' + turn.ap * 20 + ' m)' : '');
+      : null;
     var canContinue = Boolean(turn.plan) && (turn.apOff || turn.ap > 0);
     // In a fight (L-821): its round (the order bar has the rest, L-828).
     var fight = s.map && s.map.fight;
+    var state =
+      (fight ? 'Round ' + fight.round + ' · ' : '') +
+      'Turn ' +
+      turn.n +
+      (movement ? ' · ' + movement : '');
     return html`<div class="loom-map-turnbar loom-map-ui" role="group" aria-label="Turn">
-      <span class="loom-map-turnbar-state">
-        ${fight ? 'Round ' + fight.round + ' · ' : ''}Turn ${turn.n} · ${movement}
-      </span>
+      <span class="loom-map-turnbar-state">${state}</span>
+      ${!movement &&
+      html`<${ApMeter}
+        turn=${turn}
+        held=${s.held}
+        id="loom-overlay-ap"
+        town=${walkingTown ? turn.ap * 20 + ' m' : null}
+      />`}
       ${canContinue &&
       html`<button
         class="loom-map-turnbar-btn"
@@ -353,6 +420,7 @@
 
   Loom.overlay = {
     mount: mount,
+    ApMeter: ApMeter,
     drawMinimap: drawMinimap,
   };
 })();

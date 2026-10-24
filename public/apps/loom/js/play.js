@@ -64,6 +64,9 @@
         setLoading(false);
         var data = result.data;
         showTime(data.time);
+        // The AP kept for reactions over the others' turns (L-837), shown
+        // as held till the next turn.
+        Loom.store.set({ held: data.held || null });
         // A second action turned down (L-614) keeps the suggestions, too.
         var keep = (options.keep || data.refused) && !(data.suggestedActions || []).length;
         // A walk that ends by going in or setting out (L-664), by walking

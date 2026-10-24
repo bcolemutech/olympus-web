@@ -1559,6 +1559,64 @@ body.loom-playing .app-divider {
   white-space: nowrap;
 }
 
+/* The AP bar (L-837; action points UI1): what's left of the pool, any set
+   aside for a readied attack (striped), and after End turn the AP held for
+   reactions. */
+.loom-ap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--loom-text-soft);
+  white-space: nowrap;
+}
+
+.loom-ap-bar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 5.5rem;
+  height: 0.5rem;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--loom-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--loom-accent) 40%, transparent);
+  border-radius: 999px;
+}
+
+.loom-ap-fill,
+.loom-ap-set {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.loom-ap-fill {
+  left: 0;
+  background: var(--loom-accent);
+  transition: width 0.25s ease;
+}
+
+.loom-ap-set {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--loom-accent) 70%, transparent) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.loom-ap-held {
+  padding: 0.05rem 0.45rem;
+  color: var(--loom-accent);
+  border: 1px dashed color-mix(in srgb, var(--loom-accent) 60%, transparent);
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loom-ap-fill {
+    transition: none;
+  }
+}
+
 .loom-map-turnbar-btn {
   padding: 0.3rem 0.85rem;
   font: inherit;
@@ -1802,6 +1860,14 @@ body.loom-playing .app-divider {
     overflow: hidden;
     font-size: 0.75rem;
     text-overflow: ellipsis;
+  }
+
+  .loom-map-turnbar .loom-ap-bar {
+    width: 3.5rem;
+  }
+
+  .loom-map-turnbar .loom-ap {
+    font-size: 0.75rem;
   }
 
   .loom-map-turnbar-btn {

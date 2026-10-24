@@ -138,6 +138,7 @@ async function commitTurn(params) {
     const recorded = Object.assign({}, resolution);
     // Others' turns played out on the map (L-828) are for the answer only.
     delete recorded.playback;
+    delete recorded.held;
     delete recorded.walked;
     delete recorded.walkedTown;
     const turn = makeTurn({
@@ -181,6 +182,8 @@ async function commitTurn(params) {
         ...(resolution.roll ? { roll: resolution.roll } : {}),
         // Everyone else's turns, to play out on the map (L-828; combat UI3).
         ...(resolution.playback ? { turns: resolution.playback } : {}),
+        // The AP kept for reactions and what's left of it, for the turn bar (L-837).
+        ...(resolution.held ? { held: resolution.held } : {}),
         // The time once the turn is done, for the map's clock (L-376).
         time: clock.timeView(clock.timeOf(save)),
       },
