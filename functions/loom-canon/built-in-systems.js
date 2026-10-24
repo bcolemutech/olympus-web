@@ -82,11 +82,28 @@ const FANTASY = {
         description: 'Sick and shaking: −2 to every check.',
         modifiers: { checks: '-2' },
       },
+      // On AP (L-834): Prone doubles moving until you stand up (its 5 AP);
+      // Stunned leaves no AP; Restrained stops moving; Slowed takes 10.
       {
         id: 'prone',
         name: 'Prone',
-        description: 'On the ground: −2 to every check, and 10 fewer AP.',
-        modifiers: { checks: '-2', ap: '-10' },
+        description: 'On the ground: −2 to every check; moving costs double until you stand up.',
+        modifiers: { checks: '-2' },
+        costs: { move: 'x2', difficult: 'x2' },
+        standUp: true,
+      },
+      {
+        id: 'restrained',
+        name: 'Restrained',
+        description: "Held fast: −2 to every check, and you can't move.",
+        modifiers: { checks: '-2' },
+        costs: { move: 'never', difficult: 'never' },
+      },
+      {
+        id: 'slowed',
+        name: 'Slowed',
+        description: 'Sluggish: 10 fewer AP a turn.',
+        modifiers: { ap: '-10' },
       },
       {
         id: 'burning',
@@ -97,9 +114,8 @@ const FANTASY = {
       {
         id: 'stunned',
         name: 'Stunned',
-        description: "Reeling: you can't act or move.",
-        noAction: true,
-        noMove: true,
+        description: "Reeling: no AP, so you can't act or move.",
+        ap: 0,
       },
     ],
     // Armour (L-822): what an attack must reach to hit, 10 and Dexterity
@@ -280,9 +296,28 @@ const SCIFI = {
       {
         id: 'stunned',
         name: 'Stunned',
-        description: "Knocked senseless: you can't act or move.",
-        noAction: true,
-        noMove: true,
+        description: "Knocked senseless: no AP, so you can't act or move.",
+        ap: 0,
+      },
+      // On AP (L-834), as the fantasy system's: down flat, pinned, slowed.
+      {
+        id: 'prone',
+        name: 'Prone',
+        description: 'Down flat: moving costs double until you get up.',
+        costs: { move: 'x2', difficult: 'x2' },
+        standUp: true,
+      },
+      {
+        id: 'pinned',
+        name: 'Pinned',
+        description: "Held or wedged in: you can't move.",
+        costs: { move: 'never', difficult: 'never' },
+      },
+      {
+        id: 'slowed',
+        name: 'Slowed',
+        description: 'Servos jammed or legs gone heavy: 10 fewer AP a turn.',
+        modifiers: { ap: '-10' },
       },
       {
         id: 'bleeding',

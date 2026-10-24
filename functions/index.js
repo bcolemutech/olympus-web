@@ -546,7 +546,7 @@ function requireLoomAuth(request) {
  *       subdue; no model reads it
  *    or { worldId, saveId, action: { verb: 'rest', rest: 'short' | 'long' } } — a
  *       short or long rest (L-827), by the system's rests
- *    or { worldId, saveId, action: { verb: 'dash' | 'dodge' | 'withdraw' } },
+ *    or { worldId, saveId, action: { verb: 'dash' | 'dodge' | 'withdraw' | 'stand' } },
  *       { verb: 'ready', attack?, target? } or { verb: 'use', feature } — a
  *       fight's other actions (L-823); no model reads them but Use's
  * A walk in town is worked out without the model too, and returns step:
@@ -634,7 +634,7 @@ exports.loomPlayTurn = onCall(async (request) => {
     const id = (v) => typeof v === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(v);
     const tactic =
       typeof action === 'object' &&
-      (['dash', 'dodge', 'withdraw'].includes(action.verb) ||
+      (['dash', 'dodge', 'withdraw', 'stand'].includes(action.verb) ||
         (action.verb === 'ready' &&
           (action.attack === undefined || id(action.attack)) &&
           (action.target === undefined || goodTarget)) ||
@@ -653,7 +653,7 @@ exports.loomPlayTurn = onCall(async (request) => {
           '{ verb: "move", point: { x, y } }, { verb: "walk-there", point | target }, ' +
           '{ verb: "continue" }, { verb: "door", door: <door id>, open: true | false }, ' +
           '{ verb: "attack", target: <character id>, attack?, subdue? }, ' +
-          '{ verb: "rest", rest: "short" | "long" }, { verb: "dash" | "dodge" | "withdraw" }, ' +
+          '{ verb: "rest", rest: "short" | "long" }, { verb: "dash" | "dodge" | "withdraw" | "stand" }, ' +
           '{ verb: "ready", attack?, target? }, { verb: "use", feature: <feature id> }, ' +
           '{ verb: "look", cell: { x, y } | door: <door id> }, ' +
           '{ verb: "suggested", text, act?: { verb, target? } }, { verb: "confirm" } ' +
@@ -699,7 +699,7 @@ exports.loomPlayTurn = onCall(async (request) => {
                     ? { verb: 'door', door: action.door, open: action.open }
                     : action.verb === 'rest'
                       ? { verb: 'rest', rest: action.rest }
-                      : ['dash', 'dodge', 'withdraw', 'ready', 'use'].includes(action.verb)
+                      : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(action.verb)
                         ? {
                             verb: action.verb,
                             ...(action.attack ? { attack: action.attack } : {}),

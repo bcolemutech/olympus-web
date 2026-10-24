@@ -97,7 +97,8 @@ describe.each([
     const view = sheets.characterView(system, character(sheet), 1000 + 1800);
     expect(view.conditions).toEqual([
       { id: 'poisoned', name: 'Poisoned', left: '2 turns' },
-      { id: 'stunned', name: 'Stunned', left: '1 round' },
+      // What it does to AP (L-834).
+      { id: 'stunned', name: 'Stunned', left: '1 round', ap: '0 AP' },
       { id: 'cursed', name: 'Cursed', left: 'until saved' },
       { id: 'blessed', name: 'Blessed', left: 'about 30 minutes' },
       { id: 'tired', name: 'Tired' },

@@ -18,8 +18,13 @@
  *                     rank, its maximum
  *       each?: { [resource]: formula },      at the end of each turn: damage
  *                                            (negative) or healing
- *       costs?: { [spend]: n | 'x2' },       what AP buys at (L-831, ./ap.js)
- *       noAction?, noMove? }                 can't act, can't move
+ *       costs?: { [spend]: n | 'x2' | 'never' },  what AP buys at (L-831,
+ *                                            ./ap.js); 'never', not at all
+ *       ap?: n,                              sets the pool (L-834): 0, Stunned
+ *       standUp? }                           ended by standing up, for its
+ *                                            cost (Prone)
+ *   (The flags noAction and noMove, from before AP, are converted by
+ *   ./ap.js: noAction to `ap: 0`, noMove to moving at 'never'.)
  *
  *   An effect on a sheet (sheet.conditions)
  *     { condition, source?, duration: { rounds | turns | seconds | untilSaved },
@@ -89,16 +94,55 @@ function sumOf(mods, target) {
 }
 
 /**
- * What the conditions on a sheet stop: `{ noAction: [name], noMove: [name] }`,
- * each the names of the conditions doing it.
+ * What the conditions on a sheet stop (L-834): `{ noAction: [name], noMove:
+ * [name] }`, each the names of the conditions doing it. A condition that
+ * sets the pool to 0 (Stunned) stops both; one that makes moving cost
+ * 'never' (Restrained) stops moving. The same with AP off (L-838).
  */
 function flagsOf(system, sheet) {
   const flags = { noAction: [], noMove: [] };
   for (const { condition } of activeOn(system, sheet)) {
-    if (condition.noAction) flags.noAction.push(condition.name);
-    if (condition.noMove) flags.noMove.push(condition.name);
+    const empty = condition.ap === 0 || condition.noAction === true;
+    const costs = isObject(condition.costs) ? condition.costs : {};
+    if (empty) flags.noAction.push(condition.name);
+    if (empty || costs.move === 'never' || condition.noMove === true) {
+      flags.noMove.push(condition.name);
+    }
   }
   return flags;
+}
+
+/** The pool the conditions on a sheet set (`ap: n`; the lowest), or null (L-834). */
+function poolSetBy(system, sheet) {
+  const set = activeOn(system, sheet)
+    .map((a) => a.condition.ap)
+    .filter((n) => Number.isInteger(n) && n >= 0);
+  return set.length ? Math.min(...set) : null;
+}
+
+/**
+ * What a condition does to AP, for the player and the GM (L-834): "0 AP",
+ * "−10 AP", "moving costs ×2", "can't move", "ended by standing up", or ''.
+ */
+function apNoteOf(condition) {
+  if (!isObject(condition)) return '';
+  const notes = [];
+  if (Number.isInteger(condition.ap)) notes.push(condition.ap + ' AP');
+  const mod = isObject(condition.modifiers) && condition.modifiers.ap;
+  if (mod !== undefined && mod !== false && !Number.isInteger(condition.ap)) {
+    notes.push(String(mod).replace(/^\s*-/, '−') + ' AP');
+  }
+  const costs = isObject(condition.costs) ? condition.costs : {};
+  const named = { move: 'moving', difficult: 'difficult ground', attack: 'attacking' };
+  for (const [spend, value] of Object.entries(costs)) {
+    const what = named[spend] || spend;
+    if (spend === 'difficult' && costs.move === value) continue; // said with moving
+    if (value === 'never') notes.push(spend === 'move' ? "can't move" : `no ${what}`);
+    else if (typeof value === 'string') notes.push(`${what} costs ${value.replace(/^x/, '×')}`);
+    else notes.push(`${what} costs ${value} AP`);
+  }
+  if (condition.standUp) notes.push('ended by standing up');
+  return notes.join(', ');
 }
 
 module.exports = {
@@ -110,4 +154,6 @@ module.exports = {
   modifiersOf,
   sumOf,
   flagsOf,
+  poolSetBy,
+  apNoteOf,
 };

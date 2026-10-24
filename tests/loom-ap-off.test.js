@@ -45,7 +45,10 @@ describe.each([
     const s = { ...copyOf(built), id: 'my-copy', ap: false };
     delete s.sheet.ap;
     // Prone's 10 AP fewer (fantasy) goes too.
-    for (const c of s.sheet.conditions || []) if (c.modifiers) delete c.modifiers.ap;
+    for (const c of s.sheet.conditions || []) {
+      if (c.modifiers) delete c.modifiers.ap;
+      delete c.costs; // Prone's double moving, Restrained's none (L-834)
+    }
     return s;
   };
   const worldOf = (system) => ({

@@ -399,7 +399,10 @@ async function runTurnPipeline(params) {
     // A short or long rest chosen in the Loom (L-827): no model reads it.
     actionText = 'take a ' + action.rest + ' rest';
     proposedAction = { verb: 'rest', targets: [], params: { rest: action.rest } };
-  } else if (action && ['dash', 'dodge', 'withdraw', 'ready', 'use'].includes(action.verb)) {
+  } else if (
+    action &&
+    ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(action.verb)
+  ) {
     // A fight's other actions chosen in the Loom (L-823): no model reads them.
     const target = action.target && (canonWorld.characters || {})[action.target];
     const thing = action.feature && maps.positionOf(canonWorld, save).map;
@@ -407,7 +410,9 @@ async function runTurnPipeline(params) {
     actionText =
       action.verb === 'use'
         ? 'use ' + (feature ? feature.name : action.feature)
-        : action.verb + (target ? ' for ' + target.name : '');
+        : action.verb === 'stand'
+          ? 'stand up'
+          : action.verb + (target ? ' for ' + target.name : '');
     proposedAction = {
       verb: action.verb,
       targets: action.feature
