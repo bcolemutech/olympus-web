@@ -33,6 +33,7 @@ const { strike, spendAmmo } = require('./strike');
 const fight = require('./fight');
 const play = require('./play');
 const position = require('./position');
+const reactions = require('./reactions');
 
 const NOBODY = "You don't see anyone like that here.";
 
@@ -153,6 +154,7 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
     friends,
     dodging: Boolean(f && f.combatants[person.id] && f.combatants[person.id].dodging),
   });
+  const costs = {};
   const struck = strike(system, {
     attacker: { name: 'You', sheet: ammo.sheet },
     attack,
@@ -161,7 +163,8 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
     targets: targets.map((t) => {
       const sheet = play.sheetFor(world, save, t);
       const theirs = (f && f.combatants[t.id]) || {};
-      const defend = theirs.reactionsLeft > 0 ? position.defendOf(system, sheet, attack) : null;
+      // Their defending reaction, paid from the AP they kept (L-833).
+      const defend = f ? reactions.defendingOf(system, f, t.id, sheet, attack) : null;
       const guard = attack.area
         ? position.termsFor(system, {
             map,
@@ -172,7 +175,14 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
             dodging: Boolean(theirs.dodging),
           }).guard
         : terms.guard;
-      return { id: t.id, name: t.name, sheet, guard, ...(defend ? { reaction: defend } : {}) };
+      if (defend) costs[t.id] = { cost: defend.cost, sheet };
+      return {
+        id: t.id,
+        name: t.name,
+        sheet,
+        guard,
+        ...(defend ? { reaction: defend.reaction } : {}),
+      };
     }),
     now: clock.timeOf(save),
     dice,
@@ -181,7 +191,8 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
   for (const r of struck.results) {
     if (r.reacted && f && f.combatants[r.id]) {
       f = JSON.parse(JSON.stringify(f));
-      f.combatants[r.id].reactionsLeft -= 1;
+      const paid = costs[r.id] || { cost: 0, sheet: null };
+      f.combatants[r.id].kept = reactions.keptOf(f, r.id, system, paid.sheet) - paid.cost;
     }
     lines.push(...r.lines);
     mutations.push(

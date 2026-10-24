@@ -371,12 +371,13 @@ describe.each(Object.keys(CASES))('position under %s', (id) => {
       order: ['player', 'grell'],
       turn: 'player',
       combatants: {
-        player: { kind: 'player', side: 'party', name: 'Tam', reactionsLeft: 1, ...patch.player },
+        // The AP each kept from their last turn, for reactions (L-833).
+        player: { kind: 'player', side: 'party', name: 'Tam', kept: 20, ...patch.player },
         grell: {
           kind: 'character',
           side: 'hostile',
           name: 'Grell',
-          reactionsLeft: 1,
+          kept: 20,
           ...patch.grell,
         },
       },
@@ -411,16 +412,17 @@ describe.each(Object.keys(CASES))('position under %s', (id) => {
         ...patch,
       });
 
-    test('stepping out of a foe’s reach draws its attack, once, its reaction spent', () => {
+    test('stepping out of a foe’s reach draws its attack, once, paid from what it kept', () => {
       const r = walk();
       expect(r.struck).toEqual([expect.objectContaining({ by: 'grell', attack: 'club' })]);
       expect(r.lines[0]).toBe("You leave Grell's reach.");
-      expect(r.fight.combatants.grell.reactionsLeft).toBe(0);
+      // An attack's 10 AP (L-833).
+      expect(r.fight.combatants.grell.kept).toBe(10);
       expect(r.reached).toBe(2);
       // Staying in reach draws nothing.
       expect(walk({ path: [{ x: 4, y: 6 }] }).struck).toEqual([]);
-      // Nor does a foe with no reaction left.
-      expect(walk({ fight: fightOf({ grell: { reactionsLeft: 0 } }) }).struck).toEqual([]);
+      // Nor does a foe who kept too little to pay for it.
+      expect(walk({ fight: fightOf({ grell: { kept: 9 } }) }).struck).toEqual([]);
     });
 
     test('Withdraw: stepping away draws nothing', () => {
@@ -435,7 +437,7 @@ describe.each(Object.keys(CASES))('position under %s', (id) => {
       expect(r.reached).toBe(0);
     });
 
-    test('a readied attack goes off as a foe comes into its reach, and is spent', () => {
+    test('a readied attack goes off as a foe comes into its reach, from its reserved AP', () => {
       const ready = (target) =>
         fightOf({ player: { readied: { attack: c.melee, ...(target ? { target } : {}) } } });
       const r = reactions.reactToWalk(system, {
@@ -457,7 +459,8 @@ describe.each(Object.keys(CASES))('position under %s', (id) => {
       expect(r.struck).toEqual([expect.objectContaining({ by: 'player', attack: c.melee })]);
       expect(r.lines[0]).toBe(`Grell comes into your readied ${c.melee}.`);
       expect(r.fight.combatants.player.readied).toBeUndefined();
-      expect(r.fight.combatants.player.reactionsLeft).toBe(0);
+      // Paid when readied (L-833; KP3): what the player kept is untouched.
+      expect(r.fight.combatants.player.kept).toBe(20);
       // Readied for someone else: Grell walks in untouched.
       const other = reactions.reactToWalk(system, {
         map: room(),

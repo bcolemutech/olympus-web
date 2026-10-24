@@ -134,8 +134,8 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
     order: ['player', 'grell'],
     turn: 'player',
     combatants: {
-      player: { kind: 'player', side: 'party', name: 'Tam', initiative: 15, reactionsLeft: 1 },
-      grell: { kind: 'character', side: 'hostile', name: 'Grell', initiative: 5, reactionsLeft: 1 },
+      player: { kind: 'player', side: 'party', name: 'Tam', initiative: 15, kept: 20 },
+      grell: { kind: 'character', side: 'hostile', name: 'Grell', initiative: 5, kept: 20 },
     },
   });
   async function onTheMap(saveId, { cell = { x: 5, y: 2 }, inFight = true } = {}) {
@@ -173,7 +173,8 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
     const save = await saved(ref);
     expect(save.cell).toEqual({ x: 3, y: 2 });
     expect(healthOf(save)).toBe(Math.max(0, full - hurt));
-    expect(save.fight.combatants.grell.reactionsLeft).toBe(0);
+    // His club's 10 AP, from what he kept (L-833).
+    expect(save.fight.combatants.grell.kept).toBe(10);
     expect(prompts).toHaveLength(0);
   });
 

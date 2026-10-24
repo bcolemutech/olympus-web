@@ -3,8 +3,11 @@
 /**
  * Reactions (planning/combat.md §3 TN4, PS4, §4.3; L-823 / #655): what
  * fighters do out of turn while someone else moves, by the rules alone
- * (CB0). Each takes one of the fighter's reactions this round (the system's
- * `economy.reactions`, refreshed each round: ./fight.js).
+ * (CB0). Each is paid from the AP the fighter kept from their last turn
+ * (L-833; action points KP1, KP4: `kept` on their entry in the fight,
+ * ./fight.js), as many as it covers: an attack its cost (its own `ap`, or
+ * the system's), a defending reaction the system's `defend`. A readied
+ * attack was paid for when readied (its AP set aside, KP3).
  *
  *   Leaving reach (PS4)  someone who steps from within a foe's melee reach
  *                  to outside it is struck by that foe first, where they
@@ -22,6 +25,8 @@
  */
 
 const conditions = require('../../loom-canon/conditions');
+const apRules = require('../../loom-canon/ap');
+const sheets = require('../../loom-canon/sheets');
 const { attacksOf } = require('./attacks');
 const { strike, spendAmmo } = require('./strike');
 const position = require('./position');
@@ -41,13 +46,45 @@ function meleeOf(system, sheet, player) {
   return melee.find((a) => a.id !== 'unarmed') || melee[0] || null;
 }
 
-// Whether a fighter can react now: in the fight, standing, a reaction left,
-// not caught off guard in the first round, and free to act.
-function canReact(system, f, fighter) {
+/**
+ * What a reaction costs a fighter in AP (L-833): an attack's own cost or
+ * the system's (`kind` 'attack'), or a defending reaction (`kind`
+ * 'defend').
+ */
+function reactionCost(system, sheet, kind, attack = null) {
+  const prices = apRules.pricesOf(system, sheet || {});
+  return kind === 'defend' ? prices.of('defend') : prices.of('attack', attack && attack.ap);
+}
+
+/**
+ * The AP a fighter has kept for reactions (L-833). One in a fight from
+ * before AP (no `kept`) has their whole pool, as before their first turn.
+ */
+function keptOf(f, id, system, sheet) {
+  const c = f.combatants[id];
+  if (!c) return 0;
+  if (Number.isInteger(c.kept)) return c.kept;
+  return system ? sheets.apFor(system, sheet || {}) : 0;
+}
+
+// Whether a fighter can react now: in the fight, standing, its `cost` kept
+// (L-833), not caught off guard in the first round, and free to act.
+function canReact(system, f, fighter, cost = 0) {
   const c = f.combatants[fighter.id];
-  if (!c || c.out || !(c.reactionsLeft > 0)) return false;
+  if (!c || c.out || keptOf(f, fighter.id, system, fighter.sheet) < cost) return false;
   if (f.round === 1 && c.surprised) return false;
   return !conditions.flagsOf(system, fighter.sheet).noAction.length;
+}
+
+/**
+ * A target's defending reaction against `attack`, if they have one and the
+ * AP kept to pay for it: `{ reaction, cost }`, or null (L-833).
+ */
+function defendingOf(system, f, id, sheet, attack) {
+  const reaction = position.defendOf(system, sheet, attack);
+  if (!reaction) return null;
+  const cost = reactionCost(system, sheet, 'defend');
+  return keptOf(f, id, system, sheet) >= cost ? { reaction, cost } : null;
 }
 
 /**
@@ -76,14 +113,15 @@ function reactToWalk(
   const name = mover.you ? 'You' : mover.name;
   const watchers = fighters.filter((w) => w.id !== mover.id && opposed(w.side, mover.side));
 
-  // One reactor's attack at the mover standing on `at`.
-  const fire = (w, attack, at, line) => {
+  // One reactor's attack at the mover standing on `at`, paid from what
+  // they kept (`cost`; a readied attack's 0, paid when readied).
+  const fire = (w, attack, at, line, cost) => {
     const c = f.combatants[w.id];
     const own = sheets[w.id] || w.sheet;
     const spent = spendAmmo(system, own, attack);
     if (spent.refused) return false;
     if (spent.sheet !== own) sheets[w.id] = spent.sheet;
-    c.reactionsLeft -= 1;
+    c.kept = keptOf(f, w.id, system, w.sheet) - cost;
     const friends = fighters
       .filter((x) => x.id !== w.id && !opposed(x.side, w.side) && x.cell)
       .map((x) => x.cell);
@@ -96,10 +134,7 @@ function reactToWalk(
       friends,
       dodging: Boolean(mine.dodging),
     });
-    const defend =
-      (f.combatants[mover.id] || {}).reactionsLeft > 0
-        ? position.defendOf(system, sheet, attack)
-        : null;
+    const defend = defendingOf(system, f, mover.id, sheet, attack);
     const result = strike(system, {
       attacker: { name: w.id === PLAYER ? 'You' : w.name, sheet: spent.sheet },
       attack,
@@ -110,14 +145,16 @@ function reactToWalk(
           name: mover.you ? 'you' : mover.name,
           sheet,
           guard: terms.guard,
-          ...(defend ? { reaction: defend } : {}),
+          ...(defend ? { reaction: defend.reaction } : {}),
         },
       ],
       now,
       dice,
     });
     const r = result.results[0];
-    if (r.reacted && f.combatants[mover.id]) f.combatants[mover.id].reactionsLeft -= 1;
+    if (r.reacted && f.combatants[mover.id]) {
+      f.combatants[mover.id].kept = keptOf(f, mover.id, system, mover.sheet) - defend.cost;
+    }
     lines.push(line, ...r.lines);
     struck.push({
       by: w.id,
@@ -138,13 +175,15 @@ function reactToWalk(
     // Leaving someone's reach (PS4): struck where they stand, before the step.
     if (!withdrawn) {
       for (const w of watchers) {
-        if (down || !canReact(system, f, w)) continue;
+        if (down) continue;
         const attack = meleeOf(system, w.sheet, w.id === PLAYER);
         if (!attack) continue;
+        const cost = reactionCost(system, w.sheet, 'attack', attack);
+        if (!canReact(system, f, w, cost)) continue;
         const reach = attack.reach || 1;
         if (distance(prev, w.cell) > reach || distance(cur, w.cell) <= reach) continue;
         const whose = w.id === PLAYER ? 'your' : w.name + "'s";
-        fire(w, attack, prev, `${name} ${mover.you ? 'leave' : 'leaves'} ${whose} reach.`);
+        fire(w, attack, prev, `${name} ${mover.you ? 'leave' : 'leaves'} ${whose} reach.`, cost);
       }
       if (down) break;
     }
@@ -171,7 +210,8 @@ function reactToWalk(
         w,
         attack,
         cur,
-        `${name} ${mover.you ? 'come' : 'comes'} into ${whose} readied ${attack.name.toLowerCase()}.`
+        `${name} ${mover.you ? 'come' : 'comes'} into ${whose} readied ${attack.name.toLowerCase()}.`,
+        0
       );
     }
     prev = cur;
@@ -179,4 +219,12 @@ function reactToWalk(
   return { fight: f, sheet, down, reached, lines, struck, sheets };
 }
 
-module.exports = { reactToWalk, opposed, meleeOf, canReact };
+module.exports = {
+  reactToWalk,
+  opposed,
+  meleeOf,
+  canReact,
+  reactionCost,
+  keptOf,
+  defendingOf,
+};

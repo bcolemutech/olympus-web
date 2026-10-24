@@ -12,8 +12,12 @@
  *     order                combatant ids, first to act first
  *     turn                 whose turn it is
  *     combatants: { [id]: { kind: 'player' | 'character', side: 'party' |
- *                 'hostile', name, initiative, reactionsLeft, surprised?,
+ *                 'hostile', name, initiative, kept, surprised?,
  *                 out? } }
+ *       kept               the AP they kept from their last turn, for
+ *                          reactions until their next (L-833; action points
+ *                          KP1, KP4); before their first turn, their whole
+ *                          pool, since they've spent none
  *       out                how they left the fight: 'down', 'fled',
  *                          'surrendered', 'talkedDown', 'gone' (no longer on
  *                          the map) or 'stoodDown' (no longer hostile)
@@ -31,6 +35,7 @@
 const formula = require('../../loom-canon/formula');
 const checks = require('../../loom-canon/checks');
 const { settingsOf } = require('./settings');
+const sheets = require('../../loom-canon/sheets');
 
 const PLAYER = 'player';
 const SIDES = ['party', 'hostile'];
@@ -140,7 +145,6 @@ const acts = (fight, id) => {
 function start(system, { id, mapId, by, combatants, ambushers = null, dice }) {
   const initiative = {};
   const entries = {};
-  const economy = settingsOf(system).economy;
   for (const c of combatants) {
     const roll = rollInitiative(system, c, dice);
     initiative[c.id] = roll;
@@ -150,7 +154,7 @@ function start(system, { id, mapId, by, combatants, ambushers = null, dice }) {
       name: c.name,
       initiative: roll.total,
       tie: roll.tie,
-      reactionsLeft: economy.reactions,
+      kept: sheets.apFor(system, c.sheet || {}),
     };
   }
   const sides = (side) => combatants.filter((c) => sideOf(c) === side);
@@ -170,11 +174,11 @@ function start(system, { id, mapId, by, combatants, ambushers = null, dice }) {
 
 /**
  * The next turn (TN1): the next in the order still in the fight; past the
- * last, a new round, surprise over and reactions refreshed (to `economy`'s,
- * the system's settings). Returns `{ fight, newRound }`. A fight nobody can
- * act in stays as it is.
+ * last, a new round, surprise over. (Reactions are paid from kept AP, L-833:
+ * nothing refreshes by the round.) Returns `{ fight, newRound }`. A fight
+ * nobody can act in stays as it is.
  */
-function next(fight, economy = null) {
+function next(fight) {
   const out = copyOf(fight);
   const live = out.order.filter((id) => !out.combatants[id].out);
   if (!live.length) return { fight: out, newRound: false };
@@ -186,10 +190,7 @@ function next(fight, economy = null) {
       at = 0;
       out.round += 1;
       newRound = true;
-      for (const c of Object.values(out.combatants)) {
-        delete c.surprised;
-        if (economy) c.reactionsLeft = economy.reactions;
-      }
+      for (const c of Object.values(out.combatants)) delete c.surprised;
     }
     if (acts(out, out.order[at])) break;
   }
@@ -209,9 +210,9 @@ function toPlayer(system, fight, { current: includeCurrent = false } = {}) {
   let rounds = 0;
   const passed = includeCurrent && fight.turn !== PLAYER ? [fight.turn] : [];
   if (includeCurrent && fight.turn === PLAYER) return { fight, rounds, passed };
-  const economy = settingsOf(system).economy;
+  void system;
   for (let i = 0; i < current.order.length * 3; i++) {
-    const step = next(current, economy);
+    const step = next(current);
     current = step.fight;
     if (step.newRound) rounds += 1;
     if (current.turn === PLAYER) break;

@@ -964,9 +964,27 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
   );
   // In a fight, everyone else takes their turn, to the player's next (L-821).
   const tickedSheet = (ticked.mutations.find((m) => m.path === 'character.sheet') || {}).value;
-  const after = tickedSheet
+  const ticking = tickedSheet
     ? { ...characterState, character: { ...characterState.character, sheet: tickedSheet } }
     : characterState;
+  // In a fight, the AP left is kept for reactions until the player's next
+  // turn (L-833; action points KP1, KP2): their entry in the fight.
+  const inFight = combat.play.fightOf(characterState);
+  const kept = inFight
+    ? combat.others.keptFrom(checks.systemOf(canonWorld), turnStateOf(characterState).ap)
+    : 0;
+  const after = inFight
+    ? {
+        ...ticking,
+        fight: {
+          ...inFight,
+          combatants: {
+            ...inFight.combatants,
+            [combat.fight.PLAYER]: { ...inFight.combatants[combat.fight.PLAYER], kept },
+          },
+        },
+      }
+    : ticking;
   // Dying (L-827): a save at the end of each of their turns; three of a kind
   // decides it. Dead, the fight and the save end here.
   const dying =
@@ -1033,12 +1051,13 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
       // the time, coming round) wins.
       ...round.mutations,
     ],
-    constraints: ['Turn ' + turnStateOf(characterState).n + ' ends.' + moved].concat(
-      ticked.lines,
-      saved ? [saved.line] : [],
-      round.lines,
-      interrupted
-    ),
+    constraints: [
+      'Turn ' +
+        turnStateOf(characterState).n +
+        ' ends.' +
+        moved +
+        (kept ? ' You keep ' + kept + ' AP for reactions.' : ''),
+    ].concat(ticked.lines, saved ? [saved.line] : [], round.lines, interrupted),
     ...(saved
       ? { roll: rolled(saved.roll, 'dying save', checks.systemOf(canonWorld)) }
       : ticked.roll
@@ -1492,10 +1511,14 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
       };
     }
     const { priced, ...told } = tactic;
-    void priced;
+    const reserved = priced.reserve
+      ? { reserved: (turnStateOf(characterState).ap || 0) - paid.turn.ap }
+      : {};
     return {
       ...told,
-      mutations: tactic.mutations.concat([turnSet({ ...paid.turn, ...(tactic.turn || {}) })]),
+      mutations: tactic.mutations.concat([
+        turnSet({ ...paid.turn, ...(tactic.turn || {}), ...reserved }),
+      ]),
       constraints: droppedLines(paid).concat(tactic.constraints),
     };
   }
@@ -1663,8 +1686,9 @@ function combatAction(proposedAction, characterState, canonWorld, inFight) {
         `it strikes the first foe to come into its ${reach}.`
     ),
     mutations: [setFight(f)],
-    // The attack's cost, paid now (set aside from kept AP: L-833).
-    priced: { spend: 'attack', what: 'readying an attack', own: pick.attack.ap },
+    // The attack's cost, set aside now (L-833; KP3): it fires from that,
+    // or is lost at the player's next turn.
+    priced: { spend: 'attack', what: 'readying an attack', own: pick.attack.ap, reserve: true },
   };
 }
 

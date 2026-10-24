@@ -63,7 +63,6 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
       expect(result.warnings).toEqual([]);
       expect(combat.settings.settingsOf(sys)).toMatchObject({
         initiative: { formula: c.initiative, tieBreak: c.tieBreak },
-        economy: { actions: 1, reactions: 1, quick: 0 },
         surprise: expect.objectContaining({ hide: { skill: 'Stealth' } }),
       });
     });
@@ -122,7 +121,6 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
       const s = { ...copyOf(sys), modules: {} };
       expect(combat.settings.settingsOf(s)).toMatchObject({
         initiative: { formula: '1d20', tieBreak: null },
-        economy: { actions: 1, reactions: 1, quick: 0 },
         surprise: null,
         // Attacks against the ladder's second rung (L-822).
         attack: {
@@ -191,7 +189,9 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
       expect(f.order[f.order.length - 1]).toBe('player');
       expect(f.turn).toBe('bandit');
       expect(Object.keys(started.initiative).sort()).toEqual(['bandit', 'player', 'thug']);
-      expect(f.combatants.player).toMatchObject({ side: 'party', reactionsLeft: 1 });
+      // Before their first turn, each keeps their whole pool for reactions (L-833).
+      expect(f.combatants.player).toMatchObject({ side: 'party' });
+      expect(f.combatants.player.kept).toBeGreaterThanOrEqual(10);
       expect(f.combatants.bandit).toMatchObject({ side: 'hostile', name: 'Bandit' });
     });
 
@@ -214,7 +214,7 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
       expect(second.passed).toEqual(f.order.filter((x) => x !== 'player'));
     });
 
-    test('reactions refresh each round', () => {
+    test('nothing refreshes by the round: reactions are paid from kept AP (L-833)', () => {
       const { fight: f } = fight.start(sys, {
         id: 'f',
         mapId: 'm',
@@ -222,9 +222,11 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
         combatants: three(),
         dice: faces(5),
       });
-      f.combatants.bandit.reactionsLeft = 0;
+      expect(f.combatants.bandit.kept).toBe(20);
+      f.combatants.bandit.kept = 3;
       const on = fight.toPlayer(sys, fight.toPlayer(sys, f, { current: true }).fight).fight;
-      expect(on.combatants.bandit.reactionsLeft).toBe(1);
+      expect(on.round).toBeGreaterThan(f.round);
+      expect(on.combatants.bandit.kept).toBe(3);
     });
 
     test('surprise: the ambushed who don’t notice the hiders lose the first round', () => {

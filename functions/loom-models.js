@@ -135,10 +135,14 @@ function validateWorldState(data) {
 // what a turn pays for moving (a square 1 AP on a battle map; 20 m a point
 // in town) and, on a grid, every action. A save has its turn (L-832; §4.3):
 //
-//   { n, ap, kept, plan, moved?, long?, withdrawn? }
+//   { n, ap, kept, plan, reserved?, moved?, long?, withdrawn? }
 //     n          which turn it is
 //     ap         AP left this turn
-//     kept       AP kept from the last turn, for off-turn reactions (L-833)
+//     kept       AP kept from the last turn, for off-turn reactions (L-833;
+//                in a fight it is the player's entry's `kept`, set at End
+//                turn and gone when their next turn starts)
+//     reserved   AP set aside for a readied attack (L-833; KP3), lost at
+//                the next turn if it never fires
 //     plan       the rest of a path, kept for the next turn
 //     moved      squares walked this turn, for End turn's line
 //     long       a long action under way (CT4): { key, name, put, need }
@@ -175,6 +179,9 @@ function validateTurnState(turn) {
   }
   if (turn.plan !== null && !isObject(turn.plan)) {
     errors.push('turn.plan must be an object or null');
+  }
+  if (turn.reserved !== undefined && !whole(turn.reserved, MAX_AP)) {
+    errors.push('turn.reserved must be a whole number from 0 to ' + MAX_AP);
   }
   if (turn.moved !== undefined && !whole(turn.moved, 100000)) {
     errors.push('turn.moved must be a whole number of squares');
