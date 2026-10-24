@@ -58,7 +58,13 @@ describe.each([
     expect(warnings).toEqual([]);
     expect(system.sheet.optional).toContain('conditions');
     expect(conditions.conditionOf(system, c.hurts).each).toBeDefined();
-    expect(conditions.conditionOf(system, c.stops)).toMatchObject({ noAction: true, noMove: true });
+    // Stunned empties the pool (L-834), which stops acting and moving.
+    expect(conditions.conditionOf(system, c.stops)).toMatchObject({ ap: 0 });
+    const stunned = { conditions: [{ condition: c.stops }] };
+    expect(conditions.flagsOf(system, stunned)).toEqual({
+      noAction: [conditions.conditionOf(system, c.stops).name],
+      noMove: [conditions.conditionOf(system, c.stops).name],
+    });
   });
 
   test('apply: on, with how long it has left', () => {
@@ -231,12 +237,19 @@ describe.each([
 });
 
 describe('a condition that changes the sheet (both systems)', () => {
-  test('Prone slows you; an attribute penalty is read by a check and the sheet', () => {
+  test('Prone doubles moving, Slowed lowers the pool; an attribute penalty is read', () => {
     const prone = effects.apply(FANTASY, sheets.defaultSheet(FANTASY), {
       condition: 'prone',
       duration: { turns: 1 },
     }).sheet;
-    expect(sheets.apFor(FANTASY, prone)).toBe(10);
+    // On AP (L-834): the pool as it was, moving at double.
+    expect(sheets.apFor(FANTASY, prone)).toBe(20);
+    expect(require('../functions/loom-canon/ap').pricesOf(FANTASY, prone).move).toBe(2);
+    const slowed = effects.apply(FANTASY, sheets.defaultSheet(FANTASY), {
+      condition: 'slowed',
+      duration: { turns: 1 },
+    }).sheet;
+    expect(sheets.apFor(FANTASY, slowed)).toBe(10);
     const weak = {
       ...SCIFI,
       sheet: {
