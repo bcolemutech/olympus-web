@@ -1372,7 +1372,7 @@ function outOfSightOrReach(proposedAction, characterState, canonWorld) {
 // What an action costs in action points (L-832; planning/action-points.md
 // §4.2), by what it is: looking is free; a few words 2; handling an object
 // 5; a door 2 and a lock 5; Dodge, Withdraw and an attack their own;
-// anything else typed a standard action (its tier: L-835). A feature's or a
+// anything else typed by its tier (L-835: minor, standard or major). A feature's or a
 // door's own `ap` and `long` count for what's done to it.
 const LOOKING = /^(look|examine|inspect|study|read|watch|observe|peer|glance|listen)/;
 // A few words (2 AP); persuading, threatening or deceiving someone is a
@@ -1411,13 +1411,15 @@ function spendOf(proposedAction, characterState, canonWorld, map) {
       name: feature && feature.name,
     };
   }
-  return { spend: 'standard', what: 'that', long };
+  // Anything else typed (L-835; CT3): the tier INTERPRET named, standard
+  // when it named none.
+  return { spend: 'tier', tier: params.tier, what: 'that', long };
 }
 
 // The cost of a spend for this character (their traits and conditions).
-function costFor(characterState, canonWorld, spend, own) {
+function costFor(characterState, canonWorld, spend, own, tier) {
   const system = checks.systemOf(canonWorld);
-  if (spend === 'standard') return apRules.tierCost(system, 'standard');
+  if (spend === 'tier') return apRules.tierCost(system, tier);
   return apRules.pricesOf(system, sheets.sheetOf(characterState)).of(spend, own);
 }
 
@@ -1453,7 +1455,7 @@ function payFor(characterState, canonWorld, map, priced, key) {
     }
     return { turn: { ...rest, ap: turn.ap - more, long: null }, dropped: going ? null : under };
   }
-  const cost = costFor(characterState, canonWorld, priced.spend, own);
+  const cost = costFor(characterState, canonWorld, priced.spend, own, priced.tier);
   if (turn.ap < cost) return { refused: apRules.shortLine(priced.what, cost, turn.ap) };
   return { turn: { ...rest, ap: turn.ap - cost, long: null }, dropped: under || null };
 }
@@ -1523,7 +1525,8 @@ function priceOf(proposedAction, characterState, canonWorld) {
       characterState,
       canonWorld,
       priced.spend,
-      Number.isInteger(priced.own) ? priced.own : undefined
+      Number.isInteger(priced.own) ? priced.own : undefined,
+      priced.tier
     ),
   };
 }
