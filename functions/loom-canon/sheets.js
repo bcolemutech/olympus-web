@@ -19,18 +19,19 @@
  *                                            ../loom-modules/combat/attacks.js);
  *                                            a player's without any has the
  *                                            system's starting attacks
- *     speed:      number                     movement a turn (L-611), worked
- *                                            out: see speedFor
+ *     speed:      number                     action points a turn (L-831), worked
+ *                                            out: see apFor; a turn's movement
+ *                                            until turns run on AP (L-832)
  *
  * A sheet that no longer fits its system (an attribute removed, a skill
  * renamed, a score out of range) is not refused: `misfits` says what, for
  * NARRATE and the Character panel, and the GM repairs it in play (SY2).
  *
- * Speed is worked out, never chosen: the system's `sheet.speed` formula
- * (its attributes, skill ranks and level) plus what the character's traits
- * add (a system trait's `modifiers.speed`, taken at creation, L-812). It is
- * worked out again whenever a save is loaded with its world (withSpeed), so
- * a changed sheet or system moves the character at once.
+ * Action points are worked out, never chosen: the system's `sheet.ap`
+ * formula (its attributes, skill ranks and level) plus what the character's
+ * traits and conditions add (`modifiers.ap`; a trait taken at creation,
+ * L-812). They are worked out again whenever a save is loaded with its world
+ * (withSpeed), so a changed sheet or system changes them at once.
  *
  * A character without a sheet (one made before sheets, as tests still make
  * them) keeps `character.abilities`, `speed` and `condition`: the readers
@@ -110,11 +111,13 @@ function maxima(system, sheet, { bare = false } = {}) {
 }
 
 /**
- * A character's speed (L-611; L-811): the system's speed formula over the
- * sheet, plus each of its traits' `modifiers.speed`, from 1 to MAX_SPEED.
- * A system with no speed formula moves everyone at the default.
+ * A character's action points a turn (L-831; planning/action-points.md
+ * AP1): the system's `sheet.ap` formula over the sheet, plus each held
+ * trait's and each condition's `modifiers.ap`, from 1 to MAX_SPEED. A system
+ * with no formula gives everyone the default. (A system from before AP is
+ * read with `sheet.speed` as its pool: ./ap.js convert.)
  */
-function speedFor(system, sheet) {
+function apFor(system, sheet) {
   const values = valuesOf(system, sheet || {});
   const at = (text) => {
     try {
@@ -123,16 +126,19 @@ function speedFor(system, sheet) {
       return 0;
     }
   };
-  let speed = system.sheet.speed === undefined ? DEFAULT_SPEED : at(system.sheet.speed);
+  const pool = system.sheet.ap !== undefined ? system.sheet.ap : system.sheet.speed;
+  let speed = pool === undefined ? DEFAULT_SPEED : at(pool);
   const has = new Set((sheet && Array.isArray(sheet.traits) && sheet.traits) || []);
   for (const trait of system.sheet.traits || []) {
-    const bonus = trait.modifiers && trait.modifiers.speed;
+    const mods = trait.modifiers || {};
+    const bonus = mods.ap !== undefined ? mods.ap : mods.speed;
     if (has.has(trait.id) && bonus !== undefined) speed += at(bonus);
   }
   // What its conditions add (L-815): Prone's −10. A condition that stops it
-  // moving (noMove) is the turn's business, not its speed's.
+  // moving (noMove) is the turn's business, not its pool's.
   const bare = valuesOf(system, sheet || {}, { bare: true });
-  speed += conditions.sumOf(conditions.modifiersOf(system, sheet || {}, bare), 'speed');
+  const mods = conditions.modifiersOf(system, sheet || {}, bare);
+  speed += conditions.sumOf(mods, 'ap') + conditions.sumOf(mods, 'speed');
   return Math.max(1, Math.min(MAX_SPEED, Math.floor(speed)));
 }
 
@@ -145,7 +151,7 @@ function withSpeed(save, system) {
   if (!sheet || !save.character) return save;
   return {
     ...save,
-    character: { ...save.character, sheet: { ...sheet, speed: speedFor(system, sheet) } },
+    character: { ...save.character, sheet: { ...sheet, speed: apFor(system, sheet) } },
   };
 }
 
@@ -165,7 +171,7 @@ function defaultSheet(system, { traits = [] } = {}) {
   for (const r of system.sheet.resources) sheet.resources[r.id] = { current: max[r.id] || 0 };
   sheet.traits = [...new Set(traits.filter((t) => typeof t === 'string' && TRAIT_ID.test(t)))];
   sheet.conditions = [];
-  sheet.speed = speedFor(system, sheet);
+  sheet.speed = apFor(system, sheet);
   return sheet;
 }
 
@@ -305,7 +311,7 @@ function sheetFromStatBlock(system, block) {
   }
   if (isObject(block.resources)) Object.assign(sheet.resources, block.resources);
   if (block.attacks !== undefined) sheet.attacks = block.attacks;
-  sheet.speed = speedFor(system, sheet);
+  sheet.speed = apFor(system, sheet);
   return sheet;
 }
 
@@ -425,7 +431,7 @@ function characterView(system, character, now = 0, { player = true } = {}) {
     derived: on.has('derived')
       ? (s.derived || []).map((d) => ({ id: d.id, name: d.name, value: at(d.formula) }))
       : [],
-    speed: speedFor(system, sheet),
+    speed: apFor(system, sheet),
     attacks: attacks.attacksOf(system, sheet, { player }).map((a) => attackView(system, a, values)),
     misfits,
   };
@@ -466,7 +472,9 @@ module.exports = {
   characterView,
   leftOf,
   defaultSheet,
-  speedFor,
+  apFor,
+  // A turn's movement is its action points until turns run on AP (L-832).
+  speedFor: apFor,
   withSpeed,
   validateSheet,
   validateStatBlock,

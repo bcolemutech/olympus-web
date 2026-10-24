@@ -12,19 +12,21 @@
  *       attributes: [{ id, name, min, max, modifier }]  modifier: a formula
  *       resources:  [{ id, name, max }]                  max: a formula
  *       level:      { min, max }
- *       speed:      a formula: movement a turn (default 20), plus what traits add
+ *       ap:         a formula: action points a turn (default 20; L-831,
+ *                   ./ap.js), plus what traits and conditions add
  *       optional:   which optional parts are on: skills, traits, conditions, derived
  *       skills:     [{ id, name, attribute }]            (with 'skills')
  *       traits:     [{ id, name, description?, modifiers?, resist?, weak?,
  *                   reaction? }]
- *                   (with 'traits'): modifiers { speed: formula } added while
- *                   it's held; resist and weak list damage types it halves or
+ *                   (with 'traits'): modifiers { ap: formula } added while
+ *                   it's held; costs { [spend]: n | 'x2' } what it changes
+ *                   AP prices to (L-831); resist and weak list damage types it halves or
  *                   doubles (L-822, combat's damageTypes); reaction
  *                   { defend, against? } a defending reaction it gives
  *                   (L-823): the formula added to the holder's defence
  *                   against melee, ranged or all attacks
- *       conditions: [{ id, name, description?, modifiers?, each?, noAction?, noMove?,
- *                   resist?, weak? }]
+ *       conditions: [{ id, name, description?, modifiers?, each?, costs?, noAction?,
+ *                   noMove?, resist?, weak? }]
  *                   (with 'conditions'; L-815, ./conditions.js): what each does
  *       derived:    [{ id, name, formula }]              (with 'derived')
  *     checks:  { formula, degrees: { [degree]: formula }, ladder: [{ name, value }] }
@@ -33,6 +35,7 @@
  *     modules: { [module]: settings }    combat (L-821, ../loom-modules/combat/);
  *                                        others are kept, unused, with a warning
  *     tables:  { [name]: [{ min?, max?, value }] }   lookups for table(name, x)
+ *     ap:      { costs?, tiers?, keepLimit? }  what AP pays for (L-831; ./ap.js)
  *     gmNotes: tone and pacing for NARRATE
  *
  * Formulas are text in the formula language (./formula.js; L-802), checked
@@ -52,6 +55,10 @@
  * Every save uses a system's latest version (SY2): loading a world loads its
  * system as it is now. `misfits` is where L-811 says what of a sheet no
  * longer fits it.
+ *
+ * A system written before action points (`sheet.speed`, `modifiers.speed`,
+ * combat's `economy`) is converted to them (./ap.js convert): when it's set,
+ * with warnings saying what changed, and when it's read.
  */
 
 const SYSTEMS_COLLECTION = 'loom_systems';
@@ -61,12 +68,13 @@ const DEGREES = ['criticalFailure', 'failure', 'successAtCost', 'success', 'crit
 const CREATION_METHODS = ['array', 'pointBuy', 'rolling'];
 // What a trait's modifiers may change (L-811); a condition's (L-815) may
 // also change any attribute, skill or resource.
-const MODIFIER_TARGETS = ['speed'];
+const MODIFIER_TARGETS = ['ap'];
 // What a trait's defending reaction works against (L-823).
 const REACTION_AGAINST = ['melee', 'ranged', 'all'];
 const { MODIFIER_KINDS: CONDITION_TARGETS } = require('./conditions');
 
 const formulaLanguage = require('./formula');
+const apRules = require('./ap');
 
 // The modules built (MD1; ../loom-modules/): each checks its own settings.
 const MODULES = { combat: require('../loom-modules/combat/settings') };
@@ -156,11 +164,14 @@ const text = (v) => (typeof v === 'string' ? v.trim() : v);
  * its text trimmed and its defaults filled in. Errors refuse a save;
  * warnings are returned with it (FX3).
  */
-function validateSystem(input) {
+function validateSystem(given) {
   const errors = [];
   const warnings = [];
-  if (!isObject(input)) return { errors: ['A system must be an object.'], warnings, system: null };
-  const s = copyOf(input);
+  if (!isObject(given)) return { errors: ['A system must be an object.'], warnings, system: null };
+  // One written before action points is converted first (L-831; MG1).
+  const converted = apRules.convert(given);
+  converted.warnings.forEach((w) => warnings.push(w));
+  const s = copyOf(converted.system);
 
   // ── Who it is ──
   s.id = text(s.id);
@@ -298,7 +309,8 @@ function validateSystem(input) {
       });
     }
     // A trait may add to what the sheet works out (L-811): `modifiers`
-    // { speed: formula }, a bonus taken with the trait (at creation, L-812).
+    // { ap: formula }, a bonus taken with the trait (at creation, L-812);
+    // and change what AP buys (L-831): `costs`.
     if (on.has('traits')) {
       list(sheet.traits, 'sheet.traits', {
         field: false,
@@ -321,9 +333,10 @@ function validateSystem(input) {
               if (extra.length) errors.push(`${at}.reaction: "${extra[0]}" isn't part of one.`);
             }
           }
+          if (t.costs !== undefined) apRules.checkCosts(t.costs, `${at}.costs`, errors);
           if (t.modifiers === undefined) return;
           if (!isObject(t.modifiers)) {
-            errors.push(`${at}.modifiers must map what it changes to a formula ({ speed: '5' }).`);
+            errors.push(`${at}.modifiers must map what it changes to a formula ({ ap: '5' }).`);
             return;
           }
           for (const [target, value] of Object.entries(t.modifiers)) {
@@ -336,8 +349,8 @@ function validateSystem(input) {
         },
       });
     }
-    // Speed (L-611; L-811): movement a turn, worked out from the sheet.
-    if (sheet.speed !== undefined) formula(sheet.speed, 'sheet.speed');
+    // Action points a turn (L-831; AP1), worked out from the sheet.
+    if (sheet.ap !== undefined) formula(sheet.ap, 'sheet.ap');
     const lock = isObject(s.checks) && isObject(s.checks.lock) ? s.checks.lock : null;
     if (lock) {
       if (lock.skill !== undefined && !(sheet.skills || []).some((k) => k && k.id === lock.skill)) {
@@ -350,9 +363,10 @@ function validateSystem(input) {
       }
     }
     // Conditions (EF3; L-815): what each does while it lasts, as data:
-    // `modifiers` { target: formula } (checks, dice, speed, or an attribute,
+    // `modifiers` { target: formula } (checks, dice, ap, or an attribute,
     // skill or resource), `each` { resource: formula } at the end of each
-    // turn, and the flags noAction and noMove. ./conditions.js reads them.
+    // turn, `costs` changing AP prices (L-831), and the flags noAction and
+    // noMove. ./conditions.js reads them.
     if (on.has('conditions')) {
       const ids = (part) =>
         new Set((Array.isArray(sheet[part]) ? sheet[part] : []).map((x) => x && x.id));
@@ -362,6 +376,7 @@ function validateSystem(input) {
         field: false,
         each: (c, at) => {
           checkDamageTypes(c, at, s, errors);
+          if (c.costs !== undefined) apRules.checkCosts(c.costs, `${at}.costs`, errors);
           if (c.modifiers !== undefined) {
             if (!isObject(c.modifiers)) {
               errors.push(
@@ -513,6 +528,8 @@ function validateSystem(input) {
   }
   s.advancement = s.advancement === undefined ? {} : s.advancement;
   if (!isObject(s.advancement)) errors.push('advancement must be an object (empty for now).');
+  // What AP pays for (L-831; ./ap.js).
+  apRules.check(s, { errors, warnings });
   s.modules = s.modules === undefined ? {} : s.modules;
   if (!isObject(s.modules)) errors.push('modules must map each module to its settings.');
   else {
@@ -609,7 +626,8 @@ const stored = (data) =>
 async function getSystem(db, systemId) {
   if (typeof systemId !== 'string' || !systemId) return null;
   const snap = await db.collection(SYSTEMS_COLLECTION).doc(systemId).get();
-  if (snap.exists) return { ...snap.data(), id: snap.id };
+  // One stored before action points reads as on them (L-831).
+  if (snap.exists) return { ...apRules.convert({ ...snap.data(), id: snap.id }).system };
   const builtIn = BUILT_IN[systemId];
   return builtIn ? { ...copyOf(builtIn), version: 0, builtIn: true } : null;
 }
@@ -627,7 +645,7 @@ async function loadSystem(db, systemId) {
 /** Every system: those in `loom_systems`, and the built-ins not written there yet. */
 async function listSystems(db) {
   const snap = await db.collection(SYSTEMS_COLLECTION).get();
-  const rows = snap.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+  const rows = snap.docs.map((doc) => apRules.convert({ ...doc.data(), id: doc.id }).system);
   const have = new Set(rows.map((r) => r.id));
   for (const id of Object.keys(BUILT_IN)) {
     if (!have.has(id)) rows.push({ ...copyOf(BUILT_IN[id]), version: 0, builtIn: true });

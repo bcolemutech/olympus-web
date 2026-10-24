@@ -72,7 +72,6 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
       const s = { ...copyOf(sys), id: 'my-copy' };
       s.modules.combat = {
         initiative: { formula: c.initiative, tieBreak: 'Luck' },
-        economy: { actions: 0, sneezes: 1 },
         surprise: { hide: { skill: 'Juggling' }, notice: 'eyes' },
         tactics: true,
       };
@@ -81,12 +80,20 @@ describe.each(Object.keys(CASES))('combat under %s', (id) => {
         expect.arrayContaining([
           expect.stringContaining('"tactics" isn\'t a combat setting'),
           expect.stringContaining('initiative.tieBreak "Luck"'),
-          expect.stringContaining('economy.actions must be a whole number from 1 to 5'),
-          expect.stringContaining('economy: "sneezes" isn\'t part of a turn'),
           expect.stringContaining('surprise.hide.skill "Juggling"'),
           expect.stringContaining('surprise.notice must be { skill } or { attribute }'),
         ])
       );
+    });
+
+    test('a retired economy is dropped with a warning, not refused (L-831)', () => {
+      const s = { ...copyOf(sys), id: 'my-copy' };
+      s.modules.combat.economy = { actions: 2, reactions: 1 };
+      const { errors, warnings, system } = validateSystem(s);
+      expect(errors).toEqual([]);
+      expect(warnings.join(' ')).toContain('modules.combat.economy is retired');
+      expect(warnings.join(' ')).toContain("weren't one each");
+      expect(system.modules.combat.economy).toBeUndefined();
     });
 
     test('an initiative formula is checked like any other', () => {

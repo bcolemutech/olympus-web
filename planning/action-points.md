@@ -1,6 +1,6 @@
 # The Loom — Action Points — Design Document v0.1
 
-**Status:** Decided (2026-10-23). The gap sheet (§3) is answered. Sub-issues are planned (§6) and are filed when this epic is next.
+**Status:** In progress. Decided 2026-10-23: the gap sheet (§3) is answered. Sub-issues filed 2026-10-24 (#681–#687, §6); L-831 in progress.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-830 (#675), Phase 9 — Game systems (milestone #25). Built before advancement (now L-840); the modules after it start at L-850 (renumbered 2026-10-23).
 **Depends on:** L-820 (#651, combat), L-810 (#607, sheets and effects), L-610 (turns and movement).
@@ -159,17 +159,17 @@ In both built-in systems, a player crosses difficult ground at double cost, open
 
 ---
 
-## 6. Sub-issues (planned; filed when this epic is next)
+## 6. Sub-issues (filed 2026-10-24)
 
 | ID    | Story                                                                                                                                                                                                                         | Depends on | Model  |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
-| L-831 | **The pool and costs as data:** `sheet.ap`, `ap.costs`, `ap.tiers`, `ap.keepLimit`; overrides on attacks, map features, traits and conditions; checked on save; the built-ins; retiring speed and economy, converting systems | —          | Opus   |
-| L-832 | **Turns on AP:** `save.turn` with `ap`; steps priced by the table (both `grid-paths.js` copies); every action charged; refused when short; long actions; converting saves                                                     | L-831      | Opus   |
-| L-833 | **Off your turn:** kept AP until your next turn, reactions paid from it, Ready reserving its cost                                                                                                                             | L-832      | Sonnet |
-| L-834 | **Conditions on AP:** `modifiers.ap`, `costs`, Stunned at 0; the built-ins' conditions rewritten; `noMove` and `noAction` retired                                                                                             | L-832      | Sonnet |
-| L-835 | **Typed actions by tier:** INTERPRET proposes a tier, ADJUDICATE charges it, with plausibility first                                                                                                                          | L-832      | Sonnet |
-| L-836 | **Foes and named characters on AP:** tactics plan turns that fit the pool by role and posture; named characters choose from whole turns that fit                                                                              | L-833      | Opus   |
-| L-837 | **In the Loom:** the AP bar with kept AP, costs on menu entries (greyed when unaffordable), path previews with their cost                                                                                                     | L-832      | Sonnet |
+| L-831 (#681) | **The pool and costs as data:** `sheet.ap`, `ap.costs`, `ap.tiers`, `ap.keepLimit`; overrides on attacks, map features, traits and conditions; checked on save; the built-ins; retiring speed and economy, converting systems | —          | Opus   |
+| L-832 (#682) | **Turns on AP:** `save.turn` with `ap`; steps priced by the table (both `grid-paths.js` copies); every action charged; refused when short; long actions; converting saves                                                     | L-831      | Opus   |
+| L-833 (#683) | **Off your turn:** kept AP until your next turn, reactions paid from it, Ready reserving its cost                                                                                                                             | L-832      | Sonnet |
+| L-834 (#684) | **Conditions on AP:** `modifiers.ap`, `costs`, Stunned at 0; the built-ins' conditions rewritten; `noMove` and `noAction` retired                                                                                             | L-832      | Sonnet |
+| L-835 (#685) | **Typed actions by tier:** INTERPRET proposes a tier, ADJUDICATE charges it, with plausibility first                                                                                                                          | L-832      | Sonnet |
+| L-836 (#686) | **Foes and named characters on AP:** tactics plan turns that fit the pool by role and posture; named characters choose from whole turns that fit                                                                              | L-833      | Opus   |
+| L-837 (#687) | **In the Loom:** the AP bar with kept AP, costs on menu entries (greyed when unaffordable), path previews with their cost                                                                                                     | L-832      | Sonnet |
 
 **Order:** L-831, then L-832. L-833, L-834, L-835 and L-837 follow; L-836 after L-833.
 

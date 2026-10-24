@@ -36,7 +36,7 @@ const ROLLING = {
     traits: { pick: 1 },
   },
 };
-ROLLING.sheet.traits = [{ id: 'fleet', name: 'Fleet of foot', modifiers: { speed: '5' } }];
+ROLLING.sheet.traits = [{ id: 'fleet', name: 'Fleet of foot', modifiers: { ap: '5' } }];
 
 const FANTASY_SCORES = { STR: 8, DEX: 15, CON: 14, INT: 10, WIS: 12, CHA: 13 };
 const SCIFI_SCORES = { Body: 3, Reflex: 5, Mind: 1, Presence: 1 }; // 2 + 6 + 0 + 0 = 8

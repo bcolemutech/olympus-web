@@ -8,6 +8,7 @@ const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const areas = require('../../../loom-canon/areas');
 const mapAreas = require('../../../loom-canon/map-areas');
+const apRules = require('../../../loom-canon/ap');
 const hazards = require('../../../loom-canon/hazards');
 const { systemOf } = require('../../../loom-canon/checks');
 const { worldId, entityId } = require('./schemas');
@@ -64,11 +65,21 @@ const cellId = z
   .describe('Unique on this map, e.g. "front-door". Typed moves name it.');
 const label = z.string().trim().min(1).max(60);
 const entry = z.strictObject({ id: cellId, x: coord, y: coord });
+// What using a feature or working a door costs in action points, in place of
+// the system's (L-831; a stiff lever 8, a rusted portcullis 10).
+const ownAp = z
+  .number()
+  .int()
+  .min(1)
+  .max(apRules.MAX_COST)
+  .optional()
+  .describe("Its own cost in action points, in place of the system's (a rusted portcullis 10).");
 const feature = z.strictObject({
   id: cellId,
   name: label.describe('As players would say it: "the bar".'),
   x: coord,
   y: coord,
+  ap: ownAp,
 });
 const exit = z.strictObject({
   id: cellId,
@@ -120,6 +131,7 @@ const door = z.strictObject({
   from: point.describe('One end: a corner.'),
   to: point.describe('The other end: the next corner along the grid line (one square long).'),
   locked: z.boolean().optional().describe('Locked doors stop players until opened.'),
+  ap: ownAp,
   key: label.optional().describe('The inventory item that opens it when locked.'),
   difficulty: z
     .number()
