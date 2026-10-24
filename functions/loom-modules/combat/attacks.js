@@ -14,6 +14,8 @@
  *     type             one of the system's damage types (combat's damageTypes)
  *     lethal           whether 0 kills (true, the default) or knocks out (DF4)
  *     ammo?            a resource it spends one of, and can't fire without
+ *     ap?              what it costs in action points, in place of the
+ *                      system's attack cost (L-831; a dagger 7, a greataxe 14)
  *     onHit?           an effect put on whoever it hits (L-815: { condition,
  *                      duration, save? })
  *     area?            { shape, radius | length | size, width? }: an area
@@ -31,6 +33,7 @@
  */
 
 const formula = require('../../loom-canon/formula');
+const apRules = require('../../loom-canon/ap');
 
 const ID = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
 const MAX_ATTACKS = 20;
@@ -47,6 +50,7 @@ const FIELDS = [
   'type',
   'lethal',
   'ammo',
+  'ap',
   'onHit',
   'area',
 ];
@@ -134,6 +138,10 @@ function validateAttack(system, attack, where = 'attack') {
   }
   if (attack.lethal !== undefined && typeof attack.lethal !== 'boolean') {
     errors.push(`${where}.lethal must be true or false.`);
+  }
+  // Its own cost in AP (L-831; CT2).
+  if (!apRules.ownCostOk(attack.ap)) {
+    errors.push(`${where}.ap must be a whole number of AP from 1 to ${apRules.MAX_COST}.`);
   }
   if (attack.ammo !== undefined) {
     const resources = ((system.sheet || {}).resources || []).map((r) => r.id);

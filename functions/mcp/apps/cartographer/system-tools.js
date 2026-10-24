@@ -22,6 +22,7 @@ const {
 const { systemId } = require('./schemas');
 const checks = require('../../../loom-canon/checks');
 const formula = require('../../../loom-canon/formula');
+const apRules = require('../../../loom-canon/ap');
 
 // The formula language (L-802), as Claude needs it to write a system.
 const FORMULAS =
@@ -40,11 +41,19 @@ const SHAPE =
   '"Hull" }: names the Loom shows), sheet, checks, creation, advancement ({} for now), ' +
   'modules ({}: none are built yet) and gmNotes (tone and pacing for the narrator). ' +
   'sheet: attributes [{ id, name, min, max, modifier }] and resources [{ id, name, max }] ' +
-  '(at least one of each), level { min, max }, speed (a formula: movement a turn, from ' +
-  'attributes, skill ranks and level; 20 if left out), and optional: the optional parts it switches ' +
+  '(at least one of each), level { min, max }, ap (a formula: action points a turn, from ' +
+  'attributes, skill ranks and level; 20 if left out; one pool pays for moving, every ' +
+  'action and every reaction), and optional: the optional parts it switches ' +
   `on (${OPTIONAL_PARTS.join(', ')}), each then listed: skills [{ id, name, attribute }], ` +
-  'traits [{ id, name, modifiers? }] (modifiers { speed: formula }: what holding it adds), ' +
-  'conditions [{ id, name }], derived [{ id, name, formula }]. Sheet ' +
+  'traits [{ id, name, modifiers?, costs? }] (modifiers { ap: formula }: what holding it ' +
+  'adds to the pool; costs { spend: n | "x2" }: what it changes a price to, or multiplies ' +
+  'it by), conditions [{ id, name, modifiers?, costs? }], derived [{ id, name, formula }]. ' +
+  'ap: { costs?, tiers?, keepLimit? }: costs { ' +
+  apRules.SPENDS.map((k) => `${k}: ${apRules.COSTS[k]}`).join(', ') +
+  ' } (the defaults; change any), tiers { minor: 3, standard: 10, major: 20 } for typed ' +
+  'actions, keepLimit the most kept off your turn (null: none). An attack, a map feature ' +
+  'or a door can have its own ap. A system written with speed or combat economy is ' +
+  'converted, with warnings. Sheet ' +
   'ids are the names formulas use, unique across the sheet. checks: formula, degrees ' +
   `({ ${DEGREES.join(', ')} }: formulas, optional) and ladder [{ name, value }], ` +
   'easiest first, in strict order. creation: { method: ' +
@@ -67,6 +76,8 @@ const view = (s) => {
   const iso = (ms) => (Number.isFinite(ms) ? new Date(ms).toISOString() : undefined);
   return {
     ...rest,
+    // What AP pays for (L-831), the system's own over the defaults.
+    ap: apRules.settingsOf(s),
     version: s.version || 0,
     ...(iso(createdAtMs) ? { createdAt: iso(createdAtMs) } : {}),
     ...(iso(updatedAtMs) ? { updatedAt: iso(updatedAtMs) } : {}),

@@ -19,6 +19,8 @@
  * Both pass validateSystem with no warnings (tests/loom-built-in-systems).
  */
 
+const { COSTS: AP_COSTS, TIERS: AP_TIERS } = require('./ap');
+
 const FANTASY = {
   id: 'd20-fantasy',
   name: 'd20 Fantasy',
@@ -41,9 +43,9 @@ const FANTASY = {
     // Hit points: 6 and the Constitution modifier per level, at least 1.
     resources: [{ id: 'health', name: 'Hit points', max: 'max(1, level * (6 + mod(CON)))' }],
     level: { min: 1, max: 20 },
-    // Movement a turn (L-811): 20, quicker with Dexterity and training in
-    // Athletics.
-    speed: '20 + mod(DEX) + floor(Athletics / 2)',
+    // Action points a turn (L-831; planning/action-points.md AP1): 20,
+    // more with Dexterity and training in Athletics. A square costs 1.
+    ap: '20 + mod(DEX) + floor(Athletics / 2)',
     optional: ['skills', 'traits', 'conditions', 'derived'],
     // A skill's rank is its proficiency bonus: 0 untrained, 2 to 6 trained.
     skills: [
@@ -83,8 +85,8 @@ const FANTASY = {
       {
         id: 'prone',
         name: 'Prone',
-        description: 'On the ground: −2 to every check, and 10 less movement.',
-        modifiers: { checks: '-2', speed: '-10' },
+        description: 'On the ground: −2 to every check, and 10 fewer AP.',
+        modifiers: { checks: '-2', ap: '-10' },
       },
       {
         id: 'burning',
@@ -132,13 +134,15 @@ const FANTASY = {
     skills: { trained: 4, rank: 2 },
   },
   advancement: {},
-  // Combat (L-821; planning/combat.md §4.1): d20 + Dexterity for initiative,
-  // one action and one reaction a turn; Stealth against Perception for
-  // surprise.
+  // What AP pays for (L-831; planning/action-points.md CT1): the default
+  // costs and tiers, no limit on what's kept.
+  ap: { costs: { ...AP_COSTS }, tiers: { ...AP_TIERS }, keepLimit: null },
+  // Combat (L-821; planning/combat.md §4.1): d20 + Dexterity for initiative
+  // (actions and reactions paid in AP, L-830); Stealth against Perception
+  // for surprise.
   modules: {
     combat: {
       initiative: { formula: '1d20 + mod(DEX)', tieBreak: 'DEX' },
-      economy: { actions: 1, reactions: 1 },
       surprise: { hide: { skill: 'Stealth' }, notice: { skill: 'Perception' } },
       // Attacks (L-822): a d20 against Armour, a critical doubling the dice;
       // a blow meant to knock out with a lethal weapon is 4 harder.
@@ -245,9 +249,9 @@ const SCIFI = {
       { id: 'stress', name: 'Stress', max: '3 + Presence' },
     ],
     level: { min: 1, max: 10 },
-    // Movement a turn (L-811): 20 at Reflex 3, two more for each point of
-    // Reflex above, and one for each rank of Athletics.
-    speed: '14 + 2 * Reflex + Athletics',
+    // Action points a turn (L-831; AP2): 20 at Reflex 3, two more for each
+    // point of Reflex above, and one for each rank of Athletics.
+    ap: '14 + 2 * Reflex + Athletics',
     optional: ['skills', 'traits', 'conditions'],
     // A skill's rank adds dice: 0 untrained, 1 to 3 trained.
     skills: [
@@ -337,13 +341,15 @@ const SCIFI = {
     skills: { trained: 3, rank: 1 },
   },
   advancement: {},
+  // What AP pays for (L-831; planning/action-points.md CT1): the default
+  // costs and tiers, no limit on what's kept.
+  ap: { costs: { ...AP_COSTS }, tiers: { ...AP_TIERS }, keepLimit: null },
   // Combat (L-821; planning/combat.md §4.1): a Reflex pool for initiative,
-  // ties to the higher Reflex; one action and one reaction a turn; Stealth
-  // against Notice for surprise.
+  // ties to the higher Reflex (actions and reactions paid in AP, L-830);
+  // Stealth against Notice for surprise.
   modules: {
     combat: {
       initiative: { formula: 'count((Reflex)d10, >= 7)', tieBreak: 'Reflex' },
-      economy: { actions: 1, reactions: 1 },
       surprise: { hide: { skill: 'Stealth' }, notice: { skill: 'Notice' } },
       // Attacks (L-822): the attacker's pool against the target's Reflex and
       // Athletics, each success past theirs a die more of damage; striking to

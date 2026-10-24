@@ -3,7 +3,7 @@
 /**
  * Conditions on a sheet (planning/game-systems.md §3 EF3, §4.10; L-815 /
  * #642): what the effects on a character change while they last. Shared by
- * the sheet (./sheets.js: speed, resource maximums), checks (./checks.js:
+ * the sheet (./sheets.js: action points, resource maximums), checks (./checks.js:
  * attributes, skills, the check itself, a pool's dice) and the effects
  * engine (./effects.js), which puts them on and takes them off.
  *
@@ -13,11 +13,12 @@
  *                     checks   every check's result (or, rolling under,
  *                              what it must be under)
  *                     dice     a pool's dice (count(...) checks)
- *                     speed    movement a turn
+ *                     ap       action points a turn (L-831)
  *                     an attribute, skill or resource id: its score, its
  *                     rank, its maximum
  *       each?: { [resource]: formula },      at the end of each turn: damage
  *                                            (negative) or healing
+ *       costs?: { [spend]: n | 'x2' },       what AP buys at (L-831, ./ap.js)
  *       noAction?, noMove? }                 can't act, can't move
  *
  *   An effect on a sheet (sheet.conditions)
@@ -35,7 +36,7 @@ const conditionsOn = (system) =>
   (((system && system.sheet) || {}).optional || []).includes('conditions');
 
 // What a modifier may change besides the sheet's own fields.
-const MODIFIER_KINDS = ['checks', 'dice', 'speed'];
+const MODIFIER_KINDS = ['checks', 'dice', 'ap'];
 
 /** The id of the condition an effect puts on (L-811's `{ id }`, or L-815's `{ condition }`). */
 function idOf(effect) {

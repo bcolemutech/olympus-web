@@ -276,6 +276,68 @@ test('copy_system: a new, named system, independent of its source', async () => 
   );
 });
 
+test('set_system takes AP settings; get_system shows them over the defaults (L-831)', async () => {
+  const priced = {
+    ...STARS,
+    id: 'star-ap',
+    sheet: {
+      ...STARS.sheet,
+      ap: '16 + 2 * Body',
+      optional: ['skills', 'traits'],
+      traits: [{ id: 'nimble', name: 'Nimble', modifiers: { ap: '2' }, costs: { difficult: 1 } }],
+    },
+    ap: { costs: { attack: 12 }, tiers: { major: 24 }, keepLimit: 8 },
+  };
+  expect(await ok('set_system', { system: priced })).toMatchObject({ created: true });
+  const { system } = await ok('get_system', { systemId: 'star-ap' });
+  expect(system.sheet.ap).toBe('16 + 2 * Body');
+  expect(system.ap).toEqual({
+    costs: expect.objectContaining({ attack: 12, move: 1, dodge: 8 }),
+    tiers: { minor: 3, standard: 10, major: 24 },
+    keepLimit: 8,
+  });
+  // A built-in shows its own.
+  expect((await ok('get_system', { systemId: 'pool-scifi' })).system.ap).toMatchObject({
+    costs: { attack: 10 },
+    keepLimit: null,
+  });
+  // Bad settings refuse it, each named.
+  const text = await refused('set_system', {
+    system: { ...priced, ap: { costs: { attack: 0.5, fly: 2 }, keepLimit: -1 } },
+  });
+  expect(text).toContain('ap.costs.attack must be a whole number');
+  expect(text).toContain('ap.costs: "fly" isn\'t something AP pays for');
+  expect(text).toContain('ap.keepLimit must be a whole number');
+});
+
+test('a system written before AP is converted on save and on read, with warnings (L-831)', async () => {
+  const older = {
+    ...STARS,
+    id: 'star-old',
+    sheet: { ...STARS.sheet, speed: '18 + Body' },
+    modules: { combat: { economy: { actions: 1, reactions: 1, quick: 0 } } },
+  };
+  const saved = await ok('set_system', { system: older });
+  expect(saved.warnings).toEqual([
+    expect.stringContaining('sheet.speed is now sheet.ap'),
+    expect.stringContaining('modules.combat.economy is retired'),
+  ]);
+  const { system } = await ok('get_system', { systemId: 'star-old' });
+  expect(system.sheet.ap).toBe('18 + Body');
+  expect(system.sheet.speed).toBeUndefined();
+  expect(system.modules.combat.economy).toBeUndefined();
+  // One stored before AP (never saved again) reads as converted.
+  await db
+    .collection('loom_systems')
+    .doc('star-stored')
+    .set({ ...older, id: 'star-stored', version: 1, createdAtMs: 1, updatedAtMs: 1 });
+  const stored = (await ok('get_system', { systemId: 'star-stored' })).system;
+  expect(stored.sheet).toMatchObject({ ap: '18 + Body' });
+  expect(stored.sheet.speed).toBeUndefined();
+  const listed = await ok('list_systems');
+  expect(listed.systems.map((x) => x.id)).toContain('star-stored');
+});
+
 test('update_world sets a world’s system; get_world and its grading show it', async () => {
   const before = await ok('get_world', { worldId: WORLD });
   expect(before.system).toEqual({

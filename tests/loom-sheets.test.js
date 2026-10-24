@@ -137,7 +137,7 @@ describe.each([
   // A copy with a trait that adds speed, taken at creation (L-812).
   const withFleet = () => {
     const copy = JSON.parse(JSON.stringify(system));
-    copy.sheet.traits = [{ id: 'fleet', name: 'Fleet of foot', modifiers: { speed: '5' } }];
+    copy.sheet.traits = [{ id: 'fleet', name: 'Fleet of foot', modifiers: { ap: '5' } }];
     return copy;
   };
 
@@ -161,7 +161,7 @@ describe.each([
     expect(sheets.speedFor(fleet, defaultSheet(fleet))).toBe(20);
     fleet.sheet.traits[0].modifiers = { charm: '2' };
     expect(require('../functions/loom-canon/systems').validateSystem(fleet).errors).toEqual([
-      'sheet.traits[0].modifiers: "charm" isn\'t something a trait changes (speed).',
+      'sheet.traits[0].modifiers: "charm" isn\'t something a trait changes (ap).',
     ]);
   });
 
@@ -170,10 +170,10 @@ describe.each([
     const save = { character: { name: 'Tam', sheet } };
     expect(speedOf(sheets.withSpeed(save, system))).toBe(20);
     const crawl = JSON.parse(JSON.stringify(system));
-    crawl.sheet.speed = '1 - level * 5';
+    crawl.sheet.ap = '1 - level * 5';
     expect(sheets.speedFor(crawl, sheet)).toBe(1);
-    // No speed formula: the default.
-    delete crawl.sheet.speed;
+    // No AP formula: the default.
+    delete crawl.sheet.ap;
     expect(sheets.speedFor(crawl, sheet)).toBe(20);
     // A save without a sheet is as it was.
     const older = { character: { name: 'Tam', speed: 4 } };

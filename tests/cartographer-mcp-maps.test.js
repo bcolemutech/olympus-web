@@ -956,6 +956,28 @@ describe('walls, doors and obstacles (L-622)', () => {
     await ok('set_map_layers', { worldId: W, mapId, doors: DOORS });
   });
 
+  test('a door and a feature can have their own AP cost; a bad one is refused (L-831)', async () => {
+    const stiff = [{ ...DOORS[0], ap: 10 }];
+    await ok('set_map_layers', { worldId: W, mapId, doors: stiff });
+    expect((await mapDoc(W, mapId)).doors).toEqual(stiff);
+    for (const ap of [0, 2.5, 201]) {
+      const bad = await call('set_map_layers', { worldId: W, mapId, doors: [{ ...DOORS[0], ap }] });
+      expect(bad.isError).toBe(true);
+    }
+    await ok('set_map_layers', { worldId: W, mapId, doors: DOORS });
+    const lever = [{ ...ROOM.features[0], ap: 8 }];
+    await ok('set_battle_map', { worldId: W, mapId, ...ROOM, features: lever });
+    expect((await mapDoc(W, mapId)).features).toEqual(lever);
+    const bad = await call('set_battle_map', {
+      worldId: W,
+      mapId,
+      ...ROOM,
+      features: [{ ...lever[0], ap: 0 }],
+    });
+    expect(bad.isError).toBe(true);
+    await ok('set_battle_map', { worldId: W, mapId, ...ROOM });
+  });
+
   test('a feature walled in is warned about', async () => {
     const boxed = [
       ...WALLS,

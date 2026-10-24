@@ -7,8 +7,11 @@
  *   initiative  { formula, tieBreak }   rolled once when a fight starts; a
  *               sheet formula ("1d20 + mod(DEX)"), ties broken by the higher
  *               score in `tieBreak` (an attribute), then the player
- *   economy     { actions, reactions, quick? }  per turn: actions (default 1),
- *               reactions per round (default 1), quick actions (default 0)
+ *   (economy    retired with action points, L-831: actions and reactions
+ *               are paid in AP, ../../loom-canon/ap.js; a system that
+ *               still gives it is converted, the setting dropped. Until
+ *               turns and reactions run on AP (L-832, L-833) a turn has one
+ *               action and a round one reaction.)
  *   surprise    { hide, notice }        each { skill } or { attribute }: an
  *               ambushed side rolls `notice` against the ambushers' `hide`;
  *               with none, nobody is surprised
@@ -79,7 +82,6 @@
 
 const KEYS = [
   'initiative',
-  'economy',
   'surprise',
   'attack',
   'damageTypes',
@@ -97,7 +99,8 @@ const KEYS = [
 ];
 // Settings read by later stories: kept as given, with a warning.
 const LATER = {};
-const ECONOMY = { actions: [1, 1, 5], reactions: [1, 0, 5], quick: [0, 0, 5] };
+// One action a turn and one reaction a round, until AP pays for them (L-832, L-833).
+const ECONOMY = { actions: 1, reactions: 1, quick: 0 };
 const DEFAULT_INITIATIVE = '1d20';
 
 const HITS = ['defence', 'opposed'];
@@ -110,10 +113,7 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 /** The settings with their defaults filled in (none set: a d20, one action, one reaction). */
 function settingsOf(system) {
   const given = (system && system.modules && system.modules.combat) || {};
-  const economy = {};
-  for (const [key, [fallback]] of Object.entries(ECONOMY)) {
-    economy[key] = Number.isInteger((given.economy || {})[key]) ? given.economy[key] : fallback;
-  }
+  const economy = { ...ECONOMY };
   return {
     initiative: {
       formula: (given.initiative && given.initiative.formula) || DEFAULT_INITIATIVE,
@@ -203,7 +203,7 @@ function check(settings, { system, errors, warnings, formula }) {
   for (const key of Object.keys(settings)) {
     if (LATER[key]) {
       warnings.push(`${at}.${key} is used from ${LATER[key]}; it is kept, unused.`);
-    } else if (!KEYS.includes(key)) {
+    } else if (!KEYS.includes(key) && key !== 'economy') {
       errors.push(
         `${at}: "${key}" isn't a combat setting (${KEYS.concat(Object.keys(LATER)).join(', ')}).`
       );
@@ -224,25 +224,12 @@ function check(settings, { system, errors, warnings, formula }) {
     }
   }
 
-  const economy = settings.economy;
-  if (economy !== undefined) {
-    if (!isObject(economy)) errors.push(`${at}.economy must be { actions, reactions, quick? }.`);
-    else {
-      for (const key of Object.keys(economy)) {
-        const range = ECONOMY[key];
-        if (!range) {
-          errors.push(`${at}.economy: "${key}" isn't part of a turn (actions, reactions, quick).`);
-        } else if (
-          !Number.isInteger(economy[key]) ||
-          economy[key] < range[1] ||
-          economy[key] > range[2]
-        ) {
-          errors.push(
-            `${at}.economy.${key} must be a whole number from ${range[1]} to ${range[2]}.`
-          );
-        }
-      }
-    }
+  // Retired with action points (L-831): converted away before the check
+  // (../../loom-canon/ap.js convert); given here directly, it is dropped.
+  if (settings.economy !== undefined) {
+    warnings.push(
+      `${at}.economy is retired (L-830): every action and reaction is paid in AP, from ap.costs.`
+    );
   }
 
   const surprise = settings.surprise;
