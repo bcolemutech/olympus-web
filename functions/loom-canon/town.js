@@ -84,10 +84,52 @@ function routeBetween(world, fromId, toId) {
  * Where a traveller arriving at a settlement by `via` lands: an open entrance
  * serving that route, else any open entrance, else null (no layout, or no
  * way in yet — the settlement is then entered as a whole, as before towns).
+ * Coming from `fromId` (a world place), the most direct of them (L-381;
+ * journeys JA4): the one whose position in town lies nearest the bearing to
+ * where the traveller came from on the world map.
  */
-function arrivalPlace(world, locationId, via) {
+function arrivalPlace(world, locationId, via, fromId = null) {
   const open = entrancesOf(world, locationId).filter((place) => isPlaceOpen(world, place));
-  return open.find((place) => serves(place, via)) || open[0] || null;
+  const serving = open.filter((place) => serves(place, via));
+  const ways = serving.length ? serving : open;
+  return facing(world, locationId, fromId, ways) || ways[0] || null;
+}
+
+// Of `ways`, the one facing a world place (L-381): the smallest angle
+// between its position from the town's middle and the bearing from the
+// settlement to that place; null when either isn't placed. Ties go to the
+// first, in id order.
+function facing(world, locationId, fromId, ways) {
+  const here = world.locations[locationId];
+  const there = fromId && world.locations[fromId];
+  const geo = (l) => l && l.geo && Number.isFinite(l.geo.x) && Number.isFinite(l.geo.y);
+  if (!geo(here) || !geo(there)) return null;
+  const bearing = Math.atan2(there.geo.y - here.geo.y, there.geo.x - here.geo.x);
+  const middle = TOWN_SIDE / 2;
+  let best = null;
+  for (const way of ways) {
+    const p = way.position;
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    if (p.x === middle && p.y === middle) continue;
+    const angle = Math.atan2(p.y - middle, p.x - middle);
+    const off = Math.abs(Math.atan2(Math.sin(angle - bearing), Math.cos(angle - bearing)));
+    if (!best || off < best.off - 1e-9) best = { way, off };
+  }
+  return best ? best.way : null;
+}
+
+/**
+ * Whether a save knows a way in or out of a settlement (L-381; journeys
+ * JA4): one it arrived by, stood in or crossed by (`save.waysKnown`, by
+ * settlement), or every one where it knew the town before L-381 ('all'). A
+ * save from before L-381 knows them all. (Sighting a way's door finds it too:
+ * ../loom-turn/town-found.js.)
+ */
+function knowsWay(save, locationId, placeId) {
+  const known = save && save.waysKnown;
+  if (!known || typeof known !== 'object') return true;
+  const here = known[locationId];
+  return here === 'all' || (Array.isArray(here) && here.includes(placeId));
 }
 
 /**
@@ -312,6 +354,7 @@ module.exports = {
   serves,
   routeBetween,
   arrivalPlace,
+  knowsWay,
   positionOf,
   hasTownLayout,
   layoutReport,

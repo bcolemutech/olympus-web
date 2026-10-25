@@ -930,6 +930,10 @@ exports.loomCreateSave = onCall(async (request) => {
     // The world map shows what a save has discovered (L-331): at first, the
     // start and the places it connects to.
     discovered: withNeighbours(canonWorld, start.id),
+    // Where it has been, and the ways in and out it knows there (L-381):
+    // the start, and the way in it begins at.
+    visited: [start.id],
+    waysKnown: { [start.id]: startPlace ? [startPlace.id] : [] },
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
