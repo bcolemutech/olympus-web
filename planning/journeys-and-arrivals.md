@@ -1,8 +1,8 @@
 # The Loom — Journeys and Arrivals — Design Document v0.1
 
-**Status:** Decided (2026-10-25): the gap sheet (§3) is answered. Sub-issues are planned (§6) and filed once this doc is merged.
+**Status:** In progress. Decided 2026-10-25: the gap sheet (§3) is answered. Sub-issues filed 2026-10-25 (#700–#703, §6); L-381 in progress.
 **Project:** Olympus (`olympus-dfa00`)
-**Epic:** L-380 (to be filed), Phase 3d — Time and travel (milestone #21)
+**Epic:** L-380 (#699), Phase 3d — Time and travel (milestone #21)
 **Depends on:** L-342 to L-346 (ways in and out), L-373 (trip times), L-660 and L-670 (walking and vision in town), #669 (setting out from anywhere in town)
 
 ---
@@ -77,13 +77,13 @@ None: journeys and arrivals add no content to the game.
 
 On Nisia, a new save leaves Hatham by its only known way out with one entry per neighbour; arrives at Bridgeford by the way in facing Hatham, on its battle map, knowing no other gate; leaves and returns to land on Bridgeford's town map; and from Bridgeford makes one journey back to Hatham through a town it has visited, the time summed and that town's gates found.
 
-## 6. Sub-issues (planned)
+## 6. Sub-issues (filed 2026-10-25)
 
 | Story | What                                                                                                                                                           | Depends on | Model  |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
-| L-381 | **Visits and the way in:** `save.visited` (older saves derived); the most direct way in; only the ways arrived or crossed by known; leaving by a known way out | —          | Opus   |
-| L-382 | **Arriving on the town map:** a visited settlement lands on its town map at the way in; a first visit on the way in's battle map                               | L-381      | Sonnet |
-| L-383 | **The way out's menu:** one entry per neighbour with its time, arriving by the most direct way in; chosen ways in retired from the menu                        | L-381      | Sonnet |
-| L-384 | **Journeys:** the quickest path through visited settlements, its time, crossing towns finds their gates; the world map's Journey to, narrated as one passage   | L-381      | Opus   |
+| L-381 (#700) | **Visits and the way in:** `save.visited` (older saves derived); the most direct way in; only the ways arrived or crossed by known; leaving by a known way out | —          | Opus   |
+| L-382 (#701) | **Arriving on the town map:** a visited settlement lands on its town map at the way in; a first visit on the way in's battle map                               | L-381      | Sonnet |
+| L-383 (#702) | **The way out's menu:** one entry per neighbour with its time, arriving by the most direct way in; chosen ways in retired from the menu                        | L-381      | Sonnet |
+| L-384 (#703) | **Journeys:** the quickest path through visited settlements, its time, crossing towns finds their gates; the world map's Journey to, narrated as one passage   | L-381      | Opus   |
 
 **Order:** L-381 first; L-382, L-383 and L-384 follow in any order. Each is checked in headless Chrome against the emulators on Nisia-like data, and on a phone width.

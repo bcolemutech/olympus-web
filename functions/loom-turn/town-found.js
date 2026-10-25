@@ -10,8 +10,10 @@ const { squaresOf } = require('./town-seen');
  * movement-and-vision.md §9; L-673 / #475). A place is found once its door
  * has been in sight: its square is in the save's record of the town
  * (./town-seen.js), which only grows, so it stays found. Some are known from
- * the start: the ways in and out, and the place the save is at (where it
- * arrived, or stands).
+ * the start: the place the save is at (where it arrived, or stands), and the
+ * ways in and out it has arrived by, stood in or crossed by (L-381:
+ * `save.waysKnown`, ../loom-canon/town.js knowsWay); the others are found by
+ * sight like any place.
  *
  * Only found places are sent to the town view, and INTERPRET and NARRATE
  * are given a world without the others (knownWorld); a move to one is turned
@@ -33,7 +35,11 @@ function foundIn(canonWorld, save, record) {
   const sighted = (square) => Boolean(square) && seen[square.y * side + square.x] === 1;
   const found = new Set();
   for (const place of town.placesOf(canonWorld, settlement.id)) {
-    const known = town.isEntrance(place) || place.id === save.placeId;
+    // A way in or out only once arrived by, stood in or crossed by (L-381;
+    // journeys JA4), or sighted.
+    const known =
+      (town.isEntrance(place) && town.knowsWay(save, settlement.id, place.id)) ||
+      place.id === save.placeId;
     const door = place.position;
     const doorSeen =
       door &&

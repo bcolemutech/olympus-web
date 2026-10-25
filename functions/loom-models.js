@@ -494,6 +494,11 @@ function makeSave(fields) {
     // square, with no place (placeId null) and no map.
     ...(fields.townPoint ? { townPoint: fields.townPoint } : {}),
     discovered: fields.discovered || [],
+    // The settlements arrived in, and the ways in and out known in each
+    // (L-381; journeys and arrivals §4.1, §4.2). A save without them is from
+    // before L-381: its next turn derives them (../loom-turn/visits.js).
+    ...(fields.visited ? { visited: fields.visited } : {}),
+    ...(fields.waysKnown ? { waysKnown: fields.waysKnown } : {}),
     privateFlags: fields.privateFlags || {},
     relationships: fields.relationships || {},
     recentSummary: fields.recentSummary || '',

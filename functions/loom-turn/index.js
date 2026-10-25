@@ -510,7 +510,7 @@ async function runTurnPipeline(params) {
   // Setting out from a town with ground, from anywhere on its streets
   // (#669): the way out is walked turn after turn, as Walk there is, and the
   // journey begins there.
-  const out = action && action.enter ? null : setOutWalk(canonWorld, save, proposedAction);
+  const out = action && action.enter ? null : setOutWalk(canonWorld, save, proposedAction, found);
   if (out && out.refused) return refusal(save, out.refused);
   if (out) {
     const walked = await walkThere(params, out.target);

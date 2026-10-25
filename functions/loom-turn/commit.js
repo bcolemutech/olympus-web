@@ -7,6 +7,7 @@ const { shouldRegenerateSummary, maybeRegenerateSummary } = require('./summary')
 const { doorStatesOf } = require('./steps');
 const { look } = require('./seen');
 const { lookInTown } = require('./town-seen');
+const visits = require('./visits');
 const clock = require('../loom-canon/clock');
 const effects = require('../loom-canon/effects');
 const { systemOf } = require('../loom-canon/checks');
@@ -83,6 +84,12 @@ async function commitTurn(params) {
     }
 
     const save = saveSnap.data();
+    // A save from before L-381: the towns it has records of, read now
+    // (before any write), to derive where it has been (./visits.js).
+    const townsRecorded = Array.isArray(save.visited)
+      ? null
+      : (await transaction.get(saveRef.collection('seenTowns'))).docs.map((d) => d.id);
+    const before = save.location;
     const worldState = worldStateSnap.exists
       ? worldStateSnap.data()
       : { worldId, locations: {}, factions: {}, globalFlags: {}, worldClock: 0 };
@@ -99,6 +106,10 @@ async function commitTurn(params) {
       discovered.map((id) => ({ op: 'add', path: 'discovered', value: id }))
     );
     applyStateMutations(worldState, worldMutations);
+    // Where it has been and the ways in and out it knows (L-381): derived
+    // for a save from before, then where it now stands noted.
+    if (townsRecorded) Object.assign(save, visits.derived(before, townsRecorded));
+    if (canonWorld) visits.noteWhereItIs(canonWorld, save);
     // An older save gets its clock on its next turn (L-371): Day 1, 08:00.
     if (!clock.isTime(save.time)) save.time = clock.START;
     // Conditions whose game time has run out by now end (L-815): a journey

@@ -576,7 +576,7 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
     if (found && !found.has(targetPlace.id)) return blocked(UNKNOWN);
     return evaluateTownMove(targetPlace, characterState, canonWorld);
   }
-  const out = leavingTown(proposedAction, characterState, canonWorld);
+  const out = leavingTown(proposedAction, characterState, canonWorld, found);
   if (out.result) return out.result;
   const { targetId, targetLocation, wayIn, via, here, exits, atWayOut } = out;
 
@@ -614,7 +614,9 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
     if (!walkedOut) return blocked(leaveHint(targetLocation, exits, via));
   }
 
-  const arrival = wayIn || town.arrivalPlace(canonWorld, targetId, via);
+  // By the way in chosen, else the most direct (L-381): facing where you
+  // came from.
+  const arrival = wayIn || town.arrivalPlace(canonWorld, targetId, via, currentId);
   const mutations = [{ target: 'save', op: 'set-flag', path: 'location', value: targetId }];
   if (characterState.townPoint || (walkedOut && walkedOut.spend)) {
     mutations.push({ target: 'save', op: 'set-flag', path: 'townPoint', value: null });
@@ -657,8 +659,10 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
 // allow it before setting out (#669): `{ result }`, an answer at once (no
 // such place, already there, or why not), or what leaving needs: the place
 // and the way in asked for, the route, where the save is, the ways out
-// serving the route and whether it stands at one.
-function leavingTown(proposedAction, characterState, canonWorld) {
+// serving the route and whether it stands at one. `found` the places it
+// knows in this town (./town-found.js; null: all): it leaves only by a way
+// out it knows (L-381).
+function leavingTown(proposedAction, characterState, canonWorld, found = null) {
   const currentId = characterState.location;
   const first = proposedAction.targets[0];
   const targetPlace = first && (canonWorld.places || {})[first];
@@ -711,7 +715,8 @@ function leavingTown(proposedAction, characterState, canonWorld) {
     if (refused) return { result: refused };
   }
   const { place: here, point } = town.positionOf(canonWorld, characterState);
-  const exits = town.entrancesOf(canonWorld, currentId).filter((p) => town.serves(p, via));
+  const serving = town.entrancesOf(canonWorld, currentId).filter((p) => town.serves(p, via));
+  const exits = serving.filter((p) => !found || found.has(p.id));
   // Out of town only from a way out that serves the route: standing in it,
   // or on the street at its door (L-662).
   const atAWayOut = (p) =>
@@ -720,6 +725,17 @@ function leavingTown(proposedAction, characterState, canonWorld) {
     (here && town.isEntrance(here) && town.serves(here, via)) ||
     (!here && point && exits.some(atAWayOut)) ||
     (!here && !point);
+  // Ways out serving the route, none of them known yet (L-381).
+  if (!atWayOut && serving.length && !exits.length) {
+    return {
+      result: blocked(
+        'You know no way out of ' +
+          currentLocation.name +
+          (via ? ' by ' + via : '') +
+          '. Explore to find one.'
+      ),
+    };
+  }
   return { targetId, targetLocation, wayIn, via, here, exits, atWayOut };
 }
 
@@ -761,12 +777,12 @@ function wayOutLine(here, walkedOut) {
  * when the move can't be made, or null when no walk is needed (the save is
  * at a way out, isn't on a town's streets, or the move isn't out of town).
  */
-function setOutWalk(canonWorld, characterState, proposedAction) {
+function setOutWalk(canonWorld, characterState, proposedAction, found = null) {
   if (proposedAction.verb !== 'move' || !walksTown(canonWorld, characterState)) return null;
   const first = proposedAction.targets[0];
   const targetPlace = first && (canonWorld.places || {})[first];
   if (!first || (targetPlace && targetPlace.locationId === characterState.location)) return null;
-  const out = leavingTown(proposedAction, characterState, canonWorld);
+  const out = leavingTown(proposedAction, characterState, canonWorld, found);
   if (out.result) {
     return out.result.outcome === 'success' ? null : { refused: out.result.constraints[0] };
   }
