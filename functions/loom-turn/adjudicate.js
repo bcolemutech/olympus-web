@@ -631,8 +631,18 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
     });
   }
   // Arriving where there is a battle map (L-351) lands on it, at its entry:
-  // the way in reached, or the point of interest itself.
-  mutations.push(...maps.arrivalMutations(canonWorld, arrival || targetLocation, characterState));
+  // the way in reached, or the point of interest itself. A settlement
+  // visited before is arrived at on its town map, at the way in (L-382;
+  // journeys JA2): its map is entered from there, as any place's is.
+  const been =
+    Boolean(arrival) &&
+    Array.isArray(characterState.visited) &&
+    characterState.visited.includes(targetId);
+  mutations.push(
+    ...(been
+      ? maps.arrivalMutations(canonWorld, null, characterState)
+      : maps.arrivalMutations(canonWorld, arrival || targetLocation, characterState))
+  );
   // The trip takes its time (L-373; game time T8–T10): the route's miles at
   // its speed, nights camped on land. The same trip() gives the map's
   // estimate before setting out (./map-view.js).

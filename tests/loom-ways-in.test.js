@@ -63,8 +63,20 @@ const WORLD = {
   },
   factions: {},
   characters: {},
-  battleMaps: {},
+  battleMaps: {
+    bm_gate: {
+      id: 'bm_gate',
+      name: 'A gateway',
+      width: 3,
+      height: 3,
+      entries: [{ id: 'in', x: 1, y: 1 }],
+      exits: [{ id: 'out', name: 'the way out', x: 1, y: 1, to: 'out' }],
+      features: [],
+    },
+  },
 };
+// The east gate has a battle map, for arriving on it (L-382).
+WORLD.places.east.battleMap = { mapId: 'bm_gate' };
 
 describe('arriving by the most direct way in', () => {
   test('by road from the east, the east gate; from the west, the west gate', () => {
@@ -158,5 +170,40 @@ describe('visits', () => {
     const old = { location: 'hatham', placeId: 'east', visited: [], waysKnown: { hatham: 'all' } };
     visits.noteWhereItIs(WORLD, old);
     expect(old.waysKnown).toEqual({ hatham: 'all' });
+  });
+});
+
+describe('arriving on the town map where you have been (L-382)', () => {
+  // From Bridgeford, by road, to Hatham's east gate (which has a map).
+  const arrive = (visited) => {
+    const s = {
+      location: 'bridgeford',
+      placeId: null,
+      ...(visited ? { visited } : {}),
+      character: { name: 'Tam', inventory: [] },
+    };
+    const r = evaluate({ verb: 'move', targets: ['hatham'], params: {} }, {}, s, 10, WORLD);
+    const set = (path) => (r.mutations.find((m) => m.path === path) || {}).value;
+    return { r, placeId: set('placeId'), mapId: set('mapId'), cell: set('cell') };
+  };
+
+  test("a first visit lands on the way in's battle map", () => {
+    expect(arrive(['bridgeford'])).toMatchObject({
+      placeId: 'east',
+      mapId: 'bm_gate',
+      cell: { x: 1, y: 1 },
+    });
+  });
+
+  test('a visit after that lands in town at the way in, off its map', () => {
+    const a = arrive(['bridgeford', 'hatham']);
+    // In town at the way in; no map set (a save on one would have it cleared).
+    expect(a.placeId).toBe('east');
+    expect(a.mapId || null).toBeNull();
+    expect(a.r.constraints.join(' ')).toContain('at The East Gate');
+  });
+
+  test('a save from before L-381 (no visits kept) lands on the map, as before', () => {
+    expect(arrive(null).mapId).toBe('bm_gate');
   });
 });

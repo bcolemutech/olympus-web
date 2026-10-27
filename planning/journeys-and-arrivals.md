@@ -1,6 +1,6 @@
 # The Loom — Journeys and Arrivals — Design Document v0.1
 
-**Status:** In progress. Decided 2026-10-25: the gap sheet (§3) is answered. Sub-issues filed 2026-10-25 (#700–#703, §6); L-381 in progress.
+**Status:** In progress. Decided 2026-10-25: the gap sheet (§3) is answered. Sub-issues filed 2026-10-25 (#700–#703, §6); L-381 shipped (#704); L-382 in progress.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-380 (#699), Phase 3d — Time and travel (milestone #21)
 **Depends on:** L-342 to L-346 (ways in and out), L-373 (trip times), L-660 and L-670 (walking and vision in town), #669 (setting out from anywhere in town)
