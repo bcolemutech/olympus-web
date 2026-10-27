@@ -8,7 +8,8 @@
  * gate; leaving by sea with no harbour known is refused; walking into sight of
  * the north gate finds it. Setting out for Dunsmouth by trail arrives by its
  * west gate, the one facing Burdendal, knowing no other, and the save has
- * visited both.
+ * visited both. Coming back to either lands on its town map at the way in,
+ * off the way in's battle map (L-382 / #701).
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest loom-ways-in-play --verbose"
@@ -206,5 +207,45 @@ describe('a save from before L-381', () => {
       waysKnown: { loc_1: 'all' },
     });
     expect(await townPlaces(saveId)).toEqual(['plc_1_gate', 'plc_1_harbour', 'plc_1_north']);
+  });
+});
+
+describe('coming back lands on the town map (L-382)', () => {
+  let saveId;
+  beforeAll(async () => {
+    saveId = await newGame();
+    await stepOffMap(saveId);
+    // To Dunsmouth: a first visit, on its west gate's map.
+    await play(saveId, { verb: 'move', target: 'loc_631' });
+  });
+
+  test("a first visit lands on the way in's battle map", async () => {
+    expect(await saveOf(saveId)).toMatchObject({
+      location: 'loc_631',
+      placeId: 'plc_631_west',
+      mapId: GATEWAY.id,
+    });
+  });
+
+  test('back to Burdendal, and on to Dunsmouth again: each lands in town, off the map', async () => {
+    await stepOffMap(saveId);
+    await play(saveId, { verb: 'move', target: 'loc_1' });
+    expect(await saveOf(saveId)).toMatchObject({
+      location: 'loc_1',
+      placeId: 'plc_1_gate',
+      mapId: null,
+      cell: null,
+    });
+    await play(saveId, { verb: 'move', target: 'loc_631' });
+    expect(await saveOf(saveId)).toMatchObject({
+      location: 'loc_631',
+      placeId: 'plc_631_west',
+      mapId: null,
+    });
+    // What was found there the first time is known still.
+    expect(await townPlaces(saveId)).toEqual(['plc_631_west']);
+    const map = await mapOf(saveId);
+    expect(map.battleMap).toBeFalsy();
+    expect(map.town.here).toBe('plc_631_west');
   });
 });

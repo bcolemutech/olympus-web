@@ -210,6 +210,8 @@ describe('a walk through Burdendal', () => {
 
   test('arriving by sea lands at the harbour', async () => {
     await standAt(saveId, 'loc_229', null); // Wisin, an older save with no place
+    // Never in Burdendal before, so arriving lands on the harbour's map (L-382).
+    await db.collection('loom_saves').doc(saveId).update({ visited: ['loc_229'] });
     expect(await moveTo(saveId, 'loc_1')).toMatchObject({
       outcome: 'success',
       constraints: [
