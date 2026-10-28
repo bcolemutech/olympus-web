@@ -868,6 +868,7 @@
   // Setting out along the world routes from a way out: from where you
   // stand anywhere in town (#669), the server walking you there first (on
   // the streets, turn after turn; through the town's places, in one go).
+  // One entry a neighbouring settlement, with its time (L-383).
   function setOutItems(place, away) {
     if (place.retired || !place.open) return [];
     var items = [];
@@ -879,27 +880,15 @@
         return;
       }
       var note = [first, exit.travel && exit.travel.label].filter(Boolean).join(' · ') || undefined;
-      var ways = exit.waysIn || [];
-      if (ways.length > 1) {
-        // Where to arrive (L-346): travelling to a way in arrives by it.
-        ways.forEach(function (way) {
-          items.push({
-            label: 'Set out for ' + label + ', arriving by ' + way.name,
-            note: note,
-            onSelect: function () {
-              act(way.id, exit.name + ' by ' + way.name);
-            },
-          });
-        });
-      } else {
-        items.push({
-          label: 'Set out for ' + label,
-          note: note,
-          onSelect: function () {
-            act(exit.id, exit.name);
-          },
-        });
-      }
+      // One entry a neighbour (L-383): arriving by the way in facing here
+      // (L-381), so there is no choosing it.
+      items.push({
+        label: 'Set out for ' + label,
+        note: note,
+        onSelect: function () {
+          act(exit.id, exit.name);
+        },
+      });
     });
     return items;
   }
