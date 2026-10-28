@@ -9,6 +9,7 @@ const { turnStateOf, nextTurnState, applyStateMutations } = require('../loom-mod
 const apRules = require('../loom-canon/ap');
 const clock = require('../loom-canon/clock');
 const travel = require('../loom-canon/travel');
+const journeys = require('../loom-canon/journeys');
 const checks = require('../loom-canon/checks');
 const { planStep, heldBy, doorStatesOf, doorSides, hasKey, besideDoor } = require('./steps');
 const effects = require('../loom-canon/effects');
@@ -578,7 +579,7 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
   }
   const out = leavingTown(proposedAction, characterState, canonWorld, found);
   if (out.result) return out.result;
-  const { targetId, targetLocation, wayIn, via, here, exits, atWayOut } = out;
+  const { targetId, targetLocation, wayIn, via, here, exits, atWayOut, journey } = out;
 
   // In a town with ground, a typed move out walks to the nearest way out
   // first (L-663), and sets out from there if it gets there this turn. (The
@@ -616,7 +617,17 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
 
   // By the way in chosen, else the most direct (L-381): facing where you
   // came from.
-  const arrival = wayIn || town.arrivalPlace(canonWorld, targetId, via, currentId);
+  // The walk to the way out comes first (#669); a journey (L-384; JA3)
+  // sets out when it ends: its legs and the walks across the towns between,
+  // summed, arriving by the way in facing its last leg.
+  const start = clock.timeOf(characterState);
+  const walked = walkedOut ? walkedOut.seconds : 0;
+  const made = journey
+    ? journeys.journeyOf(canonWorld, characterState, currentId, targetId, start + walked)
+    : null;
+  const arrival = made
+    ? made.arrival
+    : wayIn || town.arrivalPlace(canonWorld, targetId, via, currentId);
   const mutations = [{ target: 'save', op: 'set-flag', path: 'location', value: targetId }];
   if (characterState.townPoint || (walkedOut && walkedOut.spend)) {
     mutations.push({ target: 'save', op: 'set-flag', path: 'townPoint', value: null });
@@ -647,10 +658,10 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
   // its speed, nights camped on land. The same trip() gives the map's
   // estimate before setting out (./map-view.js).
   // The walk to the way out comes first (#669).
-  const start = clock.timeOf(characterState);
-  const walked = walkedOut ? walkedOut.seconds : 0;
-  const trip = travel.trip(canonWorld, currentId, targetId, start + walked);
-  const end = trip ? trip.to : start + walked;
+  // The ways used in each town a journey crosses are found there (JA5).
+  if (made) mutations.push(...crossingMutations(characterState, made));
+  const trip = made ? null : travel.trip(canonWorld, currentId, targetId, start + walked);
+  const end = made ? made.to : trip ? trip.to : start + walked;
   if (end !== start) mutations.push({ target: 'save', op: 'set-flag', path: 'time', value: end });
   mutations.push({ op: 'increment', path: 'worldClock', value: 1 });
   const arrived =
@@ -659,10 +670,32 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
     outcome: 'success',
     mutations,
     constraints: (walkedOut ? [wayOutLine(here, walkedOut)] : []).concat(
-      trip ? travel.tripLines(trip, arrived) : ['Y' + arrived.slice(1)]
+      made
+        ? journeys.journeyLines(canonWorld, made)
+        : trip
+          ? travel.tripLines(trip, arrived)
+          : ['Y' + arrived.slice(1)]
     ),
+    ...(made ? { journey: { stops: made.stops, through: made.through } } : {}),
     ...(end !== start ? { time: travel.timeSpent(start, end - start) } : {}),
   };
+}
+
+// What crossing towns on a journey finds (L-384; JA5): the way in and the
+// way out used in each, known there from now on, and the town visited.
+function crossingMutations(characterState, journey) {
+  const known = characterState.waysKnown || {};
+  const out = [];
+  for (const c of journey.crossings) {
+    out.push({ target: 'save', op: 'add', path: 'visited', value: c.locationId });
+    if (known[c.locationId] === 'all') continue;
+    for (const way of [c.wayIn, c.wayOut]) {
+      if (way) {
+        out.push({ target: 'save', op: 'add', path: 'waysKnown.' + c.locationId, value: way.id });
+      }
+    }
+  }
+  return out;
 }
 
 // The way to a world place out of the current town, as far as the rules
@@ -696,11 +729,31 @@ function leavingTown(proposedAction, characterState, canonWorld, found = null) {
   }
 
   const currentLocation = canonWorld.locations[currentId];
+  const targetLocation = canonWorld.locations[targetId];
+  // Not a neighbour: a journey there, through settlements visited before
+  // (L-384; journeys JA1), if it has been there.
   if (currentLocation.connections.indexOf(targetId) === -1) {
-    return { result: blocked("You can't get there directly from here.") };
+    const visited = Array.isArray(characterState.visited) && characterState.visited;
+    const stops =
+      !wayIn && visited && journeys.routeOf(canonWorld, characterState, currentId, targetId);
+    if (!stops) {
+      return {
+        result: blocked(
+          visited && visited.includes(targetId)
+            ? 'No way you know leads there.'
+            : "You can't get there directly from here."
+        ),
+      };
+    }
+    return leavingBy(characterState, canonWorld, found, {
+      targetId,
+      targetLocation,
+      wayIn: null,
+      via: town.routeBetween(canonWorld, currentId, stops[1]),
+      journey: { stops },
+    });
   }
 
-  const targetLocation = canonWorld.locations[targetId];
   // A retired place stays resolvable for saves already there, but nobody can
   // travel to it (Firestore worlds also drop it from connections).
   if (targetLocation.retired) return { result: blocked("That place can't be reached anymore.") };
@@ -717,6 +770,25 @@ function leavingTown(proposedAction, characterState, canonWorld, found = null) {
   // Leaving a town (L-342): only from a way out that serves the route — a
   // harbour for the sea, a gate for the roads and trails.
   const via = town.routeBetween(canonWorld, currentId, targetId);
+  return leavingBy(characterState, canonWorld, found, {
+    targetId,
+    targetLocation,
+    wayIn,
+    via,
+  });
+}
+
+// The rest of leaving (#669, L-381): a chosen way in checked, where the save
+// is, the known ways out serving `via` (a journey's first leg's, L-384) and
+// whether it stands at one.
+function leavingBy(
+  characterState,
+  canonWorld,
+  found,
+  { targetId, targetLocation, wayIn, via, journey }
+) {
+  const currentId = characterState.location;
+  const currentLocation = canonWorld.locations[currentId];
   // Arriving at a town lands at the way in the traveller chose (L-346), or
   // else at the open entrance serving the route: a way in that won't do is
   // turned down before any walk to the way out.
@@ -746,7 +818,7 @@ function leavingTown(proposedAction, characterState, canonWorld, found = null) {
       ),
     };
   }
-  return { targetId, targetLocation, wayIn, via, here, exits, atWayOut };
+  return { targetId, targetLocation, wayIn, via, here, exits, atWayOut, journey };
 }
 
 // The walk through a town's links (L-600) from a place in it to the nearest
@@ -2063,6 +2135,8 @@ function evaluate(
     ...(resolution.time ? { time: Object.freeze({ ...resolution.time }) } : {}),
     ...(resolution.walked ? { walked: Object.freeze(resolution.walked) } : {}),
     ...(resolution.walkedTown ? { walkedTown: Object.freeze(resolution.walkedTown) } : {}),
+    // A journey made (L-384): its stops and the towns passed, for the GM.
+    ...(resolution.journey ? { journey: Object.freeze({ ...resolution.journey }) } : {}),
   });
 }
 

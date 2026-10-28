@@ -16,6 +16,7 @@ const townPaths = require('../loom-canon/town-paths');
 const layers = require('../loom-canon/layers');
 const seen = require('./seen');
 const travel = require('../loom-canon/travel');
+const journeys = require('../loom-canon/journeys');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
 const apRules = require('../loom-canon/ap');
@@ -79,6 +80,17 @@ function mapView(canonWorld, save, record, townRecord) {
     }
     if (geo.markerType) row.markerType = geo.markerType;
     if (place.retired) row.retired = true;
+    // A settlement visited before that isn't a neighbour (L-384; JA6): its
+    // journey from here, for the world map's Journey to (its time and the
+    // towns passed), or `false` when no way the save knows leads there.
+    const near = id === save.location || (canonWorld.locations[save.location] || {}).connections;
+    const visited = Array.isArray(save.visited) && save.visited.includes(id);
+    if (visited && id !== save.location && !(near || []).includes(id)) {
+      const j = journeys.journeyOf(canonWorld, save, save.location, id, clock.timeOf(save));
+      row.journey = j
+        ? { label: clock.duration(j.seconds), through: j.through, vias: j.vias }
+        : false;
+    }
     places.push(row);
   }
 

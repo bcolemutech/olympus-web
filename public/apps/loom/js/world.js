@@ -301,11 +301,28 @@
     return facts.join(' · ');
   }
 
+  // A journey's time and the towns passed (L-384): "about 3 days, through
+  // Hatham and Bridgeford".
+  function journeyWords(journey) {
+    var names = journey.through || [];
+    var through =
+      names.length < 2
+        ? names.join('')
+        : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+    return journey.label + (through ? ', through ' + through : '');
+  }
+
   // Why a place can't be travelled to now, or null if it can.
   function refusal(place, via) {
     if (place.id === world.data.here) return 'You are here.';
     if (!place.open) return 'Not built yet. The way is closed.';
-    if (!via) return 'Not directly reachable from here.';
+    if (!via) {
+      // Somewhere you've been (L-384): a journey there, or no known way.
+      if (place.journey) return null;
+      return place.journey === false
+        ? 'No way you know leads there.'
+        : 'Not directly reachable from here.';
+    }
     if (Loom.state.turnInProgress) return 'A turn is under way.';
     return null;
   }
@@ -354,16 +371,38 @@
     var no = refusal(place, via);
     var items = [];
     var trip = no ? null : tripWords(place.id);
-    // One entry a neighbour: arriving by the way in facing here (L-381,
-    // L-383), so there is no choosing it.
-    items.push({
-      label: trip ? 'Travel to ' + place.name + ' · ' + trip : 'Move',
-      disabled: Boolean(no),
-      note: no || undefined,
-      onSelect: function () {
-        travel(place.id, place.name);
-      },
-    });
+    // A place you've been that isn't a neighbour (L-384; JA6): a journey
+    // there, through the places you've been on the way.
+    var journey = place.journey;
+    if (journey !== undefined && !via) {
+      var busy = Loom.state.turnInProgress;
+      var cannot = !place.open
+        ? 'Not built yet. The way is closed.'
+        : journey === false
+          ? 'No way you know leads there.'
+          : busy
+            ? 'A turn is under way.'
+            : null;
+      items.push({
+        label: 'Journey to ' + place.name + (journey ? ' · ' + journeyWords(journey) : ''),
+        disabled: Boolean(cannot),
+        note: cannot || undefined,
+        onSelect: function () {
+          travel(place.id, place.name);
+        },
+      });
+    } else {
+      // One entry a neighbour: arriving by the way in facing here (L-381,
+      // L-383), so there is no choosing it.
+      items.push({
+        label: trip ? 'Travel to ' + place.name + ' · ' + trip : 'Move',
+        disabled: Boolean(no),
+        note: no || undefined,
+        onSelect: function () {
+          travel(place.id, place.name);
+        },
+      });
+    }
     items.push({
       label: 'Look',
       onSelect: function () {
@@ -419,6 +458,12 @@
     var no = place.id === world.data.here ? 'You are here.' : refusal(place, via);
     if (no && no !== 'A turn is under way.') {
       info.appendChild(el('p', 'loom-map-info-status' + (place.open ? '' : ' is-closed'), no));
+    }
+    // A place you've been, a journey away (L-384).
+    if (!via && place.journey && place.open) {
+      info.appendChild(
+        el('p', 'loom-map-info-status', 'A journey from here: ' + journeyWords(place.journey) + '.')
+      );
     }
   }
 
