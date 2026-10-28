@@ -557,7 +557,6 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
       { from: 'plc_1_market', to: 'plc_1_temple' },
     ]);
     // The routes out, each with the ways out that serve it.
-    const gate = (id) => [{ id, name: 'The Town Gate' }];
     expect(view.exits).toEqual([
       {
         id: 'loc_120',
@@ -565,7 +564,6 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
         via: 'sea',
         open: false,
         waysOut: ['plc_1_harbour'],
-        waysIn: [],
         // How long the trip takes (L-373).
         travel: expect.objectContaining({ label: 'about 14½ hours by sea' }),
       },
@@ -575,7 +573,6 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
         via: 'sea',
         open: true,
         waysOut: ['plc_1_harbour'],
-        waysIn: gate('plc_229_town-gate'),
         // How long the trip takes (L-373).
         travel: expect.objectContaining({ label: 'about 13½ hours by sea' }),
       },
@@ -585,7 +582,6 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
         via: 'trail',
         open: false,
         waysOut: ['plc_1_gate'],
-        waysIn: [],
         // How long the trip takes (L-373).
         travel: expect.objectContaining({ label: 'about 3½ days by trail' }),
       },
@@ -595,7 +591,6 @@ describe('the town view: loomGetMap’s town (L-345)', () => {
         via: 'trail',
         open: true,
         waysOut: ['plc_1_gate'],
-        waysIn: gate('plc_631_town-gate'),
         // How long the trip takes (L-373).
         travel: expect.objectContaining({ label: 'about 3 days by trail' }),
       },
@@ -803,22 +798,12 @@ describe('choosing the way in (L-346)', () => {
     expect(prompt).not.toMatch(/way into Burdendal/);
   });
 
-  test('loomGetMap offers the choice: open ways in, and those serving each route out', async () => {
+  test('loomGetMap offers no choice of way in (L-383): one entry a neighbour', async () => {
     await atTheGate();
     const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
-    const dunsmouth = view.places.find((p) => p.id === 'loc_631');
-    expect(dunsmouth.waysIn).toEqual([
-      { id: 'plc_631_quay', name: 'The Quay', via: ['sea'] },
-      { id: 'plc_631_town-gate', name: 'The Town Gate', via: ['road', 'trail', 'sea'] },
-      { id: 'plc_631_west-gate', name: 'The West Gate', via: ['trail'] },
-    ]);
-    // Closed places offer no ways in.
-    expect(view.places.find((p) => p.id === 'loc_231')).not.toHaveProperty('waysIn');
-    const byTrail = view.town.exits.find((e) => e.id === 'loc_631');
-    expect(byTrail.waysIn).toEqual([
-      { id: 'plc_631_town-gate', name: 'The Town Gate' },
-      { id: 'plc_631_west-gate', name: 'The West Gate' },
-    ]);
-    expect(view.town.exits.find((e) => e.id === 'loc_231').waysIn).toEqual([]);
+    for (const p of view.places) expect(p).not.toHaveProperty('waysIn');
+    for (const e of view.town.exits) expect(e).not.toHaveProperty('waysIn');
+    // Dunsmouth by trail is one route out, from the ways out serving it.
+    expect(view.town.exits.filter((e) => e.id === 'loc_631')).toHaveLength(1);
   });
 });

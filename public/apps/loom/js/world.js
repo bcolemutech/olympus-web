@@ -353,30 +353,17 @@
     var via = neighboursOfHere()[place.id];
     var no = refusal(place, via);
     var items = [];
-    // Where to arrive, when more than one way in serves the route (L-346).
-    var ways = (place.waysIn || []).filter(function (w) {
-      return typeof via !== 'string' || w.via.indexOf(via) !== -1;
-    });
     var trip = no ? null : tripWords(place.id);
-    if (!no && ways.length > 1) {
-      ways.forEach(function (way) {
-        items.push({
-          label: 'Travel to ' + place.name + ' by ' + way.name + (trip ? ' · ' + trip : ''),
-          onSelect: function () {
-            travel(way.id, place.name + ' by ' + way.name);
-          },
-        });
-      });
-    } else {
-      items.push({
-        label: trip ? 'Travel to ' + place.name + ' · ' + trip : 'Move',
-        disabled: Boolean(no),
-        note: no || undefined,
-        onSelect: function () {
-          travel(place.id, place.name);
-        },
-      });
-    }
+    // One entry a neighbour: arriving by the way in facing here (L-381,
+    // L-383), so there is no choosing it.
+    items.push({
+      label: trip ? 'Travel to ' + place.name + ' · ' + trip : 'Move',
+      disabled: Boolean(no),
+      note: no || undefined,
+      onSelect: function () {
+        travel(place.id, place.name);
+      },
+    });
     items.push({
       label: 'Look',
       onSelect: function () {

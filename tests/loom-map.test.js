@@ -236,9 +236,9 @@ describe('loomGetMap', () => {
       population: 28473,
       capital: true,
       port: true,
-      // Where a traveller can arrive (L-346): its open ways in.
-      waysIn: [{ id: 'plc_1_town-gate', name: 'The Town Gate', via: ['road', 'trail', 'sea'] }],
     });
+    // No choosing where to arrive any more (L-383): no ways in sent.
+    expect(map.places.find((p) => p.id === 'loc_1')).not.toHaveProperty('waysIn');
     expect(map.places.find((p) => p.id === 'loc_229')).toMatchObject({ open: false });
     expect(map.places.find((p) => p.id === 'loc_229')).not.toHaveProperty('waysIn');
     // Links only between discovered places, each once.

@@ -76,9 +76,6 @@ function mapView(canonWorld, save, record, townRecord) {
       row.population = Math.round(geo.population || 0);
       if (geo.capital) row.capital = true;
       if (geo.port) row.port = true;
-      // Where a traveller can choose to arrive (L-346): its open ways in.
-      const ways = row.open ? waysInto(canonWorld, id) : [];
-      if (ways.length) row.waysIn = ways;
     }
     if (geo.markerType) row.markerType = geo.markerType;
     if (place.retired) row.retired = true;
@@ -166,15 +163,6 @@ function estimate(canonWorld, save, toId) {
         crossesDuskOrDawn: t.crossed.length > 0,
       }
     : null;
-}
-
-// A settlement's open ways in, and the routes each serves (`via`, a route
-// kind, narrows them to the ones serving it).
-function waysInto(canonWorld, locationId, via) {
-  return town
-    .entrancesOf(canonWorld, locationId)
-    .filter((p) => isPlaceOpen(canonWorld, p) && (via === undefined || town.serves(p, via)))
-    .map((p) => ({ id: p.id, name: p.name, via: servedRoutes(p) }));
 }
 
 // The world routes an entrance serves, in a fixed order (no list: all of them).
@@ -265,8 +253,6 @@ function townView(canonWorld, save, discovered, townRecord) {
       via,
       open,
       waysOut: entrances.filter((p) => town.serves(p, via)).map((p) => p.id),
-      // Where you can choose to arrive by this route (L-346).
-      waysIn: open ? waysInto(canonWorld, id, via).map((p) => ({ id: p.id, name: p.name })) : [],
       travel: estimate(canonWorld, save, id),
     });
   }

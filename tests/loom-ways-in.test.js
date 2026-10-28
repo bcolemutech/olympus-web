@@ -207,3 +207,31 @@ describe('arriving on the town map where you have been (L-382)', () => {
     expect(arrive(null).mapId).toBe('bm_gate');
   });
 });
+
+describe("the way out's menu: one entry a neighbour (L-383)", () => {
+  const { townView } = require('../functions/loom-turn/map-view');
+  // Westmere gets two ways in, by road; Hatham's west gate serves the road.
+  const world = {
+    ...WORLD,
+    places: {
+      ...WORLD.places,
+      wm_north: {
+        ...place('wm_north', 'North Gate', pt(500, 40), { via: ['road'] }),
+        locationId: 'westmere',
+      },
+      wm_south: {
+        ...place('wm_south', 'South Gate', pt(500, 960), { via: ['road'] }),
+        locationId: 'westmere',
+      },
+    },
+  };
+
+  test('each neighbour once, with the ways out serving its route, and no way in to choose', () => {
+    const save = { location: 'hatham', placeId: 'market', waysKnown: { hatham: 'all' } };
+    const view = townView(world, save, new Set(['bridgeford', 'westmere', 'keton']), null);
+    expect(view.exits.map((e) => e.id).sort()).toEqual(['bridgeford', 'keton', 'westmere']);
+    const westmere = view.exits.find((e) => e.id === 'westmere');
+    expect(westmere).toMatchObject({ via: 'road', waysOut: ['east', 'west'] });
+    expect(westmere).not.toHaveProperty('waysIn');
+  });
+});
