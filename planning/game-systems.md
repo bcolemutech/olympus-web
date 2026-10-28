@@ -252,7 +252,7 @@ Two worlds on different systems, a d20 fantasy and a dice-pool sci-fi. In each, 
 
 - **L-820 Combat**, the first module, designed in [`combat.md`](./combat.md) (2026-10-20). It also covers falling to 0 (the system decides: down and dying, then saved, captured or dead; a world can turn death off), short and long rests as waits that restore resources, and hostile creatures with fight behaviours (attack, guard, flee when hurt, call for help).
 - **L-830 Action points**, designed in [`action-points.md`](./action-points.md) (2026-10-23): one pool for moving, actions and reactions, replacing speed and combat's `economy`. Advancement moved from L-830 to L-840, and the modules after it to L-850 on.
-- **L-840 Advancement:** experience and levels, and improving by use (not milestones or study). CS6 is no longer deferred.
+- **L-840 Advancement** (#712), designed in [`advancement.md`](./advancement.md) (2026-10-28): experience and levels, and improving by use (not milestones or study), as one module each system sets. CS6 is no longer deferred.
 - **Then the other modules** in MD5's order, from L-850: powers, social conflict, crafting (alchemy, machines, repair, gathering), ship battle, chases, hacking, mass battle.
 
 Each is designed when it is next.
