@@ -9,7 +9,9 @@
  * the north gate finds it. Setting out for Dunsmouth by trail arrives by its
  * west gate, the one facing Burdendal, knowing no other, and the save has
  * visited both. Coming back to either lands on its town map at the way in,
- * off the way in's battle map (L-382 / #701).
+ * off the way in's battle map (L-382 / #701). A journey of three legs from
+ * Dunscombe through Burdendal and Dunsmouth to Swateston is one move (L-384 /
+ * #703).
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest loom-ways-in-play --verbose"
@@ -71,6 +73,10 @@ const PLACES = [
   place('loc_631', 'plc_631_east', 'The East Gate', pt(950, 500), ['road', 'trail']),
   place('loc_631', 'plc_631_west', 'The West Gate', pt(50, 500), ['road', 'trail']),
   place('loc_229', 'plc_229_quay', 'The Quay', pt(500, 950), ['sea']),
+  // For a journey (L-384): Dunscombe (loc_120), by sea from Burdendal, and
+  // Swateston (loc_184), by trail beyond Dunsmouth.
+  place('loc_120', 'plc_120_quay', 'The Quay', pt(500, 950), ['sea']),
+  place('loc_184', 'plc_184_gate', 'The Gate', pt(50, 500), ['road', 'trail']),
 ];
 
 function narrator() {
@@ -123,6 +129,8 @@ beforeAll(async () => {
     ['loc_1', 'A great walled port.'],
     ['loc_631', 'A market town.'],
     ['loc_229', 'A fishing village.'],
+    ['loc_120', 'A harbour town.'],
+    ['loc_184', 'A hill town.'],
   ]) {
     await worldRef
       .collection('locations')
@@ -247,5 +255,60 @@ describe('coming back lands on the town map (L-382)', () => {
     const map = await mapOf(saveId);
     expect(map.battleMap).toBeFalsy();
     expect(map.town.here).toBe('plc_631_west');
+  });
+});
+
+describe('a journey of three legs, through towns visited (L-384)', () => {
+  let saveId;
+  beforeAll(async () => {
+    saveId = await newGame();
+    // At Dunscombe's quay, having been to all four.
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({
+        location: 'loc_120',
+        placeId: 'plc_120_quay',
+        mapId: null,
+        cell: null,
+        visited: ['loc_1', 'loc_631', 'loc_184', 'loc_120'],
+        waysKnown: { loc_120: ['plc_120_quay'] },
+        discovered: ['loc_1', 'loc_631', 'loc_184', 'loc_120'],
+      });
+  });
+
+  test('the world map offers the journey to Swateston, with its time and the towns passed', async () => {
+    const swateston = (await mapOf(saveId)).places.find((p) => p.id === 'loc_184');
+    expect(swateston.journey).toMatchObject({
+      through: ['Burdendal', 'Dunsmouth'],
+      vias: ['sea', 'trail'],
+    });
+  });
+
+  test('one move: by sea and trail, through Burdendal and Dunsmouth, landing on the town map', async () => {
+    await play(saveId, { verb: 'move', target: 'loc_184' });
+    const save = await saveOf(saveId);
+    expect(save).toMatchObject({
+      location: 'loc_184',
+      placeId: 'plc_184_gate',
+      mapId: null,
+    });
+    const turns = await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .collection('loom_turns')
+      .orderBy('index', 'desc')
+      .limit(1)
+      .get();
+    const { constraints, journey } = turns.docs[0].data().resolution;
+    expect(constraints[constraints.length - 1]).toMatch(
+      /^You journey about \d+½? days by sea and trail, through Burdendal and Dunsmouth, and arrive at Swateston, at The Gate\.$/
+    );
+    expect(journey.stops).toEqual(['loc_120', 'loc_1', 'loc_631', 'loc_184']);
+    // Days on the way.
+    expect(save.time - 8 * 3600).toBeGreaterThan(2 * 24 * 3600);
+    // Crossing Burdendal and Dunsmouth found the ways used there.
+    expect(save.waysKnown.loc_1).toEqual(['plc_1_harbour', 'plc_1_gate']);
+    expect(save.waysKnown.loc_631).toEqual(['plc_631_west', 'plc_631_east']);
   });
 });
