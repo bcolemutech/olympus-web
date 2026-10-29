@@ -24,6 +24,7 @@ const { lookInTown, townRecordOf } = require('./town-seen');
 const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const clock = require('../loom-canon/clock');
 const maps = require('../loom-canon/maps');
+const layers = require('../loom-canon/layers');
 const { systemOf } = require('../loom-canon/checks');
 const { withAp } = require('../loom-canon/sheets');
 const apRules = require('../loom-canon/ap');
@@ -292,8 +293,44 @@ async function runTurnPipeline(params) {
           planned.walked,
           doorStatesOf(fresh, fresh.mapId)
         );
+        // Wary figures turned by the areas walked into or the door opened
+        // (L-392); those turned hostile in a fight join it.
+        const here = maps.positionOf(canonWorld, fresh).map;
+        const doorOf = door && here && (here.doors || []).find((d) => d.id === door.doorId);
+        const turned = combat.wary.react(canonWorld, { ...fresh, cell: planned.cell, doors }, [
+          ...combat.wary.walkEvents(here, fresh.cell, planned.walked),
+          ...(doorOf
+            ? combat.wary.doorEvents(
+                door.doorId,
+                layers.doorState(doorOf, doorStatesOf(fresh, door.mapId)),
+                door.state,
+                { keyed: true }
+              )
+            : []),
+        ]);
+        const sides = Object.fromEntries(turned.map((t) => ['sides.' + t.id, t.side]));
+        const sided = combat.wary.withTurned({ ...fresh, cell: planned.cell, doors }, turned);
+        const joined = turned.length
+          ? combat.play.joinFight(
+              combat.figures.withFigures(canonWorld, sided),
+              { ...sided, ...(struck.fight ? { fight: struck.fight } : {}) },
+              turned.filter((t) => t.side === 'hostile').map((t) => t.id),
+              { dice: rollDie }
+            )
+          : null;
+        if (turned.length) {
+          planned = {
+            ...planned,
+            lines: (planned.lines || [])
+              .concat(combat.wary.linesOf(turned))
+              .concat(joined ? joined.lines : []),
+            sides: sided.sides,
+          };
+        }
         transaction.update(saveRef, {
           ...struck,
+          ...(joined ? { fight: joined.mutations[0].value } : {}),
+          ...sides,
           cell: planned.cell,
           turn: planned.turn,
           ...(door ? { [`doors.${door.mapId}.${door.doorId}`]: door.state } : {}),
@@ -307,6 +344,7 @@ async function runTurnPipeline(params) {
             ...fresh,
             cell: planned.cell,
             turn: planned.turn,
+            ...(planned.sides ? { sides: planned.sides } : {}),
             ...(door
               ? {
                   doors: {
@@ -340,7 +378,10 @@ async function runTurnPipeline(params) {
     }
     const spotted =
       !step.exit && !step.refused && !combat.play.fightOf(step.after)
-        ? combat.play.hostilesInSight(canonWorld, step.after)
+        ? combat.play.hostilesInSight(
+            combat.figures.withFigures(canonWorld, step.after),
+            step.after
+          )
         : [];
     if (spotted.length) {
       // In sight of a hostile (L-821; SE1): a fight starts, narrated.

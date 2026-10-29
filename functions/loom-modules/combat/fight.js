@@ -228,6 +228,27 @@ function toPlayer(system, fight, { current: includeCurrent = false } = {}) {
   return { fight: current, rounds, passed };
 }
 
+/**
+ * Someone joining a fight under way (L-392: a wary figure turned hostile by
+ * a trigger): their initiative rolled, their place in the order taken, the
+ * turn staying whose it is. Returns `{ fight, roll }`.
+ */
+function join(system, fight, combatant, dice) {
+  const out = copyOf(fight);
+  const roll = rollInitiative(system, combatant, dice);
+  out.combatants[combatant.id] = {
+    kind: combatant.kind,
+    side: sideOf(combatant),
+    name: combatant.name,
+    initiative: roll.total,
+    tie: roll.tie,
+    kept: sheets.apFor(system, combatant.sheet || {}),
+    ...(apRules.isOff(system) ? { reactionsLeft: settingsOf(system).turn.reactions } : {}),
+  };
+  out.order = orderOf(out.combatants);
+  return { fight: out, roll };
+}
+
 /** Takes a combatant out of the fight (SE4): `how` one of OUTS. */
 function leave(fight, id, how) {
   if (!OUTS.includes(how)) throw new Error(`fight.leave: "${how}" isn't a way out of a fight.`);
@@ -260,6 +281,7 @@ function endOf(fight) {
 
 module.exports = {
   PLAYER,
+  join,
   SIDES,
   OUTS,
   rollInitiative,

@@ -603,6 +603,9 @@ function characterDetail(world, character) {
     // Their side in a fight (L-821): party, hostile or neutral; how they fight
     // (L-824: set_tactics), with the defaults.
     side: character.side || 'neutral',
+    // A wary one's challenge, and what turns them (L-392).
+    ...(character.challenge ? { challenge: character.challenge } : {}),
+    ...(character.triggers ? { triggers: character.triggers } : {}),
     tactics: {
       role: figures.roleOf(systemOf(world), character),
       posture: figures.postureOf(character),

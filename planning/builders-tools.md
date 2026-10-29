@@ -1,6 +1,6 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch built.
+**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch and L-392 wary figures built.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25),, built next, before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
@@ -106,6 +106,7 @@ The list in #735, judged 2026-10-29, with the user's answers (each took the reco
   - The Hulks' guards turn hostile if the hold grating is forced.
 - **A combat module setting** (`modules.combat.wary`: on by default), so a system can turn it off; tested in both built-ins.
 - **Named characters** can be wary too; L-790's behaviours build on this later.
+- **Built (L-392):** `loom-modules/combat/wary.js`. A side turned in a save is `save.sides[id]`, put on the figure by `withFigures`. Attacking someone turns them, the wary of their figure group, and anyone whose `allyAttacked` trigger names them (or names no one); the wary stay out of a fight begun by others until turned; those turned while a fight is under way join it (`fight.join`), and one turned hostile in sight out of a fight starts one (`by: 'event'`, no surprise). `doorForced` is a lock given way without its key; `enteredArea` fires on a walk into the area, typed or clicked. NARRATE's people in sight carry "wary of the player: they challenge, …". Wary figures count as a dangerous place's foes in grading. The Loom draws them amber and offers Talk before Attack.
 
 ### 4.3 Named stat blocks (BT4, gap 18)
 

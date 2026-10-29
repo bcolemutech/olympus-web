@@ -279,7 +279,7 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
           expect.stringMatching(/^figures\[0\]\.role must be one of brute/),
           expect.stringMatching(/^figures\[0\]\.statBlock: /),
           'figures[0].cells[0] (0, 3) is an exit.',
-          'figures[1].side must be one of party, hostile, neutral.',
+          'figures[1].side must be one of party, hostile, neutral, wary.',
           'figures[1].cells[0] (5, 5): Grell stands there.',
           'figures[1].cells[1] (1, 3) is an entry, where players arrive.',
           'figures[1].cells[2] must be a square on the 10 × 6 grid.',
