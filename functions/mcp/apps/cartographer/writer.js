@@ -19,6 +19,9 @@ const { ToolError } = require('../../registry');
 // may only queue writes (they are applied after it returns, so every read in
 // the transaction precedes every write) and returns the tool result.
 //
+// create(uid, { name, systemId, map }) makes a new, empty draft world, as an
+// import does but with no Azgaar map (L-391): its locations are added after.
+//
 // publish(uid, worldId) publishes a draft through the Cartographer's own
 // publish, with its playability checks.
 
@@ -114,7 +117,35 @@ function createFirestoreWorldWriter(getDb, { now = () => Date.now() } = {}) {
     }
   }
 
-  return { edit, publish };
+  // A new draft world from scratch (planning/builders-tools.md §4.1; L-391):
+  // the world document only, with no entities yet, its id readable and new.
+  async function create(uid, { name, systemId, map }) {
+    const { newWorldId } = require('../../../cartographer/load');
+    const at = now();
+    const id = newWorldId(name);
+    await worlds()
+      .doc(id)
+      .create({
+        id,
+        name,
+        tagline: '',
+        openingHook: '',
+        rules: {},
+        map,
+        ...(systemId ? { systemId } : {}),
+        status: 'draft',
+        canonVersion: 1,
+        source: { kind: 'scratch', createdBy: uid },
+        counts: {},
+        warnings: [],
+        createdAtMs: at,
+        updatedAtMs: at,
+        updatedBy: uid,
+      });
+    return { worldId: id };
+  }
+
+  return { edit, publish, create };
 }
 
 module.exports = { createFirestoreWorldWriter };

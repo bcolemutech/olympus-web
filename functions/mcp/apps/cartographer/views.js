@@ -254,10 +254,13 @@ function worldOverview(meta, world) {
         ? { imageId: artOf.worldMapArt(world).imageId }
         : {}),
       ...(map.distance ? { distance: map.distance } : {}),
+      ...(map.backdrop ? { backdrop: map.backdrop } : {}),
     },
-    source: meta.source
-      ? { mapName: meta.source.mapName || null, azgaarVersion: meta.source.version || null }
-      : null,
+    source: !meta.source
+      ? null
+      : meta.source.kind === 'scratch'
+        ? { kind: 'scratch' }
+        : { mapName: meta.source.mapName || null, azgaarVersion: meta.source.version || null },
     // The world's score and band (L-691): 80% its places, weighted by
     // nearness to play, and 20% its own criteria; completion has the rest.
     ...(({ score, band }) => (score === undefined ? {} : { score, band }))(completion),

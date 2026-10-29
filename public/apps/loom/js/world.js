@@ -141,12 +141,13 @@
 
   function build(container) {
     var PIXI = window.PIXI;
+    var backdrop = new PIXI.Graphics();
     var art = new PIXI.Sprite();
     var routes = new PIXI.Graphics();
     var pins = new PIXI.Graphics();
     var labels = new PIXI.Container();
-    container.addChild(art, routes, pins, labels);
-    world.nodes = { art: art, routes: routes, pins: pins, labels: labels };
+    container.addChild(backdrop, art, routes, pins, labels);
+    world.nodes = { backdrop: backdrop, art: art, routes: routes, pins: pins, labels: labels };
   }
 
   var line = Loom.draw.line;
@@ -177,6 +178,13 @@
     var data = world.data;
     if (!data) return;
 
+    // A world made from scratch has a plain colour under its art (L-391).
+    n.backdrop.clear();
+    if (data.map.backdrop) {
+      n.backdrop
+        .rect(view.x, view.y, data.map.width * view.scale, data.map.height * view.scale)
+        .fill({ color: parseInt(data.map.backdrop.slice(1), 16) });
+    }
     var texture = world.art && world.art.ready(data.map.image) ? world.art.texture : null;
     n.art.visible = Boolean(texture);
     if (texture) {
