@@ -69,6 +69,9 @@
  *               (PS1), "-5". With none, nothing.
  *   dodge       a formula added to the defence of someone who took the Dodge
  *               action, until their next turn (TN5), "5". With none, nothing.
+ *   wary        whether fighters can be wary (L-392; planning/builders-tools.md
+ *               §4.2): challenging before they fight, turned by triggers
+ *               (./wary.js). On (true) by default; off, wary reads as hostile.
  *   flanking    a formula added to a melee attack on someone with a friend of
  *               the attacker on their far side (PS3), "2"; off (null) unless
  *               set, as in both built-in systems.
@@ -98,6 +101,7 @@ const KEYS = [
   'dodge',
   'flanking',
   'turn',
+  'wary',
 ];
 // The turn without AP (L-838): one action a turn, one reaction a round.
 const TURN = { actions: 1, reactions: 1 };
@@ -133,6 +137,7 @@ function settingsOf(system) {
     longRange: given.longRange ?? null,
     dodge: given.dodge ?? null,
     flanking: given.flanking ?? null,
+    wary: given.wary !== false,
     turn: {
       actions: isObject(given.turn) && given.turn.actions !== undefined ? given.turn.actions : 1,
       reactions:
@@ -466,6 +471,9 @@ function check(settings, { system, errors, warnings, formula }) {
         } else formula(cover[key], `${at}.cover.${key}`);
       }
     }
+  }
+  if (settings.wary !== undefined && typeof settings.wary !== 'boolean') {
+    errors.push(`${at}.wary must be true or false.`);
   }
   for (const key of ['longRange', 'dodge', 'flanking']) {
     if (settings[key] !== undefined && settings[key] !== null) {

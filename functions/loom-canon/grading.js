@@ -457,11 +457,12 @@ const CRITERIA = Object.freeze([
     applies: (world, entity) => entity.danger === 'low' || entity.danger === 'high',
     check: (world, entity, { kind }) => {
       const map = require('./maps').mapOf(world, entity);
-      const figures = ((map && map.figures) || []).filter(
-        (g) => (g.side || 'hostile') === 'hostile'
+      const figures = ((map && map.figures) || []).filter((g) =>
+        ['hostile', 'wary'].includes(g.side || 'hostile')
       );
-      const people = peopleAt(world, entity, kind === 'place').filter(
-        (id) => ((world.characters || {})[id] || {}).side === 'hostile'
+      // The wary count (L-392): guards who challenge before they fight.
+      const people = peopleAt(world, entity, kind === 'place').filter((id) =>
+        ['hostile', 'wary'].includes(((world.characters || {})[id] || {}).side)
       );
       return figures.length || people.length
         ? met()
@@ -588,7 +589,7 @@ const CRITERIA = Object.freeze([
     label: 'Attacks for a fighter',
     need: 'attacks',
     tool: 'set_sheet',
-    applies: (world, character) => character.side === 'hostile' || character.side === 'party',
+    applies: (world, character) => ['hostile', 'party', 'wary'].includes(character.side),
     check: (world, character) => {
       const list = character.sheet && character.sheet.attacks;
       if (!Array.isArray(list) || !list.length) {

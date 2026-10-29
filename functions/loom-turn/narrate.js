@@ -19,6 +19,7 @@ const apRules = require('../loom-canon/ap');
 const { sheetOf, validateSheet } = require('../loom-canon/sheets');
 const conditions = require('../loom-canon/conditions');
 const effects = require('../loom-canon/effects');
+const wary = require('../loom-modules/combat/wary');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -196,6 +197,17 @@ async function mapSightAfter(canonWorld, save, position, resolution, known, save
 // on a map, its exits are the only ways on. The narrator is told only what
 // the player sees there, and what they remember seeing (L-636): never what
 // they haven't seen.
+// A check's name in the world's system, for NARRATE: "Deception".
+function checkName(canonWorld) {
+  const sheet = checks.systemOf(canonWorld).sheet || {};
+  return (check) => {
+    const list = check.skill ? sheet.skills || [] : sheet.attributes || [];
+    const id = check.skill || check.attribute;
+    const found = list.find((x) => x.id === id);
+    return (found && found.name) || id;
+  };
+}
+
 function buildMapSection(canonWorld, position, save, resolution, view) {
   const { map, cell } = maps.positionOf(canonWorld, position);
   const host = maps.hostOf(canonWorld, position);
@@ -261,7 +273,9 @@ function buildMapSection(canonWorld, position, save, resolution, view) {
               at.y +
               ')' +
               (mapAreas.areaAt(map, at) ? ', in ' + mapAreas.areaAt(map, at).name : '') +
-              (beside ? ', beside the player' : '')
+              (beside ? ', beside the player' : '') +
+              // Wary, and their challenge (L-392).
+              wary.narrateLine(checks.systemOf(canonWorld), character, checkName(canonWorld))
           )
           .join('; ') +
         '.'

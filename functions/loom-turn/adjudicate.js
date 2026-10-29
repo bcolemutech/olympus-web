@@ -2045,6 +2045,85 @@ function afterMove(resolution, characterState, canonWorld, dice, choose = null) 
   };
 }
 
+// Wary figures and triggers (L-392; ../loom-modules/combat/wary.js): the
+// events an action makes, as its resolution has them: doors opened or
+// forced, a feature touched, areas walked into, a challenge's check failed.
+// (An attack's are the combat module's own.)
+function eventsOf(proposedAction, resolution, characterState, canonWorld) {
+  if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return [];
+  const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
+  if (!map) return [];
+  const events = [];
+  const before = doorStatesOf(characterState, map.id);
+  for (const m of resolution.mutations) {
+    const door = m.target === 'save' && /^doors\.([^.]+)\.(.+)$/.exec(m.path || '');
+    if (!door || door[1] !== map.id) continue;
+    const was = layers.doorState((map.doors || []).find((d) => d.id === door[2]) || {}, before);
+    events.push(...combat.wary.doorEvents(door[2], was, m.value, { keyed: !resolution.roll }));
+  }
+  for (const t of proposedAction.targets || []) {
+    if (typeof t === 'string' && t.indexOf('feature:') === 0) {
+      events.push({ on: 'featureTouched', target: t.slice(8) });
+    }
+  }
+  if (resolution.walked) events.push(...combat.wary.walkEvents(map, cell, resolution.walked));
+  const params = proposedAction.params || {};
+  const target =
+    (params.check && params.check.opposedBy) ||
+    (proposedAction.targets || []).find((t) => (canonWorld.characters || {})[t]);
+  if (target && params.check && resolution.roll && resolution.roll.success === false) {
+    events.push({ on: 'challengeFailed', target, check: params.check });
+  }
+  return events;
+}
+
+// What an action's events turn (L-392), and what follows: out of a fight,
+// a hostile now in sight starts one (initiative as ever, no surprise); in
+// one, those turned hostile join it.
+function afterEvents(resolution, characterState, canonWorld, events, dice, choose = null) {
+  if (!events.length) return resolution;
+  const after = JSON.parse(JSON.stringify(characterState));
+  applyStateMutations(
+    after,
+    resolution.mutations.filter((m) => m.target === 'save')
+  );
+  const turned = combat.wary.react(canonWorld, after, events);
+  if (!turned.length) return resolution;
+  const sided = combat.wary.withTurned(after, turned);
+  const seen = combat.figures.withFigures(canonWorld, sided);
+  const mutations = resolution.mutations.concat(combat.wary.mutationsOf(turned));
+  const constraints = resolution.constraints.concat(combat.wary.linesOf(turned));
+  const hostile = turned.filter((t) => t.side === 'hostile').map((t) => t.id);
+  if (combat.play.fightOf(sided)) {
+    const joined = hostile.length && combat.play.joinFight(seen, sided, hostile, { dice });
+    return joined
+      ? {
+          ...resolution,
+          mutations: mutations.concat(joined.mutations),
+          constraints: constraints.concat(joined.lines),
+        }
+      : { ...resolution, mutations, constraints };
+  }
+  const fought =
+    hostile.length && combat.play.hostilesInSight(seen, sided).length
+      ? fightStarted(sided, seen, { by: 'event', ambushers: null, dice, choose })
+      : null;
+  if (!fought) return { ...resolution, mutations, constraints };
+  // A fight begun is narrated, however the action was ruled.
+  const told = { ...resolution };
+  delete told.ruled;
+  return {
+    ...told,
+    mutations: mutations.concat(fought.mutations),
+    constraints: constraints.concat(fought.constraints),
+    ...(!resolution.roll ? { roll: fought.roll } : {}),
+    fight: fought.fight,
+    ...(fought.fallen ? { fallen: fought.fallen } : {}),
+    ...(fought.named ? { named: fought.named } : {}),
+    ...(fought.playback ? { playback: fought.playback } : {}),
+  };
+}
+
 function evaluate(
   proposedAction,
   worldState,
@@ -2094,6 +2173,17 @@ function evaluate(
   }
   if (proposedAction.verb === 'move' && resolution.outcome === 'success') {
     resolution = afterMove(resolution, characterState, canonWorld, diceSource(dice), choose);
+  }
+  // Wary figures turned by what was done (L-392), unless a fight began anyway.
+  if (!(resolution.fight && !combat.play.fightOf(characterState))) {
+    resolution = afterEvents(
+      resolution,
+      characterState,
+      canonWorld,
+      eventsOf(proposedAction, resolution, characterState, canonWorld),
+      diceSource(dice),
+      choose
+    );
   }
 
   // Resolution is immutable once produced — NARRATE (L-113) can color it, never change it.

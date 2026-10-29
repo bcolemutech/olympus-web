@@ -403,7 +403,7 @@ function battleView(canonWorld, save, record) {
             ...(down ? { down } : {}),
             // Their side, when they have one (L-824); a figure placed from a
             // stat block says so.
-            ...(c.side === 'hostile' || c.side === 'party' ? { side: c.side } : {}),
+            ...(['hostile', 'party', 'wary'].includes(c.side) ? { side: c.side } : {}),
             ...(c.figure ? { figure: true } : {}),
             // The cover they have from where the player stands (L-828;
             // combat PS2), for Attack's note and the grid.

@@ -34,6 +34,8 @@ const fight = require('./fight');
 const play = require('./play');
 const position = require('./position');
 const reactions = require('./reactions');
+const wary = require('./wary');
+const { withFigures } = require('./figures');
 
 const NOBODY = "You don't see anyone like that here.";
 
@@ -121,16 +123,27 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
     if (!targets.some((t) => t.id === person.id)) targets.unshift(person);
   }
 
+  // Attacking someone turns the wary (L-392): them, their group, and anyone
+  // whose trigger guards them.
+  const turned = wary.react(
+    world,
+    save,
+    targets.map((t) => ({ on: 'allyAttacked', target: t.id }))
+  );
+  const turning = turned.filter((t) => t.side === 'hostile').map((t) => t.id);
+  const sided = wary.withTurned(save, turned);
+  const sidedWorld = turned.length ? withFigures(world, sided) : world;
+
   // Out of a fight, the attack starts one: the player's blow opens it.
-  const lines = [];
-  const mutations = [];
+  const lines = wary.linesOf(turned);
+  const mutations = wary.mutationsOf(turned);
   let f = play.fightOf(save);
   let started = null;
   if (!f) {
-    const begun = play.begin(world, save, {
+    const begun = play.begin(sidedWorld, sided, {
       by: 'attack',
       ambushers: 'party',
-      joining: targets.map((t) => t.id),
+      joining: [...new Set(targets.map((t) => t.id).concat(turning))],
       first: true,
       dice,
     });
@@ -138,6 +151,13 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
       f = begun.mutations[0].value;
       started = begun.fight;
       lines.push(...begun.lines);
+    }
+  } else if (turning.length) {
+    // In a fight already: they join it.
+    const joined = play.joinFight(sidedWorld, sided, turning, { dice });
+    if (joined) {
+      f = joined.mutations[0].value;
+      lines.push(...joined.lines);
     }
   }
 

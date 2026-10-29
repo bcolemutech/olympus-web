@@ -12,7 +12,9 @@
  *                ("Bandit 3")
  *     statBlock  the short form of a sheet (../../loom-canon/sheets.js): every
  *                attribute, and attacks
- *     side       hostile (the default), party or neutral
+ *     side       hostile (the default), party, neutral or wary (L-392)
+ *     challenge? what a wary group says, and the check that answers it
+ *     triggers?  what turns them: [{ on, target?, then }] (./wary.js)
  *     role?      brute, skirmisher, archer, guard, caster or leader
  *     posture?   cowardly, cautious, steady, bold or reckless
  *     leader?    whether their fall shakes the rest (EN4)
@@ -32,10 +34,11 @@ const maps = require('../../loom-canon/maps');
 const layers = require('../../loom-canon/layers');
 const sheets = require('../../loom-canon/sheets');
 const { attacksOf } = require('./attacks');
+const wary = require('./wary');
 
 const ROLES = ['brute', 'skirmisher', 'archer', 'guard', 'caster', 'leader'];
 const POSTURES = ['cowardly', 'cautious', 'steady', 'bold', 'reckless'];
-const SIDES = ['party', 'hostile', 'neutral'];
+const SIDES = ['party', 'hostile', 'neutral', 'wary'];
 const GROUP_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const MAX_GROUPS = 20;
 const MAX_FIGURES = 20;
@@ -62,6 +65,8 @@ function instancesOf(system, group) {
     ...(group.role ? { role: group.role } : {}),
     ...(group.posture ? { posture: group.posture } : {}),
     ...(group.leader ? { leader: true } : {}),
+    ...(group.challenge ? { challenge: copyOf(group.challenge) } : {}),
+    ...(group.triggers ? { triggers: copyOf(group.triggers) } : {}),
     sheet: copyOf(sheet),
   }));
 }
@@ -122,6 +127,7 @@ function validateFigures(world, system, map, list) {
       errors.push(`${at}.side must be one of ${SIDES.join(', ')}.`);
     }
     errors.push(...validateTactics(g, at));
+    errors.push(...wary.validateAgainst(system, map, g, at));
     if (!isObject(g.statBlock)) errors.push(`${at}.statBlock is required: every attribute.`);
     else {
       sheets
@@ -163,20 +169,30 @@ function validateFigures(world, system, map, list) {
  */
 function withFigures(world, save) {
   const states = (save && save.figures) || {};
+  const sides = (save && save.sides) || {};
   const host = save && save.mapId ? maps.hostOf(world, save) : null;
   const map = host ? maps.mapOf(world, host) : null;
   const onMap = map && map.id === save.mapId;
-  if (!onMap && !Object.keys(states).length) return world;
+  const system = require('../../loom-canon/checks').systemOf(world);
+  // Wary figures (L-392): sides turned in this save, and wary read as
+  // hostile in a system without them.
+  const waryOff = !wary.isOn(system);
+  if (!onMap && !Object.keys(states).length && !Object.keys(sides).length && !waryOff) {
+    return world;
+  }
   const characters = {};
+  const sided = (c) => {
+    const side = wary.sideIn(system, c, sides);
+    return side && side !== c.side ? { ...c, side } : c;
+  };
   const place = (c) => {
     const s = states[c.id];
-    if (!s) return c;
+    if (!s) return sided(c);
     if (s.gone) return { ...c, retired: true, gone: s.gone };
-    return s.cell ? { ...c, cell: { x: s.cell.x, y: s.cell.y } } : c;
+    return sided(s.cell ? { ...c, cell: { x: s.cell.x, y: s.cell.y } } : c);
   };
   for (const [id, c] of Object.entries(world.characters || {})) characters[id] = place(c);
   if (onMap) {
-    const system = require('../../loom-canon/checks').systemOf(world);
     const isPlace = Boolean((world.places || {})[host.id]);
     for (const group of map.figures || []) {
       for (const f of instancesOf(system, group)) {

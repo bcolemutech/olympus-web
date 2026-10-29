@@ -1546,6 +1546,35 @@ describe('figures, tactics and danger (L-824)', () => {
     expect((await mapDoc(W, mapId)).figures).toEqual([BANDITS]);
   });
 
+  test('wary figures (L-392): a challenge and triggers, checked against the system and map', async () => {
+    const WARY = {
+      ...BANDITS,
+      side: 'wary',
+      challenge: { says: 'Who goes there?', check: { skill: 'Deception' } },
+      triggers: [{ on: 'allyAttacked', then: 'hostile' }],
+    };
+    await ok('place_figures', { worldId: W, mapId, figures: [WARY] });
+    expect((await mapDoc(W, mapId)).figures).toEqual([WARY]);
+    expect((await ok('get_battle_map', { worldId: W, mapId })).figures[0]).toMatchObject({
+      side: 'wary',
+      challenge: WARY.challenge,
+    });
+    const text = await refused('place_figures', {
+      worldId: W,
+      mapId,
+      figures: [
+        {
+          ...WARY,
+          challenge: { says: 'Who goes there?', check: { skill: 'Juggling' } },
+          triggers: [{ on: 'doorForced', target: 'vault', then: 'hostile' }],
+        },
+      ],
+    });
+    expect(text).toContain('figures[0].challenge.check: the system has no skill "Juggling"');
+    expect(text).toContain('figures[0].triggers[0].target: The bandit hall has no door "vault"');
+    await ok('place_figures', { worldId: W, mapId, figures: [BANDITS] });
+  });
+
   test('a new grid keeps them; an empty list clears them', async () => {
     await ok('set_battle_map', { worldId: W, mapId, ...HALL });
     expect((await mapDoc(W, mapId)).figures).toEqual([BANDITS]);

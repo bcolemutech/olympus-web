@@ -764,6 +764,37 @@ describe('every character has a position (L-682)', () => {
     expect(await raw(worldId, 'characters', added.character.id)).toMatchObject({ side: 'party' });
   });
 
+  test('wary (L-392): a challenge and triggers, set, shown, cleared, and checked', async () => {
+    const added = await ok('add_character', {
+      worldId,
+      name: 'Gate Warden',
+      description: 'Bars the gate to anyone without a pass.',
+      locationId: 'loc_1',
+      townPoint: { x: 320, y: 320 },
+      side: 'wary',
+      challenge: { says: 'Your pass.', check: { skill: 'Deception' } },
+      triggers: [{ on: 'allyAttacked', then: 'hostile' }],
+    });
+    const id = added.character.id;
+    expect(await ok('get_character', { worldId, characterId: id })).toMatchObject({
+      side: 'wary',
+      challenge: { says: 'Your pass.', check: { skill: 'Deception' } },
+      triggers: [{ on: 'allyAttacked', then: 'hostile' }],
+    });
+    expect(
+      await refused('update_character', {
+        worldId,
+        characterId: id,
+        challenge: { says: 'Your pass.', check: { attribute: 'Luck' } },
+      })
+    ).toMatch(/the system has no attribute "Luck"/);
+    await ok('update_character', { worldId, characterId: id, challenge: null, triggers: null });
+    const stored = await raw(worldId, 'characters', id);
+    expect(stored).not.toHaveProperty('challenge');
+    expect(stored).not.toHaveProperty('triggers');
+    expect(stored.side).toBe('wary');
+  });
+
   test('someone made before positions were required is warned about on any change', async () => {
     await worlds()
       .doc(worldId)

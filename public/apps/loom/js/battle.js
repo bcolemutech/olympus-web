@@ -68,6 +68,7 @@
     person: 0x4db6ac,
     foe: 0xe57373, // someone hostile (L-828)
     friend: 0x81c784, // someone on your side (L-828)
+    wary: 0xffb74d, // someone wary of you, who challenges first (L-392)
     you: 0xffffff,
     ring: 0xffb74d,
     label: 0xe0e0e0,
@@ -855,7 +856,9 @@
             ? COLOURS.foe
             : person.side === 'party'
               ? COLOURS.friend
-              : COLOURS.person,
+              : person.side === 'wary'
+                ? COLOURS.wary
+                : COLOURS.person,
       });
     });
     Object.keys(battle.tokens).forEach(function (id) {
@@ -1241,13 +1244,17 @@
   var BAND_WORDS = { reach: 'in reach', normal: 'in range', long: 'long range' };
 
   // What a square offers: on yours, Stand up when lying down and, in a
-  // fight, Dodge, Withdraw and Ready; on someone, Move and Attack with each of your attacks; on a
-  // feature beside you, Use; else Move.
+  // fight, Dodge, Withdraw and Ready; on someone, Move and Attack with each of your attacks
+  // (someone wary, Talk first: L-392); on a feature beside you, Use; else Move.
   function itemsFor(cell) {
     var d = battle.data;
     if (same(cell, d.here)) return selfItems();
     var person = personAt(cell);
-    if (person) return [moveItem(cell)].concat(attackItems(person));
+    if (person) {
+      return [moveItem(cell)]
+        .concat(person.side === 'wary' && !person.down ? [talkItem(person)] : [])
+        .concat(attackItems(person));
+    }
     var feature = at(cell).feature;
     return [moveItem(cell)].concat(feature ? useItems(feature) : []);
   }
@@ -1257,6 +1264,17 @@
   // (L-838), the turn's one action.
   function acted() {
     return Boolean(battle.turn && battle.turn.apOff && battle.turn.acted);
+  }
+
+  /** Talk (L-392): answering someone wary before it comes to blows, walked to as any suggestion. */
+  function talkItem(person) {
+    return {
+      label: 'Talk to ' + person.name,
+      note: 'wary of you',
+      onSelect: function () {
+        Loom.play.suggest({ text: 'talk to ' + person.name, verb: 'talk', target: person.id });
+      },
+    };
   }
 
   /**

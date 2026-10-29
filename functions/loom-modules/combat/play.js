@@ -7,8 +7,9 @@
  * each as the save's mutations and plain lines: no model decides anything
  * (CB0), and NARRATE is told only when a fight starts or ends.
  *
- * Sides (EN1): a character's `side` in canon, `party`, `hostile` or
- * `neutral` (the default), set over MCP. A fight is on the battle map the
+ * Sides (EN1): a character's `side` in canon, `party`, `hostile`, `wary`
+ * (L-392: challenging first, ./wary.js) or `neutral` (the default), set
+ * over MCP, or as turned in the save (`save.sides`). A fight is on the battle map the
  * player stands on, among the player, the hostile characters standing on it
  * and those on the player's side; someone the player attacks joins it,
  * hostile.
@@ -35,7 +36,7 @@ const down = require('./down');
 const reactions = require('./reactions');
 
 const { PLAYER } = fight;
-const SIDES = ['party', 'hostile', 'neutral'];
+const SIDES = ['party', 'hostile', 'neutral', 'wary'];
 
 // What the player can do to talk a foe out of a fight (SE4): a social check
 // against them that succeeds.
@@ -47,7 +48,7 @@ const ATTACK = /^(attack|strike|hit|stab|slash|shoot|punch|kick|fight|assault|am
 const ORDINAL = ['1st', '2nd', '3rd'];
 const ordinal = (n) => ORDINAL[n - 1] || n + 'th';
 
-/** A character's side (EN1): party, hostile or neutral. */
+/** A character's side (EN1): party, hostile, wary or neutral. */
 function sideOf(character) {
   return SIDES.includes(character && character.side) ? character.side : 'neutral';
 }
@@ -126,8 +127,9 @@ function begin(
   const { map } = maps.positionOf(world || {}, save);
   if (!map) return null;
   const system = checks.systemOf(world);
+  // The neutral and the wary stay out (L-392), unless joining.
   const others = standingHere(world, save).filter(
-    (c) => sideOf(c) !== 'neutral' || joining.includes(c.id)
+    (c) => ['party', 'hostile'].includes(sideOf(c)) || joining.includes(c.id)
   );
   if (!others.some((c) => sideOf(c) === 'hostile' || joining.includes(c.id))) return null;
   const combatants = [
@@ -465,6 +467,35 @@ function walkReactions(world, save, walked, { dice }) {
   };
 }
 
+/**
+ * Those turned hostile in a fight under way join it (L-392; ./wary.js): each
+ * standing on its map and not in it yet. `{ mutations, lines }`, or null
+ * when nobody joins.
+ */
+function joinFight(world, save, ids, { dice }) {
+  let f = fightOf(save);
+  if (!f) return null;
+  const system = checks.systemOf(world);
+  const lines = [];
+  for (const c of standingHere(world, save)) {
+    if (!ids.includes(c.id) || f.combatants[c.id] || sideOf(c) !== 'hostile') continue;
+    f = fight.join(
+      system,
+      f,
+      {
+        id: c.id,
+        kind: 'character',
+        side: 'hostile',
+        name: c.name,
+        sheet: sheetFor(world, save, c),
+      },
+      dice
+    ).fight;
+    lines.push(c.name + ' joins the fight.');
+  }
+  return lines.length ? { mutations: [setFight(f)], lines } : null;
+}
+
 /** The player leaving the fight's map (SE4: fled): `{ mutations, lines, fight }`, or null. */
 function leftMap(save, mapId) {
   const f = fightOf(save);
@@ -538,6 +569,7 @@ module.exports = {
   afterFight,
   walkReactions,
   leftMap,
+  joinFight,
   talkedDown,
   isAttack,
   viewOf,

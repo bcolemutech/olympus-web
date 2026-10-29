@@ -11,7 +11,7 @@ const mapAreas = require('../../../loom-canon/map-areas');
 const apRules = require('../../../loom-canon/ap');
 const hazards = require('../../../loom-canon/hazards');
 const { systemOf } = require('../../../loom-canon/checks');
-const { worldId, entityId } = require('./schemas');
+const { worldId, entityId, challenge, triggers } = require('./schemas');
 const { helpers } = require('./write-tools');
 const views = require('./views');
 const figures = require('../../../loom-modules/combat/figures');
@@ -265,7 +265,16 @@ const figureGroup = z.strictObject({
       'Their stat block, as set_sheet takes it: { attributes (every one), skills?, ' +
         'resources?, level?, traits?, attacks? }.'
     ),
-  side: z.enum(figures.SIDES).optional().describe('hostile (the default), party or neutral.'),
+  side: z
+    .enum(figures.SIDES)
+    .optional()
+    .describe(
+      'hostile (the default), party, neutral, or wary: they challenge before they fight ' +
+        '(L-392), turning hostile when attacked, when their challenge’s check fails, or by a ' +
+        'trigger.'
+    ),
+  challenge: challenge.optional(),
+  triggers: triggers.optional(),
   role: z
     .enum(figures.ROLES)
     .optional()
@@ -706,7 +715,8 @@ function mapTools({ writer }) {
       description:
         'Place unnamed fighters on a battle map from a stat block (L-824): "bandit × 4". Each ' +
         'group has a name, a stat block (as set_sheet takes it, with attacks), a side ' +
-        '(hostile by default: they start a fight when a player comes into sight), how they ' +
+        '(hostile by default: they start a fight when a player comes into sight; wary: they ' +
+        'challenge first, with a challenge and triggers, L-392), how they ' +
         'fight (role: brute, skirmisher, archer, guard, caster or leader), how much risk they ' +
         'take (posture: cowardly, cautious, steady, bold or reckless; it sets when they break ' +
         'and flee), whether one is a leader whose fall shakes the rest, and one square each. ' +

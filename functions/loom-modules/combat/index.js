@@ -35,6 +35,7 @@ module.exports = {
   strike: require('./strike'),
   attackTurn: require('./attack-turn'),
   figures: require('./figures'),
+  wary: require('./wary'),
   tactics: require('./tactics'),
   others: require('./others'),
   down: require('./down'),

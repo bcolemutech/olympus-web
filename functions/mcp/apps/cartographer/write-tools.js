@@ -4,7 +4,7 @@ const { z } = require('zod');
 const { FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const { normalizeName } = require('../../../loom-turn/interpret');
-const { worldId, entityId, systemId } = require('./schemas');
+const { worldId, entityId, systemId, challenge, triggers } = require('./schemas');
 const { SOURCES } = require('../../../cartographer/sources');
 const { isPlayable } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
@@ -70,7 +70,8 @@ const INVERSE_RELATION = { vassal: 'suzerain', suzerain: 'vassal' };
 const DISPOSITIONS = ['friendly', 'neutral', 'hostile'];
 // A character's side in a fight (L-821; planning/combat.md EN1), and how
 // they fight (L-824).
-const SIDES = ['party', 'hostile', 'neutral'];
+const SIDES = ['party', 'hostile', 'neutral', 'wary'];
+const wary = require('../../../loom-modules/combat/wary');
 const figureRules = require('../../../loom-modules/combat/figures');
 const { ROLES, POSTURES } = figureRules;
 const COLLECTION = {
@@ -565,6 +566,23 @@ function deleteFromDraft(e, kind, entity) {
 
 // ── The tools ──────────────────────────────────────────────────────────
 
+// A character's challenge and triggers (L-392), checked against the world's
+// system and the map where they stand (`at`: their place), or refused.
+function checkWary(world, at, args) {
+  if (args.challenge == null && args.triggers == null) return;
+  const host = at.placeId
+    ? (world.places || {})[at.placeId]
+    : at.locationId
+      ? world.locations[at.locationId]
+      : null;
+  const map = host ? maps.mapOf(world, host) : null;
+  const errors = wary.validateAgainst(systemOf(world), map, {
+    challenge: args.challenge || undefined,
+    triggers: args.triggers || undefined,
+  });
+  if (errors.length) throw new ToolError(errors.join(' '));
+}
+
 function writeTools({ writer, systems, studio }) {
   const edit = (ctx, args, change) => writer.edit(args.worldId, ctx.uid, change);
   const additive = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
@@ -576,7 +594,9 @@ function writeTools({ writer, systems, studio }) {
   const sideNote =
     'Their side in a fight (L-821): hostile starts one when the player comes into sight of ' +
     'them on a battle map; party fights beside the player; neutral (the default) stays out ' +
-    'unless attacked.';
+    'unless attacked; wary (L-392) challenges first (challenge: what they say, and the check ' +
+    'that answers it) and turns hostile when attacked, when that check fails, or by a trigger ' +
+    '(triggers: [{ on, target?, then }]).';
 
   return [
     {
@@ -1296,6 +1316,8 @@ function writeTools({ writer, systems, studio }) {
           .describe('Where in that town they are found, if it has a layout.'),
         factionId: entityId('faction', 'get_world').optional().describe('Their realm or faction.'),
         side: z.enum(SIDES).optional().describe(sideNote),
+        challenge: challenge.optional(),
+        triggers: triggers.optional(),
         cell: square.optional(),
         townPoint: townPoint.optional(),
         worldPoint: worldPoint.optional(),
@@ -1319,12 +1341,15 @@ function writeTools({ writer, systems, studio }) {
             ...(place ? { placeId: place.id } : {}),
           };
           const { fields, warning, view } = positionFor(world, at, args);
+          checkWary(world, at, args);
           e.create(e.ref('characters', id), {
             ...at,
             description: args.description,
             sources: { description: SOURCES.MCP },
             ...(faction ? { factionId: faction.id } : {}),
             ...(args.side && args.side !== 'neutral' ? { side: args.side } : {}),
+            ...(args.challenge ? { challenge: args.challenge } : {}),
+            ...(args.triggers && args.triggers.length ? { triggers: args.triggers } : {}),
             ...fields,
           });
           if (home) e.update(e.ref('locations', home.id), 'npcIds', FieldValue.arrayUnion(id));
@@ -1370,6 +1395,11 @@ function writeTools({ writer, systems, studio }) {
           .optional()
           .describe('Their realm or faction; null for none.'),
         side: z.enum(SIDES).optional().describe(sideNote),
+        challenge: challenge.nullable().optional().describe('A wary challenge; null removes it.'),
+        triggers: triggers
+          .nullable()
+          .optional()
+          .describe('What turns them; null or [] removes them.'),
         cell: square.nullable().optional(),
         townPoint: townPoint.nullable().optional(),
         worldPoint: worldPoint.nullable().optional(),
@@ -1383,6 +1413,8 @@ function writeTools({ writer, systems, studio }) {
           'placeId',
           'factionId',
           'side',
+          'challenge',
+          'triggers',
           ...POSITIONS,
         ]);
         return edit(ctx, args, (e) => {
@@ -1462,6 +1494,17 @@ function writeTools({ writer, systems, studio }) {
           if (args.side !== undefined && args.side !== (character.side || 'neutral')) {
             fields.side = args.side === 'neutral' ? FieldValue.delete() : args.side;
           }
+          // What a wary one says, and what turns them (L-392).
+          checkWary(world, { locationId: homeId, placeId }, args);
+          if (args.challenge === null && character.challenge) {
+            fields.challenge = FieldValue.delete();
+          } else if (args.challenge) fields.challenge = args.challenge;
+          if (
+            (args.triggers === null || (args.triggers && !args.triggers.length)) &&
+            character.triggers
+          ) {
+            fields.triggers = FieldValue.delete();
+          } else if (args.triggers && args.triggers.length) fields.triggers = args.triggers;
           if (Object.keys(fields).length) e.update(e.ref('characters', id), fields);
           const result = {
             character: {
