@@ -259,12 +259,17 @@ const figureGroup = z.strictObject({
   name: label.describe('What one is called: "Bandit". Several are numbered: "Bandit 3".'),
   description: z.string().trim().max(300).optional().describe('What they look like.'),
   statBlock: z
-    .object({})
-    .passthrough()
+    .union([z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/), z.object({}).passthrough()])
     .describe(
       'Their stat block, as set_sheet takes it: { attributes (every one), skills?, ' +
-        'resources?, level?, traits?, attacks? }.'
+        'resources?, level?, traits?, attacks? }; or a named stat block’s id (L-393; ' +
+        'list_stat_blocks), whose changes reach them.'
     ),
+  overrides: z
+    .object({})
+    .passthrough()
+    .optional()
+    .describe('What differs from the stat block: a partial one.'),
   side: z
     .enum(figures.SIDES)
     .optional()

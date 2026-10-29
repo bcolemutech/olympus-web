@@ -128,6 +128,7 @@ const ENTITY_COLLECTIONS = [
   'lore',
   'places',
   'battleMaps', // battle maps of places and points of interest (L-351; ./maps.js)
+  'statBlocks', // named stat blocks characters and figures name (L-393; ./stat-blocks.js)
 ];
 const LOADABLE_STATUSES = ['draft', 'published'];
 
@@ -227,7 +228,12 @@ async function loadWorld(worldId, { db, playableOnly = true } = {}) {
     cached && cached.canonVersion === meta.canonVersion && cached.world.status === meta.status
       ? cached.world
       : await readFirestoreWorld(db, worldId, meta);
-  const withSystem = Object.freeze(Object.assign({}, world, { system: system }));
+  // Named stat blocks (L-393): each character naming one gets the sheet it
+  // stands for in this system, so a change to the block reaches them all.
+  const withSystem = require('./stat-blocks').resolve(
+    Object.freeze(Object.assign({}, world, { system: system })),
+    system
+  );
   worldCache.set(worldId, {
     canonVersion: meta.canonVersion,
     systemKey: systemKey,

@@ -259,6 +259,7 @@ describe('connector surface', () => {
       'get_town',
       'get_world',
       'list_battle_maps',
+      'list_stat_blocks',
       'list_work',
       'list_worlds',
       'view_image',

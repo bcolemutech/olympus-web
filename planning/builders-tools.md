@@ -1,6 +1,6 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch and L-392 wary figures built.
+**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures and L-393 named stat blocks built.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25),, built next, before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
@@ -114,6 +114,7 @@ The list in #735, judged 2026-10-29, with the user's answers (each took the reco
 - **Tools:** `set_stat_block`, `list_stat_blocks`, and `statBlock: id` on `add_character`, `update_character` and `place_figures`, with overrides for the parts that differ.
 - **Bulk:** `set_sheets` takes many characters at once, each a sheet or a stat block's name.
 - **A change to a stat block** reaches everyone who names it; overrides stay. L-927's spawns will name them.
+- **Built (L-393):** `loom-canon/stat-blocks.js`. A character names one as `statBlock: id` with `overrides` (attributes, skills and resources merge by id; level, traits and attacks replace), and their sheet is worked out when the world loads, for its system as it is then; a figure group's `statBlock` may be an id, resolved as its figures are made. `set_stat_block` takes one or up to 20 (`blocks`), all checked before any is written, and deletes one (null) only once nobody names it; `list_stat_blocks` shows who names each and what of it no longer fits the system; `set_sheets` takes up to 50. `set_sheet` with a sheet of a character's own drops their block.
 
 ### 4.4 Seeing and placing (gaps 28, 26, 8)
 

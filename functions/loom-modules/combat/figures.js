@@ -11,7 +11,9 @@
  *     name       "Bandit"; each is named with a number when there are several
  *                ("Bandit 3")
  *     statBlock  the short form of a sheet (../../loom-canon/sheets.js): every
- *                attribute, and attacks
+ *                attribute, and attacks; or the id of one of the world's named
+ *                stat blocks (L-393; ../../loom-canon/stat-blocks.js)
+ *     overrides? what differs from it: a partial stat block
  *     side       hostile (the default), party, neutral or wary (L-392)
  *     challenge? what a wary group says, and the check that answers it
  *     triggers?  what turns them: [{ on, target?, then }] (./wary.js)
@@ -35,6 +37,7 @@ const layers = require('../../loom-canon/layers');
 const sheets = require('../../loom-canon/sheets');
 const { attacksOf } = require('./attacks');
 const wary = require('./wary');
+const statBlocks = require('../../loom-canon/stat-blocks');
 
 const ROLES = ['brute', 'skirmisher', 'archer', 'guard', 'caster', 'leader'];
 const POSTURES = ['cowardly', 'cautious', 'steady', 'bold', 'reckless'];
@@ -52,10 +55,13 @@ function figureId(group, n) {
   return 'fig-' + group.id + ((group.cells || []).length > 1 ? '-' + n : '');
 }
 
-/** The figures a group stands for, each as a character would be: id, name, cell, side... */
-function instancesOf(system, group) {
+/**
+ * The figures a group stands for, each as a character would be: id, name,
+ * cell, side... `world` resolves a named stat block (L-393).
+ */
+function instancesOf(system, group, world = null) {
   const cells = Array.isArray(group.cells) ? group.cells : [];
-  const sheet = sheets.sheetFromStatBlock(system, group.statBlock || {});
+  const sheet = sheets.sheetFromStatBlock(system, statBlocks.blockOf(world, group) || {});
   return cells.map((cell, i) => ({
     id: figureId(group, i + 1),
     name: cells.length > 1 ? `${group.name} ${i + 1}` : group.name,
@@ -128,10 +134,22 @@ function validateFigures(world, system, map, list) {
     }
     errors.push(...validateTactics(g, at));
     errors.push(...wary.validateAgainst(system, map, g, at));
-    if (!isObject(g.statBlock)) errors.push(`${at}.statBlock is required: every attribute.`);
-    else {
+    if (typeof g.statBlock === 'string') {
+      // One of the world's named stat blocks (L-393), with any overrides.
+      errors.push(...statBlocks.validateOverrides(g.overrides, `${at}.overrides`));
+      if (!((world && world.statBlocks) || {})[g.statBlock]) {
+        errors.push(`${at}.statBlock: no stat block "${g.statBlock}" (list_stat_blocks).`);
+      } else {
+        sheets
+          .validateStatBlock(system, statBlocks.blockOf(world, g))
+          .forEach((e) => errors.push(`${at}.statBlock: ${e}`));
+      }
+    } else if (!isObject(g.statBlock)) {
+      errors.push(`${at}.statBlock is required: every attribute, or a named stat block's id.`);
+    } else {
+      errors.push(...statBlocks.validateOverrides(g.overrides, `${at}.overrides`));
       sheets
-        .validateStatBlock(system, g.statBlock)
+        .validateStatBlock(system, statBlocks.blockOf(world, g))
         .forEach((e) => errors.push(`${at}.statBlock: ${e}`));
     }
     if (!Array.isArray(g.cells) || !g.cells.length || g.cells.length > MAX_FIGURES) {
@@ -195,7 +213,7 @@ function withFigures(world, save) {
   if (onMap) {
     const isPlace = Boolean((world.places || {})[host.id]);
     for (const group of map.figures || []) {
-      for (const f of instancesOf(system, group)) {
+      for (const f of instancesOf(system, group, world)) {
         if (characters[f.id]) continue; // a character of that id wins
         characters[f.id] = place({
           ...f,

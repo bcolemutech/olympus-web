@@ -23,6 +23,7 @@ const ground = require('../../../loom-canon/ground');
 const artOf = require('../../../loom-canon/art');
 const routes = require('../../../loom-canon/routes');
 const { validateSheet, apFor, sheetFromStatBlock } = require('../../../loom-canon/sheets');
+const statBlocks = require('../../../loom-canon/stat-blocks');
 const figures = require('../../../loom-modules/combat/figures');
 const { systemOf } = require('../../../loom-canon/checks');
 const hazards = require('../../../loom-canon/hazards');
@@ -716,9 +717,14 @@ function figureRows(world, map) {
   return (map.figures || []).map((g) => ({
     ...g,
     side: g.side || 'hostile',
-    role: figures.roleOf(system, { ...g, sheet: sheetFromStatBlock(system, g.statBlock || {}) }),
+    role: figures.roleOf(system, {
+      ...g,
+      sheet: sheetFromStatBlock(system, statBlocks.blockOf(world, g) || {}),
+    }),
     posture: figures.postureOf(g),
-    named: figures.instancesOf(system, g).map((f) => ({ id: f.id, name: f.name, ...f.cell })),
+    named: figures
+      .instancesOf(system, g, world)
+      .map((f) => ({ id: f.id, name: f.name, ...f.cell })),
   }));
 }
 

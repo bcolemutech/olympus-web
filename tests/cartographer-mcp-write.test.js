@@ -207,6 +207,8 @@ test('exposes the write tools with honest hints', async () => {
     'set_hazards',
     'set_map_layers',
     'set_sheet',
+    'set_sheets',
+    'set_stat_block',
     'set_tactics',
     'set_town_ground',
     'update_character',

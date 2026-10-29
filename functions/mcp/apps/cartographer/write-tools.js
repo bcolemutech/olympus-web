@@ -13,7 +13,7 @@ const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
 const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
-const { validateSheet, sheetFromStatBlock, apFor } = require('../../../loom-canon/sheets');
+const { validateSheet } = require('../../../loom-canon/sheets');
 const { systemOf } = require('../../../loom-canon/checks');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
@@ -72,6 +72,7 @@ const DISPOSITIONS = ['friendly', 'neutral', 'hostile'];
 // they fight (L-824).
 const SIDES = ['party', 'hostile', 'neutral', 'wary'];
 const wary = require('../../../loom-modules/combat/wary');
+const { sheetFields, blockRef, overrides } = require('./stat-block-tools');
 const figureRules = require('../../../loom-modules/combat/figures');
 const { ROLES, POSTURES } = figureRules;
 const COLLECTION = {
@@ -1318,6 +1319,12 @@ function writeTools({ writer, systems, studio }) {
         side: z.enum(SIDES).optional().describe(sideNote),
         challenge: challenge.optional(),
         triggers: triggers.optional(),
+        statBlock: z
+          .string()
+          .regex(/^[a-z0-9][a-z0-9-]{0,39}$/)
+          .optional()
+          .describe('A named stat block’s id (L-393; list_stat_blocks): their sheet.'),
+        overrides: overrides.optional(),
         cell: square.optional(),
         townPoint: townPoint.optional(),
         worldPoint: worldPoint.optional(),
@@ -1342,7 +1349,16 @@ function writeTools({ writer, systems, studio }) {
           };
           const { fields, warning, view } = positionFor(world, at, args);
           checkWary(world, at, args);
+          // Their sheet from a named stat block (L-393).
+          const named = args.statBlock
+            ? sheetFields(world, args.name, args, { creating: true }).fields
+            : args.overrides !== undefined
+              ? (() => {
+                  throw new ToolError('overrides go with statBlock.');
+                })()
+              : {};
           e.create(e.ref('characters', id), {
+            ...named,
             ...at,
             description: args.description,
             sources: { description: SOURCES.MCP },
@@ -1400,6 +1416,15 @@ function writeTools({ writer, systems, studio }) {
           .nullable()
           .optional()
           .describe('What turns them; null or [] removes them.'),
+        statBlock: z
+          .string()
+          .regex(/^[a-z0-9][a-z0-9-]{0,39}$/)
+          .optional()
+          .describe(
+            'A named stat block’s id (L-393): their sheet from now on, with any overrides ' +
+              '(set_sheet gives a sheet of their own).'
+          ),
+        overrides: overrides.nullable().optional().describe('What differs; null clears them.'),
         cell: square.nullable().optional(),
         townPoint: townPoint.nullable().optional(),
         worldPoint: worldPoint.nullable().optional(),
@@ -1415,6 +1440,8 @@ function writeTools({ writer, systems, studio }) {
           'side',
           'challenge',
           'triggers',
+          'statBlock',
+          'overrides',
           ...POSITIONS,
         ]);
         return edit(ctx, args, (e) => {
@@ -1505,6 +1532,24 @@ function writeTools({ writer, systems, studio }) {
           ) {
             fields.triggers = FieldValue.delete();
           } else if (args.triggers && args.triggers.length) fields.triggers = args.triggers;
+          // Their named stat block, and what differs from it (L-393).
+          if (args.statBlock !== undefined || args.overrides !== undefined) {
+            const blockId = args.statBlock || character.statBlock;
+            if (typeof blockId !== 'string') {
+              throw new ToolError('overrides go with a named stat block: give statBlock.');
+            }
+            const over =
+              args.overrides === null
+                ? undefined
+                : args.overrides !== undefined
+                  ? args.overrides
+                  : character.overrides;
+            const named = sheetFields(world, fields.name || character.name, {
+              statBlock: blockId,
+              overrides: over,
+            }).fields;
+            Object.assign(fields, named);
+          }
           if (Object.keys(fields).length) e.update(e.ref('characters', id), fields);
           const result = {
             character: {
@@ -1557,51 +1602,49 @@ function writeTools({ writer, systems, studio }) {
               'resources: { [id]: { current } }, level, traits: [id], conditions: [], ' +
               'attacks?: [attack] }. Speed is worked out by the system. null removes it.'
           ),
-        statBlock: z
-          .object({})
-          .passthrough()
+        statBlock: blockRef
           .optional()
           .describe(
             'Or the short form: { attributes (every one), skills?, resources?, level?, traits?, ' +
-              'attacks? }.'
+              'attacks? }; or a named stat block’s id (L-393; list_stat_blocks), whose changes ' +
+              'reach them.'
           ),
+        overrides: overrides.optional(),
       },
       annotations: replacing,
       handler: (ctx, args) => {
         if ((args.sheet === undefined) === (args.statBlock === undefined)) {
           throw new ToolError('Give either sheet (or null to remove it) or statBlock.');
         }
+        if (args.overrides !== undefined && typeof args.statBlock !== 'string') {
+          throw new ToolError('overrides go with a named stat block’s id.');
+        }
         return edit(ctx, args, (e) => {
           const { world } = e;
           const character = existing(world, 'character', args.characterId);
           const ref = e.ref('characters', character.id);
           if (args.sheet === null) {
-            if (character.sheet) e.update(ref, 'sheet', FieldValue.delete());
+            const had = character.sheet || character.statBlock;
+            if (had) {
+              e.update(ref, {
+                sheet: FieldValue.delete(),
+                statBlock: FieldValue.delete(),
+                overrides: FieldValue.delete(),
+              });
+            }
             return {
               character: { id: character.id, name: character.name },
-              changed: Boolean(character.sheet),
+              changed: Boolean(had),
               sheet: null,
             };
           }
-          const system = systemOf(world);
-          const given =
-            args.statBlock !== undefined
-              ? sheetFromStatBlock(system, args.statBlock)
-              : { ...args.sheet };
-          delete given.speed; // worked out by the system (L-811; its pool, L-832)
-          delete given.ap;
-          const problems = validateSheet(system, given);
-          if (problems.length) {
-            throw new ToolError(
-              `${character.name}’s sheet doesn’t fit the world’s rules (${system.name}):\n- ` +
-                problems.join('\n- ')
-            );
-          }
-          e.update(ref, 'sheet', given);
+          const { fields, sheet } = sheetFields(world, character.name, args);
+          e.update(ref, fields);
           return {
             character: { id: character.id, name: character.name },
             changed: true,
-            sheet: { ...given, ap: apFor(system, given) },
+            ...(typeof args.statBlock === 'string' ? { statBlock: args.statBlock } : {}),
+            sheet,
           };
         });
       },
