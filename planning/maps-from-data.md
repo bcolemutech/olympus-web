@@ -1,6 +1,6 @@
 # The Loom — Maps Drawn From Their Data — Design Document v0.1
 
-**Status:** Decided (2026-10-28). The gap sheet (§3) is answered. Sub-issues are planned (§6) and are filed when this epic is next.
+**Status:** Decided (2026-10-28). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#725–#733, §6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-920 (#710), Phase 10 — Levels and Vehicles (milestone #26). From idea #709.
 **Built:** right after L-900 (map levels to any depth) and before L-710 (worlds without Azgaar), so L-710's regions and terrain use this geometry from the start.
@@ -152,19 +152,19 @@ A dungeon built over MCP from data alone, with no image, draws with character fr
 
 ---
 
-## 6. Sub-issues (planned; filed when this epic is next)
+## 6. Sub-issues (filed 2026-10-28)
 
-| ID    | Story                                                                                                                                                                                        | Depends on   | Model  |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
-| L-921 | **The geometry:** ground, walls, doors, windows, objects, zones, spawns, lights, notes, hidden; materials and flags; heights; `map-geometry.js` (both copies); on L-900's maps               | L-901        | Opus   |
-| L-922 | **Moving and AP:** sizes; paths on the fine grid through gaps wide enough; 1 AP per 5 ft rounded up; preview equals charge; reach, ranges and areas in feet; combat and tactics on distances | L-921        | Opus   |
-| L-923 | **Sight:** line of sight on the geometry, see-through flags, heights, high ground and falls, fog shaped by it                                                                                | L-921        | Opus   |
-| L-924 | **Drawing:** materials and objects drawn from embedded art, heights shaded, light, fog; maps with art; loading progress and caching                                                          | L-921, L-925 | Opus   |
-| L-925 | **Materials and the object catalog:** the built-in set and its art, made with the studio and committed; assigning over MCP; a world's own object art; the box with a question mark           | —            | Sonnet |
-| L-926 | **Objects:** their settings, containers, locks and what unlocks them, descriptions and card art, their click-menu actions and costs                                                          | L-921        | Sonnet |
-| L-927 | **Hidden things and spawns:** noticing and Search, traps as hidden hazards, spawn points, generic maps' spawns filled by the GM or an event                                                  | L-923        | Sonnet |
-| L-928 | **Today's maps:** battle-map layers converted, towns drawn from ground, Azgaar exports converted to region data, art kept; tracing                                                           | L-921        | Opus   |
-| L-929 | **Tools and generators:** the MCP tools, `view_image` of the data, seeded generators (rooms and corridors, caves, interiors, decks); the grading criterion                                   | L-921        | Sonnet |
+| ID           | Story                                                                                                                                                                                        | Depends on   | Model  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
+| L-921 (#725) | **The geometry:** ground, walls, doors, windows, objects, zones, spawns, lights, notes, hidden; materials and flags; heights; `map-geometry.js` (both copies); on L-900's maps               | L-901        | Opus   |
+| L-922 (#726) | **Moving and AP:** sizes; paths on the fine grid through gaps wide enough; 1 AP per 5 ft rounded up; preview equals charge; reach, ranges and areas in feet; combat and tactics on distances | L-921        | Opus   |
+| L-923 (#727) | **Sight:** line of sight on the geometry, see-through flags, heights, high ground and falls, fog shaped by it                                                                                | L-921        | Opus   |
+| L-924 (#728) | **Drawing:** materials and objects drawn from embedded art, heights shaded, light, fog; maps with art; loading progress and caching                                                          | L-921, L-925 | Opus   |
+| L-925 (#729) | **Materials and the object catalog:** the built-in set and its art, made with the studio and committed; assigning over MCP; a world's own object art; the box with a question mark           | —            | Sonnet |
+| L-926 (#730) | **Objects:** their settings, containers, locks and what unlocks them, descriptions and card art, their click-menu actions and costs                                                          | L-921        | Sonnet |
+| L-927 (#731) | **Hidden things and spawns:** noticing and Search, traps as hidden hazards, spawn points, generic maps' spawns filled by the GM or an event                                                  | L-923        | Sonnet |
+| L-928 (#732) | **Today's maps:** battle-map layers converted, towns drawn from ground, Azgaar exports converted to region data, art kept; tracing                                                           | L-921        | Opus   |
+| L-929 (#733) | **Tools and generators:** the MCP tools, `view_image` of the data, seeded generators (rooms and corridors, caves, interiors, decks); the grading criterion                                   | L-921        | Sonnet |
 
 **Order:** L-921 and L-925 first. L-922, L-923, L-926, L-928 and L-929 follow L-921; L-924 follows L-925; L-927 follows L-923.
 

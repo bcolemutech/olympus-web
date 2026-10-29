@@ -1,6 +1,6 @@
 # The Loom — Map Levels to Any Depth — Design Document v0.1
 
-**Status:** Decided (2026-10-16). The gap sheet (§3) is answered. Sub-issues are planned (§6) and are filed when this epic is next.
+**Status:** Decided (2026-10-16). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#719–#724, §6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-900 (#625), milestone #26 (Phase 10 — Levels and Vehicles)
 **Built:** just before L-710 (worlds without Azgaar), which then builds on it (the roadmap's Build order).
@@ -166,16 +166,16 @@ Nisia is migrated and plays as before: the same trips take the same time, towns 
 
 ---
 
-## 6. Sub-issues (planned; filed when this epic is next)
+## 6. Sub-issues (filed 2026-10-28)
 
-| ID    | Story                                                                                                                                                                  | Depends on   | Model  |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
-| L-901 | **The model:** `maps` and `places`, kinds and spaces, parents and exits, `world.topMapId`; `levels.js` helpers; `loadWorld` gives the tree; `save.at` and its checks   | —            | Opus   |
-| L-902 | **The migration:** locations, towns, town places and battle maps into maps and places; saves into `save.at`; the replay test; dry run, then apply; old fields removed  | L-901        | Opus   |
-| L-903 | **Rules at any depth:** moves on each kind, up and down, between parents, through exits; the gate at every depth; `timeRules(world, map)`; `loomGetMap` with the trail | L-901        | Opus   |
-| L-904 | **The Loom at any depth:** the three drawers by kind, the zoom and peeking at any depth, the trail in place of the level switcher                                      | L-903        | Sonnet |
-| L-905 | **Tools and grading:** the new MCP tools, today's as shortcuts, the work list and completion over every map, the Cartographer page's tree, grading by map kind         | L-901        | Sonnet |
-| L-906 | **Templates:** template maps, `assign_template`, filling from the place, seeded fill tables, per-save changes per place, the gate and grading                          | L-903, L-905 | Opus   |
+| ID           | Story                                                                                                                                                                  | Depends on   | Model  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------ |
+| L-901 (#719) | **The model:** `maps` and `places`, kinds and spaces, parents and exits, `world.topMapId`; `levels.js` helpers; `loadWorld` gives the tree; `save.at` and its checks   | —            | Opus   |
+| L-902 (#720) | **The migration:** locations, towns, town places and battle maps into maps and places; saves into `save.at`; the replay test; dry run, then apply; old fields removed  | L-901        | Opus   |
+| L-903 (#721) | **Rules at any depth:** moves on each kind, up and down, between parents, through exits; the gate at every depth; `timeRules(world, map)`; `loomGetMap` with the trail | L-901        | Opus   |
+| L-904 (#722) | **The Loom at any depth:** the three drawers by kind, the zoom and peeking at any depth, the trail in place of the level switcher                                      | L-903        | Sonnet |
+| L-905 (#723) | **Tools and grading:** the new MCP tools, today's as shortcuts, the work list and completion over every map, the Cartographer page's tree, grading by map kind         | L-901        | Sonnet |
+| L-906 (#724) | **Templates:** template maps, `assign_template`, filling from the place, seeded fill tables, per-save changes per place, the gate and grading                          | L-903, L-905 | Opus   |
 
 **Order:** L-901 first. L-902, L-903 and L-905 follow it; L-902 must pass before the old fields go. L-904 follows L-903, and L-906 comes last.
 
