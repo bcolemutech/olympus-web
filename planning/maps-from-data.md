@@ -92,6 +92,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
   - `zones` (named polygons), `spawns` (points or areas, §4.5), `lights` (sources and dark areas), `notes` (for the GM), `hidden` (any of the above hidden until found).
 - **Region and area maps** use the same vocabulary at their scale: coasts and terrain as ground, rivers and roads as lines, building footprints as shapes, districts as zones.
 - **Shared and pure:** `map-geometry.js` (shapes, hits, checks), kept in `functions/loom-canon/` and `public/apps/loom/js/` with identical bytes, like `grid-paths.js`.
+- **Compact shapes** (#735 gap 16): points as `[[x, y], …]` or SVG path data; circles and rectangles as shapes of their own.
 
 ### 4.2 Movement and AP (GE2, MV1, SZ1, DS1)
 
@@ -137,7 +138,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 
 ### 4.8 Tools and generators (AU1, AU2)
 
-- **MCP tools:** `set_ground`, `set_walls`, `set_doors`, `set_windows`, `set_objects`, `set_zones`, `set_spawns`, `set_lights`, `set_hidden`, `list_materials`, `list_object_kinds`, `set_object_art`; `view_image` draws the data (with or without fog, heights shaded).
+- **MCP tools:** `set_ground`, `set_walls`, `set_doors`, `set_windows`, `set_objects`, `set_zones`, `set_spawns`, `set_lights`, `set_hidden`, `list_materials`, `list_object_kinds`, `set_object_art`. Each patches shapes by id (features, entries and exits too), keeping what saves have seen and opened (#735 gap 17). `view_image` draws the data (with or without fog, heights shaded).
 - **Generators,** seeded: rooms and corridors, caves, building interiors, ship decks. Claude calls one, then edits.
 
 ### 4.9 Grading (PL2)

@@ -145,7 +145,7 @@ A dry-run-then-apply workflow, like the earlier backfills:
 
 ### 4.7 Tools (UI3, UI4)
 
-- **New MCP tools:** `add_map` (kind, parent place, space), `get_map`, `list_maps` (the tree), `add_place` / `add_places` (on a map), `connect_places`, `add_exit`, `set_grid` (walls, doors and features of a grid), `set_area_ground`, `assign_template`.
+- **New MCP tools:** `add_map` (kind, parent place, space), `get_map`, `list_maps` (the tree), `add_place` / `add_places` (on a map), `connect_places`, `add_exit` (both directions in one call, `twoWay`, naming a map or place made in the same call; #735 gap 9), `set_grid` (walls, doors and features of a grid), `set_area_ground`, `assign_template`.
 - **Shortcuts:** today's tools (`add_location`, `add_place`, `set_battle_map`, `connect_locations`…) keep working for a while, mapping onto the new ones, and say so in their descriptions.
 - **The work list** and **`cartographerCompletion`** cover every map.
 - **The Cartographer page** shows a world's maps as a tree, each with its grade and what it lacks.

@@ -163,16 +163,16 @@ A world started from a studio map image, with places pinned and regions and terr
 
 ## 6. Sub-issues (planned; filed when this epic is next)
 
-| ID    | Story                                                                                                                                                           | Depends on          | Model  |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------ |
-| L-711 | **A world's space:** map units, scale, image fitted to the space; Azgaar worlds' pixel space converted (AZ4)                                                    | L-704               | Opus   |
-| L-712 | **Creating worlds:** `create_world`, New world on the page, the brief (fields, `update_world`, the page, the GM's BRIEF line)                                   | L-711               | Sonnet |
-| L-713 | **Adding places:** `add_location(s)`, sub-types and settlement facts, `add_realm`, `add_region`, route waypoints and lengths, batch connect, the world-map grid | L-711               | Sonnet |
-| L-714 | **Route kinds per world:** `world.routeKinds`, L-370 speeds read from it                                                                                        | L-713, L-373        | Sonnet |
-| L-715 | **The region layer:** region shapes, terrain areas and kinds, topmost-wins lookup, places' region and realm from position, the tools, `view_image` overlays     | L-713               | Opus   |
-| L-716 | **The GM knows where:** the WHERE line                                                                                                                          | L-715               | Sonnet |
-| L-717 | **Azgaar worlds:** the legacy link, the layer from exports (script), fields moved                                                                               | L-715               | Sonnet |
-| L-718 | **Grading criteria:** brief, layer coverage, painted regions and shapes (§4.6)                                                                                  | L-712, L-715, L-691 | Sonnet |
+| ID    | Story                                                                                                                                                                                                                         | Depends on          | Model  |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------ |
+| L-711 | **A world's space:** map units, scale, image fitted to the space; Azgaar worlds' pixel space converted (AZ4)                                                                                                                  | L-704               | Opus   |
+| L-712 | **Creating worlds:** `create_world`, New world on the page, the brief (fields, `update_world`, the page, the GM's BRIEF line)                                                                                                 | L-711               | Sonnet |
+| L-713 | **Adding places:** `add_location(s)` (first slice in L-391), sub-types and settlement facts, `add_realm`, `add_region`, route waypoints and lengths, rules on routes (#735 gap 10), batch connect (L-391), the world-map grid | L-711               | Sonnet |
+| L-714 | **Route kinds per world:** `world.routeKinds`, L-370 speeds read from it                                                                                                                                                      | L-713, L-373        | Sonnet |
+| L-715 | **The region layer:** region shapes, terrain areas and kinds, topmost-wins lookup, places' region and realm from position, the tools, `view_image` overlays                                                                   | L-713               | Opus   |
+| L-716 | **The GM knows where:** the WHERE line                                                                                                                                                                                        | L-715               | Sonnet |
+| L-717 | **Azgaar worlds:** the legacy link, the layer from exports (script), fields moved                                                                                                                                             | L-715               | Sonnet |
+| L-718 | **Grading criteria:** brief, layer coverage, painted regions and shapes (§4.6)                                                                                                                                                | L-712, L-715, L-691 | Sonnet |
 
 ---
 
