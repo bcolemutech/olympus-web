@@ -92,6 +92,17 @@ const HINT = {
   battleMap: 'Use list_battle_maps to see them.',
 };
 const UNREACHABLE_SHOWN = 5;
+// Worlds from scratch (L-391): the backdrop's default size, in map units (as
+// an Azgaar world's), and how many locations or links one call may add.
+const DEFAULT_MAP = Object.freeze({ width: 1600, height: 1200 });
+const MIN_MAP = 100;
+const MAX_MAP = 10000;
+const MAX_NEW_LOCATIONS = 50;
+const MAX_LINKS = 100;
+const COLOUR = /^#[0-9a-fA-F]{6}$/;
+const SLICE_NOTE =
+  'The first slice of worlds without Azgaar (L-710): the brief, realms, regions, waypoints ' +
+  'and map units come later.';
 
 const text = (max, what) =>
   z
@@ -554,7 +565,7 @@ function deleteFromDraft(e, kind, entity) {
 
 // ── The tools ──────────────────────────────────────────────────────────
 
-function writeTools({ writer, systems }) {
+function writeTools({ writer, systems, studio }) {
   const edit = (ctx, args, change) => writer.edit(args.worldId, ctx.uid, change);
   const additive = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
   const replacing = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
@@ -568,6 +579,106 @@ function writeTools({ writer, systems }) {
     'unless attacked.';
 
   return [
+    {
+      name: 'create_world',
+      title: 'Create world',
+      description:
+        'Start a new draft world from scratch, with no Azgaar map: a name, its game system ' +
+        '(systemId, from list_systems; the built-in d20 Fantasy when omitted) and a backdrop ' +
+        'for the world map, a plain colour or a studio image (imageId, of kind worldMap). The ' +
+        'map is width × height map units (default 1600 × 1200, the size of an imported map); ' +
+        'milesPerUnit sets how far one unit is (default 3), so route lengths and travel time ' +
+        'come from distance as in any world. Then add places with add_locations, link them ' +
+        'with connect_locations (links: many in one call), open towns with add_place, and ' +
+        'publish with publish_world. ' +
+        SLICE_NOTE,
+      inputSchema: {
+        name,
+        systemId: systemId.optional().describe('The game system it plays by, from list_systems.'),
+        backdrop: z
+          .union([
+            z.strictObject({
+              colour: z
+                .string()
+                .regex(COLOUR, 'colour must be #rrggbb')
+                .describe('A plain colour, #rrggbb.'),
+            }),
+            z.strictObject({
+              imageId: z
+                .string()
+                .trim()
+                .min(1)
+                .max(80)
+                .describe('A worldMap image, from studio_find.'),
+            }),
+          ])
+          .optional()
+          .describe('The world map’s backdrop (default a plain dark green, #26332a).'),
+        width: z.number().int().min(MIN_MAP).max(MAX_MAP).optional().describe('Map units across.'),
+        height: z.number().int().min(MIN_MAP).max(MAX_MAP).optional().describe('Map units down.'),
+        milesPerUnit: z
+          .number()
+          .positive()
+          .max(1000)
+          .optional()
+          .describe('Miles per map unit (default 3).'),
+      },
+      annotations: additive,
+      handler: async (ctx, args) => {
+        const system = args.systemId ? systems && (await systems.get(args.systemId)) : null;
+        if (args.systemId && !system) {
+          throw new ToolError(`No system "${args.systemId}". list_systems shows them.`);
+        }
+        const backdrop = args.backdrop || { colour: '#26332a' };
+        if (backdrop.imageId && !studio) {
+          throw new ToolError('The image studio isn’t available here; give a colour instead.');
+        }
+        const map = {
+          width: args.width || DEFAULT_MAP.width,
+          height: args.height || DEFAULT_MAP.height,
+          imagePath: null,
+          backdrop: backdrop.colour || '#26332a',
+          ...(args.milesPerUnit ? { distance: { unit: 'mi', perMapUnit: args.milesPerUnit } } : {}),
+        };
+        const { worldId: id } = await writer.create(ctx.uid, {
+          name: args.name,
+          systemId: system ? system.id : null,
+          map,
+        });
+        // A studio image as its art, the way studio_assign sets a world's map.
+        let image = null;
+        if (backdrop.imageId) {
+          try {
+            const assigned = await studio.assign(ctx.uid, {
+              worldId: id,
+              target: 'map',
+              imageId: backdrop.imageId,
+            });
+            image = {
+              imageId: backdrop.imageId,
+              ...(assigned.warnings ? { warnings: assigned.warnings } : {}),
+            };
+          } catch (err) {
+            // The world stands; the art can be set again with studio_assign.
+            return {
+              worldId: id,
+              name: args.name,
+              warnings: [
+                `The world was made, but its image wasn't set: ${err.message} Try studio_assign.`,
+              ],
+            };
+          }
+        }
+        return {
+          worldId: id,
+          name: args.name,
+          status: 'draft',
+          ...(system ? { system: { id: system.id, name: system.name } } : {}),
+          map: { width: map.width, height: map.height, backdrop: image || map.backdrop },
+          next: 'Add places with add_locations, then link them with connect_locations.',
+        };
+      },
+    },
     {
       name: 'update_world',
       title: 'Update world',
@@ -810,47 +921,210 @@ function writeTools({ writer, systems }) {
       },
     },
     {
-      name: 'connect_locations',
-      title: 'Connect locations',
+      name: 'add_locations',
+      title: 'Add locations',
       description:
-        'Link two places so players can travel directly between them, by road, trail or sea ' +
-        '(default road). Links are two-way; connecting places that are already linked changes ' +
-        'how. ' +
-        editNote,
+        'Add places to the world map, up to ' +
+        MAX_NEW_LOCATIONS +
+        ' in one call: settlements (kind settlement; a town to open with add_place) or points ' +
+        'of interest (kind poi; a site with a battle map), each at { x, y } in map units, with ' +
+        'its name, description and, for a settlement, its facts (population, port, capital, ' +
+        'biome). Names stay unique in the world. Returns each one’s id, for connect_locations; ' +
+        'a new place has no links yet. Works on any world, imported or made with create_world. ' +
+        editNote +
+        ' ' +
+        SLICE_NOTE,
       inputSchema: {
         worldId,
-        fromId: entityId('location', 'find_locations'),
-        toId: entityId('location', 'find_locations'),
-        via: z.enum(LINKS).optional().describe('road, trail or sea (default road).'),
+        locations: z
+          .array(
+            z.strictObject({
+              name,
+              kind: z
+                .enum(['settlement', 'poi'])
+                .optional()
+                .describe('settlement (default) or poi, a point of interest.'),
+              x: z.number().min(0).describe('Map units from the left.'),
+              y: z.number().min(0).describe('Map units from the top.'),
+              description: text(MAX_DESCRIPTION, 'description')
+                .optional()
+                .describe('What a traveller finds here; marks it written up.'),
+              population: z.number().int().min(0).max(10000000).optional(),
+              port: z.boolean().optional().describe('A settlement on the water, for sea routes.'),
+              capital: z.boolean().optional(),
+              biome: z
+                .string()
+                .trim()
+                .min(1)
+                .max(MAX_NAME)
+                .optional()
+                .describe('e.g. "Grassland".'),
+              markerType: z
+                .string()
+                .trim()
+                .min(1)
+                .max(MAX_NAME)
+                .optional()
+                .describe('A point of interest’s kind, e.g. "fort", "ruins", "camp".'),
+              factionIds: z.array(entityId('faction', 'get_world')).max(MAX_FACTIONS).optional(),
+              danger: z.enum(['none', 'low', 'high']).optional(),
+            })
+          )
+          .min(1)
+          .max(MAX_NEW_LOCATIONS),
       },
-      annotations: replacing,
+      annotations: additive,
       handler: (ctx, args) =>
         edit(ctx, args, (e) => {
           const { world } = e;
-          const via = args.via || 'road';
-          if (args.fromId === args.toId) throw new ToolError('A place can’t connect to itself.');
-          const a = live(world, 'location', args.fromId);
-          const b = live(world, 'location', args.toId);
-          const linked = (x, y) =>
-            (x.connections || []).includes(y.id) && ((x.geo || {}).links || {})[y.id] === via;
-          if (!(linked(a, b) && linked(b, a))) {
-            for (const [x, y] of [
-              [a, b],
-              [b, a],
-            ]) {
-              e.update(
-                e.ref('locations', x.id),
-                'connections',
-                FieldValue.arrayUnion(y.id),
-                link(y.id),
-                via
+          const size = world.map || {};
+          // Names unique among the world's and each other's.
+          const taken = new Set();
+          const ids = new Set();
+          const added = args.locations.map((spec, i) => {
+            const at = `Location ${i + 1} (${spec.name})`;
+            checkName(world, spec.name);
+            const key = normalizeName(spec.name);
+            if (taken.has(key)) throw new ToolError(`${at}: that name is given twice.`);
+            taken.add(key);
+            if ((size.width && spec.x > size.width) || (size.height && spec.y > size.height)) {
+              throw new ToolError(
+                `${at}: { x: ${spec.x}, y: ${spec.y} } is off the map (${size.width} × ${size.height}).`
               );
             }
-          }
+            const kind = spec.kind || 'settlement';
+            if (kind === 'poi') {
+              for (const fact of ['population', 'port', 'capital']) {
+                if (spec[fact] !== undefined) {
+                  throw new ToolError(`${at}: ${fact} is for settlements, not points of interest.`);
+                }
+              }
+            } else if (spec.markerType !== undefined) {
+              throw new ToolError(`${at}: markerType is for points of interest.`);
+            }
+            (spec.factionIds || []).forEach((id) => live(world, 'faction', id));
+            let id = newId(world, 'location', kind === 'poi' ? 'poi' : 'loc', spec.name);
+            for (let n = 2; ids.has(id); n += 1) id = `${id}-${n}`;
+            ids.add(id);
+            const geo =
+              kind === 'poi'
+                ? { kind, x: spec.x, y: spec.y, markerType: spec.markerType || 'site', links: {} }
+                : {
+                    kind,
+                    x: spec.x,
+                    y: spec.y,
+                    population: spec.population || 0,
+                    port: Boolean(spec.port),
+                    capital: Boolean(spec.capital),
+                    biome: spec.biome || null,
+                    regionId: null,
+                    links: {},
+                  };
+            const location = {
+              id,
+              name: spec.name,
+              description: spec.description || '',
+              connections: [],
+              factionIds: [...new Set(spec.factionIds || [])],
+              npcIds: [],
+              rules: {},
+              geo,
+              ...(spec.danger && spec.danger !== 'none' ? { danger: spec.danger } : {}),
+              ...(spec.description ? { sources: { description: SOURCES.MCP } } : {}),
+            };
+            e.create(e.ref('locations', id), location);
+            return { id, name: spec.name, kind };
+          });
           return {
-            connection: { from: { id: a.id, name: a.name }, to: { id: b.id, name: b.name }, via },
+            added,
+            next:
+              'Link them with connect_locations (links: [{ fromId, toId, via }]); open a ' +
+              'settlement’s town with add_place, a point of interest with a battle map.',
           };
         }),
+    },
+    {
+      name: 'connect_locations',
+      title: 'Connect locations',
+      description:
+        'Link places so players can travel directly between them, by road, trail or sea ' +
+        '(default road): one pair (fromId, toId, via), or many in one call (links, up to ' +
+        MAX_LINKS +
+        '). Links are two-way; connecting places that are already linked changes how. A ' +
+        'route’s length comes from the distance between them. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        fromId: entityId('location', 'find_locations').optional(),
+        toId: entityId('location', 'find_locations').optional(),
+        via: z.enum(LINKS).optional().describe('road, trail or sea (default road).'),
+        links: z
+          .array(
+            z.strictObject({
+              fromId: entityId('location', 'find_locations'),
+              toId: entityId('location', 'find_locations'),
+              via: z.enum(LINKS).optional().describe('road, trail or sea (default road).'),
+            })
+          )
+          .min(1)
+          .max(MAX_LINKS)
+          .optional()
+          .describe('Many links in one call, instead of fromId and toId.'),
+      },
+      annotations: replacing,
+      handler: (ctx, args) => {
+        const single = args.fromId !== undefined || args.toId !== undefined;
+        if (single && args.links) throw new ToolError('Give fromId and toId, or links, not both.');
+        if (!single && !args.links) throw new ToolError('Give fromId and toId, or links.');
+        if (single && !(args.fromId && args.toId)) {
+          throw new ToolError('A link needs both fromId and toId.');
+        }
+        const wanted = single
+          ? [{ fromId: args.fromId, toId: args.toId, via: args.via }]
+          : args.links;
+        return edit(ctx, args, (e) => {
+          const { world } = e;
+          // Each pair once: the last one given decides how.
+          const pairs = new Map();
+          wanted.forEach((l, i) => {
+            const at = single ? '' : `Link ${i + 1}: `;
+            if (l.fromId === l.toId) throw new ToolError(`${at}A place can’t connect to itself.`);
+            const a = live(world, 'location', l.fromId);
+            const b = live(world, 'location', l.toId);
+            pairs.set([a.id, b.id].sort().join('|'), { a, b, via: l.via || 'road' });
+          });
+          // One update per place: its new neighbours and how each is linked.
+          const changes = new Map();
+          const change = (x, y, via) => {
+            if (!changes.has(x.id)) changes.set(x.id, { ids: [], links: [] });
+            changes.get(x.id).ids.push(y.id);
+            changes.get(x.id).links.push(link(y.id), via);
+          };
+          const connections = [];
+          for (const { a, b, via } of pairs.values()) {
+            const linked = (x, y) =>
+              (x.connections || []).includes(y.id) && ((x.geo || {}).links || {})[y.id] === via;
+            if (!(linked(a, b) && linked(b, a))) {
+              change(a, b, via);
+              change(b, a, via);
+            }
+            connections.push({
+              from: { id: a.id, name: a.name },
+              to: { id: b.id, name: b.name },
+              via,
+            });
+          }
+          for (const [id, { ids, links }] of changes) {
+            e.update(
+              e.ref('locations', id),
+              'connections',
+              FieldValue.arrayUnion(...ids),
+              ...links
+            );
+          }
+          return single ? { connection: connections[0] } : { connections };
+        });
+      },
     },
     {
       name: 'disconnect_locations',

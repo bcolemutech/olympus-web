@@ -154,6 +154,8 @@ function mapView(canonWorld, save, record, townRecord) {
             height: map.height,
             // Its art (L-704): a library image's link, or an older path.
             image: artOf.forPlayer(artOf.worldMapArt(canonWorld)),
+            // A world made from scratch (L-391): its plain colour, under any art.
+            ...(map.backdrop ? { backdrop: map.backdrop } : {}),
           }
         : null,
   };

@@ -1,6 +1,6 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744.
+**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch built.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25),, built next, before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
@@ -88,6 +88,7 @@ The list in #735, judged 2026-10-29, with the user's answers (each took the reco
 - **`create_world`:** a name, a system (`systemId`), and a backdrop: a plain colour or a studio image, in today's coordinate space (the size Azgaar worlds use). It makes a draft world, as an import does.
 - **`add_location` and `add_locations`:** a settlement or point of interest at `{ x, y }`, with its kind, name, description and settlement facts; for an existing world too (the smugglers' trail between Hatham and Daldockley).
 - **`connect_locations` in batch:** many links in one call, each with its route kind; lengths from distance as today (L-372).
+- **Built (L-391):** a world made this way is `source: { kind: 'scratch' }`, its map `{ width, height, backdrop: '#rrggbb', distance? }` (default 1600 × 1200 map units, 3 mi each; `milesPerUnit` sets it); `loomGetMap` sends the backdrop and the Loom's world map draws it under any art; the Cartographer page says "Made from scratch". `connect_locations` takes `links` (up to 100) or one pair.
 - **The New world button** on the Cartographer page is left to L-712. Publishing works as it does for an imported world.
 - **L-902's migration** moves these locations like any other, so nothing here is built twice.
 

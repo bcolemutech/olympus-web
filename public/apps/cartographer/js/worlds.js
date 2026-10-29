@@ -181,14 +181,17 @@
     card.appendChild(header);
 
     if (world.tagline) card.appendChild(el('p', 'carto-tagline', world.tagline));
-    card.appendChild(el('p', 'carto-meta', describeCounts(world.counts)));
+    // A world made from scratch over MCP (L-391) has no import to count or name.
+    var scratch = world.source && world.source.kind === 'scratch';
+    if (!scratch) card.appendChild(el('p', 'carto-meta', describeCounts(world.counts)));
     card.appendChild(
       el(
         'p',
         'carto-meta',
-        'From "' +
-          ((world.source && world.source.mapName) || 'a map') +
-          '" · created ' +
+        (scratch
+          ? 'Made from scratch'
+          : 'From "' + ((world.source && world.source.mapName) || 'a map') + '"') +
+          ' · created ' +
           Cartographer.formatDate(world.createdAtMs) +
           (world.publishedAtMs
             ? ' · published ' + Cartographer.formatDate(world.publishedAtMs)

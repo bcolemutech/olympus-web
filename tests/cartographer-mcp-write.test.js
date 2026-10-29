@@ -190,11 +190,13 @@ test('exposes the write tools with honest hints', async () => {
   const writes = tools.filter((t) => !t.annotations.readOnlyHint);
   expect(writes.map((t) => t.name).sort()).toEqual([
     'add_character',
+    'add_locations',
     'add_lore',
     'add_place',
     'assign_battle_map',
     'connect_locations',
     'connect_places',
+    'create_world',
     'disconnect_locations',
     'disconnect_places',
     'place_figures',

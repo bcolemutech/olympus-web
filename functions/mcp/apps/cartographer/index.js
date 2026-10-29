@@ -679,7 +679,7 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           return { worldId: world.id, ...views.loreDetail(world, entry) };
         },
       },
-      ...writeTools({ writer, systems }),
+      ...writeTools({ writer, systems, studio }),
       ...townTools({ writer }),
       ...mapTools({ writer }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
