@@ -1553,6 +1553,11 @@ describe('loom_* — Firestore Security Rules', function () {
         height: 6,
         features: [{ id: 'casks', name: 'the casks', x: 1, y: 1 }],
       });
+      await setDoc(doc(db, 'loom_worlds', 'world-001', 'statBlocks', 'gate-guard'), {
+        id: 'gate-guard',
+        name: 'Gate guard',
+        statBlock: { attributes: { STR: 12 } },
+      });
       await setDoc(doc(db, 'loom_world_state', 'world-001'), { worldClock: 0 });
       await setDoc(doc(db, 'loom_saves', SAVE_ID), {
         ownerUid: OWNER_UID,
@@ -1638,6 +1643,24 @@ describe('loom_* — Firestore Security Rules', function () {
       await assertSucceeds(
         getDoc(doc(builderDb, 'loom_worlds', 'world-001', 'battleMaps', 'bm_cellar'))
       );
+    });
+  });
+
+  // Named stat blocks (L-393): builders read them; nobody writes them but
+  // the server, and players never see them.
+  describe('loom_worlds statBlocks', function () {
+    it('lets a builder read them, a player not at all, and no client write them', async function () {
+      var builderDb = testEnv
+        .authenticatedContext('builder-001', { apps: ['cartographer'] })
+        .firestore();
+      var ref = (d) => doc(d, 'loom_worlds', 'world-001', 'statBlocks', 'gate-guard');
+      await assertSucceeds(getDoc(ref(builderDb)));
+      await assertFails(getDoc(ref(loomDb)));
+      await assertFails(setDoc(ref(builderDb), { id: 'gate-guard', name: 'Changed' }));
+      await assertFails(
+        setDoc(doc(builderDb, 'loom_worlds', 'world-001', 'statBlocks', 'new-one'), { name: 'x' })
+      );
+      await assertFails(setDoc(ref(loomDb), { name: 'x' }));
     });
   });
 

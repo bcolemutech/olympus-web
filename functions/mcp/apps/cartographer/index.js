@@ -10,6 +10,7 @@ const { townTools } = require('./town-tools');
 const { mapTools } = require('./map-tools');
 const { studioTools } = require('./studio-tools');
 const { systemTools } = require('./system-tools');
+const { statBlockTools } = require('./stat-block-tools');
 const artOf = require('../../../loom-canon/art');
 const { currentPath } = require('../../../studio/library');
 const { GRADES, BANDS } = require('../../../loom-canon/grading');
@@ -680,6 +681,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
         },
       },
       ...writeTools({ writer, systems, studio }),
+      // Named stat blocks and sheets in bulk (L-393).
+      ...statBlockTools({ writer, worldFor }),
       ...townTools({ writer }),
       ...mapTools({ writer }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
