@@ -647,7 +647,26 @@ exports.loomPlayTurn = onCall(async (request) => {
       (action.door !== undefined
         ? typeof action.door === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(action.door)
         : isCell(action.cell));
-    if (!bare && !door && !moving && !attacking && !resting && !tactic && !looking && !suggestion) {
+    // Taking a level offered at a long rest (L-843): the choices are checked
+    // by the advancement module.
+    const levelling =
+      typeof action === 'object' &&
+      action.verb === 'levelUp' &&
+      action.choices !== null &&
+      typeof action.choices === 'object' &&
+      !Array.isArray(action.choices) &&
+      JSON.stringify(action.choices).length <= 2000;
+    if (
+      !bare &&
+      !door &&
+      !moving &&
+      !attacking &&
+      !resting &&
+      !tactic &&
+      !looking &&
+      !suggestion &&
+      !levelling
+    ) {
       throw new HttpsError(
         'invalid-argument',
         'action must be { verb: "move", target: <place id> }, { verb: "move", cell: { x, y } }, ' +
@@ -657,7 +676,8 @@ exports.loomPlayTurn = onCall(async (request) => {
           '{ verb: "rest", rest: "short" | "long" }, { verb: "dash" | "dodge" | "withdraw" | "stand" }, ' +
           '{ verb: "ready", attack?, target? }, { verb: "use", feature: <feature id> }, ' +
           '{ verb: "look", cell: { x, y } | door: <door id> }, ' +
-          '{ verb: "suggested", text, act?: { verb, target? } }, { verb: "confirm" } ' +
+          '{ verb: "suggested", text, act?: { verb, target? } }, { verb: "confirm" }, ' +
+          '{ verb: "levelUp", choices: { attributes?, skills?, traits?, attacks? } } ' +
           'or { verb: "end-turn" }.'
       );
     }
@@ -679,53 +699,57 @@ exports.loomPlayTurn = onCall(async (request) => {
       ...(action
         ? {
             action:
-              action.verb === 'suggested'
-                ? {
-                    verb: 'suggested',
-                    text: action.text.trim(),
-                    ...(action.act
-                      ? {
-                          act: {
-                            verb: action.act.verb,
-                            ...(action.act.target ? { target: action.act.target } : {}),
-                          },
-                        }
-                      : {}),
-                  }
-                : action.verb === 'look'
-                  ? action.door !== undefined
-                    ? { verb: 'look', door: action.door }
-                    : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
-                  : action.verb === 'door'
-                    ? { verb: 'door', door: action.door, open: action.open }
-                    : action.verb === 'rest'
-                      ? { verb: 'rest', rest: action.rest }
-                      : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(action.verb)
+              action.verb === 'levelUp'
+                ? { verb: 'levelUp', choices: action.choices }
+                : action.verb === 'suggested'
+                  ? {
+                      verb: 'suggested',
+                      text: action.text.trim(),
+                      ...(action.act
                         ? {
-                            verb: action.verb,
-                            ...(action.attack ? { attack: action.attack } : {}),
-                            ...(action.target ? { target: action.target } : {}),
-                            ...(action.feature ? { feature: action.feature } : {}),
+                            act: {
+                              verb: action.act.verb,
+                              ...(action.act.target ? { target: action.act.target } : {}),
+                            },
                           }
-                        : action.verb === 'attack'
+                        : {}),
+                    }
+                  : action.verb === 'look'
+                    ? action.door !== undefined
+                      ? { verb: 'look', door: action.door }
+                      : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
+                    : action.verb === 'door'
+                      ? { verb: 'door', door: action.door, open: action.open }
+                      : action.verb === 'rest'
+                        ? { verb: 'rest', rest: action.rest }
+                        : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(
+                              action.verb
+                            )
                           ? {
-                              verb: 'attack',
-                              target: action.target,
+                              verb: action.verb,
                               ...(action.attack ? { attack: action.attack } : {}),
-                              ...(action.subdue ? { subdue: true } : {}),
+                              ...(action.target ? { target: action.target } : {}),
+                              ...(action.feature ? { feature: action.feature } : {}),
                             }
-                          : action.verb === 'end-turn' ||
-                              action.verb === 'continue' ||
-                              action.verb === 'confirm'
-                            ? { verb: action.verb }
-                            : action.point !== undefined
-                              ? {
-                                  verb: action.verb,
-                                  point: { x: action.point.x, y: action.point.y },
-                                }
-                              : typeof action.target === 'string'
-                                ? { verb: action.verb, target: action.target }
-                                : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
+                          : action.verb === 'attack'
+                            ? {
+                                verb: 'attack',
+                                target: action.target,
+                                ...(action.attack ? { attack: action.attack } : {}),
+                                ...(action.subdue ? { subdue: true } : {}),
+                              }
+                            : action.verb === 'end-turn' ||
+                                action.verb === 'continue' ||
+                                action.verb === 'confirm'
+                              ? { verb: action.verb }
+                              : action.point !== undefined
+                                ? {
+                                    verb: action.verb,
+                                    point: { x: action.point.x, y: action.point.y },
+                                  }
+                                : typeof action.target === 'string'
+                                  ? { verb: action.verb, target: action.target }
+                                  : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
           }
         : { actionText: actionText.trim() }),
     });

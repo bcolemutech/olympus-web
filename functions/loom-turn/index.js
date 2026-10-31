@@ -29,6 +29,8 @@ const { systemOf } = require('../loom-canon/checks');
 const { withAp } = require('../loom-canon/sheets');
 const apRules = require('../loom-canon/ap');
 const combat = require('../loom-modules/combat');
+const levelRules = require('../loom-modules/advancement/level-up');
+const levelUps = require('./level-up');
 const { FieldValue } = require('firebase-admin/firestore');
 
 /**
@@ -173,6 +175,11 @@ async function runTurnPipeline(params) {
   }
 
   if (confirming) return confirmTurn(params, { save, saveRef, canonWorld }, pending);
+
+  // Taking a level offered at a long rest (L-843): no model, no time.
+  if (action && action.verb === 'levelUp') {
+    return takeLevel({ saveRef, canonWorld }, action.choices);
+  }
 
   // "What's here?" on a battle map (#672): free, unrecorded.
   if (action && action.verb === 'look') {
@@ -628,7 +635,7 @@ async function runTurnPipeline(params) {
   });
   const { narration, entityRefs, inventedEntities, suggestedActions } = told;
 
-  return commitTurn({
+  const answer = await commitTurn({
     db,
     saveRef,
     worldStateRef,
@@ -645,6 +652,69 @@ async function runTurnPipeline(params) {
     // A story moment NARRATE named (L-842), paid once by the rules.
     moment: told.moment || null,
   });
+  return withSuggestion(answer, { saveRef, canonWorld });
+}
+
+// A level offered at a long rest (L-843), with the GM's suggestion: read
+// from the save as the rest left it.
+async function withSuggestion(answer, { saveRef, canonWorld }) {
+  if (!answer || !answer.levelUp) return answer;
+  const fresh = withAp((await saveRef.get()).data(), systemOf(canonWorld), canonWorld);
+  const offer = await levelUps.offerWithSuggestion(systemOf(canonWorld), canonWorld, fresh);
+  return { ...answer, levelUp: offer || answer.levelUp };
+}
+
+const LEVEL_NOT_OFFERED = 'A level is taken at a long rest: rest long with one ready to take it.';
+
+/**
+ * The player's levelUp (L-843; advancement LV3, LV4): the choices checked
+ * like creation's and the level taken, its grants applied; never in a fight,
+ * and only as offered at the last long rest. A second level ready is offered
+ * straight after. `{ narration, levelUp?, refused?, errors? }`.
+ */
+async function takeLevel({ saveRef, canonWorld }, choices) {
+  const system = systemOf(canonWorld);
+  const result = await saveRef.firestore.runTransaction(async (transaction) => {
+    const snap = await transaction.get(saveRef);
+    const save = withAp(snap.data(), system, canonWorld);
+    if (save.fight) return { refused: "You can't take a level in a fight." };
+    if (!save.levelOffer) return { refused: LEVEL_NOT_OFFERED };
+    const sheet = save.character && save.character.sheet;
+    const taken = levelRules.take(system, sheet, choices, canonWorld);
+    if (taken.errors.length) return { refused: taken.errors.join(' '), errors: taken.errors };
+    const next = levelRules.offerOf(system, taken.sheet, canonWorld);
+    transaction.update(saveRef, {
+      'character.sheet': taken.sheet,
+      levelOffer: next ? true : FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      level: taken.sheet.level,
+      save: { ...save, character: { ...save.character, sheet: taken.sheet } },
+      next,
+    };
+  });
+  const time = clock.timeView(clock.timeOf((await saveRef.get()).data()));
+  if (result.refused) {
+    return {
+      narration: result.refused,
+      suggestedActions: [],
+      time,
+      refused: true,
+      ...(result.errors ? { errors: result.errors } : {}),
+    };
+  }
+  const word = (system.words && system.words.level) || 'level';
+  const levelUp = result.next
+    ? await levelUps.offerWithSuggestion(system, canonWorld, result.save)
+    : null;
+  return {
+    narration: `You are now ${word} ${result.level}.`,
+    suggestedActions: [],
+    time,
+    level: result.level,
+    ...(levelUp ? { levelUp } : {}),
+  };
 }
 
 /**

@@ -12,6 +12,8 @@ const clock = require('../loom-canon/clock');
 const effects = require('../loom-canon/effects');
 const { systemOf } = require('../loom-canon/checks');
 const earning = require('../loom-modules/advancement/earn');
+const advancement = require('../loom-modules/advancement');
+const levelUp = require('../loom-modules/advancement/level-up');
 
 /**
  * Stage 5 — COMMIT (design doc §5, §8).
@@ -128,6 +130,21 @@ async function commitTurn(params) {
       : null;
     if (earned) earning.apply(systemOf(canonWorld), save, earned);
     const awards = earned ? earned.awards : [];
+    // A level ready at a long rest (L-843; advancement LV3): offered now, and
+    // kept for the player's levelUp until any other turn; never in a fight.
+    const rested =
+      resolution.rest && resolution.rest.kind === 'long' && !resolution.rest.interrupted;
+    const sheetNow = save.character && save.character.sheet;
+    const offer =
+      canonWorld && rested && !save.fight && sheetNow
+        ? levelUp.offerOf(
+            systemOf(canonWorld),
+            advancement.sheetWith(systemOf(canonWorld), sheetNow, canonWorld),
+            canonWorld
+          )
+        : null;
+    if (offer) save.levelOffer = true;
+    else delete save.levelOffer;
     // An older save gets its clock on its next turn (L-371): Day 1, 08:00.
     if (!clock.isTime(save.time)) save.time = clock.START;
     // Conditions whose game time has run out by now end (L-815): a journey
@@ -211,6 +228,9 @@ async function commitTurn(params) {
         ...(resolution.roll ? { roll: resolution.roll } : {}),
         // Everyone else's turns, to play out on the map (L-828; combat UI3).
         ...(resolution.playback ? { turns: resolution.playback } : {}),
+        // A level to take, offered at a long rest (L-843; the GM's suggestion
+        // is added after, ./index.js).
+        ...(offer ? { levelUp: offer } : {}),
         // Experience earned, for the journal (L-842; shown by L-845).
         ...(awards.length ? { awards } : {}),
         // The AP kept for reactions and what's left of it, for the turn bar (L-837).
