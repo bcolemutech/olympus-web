@@ -137,6 +137,9 @@ beforeAll(async () => {
   await new Promise((resolve) => {
     server = app.listen(0, '127.0.0.1', resolve);
   });
+  // Building a big test image takes seconds between calls: past Node's 5 s
+  // keep-alive the server closes the client's socket as it sends (ECONNRESET).
+  server.keepAliveTimeout = 60000;
   oauthStore._debug.grants.set('g', {
     grantId: 'g',
     uid: 'builder-001',
@@ -727,6 +730,50 @@ describe('set_art: Claude draws the art, as SVG (L-356)', () => {
     });
     expect(seen.structuredContent).toMatchObject({ art: true });
     expect(seen.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+  });
+
+  test('8-digit hex colours (#744): stored as rgba(), drawn right after set_art and later', async () => {
+    const hexy =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8">' +
+      '<defs><linearGradient id="fade"><stop offset="0" stop-color="#ff000080"/>' +
+      '<stop offset="1" stop-color="#0000ffcc"/></linearGradient></defs>' +
+      '<rect width="12" height="8" fill="#6d5a45cc"/>' +
+      '<rect x="2" y="1" width="4" height="2" style="fill:#3b2a1d80;stroke:#fff8"/>' +
+      '<rect x="7" y="4" width="4" height="3" fill="url(#fade)"/></svg>';
+    const made = await ok('set_art', {
+      worldId: W,
+      of: 'battleMap',
+      id: 'bm_the-gull-anchor-ground-floor',
+      svg: hexy,
+    });
+    // Stored with the colours as rgba(), the references untouched.
+    const stored = await libraryImage(made.art.imageId);
+    const [text] = await bucket.file(stored.versions[0].path).download();
+    expect(text.toString()).not.toMatch(/#[0-9a-f]{8}\b|#fff8\b/i);
+    expect(text.toString()).toContain('fill="rgba(109,90,69,0.8)"');
+    expect(text.toString()).toContain('stroke:rgba(255,255,255,0.533)');
+    expect(text.toString()).toContain('fill="url(#fade)"');
+    // Drawn at once, and again on a later view.
+    for (let i = 0; i < 2; i++) {
+      const seen = await call('view_image', {
+        worldId: W,
+        of: 'battleMap',
+        id: 'bm_the-gull-anchor-ground-floor',
+      });
+      expect(seen.isError).toBeFalsy();
+      expect(seen.structuredContent).toMatchObject({ art: true });
+    }
+  });
+
+  test('art stored before, with 8-digit hex, is drawn too; a bad drawing is a clear error', async () => {
+    const { rasterSvg } = require('../functions/mcp/apps/cartographer/svg-raster');
+    const old =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8"><rect width="12" height="8" fill="#6d5a45cc"/></svg>';
+    const png = await rasterSvg(old, { maxSide: 120 });
+    expect(png.subarray(1, 4).toString()).toBe('PNG');
+    await expect(rasterSvg(old, { maxSide: 120, timeLimitMs: 1 })).rejects.toThrow(
+      /took more than 0 s to draw: simplify it/
+    );
   });
 
   test('a shape that isn’t the grid’s is stretched, with a warning; replacing frees the old', async () => {

@@ -16,6 +16,26 @@
 // draws art as an image, where browsers run no script anyway.
 
 const MAX_SVG_BYTES = 1024 * 1024;
+
+// Colours with alpha in hex (#rrggbbaa, #rgba), as a colour property's value
+// or a style's: written as rgba() instead (#744), which every renderer reads.
+const HEX_ALPHA =
+  /((?:fill|stroke|stop-color|flood-color|lighting-color|color)\s*(?:=\s*["']\s*|:\s*))#([0-9a-f]{8}|[0-9a-f]{4})(?![0-9a-f])/gi;
+
+/** An SVG with its #rrggbbaa and #rgba colours written as rgba() (#744). */
+function normaliseColours(svg) {
+  return svg.replace(HEX_ALPHA, (match, before, hex) => {
+    const full =
+      hex.length === 4
+        ? hex
+            .split('')
+            .map((c) => c + c)
+            .join('')
+        : hex;
+    const [r, g, b, a] = [0, 2, 4, 6].map((i) => parseInt(full.slice(i, i + 2), 16));
+    return `${before}rgba(${r},${g},${b},${Math.round((a / 255) * 1000) / 1000})`;
+  });
+}
 const MAX_SIDE = 100000;
 
 const REFUSED = [
@@ -81,7 +101,7 @@ function checkSvg(input) {
     throw new Error('it needs a viewBox (or a width and height) to give it a size');
   }
   if (width > MAX_SIDE || height > MAX_SIDE) throw new Error('its size is too large');
-  return { svg, width, height };
+  return { svg: normaliseColours(svg), width, height };
 }
 
 /** Whether stored art bytes are SVG (rather than PNG). */
@@ -90,4 +110,4 @@ function isSvg(bytes) {
   return head.startsWith('<');
 }
 
-module.exports = { MAX_SVG_BYTES, checkSvg, isSvg };
+module.exports = { MAX_SVG_BYTES, checkSvg, isSvg, normaliseColours };

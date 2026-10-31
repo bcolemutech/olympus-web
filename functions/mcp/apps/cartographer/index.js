@@ -17,7 +17,8 @@ const { GRADES, BANDS } = require('../../../loom-canon/grading');
 const { workList } = require('./work');
 const views = require('./views');
 const images = require('./images');
-const { MAX_SVG_BYTES } = require('../../../cartographer/svg');
+const { MAX_SVG_BYTES, isSvg } = require('../../../cartographer/svg');
+const { rasterSvg } = require('./svg-raster');
 const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
@@ -507,10 +508,21 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           // Art is a library image (its current version, L-704) or an older
           // Storage path.
           const load = async (piece) => {
+            let bytes;
             try {
-              return await art.load(piece.path || currentPath(piece.imageId));
+              bytes = await art.load(piece.path || currentPath(piece.imageId));
             } catch {
               throw new ToolError('Its image could not be read from storage.');
+            }
+            // SVG is drawn in a worker, with a time limit (#744): a drawing
+            // that fails says so instead of the request failing.
+            if (!isSvg(bytes)) return bytes;
+            try {
+              return await rasterSvg(Buffer.from(bytes).toString('utf8'), {
+                maxSide: images.MAX_SIDE,
+              });
+            } catch (err) {
+              throw new ToolError(`The image can't be shown: ${err.message}.`);
             }
           };
           const needId = () => {
