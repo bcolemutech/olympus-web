@@ -3,7 +3,7 @@
 const { PNG } = require('pngjs');
 const jpeg = require('jpeg-js');
 const { pngDimensions } = require('../../../cartographer/service');
-const { isSvg } = require('../../../cartographer/svg');
+const { isSvg, normaliseColours } = require('../../../cartographer/svg');
 const mapAreas = require('../../../loom-canon/map-areas');
 
 // Images Claude can see (planning/the-loom-layered-worlds.md §9; L-355 /
@@ -254,10 +254,12 @@ function decode(art) {
     const { Resvg } = require('@resvg/resvg-js');
     let rendered;
     try {
-      const probe = new Resvg(bytes.toString('utf8'));
+      // Hex colours with alpha as rgba() (#744), for any renderer.
+      const text = normaliseColours(bytes.toString('utf8'));
+      const probe = new Resvg(text);
       const long = Math.max(probe.width, probe.height) || 1;
       const side = (n) => Math.max(1, Math.round((n / long) * MAX_SIDE));
-      rendered = new Resvg(bytes.toString('utf8'), {
+      rendered = new Resvg(text, {
         fitTo:
           probe.width >= probe.height
             ? { mode: 'width', value: side(probe.width) }
