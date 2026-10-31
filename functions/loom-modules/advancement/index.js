@@ -204,7 +204,13 @@ function rulesView(system, world = null) {
     };
   }
   if (s.use) {
-    out.use = { skills: s.use.skills, attacks: s.use.attacks, maxRank: s.use.maxRank };
+    out.use = {
+      skills: s.use.skills,
+      attacks: s.use.attacks,
+      maxRank: s.use.maxRank,
+      // What each rank takes to rise, for the rules reference (L-845).
+      thresholds: [0, 1, 2, 3].map((rank) => ({ rank, uses: thresholdFor(system, rank) })),
+    };
   }
   return out;
 }

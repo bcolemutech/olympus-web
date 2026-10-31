@@ -6,8 +6,8 @@
   // loomGetMap sends it (`rules`, functions/loom-canon/checks.js rulesOf),
   // in the system's own words: the check and what it reads, the difficulty
   // ladder, the degrees and when each happens, the attributes, the skills,
-  // action points (L-837: the pool, the costs and the tiers) and what the
-  // sheet tracks. Escape or Close shuts it.
+  // action points (L-837: the pool, the costs and the tiers), how characters
+  // grow (L-845) and what the sheet tracks. Escape or Close shuts it.
 
   var Loom = window.Loom;
   var ui = Loom.ui;
@@ -96,6 +96,57 @@
           })}
         </tbody>
       </table>
+    <//>`;
+  }
+
+  // How characters grow (L-845; advancement §4.6): what earns experience,
+  // what each level takes, and what improves by use; or that they don't,
+  // with advancement off.
+  function AdvancementSection(props) {
+    var a = props.advancement;
+    var word = props.word;
+    if (!a) return null;
+    if (a.off) {
+      return html`<${Section} title="Growing">
+        <p id="loom-rules-advancement">Characters don't grow in this world.</p>
+      <//>`;
+    }
+    if (!a.experience && !a.use) return null;
+    var x = a.experience;
+    return html`<${Section} title="Growing">
+      <div id="loom-rules-advancement">
+        ${x &&
+        html`<p>
+            Experience comes from overcoming foes by any means (more for those above your
+            ${' ' + word.toLowerCase()}) and from moments that matter in the
+            story${x.story
+              ? ' (' + x.story.small + ', ' + x.story.notable + ' or ' + x.story.major + ')'
+              : ''}.
+            A ${word.toLowerCase()} earned is taken at your next long rest.
+          </p>
+          <table class="loom-rules-table" id="loom-rules-curve">
+            <tbody>
+              ${x.curve.slice(1, 6).map(function (step) {
+                return html`<tr key=${step.level}>
+                  <th scope="row">${word} ${step.level}</th>
+                  <td>${step.xp} experience</td>
+                </tr>`;
+              })}
+            </tbody>
+          </table>`}
+        ${a.use &&
+        html`<p id="loom-rules-use">
+          ${[a.use.skills && 'Skills', a.use.attacks && 'attacks'].filter(Boolean).join(' and ')}
+          improve by use: each success when something is at stake counts, and at a long rest one
+          that has enough rises a rank
+          (${a.use.thresholds
+            .map(function (t) {
+              return t.uses + ' from ' + t.rank;
+            })
+            .join(', ')};
+          attacks up to ${a.use.maxRank}).
+        </p>`}
+      </div>
     <//>`;
   }
 
@@ -201,6 +252,7 @@
             </ul>
           <//>`}
           <${ApSection} ap=${rules.ap} />
+          <${AdvancementSection} advancement=${rules.advancement} word=${level.name} />
           <${Section} title="Your sheet">
             <p>
               ${rules.resources
