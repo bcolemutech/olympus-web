@@ -81,7 +81,7 @@ async function intake(params) {
   // characters, and everyone where the save has them.
   const canonWorld = combat.figures.withFigures(loaded, stored);
   // The character's pool of action points, worked out for the world's system (L-811; L-832).
-  const save = withAp(stored, systemOf(canonWorld));
+  const save = withAp(stored, systemOf(canonWorld), canonWorld);
 
   const worldStateRef = db.collection('loom_world_state').doc(worldId);
   const worldStateSnap = await worldStateRef.get();
@@ -237,7 +237,11 @@ async function runTurnPipeline(params) {
   if (action && (action.cell || action.verb === 'continue' || action.verb === 'door')) {
     const target = action.cell ? { cell: action.cell } : { plan: true };
     const step = await db.runTransaction(async (transaction) => {
-      const fresh = withAp((await transaction.get(saveRef)).data(), systemOf(canonWorld));
+      const fresh = withAp(
+        (await transaction.get(saveRef)).data(),
+        systemOf(canonWorld),
+        canonWorld
+      );
       // What the save has seen on its map: the ground it may walk (L-635),
       // and the record its new sight is added to (L-632).
       const found = fresh.mapId ? await recordOf(transaction, saveRef, fresh.mapId) : null;
@@ -694,7 +698,7 @@ async function townStep(params, target) {
   const { db, uid, worldId, saveId } = params;
   const { saveRef, canonWorld } = await intake({ db, uid, worldId, saveId });
   const step = await db.runTransaction(async (transaction) => {
-    const fresh = withAp((await transaction.get(saveRef)).data(), systemOf(canonWorld));
+    const fresh = withAp((await transaction.get(saveRef)).data(), systemOf(canonWorld), canonWorld);
     const planned = planTownStep(canonWorld, fresh, target);
     // What it sees along the way, added to what it has seen of the town
     // (L-671), read before the transaction's writes.

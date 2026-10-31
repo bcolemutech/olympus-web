@@ -149,7 +149,30 @@ const FANTASY = {
     values: [15, 14, 13, 12, 10, 8],
     skills: { trained: 4, rank: 2 },
   },
-  advancement: {},
+  // Advancement (L-841; planning/advancement.md §4.1): experience and levels
+  // only. Each level needs 50 × level × (level − 1) in all (100 for level 2,
+  // 19,000 for 20); a foe is worth 25, 10 more or less for each level it is
+  // above or below yours (5 at least); a skill rank every level, two
+  // attribute points as well every fourth, no skill past 10.
+  advancement: {
+    experience: {
+      curve: '50 * level * (level - 1)',
+      foe: 'max(5, 25 + 10 * (foeLevel - level))',
+      story: { small: 10, notable: 25, major: 50 },
+      quest: 100,
+      grants: {
+        every: { skillRanks: 1 },
+        at: {
+          4: { skillRanks: 1, attributePoints: 2 },
+          8: { skillRanks: 1, attributePoints: 2 },
+          12: { skillRanks: 1, attributePoints: 2 },
+          16: { skillRanks: 1, attributePoints: 2 },
+          20: { skillRanks: 1, attributePoints: 2 },
+        },
+      },
+      skillMax: 10,
+    },
+  },
   // What AP pays for (L-831; planning/action-points.md CT1): the default
   // costs and tiers, no limit on what's kept.
   ap: { costs: { ...AP_COSTS }, tiers: { ...AP_TIERS }, keepLimit: null },
@@ -375,7 +398,29 @@ const SCIFI = {
     costs: { 1: 0, 2: 1, 3: 2, 4: 4, 5: 6 },
     skills: { trained: 3, rank: 1 },
   },
-  advancement: {},
+  // Advancement (L-841; planning/advancement.md §4.1): both parts.
+  // Experience raises Rank: each needs 100 × rank × (rank − 1) in all (200
+  // for Rank 2); a foe is worth 40, 20 more or less for each Rank it is above
+  // or below yours (10 at least); an attribute point every third Rank.
+  // Skills and attacks improve by use: 3 × (rank + 1) successes with stakes
+  // to rise, skills to 5, attacks to 3.
+  advancement: {
+    experience: {
+      curve: '100 * level * (level - 1)',
+      foe: 'max(10, 40 + 20 * (foeLevel - level))',
+      story: { small: 20, notable: 50, major: 100 },
+      quest: 200,
+      grants: {
+        at: {
+          3: { attributePoints: 1 },
+          6: { attributePoints: 1 },
+          9: { attributePoints: 1 },
+        },
+      },
+      skillMax: 5,
+    },
+    use: { threshold: '3 * (rank + 1)', skills: true, attacks: true, maxRank: 3 },
+  },
   // What AP pays for (L-831; planning/action-points.md CT1): the default
   // costs and tiers, no limit on what's kept.
   ap: { costs: { ...AP_COSTS }, tiers: { ...AP_TIERS }, keepLimit: null },

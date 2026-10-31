@@ -38,7 +38,7 @@ const FORMULAS =
 const SHAPE =
   'A system is an object: id (lowercase letters, digits and dashes), name, credits ' +
   '([{ source, licence, url? }]: openly licensed text only, credited), words ({ health: ' +
-  '"Hull" }: names the Loom shows), sheet, checks, creation, advancement ({} for now), ' +
+  '"Hull" }: names the Loom shows), sheet, checks, creation, advancement ({ experience?: { curve, foe, story, quest, grants, skillMax }, use?: { threshold, skills, attacks, maxRank } }: how characters grow), ' +
   'modules ({}: none are built yet) and gmNotes (tone and pacing for the narrator). ' +
   'sheet: attributes [{ id, name, min, max, modifier }] and resources [{ id, name, max }] ' +
   '(at least one of each), level { min, max }, ap (a formula: action points a turn, from ' +

@@ -31,7 +31,9 @@
  *       derived:    [{ id, name, formula }]              (with 'derived')
  *     checks:  { formula, degrees: { [degree]: formula }, ladder: [{ name, value }] }
  *     creation: { method: 'array' | 'pointBuy' | 'rolling', ...its settings }
- *     advancement: {}                    empty for now (L-830)
+ *     advancement: { experience?, use? } how characters grow (L-841,
+ *                                        ../loom-modules/advancement/): each
+ *                                        part on when given; {} is off
  *     modules: { [module]: settings }    combat (L-821, ../loom-modules/combat/);
  *                                        others are kept, unused, with a warning
  *     tables:  { [name]: [{ min?, max?, value }] }   lookups for table(name, x)
@@ -78,6 +80,8 @@ const apRules = require('./ap');
 
 // The modules built (MD1; ../loom-modules/): each checks its own settings.
 const MODULES = { combat: require('../loom-modules/combat/settings') };
+// Advancement is the system's own `advancement`, not one of its modules (L-841).
+const advancement = require('../loom-modules/advancement');
 
 // Whether a formula rolls dice (a modifier holds while it lasts, so it can't).
 function rollsDice(text) {
@@ -534,8 +538,10 @@ function validateSystem(given) {
   } else if (!isObject(s.creation) || !CREATION_METHODS.includes(s.creation.method)) {
     errors.push(`creation.method must be one of ${CREATION_METHODS.join(', ')}.`);
   }
+  // How characters grow (L-841; ../loom-modules/advancement/).
   s.advancement = s.advancement === undefined ? {} : s.advancement;
-  if (!isObject(s.advancement)) errors.push('advancement must be an object (empty for now).');
+  if (!errors.length) advancement.check(s.advancement, { system: s, errors, warnings });
+  else if (!isObject(s.advancement)) errors.push('advancement must be { experience?, use? }.');
   // What AP pays for (L-831; ./ap.js).
   apRules.check(s, { errors, warnings });
   s.modules = s.modules === undefined ? {} : s.modules;

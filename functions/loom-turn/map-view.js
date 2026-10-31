@@ -20,6 +20,7 @@ const journeys = require('../loom-canon/journeys');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
 const apRules = require('../loom-canon/ap');
+const advancement = require('../loom-modules/advancement');
 const sheets = require('../loom-canon/sheets');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
@@ -140,6 +141,8 @@ function mapView(canonWorld, save, record, townRecord) {
       ...checks.rulesOf(checks.systemOf(canonWorld)),
       // Its action points: the pool, each cost and the tiers (L-837).
       ap: apRules.rulesView(checks.systemOf(canonWorld)),
+      // How characters grow here (L-841), for the rules reference (L-845).
+      advancement: advancement.rulesView(checks.systemOf(canonWorld), canonWorld),
     },
     // The sheet, in the system's words, every number worked out (L-814; CS8).
     character: sheets.characterView(

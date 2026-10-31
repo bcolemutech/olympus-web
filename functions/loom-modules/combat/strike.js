@@ -71,6 +71,9 @@ function withTerms(tree, terms, { values, labels, system, dice, prefix }) {
   return out;
 }
 
+// An attack's rank (L-841): given by attacksOf from the sheet, 0 otherwise.
+const rankOf = (attack) => (attack && Number.isInteger(attack.rank) ? attack.rank : 0);
+
 /**
  * The attack's roll (AT1): its formula on the attacker's sheet, with their
  * conditions and, striking to subdue with a lethal attack, the system's
@@ -79,6 +82,8 @@ function withTerms(tree, terms, { values, labels, system, dice, prefix }) {
  */
 function rollAttack(system, { sheet, attack, subdue = false, bonus = [], dice }) {
   const { values, mods, labels } = valuesOf(system, sheet, dice);
+  values.rank = rankOf(attack); // its own rank (L-841)
+  labels.rank = 'Rank';
   let tree = checks.withConditions(String(attack.attack), mods, values, labels);
   const penalty = settingsOf(system).subduePenalty;
   if (subdue && attack.lethal !== false && penalty !== null) {
@@ -247,6 +252,8 @@ function takesOf(system, sheet, type) {
 function rollDamage(system, { sheet, attack, degree, extra, target, dice }) {
   const s = settingsOf(system).attack;
   const { values, labels } = valuesOf(system, sheet, dice);
+  values.rank = rankOf(attack); // its own rank (L-841)
+  labels.rank = 'Rank';
   values['@extra'] = extra;
   labels['@extra'] = extra === 1 ? 'Extra success' : 'Extra successes';
   const tree = damageTree(attack.damage, {

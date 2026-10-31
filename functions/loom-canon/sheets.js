@@ -19,6 +19,12 @@
  *                                            ../loom-modules/combat/attacks.js);
  *                                            a player's without any has the
  *                                            system's starting attacks
+ *     xp?:        number                     experience earned (L-841;
+ *                                            ../loom-modules/advancement/), its
+ *                                            level's total on a sheet from before
+ *     levelsReady number                     levels earned, not taken: worked out
+ *     uses?:      { skills, attacks }        successes counted toward rising
+ *     attackRanks? { [attackId]: rank }      each attack's rank, 0 when not listed
  *     speed:      number                     action points a turn (L-831), worked
  *                                            out: see apFor; a turn's movement
  *                                            until turns run on AP (L-832)
@@ -42,6 +48,8 @@ const formula = require('./formula');
 const clock = require('./clock');
 const conditions = require('./conditions');
 const attacks = require('../loom-modules/combat/attacks');
+// Required where used: it reads attacks, which read this.
+const advancement = () => require('../loom-modules/advancement');
 
 const DEFAULT_AP = 20; // as loom-models' (L-611; L-831)
 const MAX_AP = 1000;
@@ -148,21 +156,24 @@ function apFor(system, sheet) {
  * A sheet with its pool of action points worked out (`ap`, L-832), in place
  * of the `speed` a sheet from before AP kept.
  */
-function withPool(system, sheet) {
+function withPool(system, sheet, world = null) {
   const { speed, ...rest } = sheet;
   void speed;
-  return { ...rest, ap: apFor(system, sheet) };
+  // What advancement keeps (L-841): xp (its level's total on a sheet from
+  // before), uses, attack ranks, and the levels ready, worked out.
+  return { ...advancement().sheetWith(system, rest, world), ap: apFor(system, sheet) };
 }
 
 /**
  * A save with its character's pool of action points worked out for its
- * world's system: what every reader of the save sees (apOf). A save without
- * a sheet is as it was.
+ * world's system, and what advancement keeps (L-841; `world` for its switch):
+ * what every reader of the save sees (apOf). A save without a sheet is as it
+ * was.
  */
-function withAp(save, system) {
+function withAp(save, system, world = null) {
   const sheet = sheetOf(save);
   if (!sheet || !save.character) return save;
-  return { ...save, character: { ...save.character, sheet: withPool(system, sheet) } };
+  return { ...save, character: { ...save.character, sheet: withPool(system, sheet, world) } };
 }
 
 /**
@@ -277,6 +288,8 @@ function validateSheet(system, sheet) {
   }
   // Attacks (L-822): optional; checked against the system's combat settings.
   if (sheet.attacks !== undefined) errors.push(...attacks.validateAttacks(system, sheet.attacks));
+  // What advancement keeps (L-841): xp, uses and attack ranks.
+  errors.push(...advancement().validateSheetFields(system, sheet));
   if (!Array.isArray(sheet.conditions)) errors.push('conditions must be a list.');
   else {
     if (sheet.conditions.length > MAX_CONDITIONS) errors.push('Too many conditions.');
@@ -463,7 +476,13 @@ function attackView(system, a, values) {
     try {
       return Math.max(
         1,
-        Math.trunc(formula.evaluate(String(a.damage), { values, system, dice }).total)
+        Math.trunc(
+          formula.evaluate(String(a.damage), {
+            values: { ...values, rank: Number.isInteger(a.rank) ? a.rank : 0 },
+            system,
+            dice,
+          }).total
+        )
       );
     } catch {
       return null;

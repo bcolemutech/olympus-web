@@ -18,6 +18,9 @@
  *                      system's attack cost (L-831; a dagger 7, a greataxe 14)
  *     onHit?           an effect put on whoever it hits (L-815: { condition,
  *                      duration, save? })
+ *     (rank            not set on the attack: the sheet's `attackRanks` give
+ *                      it, 0 by default, read as `rank` in `attack` and
+ *                      `damage` (L-841; ../advancement/))
  *     area?            { shape, radius | length | size, width? }: an area
  *                      attack, at the target's square (burst, square) or out
  *                      from the attacker towards it (cone, line); everyone
@@ -120,7 +123,8 @@ function validateAttack(system, attack, where = 'attack') {
       errors.push(`${where}.${part} must be a formula (at most ${MAX_FORMULA} characters).`);
       continue;
     }
-    const checked = formula.check(value, { system });
+    // An attack's own rank (L-841; ../advancement/), 0 until it improves.
+    const checked = formula.check(value, { system, names: ['rank'] });
     checked.errors.forEach((e) => errors.push(`${where}.${part}: ${e}`));
     if (!checked.errors.length && checked.type === 'bool') {
       errors.push(`${where}.${part} must come to a number, not a comparison.`);
@@ -195,7 +199,8 @@ function validateAttacks(system, list, where = 'attacks') {
  * A fighter's attacks (AT4): their sheet's own, or, for a player character
  * (`player`) whose sheet lists none, the system's starting attacks; with the
  * system's unarmed attack unless one of its id is listed. Each with `lethal`
- * filled in.
+ * filled in, and its `rank` from the sheet's `attackRanks` (L-841: 0 when
+ * not listed), read as `rank` in its formulas.
  */
 function attacksOf(system, sheet, { player = false } = {}) {
   const own = sheet && Array.isArray(sheet.attacks) ? sheet.attacks : null;
@@ -203,7 +208,12 @@ function attacksOf(system, sheet, { player = false } = {}) {
   const list = (own || (player ? starting : [])).slice();
   const unarmed = unarmedOf(system);
   if (!list.some((a) => a.id === unarmed.id)) list.push(unarmed);
-  return list.map((a) => ({ ...a, lethal: a.lethal !== false }));
+  const ranks = (sheet && sheet.attackRanks) || {};
+  return list.map((a) => ({
+    ...a,
+    lethal: a.lethal !== false,
+    rank: Number.isInteger(ranks[a.id]) ? ranks[a.id] : 0,
+  }));
 }
 
 /** One of a fighter's attacks by id, or their first (the unarmed one last). */

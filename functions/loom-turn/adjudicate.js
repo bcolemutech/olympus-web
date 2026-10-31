@@ -1146,7 +1146,8 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
   const leaving = lastSheet
     ? sheets.withAp(
         { ...characterState, character: { ...characterState.character, sheet: lastSheet.value } },
-        checks.systemOf(canonWorld)
+        checks.systemOf(canonWorld),
+        canonWorld
       )
     : characterState;
   const next = nextTurnState(leaving);

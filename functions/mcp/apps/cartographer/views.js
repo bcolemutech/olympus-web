@@ -244,6 +244,8 @@ function worldOverview(meta, world) {
       : { id: world.systemId, missing: true },
     // Whether a character down with no one to help dies (L-827).
     death: require('../../../loom-modules/combat/down').deathOf(world),
+    // Whether characters grow here (L-841): false when the world turns it off.
+    advancement: require('../../../loom-modules/advancement').isOn(world),
     readyToPublish: missing.length === 0,
     ...(missing.length ? { missing } : {}),
     map: {
