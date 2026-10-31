@@ -21,6 +21,9 @@ const { MAX_SVG_BYTES } = require('../../../cartographer/svg');
 const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
+const sightOf = require('../../../loom-canon/sight');
+const figures = require('../../../loom-modules/combat/figures');
+const { systemOf } = require('../../../loom-canon/checks');
 
 // The live characters whose position is at `level` and passes `keep`, as
 // view_image draws them (L-684): [{ id, name, x, y, place? }].
@@ -454,8 +457,10 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'See an image as players will: a battle map, a town, or the world map, returned as an ' +
           'image you can look at (scaled to at most 1568 px on the long side). Use it to check ' +
           'that what you place lines up with the art. Battle maps come with their grid (every ' +
-          'fifth line labelled), numbered markers for entries, exits, features and the people ' +
-          'standing on it, and its areas outlined with their names; towns with numbered markers at their places’ positions, the people ' +
+          'fifth line labelled), numbered markers for entries, exits, features, the people ' +
+          'standing on it and its figures (coloured by side: red hostile, green party, yellow ' +
+          'wary, teal neutral; sightFrom an entry shades what can’t be seen from it), and its ' +
+          'areas outlined with their names; towns with numbered markers at their places’ positions, the people ' +
           'about town at their town points, their links, the 0–1000 grid, and their ground ' +
           '(set_town_ground: buildings, water, walls and crossings, see-through over the art); ' +
           'the world map with ' +
@@ -469,6 +474,14 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           id: entityId('battle map or settlement', 'list_battle_maps or find_locations')
             .optional()
             .describe('The battle map, or the settlement (for its town). Not for the world map.'),
+          sightFrom: z
+            .string()
+            .regex(/^[A-Za-z0-9_-]{1,40}$/)
+            .optional()
+            .describe(
+              'A battle map’s entry id: shade what can’t be seen from it (L-394), as a player ' +
+                'arriving there sees it, closed doors shut.'
+            ),
         },
         annotations: readOnly,
         handler: async (ctx, args) => {
@@ -499,19 +512,49 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
                 'battle map',
                 'Use list_battle_maps to see them.'
               );
-              // Who stands on it (L-684), at whichever place's copy.
-              const people = maps.standingOn(world, map).map(({ character, host, cell }) => ({
-                id: character.id,
-                name: character.name,
-                x: cell.x,
-                y: cell.y,
-                at: { id: host.id, name: host.name },
-              }));
+              // Who stands on it (L-684), at whichever place's copy, and its
+              // figures (L-394), each with their side.
+              const people = maps
+                .standingOn(world, map)
+                .map(({ character, host, cell }) => ({
+                  id: character.id,
+                  name: character.name,
+                  x: cell.x,
+                  y: cell.y,
+                  side: character.side || 'neutral',
+                  at: { id: host.id, name: host.name },
+                }))
+                .concat(
+                  (map.figures || []).flatMap((g) =>
+                    figures.instancesOf(systemOf(world), g, world).map((f) => ({
+                      id: f.id,
+                      name: f.name,
+                      x: f.cell.x,
+                      y: f.cell.y,
+                      side: f.side,
+                      figure: g.id,
+                    }))
+                  )
+                );
+              // What can be seen from an entry (L-394).
+              let sight = null;
+              if (args.sightFrom) {
+                const entry = (map.entries || []).find((e) => e.id === args.sightFrom);
+                if (!entry) {
+                  throw new ToolError(
+                    `${map.name} has no entry "${args.sightFrom}" (` +
+                      ((map.entries || []).map((e) => e.id).join(', ') || 'none') +
+                      ').'
+                  );
+                }
+                sight = { from: entry.id, seen: sightOf.inSight(map, entry, {}) };
+              }
               const mapPiece = artOf.mapArt(map);
               rendered = images.renderBattleMap(
                 map,
                 mapPiece ? await load(mapPiece) : null,
-                people
+                people,
+                { sight }
               );
             } else if (args.of === 'town') {
               needId();

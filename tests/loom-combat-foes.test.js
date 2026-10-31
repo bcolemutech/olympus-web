@@ -19,6 +19,15 @@ const { figures, tactics, others, play } = combat;
 const FANTASY = BUILT_IN['d20-fantasy'];
 const SCIFI = BUILT_IN['pool-scifi'];
 const copyOf = (v) => JSON.parse(JSON.stringify(v));
+// A refusal of a square, naming the nearest open one (L-394).
+const near = (text) =>
+  expect.stringMatching(
+    new RegExp(
+      '^' +
+        text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+        ' The nearest open square is \\(\\d+, \\d+\\)\\.$'
+    )
+  );
 
 // Dice that roll these faces in turn, then the last one forever.
 const faces = (...list) => {
@@ -278,12 +287,13 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
           'figures[0].id must be lowercase letters, digits and dashes.',
           expect.stringMatching(/^figures\[0\]\.role must be one of brute/),
           expect.stringMatching(/^figures\[0\]\.statBlock: /),
-          'figures[0].cells[0] (0, 3) is an exit.',
+          // Each refused square names the nearest open one (L-394).
+          near('figures[0].cells[0] (0, 3) is an exit.'),
           'figures[1].side must be one of party, hostile, neutral, wary.',
-          'figures[1].cells[0] (5, 5): Grell stands there.',
-          'figures[1].cells[1] (1, 3) is an entry, where players arrive.',
+          near('figures[1].cells[0] (5, 5): Grell stands there.'),
+          near('figures[1].cells[1] (1, 3) is an entry, where players arrive.'),
           'figures[1].cells[2] must be a square on the 10 × 6 grid.',
-          'figures[3].cells[0] (4, 4): C stands there.',
+          near('figures[3].cells[0] (4, 4): C stands there.'),
           expect.stringMatching(/^figures\[3\]\.posture must be one of cowardly/),
         ])
       );

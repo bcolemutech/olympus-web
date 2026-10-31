@@ -321,15 +321,22 @@ const square = z
         .int()
         .min(0)
         .max(maps.MAX_SIDE - 1),
+      nearest: z
+        .boolean()
+        .optional()
+        .describe('true: the nearest open square to this one, if it is taken (L-394).'),
     }),
     z.strictObject({
       feature: z.string().trim().min(1).max(60).describe('A feature’s id or name: "bar".'),
     }),
+    z.literal('auto').describe('The nearest open square to the map’s entry (L-394).'),
   ])
   .describe(
     'Where they stand on the battle map of the place they are found at: { x, y } (0-based from ' +
-      'the top-left), or { feature } to stand at it, or beside it if it sits on an obstacle. ' +
-      'Not on a wall, an obstacle, an entry or an exit, and one character a square.'
+      'the top-left; nearest: true takes the nearest open square to it), { feature } to stand ' +
+      'at it, or at the nearest open square to it, or "auto", the nearest open square to the ' +
+      'entry. Not on a wall, an obstacle, an entry or an exit, and one character a square; a ' +
+      'refusal names the nearest open square.'
   );
 
 // A town point (L-682): in the settlement's 0–1000 square.
@@ -364,7 +371,9 @@ const NEIGHBOURS = [
 
 // Where a character asked to stand at a place stands: { map, cell, warning }.
 // A feature gives its own square, else the nearest free one beside it with
-// no wall or door between them.
+// no wall or door between them, else the nearest open one (L-394); "auto"
+// the nearest open square to the entry; { x, y, nearest } the nearest to
+// that square. A refusal names the nearest open square.
 function squareFor(world, host, spec, selfId) {
   const map = maps.mapOf(world, host);
   if (!map) {
@@ -373,11 +382,21 @@ function squareFor(world, host, spec, selfId) {
         'assign_battle_map, or leave out cell.'
     );
   }
+  const nearest = (from) => maps.nearestFree(world, map, host, from, { selfId });
+  const named = (c) => (c ? ` The nearest open square is (${c.x}, ${c.y}).` : '');
   let cell;
-  if (spec.feature === undefined) {
+  if (spec === 'auto') {
+    cell = nearest(null);
+    if (!cell) throw new ToolError(`Every square of ${map.name} is blocked or taken.`);
+  } else if (spec.feature === undefined) {
     const problem = maps.squareProblem(world, map, host, spec, selfId);
-    if (problem) throw new ToolError(`They can't stand there: ${problem}.`);
-    cell = { x: spec.x, y: spec.y };
+    if (problem && spec.nearest && maps.inBounds(map, spec)) {
+      cell = nearest(spec);
+      if (!cell) throw new ToolError(`Every square of ${map.name} is blocked or taken.`);
+    } else if (problem) {
+      const near = maps.inBounds(map, spec) ? nearest(spec) : null;
+      throw new ToolError(`They can't stand there: ${problem}.${named(near)}`);
+    } else cell = { x: spec.x, y: spec.y };
   } else {
     const wanted = spec.feature.toLowerCase();
     const feature = (map.features || []).find(
@@ -395,18 +414,26 @@ function squareFor(world, host, spec, selfId) {
         return !edge.wall && !edge.door;
       }
     );
-    cell = [{ x: feature.x, y: feature.y }, ...beside].find(
-      (c) => !maps.squareProblem(world, map, host, c, selfId)
-    );
+    cell =
+      [{ x: feature.x, y: feature.y }, ...beside].find(
+        (c) => !maps.squareProblem(world, map, host, c, selfId)
+      ) || nearest(feature);
     if (!cell) {
       throw new ToolError(`Every square at and beside ${feature.name} is blocked or taken.`);
     }
   }
-  const reached = layers.reachable(map, map.entries || []);
-  const warning = reached[`${cell.x},${cell.y}`]
-    ? null
-    : `Nobody can reach (${cell.x}, ${cell.y}) from an entry of ${map.name}: it's walled in.`;
-  return { map, cell, warning };
+  return { map, cell, warning: reachWarning(map, cell, `(${cell.x}, ${cell.y})`) };
+}
+
+// Whether a square can be walked to from an entry (L-394): a warning when
+// it can only through a locked door, or not at all.
+function reachWarning(map, cell, what) {
+  const key = `${cell.x},${cell.y}`;
+  if (layers.reachable(map, map.entries || [])[key]) return null;
+  if (layers.reachable(map, map.entries || [], () => true)[key]) {
+    return `${what} on ${map.name} is behind a locked door: only someone who opens it gets there.`;
+  }
+  return `Nobody can reach ${what} from an entry of ${map.name}: it's walled in.`;
 }
 
 // The suggestion a refusal offers (L-682): a default position there.
@@ -433,6 +460,11 @@ function positionFor(world, at, args) {
       const stand = squareFor(world, host, args.cell, at.id);
       fields.cell = stand.cell;
       warning = stand.warning;
+    } else if (args.cell === 'auto' || args.cell.nearest !== undefined) {
+      throw new ToolError(
+        `${host ? host.name : 'Where they are'} has no battle map, so there is no square to ` +
+          'find: give it one with assign_battle_map, or leave out cell.'
+      );
     } else {
       fields.cell = args.cell; // the wrong level: positionOf says so
     }

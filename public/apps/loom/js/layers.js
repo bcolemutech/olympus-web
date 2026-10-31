@@ -257,10 +257,11 @@
 
   /**
    * The squares a walk from `starts` can reach, by "x,y": along steps canStep
-   * allows (locked doors shut), never on from an exit, since stepping on one
-   * leaves (an exit is reached, but not walked through).
+   * allows (locked doors shut, unless `open(door)` says otherwise: L-394),
+   * never on from an exit, since stepping on one leaves (an exit is reached,
+   * but not walked through).
    */
-  function reachable(map, starts) {
+  function reachable(map, starts, open) {
     var exits = {};
     (map.exits || []).forEach(function (e) {
       exits[cellKey(e.x, e.y)] = true;
@@ -278,7 +279,7 @@
         for (var dy = -1; dy <= 1; dy++) {
           var next = { x: at.x + dx, y: at.y + dy };
           var key = cellKey(next.x, next.y);
-          if ((!dx && !dy) || seen[key] || !canStep(map, at, next)) continue;
+          if ((!dx && !dy) || seen[key] || !canStep(map, at, next, open)) continue;
           seen[key] = true;
           queue.push(next);
         }

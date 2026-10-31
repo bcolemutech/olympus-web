@@ -190,8 +190,48 @@ function squareProblem(world, map, host, cell, selfId) {
   return null;
 }
 
+/**
+ * The open square nearest `from` (L-394; planning/builders-tools.md §4.4):
+ * by rings of distance, in reading order within each, the first that
+ * `isOpen(cell)` passes, preferring one a walk from an entry reaches
+ * (locked doors open). Null when there is none.
+ */
+function nearestOpen(map, from, isOpen) {
+  const reached = layers.reachable(map, map.entries || [], () => true);
+  let fallback = null;
+  const most = Math.max(map.width, map.height);
+  for (let d = 0; d <= most; d++) {
+    for (let y = from.y - d; y <= from.y + d; y++) {
+      for (let x = from.x - d; x <= from.x + d; x++) {
+        if (Math.max(Math.abs(x - from.x), Math.abs(y - from.y)) !== d) continue;
+        const cell = { x, y };
+        if (!inBounds(map, cell) || !isOpen(cell)) continue;
+        if (reached[x + ',' + y]) return cell;
+        if (!fallback) fallback = cell;
+      }
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Where nobody stands yet at a place (L-394): the open square nearest
+ * `from` (by default its first entry), free of what blocks, of entries and
+ * exits, and of anyone standing there or in `taken` ("x,y").
+ */
+function nearestFree(world, map, host, from, { selfId = null, taken = new Set() } = {}) {
+  const start = from || (map.entries || [])[0] || { x: 0, y: 0 };
+  return nearestOpen(
+    map,
+    { x: start.x, y: start.y },
+    (cell) => !taken.has(cell.x + ',' + cell.y) && !squareProblem(world, map, host, cell, selfId)
+  );
+}
+
 module.exports = {
   MAX_SIDE,
+  nearestOpen,
+  nearestFree,
   mapOf,
   kindOf,
   hostOf,

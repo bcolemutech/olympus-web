@@ -1324,6 +1324,7 @@ describe('characters on squares (L-641)', () => {
       name: 'Tobin the Barkeep',
       cell: { x: 5, y: 2 },
       at: { id: cellar, name: 'The Salt Cellar' },
+      side: 'neutral',
     });
     // Fen, moved to a town point when the market lost its map.
     const fen = await character('chr_fen-the-fishwife');
@@ -1770,5 +1771,168 @@ describe('areas (#670)', () => {
       expect.objectContaining({ type: 'area', id: 'hall', name: 'the hall' }),
     ]);
     expect(result.structuredContent.reading).toMatch(/Violet outlines are areas/);
+  });
+});
+
+describe('seeing and placing (L-394)', () => {
+  const W = DRAFT;
+  // A shared tavern, 8 × 6: in at the west; a back room behind a locked door
+  // (squares x 5–7, y 4–5), with a strongbox in it.
+  const SHARED = {
+    name: 'The shared tavern',
+    width: 8,
+    height: 6,
+    generic: { kind: 'tavern', terrain: 'road' },
+    entries: [{ id: 'in', x: 1, y: 2 }],
+    exits: [{ id: 'out', name: 'the door', x: 0, y: 2, to: 'out' }],
+    features: [
+      { id: 'hearth', name: 'the hearth', x: 3, y: 0 },
+      { id: 'strongbox', name: 'the strongbox', x: 6, y: 5 },
+    ],
+    walls: [
+      {
+        points: [
+          { x: 5, y: 6 },
+          { x: 5, y: 4 },
+          { x: 6, y: 4 },
+        ],
+      },
+      {
+        points: [
+          { x: 7, y: 4 },
+          { x: 8, y: 4 },
+        ],
+      },
+    ],
+    doors: [
+      { id: 'back', name: 'the back door', from: { x: 6, y: 4 }, to: { x: 7, y: 4 }, locked: true },
+    ],
+  };
+  let mapId;
+  let tavern;
+  const person = (name, cell) =>
+    call('add_character', {
+      worldId: W,
+      name,
+      description: 'A drinker.',
+      locationId: 'loc_1',
+      placeId: tavern,
+      cell,
+    });
+
+  beforeAll(async () => {
+    const made = await ok('set_battle_map', { worldId: W, ...SHARED });
+    mapId = made.map.id;
+    // The strongbox, behind the locked door, isn't walled in.
+    expect(made.warnings).toEqual(
+      expect.arrayContaining([
+        'the strongbox at (6, 5) is behind a locked door: only someone who opens it gets there.',
+      ])
+    );
+    expect(made.warnings.join(' ')).not.toMatch(/walled in/);
+    tavern = (
+      await ok('add_place', {
+        worldId: W,
+        locationId: 'loc_1',
+        name: 'The Wayside Inn',
+        kind: 'tavern',
+        description: 'Low beams and a smoky hearth.',
+        entranceFor: ['sea', 'trail'],
+        battleMap: mapId,
+      })
+    ).place.id;
+  });
+
+  test('cell "auto" on the shared tavern finds a free square nine times in a row', async () => {
+    const cells = [];
+    for (let i = 1; i <= 9; i++) {
+      const result = await person(`Drinker ${i}`, 'auto');
+      expect(result.isError).toBeFalsy();
+      const { x, y } = result.structuredContent.character.position;
+      cells.push(`${x},${y}`);
+    }
+    expect(new Set(cells).size).toBe(9);
+    // Never the entry or the exit; the first beside the entry.
+    expect(cells).not.toContain('1,2');
+    expect(cells).not.toContain('0,2');
+    expect(cells[0]).toMatch(/^[0-2],[1-3]$/);
+  });
+
+  test('a refusal names the nearest open square; nearest: true takes it', async () => {
+    const text = (await person('Latecomer', { x: 1, y: 2 })).content[0].text;
+    expect(text).toMatch(
+      /They can't stand there: \(1, 2\) is the entry "in", where players arrive\. The nearest open square is \(\d+, \d+\)\./
+    );
+    const near = await person('Latecomer', { x: 1, y: 2, nearest: true });
+    expect(near.isError).toBeFalsy();
+    expect(near.structuredContent.character.position).not.toMatchObject({ x: 1, y: 2 });
+  });
+
+  test('a room behind a locked door gets the new warning, not "walled in"', async () => {
+    const result = await person('The landlord', { feature: 'strongbox' });
+    expect(result.structuredContent.warnings).toEqual([
+      '(6, 5) on The shared tavern is behind a locked door: only someone who opens it gets there.',
+    ]);
+  });
+
+  test('place_figures: "auto" squares, and a refusal naming the nearest open one', async () => {
+    const block = {
+      attributes: { STR: 12, DEX: 12, CON: 10, INT: 8, WIS: 8, CHA: 8 },
+    };
+    const placed = await ok('place_figures', {
+      worldId: W,
+      mapId,
+      figures: [
+        { id: 'toughs', name: 'Tough', statBlock: block, side: 'wary', cells: ['auto', 'auto'] },
+      ],
+    });
+    const squares = placed.figures[0].named.map((f) => `${f.x},${f.y}`);
+    expect(new Set(squares).size).toBe(2);
+    const standing = (await mapDoc(W, mapId)).figures[0].cells;
+    expect(standing.every((c) => typeof c === 'object')).toBe(true);
+    const text = await refused('place_figures', {
+      worldId: W,
+      mapId,
+      figures: [{ id: 'x', name: 'X', statBlock: block, cells: [{ x: 0, y: 2 }] }],
+    });
+    expect(text).toMatch(
+      /figures\[0\]\.cells\[0\] \(0, 2\) is an exit\. The nearest open square is/
+    );
+  });
+
+  test('view_image draws them numbered, by side, with a key; and sight from an entry', async () => {
+    const result = await call('view_image', { worldId: W, of: 'battleMap', id: mapId });
+    const legend = result.structuredContent;
+    const people = legend.markers.filter((m) => m.type === 'person');
+    const figs = legend.markers.filter((m) => m.type === 'figure');
+    expect(people.length).toBeGreaterThanOrEqual(11);
+    expect(people[0]).toMatchObject({ side: 'neutral', at: { id: tavern } });
+    expect(figs).toEqual([
+      expect.objectContaining({ id: 'fig-toughs-1', side: 'wary', group: 'toughs' }),
+      expect.objectContaining({ id: 'fig-toughs-2', side: 'wary', group: 'toughs' }),
+    ]);
+    expect(legend.sides).toEqual({
+      hostile: 'red',
+      party: 'green',
+      wary: 'yellow',
+      neutral: 'teal',
+    });
+    expect(legend.reading).toMatch(/coloured by side/);
+
+    const seen = await call('view_image', {
+      worldId: W,
+      of: 'battleMap',
+      id: mapId,
+      sightFrom: 'in',
+    });
+    const sight = seen.structuredContent;
+    expect(sight.sight.from).toBe('in');
+    expect(sight.sight.squaresSeen).toBeLessThan(8 * 6);
+    // The landlord, behind the locked door, isn't seen from the entry.
+    const landlord = sight.markers.find((m) => m.name === 'The landlord');
+    expect(landlord.seen).toBe(false);
+    expect(
+      await refused('view_image', { worldId: W, of: 'battleMap', id: mapId, sightFrom: 'nope' })
+    ).toMatch(/has no entry "nope" \(in\)/);
   });
 });
