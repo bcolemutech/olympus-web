@@ -14,6 +14,29 @@ const { systemOf } = require('../loom-canon/checks');
 const earning = require('../loom-modules/advancement/earn');
 const advancement = require('../loom-modules/advancement');
 const levelUp = require('../loom-modules/advancement/level-up');
+const using = require('../loom-modules/advancement/use');
+
+// Verbs whose rolls are not the player's own doing: saves, initiative,
+// rests, the rounds of a fight.
+const NOT_USES = /^(hazard|fight|end-turn|rest|wait|move)$/;
+
+/**
+ * What a turn's resolution counts toward improving by use (L-844; US2): the
+ * skill of a check that succeeded with stakes (INTERPRET's flag, or in a
+ * fight), and the attack that hit someone in a fight.
+ */
+function usesOf(proposedAction, resolution, inFight) {
+  const verb = String((proposedAction && proposedAction.verb) || '');
+  if (NOT_USES.test(verb)) return {};
+  const stakes = inFight || Boolean((proposedAction.params || {}).stakes);
+  const roll = resolution && resolution.roll;
+  const attack = resolution && resolution.attack;
+  const hit = attack && (attack.targets || []).some((t) => t.hit);
+  return {
+    skill: !attack && stakes && roll && roll.success && roll.skill ? roll.skill : null,
+    attack: hit && inFight ? attack.id : null,
+  };
+}
 
 /**
  * Stage 5 — COMMIT (design doc §5, §8).
@@ -116,6 +139,18 @@ async function commitTurn(params) {
     // for a save from before, then where it now stands noted.
     if (townsRecorded) Object.assign(save, visits.derived(before, townsRecorded));
     if (canonWorld) visits.noteWhereItIs(canonWorld, save);
+    // A use counted (L-844; ../loom-modules/advancement/use.js): a skill
+    // rolled and succeeded with stakes (INTERPRET's say, or a fight on), or
+    // an attack that hit in a fight.
+    const usedSheet = save.character && save.character.sheet;
+    if (canonWorld && usedSheet) {
+      save.character.sheet = using.counted(
+        systemOf(canonWorld),
+        canonWorld,
+        usedSheet,
+        usesOf(proposedAction, resolution, Boolean(fightBefore || save.fight || resolution.fight))
+      );
+    }
     // Experience earned (L-842; ../loom-modules/advancement/earn.js): each
     // foe overcome, and a story moment NARRATE named, paid once.
     const earned = canonWorld
@@ -130,10 +165,18 @@ async function commitTurn(params) {
       : null;
     if (earned) earning.apply(systemOf(canonWorld), save, earned);
     const awards = earned ? earned.awards : [];
+    const restedLong =
+      resolution.rest && resolution.rest.kind === 'long' && !resolution.rest.interrupted;
+    // At a long rest, skills and attacks at their thresholds rise (L-844).
+    let rises = [];
+    if (canonWorld && restedLong && save.character && save.character.sheet) {
+      const risen = using.rise(systemOf(canonWorld), canonWorld, save.character.sheet);
+      save.character.sheet = risen.sheet;
+      rises = risen.rises;
+    }
     // A level ready at a long rest (L-843; advancement LV3): offered now, and
     // kept for the player's levelUp until any other turn; never in a fight.
-    const rested =
-      resolution.rest && resolution.rest.kind === 'long' && !resolution.rest.interrupted;
+    const rested = restedLong;
     const sheetNow = save.character && save.character.sheet;
     const offer =
       canonWorld && rested && !save.fight && sheetNow
@@ -181,7 +224,12 @@ async function commitTurn(params) {
 
     const turnIndex = lastTurnSnap.empty ? 0 : lastTurnSnap.docs[0].data().index + 1;
 
-    const recorded = Object.assign({}, resolution, awards.length ? { awards } : {});
+    const recorded = Object.assign(
+      {},
+      resolution,
+      awards.length ? { awards } : {},
+      rises.length ? { rises } : {}
+    );
     // Others' turns played out on the map (L-828) are for the answer only.
     delete recorded.playback;
     delete recorded.held;
@@ -231,6 +279,8 @@ async function commitTurn(params) {
         // A level to take, offered at a long rest (L-843; the GM's suggestion
         // is added after, ./index.js).
         ...(offer ? { levelUp: offer } : {}),
+        // Skills and attacks risen by use at a long rest (L-844), for the journal.
+        ...(rises.length ? { rises } : {}),
         // Experience earned, for the journal (L-842; shown by L-845).
         ...(awards.length ? { awards } : {}),
         // The AP kept for reactions and what's left of it, for the turn bar (L-837).
