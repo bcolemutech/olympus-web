@@ -1,6 +1,6 @@
 # The Loom — Advancement — Design Document v0.1
 
-**Status:** Decided (2026-10-28). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#713–#717, §6). **In progress:** L-841 advancement as data built (2026-10-31; `functions/loom-modules/advancement/`).
+**Status:** Decided (2026-10-28). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#713–#717, §6). **In progress:** L-841 advancement as data shipped (2026-10-31; `functions/loom-modules/advancement/`); L-842 earning experience built (2026-10-31; `advancement/earn.js`): foes are paid as they're overcome, when the fight ends or before (a foe dropped in round 1 is paid then), checked at commit against the fight as it stood.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-840 (#712), Phase 9 — Game systems (milestone #25).
 **Depends on:** L-810 (sheets, creation), L-820 (combat: fights' ends, rests), L-830 (action points).

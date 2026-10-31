@@ -45,6 +45,9 @@ const TALK_DOWN =
 // What starts a fight with someone not already in one (SE1).
 const ATTACK = /^(attack|strike|hit|stab|slash|shoot|punch|kick|fight|assault|ambush|charge|swing)/;
 
+// The ways out of a fight that overcome a foe (L-842): not gone or stood down.
+const OVERCOME = ['down', 'fled', 'surrendered', 'talkedDown'];
+
 const ORDINAL = ['1st', '2nd', '3rd'];
 const ordinal = (n) => ORDINAL[n - 1] || n + 'th';
 
@@ -340,10 +343,14 @@ function ending(f, result) {
     : result.how.includes('fled')
       ? 'You get away: the fight is over.'
       : 'The fight is over.';
+  // The foes it overcame (L-842; advancement XP1), for experience.
+  const overcome = Object.entries(f.combatants)
+    .filter(([, c]) => c.side === 'hostile' && OVERCOME.includes(c.out))
+    .map(([id, c]) => ({ id, name: c.name || id }));
   return {
     mutations: [setFight(null)],
     lines: [line],
-    fight: { ended: true, winner: result.winner, how, rounds: f.round },
+    fight: { ended: true, winner: result.winner, how, rounds: f.round, overcome },
   };
 }
 
