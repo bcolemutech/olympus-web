@@ -951,6 +951,8 @@ function rolled(check, against, system) {
     line: check.breakdown.named,
     dice,
     verdict: checks.degreeName(system, check.degree),
+    // The skill rolled, for improving by use (L-844).
+    ...(check.skillId ? { skill: check.skillId } : {}),
   };
 }
 

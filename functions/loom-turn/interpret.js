@@ -127,6 +127,9 @@ function plausibilitySection(canonWorld, save) {
     '- "complicated": a scheme of many steps, or a method left unclear ("I rig the ' +
     'chandelier to fall on them"); add params.question, asking the player exactly how. ' +
     'The rules ask it and try nothing yet.\n' +
+    'STAKES: add params.stakes, true when failing would cost something real (danger, harm, ' +
+    'being caught, a chance lost for good), false when it could simply be tried again in ' +
+    'safety.\n' +
     'THE CHARACTER: ' +
     [
       attributes && 'attributes ' + attributes,
@@ -428,8 +431,10 @@ async function interpretAction(params) {
 // The plausibility the model judged (L-826), one of the four kinds, with its
 // reason or question as short text; anything else dropped.
 function withPlausibility(params) {
-  const { plausibility, why, question, answering, ...rest } = params;
+  const { plausibility, why, question, answering, stakes, ...kept } = params;
   void answering; // only the pipeline says an action answers a question
+  // Whether failing would cost something (L-844; advancement US2).
+  const rest = typeof stakes === 'boolean' ? { ...kept, stakes } : kept;
   const kind = typeof plausibility === 'string' ? plausibility.trim().toLowerCase() : '';
   if (!PLAUSIBILITY.includes(kind)) return rest;
   const text = (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 300) : null);
