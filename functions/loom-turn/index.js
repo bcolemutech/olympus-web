@@ -216,6 +216,7 @@ async function runTurnPipeline(params) {
       entityRefs: told ? told.entityRefs : [],
       inventedEntities: told ? told.inventedEntities : [],
       suggestedActions: told ? told.suggestedActions : [],
+      moment: told ? told.moment : null,
     });
   }
 
@@ -641,6 +642,8 @@ async function runTurnPipeline(params) {
     inventedEntities,
     suggestedActions,
     discovered: newlyDiscovered(canonWorld, save, resolution),
+    // A story moment NARRATE named (L-842), paid once by the rules.
+    moment: told.moment || null,
   });
 }
 

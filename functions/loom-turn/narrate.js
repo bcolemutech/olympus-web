@@ -20,6 +20,8 @@ const { sheetOf, validateSheet } = require('../loom-canon/sheets');
 const conditions = require('../loom-canon/conditions');
 const effects = require('../loom-canon/effects');
 const wary = require('../loom-modules/combat/wary');
+const advancement = require('../loom-modules/advancement');
+const earning = require('../loom-modules/advancement/earn');
 
 /**
  * Stage 4 — NARRATE (design doc §5).
@@ -116,8 +118,34 @@ function buildSystemInstruction(knownEntities, canonWorld) {
     'a short phrase (e.g. "talk to the innkeeper"), "verb": one word (talk, examine, use, ' +
     'move, look, search, …), "target": the exact id from the known-entities list it is ' +
     'aimed at, if any }. Leave the list empty if nothing obvious suggests itself.\n\n' +
+    momentInstruction(canonWorld) +
     'Respond with ONLY a JSON object: { "narration": string, "inventedEntities": string[], ' +
-    '"suggestedActions": [{ "text": string, "verb": string, "target"?: string }] }'
+    '"suggestedActions": [{ "text": string, "verb": string, "target"?: string }]' +
+    (earnsMoments(canonWorld)
+      ? ', "moment"?: { "id": string, "size": string, "name": string }'
+      : '') +
+    ' }'
+  );
+}
+
+// Whether the world's system pays for story moments (L-842): advancement
+// on, with experience.
+function earnsMoments(canonWorld) {
+  const s = advancement.settingsOf(checks.systemOf(canonWorld), canonWorld);
+  return Boolean(s.experience && s.experience.story);
+}
+
+// Story moments (L-842; advancement XP1, XP2): the GM names one and its
+// size, never an amount; the rules pay it once.
+function momentInstruction(canonWorld) {
+  if (!earnsMoments(canonWorld)) return '';
+  return (
+    'A STORY MOMENT is a turn that truly matters to the story: a mystery solved, a life ' +
+    'saved, a vow kept, a hard truth faced, a place of legend reached. Routine actions, ' +
+    'checks, fights and finding things are not. Most turns have none. When this one is, add ' +
+    '"moment": { "id": a short name for it in kebab-case, the same each time it is ' +
+    'described, "size": "small", "notable" or "major", "name": a few words saying what it ' +
+    'was }. Never say how much it is worth: the rules decide that.\n\n'
   );
 }
 
@@ -599,6 +627,25 @@ function buildFightSection(save, resolution) {
   return null;
 }
 
+// The player's level against each foe in the fight or in sight (L-842;
+// advancement NP2), so a deadly fight reads as one; null with none.
+function buildLevelsSection(save, canonWorld) {
+  const play = require('../loom-modules/combat/play');
+  const foes = new Map();
+  const f = save.fight;
+  for (const [id, c] of Object.entries((f && f.combatants) || {})) {
+    if (c.side === 'hostile' && !c.out) foes.set(id, { id, name: c.name || id });
+  }
+  try {
+    for (const c of play.hostilesInSight(canonWorld, save)) {
+      foes.set(c.id, { id: c.id, name: c.name || c.id });
+    }
+  } catch {
+    // Off a battle map: only the fight's foes.
+  }
+  return earning.levelsLine(checks.systemOf(canonWorld), canonWorld, save, [...foes.values()]);
+}
+
 // What the named characters chose to do this round (L-825; EN5): one
 // passage for the round, in their character, the rules' lines its facts.
 function buildNamedSection(resolution) {
@@ -664,6 +711,7 @@ function buildUserMessage(params) {
     ? buildEffectsSection(params.save, resolution, canonWorld)
     : null;
   const fightSection = buildFightSection(params.save, resolution);
+  const levelsSection = params.save ? buildLevelsSection(params.save, canonWorld) : null;
   const fallenSection = buildFallenSection(resolution);
   const namedSection = buildNamedSection(resolution);
 
@@ -685,6 +733,7 @@ function buildUserMessage(params) {
     '\n\n' +
     (rollSection ? rollSection + '\n\n' : '') +
     (fightSection ? fightSection + '\n\n' : '') +
+    (levelsSection ? levelsSection + '\n\n' : '') +
     (fallenSection ? fallenSection + '\n\n' : '') +
     (namedSection ? namedSection + '\n\n' : '') +
     (effectsSection ? effectsSection + '\n\n' : '') +
@@ -698,6 +747,16 @@ function buildUserMessage(params) {
     (turnSection ? '\n\n' + turnSection : '') +
     (sheetSection ? '\n\n' + sheetSection : '')
   );
+}
+
+// A story moment as the model named it, checked (L-842): an id and a known
+// size, with experience paying for them; else null.
+function momentOf(value, canonWorld) {
+  if (!value || typeof value !== 'object' || !earnsMoments(canonWorld)) return null;
+  const id = earning.momentId(value.id);
+  if (!id || !advancement.SIZES.includes(value.size)) return null;
+  const name = typeof value.name === 'string' ? value.name.trim().slice(0, 80) : '';
+  return { id, size: value.size, ...(name ? { name } : {}) };
 }
 
 function isValidRawNarration(raw) {
@@ -858,6 +917,8 @@ async function narrateResolution(params) {
     suggestedActions: sanitizeSuggestions(raw.suggestedActions, knownEntities),
     // The fate it chose for a player down (L-827), when asked.
     ...(Object.keys(FATE_WORDS).includes(raw.fate) ? { fate: raw.fate } : {}),
+    // A story moment it named (L-842), for the rules to pay.
+    ...(momentOf(raw.moment, canonWorld) ? { moment: momentOf(raw.moment, canonWorld) } : {}),
   };
 }
 
