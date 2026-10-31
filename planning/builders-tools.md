@@ -1,6 +1,6 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures, L-393 named stat blocks, L-394 seeing and placing and L-395 towns, routes and the work list built.
+**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures, L-393 named stat blocks, L-394 seeing and placing, L-395 towns, routes and the work list and L-396 studio jobs built.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25),, built next, before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
@@ -135,6 +135,7 @@ The list in #735, judged 2026-10-29, with the user's answers (each took the reco
 
 - **Retries:** a 429 (`RESOURCE_EXHAUSTED`) puts the job back on the queue with backoff (up to 5 tries over about 10 minutes) instead of failing it; it isn't charged until it runs.
 - **Shapes:** `studio_assign` (and the map and town image functions) take `fit: 'crop' | 'pad' | 'stretch'`, so art made at 4:3 fits a 26 × 20 grid.
+- **Built (L-396):** a call the model turns away as busy (429, `RESOURCE_EXHAUSTED`) puts the job back to `queued` with `tries` and `retryAt`, and queues it again after 30, 60, 120 and 180 s; the fifth busy answer fails it ("The model stayed busy through 5 tries…"); nothing is charged for a try that came back with nothing; other errors fail at once. `fit` (`functions/studio/fit.js`, with sharp) crops the middle or pads with see-through margins to the grid's shape (a town's: square), as a new version made current, the original kept as the one before; an image used elsewhere is copied (`via: 'fit'`) so its other uses keep their shape; SVG is refused (its viewBox gives its shape); `stretch` keeps today's behaviour, without the warning.
 
 ### 4.7 Scriptorium (gap 5)
 

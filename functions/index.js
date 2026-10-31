@@ -115,8 +115,9 @@ exports.studioGenerate = onCall(async (request) => {
 });
 
 // Runs one generation job (L-707): the studio's Cloud Tasks queue, at most
-// MAX_RUNNING at once (T5). A job is run once: no retries, so it is never
-// charged twice.
+// MAX_RUNNING at once (T5). A job is run once: no retries by the queue, so it
+// is never charged twice. A job the model turns away as busy queues itself
+// again, after a wait (L-396; functions/studio/jobs.js).
 const { onTaskDispatched } = require('firebase-functions/v2/tasks');
 exports.studioRunJob = onTaskDispatched(
   {

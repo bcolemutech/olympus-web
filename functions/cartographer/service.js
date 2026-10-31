@@ -333,7 +333,7 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     return err;
   };
 
-  async function attachArt(uid, { worldId, uploadId, remove, svg }, id, kind, via = 'page') {
+  async function attachArt(uid, { worldId, uploadId, remove, svg, fit }, id, kind, via = 'page') {
     if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
       throw new HttpsError('invalid-argument', 'worldId is required.');
     }
@@ -381,6 +381,8 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
             id,
             file,
             via: drawn ? 'mcp' : via,
+            // Cropped or padded to the grid's or town's shape (L-396).
+            ...(fit ? { fit } : {}),
           })
         : await studio().assign(uid, { worldId, target: kind.target, id, imageId: null });
     } catch (err) {
@@ -402,6 +404,7 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
           }
         : null,
       ...(result.warnings.length ? { warnings: result.warnings } : {}),
+      ...(result.fitted ? { fitted: result.fitted } : {}),
     };
   }
 
@@ -435,12 +438,18 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
 
   // Using a library image for a world's map, cover, town or battle map, or
   // taking it away (imageId null): studio_assign and studio_unassign (L-704).
-  async function assignImage(uid, { worldId, target, id, imageId } = {}) {
+  async function assignImage(uid, { worldId, target, id, imageId, fit } = {}) {
     if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
       throw new HttpsError('invalid-argument', 'worldId is required.');
     }
     try {
-      return await studio().assign(uid, { worldId, target, id, imageId: imageId || null });
+      return await studio().assign(uid, {
+        worldId,
+        target,
+        id,
+        imageId: imageId || null,
+        ...(fit ? { fit } : {}),
+      });
     } catch (err) {
       throw asHttps(err);
     }

@@ -42,7 +42,10 @@ const { chooseStyle, snapshot, StyleError } = require('./styles');
  *
  * A call that brings no image back (refused, blocked) fails the job with the
  * model's reason, and is still charged for the tokens the provider reports.
- * A call that fails outright isn't charged. A job is run once: one already
+ * A call that fails outright isn't charged. One the model turns away as busy
+ * (429, RESOURCE_EXHAUSTED; L-396) goes back on the queue, `queued` with its
+ * try count (`tries`) and when it runs again (`retryAt`), up to MAX_TRIES
+ * over about ten minutes (BACKOFF); then it fails, saying so. A job is run once: one already
  * running when dispatched again (a retry after a crash) is marked failed
  * rather than run twice, so it is never charged twice.
  */
@@ -52,6 +55,18 @@ const MAX_TITLE = 120;
 const FROM_KINDS = ['location', 'town', 'battleMap', 'character'];
 // Reference formats the model reads; SVG is drawn to PNG first.
 const READABLE = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
+
+// Tries a job gets when the model is busy (L-396), and the wait before each
+// try after the first, in seconds: about ten minutes in all.
+const MAX_TRIES = 5;
+const BACKOFF = [30, 60, 120, 180, 240];
+
+/** Whether a failed call was the model turning us away as busy (429). */
+function isBusy(err) {
+  if (!err) return false;
+  if (err.status === 429 || err.code === 429) return true;
+  return /RESOURCE_EXHAUSTED|\b429\b|Too Many Requests/i.test(String(err.message || err));
+}
 
 class JobError extends Error {
   constructor(code, message) {
@@ -505,10 +520,21 @@ function createJobs({
       });
     } catch (err) {
       // Not charged: the call never came back with anything.
+      const tries = job.tries || 1;
+      if (isBusy(err) && tries < MAX_TRIES) {
+        // Busy (L-396): back on the queue, after a wait.
+        const wait = BACKOFF[tries - 1];
+        await ref.update({ state: 'queued', tries: tries + 1, retryAt: now() + wait * 1000 });
+        await enqueue({ jobId }, { scheduleDelaySeconds: wait });
+        return { state: 'queued', tries: tries + 1 };
+      }
       console.error(`studio job ${jobId} failed:`, err);
+      const message = String((err && err.message) || err).slice(0, 900);
       await ref.update({
         state: 'failed',
-        error: String((err && err.message) || err).slice(0, 1000),
+        error: isBusy(err)
+          ? `The model stayed busy through ${tries} tries over about ten minutes: ${message}`
+          : message,
         finishedAt: now(),
       });
       return { state: 'failed' };
@@ -678,6 +704,9 @@ function createJobs({
 }
 
 module.exports = {
+  MAX_TRIES,
+  BACKOFF,
+  isBusy,
   createJobs,
   fromData,
   buildPrompt,

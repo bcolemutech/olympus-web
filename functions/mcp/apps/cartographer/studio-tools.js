@@ -199,8 +199,22 @@ function assignTools({ studio }) {
         'on the Loom’s world list), a town’s art or a battle map’s art. The image’s kind must ' +
         'fit: worldMap, cover, town or battleMap. The world refers to the image, so a new ' +
         'version of it shows wherever it is used. Replaces any art there. Warns when its shape ' +
-        'doesn’t fit a battle map’s grid or a town’s square; check it with view_image.',
-      inputSchema: { worldId, imageId, target: TARGET, id: targetId },
+        'doesn’t fit a battle map’s grid or a town’s square, unless fit says what to do; check ' +
+        'it with view_image.',
+      inputSchema: {
+        worldId,
+        imageId,
+        target: TARGET,
+        id: targetId,
+        fit: z
+          .enum(['crop', 'pad', 'stretch'])
+          .optional()
+          .describe(
+            'For a battle map or a town (L-396): crop to its shape (the middle, edges lost), ' +
+              'pad to it (see-through margins) or stretch (as before). Crop and pad make a ' +
+              'fitted version and keep the original; an image used elsewhere is copied instead.'
+          ),
+      },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       handler: (ctx, args) =>
         relay(async () => {
@@ -440,6 +454,9 @@ function jobView(job, image) {
     ...(job.cost !== null && job.cost !== undefined ? { cost: job.cost } : {}),
     ...(job.error ? { error: job.error } : {}),
     ...(job.note ? { note: job.note } : {}),
+    // Tried again after the model was busy (L-396): which try, and when next.
+    ...(job.tries > 1 ? { tries: job.tries } : {}),
+    ...(job.state === 'queued' && job.retryAt ? { retryAt: iso(job.retryAt) } : {}),
     createdBy: job.createdBy,
     via: job.via,
     createdAt: iso(job.createdAt),
