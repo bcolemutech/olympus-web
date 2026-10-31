@@ -34,8 +34,14 @@ const COLOURS = {
   place: [129, 212, 250, 255],
   wayIn: [128, 203, 196, 255],
   link: [255, 255, 255, 150],
-  // People (L-684): the grid view's teal, as diamonds, apart from every place.
+  // People (L-684): the grid view's teal, as diamonds, apart from every place;
+  // on a battle map coloured by side (L-394): foes red, friends green, the
+  // wary yellow, everyone else teal.
   person: [77, 182, 172, 255],
+  hostile: [229, 115, 115, 255],
+  party: [129, 199, 132, 255],
+  wary: [255, 235, 59, 255],
+  unseen: [0, 0, 0, 150],
   // Areas (#670): violet outlines, apart from every marker.
   area: [179, 157, 219, 255],
   outline: [10, 14, 26, 255],
@@ -372,7 +378,7 @@ function gridLine(c, a, b, cw, ch, colour, width) {
  * people standing on it (L-684: `people`, [{ id, name, x, y, at }], `at` the
  * place whose copy of the map they stand on).
  */
-function renderBattleMap(map, art, people = []) {
+function renderBattleMap(map, art, people = [], { sight = null } = {}) {
   let base;
   if (art) {
     base = scaleDown(decode(art));
@@ -413,6 +419,17 @@ function renderBattleMap(map, art, people = []) {
     });
   });
 
+  // What can be seen from an entry (L-394): the rest shaded.
+  if (sight) {
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        if (!sight.seen[x + ',' + y]) {
+          fillRect(base, x * cw, y * ch, Math.ceil(cw), Math.ceil(ch), COLOURS.unseen);
+        }
+      }
+    }
+  }
+
   const markers = [];
   const add = (type, item, shape, colour) => {
     const n = markers.length + 1;
@@ -430,8 +447,12 @@ function renderBattleMap(map, art, people = []) {
   (map.exits || []).forEach((e) => add('exit', e, 'square', COLOURS.exit));
   (map.features || []).forEach((f) => add('feature', f, 'circle', COLOURS.feature));
   people.forEach((p) => {
-    add('person', p, 'diamond', COLOURS.person);
-    if (p.at) markers[markers.length - 1].at = p.at;
+    add(p.figure ? 'figure' : 'person', p, 'diamond', COLOURS[p.side] || COLOURS.person);
+    const m = markers[markers.length - 1];
+    if (p.at) m.at = p.at;
+    if (p.side) m.side = p.side;
+    if (p.figure) m.group = p.figure;
+    if (sight) m.seen = Boolean(sight.seen[p.x + ',' + p.y]);
   });
   // Areas are numbered at their middle square.
   (map.areas || []).forEach((a) => {
@@ -482,13 +503,25 @@ function renderBattleMap(map, art, people = []) {
         'Cells are { x, y } from the top-left, 0-based; every fifth grid line is brighter and ' +
         'labelled. Green circles are entries, red squares exits, amber circles features, teal ' +
         'diamonds people (at: the place they stand at); each marker is at the centre of its ' +
-        'cell, numbered as below. Layers: white lines are walls ' +
+        'cell, numbered as below. People and figures (type figure: placed with ' +
+        'place_figures, group their group) are coloured by side: red hostile, green party, ' +
+        'yellow wary, teal neutral. With sightFrom, squares the entry can’t see are shaded ' +
+        'dark, and each person says whether they are seen. Layers: white lines are walls ' +
         'and amber bars doors, both on the grid lines between squares (corner (x, y) is the ' +
         'top-left of square (x, y)); obstacles are shaded by kind: solid filled dark, low ' +
         'hatched, difficult dotted. Doors are numbered at their middle, obstacles at their ' +
         'top-left square. Violet outlines are areas, along the grid lines, numbered at their ' +
         'middle square.',
       walls: (map.walls || []).length,
+      sides: { hostile: 'red', party: 'green', wary: 'yellow', neutral: 'teal' },
+      ...(sight
+        ? {
+            sight: {
+              from: sight.from,
+              squaresSeen: Object.keys(sight.seen).filter((k) => sight.seen[k]).length,
+            },
+          }
+        : {}),
       markers,
     },
   };

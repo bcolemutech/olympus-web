@@ -290,10 +290,13 @@ const figureGroup = z.strictObject({
     .describe('How much risk they take (default steady).'),
   leader: z.boolean().optional().describe('Whether their fall shakes the rest.'),
   cells: z
-    .array(z.strictObject({ x: coord, y: coord }))
+    .array(z.union([z.strictObject({ x: coord, y: coord }), z.literal('auto')]))
     .min(1)
     .max(20)
-    .describe('The squares they stand on: one figure each.'),
+    .describe(
+      'The squares they stand on: one figure each; "auto" for the nearest open square to the ' +
+        'entry (L-394).'
+    ),
 });
 
 // A map's hazards against the world's system (loom-canon/hazards.js): its
@@ -333,11 +336,18 @@ function layerWarnings(map) {
     ];
   }
   const reached = layers.reachable(map, map.entries || []);
-  const near = (f) =>
-    [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => reached[`${f.x + dx},${f.y + dy}`]));
+  // Locked doors open (L-394): what lies behind one isn't walled in.
+  const unlocked = layers.reachable(map, map.entries || [], () => true);
+  const near = (f, by) =>
+    [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => by[`${f.x + dx},${f.y + dy}`]));
   return (map.features || [])
-    .filter((f) => !near(f))
-    .map((f) => `Nobody can reach ${f.name} at (${f.x}, ${f.y}) from an entry: it's walled in.`);
+    .filter((f) => !near(f, reached))
+    .map((f) =>
+      near(f, unlocked)
+        ? `${f.name} at (${f.x}, ${f.y}) is behind a locked door: only someone who opens it ` +
+          'gets there.'
+        : `Nobody can reach ${f.name} at (${f.x}, ${f.y}) from an entry: it's walled in.`
+    );
 }
 
 // Characters a changed map leaves where nobody can stand (L-641).
@@ -738,7 +748,12 @@ function mapTools({ writer }) {
         edit(ctx, args, (e) => {
           const { world } = e;
           const map = live(world, 'battleMap', args.mapId);
-          const list = args.figures.map((g) => JSON.parse(JSON.stringify(g)));
+          // Squares for "auto" first (L-394), then the whole list checked.
+          const list = figures.placeAuto(
+            world,
+            map,
+            args.figures.map((g) => JSON.parse(JSON.stringify(g)))
+          );
           const errors = figures.validateFigures(world, systemOf(world), map, list);
           if (errors.length) throw new ToolError(errors.join(' '));
           e.update(e.ref('battleMaps', map.id), { figures: list });

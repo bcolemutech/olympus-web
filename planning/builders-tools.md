@@ -1,6 +1,6 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures and L-393 named stat blocks built.
+**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures, L-393 named stat blocks and L-394 seeing and placing built.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25),, built next, before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
@@ -121,6 +121,7 @@ The list in #735, judged 2026-10-29, with the user's answers (each took the reco
 - **`view_image` draws figures** on battle maps as numbered markers coloured by side (wary its own colour), with a key, and sight lines from an entry on request.
 - **`cell: "auto"`** on `add_character` and `place_figures` takes the nearest open square to a place or feature. A refusal for a taken or walled square names the nearest open one.
 - **"Behind a locked door":** the reachability check treats locked doors as passable and says so, instead of "walled in".
+- **Built (L-394):** `view_image` of a battle map draws characters and figures as numbered diamonds coloured by side (red hostile, green party, yellow wary, teal neutral), with `sides` as the key and each figure's group; `sightFrom: entryId` shades what that entry can't see (closed doors shut) and marks each person seen or not. `cell` takes `"auto"` (the nearest open square to the map's entry), `{ x, y, nearest: true }`, and `{ feature }` falls back to the nearest open square; `place_figures` cells take `"auto"`, given in turn so none share. Every refused square names the nearest open one (`maps.nearestOpen`, preferring squares a walk from an entry reaches). `layers.reachable` takes a door rule, so what lies behind a locked door warns "behind a locked door: only someone who opens it gets there".
 
 ### 4.5 Towns, routes and the work list (gaps 25, 6, 12, 13)
 

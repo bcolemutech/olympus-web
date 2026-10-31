@@ -104,6 +104,52 @@ function validateTactics(t, where = 'tactics') {
   return errors;
 }
 
+// Why a figure can't stand on a square, or null: what blocks, an entry, an
+// exit, or someone in `taken` ("x,y" → name).
+function whyNot(map, cell, taken) {
+  const obstacle = layers.obstacleAt(map, cell);
+  if (obstacle && obstacle.kind !== 'difficult') return ` is ${obstacle.name} (${obstacle.kind}).`;
+  if ((map.entries || []).some((e) => maps.sameCell(e, cell))) {
+    return ' is an entry, where players arrive.';
+  }
+  if ((map.exits || []).some((e) => maps.sameCell(e, cell))) return ' is an exit.';
+  if (taken.has(key(cell))) return `: ${taken.get(key(cell))} stands there.`;
+  return null;
+}
+
+/**
+ * Squares for a list of groups whose cells may be "auto" (L-394): each the
+ * open square nearest the map's first entry not yet taken (by characters on
+ * the map, other figures, or those given before it). Returns the list with
+ * every cell a square; one with no square left keeps "auto", for the check
+ * to refuse.
+ */
+function placeAuto(world, map, list) {
+  const taken = new Map();
+  for (const { character, cell } of maps.standingOn(world, map)) {
+    taken.set(key(cell), character.name);
+  }
+  for (const g of list) {
+    for (const c of (g && Array.isArray(g.cells) && g.cells) || []) {
+      if (isObject(c)) taken.set(key(c), g.name || 'a figure');
+    }
+  }
+  const from = (map.entries || [])[0] || { x: 0, y: 0 };
+  return list.map((g) => {
+    if (!g || !Array.isArray(g.cells) || !g.cells.includes('auto')) return g;
+    return {
+      ...g,
+      cells: g.cells.map((c) => {
+        if (c !== 'auto') return c;
+        const cell = maps.nearestOpen(map, from, (sq) => !whyNot(map, sq, taken));
+        if (!cell) return c;
+        taken.set(key(cell), g.name || 'a figure');
+        return cell;
+      }),
+    };
+  });
+}
+
 /**
  * What's wrong with a map's figures (as place_figures would set them), each
  * named: their shape, stat blocks against the system, and squares (on the
@@ -163,15 +209,14 @@ function validateFigures(world, system, map, list) {
         return;
       }
       const square = `(${cell.x}, ${cell.y})`;
-      const obstacle = layers.obstacleAt(map, cell);
-      if (obstacle && obstacle.kind !== 'difficult') {
-        errors.push(`${where} ${square} is ${obstacle.name} (${obstacle.kind}).`);
-      } else if ((map.entries || []).some((e) => maps.sameCell(e, cell))) {
-        errors.push(`${where} ${square} is an entry, where players arrive.`);
-      } else if ((map.exits || []).some((e) => maps.sameCell(e, cell))) {
-        errors.push(`${where} ${square} is an exit.`);
-      } else if (taken.has(key(cell))) {
-        errors.push(`${where} ${square}: ${taken.get(key(cell))} stands there.`);
+      const why = whyNot(map, cell, taken);
+      if (why) {
+        // The nearest open square (L-394), to try instead.
+        const near = maps.nearestOpen(map, cell, (c) => !whyNot(map, c, taken));
+        errors.push(
+          `${where} ${square}${why}` +
+            (near ? ` The nearest open square is (${near.x}, ${near.y}).` : '')
+        );
       } else taken.set(key(cell), g.name || 'a figure');
     });
   });
@@ -239,5 +284,6 @@ module.exports = {
   postureOf,
   validateTactics,
   validateFigures,
+  placeAuto,
   withFigures,
 };
