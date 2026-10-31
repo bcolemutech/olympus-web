@@ -742,7 +742,8 @@ function writeTools({ writer, systems, studio }) {
         'or a premade character (startingSheet: every new game starts with this sheet and ' +
         'skips making a character; null removes it), or death (on: a character with no one ' +
         'to help dies; off: they come round captured, robbed or rescued; null: the system’s ' +
-        'default). Fields you omit are left unchanged. ' +
+        'default), or advancement (false: characters don’t grow in this world; true: they do, ' +
+        'by its system’s rules). Fields you omit are left unchanged. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -778,6 +779,14 @@ function writeTools({ writer, systems, studio }) {
               'with an epilogue; off, they come round captured, robbed or rescued. null: the ' +
               'system’s default (on in d20 Fantasy, off in Dice-pool Sci-fi).'
           ),
+        advancement: z
+          .boolean()
+          .optional()
+          .describe(
+            'Whether characters grow here (L-841): false turns advancement off for this ' +
+              'world (a one-shot, a fixed-power story): nothing is earned and no level comes; ' +
+              'true, the default, grows them by the system’s advancement.'
+          ),
       },
       annotations: replacing,
       handler: async (ctx, args) => {
@@ -789,6 +798,7 @@ function writeTools({ writer, systems, studio }) {
           'systemId',
           'startingSheet',
           'death',
+          'advancement',
         ]);
         // The system must exist (L-801), read before the edit's transaction.
         const system =
@@ -846,6 +856,12 @@ function writeTools({ writer, systems, studio }) {
           if (args.death === null && death !== undefined) {
             fields['rules.death'] = FieldValue.delete();
           } else if (args.death && args.death !== death) fields['rules.death'] = args.death;
+          // Its advancement switch (L-841): only off is kept.
+          const growing = (world.rules || {}).advancement !== false;
+          if (args.advancement === false && growing) fields['rules.advancement'] = false;
+          else if (args.advancement === true && !growing) {
+            fields['rules.advancement'] = FieldValue.delete();
+          }
           if (Object.keys(fields).length) e.updateWorld(fields);
           return {
             updated: Object.keys(fields).map((f) => f.replace('rules.', '')),

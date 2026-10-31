@@ -674,3 +674,14 @@ test('update_world sets whether a character down with no one to help dies (L-827
   const bad = await call('update_world', { worldId: WORLD, death: 'sometimes' });
   expect(bad.isError).toBe(true);
 });
+
+test('update_world turns advancement off and on (L-841)', async () => {
+  expect((await ok('get_world', { worldId: WORLD })).advancement).toBe(true);
+  const off = await ok('update_world', { worldId: WORLD, advancement: false });
+  expect(off.updated).toEqual(['advancement']);
+  expect((await ok('get_world', { worldId: WORLD })).advancement).toBe(false);
+  // Off again changes nothing; on removes the switch.
+  expect((await ok('update_world', { worldId: WORLD, advancement: false })).updated).toEqual([]);
+  await ok('update_world', { worldId: WORLD, advancement: true });
+  expect((await ok('get_world', { worldId: WORLD })).advancement).toBe(true);
+});

@@ -780,7 +780,7 @@ exports.loomGetMap = onCall(async (request) => {
   // where the save has them.
   const canonWorld = combat.figures.withFigures(loaded, stored);
   // The character's pool of action points, worked out for the world's system (L-811; L-832).
-  const save = sheets.withAp(stored, checks.systemOf(canonWorld));
+  const save = sheets.withAp(stored, checks.systemOf(canonWorld), canonWorld);
   // On a battle map, only what the save has seen of it is sent (L-633).
   const record = save.mapId ? await seenRef(snap.ref, save.mapId).get() : null;
   // In a town, what the save has seen of it, for its fog (L-672).

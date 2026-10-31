@@ -1,6 +1,6 @@
 # The Loom — Advancement — Design Document v0.1
 
-**Status:** Decided (2026-10-28). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#713–#717, §6).
+**Status:** Decided (2026-10-28). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#713–#717, §6). **In progress:** L-841 advancement as data built (2026-10-31; `functions/loom-modules/advancement/`).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-840 (#712), Phase 9 — Game systems (milestone #25).
 **Depends on:** L-810 (sheets, creation), L-820 (combat: fights' ends, rests), L-830 (action points).
@@ -80,6 +80,17 @@ Settled with the user through a questionnaire and three follow-ups (2026-10-28).
 | **SV1** | Older saves          | **Start at the experience their level needs,** with no uses counted                                                                        |
 | **PL1** | Exit criterion       | **Kept,** reworded for counting uses (§5)                                                                                                  |
 
+### Settled while building (2026-10-31)
+
+Asked when L-841 began; the user asked to keep it simple.
+
+| ID      | Question                     | Decision                                                                                                                                                                                          |
+| ------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AR1** | Where an attack's rank lives | **On the sheet, `sheet.attackRanks: { [attackId]: n }`,** beside `uses`, so the system's starting attacks (not on the sheet) can rise too; each attack reads its own as `rank`, 0 when not listed |
+| **AR2** | A story moment paid twice    | **At most one story moment a turn, its id normalised on the server** (lower case, dashes); no fuzzy matching (L-842)                                                                              |
+| **AR3** | Nisia's Wanderlust           | **No code:** once L-842 ships, Wanderlust gets an `experience` curve over MCP in which a major story moment is one Circle; `use` stays off                                                        |
+| **AR4** | A skill's top rank           | **`experience.skillMax`** (default and at most 20, a sheet's top rank): what grants and use raise a skill to; a grant of more ranks than it is refused                                            |
+
 ---
 
 ## 4. Design
@@ -93,7 +104,8 @@ Settled with the user through a questionnaire and three follow-ups (2026-10-28).
   - `foe`: a formula of the foe's `level` and yours (`foeLevel`, `level`) giving its worth;
   - `story`: `{ small, notable, major }`, amounts or formulas;
   - `quest`: a formula or amount, used once quests exist;
-  - `grants`: per level (or a formula for every level, with exceptions): `{ attributePoints?, skillRanks?, traits?: { from: [id], choose: n }, attacks?: { from: [attack], choose: n } }`, each with creation's limits (a score's range, a skill's top rank).
+  - `grants`: `{ every?, at?: { [level]: grant } }`, a level in `at` taking its grant's parts in place of `every`'s; a grant is `{ attributePoints?, skillRanks?, traits?: { from: [id], choose: n }, attacks?: { from: [attack], choose: n } }`, each with creation's limits (a score's range, a skill's top rank);
+  - `skillMax`: a skill's top rank by grants or use (AR4).
 - `use` (or absent, off):
   - `threshold`: a formula of `rank` (default `3 * (rank + 1)`);
   - `skills: true`, `attacks: true`: what improves;
@@ -105,7 +117,7 @@ Settled with the user through a questionnaire and three follow-ups (2026-10-28).
 
 - `sheet.xp`: the total earned; `sheet.levelsReady`: levels earned and not yet taken (worked out from `xp` and the curve).
 - `sheet.uses`: `{ skills: { [id]: n }, attacks: { [id]: n } }`, successes counted since each last rose.
-- **Attacks get a `rank`** (default 0), readable as `rank` in their own `attack` and `damage` formulas, so they can improve by use.
+- **Attacks get a `rank`** (default 0), kept on the sheet as `attackRanks` (AR1) and readable as `rank` in their own `attack` and `damage` formulas, so they can improve by use.
 - `save.earned`: the ids of foes and moments already paid for (XP3).
 - **Older saves (SV1):** `xp` is the curve's total for their level; no uses.
 

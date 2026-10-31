@@ -506,6 +506,9 @@ function makeSave(fields) {
     time: fields.time === undefined ? clock.START : fields.time, // Day 1, 08:00 (L-371)
     // Doors this save has opened, closed or unlocked on battle maps (L-624).
     ...(fields.doors !== undefined ? { doors: fields.doors } : {}),
+    // The foes and story moments it has been paid experience for (L-841,
+    // L-842; advancement XP3): ids, each paid once. None yet reads as [].
+    ...(fields.earned ? { earned: fields.earned } : {}),
     createdAt: fields.createdAt,
     updatedAt: fields.updatedAt,
   };
