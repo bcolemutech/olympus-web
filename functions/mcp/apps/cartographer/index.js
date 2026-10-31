@@ -226,7 +226,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'does it, and the entities it is for, most points first. Points are the weight a ' +
           'piece of work adds times how near play its place is. Write a place up with ' +
           'update_location (setting a description marks it written), add residents with ' +
-          'add_character and lore with add_lore. Paged: pass nextOffset back as offset. ' +
+          'add_character and lore with add_lore. Paged: pass nextOffset back as offset; within a ' +
+          'criterion, its entities page by entityLimit and entityOffset (nextEntityOffset). ' +
           'unplaced lists the characters still without a position (a square, a town point or a ' +
           'world point), each with a suggested one: publishing refuses the world until ' +
           'everyone has one. ' +
@@ -266,6 +267,21 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
             .optional()
             .describe(`Items per page (default ${DEFAULT_FIND_LIMIT}).`),
           offset: z.number().int().min(0).optional().describe('Items to skip (default 0).'),
+          entityLimit: z
+            .number()
+            .int()
+            .min(1)
+            .max(100)
+            .optional()
+            .describe('Entities shown within each criterion (default 10; L-395).'),
+          entityOffset: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe(
+              'Entities to skip within each criterion: pass a group’s nextEntityOffset back.'
+            ),
         },
         annotations: readOnly,
         handler: async (ctx, args) => {
@@ -356,7 +372,9 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
         title: 'Get town',
         description:
           'A settlement’s town layout (the places inside it): each place with its kind, links, ' +
-          'grade and residents; which places are ways in and out (entranceFor) and which world ' +
+          'grade, residents and lore (loreCount; the town’s coverage in lore: about the town, ' +
+          'its places’, and the places with none); which places are ways in and out ' +
+          '(entranceFor, and entranceTo for one serving only certain places) and which world ' +
           'routes each serves; and whether the layout works (every place reachable from a written-' +
           'up way in). Build towns with add_place, update_place, connect_places and ' +
           'disconnect_places. `art` is the size of the town’s image, if it has one (uploaded on ' +

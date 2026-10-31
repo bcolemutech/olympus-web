@@ -1,6 +1,6 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures, L-393 named stat blocks and L-394 seeing and placing built.
+**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures, L-393 named stat blocks, L-394 seeing and placing and L-395 towns, routes and the work list built.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25),, built next, before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
@@ -129,6 +129,7 @@ The list in #735, judged 2026-10-29, with the user's answers (each took the reco
 - **`entranceFor`** also takes destinations: `{ via: ['trail'], to: [locationId] }`. A traveller to or from those places uses that way; others use any way serving the route.
 - **`list_work`** pages the entities inside a criterion (`entityLimit`, `entityOffset`).
 - **`get_town`** gives each place's lore count, and the town's.
+- **Built (L-395):** a way in's `entrance` may carry `to` (world places linked to the settlement); `town.serves(place, via, otherId)` and `town.waysFor` prefer a way set aside for the place at the other end, and leave it out for every other. Arrivals, leaving (the first leg's next stop on a journey), journeys' crossings, the town checks, `get_town`'s routes, the map view's ways out and NARRATE all pass the far end. `set_town_ground` returns the layout as it is with the new ground. `list_work` pages a criterion's entities (`entityLimit`, `entityOffset`, `nextEntityOffset`). `get_town` gives each place's `loreCount` and the town's `lore`: about the town, its places', and the places with none.
 
 ### 4.6 Studio jobs (gaps 22, 20)
 

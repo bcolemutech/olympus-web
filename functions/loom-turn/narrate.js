@@ -329,7 +329,7 @@ function buildTownExitsSection(canonWorld, settlement, place, save) {
   if (town.isEntrance(place)) {
     (settlement.connections || [])
       .map((id) => canonWorld.locations[id])
-      .filter((to) => to && town.serves(place, links[to.id]))
+      .filter((to) => to && town.serves(place, links[to.id], to.id))
       .forEach((to) => {
         exits.push({
           label:

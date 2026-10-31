@@ -266,7 +266,7 @@ function townView(canonWorld, save, discovered, townRecord) {
       name: to.name,
       via,
       open,
-      waysOut: entrances.filter((p) => town.serves(p, via)).map((p) => p.id),
+      waysOut: town.waysFor(entrances, via, id).map((p) => p.id),
       travel: estimate(canonWorld, save, id),
     });
   }

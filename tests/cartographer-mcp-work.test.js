@@ -228,6 +228,28 @@ test('closed places come first; then the score’s work, grouped, most points fi
   expect(groupOf(all, 'realm.description', 'update_faction')).toMatchObject({ count: 23 });
 });
 
+test('list_work pages the entities within a criterion (L-395)', async () => {
+  const first = groupOf(await work({ limit: 100, offset: 719 }), 'realm.description', 'update_region');
+  const paged = groupOf(
+    await work({ limit: 100, offset: 719, entityLimit: 50, entityOffset: 10 }),
+    'realm.description',
+    'update_region'
+  );
+  expect(first).toMatchObject({ count: 145, more: 135, nextEntityOffset: 10 });
+  expect(paged).toMatchObject({ count: 145, entityOffset: 10, more: 85, nextEntityOffset: 60 });
+  expect(paged.entities).toHaveLength(50);
+  // Past the first ten, none of them again.
+  const seen = new Set(first.entities.map((e) => e.id));
+  expect(paged.entities.some((e) => seen.has(e.id))).toBe(false);
+  const last = groupOf(
+    await work({ limit: 100, offset: 719, entityLimit: 100, entityOffset: 100 }),
+    'realm.description',
+    'update_region'
+  );
+  expect(last.entities).toHaveLength(45);
+  expect(last).not.toHaveProperty('more');
+});
+
 test('writing up the start and laying out its town opens it, moving the frontier on', async () => {
   await ok('update_location', {
     worldId: WORLD,
