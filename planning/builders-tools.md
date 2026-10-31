@@ -1,8 +1,8 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures, L-393 named stat blocks, L-394 seeing and placing, L-395 towns, routes and the work list, L-396 studio jobs and L-397 Scriptorium notes built.
+**Status:** Shipped (2026-10-31): L-391 to L-397 (#737–#743), each built as §4 says. Decided 2026-10-29. The bug, #744, is still open.
 **Project:** Olympus (`olympus-dfa00`)
-**Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25),, built next, before L-840 advancement. From idea #735.
+**Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25), built before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
 **Related:** [`worlds-without-azgaar.md`](./worlds-without-azgaar.md) (L-710), [`combat.md`](./combat.md), [`ai-characters.md`](./ai-characters.md) (L-790), [`map-levels.md`](./map-levels.md), [`maps-from-data.md`](./maps-from-data.md)
 
