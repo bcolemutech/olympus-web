@@ -20,6 +20,7 @@
     mcp: 'from Claude',
     upload: 'uploaded',
     backfill: 'moved in from a world',
+    fit: 'fitted to its map',
   };
 
   function slug(text) {

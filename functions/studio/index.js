@@ -44,9 +44,10 @@ function studio() {
     library,
     costs,
     model: createImageModel(),
-    enqueue: (data) => {
+    // A job to run, now or after a wait (a retry when the model was busy, L-396).
+    enqueue: (data, options) => {
       const { getFunctions } = require('firebase-admin/functions');
-      return getFunctions().taskQueue('studioRunJob').enqueue(data);
+      return getFunctions().taskQueue('studioRunJob').enqueue(data, options);
     },
     loadWorld: (worldId) => loomCanon.loadWorld(worldId, { db, playableOnly: false }),
     placesOf: town.placesOf,

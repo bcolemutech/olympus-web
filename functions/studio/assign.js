@@ -5,6 +5,7 @@ const art = require('../loom-canon/art');
 const loomCanon = require('../loom-canon');
 const { LibraryError } = require('./library');
 const { TARGETS, refOf } = require('./assign-targets');
+const { FITS, fits, fitFile } = require('./fit');
 
 /**
  * Assigning library images to worlds (planning/the-image-studio.md §4.4;
@@ -82,7 +83,75 @@ function createAssigner({ db, bucket, writer, library }) {
    * Assigns an image (imageId) to a target, or takes it away (imageId null).
    * Returns { worldId, target, id, name, image, previous, warnings }.
    */
-  async function assign(uid, { worldId, target, id, imageId }) {
+  /**
+   * Art fitted to its target's shape (L-396): a battle map's grid or a town's
+   * square, cropped or padded (./fit.js). The image gets a fitted version,
+   * made current, and keeps its original as the one before; one used
+   * elsewhere is copied instead, so its other uses keep their shape. Returns
+   * the record to assign, and a note of what was done, or the record as it
+   * was when nothing need change.
+   */
+  async function fitted(uid, record, { worldId, target, id, fit }) {
+    if (!fit || fit === 'stretch' || (target !== 'battleMap' && target !== 'town')) {
+      return { record };
+    }
+    const world = await loomCanon.loadWorld(worldId, { db, playableOnly: false });
+    if (!world) throw new AssignError('not-found', 'No such world, or it is still importing.');
+    const holder = holderOf(world, target, id);
+    const shape =
+      target === 'battleMap'
+        ? { width: holder.entity.width, height: holder.entity.height }
+        : { width: 1, height: 1 };
+    const version = record.versions.find((v) => v.n === record.current);
+    if (version.format === 'svg') {
+      throw new AssignError(
+        'failed-precondition',
+        `"${record.title}" is SVG: give it the shape with its viewBox ` +
+          `("0 0 ${shape.width} ${shape.height}") rather than fit.`
+      );
+    }
+    if (fits(version, shape)) return { record };
+    const file = await fitFile(
+      {
+        ...(await library.fileOf(record, record.current)),
+        width: version.width,
+        height: version.height,
+      },
+      shape,
+      fit
+    );
+    const what = `${fit === 'crop' ? 'cropped' : 'padded'} to ${shape.width}:${shape.height}`;
+    const elsewhere = (record.usedIn || []).some(
+      (u) => !(u.worldId === worldId && u.target === target && u.id === id)
+    );
+    if (elsewhere) {
+      const copy = await library.addImage({
+        title: `${record.title} (${what})`.slice(0, 120),
+        kind: record.kind,
+        labels: record.labels || [],
+        file,
+        createdBy: uid,
+        via: 'fit',
+        source: { fittedFrom: record.id, version: record.current },
+      });
+      return { record: copy, note: `A copy ${what}: the original is used elsewhere, as it was.` };
+    }
+    const next = await library.addVersion(record.id, {
+      file,
+      createdBy: uid,
+      via: 'fit',
+      instruction: what,
+    });
+    return {
+      record: next,
+      note: `Version ${next.current}, ${what}; the original is version ${record.current}.`,
+    };
+  }
+
+  async function assign(uid, { worldId, target, id, imageId, fit }) {
+    if (fit !== undefined && fit !== null && !FITS.includes(fit)) {
+      throw new AssignError('invalid-argument', `fit must be one of: ${FITS.join(', ')}.`);
+    }
     const spec = TARGETS[target];
     if (!spec) {
       throw new AssignError(
@@ -111,6 +180,13 @@ function createAssigner({ db, bucket, writer, library }) {
           `"${record.title}" is a ${record.kind} image; ${spec.label} takes a ${spec.kind} image.`
         );
       }
+    }
+    // Fitted to its shape first, if asked (L-396).
+    let fitNote = null;
+    if (record && fit) {
+      const done = await fitted(uid, record, { worldId, target, id: at, fit });
+      record = done.record;
+      fitNote = done.note || null;
     }
     const ref = record ? refOf(record) : null;
     const use = { worldId, target, id: at };
@@ -170,7 +246,9 @@ function createAssigner({ db, bucket, writer, library }) {
           ? { imageId: result.previous.imageId }
           : { path: result.previous.path }
         : null,
-      warnings: ref ? shapeWarnings(target, result.entity, ref) : [],
+      // Stretched on purpose (fit: stretch) isn't warned about.
+      warnings: ref && fit !== 'stretch' ? shapeWarnings(target, result.entity, ref) : [],
+      ...(fitNote ? { fitted: fitNote } : {}),
     };
   }
 
@@ -179,7 +257,7 @@ function createAssigner({ db, bucket, writer, library }) {
    * Cartographer page's uploads and set_art. If assigning fails, the new
    * image is deleted again.
    */
-  async function addAndAssign(uid, { worldId, target, id, file, via, labels, source }) {
+  async function addAndAssign(uid, { worldId, target, id, file, via, labels, source, fit }) {
     if (!TARGETS[target]) throw new AssignError('invalid-argument', `Unknown target ${target}.`);
     // Check the target first, and name the image after it.
     const world = await loomCanon.loadWorld(worldId, { db, playableOnly: false });
@@ -195,7 +273,7 @@ function createAssigner({ db, bucket, writer, library }) {
       source: { worldId, target, id: id || worldId, ...(source || {}) },
     });
     try {
-      return await assign(uid, { worldId, target, id, imageId: record.id });
+      return await assign(uid, { worldId, target, id, imageId: record.id, fit });
     } catch (err) {
       await library.deleteImage(record.id).catch(() => {});
       throw err;

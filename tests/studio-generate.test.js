@@ -387,15 +387,16 @@ describe('failures', () => {
   });
 
   test('a call that fails records its error, and isn’t charged', async () => {
+    // (A busy model's 429 is tried again: tests/studio-retries.test.js, L-396.)
     model.respond = () => {
-      throw new Error('429 RESOURCE_EXHAUSTED');
+      throw new Error('400 INVALID_ARGUMENT');
     };
     const before = (await costEntries()).length;
     const job = await jobs.start(BUILDER, { prompt: 'x', kind: 'scene' });
     await drain();
     expect(await jobDoc(job.id)).toMatchObject({
       state: 'failed',
-      error: '429 RESOURCE_EXHAUSTED',
+      error: '400 INVALID_ARGUMENT',
       imageId: null,
       cost: null,
     });

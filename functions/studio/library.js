@@ -51,7 +51,8 @@ const KINDS = Object.freeze([
   'interface',
   'other',
 ]);
-const VIAS = Object.freeze(['page', 'mcp', 'upload', 'backfill']);
+// How an image came in; 'fit': cropped or padded to what it is drawn on (L-396).
+const VIAS = Object.freeze(['page', 'mcp', 'upload', 'backfill', 'fit']);
 const LINK_CACHE = 'public, max-age=300';
 const MAX_TITLE = 120;
 const MAX_LABELS = 20;
@@ -435,6 +436,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
   return {
     addImage,
     addVersion,
+    fileOf,
     setCurrent,
     updateImage,
     getImage,
