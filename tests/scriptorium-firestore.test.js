@@ -173,4 +173,37 @@ describe('MCP tools over the Firestore store', () => {
     const deleted = await client.callTool({ name: 'delete_note', arguments: { id: note.id } });
     expect(deleted.structuredContent.deleted).toBe(true);
   });
+
+  test('list_notes pages 30 notes by ten, without bodies; get_note reads one (L-397)', async () => {
+    const made = [];
+    for (let i = 1; i <= 30; i++) {
+      const created = await client.callTool({
+        name: 'create_note',
+        arguments: { title: `Page note ${i}`, body: `Body ${i}` },
+      });
+      made.push(created.structuredContent.note);
+    }
+    const seen = [];
+    let cursor;
+    let pages = 0;
+    do {
+      const page = (
+        await client.callTool({
+          name: 'list_notes',
+          arguments: { limit: 10, ...(cursor ? { cursor } : {}) },
+        })
+      ).structuredContent;
+      pages += 1;
+      seen.push(...page.notes);
+      cursor = page.next_cursor;
+    } while (cursor && pages < 10);
+    const mine = seen.filter((n) => /^Page note /.test(n.title));
+    expect(mine).toHaveLength(30);
+    expect(new Set(mine.map((n) => n.id)).size).toBe(30);
+    expect(seen.every((n) => !('body' in n))).toBe(true);
+    const got = await client.callTool({ name: 'get_note', arguments: { id: made[0].id } });
+    expect(got.structuredContent.note).toMatchObject({ title: 'Page note 1', body: 'Body 1' });
+    const missing = await client.callTool({ name: 'get_note', arguments: { id: 'nosuchnote' } });
+    expect(missing.isError).toBe(true);
+  });
 });

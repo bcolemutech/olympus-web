@@ -2,7 +2,7 @@
 
 const { z } = require('zod');
 const { ToolError } = require('../../registry');
-const { createFirestoreNotesStore } = require('./store');
+const { createFirestoreNotesStore, decodeCursor } = require('./store');
 
 // Scriptorium — the Initiative 1 proof-of-concept app (design §9, phase 1f).
 // Deliberately dumb: an owner-scoped list of notes whose only job is to prove
@@ -22,6 +22,7 @@ const MAX_LIST_LIMIT = 100;
 const noteId = z
   .string()
   .regex(/^[A-Za-z0-9]{1,64}$/, 'id must be a note id returned by list_notes or create_note');
+// Notes (L-397) are read whole with get_note; list_notes gives their titles.
 const title = z.string().trim().min(1, 'title must not be empty').max(MAX_TITLE);
 const body = z.string().max(MAX_BODY);
 
@@ -33,7 +34,10 @@ function scriptoriumApp({ store, now = () => Date.now() }) {
       {
         name: 'list_notes',
         title: 'List notes',
-        description: 'List your Scriptorium notes, most recently updated first.',
+        description:
+          'List your Scriptorium notes, most recently updated first: each one’s id, title and ' +
+          'dates, without its text (get_note reads one in full). Paged: pass next_cursor back ' +
+          'as cursor for the next page.',
         inputSchema: {
           limit: z
             .number()
@@ -41,12 +45,32 @@ function scriptoriumApp({ store, now = () => Date.now() }) {
             .min(1)
             .max(MAX_LIST_LIMIT)
             .optional()
-            .describe(`Maximum notes to return (default ${DEFAULT_LIST_LIMIT}).`),
+            .describe(`Notes a page (default ${DEFAULT_LIST_LIMIT}).`),
+          cursor: z
+            .string()
+            .max(500)
+            .optional()
+            .describe('next_cursor from the page before, for the next one.'),
         },
         annotations: { readOnlyHint: true },
-        handler: async (ctx, { limit = DEFAULT_LIST_LIMIT }) => {
-          const notes = await store.list(ctx.uid, { limit });
-          return { notes, count: notes.length };
+        handler: async (ctx, { limit = DEFAULT_LIST_LIMIT, cursor }) => {
+          if (cursor !== undefined && !decodeCursor(cursor)) {
+            throw new ToolError('That cursor isn’t one list_notes gave: start again without it.');
+          }
+          const { notes, nextCursor } = await store.page(ctx.uid, { limit, cursor });
+          return { notes, count: notes.length, ...(nextCursor ? { next_cursor: nextCursor } : {}) };
+        },
+      },
+      {
+        name: 'get_note',
+        title: 'Get note',
+        description: 'Read one of your notes in full, with its text, by its id from list_notes.',
+        inputSchema: { id: noteId.describe('The note id.') },
+        annotations: { readOnlyHint: true },
+        handler: async (ctx, { id }) => {
+          const note = await store.get(ctx.uid, id);
+          if (!note) throw notFound();
+          return { note };
         },
       },
       {

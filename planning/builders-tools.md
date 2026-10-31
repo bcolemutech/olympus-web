@@ -1,6 +1,6 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures, L-393 named stat blocks, L-394 seeing and placing, L-395 towns, routes and the work list and L-396 studio jobs built.
+**Status:** Decided (2026-10-29). Sub-issues filed 2026-10-29 (#737–#743, §6); the bug is #744. **In progress:** L-391 worlds from scratch, L-392 wary figures, L-393 named stat blocks, L-394 seeing and placing, L-395 towns, routes and the work list, L-396 studio jobs and L-397 Scriptorium notes built.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25),, built next, before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
@@ -140,6 +140,7 @@ The list in #735, judged 2026-10-29, with the user's answers (each took the reco
 ### 4.7 Scriptorium (gap 5)
 
 - **`get_note`** returns one note; **`list_notes`** returns titles and dates without bodies, paged by a cursor.
+- **Built (L-397):** `list_notes` takes `limit` and `cursor` and answers with `next_cursor` while there are more, newest update first (ties by id); a cursor is the last note's update time and id, and a made-up one is refused. `get_note` reads one of the caller's notes whole; anyone else's, or an unknown id, is "Note not found." The `scriptorium://notes` resource still gives every note with its text.
 
 ### 4.8 Grading
 
