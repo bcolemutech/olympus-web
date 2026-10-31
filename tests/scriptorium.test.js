@@ -41,6 +41,7 @@ let server;
 let base;
 let alice;
 let bob;
+let carol;
 
 // Each user connects under an active grant (phase 1h).
 const oauthStore = createInMemoryStore();
@@ -87,27 +88,34 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${server.address().port}`;
   alice = await connect('uid-alice');
   bob = await connect('uid-bob');
+  carol = await connect('uid-carol');
 });
 
 afterAll(async () => {
   await alice.close();
   await bob.close();
+  await carol.close();
   await new Promise((resolve) => server.close(resolve));
 });
 
 beforeEach(() => store._debug.notes.clear());
 
 describe('Scriptorium tool surface', () => {
-  test('exposes the four note tools with accurate hints, and the notes resource', async () => {
+  test('exposes the five note tools with accurate hints, and the notes resource', async () => {
     const { tools } = await alice.listTools();
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
     expect(Object.keys(byName).sort()).toEqual([
       'create_note',
       'delete_note',
+      'get_note',
       'list_notes',
       'update_note',
     ]);
     expect(byName.list_notes.annotations.readOnlyHint).toBe(true);
+    expect(byName.get_note.annotations.readOnlyHint).toBe(true);
+    // They point at each other (L-397).
+    expect(byName.list_notes.description).toMatch(/get_note/);
+    expect(byName.get_note.description).toMatch(/list_notes/);
     expect(byName.delete_note.annotations.destructiveHint).toBe(true);
     expect(byName.create_note.inputSchema.required).toEqual(['title']);
 
@@ -123,10 +131,50 @@ describe('Scriptorium tool surface', () => {
     expect(prod.appIds()).toContain('scriptorium');
     expect(prod.getApp('scriptorium').tools.map((t) => t.name)).toEqual([
       'list_notes',
+      'get_note',
       'create_note',
       'update_note',
       'delete_note',
     ]);
+  });
+});
+
+describe('reading notes: titles in pages, one note whole (L-397)', () => {
+  test('30 notes in pages of 10, newest first, without bodies; then one in full', async () => {
+    const made = [];
+    for (let i = 1; i <= 30; i++) {
+      made.push(
+        (await call(carol, 'create_note', { title: `Note ${i}`, body: `Text of note ${i}.` }))
+          .structuredContent.note
+      );
+    }
+    const pages = [];
+    let cursor;
+    do {
+      const page = (await call(carol, 'list_notes', { limit: 10, ...(cursor ? { cursor } : {}) }))
+        .structuredContent;
+      pages.push(page);
+      cursor = page.next_cursor;
+    } while (cursor);
+    expect(pages.map((p) => p.count)).toEqual([10, 10, 10]);
+    const listed = pages.flatMap((p) => p.notes);
+    expect(listed.map((n) => n.title)).toEqual(made.map((n) => n.title).reverse());
+    expect(listed.every((n) => !('body' in n) && n.id && n.updatedAt)).toBe(true);
+    expect(pages[2]).not.toHaveProperty('next_cursor');
+
+    const one = (await call(carol, 'get_note', { id: made[4].id })).structuredContent;
+    expect(one.note).toMatchObject({ id: made[4].id, title: 'Note 5', body: 'Text of note 5.' });
+  });
+
+  test('an unknown id, someone else’s note, or a made-up cursor is refused', async () => {
+    const unknown = await call(carol, 'get_note', { id: 'nosuchnote' });
+    expect(unknown.isError).toBe(true);
+    expect(unknown.content[0].text).toMatch(/Note not found/);
+    const { note } = (await call(alice, 'create_note', { title: 'Private' })).structuredContent;
+    expect((await call(carol, 'get_note', { id: note.id })).isError).toBe(true);
+    const bad = await call(carol, 'list_notes', { cursor: 'not-a-cursor' });
+    expect(bad.isError).toBe(true);
+    expect(bad.content[0].text).toMatch(/cursor/);
   });
 });
 
@@ -139,8 +187,12 @@ describe('exit criterion: CRUD under the caller’s identity', () => {
     expect(note.id).toMatch(/^[A-Za-z0-9]+$/);
     expect(note).not.toHaveProperty('ownerUid');
 
+    // Listed without its body (L-397); get_note reads it whole.
     const listed = await call(alice, 'list_notes');
-    expect(listed.structuredContent).toEqual({ notes: [note], count: 1 });
+    const { body: _body, ...summary } = note;
+    void _body;
+    expect(listed.structuredContent).toEqual({ notes: [summary], count: 1 });
+    expect((await call(alice, 'get_note', { id: note.id })).structuredContent).toEqual({ note });
 
     const updated = await call(alice, 'update_note', { id: note.id, title: 'Renamed' });
     expect(updated.structuredContent.note).toMatchObject({

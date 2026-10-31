@@ -224,7 +224,7 @@ npm run deploy            # Deploy hosting only (production)
 | `studio_jobs/{jobId}` | `hasApp('cartographer')`, read only | The image studio's jobs, making an image or editing one: the request, its state (queued, running, done, failed), the image (and version) made, its cost or error; one the model turned away as busy (429) is queued again with backoff, `tries` and `retryAt`, up to 5 tries (L-396) |
 | `studio_styles/{styleId}` | `hasApp('cartographer')`, read only | The image studio's named styles: a name, prompt text and up to 3 reference images, named in a generation or edit; a world's default is `world.studio.styleId` |
 | `studio_costs/{entryId}`, `studio_costs_month/{yyyy-mm}` | Deny (server only) | The image studio's costs: one entry per charged job, and each month's totals by day, model and who (read through `studioCosts`) |
-| `scriptorium_notes/{id}` | Deny (server only) | Scriptorium notes, via MCP |
+| `scriptorium_notes/{id}` | Deny (server only) | Scriptorium notes, via MCP (`list_notes` pages titles and dates without bodies by a cursor; `get_note` reads one; L-397) |
 | `mcp_*` (`oauth_clients`, `oauth_codes`, `oauth_tokens`, `oauth_grants`, `audit`, `rate_limits`) | Deny (server only) | MCP OAuth state, audit log, rate limits |
 
 Client writes to Loom and Cartographer data are denied; the Cloud Functions write through the Admin SDK. Default: all other paths deny read/write.

@@ -7,14 +7,38 @@
 //
 // Interface (both implementations MUST behave identically):
 //   list(ownerUid, { limit })                 -> note[] (newest update first)
+//   page(ownerUid, { limit, cursor })         -> { notes: summary[], nextCursor }
+//                                                (newest update first, no
+//                                                bodies; L-397)
+//   get(ownerUid, id)                         -> note | null
 //   create(ownerUid, { title, body }, nowMs)  -> note
 //   update(ownerUid, id, patch, nowMs)        -> note | null  (atomic)
 //   remove(ownerUid, id)                      -> boolean      (atomic)
 //
-// A note is { id, title, body, createdAt, updatedAt } with ISO-8601 times.
-// ownerUid is stored on the document but never returned.
+// A note is { id, title, body, createdAt, updatedAt } with ISO-8601 times; a
+// summary the same without its body. ownerUid is stored on the document but
+// never returned. A cursor is opaque: the last summary's update time and id.
 
 const COLLECTION = 'scriptorium_notes';
+
+const millisOf = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : Number(t));
+const summaryOf = (note) => {
+  const { body, ...rest } = note;
+  void body;
+  return rest;
+};
+const encodeCursor = (t, id) => Buffer.from(JSON.stringify({ t, id })).toString('base64url');
+
+/** A cursor read back: { t, id }, or null when it isn't one of ours. */
+function decodeCursor(cursor) {
+  if (!cursor) return null;
+  try {
+    const { t, id } = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
+    return Number.isFinite(t) && typeof id === 'string' && id ? { t, id } : null;
+  } catch {
+    return null;
+  }
+}
 
 function toNote(id, data) {
   const iso = (t) => (t && typeof t.toDate === 'function' ? t.toDate() : new Date(t)).toISOString();
@@ -31,10 +55,33 @@ function toNote(id, data) {
 // `getDb` is called lazily so the module can be registered before Firebase
 // Admin is initialized.
 function createFirestoreNotesStore(getDb) {
-  const { Timestamp } = require('firebase-admin/firestore');
+  const { Timestamp, FieldPath } = require('firebase-admin/firestore');
   const col = () => getDb().collection(COLLECTION);
 
   return {
+    async page(ownerUid, { limit, cursor }) {
+      let query = col()
+        .where('ownerUid', '==', ownerUid)
+        .orderBy('updatedAt', 'desc')
+        .orderBy(FieldPath.documentId(), 'desc');
+      const after = decodeCursor(cursor);
+      if (after) query = query.startAfter(Timestamp.fromMillis(after.t), after.id);
+      const snap = await query.limit(limit + 1).get();
+      const docs = snap.docs.slice(0, limit);
+      const last = docs[docs.length - 1];
+      return {
+        notes: docs.map((doc) => summaryOf(toNote(doc.id, doc.data()))),
+        nextCursor:
+          snap.docs.length > limit ? encodeCursor(millisOf(last.data().updatedAt), last.id) : null,
+      };
+    },
+
+    async get(ownerUid, id) {
+      const snap = await col().doc(id).get();
+      if (!snap.exists || snap.data().ownerUid !== ownerUid) return null;
+      return toNote(id, snap.data());
+    },
+
     async list(ownerUid, { limit }) {
       const snap = await col()
         .where('ownerUid', '==', ownerUid)
@@ -80,6 +127,25 @@ function createInMemoryNotesStore() {
   let seq = 0;
 
   return {
+    async page(ownerUid, { limit, cursor }) {
+      const after = decodeCursor(cursor);
+      const mine = [...notes.entries()]
+        .filter(([, n]) => n.ownerUid === ownerUid)
+        .sort(([aId, a], [bId, b]) => b.updatedAt - a.updatedAt || (aId < bId ? 1 : -1))
+        .filter(
+          ([id, n]) => !after || n.updatedAt < after.t || (n.updatedAt === after.t && id < after.id)
+        );
+      const shown = mine.slice(0, limit);
+      const last = shown[shown.length - 1];
+      return {
+        notes: shown.map(([id, n]) => summaryOf(toNote(id, n))),
+        nextCursor: mine.length > limit ? encodeCursor(last[1].updatedAt, last[0]) : null,
+      };
+    },
+    async get(ownerUid, id) {
+      const n = notes.get(id);
+      return n && n.ownerUid === ownerUid ? toNote(id, n) : null;
+    },
     async list(ownerUid, { limit }) {
       return [...notes.entries()]
         .filter(([, n]) => n.ownerUid === ownerUid)
@@ -112,4 +178,9 @@ function createInMemoryNotesStore() {
   };
 }
 
-module.exports = { createFirestoreNotesStore, createInMemoryNotesStore, COLLECTION };
+module.exports = {
+  createFirestoreNotesStore,
+  createInMemoryNotesStore,
+  COLLECTION,
+  decodeCursor,
+};
