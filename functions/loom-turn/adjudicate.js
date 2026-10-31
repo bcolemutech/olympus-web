@@ -797,14 +797,17 @@ function leavingBy(
     if (refused) return { result: refused };
   }
   const { place: here, point } = town.positionOf(canonWorld, characterState);
-  const serving = town.entrancesOf(canonWorld, currentId).filter((p) => town.serves(p, via));
+  // Ways out serving the route to where the first leg goes (L-395: one set
+  // aside for it, if any).
+  const next = journey ? journey.stops[1] : targetId;
+  const serving = town.waysFor(town.entrancesOf(canonWorld, currentId), via, next);
   const exits = serving.filter((p) => !found || found.has(p.id));
   // Out of town only from a way out that serves the route: standing in it,
   // or on the street at its door (L-662).
   const atAWayOut = (p) =>
     p.position && Math.hypot(point.x - p.position.x, point.y - p.position.y) < 0.5;
   const atWayOut =
-    (here && town.isEntrance(here) && town.serves(here, via)) ||
+    (here && town.isEntrance(here) && serving.some((p) => p.id === here.id)) ||
     (!here && point && exits.some(atAWayOut)) ||
     (!here && !point);
   // Ways out serving the route, none of them known yet (L-381).
@@ -885,10 +888,11 @@ function refuseWayIn(wayIn, destination, via, characterState, canonWorld) {
       'The way into ' + destination.name + ' by ' + wayIn.name + ' is closed. Turn back.'
     );
   }
-  if (!town.serves(wayIn, via)) {
+  const from = characterState.location;
+  if (!town.serves(wayIn, via, from)) {
     const serving = town
-      .entrancesOf(canonWorld, destination.id)
-      .filter((p) => town.serves(p, via) && isPlaceOpen(canonWorld, p));
+      .waysFor(town.entrancesOf(canonWorld, destination.id), via, from)
+      .filter((p) => isPlaceOpen(canonWorld, p));
     return blocked(
       wayIn.name +
         ' is no way in by ' +

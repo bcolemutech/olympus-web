@@ -10,10 +10,14 @@
  *   Place
  *     id, locationId (its settlement), name, kind, description, sources
  *     connections: string[]      — places in the same town reachable directly
- *     entrance: { via: [...] }   — set on the ways in and out of town: the
+ *     entrance: { via: [...], to?: [...] }
+ *                                — set on the ways in and out of town: the
  *                                  world routes it serves ('road', 'trail',
  *                                  'sea'); a harbour serves the sea, a gate the
- *                                  roads and trails. null for the rest.
+ *                                  roads and trails. `to` (L-395): the world
+ *                                  places it serves them to and from, only
+ *                                  those; others use any way serving the
+ *                                  route. null for the rest.
  *     npcIds: string[], rules: object, position: { x, y }   — town coordinates
  *
  * A save's position is its settlement (`save.location`) and, inside a town
@@ -63,10 +67,32 @@ function isEntrance(place) {
   return Boolean(place && place.entrance);
 }
 
-/** Whether an entrance serves a world route of this kind (no list: all of them). */
-function serves(place, via) {
+/**
+ * Whether an entrance serves a world route of this kind (no list: all of
+ * them), to or from `otherId`, the world place at its far end (L-395): an
+ * entrance with destinations (`to`) serves only them. Without `otherId`, any.
+ */
+function serves(place, via, otherId = null) {
   const kinds = place.entrance && place.entrance.via;
-  return !Array.isArray(kinds) || !kinds.length || !via || kinds.includes(via);
+  if (!(!Array.isArray(kinds) || !kinds.length || !via || kinds.includes(via))) return false;
+  const to = place.entrance && place.entrance.to;
+  return !otherId || !Array.isArray(to) || !to.length || to.includes(otherId);
+}
+
+/** Whether an entrance is set aside for `otherId` (L-395): it names it among its destinations. */
+function servesOnly(place, otherId) {
+  const to = place && place.entrance && place.entrance.to;
+  return Boolean(otherId) && Array.isArray(to) && to.includes(otherId);
+}
+
+/**
+ * Of `ways`, those serving `via` to or from `otherId` (L-395): the ones set
+ * aside for it, if any; else the rest that serve the route.
+ */
+function waysFor(ways, via, otherId = null) {
+  const serving = ways.filter((place) => serves(place, via, otherId));
+  const own = serving.filter((place) => servesOnly(place, otherId));
+  return own.length ? own : serving;
 }
 
 /** A settlement's ways in and out. */
@@ -90,7 +116,8 @@ function routeBetween(world, fromId, toId) {
  */
 function arrivalPlace(world, locationId, via, fromId = null) {
   const open = entrancesOf(world, locationId).filter((place) => isPlaceOpen(world, place));
-  const serving = open.filter((place) => serves(place, via));
+  // One set aside for where they came from first (L-395).
+  const serving = waysFor(open, via, fromId);
   const ways = serving.length ? serving : open;
   return facing(world, locationId, fromId, ways) || ways[0] || null;
 }
@@ -297,7 +324,7 @@ function layoutReport(world, settlement) {
   const links = (settlement.geo && settlement.geo.links) || {};
   for (const id of settlement.connections || []) {
     const via = links[id] || null;
-    if (entrances.length && !entrances.some((place) => serves(place, via))) {
+    if (entrances.length && !entrances.some((place) => serves(place, via, id))) {
       const to = world.locations[id];
       warnings.push(
         'No way out serves the ' + (via || 'route') + ' to ' + (to ? to.name : id) + '.'
@@ -342,6 +369,8 @@ function townMetres(settlement, a, b) {
 }
 
 module.exports = {
+  servesOnly,
+  waysFor,
   TOWN_SIZES,
   TOWN_SIDE,
   MIN_TOWN_SIZE,

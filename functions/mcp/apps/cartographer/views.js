@@ -543,8 +543,8 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
     routes: (settlement.connections || []).map((id) => ({
       ...ref(world.locations, id),
       via: links[id] || null,
-      waysOut: entrances
-        .filter((place) => town.serves(place, links[id] || null))
+      waysOut: town
+        .waysFor(entrances, links[id] || null, id)
         .map((place) => ({ id: place.id, name: place.name })),
     })),
     places: places.map((place) => {
@@ -555,6 +555,10 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
         kind: place.kind || null,
         description: place.description || '',
         entranceFor: place.entrance ? (place.entrance.via || []).slice() : null,
+        // The world places it serves, only (L-395).
+        ...(place.entrance && (place.entrance.to || []).length
+          ? { entranceTo: place.entrance.to.slice() }
+          : {}),
         // How dangerous it is (L-824).
         danger: place.danger || 'none',
         grade: graded.grade,
@@ -569,11 +573,25 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
           .map((c) => ({ id: c.id, name: c.name })),
         lore: loreAbout(world, place.id),
       };
+      // Its lore coverage (L-395), at a glance.
+      row.loreCount = row.lore.length;
       if (place.position) row.position = place.position;
       row.battleMap = mapRef(world, place);
       if (place.retired) row.retired = true;
       return row;
     }),
+    // Lore coverage (L-395): about the town itself, and its live places'.
+    lore: loreCoverage(world, settlement, places),
+  };
+}
+
+function loreCoverage(world, settlement, places) {
+  const live = places.filter((place) => !place.retired);
+  const counts = live.map((place) => loreAbout(world, place.id).length);
+  return {
+    town: loreAbout(world, settlement.id).length,
+    places: counts.reduce((sum, n) => sum + n, 0),
+    placesWithNone: live.filter((place, i) => !counts[i]).map((place) => place.name),
   };
 }
 

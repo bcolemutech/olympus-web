@@ -311,7 +311,11 @@ function scorable(world, grades) {
 }
 
 // The unmet criteria, grouped by criterion (and the work it asks for).
-function scoreGroups(world, grades, { kind, grade, band, need }) {
+function scoreGroups(
+  world,
+  grades,
+  { kind, grade, band, need, entityLimit = GROUP_SHOWN, entityOffset = 0 }
+) {
   const groups = new Map();
   for (const { type, kind: entityKind, entity, graded, nearness } of scorable(world, grades)) {
     if (kind && entityKind !== kind) continue;
@@ -372,8 +376,15 @@ function scoreGroups(world, grades, { kind, grade, band, need }) {
         count: entities.length,
         points,
         summary: `${count}${noun}: ${group.label.toLowerCase()} · ${points} points · ${group.tool}`,
-        entities: entities.slice(0, GROUP_SHOWN),
-        ...(entities.length > GROUP_SHOWN ? { more: entities.length - GROUP_SHOWN } : {}),
+        // Paged within the criterion (L-395): entityLimit from entityOffset.
+        entities: entities.slice(entityOffset, entityOffset + entityLimit),
+        ...(entityOffset ? { entityOffset } : {}),
+        ...(entities.length > entityOffset + entityLimit
+          ? {
+              more: entities.length - entityOffset - entityLimit,
+              nextEntityOffset: entityOffset + entityLimit,
+            }
+          : {}),
       };
     })
     .sort(
@@ -381,7 +392,10 @@ function scoreGroups(world, grades, { kind, grade, band, need }) {
     );
 }
 
-function workList(world, { kind, grade, band, need, near, limit, offset }) {
+function workList(
+  world,
+  { kind, grade, band, need, near, limit, offset, entityLimit = GROUP_SHOWN, entityOffset = 0 }
+) {
   const start = (world.rules || {}).startingLocationId;
   const usable = (id) => Boolean(id && world.locations[id] && !world.locations[id].retired);
   const origin = usable(near) ? near : usable(start) ? start : null;
@@ -406,7 +420,9 @@ function workList(world, { kind, grade, band, need, near, limit, offset }) {
           (need === 'battleMap' && item.battleMap && item.battleMap !== 'own'))
     )
     .sort(byTierThenNearest);
-  const matching = closed.concat(scoreGroups(world, grades, { kind, grade, band, need }));
+  const matching = closed.concat(
+    scoreGroups(world, grades, { kind, grade, band, need, entityLimit, entityOffset })
+  );
 
   const byTier = Object.fromEntries(TIERS.map((tier) => [tier, 0]));
   for (const item of matching) byTier[item.priority] += 1;
@@ -461,4 +477,9 @@ function biggestGaps(world, count = 5) {
     }));
 }
 
-module.exports = { workList, biggestGaps, TIERS };
+module.exports = {
+  GROUP_SHOWN,
+  workList,
+  biggestGaps,
+  TIERS,
+};

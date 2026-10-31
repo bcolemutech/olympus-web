@@ -288,6 +288,60 @@ describe('laying out Burdendal, place by place', () => {
   });
 });
 
+describe('lore and ways for particular places (L-395)', () => {
+  const W = LIVE;
+
+  test('get_town shows each place’s lore count, and the town’s coverage', async () => {
+    const before = await ok('get_town', { worldId: W, locationId: 'loc_1' });
+    expect(before.places.every((p) => p.loreCount === p.lore.length)).toBe(true);
+    await ok('add_lore', {
+      worldId: W,
+      title: 'The eel-pie feud',
+      text: 'The Gull & Anchor and the harbour have argued over eel pie for a century.',
+      about: ['plc_1_the-gull-anchor', 'plc_1_the-harbour'],
+    });
+    const after = await ok('get_town', { worldId: W, locationId: 'loc_1' });
+    const gull = after.places.find((p) => p.id === 'plc_1_the-gull-anchor');
+    expect(gull.loreCount).toBe(before.places.find((p) => p.id === gull.id).loreCount + 1);
+    expect(after.lore).toMatchObject({
+      town: expect.any(Number),
+      places: before.lore.places + 2,
+    });
+    expect(after.lore.placesWithNone).not.toContain('The Gull & Anchor');
+    expect(after.lore.placesWithNone).toContain('Market Square');
+  });
+
+  test('entranceFor { via, to }: a way for particular places, linked ones only', async () => {
+    expect(
+      await refused('update_place', {
+        worldId: W,
+        placeId: 'plc_1_the-north-gate',
+        entranceFor: { via: ['trail'], to: ['loc_2'] },
+      })
+    ).toMatch(/isn't linked to Burdendal/);
+    const set = await ok('update_place', {
+      worldId: W,
+      placeId: 'plc_1_the-north-gate',
+      entranceFor: { via: ['trail', 'road'], to: ['loc_631'] },
+    });
+    expect(set.place).toMatchObject({ entranceFor: ['road', 'trail'], entranceTo: ['loc_631'] });
+    const view = await ok('get_town', { worldId: W, locationId: 'loc_1' });
+    expect(view.places.find((p) => p.id === 'plc_1_the-north-gate').entranceTo).toEqual([
+      'loc_631',
+    ]);
+    // The other trail now has no way out, and says so.
+    const other = view.routes.find((r) => r.via === 'trail' && r.id !== 'loc_631');
+    expect(other.waysOut).toEqual([]);
+    expect(view.layout.warnings).toEqual([`No way out serves the trail to ${other.name}.`]);
+    // Back to serving every trail and road.
+    await ok('update_place', {
+      worldId: W,
+      placeId: 'plc_1_the-north-gate',
+      entranceFor: ['trail', 'road'],
+    });
+  });
+});
+
 describe('the town’s rules', () => {
   const W = LIVE;
 

@@ -256,6 +256,10 @@ describe('setting Burdendal’s ground', () => {
   test('a gate in the wall and a bridge over the river: set, and summed up', async () => {
     const set = await ok('set_town_ground', { worldId: W, locationId: 'loc_1', ...BURDENDAL });
     expect(set.updated).toEqual(['buildings', 'water', 'walls', 'crossings']);
+    // The layout as it is with this ground, at once (L-395): walked on its
+    // streets, its places read as reachable.
+    expect(set.layout).toEqual((await getTown()).layout);
+    expect(set.layout.problems).toEqual([]);
     expect(set.ground).toMatchObject({
       buildings: { count: 1, named: ['the Gull'] },
       water: { count: 1, named: ['the Dal'] },

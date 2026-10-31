@@ -43,14 +43,28 @@ const kind = z
   .toLowerCase()
   .regex(/^[a-z][a-z -]{1,29}$/, 'kind must be a word or two, e.g. harbour, gate, tavern')
   .describe('What it is: harbour, gate, market, temple, tavern, district, …');
+const routeKinds = z.array(z.enum(ROUTES)).min(1).max(3);
 const entranceFor = z
-  .array(z.enum(ROUTES))
-  .min(1)
-  .max(3)
+  .union([
+    routeKinds,
+    z.strictObject({
+      via: routeKinds,
+      to: z
+        .array(z.string().regex(/^[A-Za-z0-9_-]{1,80}$/))
+        .min(1)
+        .max(20)
+        .optional()
+        .describe(
+          'The world places it serves those routes to and from, only (L-395): a traveller to ' +
+            'or from one uses it; others use any way serving the route.'
+        ),
+    }),
+  ])
   .describe(
     'Makes it a way in and out of town, serving these world routes: a harbour ["sea"], a ' +
-      'gate ["road", "trail"]. Travellers arrive at the way in that serves their route and ' +
-      'can only leave from one that serves the route out.'
+      'gate ["road", "trail"]; or { via, to } for a way that serves them only to and from ' +
+      'certain places (the west gate, for the trail to Daldockley). Travellers arrive at the ' +
+      'way in that serves their route and can only leave from one that serves the route out.'
   );
 const position = z
   .object({ x: z.number().min(0).max(TOWN_SPAN), y: z.number().min(0).max(TOWN_SPAN) })
@@ -79,7 +93,30 @@ function checkPlaceName(world, settlement, wanted, selfId) {
   return wanted;
 }
 
-const entranceOf = (via) => ({ via: ROUTES.filter((r) => via.includes(r)) });
+// What's stored: the routes in a fixed order, and its destinations (L-395).
+const entranceOf = (given) => {
+  const via = Array.isArray(given) ? given : given.via;
+  const to = Array.isArray(given) ? null : given.to;
+  return {
+    via: ROUTES.filter((r) => via.includes(r)),
+    ...(to && to.length ? { to: [...new Set(to)] } : {}),
+  };
+};
+// Its destinations are world places linked to the settlement (L-395).
+function checkDestinations(world, settlement, entrance) {
+  for (const id of (entrance && entrance.to) || []) {
+    const place = world.locations[id];
+    if (!place || place.retired) {
+      throw new ToolError(`No place "${id}" for entranceFor.to. Use find_locations.`);
+    }
+    if (!(settlement.connections || []).includes(id)) {
+      throw new ToolError(
+        `${place.name} isn't linked to ${settlement.name}, so no way out leads there.`
+      );
+    }
+  }
+  return entrance;
+}
 
 // A town with ground is walked on its streets (L-665): links aren't used.
 const WALKED_BY_GROUND = (settlement) =>
@@ -153,6 +190,7 @@ function townTools({ writer }) {
     id: place.id,
     name: place.name,
     entranceFor: entrance ? entrance.via : null,
+    ...(entrance && entrance.to ? { entranceTo: entrance.to } : {}),
   });
 
   return [
@@ -207,7 +245,9 @@ function townTools({ writer }) {
             description: args.description,
             sources: { description: SOURCES.MCP },
             connections: links.map((p) => p.id),
-            entrance: args.entranceFor ? entranceOf(args.entranceFor) : null,
+            entrance: args.entranceFor
+              ? checkDestinations(world, settlement, entranceOf(args.entranceFor))
+              : null,
             npcIds: [],
             rules: {},
             ...(args.position ? { position: args.position } : {}),
@@ -293,7 +333,7 @@ function townTools({ writer }) {
             helpers.keepsAWayIn(world, place, { entranceAfter: false });
             fields.entrance = entrance = null;
           } else if (args.entranceFor) {
-            const next = entranceOf(args.entranceFor);
+            const next = checkDestinations(world, settlement, entranceOf(args.entranceFor));
             if (JSON.stringify(next) !== JSON.stringify(place.entrance || null)) {
               fields.entrance = entrance = next;
             }
@@ -482,7 +522,11 @@ function townTools({ writer }) {
             town: { id: settlement.id, name: settlement.name },
             updated: given,
             ground: empty ? null : views.groundSummary(world, after),
-            layout: town.layoutReport(world, settlement),
+            // The layout as it is with this ground (L-395), never the last one.
+            layout: town.layoutReport(
+              { ...world, locations: { ...world.locations, [settlement.id]: after } },
+              after
+            ),
           };
         }),
     },
