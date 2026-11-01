@@ -1,6 +1,6 @@
 # The Loom — Builder's Tools — Design Document v0.1
 
-**Status:** Shipped (2026-10-31): L-391 to L-397 (#737–#743), each built as §4 says. Decided 2026-10-29. The bug, #744, is still open.
+**Status:** Shipped (2026-10-31): L-391 to L-397 (#737–#743), each built as §4 says. Decided 2026-10-29. The bug, #744, was fixed 2026-10-31.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-390 (#736), Phase 9 — Game systems (milestone #25), built before L-840 advancement. From idea #735.
 **Depends on:** L-820 (combat), L-813 (NPC sheets), the Cartographer connector.
