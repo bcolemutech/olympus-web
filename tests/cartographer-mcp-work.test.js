@@ -497,6 +497,8 @@ test('people, lore and a long description make it Rich; ground raises it', async
     'world.lore',
     'world.system',
     'world.hook',
+    // Nisia's world map is large: its places want templates (L-906).
+    'world.templates',
   ]);
 });
 
