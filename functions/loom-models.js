@@ -349,14 +349,40 @@ function validateSave(data) {
     errors.push('townPoint must be { x, y } (0 to 1000 each way) or null');
   }
   // Places the save has discovered (world map, L-331); older saves have none.
+  // Kept by map in the levels model (L-901): { [mapId]: [placeId] }.
+  const idList = function (v) {
+    return (
+      Array.isArray(v) &&
+      v.every(function (id) {
+        return typeof id === 'string';
+      })
+    );
+  };
   if (
     data.discovered !== undefined &&
-    (!Array.isArray(data.discovered) ||
-      data.discovered.some(function (id) {
-        return typeof id !== 'string';
-      }))
+    !idList(data.discovered) &&
+    !(
+      data.discovered !== null &&
+      typeof data.discovered === 'object' &&
+      Object.values(data.discovered).every(idList)
+    )
   ) {
-    errors.push('discovered must be an array of location ids');
+    errors.push('discovered must be an array of location ids, or place ids by map');
+  }
+  // Where it stands in the levels model (L-901; ../loom-canon/levels.js): a
+  // path of steps from the top map down, each checked against canon there.
+  if (
+    data.at !== undefined &&
+    data.at !== null &&
+    !(
+      Array.isArray(data.at) &&
+      data.at.length > 0 &&
+      data.at.every(function (step) {
+        return step !== null && typeof step === 'object' && typeof step.mapId === 'string';
+      })
+    )
+  ) {
+    errors.push('at must be a path of { mapId, placeId | point | cell } steps, or null');
   }
   if (
     typeof data.privateFlags !== 'object' ||
@@ -494,6 +520,8 @@ function makeSave(fields) {
     // square, with no place (placeId null) and no map.
     ...(fields.townPoint ? { townPoint: fields.townPoint } : {}),
     discovered: fields.discovered || [],
+    // Where it stands in the levels model (L-901), once worlds move onto it.
+    ...(fields.at ? { at: fields.at } : {}),
     // The settlements arrived in, and the ways in and out known in each
     // (L-381; journeys and arrivals §4.1, §4.2). A save without them is from
     // before L-381: its next turn derives them (../loom-turn/visits.js).
