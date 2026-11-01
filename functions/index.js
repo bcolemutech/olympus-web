@@ -784,12 +784,15 @@ exports.loomPlayTurn = onCall(async (request) => {
  */
 exports.loomGetMap = onCall(async (request) => {
   const uid = requireLoomAuth(request);
-  const { worldId, saveId } = request.data || {};
+  const { worldId, saveId, peek } = request.data || {};
   if (typeof worldId !== 'string' || worldId.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'worldId is required.');
   }
   if (typeof saveId !== 'string' || saveId.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'saveId is required.');
+  }
+  if (peek !== undefined && peek !== null && (typeof peek !== 'string' || !peek)) {
+    throw new HttpsError('invalid-argument', 'peek must be a map id.');
   }
 
   const db = getFirestore();
@@ -803,7 +806,23 @@ exports.loomGetMap = onCall(async (request) => {
   const loaded = await loomCanon.loadWorld(worldId.trim(), { db });
   if (!loaded) throw new HttpsError('not-found', 'Unknown world.');
   // The world from where the save stands (L-903): the map it is on.
-  const framed = frames.frameOf(frames.playWorld(loaded), stored);
+  const play = frames.playWorld(loaded);
+  const framed = frames.frameOf(play, stored);
+  const at = framed.at || frames.atOf(framed.view, framed.save);
+  // A peek at a region map above (L-904; map levels UI1): that map, from the
+  // place on it the save's path goes through.
+  if (peek && peek !== framed.view.frame.mapId) {
+    const peeked = frames.peekAt(play, at, peek);
+    if (!peeked) throw new HttpsError('invalid-argument', 'That map is not on your trail.');
+    const there = { ...framed.save, ...peeked.fields };
+    const world = combat.figures.withFigures(peeked.view, there);
+    return {
+      ...mapView(world, sheets.withAp(there, checks.systemOf(world), world), null, null),
+      mapId: peek,
+      peek: true,
+      trail: frames.trailOf(play, at),
+    };
+  }
   // The world as this save sees it (L-824): its map's figures, and everyone
   // where the save has them.
   const canonWorld = combat.figures.withFigures(framed.view, framed.save);
@@ -824,7 +843,7 @@ exports.loomGetMap = onCall(async (request) => {
   return {
     ...view,
     mapId: canonWorld.frame.mapId,
-    trail: frames.trailOf(canonWorld, framed.at || frames.atOf(canonWorld, save)),
+    trail: frames.trailOf(canonWorld, at),
   };
 });
 
