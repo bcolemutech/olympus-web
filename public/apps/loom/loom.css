@@ -2448,3 +2448,112 @@ body.loom-playing .app-divider {
   color: var(--loom-accent);
   border: 1px solid color-mix(in srgb, var(--loom-accent) 40%, transparent);
 }
+
+/* ── Advancement (L-845) ─────────────────────────── */
+
+.loom-strip-level {
+  padding: 0.05rem 0.5rem;
+  color: var(--loom-on-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--loom-accent);
+  border-radius: 999px;
+}
+
+.loom-xp .loom-track-fill {
+  background: var(--loom-accent);
+}
+
+.loom-log-earned {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--loom-accent);
+  font-size: 0.85rem;
+}
+
+.loom-levelup {
+  border: 1px solid color-mix(in srgb, var(--loom-accent) 55%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--loom-accent) 10%, transparent);
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.75rem;
+}
+
+.loom-levelup-title {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+}
+
+.loom-levelup-reason,
+.loom-levelup-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.loom-levelup fieldset {
+  border: 0;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+
+.loom-levelup legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.loom-levelup-left {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.loom-levelup-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  padding: 0.1rem 0;
+}
+
+.loom-levelup-value em {
+  color: var(--loom-accent);
+  font-style: normal;
+}
+
+.loom-levelup-step {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--loom-accent) 40%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.loom-levelup-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.loom-levelup-option {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-size: 0.9rem;
+  padding: 0.15rem 0;
+}
+
+.loom-levelup-problems {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+  color: #f0c27a;
+  font-size: 0.85rem;
+}
+
+.loom-levelup .loom-confirm-cancel {
+  background: transparent;
+  color: var(--loom-accent);
+  border: 1px solid color-mix(in srgb, var(--loom-accent) 40%, transparent);
+}

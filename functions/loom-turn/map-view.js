@@ -21,6 +21,7 @@ const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
 const apRules = require('../loom-canon/ap');
 const advancement = require('../loom-modules/advancement');
+const levelUp = require('../loom-modules/advancement/level-up');
 const sheets = require('../loom-canon/sheets');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
@@ -148,8 +149,12 @@ function mapView(canonWorld, save, record, townRecord) {
     character: sheets.characterView(
       checks.systemOf(canonWorld),
       save.character,
-      clock.timeOf(save)
+      clock.timeOf(save),
+      { world: canonWorld }
     ),
+    // A level offered at the last long rest and not yet taken (L-845), with
+    // the rules' own suggestion: the level-up form after a reload.
+    levelUp: levelUpView(canonWorld, save),
     map:
       map && map.width
         ? {
@@ -162,6 +167,17 @@ function mapView(canonWorld, save, record, townRecord) {
           }
         : null,
   };
+}
+
+// The level-up offer kept on the save (L-843's levelOffer), or null.
+function levelUpView(canonWorld, save) {
+  const sheet = save.character && save.character.sheet;
+  if (!save.levelOffer || save.fight || !sheet) return null;
+  const system = checks.systemOf(canonWorld);
+  const offer = levelUp.offerOf(system, sheet, canonWorld);
+  return offer
+    ? { ...offer, suggestion: { choices: levelUp.fallback(system, sheet, canonWorld) } }
+    : null;
 }
 
 // How long the trip from where the save stands to `toId` takes, setting out

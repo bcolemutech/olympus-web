@@ -113,6 +113,7 @@
     map: null, // loomGetMap's result
     turn: null, // its `turn`
     held: null, // after End turn in a fight, the AP kept for reactions: { kept, left } (L-837)
+    levelUp: null, // a level offered by the last turn, with the GM's suggestion (L-845)
     // The panel's content (L-726): the turns' lines ({ id, action, text,
     // roll, reveal }), the suggested actions, the save's summary, the last
     // error, and the arrival banner ({ name, image }).

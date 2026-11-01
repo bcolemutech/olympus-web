@@ -67,6 +67,9 @@
         // The AP kept for reactions over the others' turns (L-837), shown
         // as held till the next turn.
         Loom.store.set({ held: data.held || null });
+        // A level offered at a long rest, or the next after one taken (L-845);
+        // any other turn takes the offer away.
+        Loom.store.set({ levelUp: data.levelUp || null });
         // A second action turned down (L-614) keeps the suggestions, too.
         var keep = (options.keep || data.refused) && !(data.suggestedActions || []).length;
         // A walk that ends by going in or setting out (L-664), by walking
@@ -94,7 +97,13 @@
           journal.setSuggestions(kept);
         } else {
           // The roll as a card (L4); the foes' after it.
-          journal.add(label, data.narration, data.roll, { cards: cards, faster: faster });
+          journal.add(label, data.narration, data.roll, {
+            cards: cards,
+            faster: faster,
+            // Experience earned and ranks risen by use (L-845): journal lines.
+            awards: data.awards,
+            rises: data.rises,
+          });
           journal.setSuggestions(keep ? kept : data.suggestedActions);
         }
         journal.setSummary(data.stateSummary);
@@ -225,7 +234,18 @@
     return Loom.map.load(); // the loading cover stays until it has (L-729)
   }
 
+  /** Takes a level offered at a long rest (L-845): the choices made on the form. */
+  function levelUp(level, choices) {
+    var word = (Loom.store.get().map.character || { level: { name: 'level' } }).level.name;
+    playTurn(
+      { action: { verb: 'levelUp', choices: choices } },
+      'take ' + String(word).toLowerCase() + ' ' + level,
+      { keep: true }
+    );
+  }
+
   Loom.play = {
+    levelUp: levelUp,
     init: init,
     submitTurn: submitTurn,
     travelTo: travelTo,

@@ -394,7 +394,30 @@
           setRead(true);
         }}
       />`}
+      ${landed &&
+      entry.earned &&
+      html`<ul class="loom-log-earned">
+        ${entry.earned.map(function (line, i) {
+          return html`<li key=${i}>${line}</li>`;
+        })}
+      </ul>`}
     </div>`;
+  }
+
+  // The lines a turn's experience adds (L-845; advancement UI1): each award,
+  // what it was for and how much, and each rank risen by use.
+  function earnedLines(extra) {
+    var awards = (extra && extra.awards) || [];
+    var rises = (extra && extra.rises) || [];
+    return awards
+      .map(function (a) {
+        return '+' + a.xp + ' experience: ' + a.name + '.';
+      })
+      .concat(
+        rises.map(function (r) {
+          return 'Your ' + r.name + ' rises to ' + r.rank + '.';
+        })
+      );
   }
 
   // ── The arrival banner (A5) ───────────────────────
@@ -579,6 +602,7 @@
   function liveText(entry) {
     if (!entry) return '';
     return [entry.action, entry.roll && rollLine(entry.roll), entry.text]
+      .concat(entry.earned || [])
       .filter(Boolean)
       .join('. ');
   }
@@ -629,6 +653,7 @@
       >
         ${liveText(last)}
       </div>
+      ${Loom.levelUp && html`<${Loom.levelUp.Form} />`}
       <${Confirm} confirm=${j.confirm} busy=${busy} />
       <${Suggestions} actions=${j.suggestions} busy=${busy} />
       <${TurnBox} busy=${busy} ended=${ended} />
@@ -727,6 +752,9 @@
       entry.cards = extra.cards;
       entry.faster = Boolean(extra.faster);
     }
+    // Experience earned and ranks risen by use (L-845): lines under it.
+    var earned = earnedLines(extra);
+    if (earned.length) entry.earned = earned;
     setJournal({ entries: journal().entries.concat([entry]), banner: null });
     Loom.shell.newLine(text); // the collapsed panel shows it, and opens
   }

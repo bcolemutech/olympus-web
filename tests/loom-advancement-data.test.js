@@ -78,13 +78,15 @@ describe.each([
     const xp = system.advancement.experience;
     const bad = (threshold) =>
       withAdvancement(system, { experience: xp, use: { threshold } }).errors.join('\n');
-    expect(bad('3 * (level + 1)')).toMatch(/threshold must be a formula of rank only; it reads level/);
+    expect(bad('3 * (level + 1)')).toMatch(
+      /threshold must be a formula of rank only; it reads level/
+    );
     expect(bad('3 * (rank + 1')).toMatch(/advancement\.use\.threshold/);
     expect(bad('1d6 + rank')).toMatch(/mustn't roll dice/);
     expect(bad('5')).toMatch(/must be a formula of rank/);
-    expect(withAdvancement(system, { experience: xp, use: { threshold: '2 * rank + 2' } }).errors).toEqual(
-      []
-    );
+    expect(
+      withAdvancement(system, { experience: xp, use: { threshold: '2 * rank + 2' } }).errors
+    ).toEqual([]);
   });
 
   test('other mistakes are named', () => {
@@ -134,7 +136,12 @@ describe.each([
     expect(loaded.levelsReady).toBe(0);
     // A sheet with its own experience keeps it.
     const kept = sheets.withAp(
-      { character: { name: 'Earner', sheet: { ...old, xp: advancement.totalFor(system, level + 1) } } },
+      {
+        character: {
+          name: 'Earner',
+          sheet: { ...old, xp: advancement.totalFor(system, level + 1) },
+        },
+      },
       system
     ).character.sheet;
     expect(kept.levelsReady).toBe(1);
@@ -152,7 +159,9 @@ describe.each([
     const sheet = { ...sheets.defaultSheet(system), xp: 1e6 };
     expect(advancement.levelsReady(system, sheet, world)).toBe(0);
     expect(advancement.levelsReady(system, sheet)).toBeGreaterThan(0);
-    expect(sheets.withAp({ character: { sheet } }, system, world).character.sheet.levelsReady).toBe(0);
+    expect(sheets.withAp({ character: { sheet } }, system, world).character.sheet.levelsReady).toBe(
+      0
+    );
     expect(advancement.rulesView(system, world)).toEqual({ off: true });
     expect(advancement.isOn({ rules: {} })).toBe(true);
   });
@@ -243,6 +252,10 @@ describe('the built-ins differ in kind', () => {
       { level: 3, xp: 300 },
     ]);
     expect(view.experience.curve).toHaveLength(20);
-    expect(advancement.rulesView(SCIFI).use).toEqual({ skills: true, attacks: true, maxRank: 3 });
+    expect(advancement.rulesView(SCIFI).use).toMatchObject({
+      skills: true,
+      attacks: true,
+      maxRank: 3,
+    });
   });
 });

@@ -384,9 +384,11 @@ const titled = (id) => String(id).charAt(0).toUpperCase() + String(id).slice(1);
  * the level, skills with their ranks and attributes, traits and conditions
  * by name (conditions with what's left), derived values, speed, attacks
  * (L-822; a player's starting ones when the sheet lists none, `player`), and
- * what no longer fits (SY2). `now` is the save's time. Null without a sheet.
+ * what no longer fits (SY2), and experience toward the next level (L-845;
+ * with `world` for its advancement switch). `now` is the save's time. Null
+ * without a sheet.
  */
-function characterView(system, character, now = 0, { player = true } = {}) {
+function characterView(system, character, now = 0, { player = true, world = null } = {}) {
   const sheet = sheetOf(character);
   if (!sheet) return null;
   const s = system.sheet;
@@ -464,6 +466,27 @@ function characterView(system, character, now = 0, { player = true } = {}) {
     ap: apFor(system, sheet),
     attacks: attacks.attacksOf(system, sheet, { player }).map((a) => attackView(system, a, values)),
     misfits,
+    // Experience toward the next level (L-845): with the system's
+    // experience and the world's advancement on, else left out.
+    ...experienceView(system, sheet, world),
+  };
+}
+
+// The experience bar (L-845; advancement UI1): `{ experience: { xp, from,
+// to, ready } }`, `from` and `to` the totals for this level and the next
+// (`to` null at the top), `ready` the levels earned and not yet taken.
+function experienceView(system, sheet, world) {
+  const adv = advancement();
+  if (!adv.settingsOf(system, world).experience) return {};
+  const at = adv.sheetWith(system, sheet, world);
+  const top = system.sheet.level.max;
+  return {
+    experience: {
+      xp: at.xp,
+      from: adv.totalFor(system, sheet.level),
+      to: sheet.level < top ? adv.totalFor(system, sheet.level + 1) : null,
+      ready: at.levelsReady || 0,
+    },
   };
 }
 

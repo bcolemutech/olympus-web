@@ -10,10 +10,12 @@
   // - The panel, from the menu bar's Character button: the level, resources
   //   as tracks, attributes with their modifiers, skills with their ranks,
   //   traits, conditions with what's left, attacks (L-822), derived values
-  //   and action points (L-832); a sheet that no longer fits the world's rules says what
+  //   and action points (L-832), experience toward the next level (L-845); a
+  //   sheet that no longer fits the world's rules says what
   //   (SY2). Escape or Close shuts it.
   // - The strip, always on the map (overlay.js hosts it): each resource as a
-  //   small track, as many as fit, and any conditions ("Poisoned · 2 turns").
+  //   small track, as many as fit, any conditions ("Poisoned · 2 turns"), and
+  //   a mark when a level is ready (L-845).
   //   A press opens the panel. On a phone it runs under the menu bar.
   //
   // The map reloads after every turn, so both follow what a turn changed.
@@ -79,6 +81,31 @@
     </div>`;
   }
 
+  // Experience toward the next level (L-845; advancement UI1): a bar from
+  // this level's total to the next's, in the system's word for the level.
+  function Experience(props) {
+    var x = props.experience;
+    var word = props.word;
+    var span = x.to === null ? 0 : x.to - x.from;
+    var share = span > 0 ? Math.max(0, Math.min(1, (x.xp - x.from) / span)) : 1;
+    return html`<div class="loom-track loom-xp" id="loom-character-xp">
+      <span class="loom-track-name">${x.to === null ? word : word + ' ' + (props.level + 1)}</span>
+      <span class="loom-track-bar" aria-hidden="true">
+        <span class="loom-track-fill" style=${{ width: share * 100 + '%' }}></span>
+      </span>
+      <span class="loom-track-amount">
+        ${x.to === null ? x.xp + ' · top ' + word.toLowerCase() : x.xp + '/' + x.to}
+      </span>
+    </div>`;
+  }
+
+  // The mark for a level ready (L-845): "Level ready", or how many.
+  function readyText(c) {
+    var n = c.experience && c.experience.ready;
+    if (!n) return '';
+    return n > 1 ? n + ' ' + c.level.name.toLowerCase() + 's ready' : c.level.name + ' ready';
+  }
+
   // ── The strip (CS8, EF9) ──────────────────────────
 
   function Strip() {
@@ -92,6 +119,7 @@
         })
         .concat(c.conditions.map(conditionText))
         .join(', ') +
+      (readyText(c) ? '. ' + readyText(c) + ': take it at a long rest' : '') +
       (c.misfits.length ? '. The sheet no longer fits the rules' : '') +
       '. Open the Character panel';
     return html`<button
@@ -109,6 +137,10 @@
       ${c.conditions.map(function (k) {
         return html`<span key=${k.id} class="loom-strip-condition">${conditionText(k)}</span>`;
       })}
+      ${readyText(c) &&
+      html`<span class="loom-strip-level" id="loom-strip-level" title="Take it at a long rest"
+        >${readyText(c)}</span
+      >`}
       ${c.misfits.length > 0 &&
       html`<span class="loom-strip-flag" title="The sheet no longer fits the rules">!</span>`}
     </button>`;
@@ -183,6 +215,14 @@
               })}
             </ul>
           </div>`}
+          ${c.experience &&
+          html`<${Section} id="loom-character-experience" title="Experience">
+            <${Experience} experience=${c.experience} word=${c.level.name} level=${c.level.value} />
+            ${readyText(c) &&
+            html`<p class="loom-rules-note" id="loom-character-ready">
+              ${readyText(c)}: take it at your next long rest.
+            </p>`}
+          <//>`}
           <${Section} id="loom-character-resources" title="Tracks">
             ${c.resources.map(function (r) {
               return html`<${Track} key=${r.id} resource=${r} />`;
