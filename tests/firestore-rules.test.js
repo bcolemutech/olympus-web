@@ -1558,6 +1558,18 @@ describe('loom_* — Firestore Security Rules', function () {
         name: 'Gate guard',
         statBlock: { attributes: { STR: 12 } },
       });
+      // Maps inside maps (L-901): a map and a place in the new shape.
+      await setDoc(doc(db, 'loom_worlds', 'world-001', 'maps', 'map_top'), {
+        kind: 'region',
+        parent: null,
+        name: 'Nisia',
+        space: { width: 1000, height: 800 },
+      });
+      await setDoc(doc(db, 'loom_worlds', 'world-001', 'places', 'pl_port'), {
+        mapId: 'map_top',
+        name: 'The port',
+        at: { x: 10, y: 20 },
+      });
       await setDoc(doc(db, 'loom_world_state', 'world-001'), { worldClock: 0 });
       await setDoc(doc(db, 'loom_saves', SAVE_ID), {
         ownerUid: OWNER_UID,
@@ -1661,6 +1673,32 @@ describe('loom_* — Firestore Security Rules', function () {
         setDoc(doc(builderDb, 'loom_worlds', 'world-001', 'statBlocks', 'new-one'), { name: 'x' })
       );
       await assertFails(setDoc(ref(loomDb), { name: 'x' }));
+    });
+  });
+
+  // Maps and places in the levels model (L-901): builders read them; nobody
+  // writes them but the server, and players never see them.
+  describe('loom_worlds maps and places', function () {
+    it('lets a builder read them, a player not at all, and no client write them', async function () {
+      var builderDb = testEnv
+        .authenticatedContext('builder-001', { apps: ['cartographer'] })
+        .firestore();
+      for (const [name, id] of [
+        ['maps', 'map_top'],
+        ['places', 'pl_port'],
+      ]) {
+        var ref = (d) => doc(d, 'loom_worlds', 'world-001', name, id);
+        await assertSucceeds(getDoc(ref(builderDb)));
+        await assertSucceeds(getDocs(collection(builderDb, 'loom_worlds', 'world-001', name)));
+        await assertFails(getDoc(ref(loomDb)));
+        await assertFails(getDocs(collection(loomDb, 'loom_worlds', 'world-001', name)));
+        await assertFails(getDoc(ref(noClaimDb)));
+        await assertFails(setDoc(ref(builderDb), { name: 'Changed' }));
+        await assertFails(
+          setDoc(doc(builderDb, 'loom_worlds', 'world-001', name, 'new'), { name: 'x' })
+        );
+        await assertFails(setDoc(ref(loomDb), { name: 'x' }));
+      }
     });
   });
 

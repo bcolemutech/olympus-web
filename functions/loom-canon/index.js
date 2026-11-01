@@ -50,8 +50,10 @@
  * assembles one from `loom_worlds/{worldId}` and its entity subcollections —
  * the CanonWorld shape,
  * extended with optional `geo` / `politics` / `regions` / `map`, `places` (the
- * town layer: places inside settlements, ./town.js; L-342 / #396), and the world's
- * `status` and `canonVersion`. Only `published` worlds are playable.
+ * town layer: places inside settlements, ./town.js; L-342 / #396; and places
+ * in the new shape, on `maps`), `maps`, `topMapId` and `tree` (maps inside
+ * maps to any depth, ./levels.js; L-901), and the world's `status` and
+ * `canonVersion`. Only `published` worlds are playable.
  *
  * Canon can be edited while a world is being played (the Cartographer's MCP
  * tools), so each call re-reads the world document — one read — and reuses a
@@ -129,6 +131,7 @@ const ENTITY_COLLECTIONS = [
   'places',
   'battleMaps', // battle maps of places and points of interest (L-351; ./maps.js)
   'statBlocks', // named stat blocks characters and figures name (L-393; ./stat-blocks.js)
+  'maps', // maps inside maps, any depth (L-901; ./levels.js)
 ];
 const LOADABLE_STATUSES = ['draft', 'published'];
 
@@ -182,6 +185,9 @@ async function readFirestoreWorld(db, worldId, meta) {
     // Its game system (L-801; planning/game-systems.md): set over MCP, or none.
     systemId: meta.systemId || null,
     rules: meta.rules || {},
+    // The top of its map tree (L-901; planning/map-levels.md MP4), or null
+    // for a world from before map levels.
+    topMapId: meta.topMapId || null,
   };
   ENTITY_COLLECTIONS.forEach(function (name, i) {
     world[name] = {};
@@ -189,6 +195,8 @@ async function readFirestoreWorld(db, worldId, meta) {
       world[name][doc.id] = doc.data();
     });
   });
+  // Its maps as a tree from the top (L-901): { top, orphans }.
+  world.tree = require('./levels').treeOf(world);
   return deepFreeze(toPlayView(world));
 }
 

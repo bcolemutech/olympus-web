@@ -1,6 +1,6 @@
 # The Loom — Map Levels to Any Depth — Design Document v0.1
 
-**Status:** Decided (2026-10-16). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#719–#724, §6).
+**Status:** Decided (2026-10-16). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#719–#724, §6). **In progress:** L-901 the model built (2026-11-01; `functions/loom-canon/levels.js`): additive, beside today's shapes. Places in the new shape share `places` with today's town places (they have a `mapId`; town places a `locationId`) until L-902 migrates them; `save.at` is accepted and checked, and nothing that plays reads the model until L-903.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-900 (#625), milestone #26 (Phase 10 — Levels and Vehicles)
 **Built:** just before L-710 (worlds without Azgaar), which then builds on it (the roadmap's Build order).
