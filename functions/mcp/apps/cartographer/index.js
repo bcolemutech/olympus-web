@@ -8,6 +8,7 @@ const { worldId, entityId } = require('./schemas');
 const { writeTools } = require('./write-tools');
 const { townTools } = require('./town-tools');
 const { mapTools } = require('./map-tools');
+const { levelTools } = require('./level-tools');
 const { studioTools } = require('./studio-tools');
 const { systemTools } = require('./system-tools');
 const { statBlockTools } = require('./stat-block-tools');
@@ -245,9 +246,13 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
               'faction',
               'region',
               'world',
+              'map',
             ])
             .optional()
-            .describe('Only this kind of thing (place: a place in town; faction: a realm).'),
+            .describe(
+              'Only this kind of thing (place: a place in town; faction: a realm; map: a map ' +
+                'made with add_map, still closed, L-905).'
+            ),
           grade: z.enum(GRADES).optional().describe('Only things with this grade (the gate).'),
           band: z
             .enum(BANDS)
@@ -758,6 +763,7 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
       ...statBlockTools({ writer, worldFor }),
       ...townTools({ writer }),
       ...mapTools({ writer }),
+      ...levelTools({ writer, worldFor }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
       // Game systems (L-801): list, get, set and copy them.
       ...(systems ? systemTools({ systems, reader }) : []),

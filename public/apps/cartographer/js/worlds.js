@@ -323,6 +323,53 @@
       details.appendChild(list);
       node.appendChild(details);
     }
+    if (c.maps) node.appendChild(renderMaps(c.maps));
+  }
+
+  // A world's maps as a tree (L-905; map levels UI4): each with its kind, its
+  // band and, while closed, what it lacks; behind a toggle.
+  var MAP_KINDS = { region: 'Region', area: 'Area', grid: 'Grid' };
+
+  function countMaps(node) {
+    return (
+      1 +
+      (node.children || []).reduce(function (n, child) {
+        return n + countMaps(child);
+      }, 0)
+    );
+  }
+
+  function mapItem(node) {
+    var li = el('li', 'carto-map');
+    var row = el('div', 'carto-map-row');
+    row.appendChild(
+      el('span', 'carto-band carto-band--' + node.band, BAND_LABELS[node.band] || node.band)
+    );
+    row.appendChild(el('span', 'carto-map-name', ' ' + node.name));
+    row.appendChild(
+      el('span', 'carto-meta carto-map-kind', ' · ' + (MAP_KINDS[node.kind] || node.kind))
+    );
+    li.appendChild(row);
+    if ((node.lacks || []).length && (node.band === 'unbuilt' || node.band === 'stub')) {
+      li.appendChild(el('p', 'carto-meta carto-map-lacks', node.lacks.join(' ')));
+    }
+    if ((node.children || []).length) {
+      var list = el('ul', 'carto-map-children');
+      node.children.forEach(function (child) {
+        list.appendChild(mapItem(child));
+      });
+      li.appendChild(list);
+    }
+    return li;
+  }
+
+  function renderMaps(tree) {
+    var details = el('details', 'carto-maps');
+    details.appendChild(el('summary', null, 'Maps (' + countMaps(tree) + ')'));
+    var list = el('ul', 'carto-map-tree');
+    list.appendChild(mapItem(tree));
+    details.appendChild(list);
+    return details;
   }
 
   function loadCompletion(worldIds) {

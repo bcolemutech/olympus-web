@@ -331,3 +331,34 @@ textarea.carto-input {
 .carto-link:focus-visible {
   text-decoration: underline;
 }
+
+/* A world's maps as a tree (L-905): each with its band, kind and lacks. */
+.carto-maps {
+  margin-top: 0.5rem;
+}
+
+.carto-maps summary {
+  cursor: pointer;
+}
+
+.carto-map-tree,
+.carto-map-children {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding-left: 0;
+}
+
+.carto-map-children {
+  padding-left: 1.1rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  margin-left: 0.4rem;
+}
+
+.carto-map {
+  margin: 0.2rem 0;
+}
+
+.carto-map-lacks {
+  margin: 0.1rem 0 0 0.2rem;
+  font-size: 0.8rem;
+}

@@ -938,8 +938,10 @@ const characterScore = (world, id) => {
 function gradeLocation(world, location, { layers = LAYER_CHECKS } = {}) {
   if (!isGraded(world)) return EXEMPT;
   const settlement = (location.geo || {}).kind === 'settlement';
-  const gate = [layerItem(layers, settlement ? 'town' : 'battleMap', world, location)];
-  if (!isWritten(location)) gate.push(descriptionItem(location));
+  const gate = location.native
+    ? nativeGateItems(world, location)
+    : [layerItem(layers, settlement ? 'town' : 'battleMap', world, location)];
+  if (!location.native && !isWritten(location)) gate.push(descriptionItem(location));
   const kind = settlement ? 'settlement' : 'poi';
   const own = ownScore(world, kind, location, layers);
   let inside;
@@ -970,8 +972,10 @@ function placeInside(world, entity, isPlace, layers) {
  */
 function gradePlace(world, place, { layers = LAYER_CHECKS } = {}) {
   if (!isGraded(world)) return EXEMPT;
-  const gate = [layerItem(layers, 'battleMap', world, place)];
-  if (!isWritten(place)) gate.push(descriptionItem(place));
+  const gate = place.native
+    ? nativeGateItems(world, place)
+    : [layerItem(layers, 'battleMap', world, place)];
+  if (!place.native && !isWritten(place)) gate.push(descriptionItem(place));
   const own = ownScore(world, 'place', place, layers);
   const keep = QUALITY.rollup.place;
   const inside = placeInside(world, place, true, layers);
@@ -1061,13 +1065,115 @@ function placeGateOf(world, place, { layers = LAYER_CHECKS } = {}) {
 // laid out if it opens one, its region map with a way in if it opens one;
 // a place with no map below is stood at, so needs no layer.
 function nativeGate(world, place) {
+  return gradeFrom(nativeGateItems(world, place));
+}
+
+function nativeGateItems(world, place) {
   const gate = [];
   if (place.town) gate.push(layerItem(LAYER_CHECKS, 'town', world, place));
   if (place.region && !require('./frames').waysOf(world, place.region.mapId).length) {
     gate.push({ need: 'wayIn', for: 'playable', message: 'Its map has no way in.' });
   }
   if (!isWritten(place)) gate.push(descriptionItem(place));
-  return gradeFrom(gate.filter(Boolean));
+  return gate.filter(Boolean);
+}
+
+// ── Maps at any depth (planning/map-levels.md §4.8; L-905) ─────────────
+
+/**
+ * Every map of a world graded by its kind with today's criteria, as a tree
+ * from its top map: `{ mapId, kind, name, grade, band, score, lacks,
+ * children }`, `lacks` the first few things its checklist asks for.
+ *
+ *   region  its places graded as the world map's are, their scores averaged
+ *           with today's weights for nearness to play (placeWeights, in that
+ *           map's own frame); a place that opens a region map counts half
+ *           its own score and half that map's, so a world's score rolls up
+ *           its tree, weighted toward the maps players reach (through the
+ *           weight of the place that opens each). Open when any place on it is.
+ *   area    as a town: the grade of the settlement it is the town of
+ *   grid    as a battle map (gradeBattleMap)
+ *
+ * Null for a world with no maps, or one that isn't graded.
+ */
+function gradeMaps(world, options) {
+  if (!isGraded(world)) return null;
+  const frames = require('./frames');
+  const play = frames.playWorld(world);
+  if (!play.topMapId || !(play.maps || {})[play.topMapId]) return null;
+  const lacksOf = (graded) =>
+    (graded.checklist || []).slice(0, 3).map((item) => item.message || item.need);
+  const seen = new Set();
+  const node = (mapId, host) => {
+    seen.add(mapId);
+    const map = play.maps[mapId];
+    const childIds = Object.keys(play.maps)
+      .filter((id) => {
+        const parent = play.maps[id].parent;
+        return parent && parent.mapId === mapId && !seen.has(id);
+      })
+      .sort();
+    const base = { mapId, kind: map.kind, name: map.name || mapId };
+    if (map.kind === 'region') {
+      const view = frames.viewFor(play, mapId);
+      const located = Object.values(view.locations).filter(live);
+      const grades = new Map(located.map((l) => [l.id, gradeLocation(view, l, options)]));
+      const children = childIds.map((id) => node(id, view.locations[play.maps[id].parent.placeId]));
+      const below = new Map();
+      for (const child of children) {
+        const opener = play.maps[child.mapId].parent.placeId;
+        if (child.kind === 'region') below.set(opener, child.score);
+      }
+      const weights = placeWeights(view, grades);
+      let weighed = 0;
+      let sum = 0;
+      for (const l of located) {
+        const own = grades.get(l.id).score;
+        const score = below.has(l.id) ? (own + below.get(l.id)) / 2 : own;
+        weighed += weights.get(l.id);
+        sum += weights.get(l.id) * score;
+      }
+      const score = round1(weighed ? sum / weighed : 0);
+      const open = [...grades.values()].some((g) => rank(g.grade) >= rank('playable'));
+      const closed = located.filter((l) => rank(grades.get(l.id).grade) < rank('playable'));
+      return {
+        ...base,
+        grade: open ? 'playable' : located.length ? 'stub' : 'unbuilt',
+        band: open ? bandOf(score) : located.length ? 'stub' : 'unbuilt',
+        score,
+        lacks: located.length
+          ? closed.slice(0, 3).map((l) => l.name + ': ' + lacksOf(grades.get(l.id)).join(' '))
+          : ['It has no places.'],
+        children,
+      };
+    }
+    const children = childIds.map((id) => node(id, null));
+    if (map.kind === 'grid') {
+      const bm = (play.battleMaps || {})[mapId];
+      const graded = bm ? gradeBattleMap(play, bm) : null;
+      return {
+        ...base,
+        grade: graded ? graded.grade : 'unbuilt',
+        band: graded ? graded.band : 'unbuilt',
+        score: graded ? graded.score : 0,
+        lacks: graded ? lacksOf(graded) : ['It has no layers.'],
+        children,
+      };
+    }
+    // An area map: as the town of the place that opens it.
+    const graded = host
+      ? gradeLocation(frames.viewFor(play, map.parent.mapId), host, options)
+      : null;
+    return {
+      ...base,
+      grade: graded ? graded.grade : 'unbuilt',
+      band: graded ? graded.band : 'unbuilt',
+      score: graded ? graded.score : 0,
+      lacks: graded ? lacksOf(graded) : [],
+      children,
+    };
+  };
+  return node(play.topMapId, null);
 }
 
 /**
@@ -1130,8 +1236,14 @@ const isOpenBand = (band) => bandRank(band) >= bandRank('playable');
  */
 function gradeWorld(world, options) {
   if (!isGraded(world)) return { graded: false };
-  const located = Object.values(world.locations).filter(live);
-  const grades = new Map(located.map((l) => [l.id, gradeLocation(world, l, options)]));
+  // Its top map's places, as play sees them (L-905; ./frames.js): today's
+  // locations, and places in the new shape on it.
+  const frames = require('./frames');
+  const play = frames.playWorld(world);
+  const top = play.topMapId && play.maps && play.maps[play.topMapId] ? play.topMapId : null;
+  const seen = top ? frames.viewFor(play, top) : world;
+  const located = Object.values(seen.locations || {}).filter(live);
+  const grades = new Map(located.map((l) => [l.id, gradeLocation(seen, l, options)]));
   const places = { total: 0, ...tally(), settlements: tally(), pointsOfInterest: tally() };
   for (const location of located) {
     const { band } = grades.get(location.id);
@@ -1155,7 +1267,7 @@ function gradeWorld(world, options) {
     return counts;
   };
 
-  const weights = placeWeights(world, grades);
+  const weights = placeWeights(seen, grades);
   let weighed = 0;
   let sum = 0;
   for (const location of located) {
@@ -1164,7 +1276,13 @@ function gradeWorld(world, options) {
     sum += weight * grades.get(location.id).score;
   }
   const own = ownScore(world, 'world', world, LAYER_CHECKS);
-  const placesScore = weighed ? sum / weighed : 0;
+  // With region maps below the top (L-905), its places' score rolls up the
+  // tree (gradeMaps); a world without them scores as before.
+  const deeper =
+    top &&
+    Object.entries(play.maps).some(([id, m]) => id !== top && m.kind === 'region' && m.parent);
+  const tree = deeper ? gradeMaps(world, options) : null;
+  const placesScore = tree ? tree.score : weighed ? sum / weighed : 0;
   const score = round1(QUALITY.world.places * placesScore + QUALITY.world.own * own.score);
   return {
     graded: true,
@@ -1202,6 +1320,7 @@ module.exports = {
   gradeBattleMap,
   gradeEntity,
   gradeWorld,
+  gradeMaps,
   placeWeights,
   isPlayable,
   isPlaceOpen,
