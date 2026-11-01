@@ -5,7 +5,13 @@ const loomCanon = require('../loom-canon');
 const { parseAzgaarExport, AzgaarFormatError } = require('./parse');
 const { mapToCanon } = require('./map');
 const { loadDraftWorld, newWorldId } = require('./load');
-const { gradeWorld, gradeLocation, isPlayable, BANDS } = require('../loom-canon/grading');
+const {
+  gradeWorld,
+  gradeMaps,
+  gradeLocation,
+  isPlayable,
+  BANDS,
+} = require('../loom-canon/grading');
 const { biggestGaps } = require('../mcp/apps/cartographer/work');
 const { unplacedCharacters } = require('../loom-canon/positions');
 const { ToolError } = require('../mcp/registry');
@@ -261,6 +267,22 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     return { worldId, status: 'published' };
   }
 
+  // A world's maps as the page shows them (L-905): each map's kind, name,
+  // band, score and first lacks, children below; null with no maps.
+  function mapTreeOf(world) {
+    const slim = (n) => ({
+      mapId: n.mapId,
+      kind: n.kind,
+      name: n.name,
+      band: n.band,
+      score: n.score,
+      lacks: (n.lacks || []).slice(0, 2),
+      children: (n.children || []).map(slim),
+    });
+    const tree = gradeMaps(world);
+    return tree ? slim(tree) : null;
+  }
+
   async function worldCompletion({ worldIds } = {}) {
     if (
       !Array.isArray(worldIds) ||
@@ -299,6 +321,8 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
           regions: bands(summary.regions),
         },
         gaps: biggestGaps(world, GAPS_SHOWN),
+        // Its maps as a tree, each graded by its kind (L-905; map levels UI4).
+        maps: mapTreeOf(world),
       };
     }
     return { worlds };

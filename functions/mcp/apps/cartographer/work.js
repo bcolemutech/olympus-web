@@ -7,6 +7,7 @@ const {
   gradeCharacter,
   gradeBattleMap,
   gradeWorld,
+  gradeMaps,
   placeWeights,
   settlementProgress,
   rank,
@@ -420,9 +421,11 @@ function workList(
           (need === 'battleMap' && item.battleMap && item.battleMap !== 'own'))
     )
     .sort(byTierThenNearest);
-  const matching = closed.concat(
-    scoreGroups(world, grades, { kind, grade, band, need, entityLimit, entityOffset })
-  );
+  const matching = closed
+    .concat(
+      mapItems(world).filter((item) => (!kind || kind === 'map') && (!band || item.band === band))
+    )
+    .concat(scoreGroups(world, grades, { kind, grade, band, need, entityLimit, entityOffset }));
 
   const byTier = Object.fromEntries(TIERS.map((tier) => [tier, 0]));
   for (const item of matching) byTier[item.priority] += 1;
@@ -451,6 +454,38 @@ function workList(
   const unplaced = unplacedOf(world);
   if (unplaced) result.unplaced = unplaced;
   return result;
+}
+
+// Maps made with the map tools (L-905; planning/map-levels.md §4.7), each
+// still closed, with what it lacks: their places in today's shape are on the
+// list already, so maps carried over from today's world (migratedFrom) are
+// left to them.
+function mapItems(world) {
+  const tree = gradeMaps(world);
+  if (!tree) return [];
+  const play = require('../../../loom-canon/frames').playWorld(world);
+  const out = [];
+  const walk = (node, depth) => {
+    const map = (play.maps || {})[node.mapId] || {};
+    if (!map.migratedFrom && rank(node.grade) < rank('playable')) {
+      out.push({
+        priority: 'closed',
+        kind: 'map',
+        mapKind: node.kind,
+        id: node.mapId,
+        name: node.name,
+        grade: node.grade,
+        band: node.band,
+        depth,
+        missing: [],
+        lacks: node.lacks,
+        tool: 'get_map',
+      });
+    }
+    for (const child of node.children || []) walk(child, depth + 1);
+  };
+  walk(tree, 0);
+  return out;
 }
 
 /**

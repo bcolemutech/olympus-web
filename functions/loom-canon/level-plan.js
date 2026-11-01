@@ -294,4 +294,60 @@ function plan(raw) {
   };
 }
 
-module.exports = { TOP, townMapId, exitPlaceId, entryPlaceId, SQUARE_METRES, GRID_LAYERS, plan };
+/**
+ * A loaded world in the levels model, whatever it holds (L-905): its stored
+ * maps and places in the new shape, over the plan of what it holds in
+ * today's shape (locations, town places, battle maps), so a change made with
+ * today's tools shows up in the model, as play and the map tools read it.
+ * `{ topMapId, maps, places, mapPlaces }`: `places` today's town places
+ * (placed on their town's map), `mapPlaces` the places with no settlement.
+ * A world with nothing in today's shape is its stored model alone.
+ */
+function modelOf(world) {
+  const locations = world.locations || {};
+  const townPlaces = world.places || {};
+  const stored = {
+    maps: world.maps || {},
+    mapPlaces: world.mapPlaces || {},
+  };
+  const legacy =
+    Object.keys(locations).length > 0 || Object.keys(world.battleMaps || {}).length > 0;
+  if (!legacy) {
+    return {
+      topMapId: world.topMapId || null,
+      maps: { ...stored.maps },
+      places: { ...townPlaces },
+      mapPlaces: { ...stored.mapPlaces },
+    };
+  }
+  const p = plan({
+    id: world.id,
+    meta: { name: world.name, map: world.map || null },
+    locations,
+    places: townPlaces,
+    battleMaps: world.battleMaps || {},
+  });
+  const topMapId = world.topMapId || TOP;
+  return {
+    topMapId,
+    maps: { ...p.maps, ...stored.maps },
+    places: Object.fromEntries(
+      Object.entries(townPlaces).map(([id, tp]) => [
+        id,
+        p.merges[id] && !tp.mapId ? { ...tp, ...p.merges[id] } : tp,
+      ])
+    ),
+    mapPlaces: { ...p.places, ...stored.mapPlaces },
+  };
+}
+
+module.exports = {
+  TOP,
+  townMapId,
+  exitPlaceId,
+  entryPlaceId,
+  SQUARE_METRES,
+  GRID_LAYERS,
+  plan,
+  modelOf,
+};

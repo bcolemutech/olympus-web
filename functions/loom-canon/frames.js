@@ -59,26 +59,10 @@ function playWorld(world) {
   if (world.regionLocations) return world;
   const cached = played.get(world);
   if (cached) return cached;
-  const out = Object.assign({}, world);
-  if (!out.topMapId || !levels.mapOf(out, out.topMapId)) {
-    const p = plan.plan({
-      id: world.id,
-      meta: { name: world.name, map: world.map || null },
-      locations: world.locations || {},
-      places: world.places || {},
-      battleMaps: world.battleMaps || {},
-    });
-    out.topMapId = plan.TOP;
-    out.maps = { ...(world.maps || {}), ...p.maps };
-    out.places = Object.fromEntries(
-      Object.entries(world.places || {}).map(([id, tp]) => [
-        id,
-        p.merges[id] ? { ...tp, ...p.merges[id] } : tp,
-      ])
-    );
-    out.mapPlaces = { ...(world.mapPlaces || {}), ...p.places };
-    out.tree = levels.treeOf(out);
-  }
+  // The model as stored, over the plan of what it holds in today's shape
+  // (./level-plan.js modelOf): a world with no top map is planned in memory.
+  const out = Object.assign({}, world, plan.modelOf(world));
+  out.tree = levels.treeOf(out);
   addNative(out);
   played.set(world, out);
   return out;

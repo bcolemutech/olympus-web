@@ -643,7 +643,8 @@ function writeTools({ writer, systems, studio }) {
         'milesPerUnit sets how far one unit is (default 3), so route lengths and travel time ' +
         'come from distance as in any world. Then add places with add_locations, link them ' +
         'with connect_locations (links: many in one call), open towns with add_place, and ' +
-        'publish with publish_world. ' +
+        'publish with publish_world. Its world map is its top region map (map_world), for ' +
+        'add_map and the other map tools (L-905). ' +
         SLICE_NOTE,
       inputSchema: {
         name,
@@ -1000,6 +1001,7 @@ function writeTools({ writer, systems, studio }) {
         'its name, description and, for a settlement, its facts (population, port, capital, ' +
         'biome). Names stay unique in the world. Returns each one’s id, for connect_locations; ' +
         'a new place has no links yet. Works on any world, imported or made with create_world. ' +
+        'A shortcut for add_places on the world’s top map (map_world in get_map; L-905). ' +
         editNote +
         ' ' +
         SLICE_NOTE,
@@ -1120,7 +1122,8 @@ function writeTools({ writer, systems, studio }) {
         '(default road): one pair (fromId, toId, via), or many in one call (links, up to ' +
         MAX_LINKS +
         '). Links are two-way; connecting places that are already linked changes how. A ' +
-        'route’s length comes from the distance between them. ' +
+        'route’s length comes from the distance between them. A shortcut: these are the top ' +
+        'map’s links (connect_places links places on any map; L-905). ' +
         editNote,
       inputSchema: {
         worldId,

@@ -528,7 +528,8 @@ function mapTools({ writer }) {
         'reusable for any ' +
         'number of places (a tavern, a forest clearing): it opens a place, but only a place’s ' +
         'own map adds to its score. Assign maps with assign_battle_map. Images are uploaded on ' +
-        'the Cartographer page. ' +
+        'the Cartographer page. A shortcut: a battle map is a grid of the same id in get_map, ' +
+        'and set_grid changes it too (add_map makes a grid at any depth; L-905). ' +
         editNote,
       inputSchema: {
         worldId,
@@ -815,4 +816,11 @@ function mapTools({ writer }) {
   ];
 }
 
-module.exports = { mapTools, checkMap };
+module.exports = {
+  mapTools,
+  checkMap,
+  checkLayers,
+  checkAreas,
+  layerWarnings,
+  shapes: { entry, exit, feature, AREAS, LAYER_SHAPES, label },
+};

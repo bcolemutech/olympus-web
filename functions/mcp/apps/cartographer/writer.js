@@ -141,6 +141,27 @@ function createFirestoreWorldWriter(getDb, { now = () => Date.now() } = {}) {
         createdAtMs: at,
         updatedAtMs: at,
         updatedBy: uid,
+        // Its world map is its top region map (L-905; map levels MP4).
+        topMapId: 'map_world',
+      });
+    await worlds()
+      .doc(id)
+      .collection('maps')
+      .doc('map_world')
+      .set({
+        kind: 'region',
+        parent: null,
+        name,
+        space: {
+          width: map.width,
+          height: map.height,
+          ...(map.distance
+            ? { distance: { unit: map.distance.unit, perUnit: map.distance.perMapUnit } }
+            : {}),
+        },
+        routeKinds: [],
+        ...(map.backdrop ? { backdrop: map.backdrop } : {}),
+        migratedFrom: 'world',
       });
     return { worldId: id };
   }

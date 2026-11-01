@@ -204,11 +204,22 @@ function townTools({ writer }) {
         'ground is walked on its streets, so give it a position, its door, instead). Every place ' +
         'needs a battle map to be open: give battleMap (its own map, or a generic one from ' +
         'list_battle_maps) here, or later with assign_battle_map. The name must be unique in ' +
-        'the town. Returns the new id. ' +
+        'the town. Returns the new id. With mapId (L-905) in place of locationId, it adds ' +
+        'one place to any region or area map at `at`, as add_places does. ' +
         editNote,
       inputSchema: {
         worldId,
-        locationId: entityId('location', 'find_locations').describe('The settlement.'),
+        locationId: entityId('location', 'find_locations')
+          .optional()
+          .describe('The settlement (a town in today’s shape).'),
+        mapId: entityId('map', 'list_maps')
+          .optional()
+          .describe('A region or area map, for a place on it (with `at`), in place of locationId.'),
+        at: z
+          .strictObject({ x: z.number().min(0), y: z.number().min(0) })
+          .optional()
+          .describe('With mapId: where on the map, in its units.'),
+        entrance: z.boolean().optional().describe('With mapId: a way in and out of the map.'),
         name: helpers.name.describe('The place’s name, e.g. "The Harbour".'),
         kind,
         description: helpers
@@ -229,6 +240,23 @@ function townTools({ writer }) {
       handler: (ctx, args) =>
         edit(ctx, args, (e) => {
           const { world } = e;
+          // On any map (L-905; level-tools.js).
+          if (args.mapId) {
+            if (args.locationId) throw new ToolError('Give locationId or mapId, not both.');
+            if (!args.at) throw new ToolError('Give `at`, where on the map it is.');
+            const made = require('./level-tools').addPlacesTo(e, args.mapId, [
+              {
+                name: args.name,
+                kind: args.kind,
+                description: args.description,
+                at: args.at,
+                entrance: args.entrance,
+                links: args.connectTo,
+              },
+            ]);
+            return { map: made.map, place: made.places[0] };
+          }
+          if (!args.locationId) throw new ToolError('Give locationId (a town) or mapId (any map).');
           const settlement = settlementFor(world, args.locationId);
           checkPlaceName(world, settlement, args.name);
           if ((args.connectTo || []).length) refuseLinksIn(settlement);
@@ -382,18 +410,54 @@ function townTools({ writer }) {
       description:
         'Link two places in the same town so a visitor can walk directly between them. Links ' +
         'are two-way. A town with ground (set_town_ground) is walked on its streets instead, ' +
-        'and refuses links. ' +
+        'and refuses links. Places on any map made with the map tools link the same way, on ' +
+        'one map, with a route kind on a region map (L-905). ' +
         editNote,
       inputSchema: {
         worldId,
         fromId: entityId('place', 'get_town'),
         toId: entityId('place', 'get_town'),
+        kind: z
+          .string()
+          .regex(/^[a-z][a-z-]{0,23}$/)
+          .optional()
+          .describe('For places on a region map (L-905): the route kind, e.g. jump.'),
       },
       annotations: replacing,
       handler: (ctx, args) =>
         edit(ctx, args, (e) => {
           const { world } = e;
           if (args.fromId === args.toId) throw new ToolError('A place can’t link to itself.');
+          // Places on a map in the new shape (L-905): links, both ways, on one map.
+          const mp = world.mapPlaces || {};
+          if (mp[args.fromId] || mp[args.toId]) {
+            const a = mp[args.fromId];
+            const b = mp[args.toId];
+            if (!a || !b) {
+              throw new ToolError(
+                'Both places must be on a map made with the map tools (get_map lists them).'
+              );
+            }
+            if (a.mapId !== b.mapId) {
+              throw new ToolError('Links stay on one map: use add_exit between maps.');
+            }
+            for (const [x, id, other] of [
+              [a, args.fromId, args.toId],
+              [b, args.toId, args.fromId],
+            ]) {
+              const links = (x.links || []).filter((l) => l.placeId !== other);
+              links.push({ placeId: other, kind: args.kind || null });
+              e.update(e.ref('places', id), 'links', links);
+            }
+            return {
+              connection: {
+                from: { id: args.fromId, name: a.name },
+                to: { id: args.toId, name: b.name },
+                mapId: a.mapId,
+                ...(args.kind ? { kind: args.kind } : {}),
+              },
+            };
+          }
           const a = live(world, 'place', args.fromId);
           const settlement = world.locations[a.locationId];
           refuseLinksIn(settlement);
@@ -475,7 +539,9 @@ function townTools({ writer }) {
         'be walkable from a way in, or the ground is refused with the reasons. Each list given ' +
         'replaces that list; an empty list clears it; one left out is kept (get_town with ' +
         'groundShapes shows them). Once a town has ground, moving or adding places must keep ' +
-        'their doors so. Check it against the art with view_image. ' +
+        'their doors so. Check it against the art with view_image. A shortcut: the town is ' +
+        'its area map (map_town_<location>) in get_map; set_area_ground does the same for an ' +
+        'area map made with add_map. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -538,4 +604,4 @@ function withoutBlanks(shape) {
   return Object.fromEntries(Object.entries(shape).filter(([, value]) => value !== undefined));
 }
 
-module.exports = { townTools };
+module.exports = { townTools, GROUND_SHAPES, withoutBlanks };

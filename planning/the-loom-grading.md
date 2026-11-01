@@ -134,6 +134,10 @@ Criteria that today's content can meet go in with this epic. The rest are listed
 
 - **Weights by distance from play (S3):** each place's score is weighted by how near it is to play. The start, open places and the frontier next to them weigh 3. Other places weigh 1 at two travel steps beyond the frontier, falling to 0.25 beyond that.
 - **The formula:** the world's score is 80% that weighted average of its places, plus 20% its own criteria (C5).
+- **Maps at any depth (L-905; [`map-levels.md`](./map-levels.md) §4.8):** every map is graded by its kind with today's criteria (`grading.js` `gradeMaps`).
+  - A **region map** is graded as the world map: its places' scores averaged with the weights above, in that map's own frame. A place that opens a region map counts half its own score and half that map's, so the world's score rolls up its tree, weighted toward the maps players reach through the weight of the place that opens each. A region map is open when any place on it is.
+  - An **area map** takes the grade of the settlement it is the town of. A **grid** is graded as a battle map.
+  - A world with region maps below its top scores its places by that roll-up; one without them scores as before. Places in the new shape with no doc of today's shape open when written (MP6), a place opening a region map only once that map has a way in.
 - **Its band is shown to players** on the Loom's world list (E4) as the band name.
   - **As built (L-694):** the `loomWorldRatings` callable returns each published world's band name, and nothing more about grading. The world list asks it once for its worlds and shows the band as a pill on each card; a world without one shows none.
 
@@ -148,6 +152,7 @@ Criteria that today's content can meet go in with this epic. The rest are listed
   - **As built (L-692):** `missing` is what to do, most score first, and `checklist` is every criterion with its weight, progress and, if unmet, its tool. Rows (`find_locations`, a region's settlements) carry score and band too.
 - **The Cartographer page** shows each world's score and band, counts by band per kind, and its five biggest gaps (`cartographerCompletion`).
   - **As built (L-693):** each world's card shows its band and score, the open share of its places, a line of counts by band for each kind, and a "Biggest gaps" toggle. The gaps are the first five groups of `list_work`'s score work, each with its count, points and tool.
+  - **As built (L-905):** a "Maps" toggle shows the world's maps as a tree, each with its band and kind and, while closed, what it lacks. `list_work` lists each map made with `add_map` that is still closed (`kind: 'map'`), with what it lacks; maps carried over from today's world are covered by their places' items.
 
 ### 4.6 The rule for new features
 
