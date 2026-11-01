@@ -195,6 +195,16 @@ async function readFirestoreWorld(db, worldId, meta) {
       world[name][doc.id] = doc.data();
     });
   });
+  // Places in the levels model with no settlement (L-902: the world map's
+  // places, and grids' ways in and out) load apart from today's town
+  // places, which everything that plays reads, until L-903 moves the rules.
+  world.mapPlaces = {};
+  for (const [id, place] of Object.entries(world.places)) {
+    if (place.mapId && !place.locationId) {
+      world.mapPlaces[id] = place;
+      delete world.places[id];
+    }
+  }
   // Its maps as a tree from the top (L-901): { top, orphans }.
   world.tree = require('./levels').treeOf(world);
   return deepFreeze(toPlayView(world));
