@@ -101,7 +101,9 @@ test('a world in the new shape loads with its maps, places, top map and tree', a
   const world = await loomCanon.loadWorld(WORLD, { db });
   expect(world.topMapId).toBe('sector');
   expect(Object.keys(world.maps).sort()).toEqual(['deck', 'sector', 'station', 'vega']);
-  expect(world.places.pl_hatch).toMatchObject({ mapId: 'deck', name: 'The hatch' });
+  // Places with no settlement load apart from today's town places (L-902).
+  expect(world.mapPlaces.pl_hatch).toMatchObject({ mapId: 'deck', name: 'The hatch' });
+  expect(world.places.pl_hatch).toBeUndefined();
   expect(world.tree.orphans).toEqual([]);
   expect(world.tree.top).toEqual({
     mapId: 'sector',

@@ -1,0 +1,77 @@
+name: Migrate Map Levels
+
+# The map levels migration (planning/map-levels.md §4.4; L-902): writes every
+# world's world map, towns, town places and battle maps into maps and places,
+# beside today's data, which play still reads until L-903. Saves are left as
+# they are.
+#
+# Run it with apply off first: the summary shows what it would write, and
+# what to look at. Then run it with apply on and confirm set to "migrate".
+# Running it again is safe: it writes only what differs, so nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Write the changes (off: a dry run that only reports them)'
+        required: true
+        type: boolean
+        default: false
+      confirm:
+        description: 'With apply: type "migrate"'
+        required: false
+        type: string
+        default: ''
+      worlds:
+        description: 'World ids, space-separated (empty: every world)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Check the confirmation
+        if: inputs.apply
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [[ "$CONFIRM" != "migrate" ]]; then
+            echo "::error::Not confirmed: type \"migrate\" in confirm to apply. Nothing changed."
+            exit 1
+          fi
+
+      - name: Check the world ids
+        env:
+          WORLDS: ${{ inputs.worlds }}
+        run: |
+          for id in $WORLDS; do
+            if [[ ! "$id" =~ ^[a-z0-9-]{1,64}$ ]]; then
+              echo "::error::Not a world id: $id"
+              exit 1
+            fi
+          done
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          npm install --prefix scripts
+          npm ci --prefix functions
+
+      - name: Migrate
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
+          APPLY: ${{ inputs.apply }}
+          WORLDS: ${{ inputs.worlds }}
+        run: node scripts/migrate-map-levels.js $WORLDS

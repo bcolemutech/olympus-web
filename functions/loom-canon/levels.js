@@ -58,7 +58,12 @@ const inside = (p, w, h) =>
   p.y <= h;
 
 const mapsOf = (world) => (world && world.maps) || {};
-const placesOf = (world) => (world && world.places) || {};
+// Today's town places (`world.places`) and, once a world is migrated, the
+// places with no settlement (`world.mapPlaces`, L-902), as one.
+const placesOf = (world) =>
+  world && world.mapPlaces
+    ? { ...(world.places || {}), ...world.mapPlaces }
+    : (world && world.places) || {};
 
 /** A map by id, or null (retired maps included: callers decide). */
 function mapOf(world, mapId) {
