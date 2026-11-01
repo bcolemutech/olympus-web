@@ -39,6 +39,7 @@
 
 const levels = require('./levels');
 const plan = require('./level-plan');
+const templates = require('./templates');
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const live = (e) => Boolean(e) && !e.retired;
@@ -62,6 +63,8 @@ function playWorld(world) {
   // The model as stored, over the plan of what it holds in today's shape
   // (./level-plan.js modelOf): a world with no top map is planned in memory.
   const out = Object.assign({}, world, plan.modelOf(world));
+  // Each place using a template plays its own instance of it (L-906).
+  templates.instantiate(out);
   out.tree = levels.treeOf(out);
   addNative(out);
   played.set(world, out);
@@ -111,6 +114,21 @@ function asLocation(play, id, place) {
   };
 }
 
+// A location in today's shape that uses a template (L-906): its own doc,
+// opening its instance (a town, a battle map or a region map below).
+function templatedLegacy(location, synth) {
+  const out = {
+    ...location,
+    geo: { ...(location.geo || {}), kind: synth.geo.kind },
+    templated: true,
+  };
+  for (const key of ['town', 'battleMap', 'region']) {
+    if (synth[key]) out[key] = synth[key];
+    else delete out[key];
+  }
+  return out;
+}
+
 // An area map's place as today's rules read a place in town.
 function asTownPlace(play, id, place, settlementId) {
   const under = below(play, id, place);
@@ -157,7 +175,13 @@ function addNative(play) {
     if (map.kind === 'region') {
       const here = mapId === play.topMapId ? { ...legacyLocations } : {};
       for (const id of levels.placesOn(play, mapId)) {
-        if (legacyLocations[id] && mapId === play.topMapId) continue;
+        if (legacyLocations[id] && mapId === play.topMapId) {
+          // A place in today's shape using a template (L-906): its instance
+          // is what it opens.
+          if (all[id].templated)
+            here[id] = templatedLegacy(legacyLocations[id], asLocation(play, id, all[id]));
+          continue;
+        }
         here[id] = asLocation(play, id, all[id]);
       }
       regionLocations[mapId] = symmetric(here);

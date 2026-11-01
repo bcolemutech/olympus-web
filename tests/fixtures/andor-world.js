@@ -130,4 +130,60 @@ function andorWorld(id = 'andor') {
   };
 }
 
-module.exports = { andorWorld };
+/**
+ * Andor with templates (L-906): two moons of Sol, Io and Europa, each using
+ * the template "a barren moon" (a grid: land at (1, 3), a hatch above it, a
+ * lift out), and a template hamlet (an area map) whose market rolls its stall.
+ */
+function andorWithTemplates(id = 'andor-templates') {
+  const w = andorWorld(id);
+  w.maps.tpl_moon = {
+    kind: 'grid',
+    template: true,
+    parent: null,
+    name: 'The surface of {place}',
+    space: { width: 8, height: 6, squareSize: 1.5 },
+    entries: [{ id: 'land', x: 1, y: 3 }],
+    exits: [{ id: 'lift', name: 'the lift', x: 0, y: 3 }],
+    doors: [{ id: 'hatch', name: 'the hatch', from: { x: 1, y: 3 }, to: { x: 2, y: 3 } }],
+    features: [{ id: 'beacon', name: 'the beacon', x: 5, y: 2 }],
+  };
+  w.maps.tpl_hamlet = {
+    kind: 'area',
+    template: true,
+    parent: null,
+    name: '{place}',
+    space: { width: 1000, height: 1000, size: 200 },
+  };
+  w.mapPlaces.tpl_hamlet_gate = {
+    mapId: 'tpl_hamlet',
+    name: 'The gate of {place}',
+    kind: 'gate',
+    at: { x: 500, y: 950 },
+    entrance: { via: [] },
+    description: 'The way into {place}.',
+    links: [{ placeId: 'tpl_hamlet_market' }],
+  };
+  w.mapPlaces.tpl_hamlet_market = {
+    mapId: 'tpl_hamlet',
+    name: 'The market',
+    kind: 'market',
+    at: { x: 500, y: 500 },
+    description: 'In {place}, {stall} keeps the square.',
+    fill: { stall: ['a smithy', 'a chandler', 'a bakery', 'a cooper', 'a tannery', 'a weaver'] },
+    links: [{ placeId: 'tpl_hamlet_gate' }],
+  };
+  const moon = (name, at) => ({
+    mapId: 'sol',
+    name,
+    kind: 'moon',
+    at,
+    opens: { template: 'tpl_moon' },
+    links: [{ placeId: 'pl_sol_gate', kind: 'sublight' }],
+  });
+  w.mapPlaces.pl_io = moon('Io', { x: 10, y: 20 });
+  w.mapPlaces.pl_europa = moon('Europa', { x: 10, y: 80 });
+  return w;
+}
+
+module.exports = { andorWorld, andorWithTemplates };
