@@ -32,8 +32,11 @@ const TOWN_METRES_A_MINUTE = 80; // the town turn's pace: 400 m in 5 min (T11)
 const FALLBACK_ROUTE = 'trail'; // a link with no kind travels as the slowest
 
 // "on the trail", "on the road", "at sea": where a traveller is on the way.
+// A map's own kinds (L-903: a jump lane) are "by jump".
 function onThe(via) {
-  return via === 'sea' ? 'at sea' : 'on the ' + (via === 'road' ? 'road' : 'trail');
+  if (via === 'sea') return 'at sea';
+  if (via && via !== 'road' && via !== 'trail') return 'by ' + via;
+  return 'on the ' + (via === 'road' ? 'road' : 'trail');
 }
 
 /**
@@ -114,6 +117,7 @@ function timeSpent(from, seconds) {
 }
 
 module.exports = {
+  onThe,
   NIGHT_HOURS,
   TOWN_METRES_A_MINUTE,
   trip,

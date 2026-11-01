@@ -191,13 +191,78 @@ function timeView(seconds) {
   return { seconds, label: label(seconds) };
 }
 
+const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const positive = (n) => typeof n === 'number' && Number.isFinite(n) && n > 0;
+
+// What a set of settings says about time, as far as it says anything: a
+// region map's (its `routeKinds` with speeds, `travelDayHours`) or a
+// world's (`rules.time`).
+function settingsOf(source) {
+  if (!isObject(source)) return {};
+  const out = {};
+  if (positive(source.travelDayHours)) out.travelDayHours = source.travelDayHours;
+  const speeds = {};
+  const allDay = [];
+  // A region map's route kinds (TV1): { kind: { speed, roundTheClock } }; a
+  // list of names alone sets no speeds.
+  if (isObject(source.routeKinds)) {
+    for (const [kind, k] of Object.entries(source.routeKinds)) {
+      if (isObject(k) && positive(k.speed)) speeds[kind] = k.speed;
+      if (isObject(k) && k.roundTheClock) allDay.push(kind);
+    }
+  }
+  if (isObject(source.routeSpeeds)) {
+    for (const [kind, speed] of Object.entries(source.routeSpeeds)) {
+      if (positive(speed)) speeds[kind] = speed;
+    }
+  }
+  if (Object.keys(speeds).length) out.routeSpeeds = speeds;
+  if (Array.isArray(source.roundTheClock)) out.roundTheClock = source.roundTheClock.slice();
+  else if (allDay.length) out.roundTheClock = allDay;
+  if (isObject(source.turnSeconds)) {
+    const t = {};
+    if (positive(source.turnSeconds.battle)) t.battle = source.turnSeconds.battle;
+    if (positive(source.turnSeconds.other)) t.other = source.turnSeconds.other;
+    if (Object.keys(t).length) out.turnSeconds = t;
+  }
+  return out;
+}
+
 /**
- * The rules time is charged by, for a world (R2). Today every world takes
- * the defaults; a world's own settings come with L-714 and Phase 9.
+ * The rules time is charged by (R2; planning/map-levels.md TV1, TV4; L-903):
+ * turn lengths by the kind of map (a grid 6 s, anywhere else 5 min; a region
+ * map travels only), and the travel day, route speeds (in the region map's
+ * own unit an hour: miles, light-years) and the routes travelled round the
+ * clock, from the region map travelled on (`map`; by default the map the
+ * world is seen from, `world.frame`, ./frames.js), falling back to the
+ * world's (`rules.time`), then the defaults. Without either, the defaults.
  */
-// eslint-disable-next-line no-unused-vars
-function timeRules(world) {
-  return DEFAULT_RULES;
+function timeRules(world, map) {
+  const on = map !== undefined ? map : frameMapOf(world);
+  const mine = settingsOf(on && on.kind !== 'grid' && on.kind !== 'area' ? on : null);
+  const theirs = settingsOf(world && world.rules && world.rules.time);
+  if (!Object.keys(mine).length && !Object.keys(theirs).length) return DEFAULT_RULES;
+  const pick = (key) => (key in mine ? mine[key] : key in theirs ? theirs[key] : null);
+  return Object.freeze({
+    turnSeconds: Object.freeze({
+      ...DEFAULT_RULES.turnSeconds,
+      ...(theirs.turnSeconds || {}),
+      ...(mine.turnSeconds || {}),
+    }),
+    travelDayHours: pick('travelDayHours') || DEFAULT_RULES.travelDayHours,
+    routeSpeeds: Object.freeze({
+      ...DEFAULT_RULES.routeSpeeds,
+      ...(theirs.routeSpeeds || {}),
+      ...(mine.routeSpeeds || {}),
+    }),
+    roundTheClock: Object.freeze(pick('roundTheClock') || DEFAULT_RULES.roundTheClock.slice()),
+  });
+}
+
+// The region map a world is seen from (./frames.js), or null.
+function frameMapOf(world) {
+  const id = world && world.frame && world.frame.mapId;
+  return (id && world.maps && world.maps[id]) || null;
 }
 
 /** A turn's length in seconds: on a battle map, or anywhere else (T4). */

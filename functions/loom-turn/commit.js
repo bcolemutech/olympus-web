@@ -9,6 +9,7 @@ const { look } = require('./seen');
 const { lookInTown } = require('./town-seen');
 const visits = require('./visits');
 const clock = require('../loom-canon/clock');
+const frames = require('../loom-canon/frames');
 const effects = require('../loom-canon/effects');
 const { systemOf } = require('../loom-canon/checks');
 const earning = require('../loom-modules/advancement/earn');
@@ -135,10 +136,22 @@ async function commitTurn(params) {
       discovered.map((id) => ({ op: 'add', path: 'discovered', value: id }))
     );
     applyStateMutations(worldState, worldMutations);
+    // Where the save now stands, as `at` (L-903; ../loom-canon/frames.js):
+    // set by the turn (a move up, down or across maps), the frame's fields
+    // follow it; else it follows them. The rest of the turn's bookkeeping
+    // sees the world from where it now stands.
+    const here =
+      canonWorld && canonWorld.frame
+        ? frames.settle(
+            canonWorld,
+            save,
+            saveMutations.some((m) => m.path === 'at')
+          )
+        : canonWorld;
     // Where it has been and the ways in and out it knows (L-381): derived
     // for a save from before, then where it now stands noted.
     if (townsRecorded) Object.assign(save, visits.derived(before, townsRecorded));
-    if (canonWorld) visits.noteWhereItIs(canonWorld, save);
+    if (here) visits.noteWhereItIs(here, save);
     // A use counted (L-844; ../loom-modules/advancement/use.js): a skill
     // rolled and succeeded with stakes (INTERPRET's say, or a fight on), or
     // an attack that hit in a fight.
@@ -198,14 +211,14 @@ async function commitTurn(params) {
     }
 
     // What the save now sees on its map, read before any write.
-    const looked = saveMutations.some((m) => /^(mapId|cell|doors)(\.|$)/.test(m.path));
+    const looked = saveMutations.some((m) => /^(mapId|cell|doors|at)(\.|$)/.test(m.path));
     const sameMap = save.mapId === mapBefore;
     const seen =
-      canonWorld && looked
+      here && looked
         ? await look(
             transaction,
             saveRef,
-            canonWorld,
+            here,
             save,
             sameMap ? resolution.walked : [],
             sameMap ? doorsBefore : undefined
@@ -215,11 +228,11 @@ async function commitTurn(params) {
     // What it sees in a town with ground, when the turn leaves it on the
     // street (L-671): along a typed walk, or from where it now stands.
     const townMoved = saveMutations.some((m) =>
-      /^(townPoint|placeId|mapId|location)$/.test(m.path)
+      /^(townPoint|placeId|mapId|location|at)$/.test(m.path)
     );
     const townSeen =
-      canonWorld && townMoved
-        ? await lookInTown(transaction, saveRef, canonWorld, save, resolution.walkedTown)
+      here && townMoved
+        ? await lookInTown(transaction, saveRef, here, save, resolution.walkedTown)
         : null;
 
     const turnIndex = lastTurnSnap.empty ? 0 : lastTurnSnap.docs[0].data().index + 1;
