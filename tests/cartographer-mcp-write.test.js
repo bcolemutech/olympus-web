@@ -190,9 +190,12 @@ test('exposes the write tools with honest hints', async () => {
   const writes = tools.filter((t) => !t.annotations.readOnlyHint);
   expect(writes.map((t) => t.name).sort()).toEqual([
     'add_character',
+    'add_exit',
     'add_locations',
     'add_lore',
+    'add_map',
     'add_place',
+    'add_places',
     'assign_battle_map',
     'connect_locations',
     'connect_places',
@@ -202,8 +205,10 @@ test('exposes the write tools with honest hints', async () => {
     'place_figures',
     'publish_world',
     'retire_entity',
+    'set_area_ground',
     'set_art',
     'set_battle_map',
+    'set_grid',
     'set_hazards',
     'set_map_layers',
     'set_sheet',

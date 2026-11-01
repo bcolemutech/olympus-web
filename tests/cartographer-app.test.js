@@ -433,6 +433,8 @@ describe('cartographerCompletion (L-323)', () => {
         regions: { ...none, stub: 145 },
       },
       gaps: expect.any(Array),
+      // Its maps as a tree (L-905): one, the world map, with what it lacks.
+      maps: expect.objectContaining({ mapId: 'map_world', kind: 'region', children: [] }),
     });
     // The five biggest, as list_work orders its score work: most points first,
     // each with its tool and a line to show.
