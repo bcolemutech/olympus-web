@@ -45,8 +45,8 @@
 // has ground (L-655); 4: the score, its criteria and bands (L-691); 5: a
 // world's cover image (L-704); 6: a world's game system (L-801); 7: a named
 // character's sheet (L-813); 8: a fighter's attacks (L-822); 9: foes at a
-// dangerous place (L-824).
-const RUBRIC_VERSION = 9;
+// dangerous place (L-824); 10: templates on a large map's places (L-906).
+const RUBRIC_VERSION = 10;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -72,9 +72,12 @@ const WEIGHTS = Object.freeze({
   character: { description: 25, lore: 15, faction: 10, sheet: 20, attacks: 15 },
   battleMap: { layers: 30, art: 30, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
-  world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15 },
+  world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15, templates: 10 },
 });
 const QUALITY = Object.freeze({
+  // A region map this many places or more is large: its ordinary places
+  // want templates (L-906; map levels TM3).
+  largeMap: 25,
   // Words a description needs to count, and a lore entry to count anywhere.
   words: { place: 60, character: 40, realm: 80, lore: 60 },
   // Named features a battle map wants.
@@ -828,7 +831,47 @@ const CRITERIA = Object.freeze([
       };
     },
   },
+  {
+    // Its large maps' ordinary places open, by hand or from a template
+    // (L-906; map levels §4.8, TM3; decided with the user 2026-11-01:
+    // weight 10, a region map of 25 places or more is large).
+    id: 'world.templates',
+    kinds: ['world'],
+    weight: WEIGHTS.world.templates,
+    feature: 'L-906',
+    label: 'Templates on a large map’s ordinary places',
+    need: 'templates',
+    tool: 'assign_template',
+    applies: (world) => largeMaps(world).length > 0,
+    check: (world) => {
+      let total = 0;
+      let open = 0;
+      for (const view of largeMaps(world)) {
+        for (const place of Object.values(view.locations).filter(live)) {
+          total += 1;
+          if (isPlayable(view, place)) open += 1;
+        }
+      }
+      if (total && open === total) return met();
+      return {
+        progress: total ? open / total : 1,
+        have: open,
+        want: total,
+        message: `${total - open} of the ${total} places on its large maps are closed: give the ordinary ones a template (assign_template).`,
+      };
+    },
+  },
 ]);
+
+// The frames of a world's large region maps (L-906): 25 places or more.
+function largeMaps(world) {
+  const frames = require('./frames');
+  const play = frames.playWorld(world);
+  return Object.entries(play.maps || {})
+    .filter(([, m]) => m.kind === 'region' && !m.template && !m.instanceOf)
+    .map(([id]) => frames.viewFor(play, id))
+    .filter((view) => Object.values(view.locations).filter(live).length >= QUALITY.largeMap);
+}
 
 /**
  * An entity's own score: the met weight of its criteria (with partial
@@ -938,14 +981,22 @@ const characterScore = (world, id) => {
 function gradeLocation(world, location, { layers = LAYER_CHECKS } = {}) {
   if (!isGraded(world)) return EXEMPT;
   const settlement = (location.geo || {}).kind === 'settlement';
-  const gate = location.native
-    ? nativeGateItems(world, location)
-    : [layerItem(layers, settlement ? 'town' : 'battleMap', world, location)];
-  if (!location.native && !isWritten(location)) gate.push(descriptionItem(location));
+  const gate = location.templated
+    ? []
+    : location.native
+      ? nativeGateItems(world, location)
+      : [layerItem(layers, settlement ? 'town' : 'battleMap', world, location)];
+  if (!location.templated && !location.native && !isWritten(location)) {
+    gate.push(descriptionItem(location));
+  }
   const kind = settlement ? 'settlement' : 'poi';
   const own = ownScore(world, kind, location, layers);
   let inside;
-  if (settlement) {
+  // A templated place counts as Playable and no more: what its template
+  // holds adds nothing; only its own content raises it (L-906; TM3).
+  if (location.templated) {
+    inside = [];
+  } else if (settlement) {
     // What is in it: its town's places (closed ones count 0) and its people.
     inside = townPlaces(world, location.id)
       .map((place) => gradePlace(world, place, { layers }).score)
@@ -972,13 +1023,15 @@ function placeInside(world, entity, isPlace, layers) {
  */
 function gradePlace(world, place, { layers = LAYER_CHECKS } = {}) {
   if (!isGraded(world)) return EXEMPT;
-  const gate = place.native
-    ? nativeGateItems(world, place)
-    : [layerItem(layers, 'battleMap', world, place)];
-  if (!place.native && !isWritten(place)) gate.push(descriptionItem(place));
+  const gate = place.templated
+    ? []
+    : place.native
+      ? nativeGateItems(world, place)
+      : [layerItem(layers, 'battleMap', world, place)];
+  if (!place.templated && !place.native && !isWritten(place)) gate.push(descriptionItem(place));
   const own = ownScore(world, 'place', place, layers);
   const keep = QUALITY.rollup.place;
-  const inside = placeInside(world, place, true, layers);
+  const inside = place.templated ? [] : placeInside(world, place, true, layers);
   return result(gate.filter(Boolean), own, keep * own.score + (1 - keep) * mean(inside));
 }
 
@@ -1045,6 +1098,8 @@ function isPlaceOpen(world, place, options) {
 // The gate alone, without the score: the game asks this on every turn.
 function gateOf(world, location, { layers = LAYER_CHECKS } = {}) {
   if (!isGraded(world)) return 'playable';
+  // A place using a template counts as Playable (L-906; TM3).
+  if (location.templated) return 'playable';
   if (location.native) return nativeGate(world, location);
   const settlement = (location.geo || {}).kind === 'settlement';
   const gate = [layerItem(layers, settlement ? 'town' : 'battleMap', world, location)];
@@ -1054,6 +1109,7 @@ function gateOf(world, location, { layers = LAYER_CHECKS } = {}) {
 
 function placeGateOf(world, place, { layers = LAYER_CHECKS } = {}) {
   if (!isGraded(world)) return 'playable';
+  if (place.templated) return 'playable';
   if (place.native) return nativeGate(world, place);
   const gate = [layerItem(layers, 'battleMap', world, place)];
   if (!isWritten(place)) gate.push(descriptionItem(place));
@@ -1069,6 +1125,7 @@ function nativeGate(world, place) {
 }
 
 function nativeGateItems(world, place) {
+  if (place.templated) return [];
   const gate = [];
   if (place.town) gate.push(layerItem(LAYER_CHECKS, 'town', world, place));
   if (place.region && !require('./frames').waysOf(world, place.region.mapId).length) {
@@ -1107,10 +1164,12 @@ function gradeMaps(world, options) {
   const node = (mapId, host) => {
     seen.add(mapId);
     const map = play.maps[mapId];
+    // A templated place's instance counts for nothing more (TM3): left out.
     const childIds = Object.keys(play.maps)
       .filter((id) => {
-        const parent = play.maps[id].parent;
-        return parent && parent.mapId === mapId && !seen.has(id);
+        const m = play.maps[id];
+        const parent = m.parent;
+        return parent && parent.mapId === mapId && !seen.has(id) && !m.instanceOf && !m.template;
       })
       .sort();
     const base = { mapId, kind: map.kind, name: map.name || mapId };

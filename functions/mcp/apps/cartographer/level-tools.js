@@ -40,6 +40,7 @@ const { GROUND_SHAPES, withoutBlanks } = require('./town-tools');
 //                    one call
 //   set_grid         a grid's entries, exits, features and layers
 //   set_area_ground  an area map's ground
+//   assign_template  many places using a template map at once (L-906)
 
 const MAX_PLACES = 50;
 const MAX_LINKS = 12;
@@ -203,9 +204,13 @@ function addPlacesTo(e, mapId, list) {
       ...(item.at ? { at: { x: item.at.x, y: item.at.y } } : {}),
       ...(item.entrance ? { entrance: map.kind === 'area' ? { via: [] } : true } : {}),
       links,
+      ...(item.fill ? { fill: item.fill } : {}),
       npcIds: [],
       rules: {},
     };
+    if (item.fill && !map.template) {
+      throw new ToolError('Fill tables go on a template’s places (add_map with template).');
+    }
     for (const l of links) back.push([l.placeId, { placeId: id, kind: l.kind }]);
   }
   // Links both ways: on places of this call, and on those already there.
@@ -270,6 +275,17 @@ const newPlace = z.strictObject({
     .max(MAX_LINKS)
     .optional()
     .describe('Places on the same map it links to (two-way), by id or by name in this call.'),
+  fill: z
+    .record(
+      z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,30}$/),
+      z.array(z.string().trim().min(1).max(200)).min(1).max(40)
+    )
+    .optional()
+    .describe(
+      'On a template’s place (L-906): fill tables, { slot: [entries] }, each rolled once per ' +
+        'place using the template (the same place always the same) for {slot} in its name or ' +
+        'description: { shop: ["a smithy", "a chandler"] }.'
+    ),
 });
 const routeKinds = z
   .record(
@@ -310,6 +326,13 @@ function levelTools({ writer, worldFor }) {
         kind: z.enum(['region', 'area', 'grid']),
         name: z.string().trim().min(1).max(80),
         parentPlaceId: entityId('place', 'get_map').optional(),
+        template: z
+          .boolean()
+          .optional()
+          .describe(
+            'A template (L-906): a map with no parent, shared by every place assign_template ' +
+              'gives it; {place} in its text is the using place’s name.'
+          ),
         width: z
           .number()
           .positive()
@@ -337,12 +360,15 @@ function levelTools({ writer, worldFor }) {
           const { world } = e;
           const model = modelOf(world);
           const hasTop = Boolean(model.topMapId && levels.mapOf(model, model.topMapId));
-          if (!args.parentPlaceId && hasTop) {
+          if (args.template && args.parentPlaceId) {
+            throw new ToolError('A template has no parent: places use it with assign_template.');
+          }
+          if (!args.parentPlaceId && hasTop && !args.template) {
             throw new ToolError(
               'Give parentPlaceId, the place it opens from (the world has a top map already).'
             );
           }
-          if (!args.parentPlaceId && args.kind !== 'region') {
+          if (!args.parentPlaceId && !args.template && args.kind !== 'region') {
             throw new ToolError('A world’s top map is a region map.');
           }
           const parent = args.parentPlaceId ? placeIn(model, args.parentPlaceId) : null;
@@ -383,12 +409,13 @@ function levelTools({ writer, worldFor }) {
             space,
             ...(args.kind === 'region' && args.routeKinds ? { routeKinds: args.routeKinds } : {}),
             ...(args.backdrop ? { backdrop: args.backdrop } : {}),
+            ...(args.template ? { template: true } : {}),
             sources: { map: SOURCES.MCP },
           };
           const errors = levels.validateMap(doc, id);
           if (errors.length) throw new ToolError(errors.join(' '));
           e.set(e.ref('maps', id), doc);
-          if (!parent) e.updateWorld({ topMapId: id });
+          if (!parent && !args.template) e.updateWorld({ topMapId: id });
           // A grid's layers: its battle map of the same id.
           let warnings = [];
           if (args.kind === 'grid') {
@@ -439,7 +466,8 @@ function levelTools({ writer, worldFor }) {
           return {
             map: { mapId: id, kind: args.kind, name: args.name, parent: doc.parent },
             created: true,
-            ...(!parent ? { top: true } : {}),
+            ...(!parent && !args.template ? { top: true } : {}),
+            ...(args.template ? { template: true } : {}),
             ...(warnings.length ? { warnings } : {}),
           };
         }),
@@ -506,10 +534,35 @@ function levelTools({ writer, worldFor }) {
           const model = modelOf(world);
           const graded = isGraded(world) ? gradeMaps(world) : null;
           const tree = levels.treeOf(model);
+          // Each place's instance of a template is the template's own (L-906):
+          // templates are listed apart, with the places using each.
+          const strip = (n) =>
+            n && {
+              ...n,
+              children: (n.children || [])
+                .filter((c) => !(model.maps[c.mapId] || {}).instanceOf)
+                .map(strip),
+            };
+          const using = {};
+          for (const [id, p] of Object.entries({ ...model.places, ...model.mapPlaces })) {
+            const t = p && p.opens && p.opens.template;
+            if (t) (using[t] = using[t] || []).push(id);
+          }
           return {
             topMapId: model.topMapId || null,
-            tree: graded || tree.top,
-            orphans: tree.orphans.map((o) => ({ mapId: o.mapId, kind: o.kind, name: o.name })),
+            tree: graded || strip(tree.top),
+            templates: Object.keys(model.maps)
+              .filter((id) => model.maps[id].template)
+              .sort()
+              .map((id) => ({
+                mapId: id,
+                kind: model.maps[id].kind,
+                name: model.maps[id].name || id,
+                usedBy: (using[id] || []).length,
+              })),
+            orphans: tree.orphans
+              .filter((o) => !(model.maps[o.mapId] || {}).template)
+              .map((o) => ({ mapId: o.mapId, kind: o.kind, name: o.name })),
           };
         }),
     },
@@ -663,6 +716,84 @@ function levelTools({ writer, worldFor }) {
           throw new ToolError(
             'An exit goes place to place ({ placeId } each) or grid to grid ({ mapId, x, y } each).'
           );
+        }),
+    },
+    {
+      name: 'assign_template',
+      title: 'Assign a template to places',
+      description:
+        'Give many ordinary places a template at once (L-906; map levels TM2): each opens at ' +
+        'once into its own copy of the template map (built with add_map and template: true), ' +
+        'filled from the place ({place}, its fill tables rolled for it) and counted as ' +
+        'Playable. Name the places (placeIds), or a map (mapId, with kind to pick some) for ' +
+        'every place on it that opens no map of its own. Places that do are left as they are ' +
+        'and listed; build the notable ones by hand. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        templateMapId: entityId('template map', 'list_maps'),
+        placeIds: z.array(entityId('place', 'get_map')).min(1).max(500).optional(),
+        mapId: entityId('map', 'list_maps')
+          .optional()
+          .describe('Every ordinary place on this map (with kind, only those of that kind).'),
+        kind: z.string().trim().toLowerCase().max(30).optional(),
+      },
+      annotations: replacing,
+      handler: (ctx, args) =>
+        edit(ctx, args, (e) => {
+          const { world } = e;
+          const model = modelOf(world);
+          const template = (world.maps || {})[args.templateMapId];
+          if (!template || !template.template) {
+            throw new ToolError(
+              `"${args.templateMapId}" is no template: make one with add_map and template: true.`
+            );
+          }
+          if (!args.placeIds === !args.mapId) {
+            throw new ToolError('Give placeIds, or a mapId (and a kind) for its ordinary places.');
+          }
+          const stored = world.mapPlaces || {};
+          const ids = args.placeIds
+            ? [...new Set(args.placeIds)]
+            : levels
+                .placesOn(model, args.mapId)
+                .filter((id) => stored[id] && !stored[id].retired)
+                .filter((id) => !args.kind || stored[id].kind === args.kind);
+          const assigned = [];
+          const skipped = [];
+          for (const id of ids) {
+            const p = stored[id];
+            if (!p) {
+              skipped.push({ id, why: 'not a place on a map (a place in town, or not stored)' });
+              continue;
+            }
+            if (p.mapId === args.templateMapId) {
+              skipped.push({ id, why: 'on the template itself' });
+              continue;
+            }
+            const opens = isObject(p.opens) ? p.opens : null;
+            if (opens && opens.mapId && !opens.template) {
+              skipped.push({ id, why: `it opens its own map (${opens.mapId})` });
+              continue;
+            }
+            if (opens && opens.template === args.templateMapId) {
+              assigned.push(id);
+              continue;
+            }
+            e.update(e.ref('places', id), 'opens', { template: args.templateMapId });
+            assigned.push(id);
+          }
+          if (!assigned.length && !skipped.length) {
+            throw new ToolError('No places to give it: that map has none.');
+          }
+          return {
+            template: { mapId: args.templateMapId, name: template.name },
+            assigned: assigned.length,
+            placeIds: assigned.slice(0, 50),
+            ...(skipped.length
+              ? { skipped: skipped.slice(0, 50), skippedCount: skipped.length }
+              : {}),
+          };
         }),
     },
     {

@@ -387,3 +387,70 @@ describe('a world three maps deep, built with the map tools', () => {
     ]);
   });
 });
+
+describe('templates (L-906)', () => {
+  test('a template map, then assigned to many places in one call', async () => {
+    const W = ids.world;
+    const made = await ok('add_map', {
+      worldId: W,
+      kind: 'grid',
+      name: 'The surface of {place}',
+      template: true,
+      width: 8,
+      height: 6,
+      entries: [{ id: 'land', x: 1, y: 3 }],
+      exits: [{ id: 'lift', name: 'the lift', x: 0, y: 3, to: 'out' }],
+    });
+    expect(made).toMatchObject({ template: true, map: { parent: null } });
+    const tpl = made.map.mapId;
+    const moons = await ok('add_places', {
+      worldId: W,
+      mapId: ids.system,
+      places: ['Vega I', 'Vega II', 'Vega III', 'Vega IV', 'Vega V'].map((name, i) => ({
+        name,
+        kind: 'moon',
+        description: `${name}, a barren moon.`,
+        at: { x: 10 + i * 10, y: 20 },
+      })),
+    });
+    expect(moons.places).toHaveLength(5);
+    // Every moon on the system's map, in one call; the station (it opens a
+    // map of its own) isn't a moon, and is left out.
+    const assigned = await ok('assign_template', {
+      worldId: W,
+      templateMapId: tpl,
+      mapId: ids.system,
+      kind: 'moon',
+    });
+    expect(assigned.assigned).toBe(5);
+    // And by ids: one that opens its own map is skipped, with why.
+    const again = await ok('assign_template', {
+      worldId: W,
+      templateMapId: tpl,
+      placeIds: [moons.places[0].id, ids.station],
+    });
+    expect(again.assigned).toBe(1);
+    expect(again.skipped).toEqual([
+      { id: ids.station, why: expect.stringMatching(/opens its own map/) },
+    ]);
+    const listed = await ok('list_maps', { worldId: W });
+    expect(listed.templates).toEqual([
+      { mapId: tpl, kind: 'grid', name: 'The surface of {place}', usedBy: 5 },
+    ]);
+    // The instances aren't in the tree; the system's children are as before.
+    const system = listed.tree.children.find((c) => c.mapId === ids.system);
+    expect(system.children.map((c) => c.mapId)).toEqual([ids.area]);
+    const map = await ok('get_map', { worldId: W, mapId: ids.system });
+    const moon = map.places.find((p) => p.name === 'Vega III');
+    expect(moon.opens).toBe(`${tpl}__${moon.id}`);
+    expect(
+      await refused('add_places', {
+        worldId: W,
+        mapId: ids.system,
+        places: [
+          { name: 'Odd', kind: 'moon', description: 'x', at: { x: 1, y: 1 }, fill: { a: ['b'] } },
+        ],
+      })
+    ).toMatch(/Fill tables go on a template/);
+  });
+});
