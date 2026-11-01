@@ -210,3 +210,30 @@ test('a closed place is refused at depth, and the save stays put', async () => {
   expect(save.at).toEqual(GATE);
   expect(save.time).toBe(clock.START);
 });
+
+test('loomGetMap peeks at a region map on the trail, from where the save stands on it (L-904)', async () => {
+  await seed('peek', GATE, {
+    time: clock.START,
+    discovered: ['pl_vega', 'pl_sol', 'pl_rigel', 'pl_vega_gate', 'pl_station'],
+  });
+  const own = await mapOf('peek');
+  expect(own.mapId).toBe('vega');
+  expect(own.trail.map((t) => [t.mapId, t.placeId])).toEqual([
+    ['sector', 'pl_vega'],
+    ['vega', 'pl_vega_gate'],
+  ]);
+  const peek = await loomGetMap.run({
+    data: { worldId: WORLD, saveId: 'peek', peek: 'sector' },
+    auth: PLAYER,
+  });
+  expect(peek).toMatchObject({ mapId: 'sector', peek: true, here: 'pl_vega' });
+  expect(peek.places.map((p) => p.id).sort()).toEqual(['pl_rigel', 'pl_sol', 'pl_vega']);
+  expect(peek.town).toBeNull();
+  expect(peek.battleMap).toBeNull();
+  // Each route out of Vega, with how long it takes there.
+  expect(peek.links.find((l) => l.to === 'pl_sol' || l.from === 'pl_sol').travel).toBeTruthy();
+  // A map not on the trail is refused.
+  await expect(
+    loomGetMap.run({ data: { worldId: WORLD, saveId: 'peek', peek: 'sol' }, auth: PLAYER })
+  ).rejects.toThrow('That map is not on your trail.');
+});

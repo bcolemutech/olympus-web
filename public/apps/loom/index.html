@@ -115,32 +115,12 @@
                  or, in a town, the town view (town.js) -->
           <section class="loom-map-pane hidden" id="loom-map-pane" aria-label="Map">
             <div class="loom-map-panel" id="loom-map-panel">
-              <div class="loom-map-layers hidden" id="loom-map-layers" role="group">
-                <button
-                  class="loom-map-layer hidden"
-                  id="loom-layer-battle"
-                  type="button"
-                  aria-pressed="false"
-                >
-                  Here
-                </button>
-                <button
-                  class="loom-map-layer is-active"
-                  id="loom-layer-town"
-                  type="button"
-                  aria-pressed="true"
-                >
-                  Town
-                </button>
-                <button
-                  class="loom-map-layer"
-                  id="loom-layer-world"
-                  type="button"
-                  aria-pressed="false"
-                >
-                  World
-                </button>
-              </div>
+              <!-- The trail (L-904): each map above you, the current one last (map.js) -->
+              <nav
+                class="loom-map-layers hidden"
+                id="loom-map-layers"
+                aria-label="Where you are"
+              ></nav>
               <div class="loom-map-controls">
                 <button
                   class="loom-map-btn"

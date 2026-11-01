@@ -16,7 +16,7 @@
   // - bottom right, a minimap of the level showing, with the view on it;
   //   a click there moves the view.
   //
-  // The level switcher and the zoom buttons sit bottom left (map.js owns
+  // The trail (was the level switcher, L-904) and the zoom buttons sit bottom left (map.js owns
   // them). Every part of the overlay carries .loom-map-ui, so a press on it
   // is never taken for a press on the map.
 
@@ -76,13 +76,15 @@
     var where = whereYouAre(s.map, player);
     if (!where) return null;
     var peeking = level !== player;
+    // A region map above, by its name (L-904); a level, as before.
+    var looking = (level.indexOf('peek:') === 0 && s.ui.levelName) || LEVEL_NAMES[level] || level;
     var time = s.turn && s.turn.time ? s.turn.time : null;
     return html`<div class="loom-map-where loom-map-ui">
       ${time && html`<span class="loom-map-time">${time}</span>`}
       <span class="loom-map-here">${where}</span>
       ${peeking &&
       html`<span class="loom-map-peek">
-        Looking at ${LEVEL_NAMES[level] || level}
+        Looking at ${looking}
         <button
           class="loom-map-back"
           type="button"

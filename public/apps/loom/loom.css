@@ -863,7 +863,8 @@
   margin-top: 0.6rem;
 }
 
-/* The layer switch: the town you are in, or the world map (L-345). */
+/* The trail (L-904; was the layer switch, L-345): each map above you, the
+   current one last; a click peeks at it. */
 .loom-map-layers {
   position: absolute;
   top: 0.6rem;
@@ -877,6 +878,20 @@
 
 .loom-map-layers.hidden,
 .loom-map-layer.hidden {
+  display: none;
+}
+
+.loom-map-layers {
+  align-items: center;
+}
+
+.loom-trail-sep {
+  padding: 0 0.1rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* The whole trail on a wide screen; the "…" is for phones. */
+.loom-trail-more {
   display: none;
 }
 
@@ -1887,6 +1902,21 @@ body.loom-playing .app-divider {
 
   .loom-map-layer {
     min-height: 2.4rem;
+  }
+
+  /* On a phone: the map you are on and its parent; the rest behind "…".
+     The row scrolls rather than squeezing names. */
+  .loom-map-layers .loom-map-layer {
+    flex: 0 0 auto;
+  }
+
+  .loom-trail-more {
+    display: inline-block;
+    padding: 0.35rem 0.55rem;
+  }
+
+  .loom-map-layers:not(.is-open) .loom-trail-far {
+    display: none;
   }
 
   .loom-map-panel .loom-map-controls {

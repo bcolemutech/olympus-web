@@ -428,16 +428,40 @@ function wayInto(play, mapId, fromId = null, open = () => true) {
   return best ? best.way : ways[0];
 }
 
-/** The trail (UI1): each map on a path, `{ mapId, name, kind }`, the current one last. */
+/**
+ * The trail (UI1): each map on a path, `{ mapId, name, kind, placeId? }`
+ * (the place the path is at on it, when it is at one), the current one last.
+ */
 function trailOf(play, at) {
   if (!Array.isArray(at)) return [];
-  return at
-    .map((s) => s.mapId)
-    .filter((id, i, all) => all.indexOf(id) === i)
-    .map((id) => {
-      const m = levels.mapOf(play, id) || {};
-      return { mapId: id, name: m.name || id, kind: m.kind || null };
+  const out = [];
+  for (const step of at) {
+    if (out.some((t) => t.mapId === step.mapId)) continue;
+    const m = levels.mapOf(play, step.mapId) || {};
+    out.push({
+      mapId: step.mapId,
+      name: m.name || step.mapId,
+      kind: m.kind || null,
+      ...(step.placeId ? { placeId: step.placeId } : {}),
     });
+  }
+  return out;
+}
+
+/**
+ * The frame for peeking at region map `mapId` on a save's path (UI1): the
+ * view on that map and the save as it stands there (at the place on it its
+ * path goes through, in no town and on no grid). Null when the map isn't a
+ * region map on the path.
+ */
+function peekAt(play, at, mapId) {
+  if (!Array.isArray(at)) return null;
+  const i = at.findIndex((s) => s.mapId === mapId);
+  if (i < 0 || mapKind(play, mapId) !== 'region' || !at[i].placeId) return null;
+  return {
+    view: viewFor(play, mapId, at.slice(0, i)),
+    fields: { location: at[i].placeId, placeId: null, townPoint: null, mapId: null, cell: null },
+  };
 }
 
 module.exports = {
@@ -454,4 +478,5 @@ module.exports = {
   waysOf,
   wayInto,
   trailOf,
+  peekAt,
 };

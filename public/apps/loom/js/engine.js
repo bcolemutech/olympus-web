@@ -309,17 +309,24 @@
     if (t >= 1) engine.ease = null;
     engine.hooks.onCamera();
     if (engine.ease) window.requestAnimationFrame(tickEase);
+    else if (t >= 1 && e.done) e.done();
   }
 
-  /** Eases the camera to a view (or jumps, with reduced motion). */
-  function easeTo(view) {
+  /**
+   * Eases the camera to a view (or jumps, with reduced motion). `opts`:
+   * { ms, done }: how long, and what to do on arriving (L-904: a zoom
+   * between region maps, through the place one opens).
+   */
+  function easeTo(view, opts) {
+    opts = opts || {};
     var from = engine.camera.view;
     if (!from || reducedMotion()) {
       engine.camera.view = view;
       engine.hooks.onCamera();
+      if (opts.done) opts.done();
       return;
     }
-    engine.ease = { from: from, to: view, t0: now(), ms: EASE_MS };
+    engine.ease = { from: from, to: view, t0: now(), ms: opts.ms || EASE_MS, done: opts.done };
     window.requestAnimationFrame(tickEase);
   }
 
