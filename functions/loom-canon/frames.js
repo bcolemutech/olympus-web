@@ -217,8 +217,9 @@ function viewFor(play, mapId, prefix = []) {
   const distance = space.distance;
   return Object.assign({}, play, {
     locations: (play.regionLocations || {})[mapId] || {},
+    // The top map migrated from today's world map keeps the world's own.
     map:
-      top && play.map
+      top && (play.map || map.migratedFrom === 'world')
         ? play.map
         : {
             width: space.width,
@@ -241,6 +242,13 @@ function regionIndex(play, at) {
 }
 
 const LEGACY = ['location', 'placeId', 'townPoint', 'mapId', 'cell'];
+
+// Whether a save's own fields are those a path gives (nulls and absence alike).
+function sameFields(fields, stored) {
+  return LEGACY.every(
+    (k) => JSON.stringify(fields[k] || null) === JSON.stringify(stored[k] || null)
+  );
+}
 
 /**
  * The frame's fields for a path: `{ location, placeId, townPoint, mapId,
@@ -340,8 +348,12 @@ function frameOf(play, stored) {
   const usable = Array.isArray(stored.at) && stored.at.length && regionIndex(play, stored.at) >= 0;
   if (usable) {
     const { fields, mapId, prefix } = legacyOf(play, stored.at);
-    const view = viewFor(play, mapId, prefix);
-    return { view, save: { ...stored, ...fields }, at: stored.at };
+    // Every write keeps the two together: fields written alone (an older
+    // writer, a test) are newer than `at`, and `at` follows them.
+    if (!stored.location || sameFields(fields, stored)) {
+      const view = viewFor(play, mapId, prefix);
+      return { view, save: { ...stored, ...fields }, at: stored.at };
+    }
   }
   const at = atFromFields(play, stored);
   const r = at ? regionIndex(play, at) : -1;
