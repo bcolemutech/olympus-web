@@ -29,6 +29,7 @@ const { systemOf } = require('../loom-canon/checks');
 const { withAp } = require('../loom-canon/sheets');
 const apRules = require('../loom-canon/ap');
 const combat = require('../loom-modules/combat');
+const frames = require('../loom-canon/frames');
 const levelRules = require('../loom-modules/advancement/level-up');
 const levelUps = require('./level-up');
 const { FieldValue } = require('firebase-admin/firestore');
@@ -79,11 +80,15 @@ async function intake(params) {
   if (!loaded) {
     throw new LoomTurnError('not-found', 'Unknown world.');
   }
+  // The world from where the save stands (L-903; ../loom-canon/frames.js):
+  // the lowest region map on its path as the world map, the save's fields
+  // read from `at`.
+  const framed = frames.frameOf(frames.playWorld(loaded), stored);
   // The world as this save sees it (L-824): its map's figures among the
   // characters, and everyone where the save has them.
-  const canonWorld = combat.figures.withFigures(loaded, stored);
+  const canonWorld = combat.figures.withFigures(framed.view, framed.save);
   // The character's pool of action points, worked out for the world's system (L-811; L-832).
-  const save = withAp(stored, systemOf(canonWorld), canonWorld);
+  const save = withAp(framed.save, systemOf(canonWorld), canonWorld);
 
   const worldStateRef = db.collection('loom_world_state').doc(worldId);
   const worldStateSnap = await worldStateRef.get();
@@ -339,15 +344,18 @@ async function runTurnPipeline(params) {
             sides: sided.sides,
           };
         }
-        transaction.update(saveRef, {
-          ...struck,
-          ...(joined ? { fight: joined.mutations[0].value } : {}),
-          ...sides,
-          cell: planned.cell,
-          turn: planned.turn,
-          ...(door ? { [`doors.${door.mapId}.${door.doorId}`]: door.state } : {}),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        transaction.update(
+          saveRef,
+          frames.withAt(canonWorld, fresh, {
+            ...struck,
+            ...(joined ? { fight: joined.mutations[0].value } : {}),
+            ...sides,
+            cell: planned.cell,
+            turn: planned.turn,
+            ...(door ? { [`doors.${door.mapId}.${door.doorId}`]: door.state } : {}),
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+        );
         if (seen) transaction.set(seen.ref, seen.value);
       }
       // Where it now stands, for a fight it walked into sight of (L-821).
@@ -786,12 +794,15 @@ async function townStep(params, target) {
       : null;
     if (planned.point) {
       if (seen) transaction.set(seen.ref, seen.value);
-      transaction.update(saveRef, {
-        townPoint: planned.point,
-        placeId: null,
-        turn: planned.turn,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      transaction.update(
+        saveRef,
+        frames.withAt(canonWorld, fresh, {
+          townPoint: planned.point,
+          placeId: null,
+          turn: planned.turn,
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+      );
     }
     return { ...planned, before: fresh };
   });

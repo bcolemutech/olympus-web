@@ -57,7 +57,27 @@ function routeMiles(world, from, to) {
   const a = located(pick(from));
   const b = located(pick(to));
   if (!a || !b) return null;
-  return Math.hypot(b.x - a.x, b.y - a.y) * milesPerMapUnit(world) * WINDING;
+  const straight = Math.hypot(b.x - a.x, b.y - a.y);
+  // A region map measured in its own unit, not a length on the ground
+  // (light-years, AU; planning/map-levels.md TV1; L-903): the straight line
+  // in that unit, which route speeds are then given in.
+  const own = ownUnit(world);
+  if (own) return straight * own;
+  return straight * milesPerMapUnit(world) * WINDING;
+}
+
+/**
+ * A region map's own unit (L-903), when it isn't a length these routes turn
+ * into miles: its size per map unit, or null. Set by ./frames.js for a map
+ * below the top (`distance.own`).
+ */
+function ownUnit(world) {
+  const distance = world && world.map && world.map.distance;
+  if (!distance || !distance.own) return null;
+  if (UNIT_MILES[String(distance.unit || '').toLowerCase()]) return null;
+  return typeof distance.perMapUnit === 'number' && distance.perMapUnit > 0
+    ? distance.perMapUnit
+    : 1;
 }
 
 /** Miles for people to read: tenths under 10, whole miles from there. */
@@ -68,6 +88,7 @@ function roundMiles(miles) {
 
 module.exports = {
   WINDING,
+  ownUnit,
   DEFAULT_MILES_PER_MAP_UNIT,
   UNIT_MILES,
   milesPerMapUnit,

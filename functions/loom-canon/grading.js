@@ -1041,6 +1041,7 @@ function isPlaceOpen(world, place, options) {
 // The gate alone, without the score: the game asks this on every turn.
 function gateOf(world, location, { layers = LAYER_CHECKS } = {}) {
   if (!isGraded(world)) return 'playable';
+  if (location.native) return nativeGate(world, location);
   const settlement = (location.geo || {}).kind === 'settlement';
   const gate = [layerItem(layers, settlement ? 'town' : 'battleMap', world, location)];
   if (!isWritten(location)) gate.push(descriptionItem(location));
@@ -1049,7 +1050,22 @@ function gateOf(world, location, { layers = LAYER_CHECKS } = {}) {
 
 function placeGateOf(world, place, { layers = LAYER_CHECKS } = {}) {
   if (!isGraded(world)) return 'playable';
+  if (place.native) return nativeGate(world, place);
   const gate = [layerItem(layers, 'battleMap', world, place)];
+  if (!isWritten(place)) gate.push(descriptionItem(place));
+  return gradeFrom(gate.filter(Boolean));
+}
+
+// The gate of a place in the levels model with no doc of today's shape
+// (planning/map-levels.md LV4, MP6; L-903; ./frames.js): written, its town
+// laid out if it opens one, its region map with a way in if it opens one;
+// a place with no map below is stood at, so needs no layer.
+function nativeGate(world, place) {
+  const gate = [];
+  if (place.town) gate.push(layerItem(LAYER_CHECKS, 'town', world, place));
+  if (place.region && !require('./frames').waysOf(world, place.region.mapId).length) {
+    gate.push({ need: 'wayIn', for: 'playable', message: 'Its map has no way in.' });
+  }
   if (!isWritten(place)) gate.push(descriptionItem(place));
   return gradeFrom(gate.filter(Boolean));
 }

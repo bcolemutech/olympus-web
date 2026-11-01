@@ -23,6 +23,7 @@ const { planTownStep, walksTown, nearestWayOut } = require('./town-steps');
 const { UNKNOWN } = require('./town-found');
 const combat = require('../loom-modules/combat');
 const { namedTurn } = require('./named-turns');
+const depth = require('./depth');
 
 // A lock's difficulty when its door gives none (L-626).
 const DEFAULT_LOCK_DIFFICULTY = 15;
@@ -434,7 +435,7 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
   if (step.refused) return blocked(step.refused);
   const spend = { target: 'save', op: 'set-flag', path: 'turn', value: step.turn };
   if (step.exit) {
-    const left = leaveMapBy(exit, host, hostName, canonWorld);
+    const left = leaveMapBy(exit, host, hostName, canonWorld, characterState);
     return left.outcome === 'success' ? { ...left, mutations: [...left.mutations, spend] } : left;
   }
   const name = exit
@@ -499,8 +500,17 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
   };
 }
 
-function leaveMapBy(exit, host, hostName, canonWorld) {
+function leaveMapBy(exit, host, hostName, canonWorld, characterState = {}) {
   const to = exit.to && typeof exit.to === 'object' ? exit.to : null;
+  // A square leading to a place on any map (L-903; map levels TV3).
+  if (to && to.placeId) {
+    return depth.exitTo(
+      canonWorld,
+      characterState,
+      { placeId: to.placeId, seconds: to.seconds, name: exit.name },
+      host ? host.id : null
+    );
+  }
   if (to) {
     const next = (canonWorld.battleMaps || {})[to.map];
     if (!next || next.retired) return blocked('The way by ' + exit.name + ' leads nowhere now.');
@@ -570,6 +580,21 @@ function evaluateMove(proposedAction, worldState, characterState, canonWorld, kn
     return blocked("There's no map here to move on.");
   }
 
+  // At any depth (L-903; ./depth.js): by an exit of where the save stands,
+  // or to a place outside the frame, up, across and down; else today's
+  // rules, going on into a region map arrived at by its way in.
+  const deep = depth.depthMove(proposedAction, characterState, canonWorld);
+  if (deep) return deep;
+  return depth.withDescent(
+    frameMove(proposedAction, characterState, canonWorld, found),
+    characterState,
+    canonWorld
+  );
+}
+
+// A move on the frame's region map, its town or into a battle map (today's rules).
+function frameMove(proposedAction, characterState, canonWorld, found) {
+  const currentId = characterState.location;
   const first = proposedAction.targets[0];
   const targetPlace = first && (canonWorld.places || {})[first];
   if (targetPlace && targetPlace.locationId === currentId) {

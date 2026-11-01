@@ -7,6 +7,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleAuth } = require('google-auth-library');
 const { runTurnPipeline, LoomTurnError } = require('./loom-turn');
 const loomCanon = require('./loom-canon');
+const frames = require('./loom-canon/frames');
+const levels = require('./loom-canon/levels');
 const { isPlayable, gradeWorld } = require('./loom-canon/grading');
 const { withNeighbours } = require('./loom-turn/discovery');
 const { arrivalPlace } = require('./loom-canon/town');
@@ -800,21 +802,30 @@ exports.loomGetMap = onCall(async (request) => {
   }
   const loaded = await loomCanon.loadWorld(worldId.trim(), { db });
   if (!loaded) throw new HttpsError('not-found', 'Unknown world.');
+  // The world from where the save stands (L-903): the map it is on.
+  const framed = frames.frameOf(frames.playWorld(loaded), stored);
   // The world as this save sees it (L-824): its map's figures, and everyone
   // where the save has them.
-  const canonWorld = combat.figures.withFigures(loaded, stored);
+  const canonWorld = combat.figures.withFigures(framed.view, framed.save);
   // The character's pool of action points, worked out for the world's system (L-811; L-832).
-  const save = sheets.withAp(stored, checks.systemOf(canonWorld), canonWorld);
+  const save = sheets.withAp(framed.save, checks.systemOf(canonWorld), canonWorld);
   // On a battle map, only what the save has seen of it is sent (L-633).
   const record = save.mapId ? await seenRef(snap.ref, save.mapId).get() : null;
   // In a town, what the save has seen of it, for its fog (L-672).
   const townRecord = save.location ? await seenTownRef(snap.ref, save.location).get() : null;
-  return mapView(
+  const view = mapView(
     canonWorld,
     save,
     record && record.exists ? record.data() : null,
     townRecord && townRecord.exists ? townRecord.data() : null
   );
+  // The map it stands on, and the trail (L-903; map levels UI1): each map
+  // above it, the one it is on last.
+  return {
+    ...view,
+    mapId: canonWorld.frame.mapId,
+    trail: frames.trailOf(canonWorld, framed.at || frames.atOf(canonWorld, save)),
+  };
 });
 
 /**
@@ -897,10 +908,13 @@ exports.loomCreateSave = onCall(async (request) => {
 
   const db = getFirestore();
   // Static or Firestore-backed; drafts aren't playable until published.
-  const canonWorld = await loomCanon.loadWorld(worldId.trim(), { db });
-  if (!canonWorld) {
+  const loaded = await loomCanon.loadWorld(worldId.trim(), { db });
+  if (!loaded) {
     throw new HttpsError('not-found', 'Unknown world.');
   }
+  // The start is a place on any region map (L-903): the world is seen from
+  // that map (../loom-canon/frames.js).
+  const canonWorld = startFrame(loaded);
   // New games begin at the starting location, so it must be open to players
   // (Layered Worlds gate, L-322 / #391).
   const start = canonWorld.rules && canonWorld.locations[canonWorld.rules.startingLocationId];
@@ -962,6 +976,9 @@ exports.loomCreateSave = onCall(async (request) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  // Where it stands in the levels model (L-903).
+  const at = frames.atOf(canonWorld, save);
+  if (at) save.at = at;
 
   // A start on a battle map sees what's in sight from its entry (L-632).
   const seen = firstLook(saveRef, canonWorld, save);
@@ -979,6 +996,19 @@ exports.loomCreateSave = onCall(async (request) => {
 
   return { saveId: saveRef.id };
 });
+
+// The world seen from the region map its start is on (L-903): the top map's
+// frame when the start isn't a place of the model.
+function startFrame(loaded) {
+  const play = frames.playWorld(loaded);
+  const startId = play.rules && play.rules.startingLocationId;
+  const path = startId ? levels.pathTo(play, startId) : null;
+  const last = path && path[path.length - 1];
+  if (last && (levels.mapOf(play, last.mapId) || {}).kind === 'region') {
+    return frames.viewFor(play, last.mapId, path.slice(0, -1));
+  }
+  return frames.viewFor(play, play.topMapId, []);
+}
 
 // A published world a player may start a game in, or a refusal.
 async function playableWorld(worldId) {
