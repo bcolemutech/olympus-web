@@ -12,7 +12,8 @@ const layers = require('../loom-canon/layers');
  * (../loom-canon/map-paths.js), and nothing hidden leaves the server.
  *
  *   knownMap(map, on, states)  the map cut down to the squares `on` says
- *                              were seen; each door in the save's state
+ *                              were seen; each door, of its layers and its
+ *                              geometry, in the save's state
  *
  * Geometry (L-921) is cut to what touches a seen square, and only what
  * moving and drawing read (ground, walls, doors, windows, objects); hidden
@@ -164,8 +165,9 @@ function touchesSeen(corners, on) {
 }
 
 // A map's stored geometry cut to what touches a square seen: only what moving
-// and drawing read, hidden things left out. Null when it has none.
-function seenGeometry(map, on) {
+// and drawing read, hidden things left out, each door in the save's state
+// (`states`). Null when it has none.
+function seenGeometry(map, on, states = {}) {
   const stored = map && map.geometry;
   if (!geo.hasGeometry(stored)) return null;
   const hidden = new Set(
@@ -173,9 +175,11 @@ function seenGeometry(map, on) {
   );
   const out = {};
   for (const key of MOVING) {
-    const kept = (stored[key] || []).filter(
-      (item) => item && !hidden.has(item.id) && touchesSeen(cornersOf(key, item), on)
-    );
+    const kept = (stored[key] || [])
+      .filter((item) => item && !hidden.has(item.id) && touchesSeen(cornersOf(key, item), on))
+      .map((item) =>
+        key === 'doors' && states[item.id] ? { ...item, state: states[item.id] } : item
+      );
     if (kept.length) out[key] = kept;
   }
   return Object.keys(out).length ? out : null;
@@ -183,7 +187,7 @@ function seenGeometry(map, on) {
 
 /** A battle map as far as a save has seen it (`on`), its doors in the save's `states`. */
 function knownMap(map, on, states) {
-  const geometry = seenGeometry(map, on);
+  const geometry = seenGeometry(map, on, states || {});
   return {
     id: map.id,
     width: map.width,

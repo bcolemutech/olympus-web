@@ -6,7 +6,7 @@ const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
 const { discoveredBy } = require('./discovery');
 const { apOf, turnStateOf } = require('../loom-models');
-const { planOn, doorStatesOf, pricesFor } = require('./steps');
+const { planOn, doorStatesOf, pricesFor, viewPrices } = require('./steps');
 const { knownMap } = require('./known-map');
 const { walksTown, townPlanOf, streetOf } = require('./town-steps');
 const ground = require('../loom-canon/ground');
@@ -23,7 +23,6 @@ const apRules = require('../loom-canon/ap');
 const advancement = require('../loom-modules/advancement');
 const levelUp = require('../loom-modules/advancement/level-up');
 const sheets = require('../loom-canon/sheets');
-const mapPaths = require('../loom-canon/map-paths');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
 const combat = require('../loom-modules/combat');
@@ -570,12 +569,9 @@ function turnView(save, canonWorld) {
 function pricesView(canonWorld, save) {
   const prices = pricesFor(canonWorld, save);
   const { map } = maps.positionOf(canonWorld, save);
-  const doors = {};
-  for (const door of (map && map.doors) || []) doors[door.id] = prices.door(door);
-  // A door in the map's geometry with its own cost (L-922).
-  for (const door of (map && mapPaths.geometryOf(map).doors) || []) {
-    if (doors[door.id] === undefined) doors[door.id] = prices.door(door);
-  }
+  // A step's, difficult ground's and a door's, and each door's own (of the
+  // map's layers and its geometry, L-922): as the server plans a move.
+  const { move, difficult, door, doors } = viewPrices(canonWorld, save, map);
   // And each action's, for the click menu (L-837): a feature's own cost by
   // id; Infinity (a condition's 'never') is sent as null.
   const finite = (n) => (Number.isFinite(n) ? n : null);
@@ -585,14 +581,7 @@ function pricesView(canonWorld, save) {
   for (const id of ['speak', 'standUp', 'lock', 'object', 'withdraw', 'dodge', 'attack']) {
     actions[id] = finite(prices.of(id));
   }
-  return {
-    move: prices.move,
-    difficult: prices.difficult,
-    door: prices.door(null),
-    doors,
-    features,
-    actions,
-  };
+  return { move, difficult, door, doors, features, actions };
 }
 
 module.exports = { mapView, townView, battleView, turnView };

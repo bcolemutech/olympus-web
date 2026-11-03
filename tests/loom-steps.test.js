@@ -365,8 +365,9 @@ describe('walls and doors (L-624)', () => {
   test('a closed door on the way is opened (2 AP), and the walk stops there', () => {
     const step = planStep(WALLED, standing({ x: 3, y: 2 }), { cell: { x: 8, y: 1 } });
     expect(step.cell).toEqual({ x: 4, y: 2 });
-    // 2 to walk to it (7.2 ft), 2 to open it (L-832).
-    expect(step.turn.ap).toBe(2);
+    // It walks until it is beside the door (within 5 ft): 1 AP, then 2 to
+    // open it (L-832; L-922).
+    expect(step.turn.ap).toBe(3);
     expect(step.lines).toEqual(['You open the inner door.']);
     expect(step.opened).toEqual({ mapId: 'bm_room', doorId: 'inner' });
     expect(step.turn.plan.to).toEqual({ x: 8, y: 1 });

@@ -16,10 +16,12 @@
   //   under the grid and the layers, so the layout remembered still reads;
   //   the dark covers everything. Only what the server sent is drawn.
   // - The turn (L-615): this turn's reach is lit; a selected square shows
-  //   the path a move would take (grid-paths.js, the server's own rules),
-  //   solid for this turn and dashed after, and a kept plan is dashed. After
-  //   a move the token walks its path (K3; a click skips ahead, reduced
-  //   motion jumps). Reach and paths cover only squares seen (L-635).
+  //   the path a move would take (map-paths.js, the server's own planner and
+  //   move: in feet, through gaps as wide as the character, 1 AP per 5 ft
+  //   rounded up once; L-922), solid for this turn and dashed after, and a
+  //   kept plan is dashed. After a move the token walks its path (K3; a
+  //   click skips ahead, reduced motion jumps). Reach and paths cover only
+  //   squares seen (L-635).
   // - Hazards (L-815; EF9): the squares of each in sight, tinted, edged and
   //   named. Walking into one stops the walk there; its save is the turn's
   //   roll card.
@@ -37,12 +39,11 @@
   var Loom = window.Loom;
   var state = Loom.state;
   var M = Loom.mapMath;
-  var P = Loom.gridPaths;
-  var L = Loom.mapLayers;
+  var MP = Loom.mapPaths;
   var engine = Loom.engine;
   var CELL = 40;
   var PAD = 60; // room for the labels of squares at the edge
-  var STEP_MS = 110; // the token's walk, a square at a time
+  var STEP_MS = 110; // the token's walk: a square (5 ft) in this long
   var DOOR_HIT = 0.2; // squares from a door's line that a click picks it
 
   var COLOURS = {
@@ -95,8 +96,8 @@
     reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
     fog: null, // the fog (L-634): { dark: runs, dim: runs }, as reach's runs
     known: null, // whether a square (by y × width + x) has been seen (L-635)
-    preview: null, // the path to the selected cell: { path, walked, rest, cost, turns } or { none }
-    pending: null, // a move sent: { mapId, from, path }, for the walk when it lands
+    preview: null, // the move to the selected cell: { path, walked, rest, stop, end, short, cost, feet, turns } or { none }
+    pending: null, // a move sent: { mapId, points } in feet, for the walk when it lands
     anim: null, // the token's walk: { cells, t0 }
     playback: null, // everyone else's turns playing out (L-828): { steps, t0, end }
     version: 0, // bumped when what is drawn changes
@@ -164,40 +165,28 @@
     return { x: PAD + (cell.x + 0.5) * CELL, y: PAD + (cell.y + 0.5) * CELL };
   }
 
-  // The server's own path rules (layers.js; L-624): around walls, locked
-  // doors and obstacles, each step at this character's price in action
-  // points (L-832: the turn's `prices`, a square 1 and difficult ground 2
-  // by default), a closed door's cost to open it (where a walk stops), and
-  // exits stepped onto, never through. Doors are as this save has them, and
-  // only ground it knows is walked (L-635): what it has seen, as the server
-  // does.
-  function pathOptions() {
-    var states = {};
-    (battle.data.doors || []).forEach(function (door) {
-      states[door.id] = door.state;
+  // A point in feet (L-922) in map coordinates.
+  function spot(p) {
+    return { x: PAD + (p.x / MP.FEET) * CELL, y: PAD + (p.y / MP.FEET) * CELL };
+  }
+
+  // Where the player stands, in feet: sent with the map, else its square's centre.
+  function hereFeet() {
+    var d = battle.data;
+    return d.herePoint || MP.centreOf(d.here);
+  }
+
+  // The map as this character moves on it, as the server plans a move
+  // (map-paths.js viewPlanner; L-922): as far as it has been seen, each door
+  // as this save has it (or `opened` on the way), at this character's prices
+  // (L-832: the turn's `prices`) and width, never into a square not seen
+  // (L-635) nor an exit but the one at `goal`.
+  function planFor(goal, opened) {
+    return MP.viewPlanner(battle.data, (battle.turn && battle.turn.prices) || null, {
+      goal: goal,
+      opened: opened,
+      known: battle.known ? known : null,
     });
-    var prices = (battle.turn && battle.turn.prices) || null;
-    var rules = L.pathOptions(
-      battle.data,
-      states,
-      prices && {
-        move: prices.move,
-        difficult: prices.difficult,
-        door: function (door) {
-          var own = prices.doors && prices.doors[door.id];
-          return typeof own === 'number' ? own : prices.door;
-        },
-      }
-    );
-    if (!battle.known) return rules;
-    return {
-      avoid: rules.avoid,
-      opens: rules.opens,
-      openCost: rules.openCost,
-      cost: function (from, to) {
-        return known(to) ? rules.cost(from, to) : Infinity;
-      },
-    };
   }
 
   // Whether the save has seen a square (L-635): everything, without a fog.
@@ -379,20 +368,30 @@
     battle.pending = null;
     var d = battle.data;
     if (!pending || !d || pending.mapId !== d.id || reducedMotion()) return;
+    var here = hereFeet();
     var i = -1;
-    pending.path.forEach(function (step, j) {
-      if (same(step, d.here)) i = j;
+    pending.points.forEach(function (p, j) {
+      if (Math.abs(p.x - here.x) < 0.05 && Math.abs(p.y - here.y) < 0.05) i = j;
     });
-    if (i < 0) return;
-    battle.anim = { cells: [pending.from].concat(pending.path.slice(0, i + 1)), t0: now() };
+    if (i < 1) return;
+    battle.anim = { points: pending.points.slice(0, i + 1), t0: now() };
     if (battle.selected && same(battle.selected, d.here)) battle.selected = null;
     window.requestAnimationFrame(frame);
+  }
+
+  // How far along a walk's points, in feet.
+  function lengthOf(points) {
+    var total = 0;
+    for (var i = 1; i < points.length; i++) {
+      total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    }
+    return total;
   }
 
   function frame() {
     var anim = battle.anim;
     if (!anim) return;
-    if ((now() - anim.t0) / STEP_MS >= anim.cells.length - 1) {
+    if (((now() - anim.t0) / STEP_MS) * MP.FEET >= lengthOf(anim.points)) {
       battle.anim = null;
       changed();
       Loom.map.render();
@@ -402,49 +401,87 @@
     window.requestAnimationFrame(frame);
   }
 
-  // Where the token is drawn: along its walk, or where it stands.
+  // Where the token is drawn: along its walk (a square in STEP_MS), or where it stands.
   function tokenCentre() {
     var anim = battle.anim;
-    if (!anim) return centre(battle.data.here);
-    var t = Math.max(0, (now() - anim.t0) / STEP_MS);
-    var i = Math.min(Math.floor(t), anim.cells.length - 2);
-    var f = Math.min(1, t - i);
-    var a = centre(anim.cells[i]);
-    var b = centre(anim.cells[i + 1]);
-    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+    if (!anim) return spot(hereFeet());
+    var left = Math.max(0, ((now() - anim.t0) / STEP_MS) * MP.FEET);
+    var pts = anim.points;
+    for (var i = 1; i < pts.length; i++) {
+      var len = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      if (left <= len && len > 0) {
+        var f = left / len;
+        return spot({
+          x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f,
+          y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f,
+        });
+      }
+      left -= len;
+    }
+    return spot(pts[pts.length - 1]);
   }
 
-  // The squares this turn's movement reaches, as runs along each row.
+  // The squares this turn's AP reaches, as runs along each row.
   function computeReach() {
     var d = battle.data;
     battle.reach = null;
     if (!d || movementLeft() <= 0) return;
     var runs = [];
-    P.reach(d, d.here, movementLeft(), pathOptions())
-      .sort(function (a, b) {
-        return a.y - b.y || a.x - b.x;
-      })
-      .forEach(function (cell) {
-        var last = runs[runs.length - 1];
-        if (last && last.y === cell.y && last.x1 === cell.x - 1) last.x1 = cell.x;
-        else runs.push({ y: cell.y, x0: cell.x, x1: cell.x });
-      });
+    MP.reachable(planFor(null), hereFeet(), movementLeft()).forEach(function (cell) {
+      var last = runs[runs.length - 1];
+      if (last && last.y === cell.y && last.x1 === cell.x - 1) last.x1 = cell.x;
+      else runs.push({ y: cell.y, x0: cell.x, x1: cell.x });
+    });
     battle.reach = { runs: runs };
   }
 
-  // How many turns walking `path` takes with a full pool, from the next turn
-  // (a door opened on the way ends a turn's walk).
-  function turnsFor(path) {
-    var speed = battle.turn ? (battle.turn.apOff ? Infinity : battle.turn.pool) : 20;
-    var openCost = pathOptions().openCost;
-    var turns = 0;
-    while (path.length) {
-      var w = P.walk(path, speed, { openCost: openCost });
-      if (!w.walked.length && !w.opened) return Infinity;
-      path = w.rest;
-      turns += 1;
+  // A move to `cell`, as the server makes it (map-paths.js moveTo, which
+  // steps.js planStep runs too): the spot in the square the character fits,
+  // the way there, cut short beside someone standing there, and how far `ap`
+  // takes it. Null when there's no way; { beside } when they're beside the
+  // one standing there already.
+  function moveTo(cell, ap, opened) {
+    var d = battle.data;
+    var meeting = personAt(cell);
+    if (meeting && distance(d.here, cell) <= 1) return { beside: meeting };
+    var plan = planFor(cell, opened);
+    var move = MP.moveTo(plan, hereFeet(), { cell: cell }, ap, {
+      occupied: function (sq) {
+        return Boolean(personAt(sq));
+      },
+    });
+    return move.none ? null : move;
+  }
+
+  // How many turns the rest of a move takes with a full pool, from the next
+  // turn: each turn's walk found afresh from where the last stopped, as
+  // Continue does (a door opened on the way ends a turn's walk).
+  function turnsFor(move) {
+    var pool = battle.turn ? (battle.turn.apOff ? Infinity : battle.turn.pool) : 20;
+    var opened = {};
+    var from = move;
+    for (var turns = 1; turns <= 50; turns++) {
+      var w = from.walk;
+      if (w.opened) opened[w.opened] = 'open';
+      var last = w.walked.length ? w.walked[w.walked.length - 1] : from.path.points[0];
+      var plan = planFor(MP.squareOf(from.end), opened);
+      var path = MP.pathTo(plan, last, from.end);
+      if (!path) return Infinity;
+      var next = MP.walk(plan, path, pool, { arriveIn: MP.squareOf(from.end) });
+      if (!next.walked.length && !next.opened) return Infinity;
+      if (next.reached) return turns;
+      from = { path: path, walk: next, end: from.end };
     }
-    return turns;
+    return Infinity;
+  }
+
+  // The points a walk goes through: from its start to where it stops.
+  function walkedPoints(move) {
+    var w = move.walk;
+    var pts = move.path.points;
+    if (!w.walked.length) return [pts[0]];
+    var stop = w.walked[w.walked.length - 1];
+    return pts.slice(0, stop.leg + 1).concat([{ x: stop.x, y: stop.y }]);
   }
 
   // The path a move to the selected cell would take, as the server finds it.
@@ -457,41 +494,34 @@
       battle.preview = { unseen: true }; // (L-635)
       return;
     }
-    var found = P.pathTo(d, d.here, cell, pathOptions());
-    if (!found) {
+    var move = moveTo(cell, movementLeft());
+    if (!move) {
       battle.preview = { none: true };
       return;
     }
-    // A way to someone ends on the last free square before them (L-642).
-    var path = found.path;
-    var meeting = personAt(cell);
-    if (meeting) {
-      while (path.length && personAt(path[path.length - 1])) path = path.slice(0, -1);
-      if (!path.length) {
-        battle.preview = { beside: meeting };
-        return;
-      }
+    // A way to someone ends just before them (L-642).
+    if (move.beside) {
+      battle.preview = { beside: move.beside };
+      return;
     }
-    var w = P.walk(path, movementLeft(), {
-      stand: function (step) {
-        return !personAt(step);
-      },
-      openCost: pathOptions().openCost,
-    });
-    var doors = path
-      .filter(function (step) {
-        return step.opens;
-      })
-      .map(function (step) {
-        return doorName(step.opens);
-      });
+    var w = move.walk;
+    var walked = walkedPoints(move);
+    var stop = walked[walked.length - 1];
+    var leg = w.walked.length ? w.walked[w.walked.length - 1].leg + 1 : 1;
+    var rest = w.reached ? [] : [stop].concat(move.path.points.slice(leg));
     battle.preview = {
-      path: path,
-      walked: w.walked,
-      rest: w.rest,
-      cost: path[path.length - 1].cost,
-      turns: (w.walked.length || w.opened ? 1 : 0) + turnsFor(w.rest),
-      doors: doors,
+      path: move.path,
+      walked: walked,
+      rest: rest,
+      stop: stop,
+      end: move.end,
+      short: !w.reached,
+      cost: move.path.ap,
+      feet: move.path.feet,
+      turns: w.reached ? 1 : (w.walked.length || w.opened ? 1 : 0) + turnsFor(move),
+      doors: move.path.doors.map(function (door) {
+        return doorName(door.id);
+      }),
     };
   }
 
@@ -517,7 +547,7 @@
   }
 
   function herePoint() {
-    return battle.data ? centre(battle.data.here) : null;
+    return battle.data ? spot(hereFeet()) : null;
   }
 
   function selectHere() {
@@ -919,9 +949,6 @@
       var r = box(battle.selected);
       o.roundRect(r[0], r[1], r[2], r[3], r[4]).stroke({ width: 2 * px, color: COLOURS.selected });
     }
-    var centres = function (cells) {
-      return cells.map(centre);
-    };
     // Someone selected (L-828; UI2): your attacks' reach and range around
     // you (long range dashed), and their cover from where you stand.
     var target = battle.selected && personAt(battle.selected);
@@ -965,26 +992,29 @@
     var preview = battle.preview;
     var plan = battle.turn && battle.turn.plan;
     if (!battle.anim && preview && preview.path) {
-      Loom.draw.polyline(o, centres([d.here].concat(preview.walked)));
-      o.stroke({ width: 3 * px, color: COLOURS.path, cap: 'round', join: 'round' });
-      var from = preview.walked.length ? preview.walked[preview.walked.length - 1] : d.here;
-      Loom.draw.polyline(o, centres([from].concat(preview.rest)), [2 * px, 7 * px]);
-      o.stroke({ width: 3 * px, color: COLOURS.path, alpha: 0.85, cap: 'round' });
+      if (preview.walked.length > 1) {
+        Loom.draw.polyline(o, preview.walked.map(spot));
+        o.stroke({ width: 3 * px, color: COLOURS.path, cap: 'round', join: 'round' });
+      }
+      if (preview.rest.length > 1) {
+        Loom.draw.polyline(o, preview.rest.map(spot), [2 * px, 7 * px]);
+        o.stroke({ width: 3 * px, color: COLOURS.path, alpha: 0.85, cap: 'round' });
+      }
       // Its cost at the end, and where the AP left runs out (L-837; UI1).
       if (battle.turn && !battle.turn.apOff) {
-        var end = preview.path[preview.path.length - 1];
-        pathLabel(n, px, end, preview.cost + ' AP');
-        if (preview.rest.length) {
-          var stop = centre(from);
+        pathLabel(n, px, MP.squareOf(preview.end), preview.cost + ' AP');
+        if (preview.short) {
+          var from = MP.squareOf(preview.stop);
+          var stop = spot(preview.stop);
           o.circle(stop.x, stop.y, CELL * 0.22).stroke({ width: 2.5 * px, color: COLOURS.path });
           o.moveTo(stop.x - CELL * 0.16, stop.y - CELL * 0.16)
             .lineTo(stop.x + CELL * 0.16, stop.y + CELL * 0.16)
             .stroke({ width: 2.5 * px, color: COLOURS.path });
-          if (preview.walked.length) pathLabel(n, px, from, 'AP runs out', true);
+          if (preview.walked.length > 1) pathLabel(n, px, from, 'AP runs out', true);
         }
       }
     } else if (!battle.anim && !battle.selected && plan) {
-      Loom.draw.polyline(o, centres([d.here].concat(plan.path)), [2 * px, 7 * px]);
+      Loom.draw.polyline(o, [spot(hereFeet())].concat(plan.path.map(centre)), [2 * px, 7 * px]);
       o.stroke({ width: 3 * px, color: COLOURS.path, alpha: 0.5, cap: 'round' });
     }
   }
@@ -1160,7 +1190,7 @@
       label: about.go,
       note: costLine(preview),
       onSelect: function () {
-        battle.pending = { mapId: d.id, from: d.here, path: preview.path };
+        battle.pending = { mapId: d.id, points: preview.walked };
         Loom.play.moveToCell(cell, label);
       },
     };
@@ -1625,13 +1655,13 @@
   // What a move costs, and when it gets there: "8 movement · this turn".
   function costLine(preview) {
     var when;
-    if (!preview.rest.length) when = 'this turn';
+    if (!preview.short) when = 'this turn';
     else if (preview.turns === Infinity) when = 'too far to walk';
-    else if (!preview.walked.length) {
+    else if (preview.walked.length <= 1) {
       when = preview.turns === 1 ? 'next turn' : preview.turns + ' turns, from next turn';
     } else when = preview.turns + ' turns';
     return (
-      (battle.turn && battle.turn.apOff ? preview.path.length + ' squares' : preview.cost + ' AP') +
+      (battle.turn && battle.turn.apOff ? Math.round(preview.feet) + ' ft' : preview.cost + ' AP') +
       ' · ' +
       when +
       (preview.doors.length ? ' · opens ' + listOf(preview.doors).replace(/ or /, ' and ') : '')
@@ -1641,8 +1671,10 @@
   /** Continue (L-613): walks the kept plan, the token walking it as it lands. */
   function continuePlan() {
     var turn = battle.turn;
-    if (battle.data && turn && turn.plan) {
-      battle.pending = { mapId: battle.data.id, from: battle.data.here, path: turn.plan.path };
+    if (battle.data && turn && turn.plan && turn.plan.to) {
+      // Where the plan heads, walked as far as this turn goes, for the token.
+      var move = moveTo(turn.plan.to, movementLeft());
+      if (move && move.path) battle.pending = { mapId: battle.data.id, points: walkedPoints(move) };
     }
     Loom.play.continuePlan();
   }
@@ -1658,7 +1690,7 @@
         var c = centre(p);
         return { x: c.x, y: c.y, colour: '#4db6ac', r: 2.5 };
       });
-    var me = centre(d.here);
+    var me = spot(hereFeet());
     points.push({ x: me.x, y: me.y, colour: '#ffffff', r: 3.5, ring: '#ffb74d' });
     return {
       rect: { x: PAD, y: PAD, width: d.width * CELL, height: d.height * CELL, fill: '#1a1f2c' },

@@ -10,7 +10,7 @@ const { systemOf } = require('../loom-canon/checks');
 const { sheetOf, widthOf } = require('../loom-canon/sheets');
 const { turnStateOf } = require('../loom-models');
 const apRules = require('../loom-canon/ap');
-const { doorSides, knownMap, statesOf } = require('./known-map');
+const { doorSides, knownMap } = require('./known-map');
 
 /**
  * Moving without the GM (planning/the-loom-movement-and-vision.md §3;
@@ -126,26 +126,37 @@ function doorOn(map, id) {
 }
 
 /**
+ * A character's AP prices as the grid view is sent them (loomGetMap's turn
+ * `prices`): a square's, difficult ground's, a door's, and each door's own
+ * (of the map's layers and its geometry), with its conditions in them.
+ */
+function viewPrices(canonWorld, save, map) {
+  const prices = pricesFor(canonWorld, save);
+  const doors = {};
+  for (const door of (map && map.doors) || []) doors[door.id] = prices.door(door);
+  for (const door of (map && mapPaths.geometryOf(map).doors) || []) {
+    if (doors[door.id] === undefined) doors[door.id] = prices.door(door);
+  }
+  return { move: prices.move, difficult: prices.difficult, door: prices.door(null), doors };
+}
+
+/**
  * How a save's character moves on a map (L-922; ../loom-canon/map-paths.js):
- * its width, its doors, its prices, and the squares it never walks into (one
- * it hasn't seen, an exit it isn't leaving by).
+ * planned on the map as far as it has been seen (`known`, keyed "x,y"; all of
+ * it without), exactly as the grid view has it (./known-map.js), with the
+ * view's prices and the character's width, through the planner the view
+ * uses (viewPlanner): so the page's preview is the server's charge. It never
+ * walks into a square not seen, nor an exit but the one at `goal`.
  */
 function moverFor(canonWorld, save, map, { known = null, goal = null } = {}) {
-  const exits = new Set((map.exits || []).map((e) => e.x + ',' + e.y));
-  const goalKey = goal ? goal.x + ',' + goal.y : null;
-  // On the map as far as it has been seen, as the grid view has it, so the
-  // view's preview is this (./known-map.js).
-  const states = doorStatesOf(save, map.id);
-  const ground = known ? knownMap(map, (sq) => Boolean(known[sq.x + ',' + sq.y]), states) : map;
-  return mapPaths.planner(ground, {
-    width: widthOf(sheetOf(save)),
-    states: known ? statesOf(ground) : states,
-    prices: pricesFor(canonWorld, save),
-    blocked: (sq) => {
-      const k = sq.x + ',' + sq.y;
-      if (known && !known[k]) return true;
-      return exits.has(k) && k !== goalKey;
-    },
+  const on = known ? (sq) => Boolean(known[sq.x + ',' + sq.y]) : () => true;
+  const view = {
+    ...knownMap(map, on, doorStatesOf(save, map.id)),
+    size: { width: widthOf(sheetOf(save)) },
+  };
+  return mapPaths.viewPlanner(view, viewPrices(canonWorld, save, map), {
+    goal,
+    known: known ? on : null,
   });
 }
 
@@ -208,10 +219,6 @@ function planStep(canonWorld, save, target, known) {
   // closed doors on the way, over ground it knows. An exit is only stepped
   // into to leave by it: it's never on the way.
   const mover = moverFor(canonWorld, save, map, { known, goal: to });
-  if (!aim || !mover.fits(aim)) aim = mapPaths.spotIn(mover, to);
-  if (!aim) return { refused: "There's no room for you there." };
-  let found = mapPaths.pathTo(mover, start, aim);
-  if (!found) return { refused: "There's no way there from here." };
 
   // People here (L-642): walked through, never stopped on. A way to
   // someone's square ends just before it, beside them.
@@ -219,14 +226,6 @@ function planStep(canonWorld, save, target, known) {
   const personAt = (cell) => people.find((p) => maps.sameCell(p.cell, cell)) || null;
   const meeting = personAt(to);
   if (meeting && besideOf(from, to)) return { refused: "You're beside " + meeting.name + '.' };
-  if (meeting) {
-    found = mapPaths.cutBefore(mover, found, (st) => maps.sameCell(st.square, to));
-    if (!found) {
-      return { refused: "There's no room to stop there." };
-    }
-    aim = found.points[found.points.length - 1];
-    to = mapPaths.squareOf(aim);
-  }
 
   // Someone not in sight where the walk starts stops it where they come
   // into view (with the doors as they were; L-642).
@@ -244,13 +243,28 @@ function planStep(canonWorld, save, target, known) {
     !maps.sameCell(st.square, before.square) &&
     (cameIntoView(st.square, doors).length > 0 ||
       Boolean(hazards.enteredBy(map, before.square, st.square, doors)));
-  // With AP off (L-838) the walk is free: it goes to the end of its path.
+  // The move, as the grid view previews it (map-paths.js moveTo): the spot
+  // in the square the character fits, the way there, short of someone
+  // standing there, and as far as the AP goes. With AP off (L-838) the walk
+  // is free: it goes to the end of its path.
   const apOff = apRules.isOff(systemOf(canonWorld));
-  const went = mapPaths.walk(mover, found, apOff ? Infinity : turn.ap, {
-    stop: intoSquare,
-    stand: (st) => !personAt(st.square),
-    arriveIn: to,
-  });
+  const move = mapPaths.moveTo(
+    mover,
+    start,
+    aim ? { point: aim } : { cell: to },
+    apOff ? Infinity : turn.ap,
+    { occupied: (sq) => Boolean(personAt(sq)), stop: intoSquare }
+  );
+  if (move.none === 'room') {
+    return {
+      refused: meeting ? "There's no room to stop there." : "There's no room for you there.",
+    };
+  }
+  if (move.none) return { refused: "There's no way there from here." };
+  const found = move.path;
+  const went = move.walk;
+  aim = move.end;
+  to = move.goal;
   const spent = went.spent;
   const stopAt = went.walked.length ? went.walked[went.walked.length - 1] : null;
   const stopPoint = stopAt ? { x: stopAt.x, y: stopAt.y } : start;
@@ -392,6 +406,7 @@ module.exports = {
   planOn,
   planPoint,
   moverFor,
+  viewPrices,
   doorOn,
   doorStatesOf,
   doorSides,

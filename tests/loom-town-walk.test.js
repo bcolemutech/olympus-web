@@ -100,6 +100,8 @@ describe('a move to any place in town', () => {
         // On to the temple's battle map, at its entry.
         { target: 'save', op: 'set-flag', path: 'mapId', value: GATEWAY.id },
         { target: 'save', op: 'set-flag', path: 'cell', value: { x: 1, y: 1 } },
+        // At its centre (L-922).
+        { target: 'save', op: 'set-flag', path: 'gridPoint', value: null },
         { op: 'increment', path: 'worldClock', value: 1 },
       ],
       constraints: ['You make your way from The Gate past The Lane and The Square to The Temple.'],

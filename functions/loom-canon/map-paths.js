@@ -16,11 +16,14 @@
   //                 character fits clear of walls, closed windows, locked
   //                 doors, objects that block, ground that can't be crossed
   //                 and the map's edge. A point that doesn't quite fit is
-  //                 nudged (by up to half the grid) to where it does, and the
+  //                 nudged (by up to half the grid) to where it does, the
   //                 middle of every narrow gap is a point too, so a path
-  //                 passes any gap at least as wide as the character. The
-  //                 path found is then pulled straight wherever that costs no
-  //                 more, so it runs at any angle.
+  //                 passes any gap at least as wide as the character, and a
+  //                 ring of points hugs every corner, so it turns tight. The
+  //                 search runs at any angle (Theta*: a point is reached
+  //                 straight from further back whenever that's clear and
+  //                 costs no more), and the path found is pulled straight
+  //                 again, so it bends only round what is in the way.
   //   AP (MV1)      a move costs its path's length at the character's price
   //                 per 5 ft (the system's `move`, 1 by default; ground
   //                 costing 2, `difficult`; other ground its multiple of
@@ -445,7 +448,7 @@
       var out = [];
       doors.forEach(function (d) {
         var t = crossing(a, b, d.a, d.b);
-        if (t !== null) out.push({ item: d.item, t: t });
+        if (t !== null) out.push({ item: d.item, t: t, a: d.a, b: d.b });
       });
       return out.sort(function (x, y) {
         return x.t - y.t;
@@ -585,6 +588,30 @@
         gaps.add(g, m.x, m.y, m.x, m.y);
         return gapList.length < MAX_GAPS;
       });
+    }
+
+    // A ring of points just clear of every corner of what's in the way (16
+    // round each, far enough out that a hop between two of them stays a half
+    // width clear: r / cos(π/16)): where a path turns round a corner as
+    // tight as the character can.
+    var ring = r / Math.cos(Math.PI / 16) + 0.01;
+    var corners = {};
+    for (var c2 = 0; c2 < ends.length && gapList.length < MAX_GAPS; c2++) {
+      var corner = ends[c2];
+      var ck = Math.round(corner.x * 1000) + ',' + Math.round(corner.y * 1000);
+      if (corners[ck]) continue;
+      corners[ck] = true;
+      for (var k2 = 0; k2 < 16 && gapList.length < MAX_GAPS; k2++) {
+        var t2 = (k2 * Math.PI) / 8;
+        var cp = {
+          x: corner.x + Math.cos(t2) * ring,
+          y: corner.y + Math.sin(t2) * ring,
+        };
+        if (!plan.fits(cp)) continue;
+        var cn = { x: cp.x, y: cp.y, id: 'g' + gapList.length, gap: true };
+        gapList.push(cn);
+        gaps.add(cn, cp.x, cp.y, cp.x, cp.y);
+      }
     }
 
     // The points a point links to: the fine grid round it, and gaps nearby.
@@ -766,15 +793,35 @@
         });
         if (goalLinks[cur.id]) nexts.push({ id: 'goal', x: goal.x, y: goal.y });
       }
+      // Any angle (Theta*): a point is reached straight from the parent of
+      // the point it was found from, when that's clear and costs no more, so
+      // a path bends only where something is in the way.
+      var parent = prev[cur.id];
       for (var k = 0; k < nexts.length; k++) {
         var n = nexts[k];
         if (closed[n.id]) continue;
+        var from = cur.id;
+        var total = Infinity;
+        if (parent !== undefined) {
+          var pp = where[parent];
+          var clearFromParent = parent === 'start' ? plan.clear(pp, n, rs) : plan.clear(pp, n);
+          if (clearFromParent) {
+            var direct = best[parent] + plan.cost(pp, n);
+            if (direct < Infinity) {
+              total = direct;
+              from = parent;
+            }
+          }
+        }
         var step = plan.cost(cur.p, n);
-        if (!(step < Infinity)) continue;
-        var total = best[cur.id] + step;
+        if (step < Infinity && best[cur.id] + step < total - EPS) {
+          total = best[cur.id] + step;
+          from = cur.id;
+        }
+        if (!(total < Infinity)) continue;
         if (best[n.id] === undefined || total < best[n.id] - EPS) {
           best[n.id] = total;
-          prev[n.id] = cur.id;
+          prev[n.id] = from;
           if (n.id !== 'goal') where[n.id] = pt(n);
           open.push(total + h(n), { id: n.id, p: where[n.id], n: n });
         }
@@ -786,29 +833,31 @@
     return done(describe(plan, straighten(plan, points, rs)));
   }
 
-  // The path pulled straight: from each point, on to the furthest point it
-  // can reach in a straight line costing no more than the way it took.
+  // The path pulled straight: the cheapest way through its own points, each
+  // leg straight from any earlier point that sees it (clear for the
+  // character) to any later one, within a window of points back.
+  var WINDOW = 48;
   function straighten(plan, points, rs) {
-    var out = [points[0]];
-    var i = 0;
-    while (i < points.length - 1) {
-      var next = i + 1;
-      var along = 0;
-      var sums = [0];
-      for (var k = i + 1; k < points.length; k++) {
-        along += plan.cost(points[k - 1], points[k]);
-        sums.push(along);
-      }
-      for (var j = points.length - 1; j > i + 1; j--) {
-        if (!plan.clear(points[i], points[j], i === 0 ? rs : plan.radius)) continue;
-        if (plan.cost(points[i], points[j]) <= sums[j - i] + 1e-7) {
-          next = j;
-          break;
+    var n = points.length;
+    if (n <= 2) return points;
+    var best = [0];
+    var from = [-1];
+    for (var j = 1; j < n; j++) {
+      best[j] = Infinity;
+      from[j] = j - 1;
+      for (var i = Math.max(0, j - WINDOW); i < j; i++) {
+        if (!(best[i] < Infinity)) continue;
+        var through = i === j - 1;
+        if (!through && !plan.clear(points[i], points[j], i === 0 ? rs : plan.radius)) continue;
+        var c = best[i] + plan.cost(points[i], points[j]);
+        if (c < best[j] - 1e-9) {
+          best[j] = c;
+          from[j] = i;
         }
       }
-      out.push(points[next]);
-      i = next;
     }
+    var out = [];
+    for (var k = n - 1; k >= 0; k = from[k]) out.unshift(points[k]);
     return out;
   }
 
@@ -862,6 +911,7 @@
         for (var d = 0; d < doorsHere.length; d++) {
           if (doorsHere[d].t > prevT + EPS && doorsHere[d].t <= t + EPS)
             station.door = doorsHere[d].item;
+          station.doorAt = { a: doorsHere[d].a, b: doorsHere[d].b };
         }
         out.push(station);
         prevT = t;
@@ -875,7 +925,8 @@
    * How far a move gets with `ap` to spend (Infinity: AP off): { walked,
    * spent, opened?, reached } — `walked` the stations stepped to (not the
    * start), `spent` its AP (the weight walked rounded up once, and a door
-   * opened), `opened` the id of a closed door it opened and stopped before,
+   * opened), `opened` the id of a closed door it opened, from the first
+   * station within 5 ft of it (beside it), and stopped at,
    * `reached` whether it got to the end. Options:
    *   stop(station, before)  true to stop on it (someone comes into view, a
    *                          hazard is entered)
@@ -891,14 +942,28 @@
     var walked = [];
     var opened = null;
     var doorAp = 0;
+    // A closed door on the way is opened from beside it, within a square's
+    // reach (5 ft): the walk goes no nearer, and stops there.
+    var doorAt = -1;
+    for (var k = 1; k < list.length && doorAt < 0; k++) if (list[k].door) doorAt = k;
+    var openFrom = doorAt;
+    if (doorAt > 0) {
+      var span = list[doorAt].doorAt;
+      for (var j = 0; j < doorAt; j++) {
+        if (pointToSegment(list[j], span.a, span.b) <= FEET + EPS) {
+          openFrom = j;
+          break;
+        }
+      }
+    }
     for (var i = 1; i < list.length; i++) {
       var st = list[i];
-      if (st.door) {
-        // A closed door on the way: opened, and the walk stops before it.
-        var cost = plan.prices.door(st.door);
+      if (doorAt > 0 && i > openFrom) {
+        var door = list[doorAt].door;
+        var cost = plan.prices.door(door);
         var sofar = walked.length ? apFor(walked[walked.length - 1].weight) : 0;
-        if (sofar + cost <= budget) {
-          opened = st.door.id;
+        if (sofar + cost <= budget && walked.length === openFrom) {
+          opened = door.id;
           doorAp = cost;
         }
         break;
@@ -926,6 +991,110 @@
       opened: inGoal ? null : opened,
       reached: Boolean(last) && (last === end || inGoal),
     };
+  }
+
+  /**
+   * A move to a square or a point, as the server makes it and the page
+   * previews it (L-922): the spot the character fits (the point itself, else
+   * where in its square nearest the centre), the way there, cut short of the
+   * square of someone standing there (`occupied(square)` true), and how far
+   * `ap` takes it. `target` is { cell } or { point }. Returns { path, walk,
+   * end, goal } (`goal` the square it ends in), or { none: 'room' | 'way' }.
+   * Options: occupied(square), stop(station, before) as walk's.
+   */
+  function moveTo(plan, from, target, ap, options) {
+    var o = options || {};
+    var cell = target.cell || squareOf(target.point);
+    var aim = target.point && plan.fits(target.point) ? pt(target.point) : spotIn(plan, cell);
+    if (!aim) return { none: 'room' };
+    var found = pathTo(plan, from, aim);
+    if (!found) return { none: 'way' };
+    var occupied = o.occupied || null;
+    if (occupied && occupied(cell)) {
+      found = cutBefore(plan, found, function (st) {
+        return st.square.x === cell.x && st.square.y === cell.y;
+      });
+      if (!found) return { none: 'room' };
+    }
+    var end = found.points[found.points.length - 1];
+    var goal = squareOf(end);
+    var went = walk(plan, found, ap, {
+      stop: o.stop,
+      stand: occupied
+        ? function (st) {
+            return !occupied(st.square);
+          }
+        : null,
+      arriveIn: goal,
+    });
+    return { path: found, walk: went, end: pt(end), goal: goal };
+  }
+
+  /**
+   * The planner for a battle map as the grid view has it (loomGetMap's
+   * `battleMap`, the map as far as the save has seen it, and its turn's
+   * `prices`): each door in the state the view gives it, or as `opened`
+   * on the way; the character's width; never into a square not seen
+   * (`known(square)` false) nor an exit but the one at `goal`. The server
+   * plans a move on the same map (functions/loom-turn/steps.js moverFor).
+   */
+  function viewPlanner(view, prices, options) {
+    var o = options || {};
+    var opened = o.opened || {};
+    var states = {};
+    (view.doors || []).forEach(function (door) {
+      states[door.id] = door.state;
+    });
+    Object.keys(opened).forEach(function (id) {
+      states[id] = opened[id];
+    });
+    var map = view;
+    if (view.geometry && Object.keys(opened).length) {
+      // A door in the map's geometry opened on the way.
+      var doors = (view.geometry.doors || []).map(function (door) {
+        if (!opened[door.id]) return door;
+        var copy = {};
+        Object.keys(door).forEach(function (k) {
+          copy[k] = door[k];
+        });
+        copy.state = opened[door.id];
+        return copy;
+      });
+      var geometry = {};
+      Object.keys(view.geometry).forEach(function (k) {
+        geometry[k] = view.geometry[k];
+      });
+      geometry.doors = doors;
+      map = {};
+      Object.keys(view).forEach(function (k) {
+        map[k] = view[k];
+      });
+      map.geometry = geometry;
+    }
+    var exits = {};
+    (view.exits || []).forEach(function (e) {
+      exits[e.x + ',' + e.y] = true;
+    });
+    var goalKey = o.goal ? o.goal.x + ',' + o.goal.y : null;
+    var known = o.known || null;
+    return planner(map, {
+      width: view.size && view.size.width,
+      states: states,
+      prices: prices && {
+        move: prices.move,
+        difficult: prices.difficult,
+        door: function (door) {
+          var own = prices.doors && prices.doors[door.id];
+          return typeof own === 'number' ? own : prices.door;
+        },
+      },
+      blocked: function (sq) {
+        if (sq.x < 0 || sq.y < 0 || sq.x >= view.width || sq.y >= view.height) return true;
+        if (known && !known(sq)) return true;
+        var k = sq.x + ',' + sq.y;
+        return Boolean(exits[k]) && k !== goalKey;
+      },
+    });
   }
 
   /**
@@ -1047,6 +1216,8 @@
     pathTo: pathTo,
     stations: stations,
     walk: walk,
+    moveTo: moveTo,
+    viewPlanner: viewPlanner,
     cutBefore: cutBefore,
     squaresOf: squaresOf,
     reachable: reachable,
