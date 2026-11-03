@@ -1,6 +1,6 @@
 # The Loom — Maps Drawn From Their Data — Design Document v0.1
 
-**Status:** Decided (2026-10-28). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#725–#733, §6).
+**Status:** Decided (2026-10-28). Revised 2026-11-03 after L-900 shipped (GE5, EX4). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#725–#733, §6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-920 (#710), Phase 10 — Levels and Vehicles (milestone #26). From idea #709.
 **Built:** right after L-900 (map levels to any depth) and before L-710 (worlds without Azgaar), so L-710's regions and terrain use this geometry from the start.
@@ -43,15 +43,16 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 
 ### Geometry, movement and sight
 
-| ID      | Question                  | Decision                                                                                                                                                                                                                                   |
-| ------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **GE1** | Precision                 | **Free geometry in map units:** walls, doors and windows as lines anywhere, rooms and areas as polygons, objects with a position, size and turn                                                                                            |
-| **GE2** | Movement                  | **Free movement** (the user's note): waypoints on a grid-like structure, but **a gap smaller than a square is passable if it's wide enough for the character.** Today's design is plagued by blocked paths                                 |
-| **MV1** | AP for moving (follow-up) | **1 AP per 5 ft of the path, rounded up per move.** Paths are planned on a fine hidden grid (a quarter square), so **the preview and the cost always match what the server charges**                                                       |
-| **SZ1** | Sizes (follow-up)         | **Built-in size classes:** tiny, small, medium, large, huge, gargantuan, each with a width (medium 2.5 ft). A gap lets you through if you're no wider than it. A system can rename them; sheets and stat blocks set one, medium by default |
-| **DS1** | Distances (follow-up)     | **Reach, ranges and areas in feet,** a square of today being 5 ft, drawn as true shapes. A square grid can still be shown as an overlay                                                                                                    |
-| **GE3** | Sight                     | **Precise line of sight against the real lines and shapes,** with soft fog. **Some walls, doors and windows are see-through but not passable** (the user's note): a gate, a glass door, a window                                           |
-| **GE4** | Levels                    | **One geometry for every level** (L-900): coasts, rivers, terrain and roads on region maps; streets, footprints and districts on area maps; rooms, walls and furniture on grids                                                            |
+| ID      | Question                                         | Decision                                                                                                                                                                                                                                                                                   |
+| ------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **GE1** | Precision                                        | **Free geometry in map units:** walls, doors and windows as lines anywhere, rooms and areas as polygons, objects with a position, size and turn                                                                                                                                            |
+| **GE2** | Movement                                         | **Free movement** (the user's note): waypoints on a grid-like structure, but **a gap smaller than a square is passable if it's wide enough for the character.** Today's design is plagued by blocked paths                                                                                 |
+| **MV1** | AP for moving (follow-up)                        | **1 AP per 5 ft of the path, rounded up per move.** Paths are planned on a fine hidden grid (a quarter square), so **the preview and the cost always match what the server charges**                                                                                                       |
+| **SZ1** | Sizes (follow-up)                                | **Built-in size classes:** tiny, small, medium, large, huge, gargantuan, each with a width (medium 2.5 ft). A gap lets you through if you're no wider than it. A system can rename them; sheets and stat blocks set one, medium by default                                                 |
+| **DS1** | Distances (follow-up)                            | **Reach, ranges and areas in feet,** a square of today being 5 ft, drawn as true shapes. A square grid can still be shown as an overlay                                                                                                                                                    |
+| **GE3** | Sight                                            | **Precise line of sight against the real lines and shapes,** with soft fog. **Some walls, doors and windows are see-through but not passable** (the user's note): a gate, a glass door, a window                                                                                           |
+| **GE4** | Levels                                           | **One geometry for every level** (L-900): coasts, rivers, terrain and roads on region maps; streets, footprints and districts on area maps; rooms, walls and furniture on grids                                                                                                            |
+| **GE5** | Where it lives (2026-11-03, after L-900 shipped) | **A grid's geometry lives in its battle map document** (same id as the grid map), beside today's layers until L-928 converts them, so frames, figures, hazards, `cell: "auto"` and `view_image` keep finding everything in one place. Region and area maps keep theirs on the map document |
 
 ### What map data holds
 
@@ -65,18 +66,19 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 
 ### Today's maps, building, and the plan
 
-| ID      | Question                  | Decision                                                                                                                                                                                                                                                     |
-| ------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **EX1** | Azgaar worlds             | **Converted into map data** (coasts, rivers, biomes as terrain, burgs, routes) and drawn                                                                                                                                                                     |
-| **EX2** | Maps with art             | **Battle-map art stays an option,** image or SVG (the user's note): nothing breaks, and rich environments stay possible. **A map with art doesn't draw its floors and walls,** but always draws its objects: with their art, or the box with a question mark |
-| **EX3** | Towns                     | **Drawn from their ground;** towns with only art keep it                                                                                                                                                                                                     |
-| **AU1** | Who builds                | **Claude over MCP,** with tools for rooms, walls, doors, windows, objects, heights, zones and spawns; `view_image` draws the data to check it                                                                                                                |
-| **AU2** | Generators                | **Yes:** rooms and corridors, caves, building interiors, ship decks; seeded                                                                                                                                                                                  |
-| **AU3** | From existing art         | **Trace an image into data, or keep the image and make its walls and doors precise** (the user's note)                                                                                                                                                       |
-| **PL1** | Where                     | **Its own epic in Phase 10 (L-920),** after L-900 and before L-710                                                                                                                                                                                           |
-| **PL2** | Grading                   | **A map's data is enough to draw it** (floors and walls, or coasts and terrain)                                                                                                                                                                              |
-| **PL3** | Exit criterion            | **Kept** (§5)                                                                                                                                                                                                                                                |
-| **PL4** | Worries (the user's note) | **Paths and AP must stay exact** off the grid (MV1's fine grid and one shared path module answer it); **drawing takes time,** so loading shows progress and the screen never looks frozen (§4.6)                                                             |
+| ID      | Question                     | Decision                                                                                                                                                                                                                                                     |
+| ------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **EX1** | Azgaar worlds                | **Converted into map data** (coasts, rivers, biomes as terrain, burgs, routes) and drawn                                                                                                                                                                     |
+| **EX2** | Maps with art                | **Battle-map art stays an option,** image or SVG (the user's note): nothing breaks, and rich environments stay possible. **A map with art doesn't draw its floors and walls,** but always draws its objects: with their art, or the box with a question mark |
+| **EX3** | Towns                        | **Drawn from their ground;** towns with only art keep it                                                                                                                                                                                                     |
+| **EX4** | Old grid layers (2026-11-03) | **Converted, then dropped:** a dry-run-then-apply workflow like L-902's converts every battle map; once a replay of scripted fights gives the same paths, sight and costs, the code reads only the geometry and today's layers go                            |
+| **AU1** | Who builds                   | **Claude over MCP,** with tools for rooms, walls, doors, windows, objects, heights, zones and spawns; `view_image` draws the data to check it                                                                                                                |
+| **AU2** | Generators                   | **Yes:** rooms and corridors, caves, building interiors, ship decks; seeded                                                                                                                                                                                  |
+| **AU3** | From existing art            | **Trace an image into data, or keep the image and make its walls and doors precise** (the user's note)                                                                                                                                                       |
+| **PL1** | Where                        | **Its own epic in Phase 10 (L-920),** after L-900 and before L-710                                                                                                                                                                                           |
+| **PL2** | Grading                      | **A map's data is enough to draw it** (floors and walls, or coasts and terrain)                                                                                                                                                                              |
+| **PL3** | Exit criterion               | **Kept** (§5)                                                                                                                                                                                                                                                |
+| **PL4** | Worries (the user's note)    | **Paths and AP must stay exact** off the grid (MV1's fine grid and one shared path module answer it); **drawing takes time,** so loading shows progress and the screen never looks frozen (§4.6)                                                             |
 
 ---
 
@@ -91,6 +93,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
   - `objects`: a position, size and turn, a kind (from the catalog or the world's own), its art, and its settings (§4.4);
   - `zones` (named polygons), `spawns` (points or areas, §4.5), `lights` (sources and dark areas), `notes` (for the GM), `hidden` (any of the above hidden until found).
 - **Region and area maps** use the same vocabulary at their scale: coasts and terrain as ground, rivers and roads as lines, building footprints as shapes, districts as zones.
+- **Where it lives (GE5):** a grid's shapes in its battle map document (the same id as its grid map, where L-905 keeps its layers); a region or area map's on its map document. The rules read them through L-903's frames.
 - **Shared and pure:** `map-geometry.js` (shapes, hits, checks), kept in `functions/loom-canon/` and `public/apps/loom/js/` with identical bytes, like `grid-paths.js`.
 - **Compact shapes** (#735 gap 16): points as `[[x, y], …]` or SVG path data; circles and rectangles as shapes of their own.
 
@@ -131,7 +134,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 
 ### 4.7 Today's maps (EX1–EX3, AU3)
 
-- **Battle maps:** walls, doors and obstacles convert to the geometry (grid lines become lines, obstacles become shapes); their art stays.
+- **Battle maps (EX4):** walls, doors and obstacles convert to the geometry (grid lines become lines, obstacles become shapes) by a dry-run-then-apply workflow; their art stays. A replay of scripted fights checks paths, sight and costs before and after; then today's layers are dropped and only the geometry is read.
 - **Towns** with ground are drawn from it.
 - **Azgaar worlds** are converted from their saved exports: coasts and biomes into ground, rivers and routes into lines, burgs into places. With L-710's conversion of regions and terrain.
 - **Tracing (AU3):** Claude can trace an image into data, or keep the image and make its walls and doors precise.
