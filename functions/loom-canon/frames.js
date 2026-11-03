@@ -30,6 +30,8 @@
  *                      from `at` (or, for a save from before, `at` from them)
  *   atOf(view, save)   where the frame's fields put the save, as `at`
  *   legacyOf(play, at) the frame's fields for a path
+ *   geometryOf(play, id) a map's geometry (L-921): a grid's from its battle
+ *                      map, a region or area map's from its map doc
  *
  * Place ids are the world's: `discovered`, `visited` and `waysKnown` stay
  * flat lists by place, which holds by map as well.
@@ -106,6 +108,8 @@ function asLocation(play, id, place) {
             ...(under.ground ? { ground: under.ground } : {}),
             ...(under.space && under.space.size ? { size: under.space.size } : {}),
             ...(under.image ? { image: under.image } : {}),
+            // Its geometry (L-921, GE5), read with geometryOf.
+            ...(isObject(under.geometry) ? { geometry: under.geometry } : {}),
           },
         }
       : {}),
@@ -223,24 +227,40 @@ function viewFor(play, mapId, prefix = []) {
   const map = levels.mapOf(play, mapId) || {};
   const space = map.space || {};
   const distance = space.distance;
+  // The top map migrated from today's world map keeps the world's own.
+  const own =
+    top && (play.map || map.migratedFrom === 'world')
+      ? play.map
+      : {
+          width: space.width,
+          height: space.height,
+          ...(distance
+            ? { distance: { unit: distance.unit, perMapUnit: distance.perUnit, own: true } }
+            : {}),
+          ...(map.image ? { image: map.image } : {}),
+          ...(map.backdrop ? { backdrop: map.backdrop } : {}),
+          name: map.name || mapId,
+        };
+  // Its geometry (L-921, GE5), read with geometryOf.
+  const geometry = isObject(map.geometry) ? map.geometry : null;
   return Object.assign({}, play, {
     locations: (play.regionLocations || {})[mapId] || {},
-    // The top map migrated from today's world map keeps the world's own.
-    map:
-      top && (play.map || map.migratedFrom === 'world')
-        ? play.map
-        : {
-            width: space.width,
-            height: space.height,
-            ...(distance
-              ? { distance: { unit: distance.unit, perMapUnit: distance.perUnit, own: true } }
-              : {}),
-            ...(map.image ? { image: map.image } : {}),
-            ...(map.backdrop ? { backdrop: map.backdrop } : {}),
-            name: map.name || mapId,
-          },
+    map: geometry ? { ...(own || {}), geometry } : own,
     frame: { mapId, prefix: prefix.map((s) => ({ ...s })) },
   });
+}
+
+/**
+ * A map's geometry (planning/maps-from-data.md §4.1, GE5; L-921): a grid's
+ * from its battle map (the same id as the grid, beside its layers until
+ * L-928), a region or area map's from its map doc. Template instances carry
+ * their template's. Null when it has none; ./map-geometry.js reads it.
+ */
+function geometryOf(play, mapId) {
+  const grid = (play.battleMaps || {})[mapId];
+  const map = levels.mapOf(play, mapId);
+  const stored = grid ? grid.geometry : map && map.geometry;
+  return isObject(stored) ? stored : null;
 }
 
 /** The index of the lowest region map on a path, or -1. */
@@ -476,6 +496,7 @@ module.exports = {
   LEGACY,
   playWorld,
   viewFor,
+  geometryOf,
   regionIndex,
   legacyOf,
   atOf,

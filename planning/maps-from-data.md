@@ -94,6 +94,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
   - `zones` (named polygons), `spawns` (points or areas, §4.5), `lights` (sources and dark areas), `notes` (for the GM), `hidden` (any of the above hidden until found).
 - **Region and area maps** use the same vocabulary at their scale: coasts and terrain as ground, rivers and roads as lines, building footprints as shapes, districts as zones.
 - **Where it lives (GE5):** a grid's shapes in its battle map document (the same id as its grid map, where L-905 keeps its layers); a region or area map's on its map document. The rules read them through L-903's frames.
+- **As stored (L-921, 2026-11-03):** the lists sit under one `geometry` field (so today's `walls`, `doors` and an area map's `ground` stay as they are beside it), read with `frames.geometryOf`. Firestore keeps no arrays of arrays, so `normalize` stores each list of points as SVG path data (also the most compact); points elsewhere are `[x, y]`. Items without ids get them (`wall-3`). Doors and windows replace the wall where they stand. The material names are in `map-geometry.js` (`MATERIALS`); L-925 gives them art and may add to them.
 - **Shared and pure:** `map-geometry.js` (shapes, hits, checks), kept in `functions/loom-canon/` and `public/apps/loom/js/` with identical bytes, like `grid-paths.js`.
 - **Compact shapes** (#735 gap 16): points as `[[x, y], …]` or SVG path data; circles and rectangles as shapes of their own.
 
