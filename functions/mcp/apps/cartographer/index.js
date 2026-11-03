@@ -10,6 +10,7 @@ const { townTools } = require('./town-tools');
 const { mapTools } = require('./map-tools');
 const { levelTools } = require('./level-tools');
 const { studioTools } = require('./studio-tools');
+const { materialTools } = require('./material-tools');
 const { systemTools } = require('./system-tools');
 const { statBlockTools } = require('./stat-block-tools');
 const artOf = require('../../../loom-canon/art');
@@ -764,6 +765,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
       ...townTools({ writer }),
       ...mapTools({ writer }),
       ...levelTools({ writer, worldFor }),
+      // Materials and the object catalog (L-925): list them, give a world's own art.
+      ...materialTools({ studio, writer, worldFor }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
       // Game systems (L-801): list, get, set and copy them.
       ...(systems ? systemTools({ systems, reader }) : []),

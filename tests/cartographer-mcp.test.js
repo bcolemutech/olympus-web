@@ -261,6 +261,8 @@ describe('connector surface', () => {
       'get_world',
       'list_battle_maps',
       'list_maps',
+      'list_materials',
+      'list_object_kinds',
       'list_stat_blocks',
       'list_work',
       'list_worlds',

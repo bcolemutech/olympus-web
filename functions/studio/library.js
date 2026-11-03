@@ -49,6 +49,7 @@ const KINDS = Object.freeze([
   'item',
   'scene',
   'interface',
+  'object',
   'other',
 ]);
 // How an image came in; 'fit': cropped or padded to what it is drawn on (L-396).

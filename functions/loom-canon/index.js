@@ -188,6 +188,10 @@ async function readFirestoreWorld(db, worldId, meta) {
     // The top of its map tree (L-901; planning/map-levels.md MP4), or null
     // for a world from before map levels.
     topMapId: meta.topMapId || null,
+    // Its own object kinds (L-925; ./materials.js): { [kind]: { art?, name?, size? } },
+    // beside the catalog's. An object's art is its own, else its kind's here,
+    // else the catalog's, else a box with a question mark.
+    objectKinds: meta.objectKinds || {},
   };
   ENTITY_COLLECTIONS.forEach(function (name, i) {
     world[name] = {};
