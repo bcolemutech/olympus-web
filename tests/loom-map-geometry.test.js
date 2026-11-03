@@ -517,7 +517,12 @@ describe("the browser's copy", () => {
     expect(fs.readFileSync(served, 'utf8')).toBe(
       fs.readFileSync(path.join(__dirname, '../functions/loom-canon/map-geometry.js'), 'utf8')
     );
+    // It reads its materials from the page's Loom.materials (L-925).
     const page = { window: { Loom: {} } };
+    vm.runInNewContext(
+      fs.readFileSync(path.join(__dirname, '../public/apps/loom/js/materials.js'), 'utf8'),
+      page
+    );
     vm.runInNewContext(fs.readFileSync(served, 'utf8'), page);
     expect(typeof page.window.Loom.mapGeometry.compile).toBe('function');
     const html = fs.readFileSync(path.join(__dirname, '../public/apps/loom/index.html'), 'utf8');

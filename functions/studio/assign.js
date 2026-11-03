@@ -2,6 +2,7 @@
 
 const { FieldValue } = require('firebase-admin/firestore');
 const art = require('../loom-canon/art');
+const catalog = require('../loom-canon/materials');
 const loomCanon = require('../loom-canon');
 const { LibraryError } = require('./library');
 const { TARGETS, refOf } = require('./assign-targets');
@@ -10,7 +11,8 @@ const { FITS, fits, fitFile } = require('./fit');
 /**
  * Assigning library images to worlds (planning/the-image-studio.md §4.4;
  * L-704 / #540). A world holds a reference to a library image (A1) for its
- * map, its cover, a town or a battle map (./assign-targets.js).
+ * map, its cover, a town or a battle map, an object kind of its own or a
+ * single object (./assign-targets.js; L-925).
  *
  * The kind must fit the target (L1). The world is changed through the
  * Cartographer's versioned writer, and the image's `usedIn` in the same
@@ -26,8 +28,71 @@ class AssignError extends Error {
   }
 }
 
+const OBJECT_ID = /^[A-Za-z0-9_-]{1,60}$/;
+
+// Where a map's geometry is kept (maps-from-data.md GE5): a grid's in its
+// battle map, as frames.geometryOf reads it, else on the map's doc.
+function geometryHome(world, mapId) {
+  if ((world.battleMaps || {})[mapId]) {
+    return { collection: 'battleMaps', doc: world.battleMaps[mapId] };
+  }
+  if ((world.maps || {})[mapId]) return { collection: 'maps', doc: world.maps[mapId] };
+  return null;
+}
+
+// An object kind or an object (L-925): what holds the art, and the art it has.
+function objectHolderOf(world, target, id) {
+  if (target === 'objectKind') {
+    if (!OBJECT_ID.test(id)) {
+      throw new AssignError(
+        'invalid-argument',
+        'An object kind is letters, digits, - and _ (60 at most): "chest", "ship-wheel".'
+      );
+    }
+    const own = (world.objectKinds || {})[id] || {};
+    const known = catalog.objectKind(id);
+    return {
+      name: own.name || (known && known.name) || id,
+      previous: art.fromRef(own.art),
+      own,
+    };
+  }
+  const [mapId, objectId, extra] = String(id).split('/');
+  if (!mapId || !OBJECT_ID.test(objectId || '') || extra !== undefined) {
+    throw new AssignError(
+      'invalid-argument',
+      'Name the object as "<mapId>/<objectId>", the map it is on and its id there.'
+    );
+  }
+  const home = geometryHome(world, mapId);
+  if (!home || home.doc.retired) {
+    throw new AssignError(
+      'not-found',
+      mapId.includes('__')
+        ? `"${mapId}" is a template's copy for one place: give the art to the object on the template map.`
+        : `No map "${mapId}" in this world.`
+    );
+  }
+  const objects = (home.doc.geometry || {}).objects || [];
+  const index = objects.findIndex((o) => o && o.id === objectId);
+  if (index < 0) {
+    throw new AssignError('not-found', `No object "${objectId}" on ${home.doc.name || mapId}.`);
+  }
+  const object = objects[index];
+  const known = catalog.objectKind(object.kind);
+  return {
+    name: object.name || (known && known.name) || objectId,
+    entity: object,
+    previous: art.fromRef(object.art),
+    home,
+    index,
+    mapId,
+  };
+}
+
 // The thing art is for, and the art it holds now.
 function holderOf(world, target, id) {
+  if (target === 'objectKind' || target === 'object') return objectHolderOf(world, target, id);
   if (target === 'map') return { name: world.name, previous: art.worldMapArt(world) };
   if (target === 'cover') return { name: world.name, previous: art.coverArt(world) };
   if (target === 'town') {
@@ -65,6 +130,17 @@ function shapeWarnings(target, entity, size) {
           `${entity.height}), so it is stretched to fit. Use viewBox="0 0 ${entity.width} ` +
           `${entity.height}" (for SVG) or an image of that shape to line cells up exactly.`,
       ];
+    }
+  } else if (target === 'object') {
+    const feet = Array.isArray(entity.size) ? entity.size : null;
+    if (feet && feet[0] > 0 && feet[1] > 0) {
+      const shape = feet[0] / feet[1];
+      if (Math.abs(aspect - shape) / shape > 0.05) {
+        return [
+          `Its shape (${size.width} × ${size.height}) isn't the object's (${feet[0]} × ${feet[1]} ` +
+            'ft), so it is stretched to fit. Make it the same shape to keep it true.',
+        ];
+      }
     }
   } else if (target === 'town' && Math.abs(aspect - 1) > 0.02) {
     return [
@@ -161,10 +237,12 @@ function createAssigner({ db, bucket, writer, library }) {
     }
     const at = target === 'map' || target === 'cover' ? worldId : id;
     if (typeof at !== 'string' || !at) {
-      throw new AssignError(
-        'invalid-argument',
-        `Say which ${target === 'town' ? 'settlement' : 'battle map'}.`
-      );
+      const which = {
+        town: 'settlement',
+        objectKind: 'object kind',
+        object: 'object ("<mapId>/<objectId>")',
+      };
+      throw new AssignError('invalid-argument', `Say which ${which[target] || 'battle map'}.`);
     }
     let record = null;
     if (imageId) {
@@ -177,7 +255,7 @@ function createAssigner({ db, bucket, writer, library }) {
       if (record.kind !== spec.kind) {
         throw new AssignError(
           'failed-precondition',
-          `"${record.title}" is a ${record.kind} image; ${spec.label} takes a ${spec.kind} image.`
+          `"${record.title}" is a ${record.kind} image; ${spec.label} takes ${/^[aeiou]/i.test(spec.kind) ? 'an' : 'a'} ${spec.kind} image.`
         );
       }
     }
@@ -220,6 +298,30 @@ function createAssigner({ db, bucket, writer, library }) {
         e.updateWorld({ cover: value });
       } else if (target === 'town') {
         e.update(e.ref('locations', at), { 'town.image': value });
+      } else if (target === 'objectKind') {
+        // Taking the art away from a kind with nothing else of its own
+        // takes the kind's entry with it.
+        const kept = Object.keys(holder.own).filter((k) => k !== 'art');
+        e.updateWorld(
+          ref || kept.length
+            ? { [`objectKinds.${at}.art`]: value }
+            : { [`objectKinds.${at}`]: FieldValue.delete() }
+        );
+      } else if (target === 'object') {
+        // The object's entry in its map's geometry, which is written whole:
+        // a list can't be changed in place. Its map's revision moves (a
+        // drawn map is cached by it).
+        const objects = ((holder.home.doc.geometry || {}).objects || []).map((o, i) => {
+          if (i !== holder.index) return o;
+          const next = { ...o };
+          if (ref) next.art = ref;
+          else delete next.art;
+          return next;
+        });
+        e.update(e.ref(holder.home.collection, holder.mapId), {
+          'geometry.objects': objects,
+          revision: (holder.home.doc.revision || 0) + 1,
+        });
       } else {
         e.update(e.ref('battleMaps', at), { image: ref || null });
       }

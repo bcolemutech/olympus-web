@@ -801,4 +801,4 @@ function styleTools({ studio, reader, writer }) {
   ];
 }
 
-module.exports = { studioTools };
+module.exports = { studioTools, relay };

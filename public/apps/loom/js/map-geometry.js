@@ -1,4 +1,4 @@
-/* global module, window */
+/* global module, window, require */
 (function () {
   'use strict';
 
@@ -39,8 +39,8 @@
   // data. Firestore keeps no arrays of arrays, so `normalize` stores every
   // list of points as path data, which is also the most compact.
   //
-  // Materials are named from the built-in set (MATERIALS; their art is
-  // L-925's); any other is refused.
+  // Materials are named from the built-in set (./materials.js, with their
+  // art); any other is refused.
   //
   //   check(geometry, bounds)   reasons it won't do, [] if it's sound
   //   normalize(geometry)       as stored: point lists as path data, ids
@@ -53,7 +53,8 @@
   //
   // This file is kept in two places with the same bytes, functions/loom-canon/
   // map-geometry.js and public/apps/loom/js/map-geometry.js (the page loads it
-  // as Loom.mapGeometry), and a test fails if they differ: change both.
+  // as Loom.mapGeometry, after materials.js), and a test fails if they
+  // differ: change both.
 
   var FEET_PER_SQUARE = 5;
   var LISTS = [
@@ -70,85 +71,21 @@
     'hidden',
   ];
 
-  // The built-in materials, by what they're for (RD1). A see-through wall,
-  // door or window lets sight through by default; water takes a depth.
-  var MATERIALS = {
-    ground: {
-      stone: {},
-      flagstone: {},
-      cobble: {},
-      marble: {},
-      tile: {},
-      wood: {},
-      carpet: {},
-      dirt: {},
-      grass: {},
-      sand: {},
-      gravel: {},
-      mud: {},
-      rock: {},
-      snow: {},
-      ice: {},
-      lava: {},
-      roof: {},
-      metal: {},
-      water: { water: true },
-      'deep-water': { water: true },
-      swamp: { water: true },
-      ocean: { water: true },
-      lake: { water: true },
-      marsh: { water: true },
-      grassland: {},
-      farmland: {},
-      forest: {},
-      jungle: {},
-      savanna: {},
-      desert: {},
-      hills: {},
-      mountains: {},
-      tundra: {},
-      taiga: {},
-      glacier: {},
-    },
-    wall: {
-      stone: {},
-      brick: {},
-      wood: {},
-      rock: {},
-      metal: {},
-      ice: {},
-      hedge: {},
-      palisade: {},
-      glass: { seeThrough: true },
-      bars: { seeThrough: true },
-      fence: { seeThrough: true },
-    },
-    door: {
-      wood: {},
-      iron: {},
-      stone: {},
-      metal: {},
-      curtain: {},
-      glass: { seeThrough: true },
-      bars: { seeThrough: true },
-      gate: { seeThrough: true },
-    },
-    window: {
-      glass: { seeThrough: true },
-      bars: { seeThrough: true },
-      opening: { seeThrough: true },
-      shutters: {},
-    },
-    line: {
-      river: {},
-      stream: {},
-      canal: {},
-      road: {},
-      track: {},
-      street: {},
-      path: {},
-    },
-  };
+  // The built-in materials, by what they're for (RD1), from ./materials.js
+  // (L-925): MATERIALS[kind][id] holds the flags it carries. A see-through
+  // wall, door or window lets sight through by default; water takes a depth.
+  var catalog =
+    typeof module === 'object' && module.exports ? require('./materials') : window.Loom.materials;
+  var MATERIALS = {};
+  catalog.KINDS.forEach(function (kind) {
+    MATERIALS[kind] = {};
+  });
+  catalog.MATERIALS.forEach(function (item) {
+    var flags = {};
+    if (item.seeThrough) flags.seeThrough = true;
+    if (item.water) flags.water = true;
+    MATERIALS[item.kind][item.id] = flags;
+  });
   var MATERIAL_OF = {
     ground: 'ground',
     lines: 'line',

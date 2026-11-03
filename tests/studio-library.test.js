@@ -211,6 +211,7 @@ describe('studioUpload', () => {
       'item',
       'scene',
       'interface',
+      'object',
       'other',
     ]);
   });
