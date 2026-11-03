@@ -5,6 +5,9 @@
  * the-loom-movement-and-vision.md §3; L-613 / #443): how far a move goes on
  * the movement left, the plan it keeps, Continue, exits, and refusals. Pure;
  * the emulator suite (loom-battle-maps) plays the same through loomPlayTurn.
+ * Since L-922 a move is in feet (functions/loom-canon/map-paths.js): its
+ * length at 1 AP per 5 ft, rounded up once, so a diagonal costs its true
+ * length.
  *
  * Run: cd tests && npx jest loom-steps --verbose
  */
@@ -29,19 +32,32 @@ const standing = (cell, turn = {}) => ({
 });
 
 test('a move in reach arrives; at a feature it says so; it lists the squares walked', () => {
-  expect(planStep(WORLD, standing({ x: 2, y: 2 }), { cell: { x: 8, y: 1 } })).toEqual({
+  // From (2, 2)'s centre to the chest's, straight: 30.4 ft, so 7 AP (L-922).
+  expect(planStep(WORLD, standing({ x: 2, y: 2 }, { ap: 7 }), { cell: { x: 8, y: 1 } })).toEqual({
     cell: { x: 8, y: 1 },
-    turn: { n: 1, ap: 0, kept: 0, plan: null, moved: 6 },
+    point: { x: 42.5, y: 7.5 },
+    turn: { n: 1, ap: 0, kept: 0, plan: null, moved: 7 },
     lines: ["You're at the chest."],
     walked: [
       { x: 3, y: 2 },
       { x: 4, y: 2 },
       { x: 5, y: 2 },
+      { x: 5, y: 1 },
       { x: 6, y: 1 },
       { x: 7, y: 1 },
       { x: 8, y: 1 },
     ],
   });
+});
+
+test('a walk out of AP a step short of its point, in its square, has arrived', () => {
+  // 6 AP walks 30 ft of the 30.4: into the chest's square, short of its centre.
+  const step = planStep(WORLD, standing({ x: 2, y: 2 }), { cell: { x: 8, y: 1 } });
+  expect(step.cell).toEqual({ x: 8, y: 1 });
+  expect(step.turn).toMatchObject({ ap: 0, plan: null });
+  expect(step.lines).toEqual(["You're at the chest."]);
+  expect(step.point.x).toBeLessThan(42.5);
+  expect(step.point.x).toBeGreaterThan(40);
 });
 
 test('a move past reach lists only the squares walked this turn', () => {
@@ -61,45 +77,54 @@ test('a move past reach stops partway; the rest is the plan', () => {
   expect(step.cell).toEqual({ x: 3, y: 5 });
   expect(step.lines).toEqual([OUT_OF_AP]);
   expect(step.turn).toMatchObject({ ap: 0 });
+  // 2 AP is 10 ft: two squares along the row, to (3, 5)'s centre.
+  expect(step.point).toEqual({ x: 17.5, y: 27.5 });
   expect(step.turn.plan).toMatchObject({
     layer: 'battleMap',
     mapId: 'bm_room',
     to: { x: 9, y: 5 },
+    point: { x: 47.5, y: 27.5 },
   });
-  expect(step.turn.plan.path[0]).toEqual({ x: 4, y: 5, cost: 1 });
+  // The squares still to go, for how far.
+  expect(step.turn.plan.path[0]).toEqual({ x: 4, y: 5 });
+  expect(step.turn.plan.path).toHaveLength(6);
 });
 
-test('Continue walks the stored plan; a stale one is found afresh', () => {
+test('Continue heads for the plan’s point from wherever the save stands', () => {
   const first = planStep(WORLD, standing({ x: 1, y: 5 }, { ap: 2 }), {
     cell: { x: 9, y: 5 },
   });
-  const next = { ...standing(first.cell), turn: { ...first.turn, ap: 6 } };
+  const next = { ...standing(first.cell), gridPoint: first.point, turn: { ...first.turn, ap: 6 } };
   expect(planStep(WORLD, next, { plan: true })).toMatchObject({
+    cell: { x: 9, y: 5 },
+    point: { x: 47.5, y: 27.5 },
+    turn: { ap: 0, plan: null },
+  });
+  // Standing elsewhere now: the way is found from there, 32 ft (7 AP).
+  const moved = { ...next, cell: { x: 5, y: 0 }, gridPoint: null, turn: { ...next.turn, ap: 7 } };
+  expect(planStep(WORLD, moved, { plan: true })).toMatchObject({
     cell: { x: 9, y: 5 },
     turn: { ap: 0, plan: null },
   });
-  // Standing elsewhere now: the stored path no longer starts here.
-  const moved = { ...next, cell: { x: 5, y: 0 } };
-  expect(planStep(WORLD, moved, { plan: true })).toMatchObject({
-    cell: { x: 9, y: 5 },
-    turn: { ap: 1 },
-  });
 });
 
-test('Continue follows the stored path, not one found afresh', () => {
-  // A valid path, though not the one pathTo would choose (straight along row 1).
+test('a plan from before heads for its square’s centre; its stored squares aren’t followed', () => {
+  // Squares zigzagging along row 1, as a plan from before L-922 kept them.
   const path = [
     { x: 2, y: 2, cost: 1 },
     { x: 3, y: 1, cost: 2 },
-    { x: 4, y: 2, cost: 3 },
-    { x: 5, y: 1, cost: 4 },
   ];
   const plan = { layer: 'battleMap', mapId: 'bm_room', to: { x: 5, y: 1 }, path };
-  const step = planStep(WORLD, standing({ x: 1, y: 1 }, { ap: 1, plan }), {
-    plan: true,
-  });
-  expect(step.cell).toEqual({ x: 2, y: 2 });
-  expect(step.turn.plan.path[0]).toEqual({ x: 3, y: 1, cost: 1 });
+  const step = planStep(WORLD, standing({ x: 1, y: 1 }, { ap: 10, plan }), { plan: true });
+  // Straight along the row: 20 ft, 4 AP.
+  expect(step).toMatchObject({ cell: { x: 5, y: 1 }, point: { x: 27.5, y: 7.5 } });
+  expect(step.turn).toMatchObject({ ap: 6, plan: null });
+  expect(step.walked).toEqual([
+    { x: 2, y: 1 },
+    { x: 3, y: 1 },
+    { x: 4, y: 1 },
+    { x: 5, y: 1 },
+  ]);
 });
 
 test('a plan for another map is no plan', () => {
@@ -159,11 +184,12 @@ describe('only on ground the save knows (L-635)', () => {
     const open = planStep(WORLD, standing({ x: 2, y: 2 }), across);
     expect(open.walked).toContainEqual({ x: 5, y: 2 });
     const known = knownBut(...column5(0, 1, 2, 3, 4));
-    const step = planStep(WORLD, standing({ x: 2, y: 2 }), across, known);
+    const step = planStep(WORLD, standing({ x: 2, y: 2 }, { ap: 20 }), across, known);
     expect(step.cell).toEqual({ x: 8, y: 2 });
     expect(step.walked).toContainEqual({ x: 5, y: 5 });
     expect(step.walked.every((s) => known[s.x + ',' + s.y])).toBe(true);
-    expect(step.turn.ap).toBe(0); // round by (5, 5) is 6, as the straight way is
+    // Round by (5, 5) is longer than the straight way's 30 ft (6 AP).
+    expect(20 - step.turn.ap).toBeGreaterThan(6);
   });
 
   test('with no known way, there is no way', () => {
@@ -176,7 +202,11 @@ describe('only on ground the save knows (L-635)', () => {
   test('Continue keeps to the known ground the plan was made on', () => {
     const known = knownBut(...column5(0, 1, 2, 3, 4));
     const first = planStep(WORLD, standing({ x: 2, y: 2 }, { ap: 2 }), across, known);
-    const next = { ...standing(first.cell), turn: { ...first.turn, ap: 6 } };
+    const next = {
+      ...standing(first.cell),
+      gridPoint: first.point,
+      turn: { ...first.turn, ap: 20 },
+    };
     const step = planStep(WORLD, next, { plan: true }, known);
     expect(step.cell).toEqual({ x: 8, y: 2 });
     expect(step.walked).toContainEqual({ x: 5, y: 5 });
@@ -228,9 +258,10 @@ describe('people on squares (L-642)', () => {
 
   test("a way to someone's square ends on the last free square before it, beside them", () => {
     const step = planStep(PEOPLE, at({ x: 0, y: 2 }), { cell: { x: 3, y: 4 } });
-    expect(step.cell).toEqual({ x: 2, y: 3 });
+    // Straight for them, stopping short of their square: beside them in (2, 4).
+    expect(step.cell).toEqual({ x: 2, y: 4 });
     expect(step.turn.plan).toBeNull();
-    expect(step.lines).toEqual(["You're beside Wim."]);
+    expect(step.lines[0]).toBe("You're beside Wim.");
     expect(planStep(PEOPLE, at({ x: 2, y: 4 }), { cell: { x: 3, y: 4 } }).refused).toBe(
       "You're beside Wim."
     );
@@ -240,11 +271,13 @@ describe('people on squares (L-642)', () => {
     const step = planStep(PEOPLE, at({ x: 1, y: 4 }, { ap: 2 }), {
       cell: { x: 4, y: 4 },
     });
+    // 10 ft would end in Wim's square: it backs off to 6.25 ft, still 2 AP.
     expect(step.cell).toEqual({ x: 2, y: 4 });
-    expect(step.turn.ap).toBe(1);
+    expect(step.point).toEqual({ x: 13.75, y: 22.5 });
+    expect(step.turn.ap).toBe(0);
     expect(step.turn.plan.path).toEqual([
-      { x: 3, y: 4, cost: 1 },
-      { x: 4, y: 4, cost: 2 },
+      { x: 3, y: 4 },
+      { x: 4, y: 4 },
     ]);
   });
 
@@ -332,7 +365,8 @@ describe('walls and doors (L-624)', () => {
   test('a closed door on the way is opened (2 AP), and the walk stops there', () => {
     const step = planStep(WALLED, standing({ x: 3, y: 2 }), { cell: { x: 8, y: 1 } });
     expect(step.cell).toEqual({ x: 4, y: 2 });
-    expect(step.turn.ap).toBe(3); // 1 to (4, 2), 2 to open the door (L-832)
+    // 2 to walk to it (7.2 ft), 2 to open it (L-832).
+    expect(step.turn.ap).toBe(2);
     expect(step.lines).toEqual(['You open the inner door.']);
     expect(step.opened).toEqual({ mapId: 'bm_room', doorId: 'inner' });
     expect(step.turn.plan.to).toEqual({ x: 8, y: 1 });

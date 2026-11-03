@@ -34,6 +34,7 @@
 
 const town = require('./town');
 const layers = require('./layers');
+const mapPaths = require('./map-paths');
 
 const MAX_SIDE = 64;
 
@@ -86,13 +87,30 @@ function entryCell(map, entryId) {
 }
 
 /**
- * Where a save stands on a map: { map, cell }, or nulls off a map. A recorded
- * map is kept even if retired, so nobody is stranded on one.
+ * Where a save stands on a map: { map, cell, point }, or nulls off a map. A
+ * recorded map is kept even if retired, so nobody is stranded on one.
+ * `point` is where in feet (L-922; ./map-paths.js): the save's `gridPoint`
+ * while it lies in its square, else the square's centre, so a square set
+ * on its own (an arrival, a fall, a save from before) reads as its centre.
  */
 function positionOf(world, save) {
   const map = save && save.mapId && (world.battleMaps || {})[save.mapId];
-  if (!map) return { map: null, cell: null };
-  return { map, cell: inBounds(map, save.cell) ? save.cell : entryCell(map) };
+  if (!map) return { map: null, cell: null, point: null };
+  const cell = inBounds(map, save.cell) ? save.cell : entryCell(map);
+  return { map, cell, point: pointIn(cell, save.gridPoint) };
+}
+
+/** A point in feet if it lies in a square, else the square's centre (L-922). */
+function pointIn(cell, point) {
+  if (
+    point &&
+    Number.isFinite(point.x) &&
+    Number.isFinite(point.y) &&
+    sameCell(mapPaths.squareOf(point), cell)
+  ) {
+    return { x: point.x, y: point.y };
+  }
+  return mapPaths.centreOf(cell);
 }
 
 /** The mutations that put a save on a place's map on arrival (or take it off one). */
@@ -102,12 +120,14 @@ function arrivalMutations(world, entity, save) {
     return [
       { target: 'save', op: 'set-flag', path: 'mapId', value: map.id },
       { target: 'save', op: 'set-flag', path: 'cell', value: entryCell(map) },
+      { target: 'save', op: 'set-flag', path: 'gridPoint', value: null },
     ];
   }
   if (save && (save.mapId || save.cell)) {
     return [
       { target: 'save', op: 'set-flag', path: 'mapId', value: null },
       { target: 'save', op: 'set-flag', path: 'cell', value: null },
+      { target: 'save', op: 'set-flag', path: 'gridPoint', value: null },
     ];
   }
   return [];
@@ -238,6 +258,7 @@ module.exports = {
   inBounds,
   entryCell,
   positionOf,
+  pointIn,
   arrivalMutations,
   sameCell,
   at,

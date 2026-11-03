@@ -1249,6 +1249,87 @@
     return out;
   }
 
+  /**
+   * A battle map's layers from before (layers.js: walls along grid lines,
+   * doors one square long, obstacles by the square) read as geometry in
+   * feet (L-922; what L-928 will store for good): its walls as walls; each
+   * door in a short wall of its own, which it replaces, keeping its id,
+   * name, key and own AP; solid and low obstacles as closed walls round
+   * their squares (low ones seen over: 3 ft high, not blocking sight); and
+   * difficult squares as gravel costing 2.
+   */
+  function fromLayers(map) {
+    var F = FEET_PER_SQUARE;
+    var pt = function (c) {
+      return [c.x * F, c.y * F];
+    };
+    var out = { ground: [], walls: [], doors: [] };
+    if (!isObject(map)) return out;
+    (map.walls || []).forEach(function (wall, i) {
+      var points = ((wall && wall.points) || []).filter(function (p) {
+        return pointOf(p);
+      });
+      if (points.length >= 2) {
+        out.walls.push({ id: 'layer-wall-' + i, material: 'stone', points: points.map(pt) });
+      }
+    });
+    (map.doors || []).forEach(function (door, i) {
+      if (!door || !pointOf(door.from) || !pointOf(door.to)) return;
+      var id = door.id || 'layer-door-' + i;
+      out.walls.push({
+        id: 'layer-doorway-' + id,
+        material: 'stone',
+        points: [pt(door.from), pt(door.to)],
+      });
+      var item = {
+        id: id,
+        material: 'wood',
+        from: pt(door.from),
+        to: pt(door.to),
+        wall: 'layer-doorway-' + id,
+        state: door.locked ? 'locked' : 'closed',
+      };
+      if (door.name) item.name = door.name;
+      if (door.key) item.unlocks = { key: door.key };
+      if (num(door.ap)) item.ap = door.ap;
+      out.doors.push(item);
+    });
+    (map.obstacles || []).forEach(function (o, i) {
+      if (!o || !num(o.x) || !num(o.y)) return;
+      var w = (o.w || 1) * F;
+      var h = (o.h || 1) * F;
+      var x = o.x * F;
+      var y = o.y * F;
+      var id = 'layer-' + (o.id || 'obstacle-' + i);
+      if (o.kind === 'difficult') {
+        out.ground.push({
+          id: id,
+          material: 'gravel',
+          cost: 2,
+          shape: { rect: { x: x, y: y, w: w, h: h } },
+        });
+      } else if (o.kind === 'solid' || o.kind === 'low') {
+        var ring = {
+          id: id,
+          material: 'stone',
+          points: [
+            [x, y],
+            [x + w, y],
+            [x + w, y + h],
+            [x, y + h],
+            [x, y],
+          ],
+        };
+        if (o.kind === 'low') {
+          ring.blocksSight = false;
+          ring.height = 3;
+        }
+        out.walls.push(ring);
+      }
+    });
+    return out;
+  }
+
   /** Whether a map has any geometry at all. */
   function hasGeometry(geometry) {
     return (
@@ -1282,6 +1363,7 @@
     check: check,
     normalize: normalize,
     hasGeometry: hasGeometry,
+    fromLayers: fromLayers,
   };
 
   if (typeof window !== 'undefined') {

@@ -1,15 +1,16 @@
 'use strict';
 
-const gridPaths = require('../loom-canon/grid-paths');
+const mapPaths = require('../loom-canon/map-paths');
 const maps = require('../loom-canon/maps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
 const { systemOf } = require('../loom-canon/checks');
-const { sheetOf } = require('../loom-canon/sheets');
+const { sheetOf, widthOf } = require('../loom-canon/sheets');
 const { turnStateOf } = require('../loom-models');
 const apRules = require('../loom-canon/ap');
+const { doorSides, knownMap, statesOf } = require('./known-map');
 
 /**
  * Moving without the GM (planning/the-loom-movement-and-vision.md §3;
@@ -107,48 +108,90 @@ function planOn(save) {
   return plan && plan.layer === 'battleMap' && plan.mapId === save.mapId ? plan : null;
 }
 
-// A plan's path is walked as it is, if it still starts next to where the save
-// stands and keeps to the grid; otherwise the path is found afresh.
-function storedPath(map, from, plan, cost) {
-  const path = Array.isArray(plan.path) ? plan.path : [];
-  let at = from;
-  let total = 0;
-  for (const step of path) {
-    const near = Math.max(Math.abs(step.x - at.x), Math.abs(step.y - at.y)) === 1;
-    const price = maps.inBounds(map, step) && near ? cost(at, step) : Infinity;
-    if (price === Infinity) return null;
-    total += price;
-    if (step.cost !== total) return null;
-    at = step;
+/** Where a plan heads, in feet: its point, or (a plan from before) its square's centre. */
+function planPoint(plan) {
+  if (plan.point && Number.isFinite(plan.point.x) && Number.isFinite(plan.point.y)) {
+    return { x: plan.point.x, y: plan.point.y };
   }
-  return path.length && maps.sameCell(at, plan.to) ? { path, cost: total } : null;
+  return plan.to ? mapPaths.centreOf(plan.to) : null;
 }
+
+/** A door on a map by id: one of its layers' doors, or of its geometry (L-922). */
+function doorOn(map, id) {
+  return (
+    (map.doors || []).find((d) => d.id === id) ||
+    (mapPaths.geometryOf(map).doors || []).find((d) => d.id === id) ||
+    null
+  );
+}
+
+/**
+ * How a save's character moves on a map (L-922; ../loom-canon/map-paths.js):
+ * its width, its doors, its prices, and the squares it never walks into (one
+ * it hasn't seen, an exit it isn't leaving by).
+ */
+function moverFor(canonWorld, save, map, { known = null, goal = null } = {}) {
+  const exits = new Set((map.exits || []).map((e) => e.x + ',' + e.y));
+  const goalKey = goal ? goal.x + ',' + goal.y : null;
+  // On the map as far as it has been seen, as the grid view has it, so the
+  // view's preview is this (./known-map.js).
+  const states = doorStatesOf(save, map.id);
+  const ground = known ? knownMap(map, (sq) => Boolean(known[sq.x + ',' + sq.y]), states) : map;
+  return mapPaths.planner(ground, {
+    width: widthOf(sheetOf(save)),
+    states: known ? statesOf(ground) : states,
+    prices: pricesFor(canonWorld, save),
+    blocked: (sq) => {
+      const k = sq.x + ',' + sq.y;
+      if (known && !known[k]) return true;
+      return exits.has(k) && k !== goalKey;
+    },
+  });
+}
+
+const inFeet = (map, p) =>
+  Boolean(p) &&
+  Number.isFinite(p.x) &&
+  Number.isFinite(p.y) &&
+  p.x >= 0 &&
+  p.y >= 0 &&
+  p.x <= map.width * mapPaths.FEET &&
+  p.y <= map.height * mapPaths.FEET;
 
 /**
  * What a move on a battle map does, for a save as it stands now:
  *   { refused: line }                          — nothing happens
  *   { exit, spent, turn, walked? }             — it reaches an exit and leaves by it
- *   { cell, turn, lines, walked }              — a quiet step (or none: out of movement)
- * `target` is { cell } (a square) or { plan: true } (walk the plan). `turn` is
- * the save's turn after the move: movement spent, the plan set or cleared.
- * `walked` lists the squares stepped on, in order, for what is seen on the
- * way (./seen.js; L-632). `known` is the squares the save knows, keyed "x,y"
- * (L-635): only those are headed for or walked over. Without it, every
- * square is (for the rules alone, as in tests).
+ *   { cell, point, turn, lines, walked }       — a quiet step (or none: out of AP)
+ * `target` is { cell } (a square: where in it the character fits, its centre
+ * if it can), { point } (in feet) or { plan: true } (walk the plan). `turn`
+ * is the save's turn after the move: AP spent, the plan set or cleared.
+ * `point` is where it stops, in feet, and `cell` the square that is in
+ * (L-922). `walked` lists the squares stepped into, in order, for what is
+ * seen on the way (./seen.js; L-632). `known` is the squares the save knows,
+ * keyed "x,y" (L-635): only those are headed for or walked over. Without it,
+ * every square is (for the rules alone, as in tests).
  */
 function planStep(canonWorld, save, target, known) {
-  const { map, cell: from } = maps.positionOf(canonWorld, save);
+  const { map, cell: from, point: start } = maps.positionOf(canonWorld, save);
   if (!map || !(map.exits || []).length) return { refused: "There's no map here to move on." };
   const held = heldBy(canonWorld, save);
   if (held) return { refused: held };
   const turn = turnStateOf(save);
 
   let plan = null;
-  let to = target.cell;
+  let aim = null; // a point in feet
+  let to = target.cell || null; // a square
   if (target.plan) {
     plan = planOn(save);
     if (!plan) return { refused: 'You have no way planned. Tap where to go.' };
-    to = plan.to;
+    aim = planPoint(plan);
+    if (!aim) return { refused: 'You have no way planned. Tap where to go.' };
+    to = mapPaths.squareOf(aim);
+  } else if (target.point) {
+    if (!inFeet(map, target.point)) return { refused: "That's off the map." };
+    aim = { x: target.point.x, y: target.point.y };
+    to = mapPaths.squareOf(aim);
   }
   if (!maps.inBounds(map, to)) return { refused: "That's off the map." };
   const seen = (cell) => !known || Boolean(known[cell.x + ',' + cell.y]);
@@ -160,35 +203,29 @@ function planStep(canonWorld, save, target, known) {
     return { refused: "You're already there." };
   }
 
-  // The map's rules (layers.js), for this save's doors, on the ground it
-  // knows. An exit is only stepped on to leave by it: it's never on the way.
-  const rules = layers.pathOptions(map, doorStatesOf(save, map.id), pricesFor(canonWorld, save));
-  const options = known
-    ? { ...rules, cost: (step, next) => (seen(next) ? rules.cost(step, next) : Infinity) }
-    : rules;
-  const cost = (step, next) =>
-    !maps.sameCell(next, to) && maps.at(map, next).exit ? Infinity : options.cost(step, next);
-  const found =
-    (plan && storedPath(map, from, plan, cost)) ||
-    gridPaths.pathTo(map, from, { x: to.x, y: to.y }, options);
+  // The map as this character moves on it: around walls, locked doors and
+  // whatever is in the way, through gaps as wide as they are, opening
+  // closed doors on the way, over ground it knows. An exit is only stepped
+  // into to leave by it: it's never on the way.
+  const mover = moverFor(canonWorld, save, map, { known, goal: to });
+  if (!aim || !mover.fits(aim)) aim = mapPaths.spotIn(mover, to);
+  if (!aim) return { refused: "There's no room for you there." };
+  let found = mapPaths.pathTo(mover, start, aim);
   if (!found) return { refused: "There's no way there from here." };
 
   // People here (L-642): walked through, never stopped on. A way to
-  // someone's square ends on the last free square before it.
+  // someone's square ends just before it, beside them.
   const people = maps.standingAt(canonWorld, maps.hostOf(canonWorld, save));
   const personAt = (cell) => people.find((p) => maps.sameCell(p.cell, cell)) || null;
   const meeting = personAt(to);
-  let path = found.path;
+  if (meeting && besideOf(from, to)) return { refused: "You're beside " + meeting.name + '.' };
   if (meeting) {
-    while (path.length && personAt(path[path.length - 1])) path = path.slice(0, -1);
-    if (!path.length) {
-      return {
-        refused: besideOf(from, to)
-          ? "You're beside " + meeting.name + '.'
-          : "There's no room to stop there.",
-      };
+    found = mapPaths.cutBefore(mover, found, (st) => maps.sameCell(st.square, to));
+    if (!found) {
+      return { refused: "There's no room to stop there." };
     }
-    to = path[path.length - 1];
+    aim = found.points[found.points.length - 1];
+    to = mapPaths.squareOf(aim);
   }
 
   // Someone not in sight where the walk starts stops it where they come
@@ -201,32 +238,36 @@ function planStep(canonWorld, save, target, known) {
     const now = sight.inSight(map, cell, states);
     return unseen.filter((p) => now[key(p.cell)]);
   };
-  // A hazard walked into stops the walk where it is entered (L-815).
-  let prev = from;
-  const intoHazard = (step) => {
-    const into = hazards.enteredBy(map, prev, step, doors);
-    prev = step;
-    return Boolean(into);
-  };
+  // Each square walked into: a hazard entered stops the walk there (L-815),
+  // as does someone coming into view.
+  const intoSquare = (st, before) =>
+    !maps.sameCell(st.square, before.square) &&
+    (cameIntoView(st.square, doors).length > 0 ||
+      Boolean(hazards.enteredBy(map, before.square, st.square, doors)));
   // With AP off (L-838) the walk is free: it goes to the end of its path.
   const apOff = apRules.isOff(systemOf(canonWorld));
-  const { walked, spent, rest, opened } = gridPaths.walk(path, apOff ? Infinity : turn.ap, {
-    stop: (step) => cameIntoView(step, doors).length > 0 || intoHazard(step),
-    stand: (step) => !personAt(step),
-    openCost: rules.openCost,
+  const went = mapPaths.walk(mover, found, apOff ? Infinity : turn.ap, {
+    stop: intoSquare,
+    stand: (st) => !personAt(st.square),
+    arriveIn: to,
   });
-  const last = walked.length ? walked[walked.length - 1] : null;
-  const before = walked.length > 1 ? walked[walked.length - 2] : from;
-  const hazard = last ? hazards.enteredBy(map, before, last, doors) : null;
+  const spent = went.spent;
+  const stopAt = went.walked.length ? went.walked[went.walked.length - 1] : null;
+  const stopPoint = stopAt ? { x: stopAt.x, y: stopAt.y } : start;
+  const stop = stopAt ? stopAt.square : from;
+  // The squares walked into, the start's left out.
+  const squares = mapPaths
+    .squaresOf(went.walked)
+    .filter((sq, i) => i > 0 || !maps.sameCell(sq, from));
+  const before = squares.length > 1 ? squares[squares.length - 2] : from;
+  const hazard = squares.length ? hazards.enteredBy(map, before, stop, doors) : null;
   const into = hazard ? { hazard: { id: hazard.id, name: hazard.name, mapId: map.id } } : {};
-  const squares = walked.map((step) => ({ x: step.x, y: step.y }));
   // What the walk leaves of the turn: its AP, the squares walked, and any
   // long action, ended by walking off.
-  const off = walkedOff(turn, squares.length > 0);
+  const off = walkedOff(turn, went.walked.length > 0);
   const ap = apOff ? turn.ap : turn.ap - spent;
   const after = { ...off.turn, ap, moved: (turn.moved || 0) + squares.length };
-  const door = opened ? (map.doors || []).find((d) => d.id === opened) : null;
-  const stop = walked.length ? walked[walked.length - 1] : from;
+  const door = went.opened ? doorOn(map, went.opened) : null;
   // Who came into view: on the way, or from where it ends, through a door
   // just opened.
   const sighted = unseen.filter((p) =>
@@ -235,12 +276,14 @@ function planStep(canonWorld, save, target, known) {
       .some(({ cell, states }) => cameIntoView(cell, states).includes(p))
   );
   const seenLines = sighted.map((p) => inViewLine(map, p));
-  if (!rest.length) {
+  if (went.reached) {
     const { exit, feature } = maps.at(map, to);
     // The squares walked to it, for the reactions it draws in a fight (L-823).
     if (exit) return { exit, spent, turn: { ...after, plan: null }, walked: squares };
     return {
       cell: { x: to.x, y: to.y },
+      // Where it stopped: its point, or a step short of it in its square.
+      point: stopPoint,
       turn: { ...after, plan: null },
       lines: off.lines
         .concat(feature ? ["You're at " + feature.name + '.'] : [])
@@ -251,15 +294,27 @@ function planStep(canonWorld, save, target, known) {
       ...into,
     };
   }
+  // The rest of the way, kept as the plan: where it heads, and the squares
+  // still to go (for a count of how far, ./reach.js).
+  const rest = mapPaths
+    .squaresOf(mapPaths.stations(mover, found).slice(went.walked.length + 1))
+    .filter((sq, i) => i > 0 || !maps.sameCell(sq, stop));
   const lines = off.lines
     .concat(door ? ['You open ' + (door.name || 'the door') + '.'] : [])
     .concat(seenLines)
     .concat(!apOff && (!ap || (!door && !seenLines.length && !hazard)) ? [OUT_OF_AP] : []);
   return {
     cell: { x: stop.x, y: stop.y },
+    point: stopPoint,
     turn: {
       ...after,
-      plan: { layer: 'battleMap', mapId: map.id, to: { x: to.x, y: to.y }, path: rest },
+      plan: {
+        layer: 'battleMap',
+        mapId: map.id,
+        to: { x: to.x, y: to.y },
+        point: { x: aim.x, y: aim.y },
+        path: rest,
+      },
     },
     lines,
     ...(seenLines.length ? { seenLines } : {}),
@@ -267,23 +322,6 @@ function planStep(canonWorld, save, target, known) {
     ...(door ? { opened: { mapId: map.id, doorId: door.id } } : {}),
     ...into,
   };
-}
-
-/** The two squares a door stands between. */
-function doorSides(door) {
-  const { from, to } = door;
-  if (from.x === to.x) {
-    const y = Math.min(from.y, to.y);
-    return [
-      { x: from.x - 1, y },
-      { x: from.x, y },
-    ];
-  }
-  const x = Math.min(from.x, to.x);
-  return [
-    { x, y: from.y - 1 },
-    { x, y: from.y },
-  ];
 }
 
 const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -352,6 +390,9 @@ module.exports = {
   heldBy,
   planDoor,
   planOn,
+  planPoint,
+  moverFor,
+  doorOn,
   doorStatesOf,
   doorSides,
   hasKey,

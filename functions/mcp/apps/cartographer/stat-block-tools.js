@@ -32,15 +32,16 @@ const statBlockShape = z
   .object({})
   .passthrough()
   .describe(
-    'A stat block: { attributes (every one), skills?, resources?, level?, traits?, attacks? }.'
+    'A stat block: { attributes (every one), skills?, resources?, level?, traits?, attacks?, size? }.'
   );
 const overrides = z
   .object({})
   .passthrough()
   .describe(
     'What differs from the named stat block: a partial one ({ attributes?, skills?, ' +
-      'resources?, level?, traits?, attacks? }); attributes, skills and resources merge by id, ' +
-      'the rest replace.'
+      'resources?, level?, traits?, attacks?, size? }); attributes, skills and resources merge ' +
+      'by id, the rest replace. size is tiny, small, medium (the default), large, huge or ' +
+      'gargantuan: how narrow a gap they pass (L-922).'
   );
 const blockRef = z
   .union([z.string().regex(statBlocks.ID, 'a stat block id'), statBlockShape])

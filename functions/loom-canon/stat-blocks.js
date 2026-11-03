@@ -22,13 +22,13 @@ const sheets = require('./sheets');
 
 const ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const MAX_NAME = 60;
-const OVERRIDABLE = ['attributes', 'skills', 'resources', 'level', 'traits', 'attacks'];
+const OVERRIDABLE = ['attributes', 'skills', 'resources', 'level', 'traits', 'attacks', 'size'];
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * A block with overrides on it: attributes, skills and resources merged by
- * id; level, traits and attacks replaced.
+ * id; level, traits, attacks and size replaced.
  */
 function merge(block, overrides) {
   if (!isObject(overrides)) return block;
@@ -36,7 +36,7 @@ function merge(block, overrides) {
   for (const key of ['attributes', 'skills', 'resources']) {
     if (isObject(overrides[key])) out[key] = { ...(block[key] || {}), ...overrides[key] };
   }
-  for (const key of ['level', 'traits', 'attacks']) {
+  for (const key of ['level', 'traits', 'attacks', 'size']) {
     if (overrides[key] !== undefined) out[key] = overrides[key];
   }
   return out;
