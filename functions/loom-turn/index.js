@@ -909,12 +909,18 @@ function rollWords(canonWorld, proposedAction) {
 async function previewTurn({ save, saveRef, canonWorld }, actionText, proposedAction, walk) {
   const inFight = Boolean(combat.play.fightOf(save));
   const moving = MOVING.test(proposedAction.verb);
-  const squares = (n) => (n === 1 ? '1 square' : n + ' squares');
+  // How far, in feet since L-922; in squares for a walk worked out before.
+  const far = (w) =>
+    Number.isFinite(w.feet)
+      ? w.feet + ' ft'
+      : w.squares === 1
+        ? '1 square'
+        : w.squares + ' squares';
   const lines = [];
   if (walk && walk.kind === 'map') {
     lines.push(
       'Walk ' +
-        squares(walk.squares) +
+        far(walk) +
         ' to ' +
         walk.name +
         (walk.thisTurn

@@ -172,13 +172,14 @@ const inFeet = (map, p) =>
 /**
  * What a move on a battle map does, for a save as it stands now:
  *   { refused: line }                          — nothing happens
- *   { exit, spent, turn, walked? }             — it reaches an exit and leaves by it
- *   { cell, point, turn, lines, walked }       — a quiet step (or none: out of AP)
+ *   { exit, spent, turn, walked?, feet }       — it reaches an exit and leaves by it
+ *   { cell, point, turn, lines, walked, feet } — a quiet step (or none: out of AP)
  * `target` is { cell } (a square: where in it the character fits, its centre
  * if it can), { point } (in feet) or { plan: true } (walk the plan). `turn`
  * is the save's turn after the move: AP spent, the plan set or cleared.
  * `point` is where it stops, in feet, and `cell` the square that is in
- * (L-922). `walked` lists the squares stepped into, in order, for what is
+ * (L-922), and `feet` how long the whole way is. `walked` lists the squares
+ * stepped into, in order, for what is
  * seen on the way (./seen.js; L-632). `known` is the squares the save knows,
  * keyed "x,y" (L-635): only those are headed for or walked over. Without it,
  * every square is (for the rules alone, as in tests).
@@ -263,6 +264,8 @@ function planStep(canonWorld, save, target, known) {
   if (move.none) return { refused: "There's no way there from here." };
   const found = move.path;
   const went = move.walk;
+  // How far the whole way is, in feet, for the confirm card (#673).
+  const feet = Math.round(found.feet);
   aim = move.end;
   to = move.goal;
   const spent = went.spent;
@@ -293,8 +296,9 @@ function planStep(canonWorld, save, target, known) {
   if (went.reached) {
     const { exit, feature } = maps.at(map, to);
     // The squares walked to it, for the reactions it draws in a fight (L-823).
-    if (exit) return { exit, spent, turn: { ...after, plan: null }, walked: squares };
+    if (exit) return { exit, spent, turn: { ...after, plan: null }, walked: squares, feet };
     return {
+      feet,
       cell: { x: to.x, y: to.y },
       // Where it stopped: its point, or a step short of it in its square.
       point: stopPoint,
@@ -318,6 +322,7 @@ function planStep(canonWorld, save, target, known) {
     .concat(seenLines)
     .concat(!apOff && (!ap || (!door && !seenLines.length && !hazard)) ? [OUT_OF_AP] : []);
   return {
+    feet,
     cell: { x: stop.x, y: stop.y },
     point: stopPoint,
     turn: {
