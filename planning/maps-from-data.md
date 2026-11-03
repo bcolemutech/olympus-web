@@ -101,6 +101,13 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
   - A world's own art for an object is a library image of kind `object`. `world.objectKinds[kind]` holds `{ art?, name?, size? }` for a catalog kind or a kind of the world's own; one object's art is its `art` in its map's geometry. The studio's assigner has `objectKind` and `object` targets (the id of the second is `<mapId>/<objectId>`), so "in use" stays right. An object is drawn with its own art, else its kind's in the world, else the catalog's, else a box with a question mark (`artFor`).
 - **Shared and pure:** `map-geometry.js` (shapes, hits, checks), kept in `functions/loom-canon/` and `public/apps/loom/js/` with identical bytes, like `grid-paths.js`.
 - **Compact shapes** (#735 gap 16): points as `[[x, y], …]` or SVG path data; circles and rectangles as shapes of their own.
+- **Moving off the grid (L-922, 2026-11-03):**
+  - **Two PRs** (the user's choice, 2026-11-03): first moving (sizes, paths and AP in feet, a save's point, the walk, the page's preview), then distances (combat's reach, ranges and areas, opportunity attacks, tactics, named turns, wary triggers and `cell: "auto"` in feet; foes' moves; `grid-paths.js` retired).
+  - **The planner**, `map-paths.js`: a fine grid at 1.25 ft, each point nudged up to half a step to where the character fits, plus a point in the middle of every narrow gap and a ring round every corner; searched at any angle (Theta*), then pulled straight by the cheapest way through its own points. Shortest paths come within 1% of the true ones.
+  - **Old layers are read as geometry** in memory (`map-geometry.js` `fromLayers`: each door in a short wall of its own, solid and low obstacles as closed walls, difficult squares as ground costing 2), beside a map's own geometry, its items winning on an id. L-928 stores it.
+  - **Rules settled in building:** a walk that runs out of AP inside the square it was going to has arrived; a closed door on the way is opened from the first point within 5 ft of it (beside it, as before); walking up to someone already beside you is refused, as before.
+  - **The preview is the charge by construction:** the server plans a move on the map as far as the save has seen it (`functions/loom-turn/known-map.js`, which the grid view is sent) with the view's prices, through the same `viewPlanner` and `moveTo` the page runs. Hidden things are left out of it, so a hidden door leaves its wall whole.
+  - **A save stands at a point** in feet: `gridPoint` beside `cell` (only while it lies in `cell`; a square set on its own reads as its centre), and a grid step of `at` is `{ mapId, point }`.
 
 ### 4.2 Movement and AP (GE2, MV1, SZ1, DS1)
 
