@@ -34,6 +34,7 @@ const standing = (cell, turn = {}) => ({
 test('a move in reach arrives; at a feature it says so; it lists the squares walked', () => {
   // From (2, 2)'s centre to the chest's, straight: 30.4 ft, so 7 AP (L-922).
   expect(planStep(WORLD, standing({ x: 2, y: 2 }, { ap: 7 }), { cell: { x: 8, y: 1 } })).toEqual({
+    feet: 30, // the whole way, for the confirm card
     cell: { x: 8, y: 1 },
     point: { x: 42.5, y: 7.5 },
     turn: { n: 1, ap: 0, kept: 0, plan: null, moved: 7 },
@@ -140,6 +141,7 @@ test('reaching an exit leaves by it; an exit is never on the way', () => {
   const step = planStep(WORLD, standing({ x: 3, y: 3 }), { cell: { x: 0, y: 3 } });
   expect(step).toEqual({
     exit: ROOM.exits[0],
+    feet: 15,
     spent: 3,
     turn: { n: 1, ap: 3, kept: 0, plan: null, moved: 3 },
     // The squares walked to it, for the blows it draws in a fight (L-823).
