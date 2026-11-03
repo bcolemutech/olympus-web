@@ -403,6 +403,43 @@ describe('set_object_art', () => {
     expect(realm.revision).toBe(1);
   });
 
+  test('a new version of an image refreshes the size a world holds, as an edit does (L-708)', async () => {
+    const bigger = await addImage('object', { width: 64, height: 64 });
+    await ok('set_object_art', { worldId: ids.world, kind: 'rune-stone', imageId: bigger.id });
+    await ok('set_object_art', {
+      worldId: ids.world,
+      mapId: 'bm_hall',
+      objectId: 'chest-1',
+      imageId: bigger.id,
+    });
+    await library.addVersion(bigger.id, {
+      file: readImage(png(128, 128)),
+      createdBy: BUILDER,
+      via: 'page',
+    });
+    // What the studio does for each use after an edit: assigns the image again.
+    for (const use of (await imageDoc(bigger.id)).usedIn) {
+      await service.assignImage(BUILDER, { ...use, imageId: bigger.id });
+    }
+    const { objectKinds } = await worldDoc(ids.world);
+    expect(objectKinds['rune-stone'].art).toMatchObject({ imageId: bigger.id, width: 128 });
+    const hall = await sub(ids.world, 'battleMaps', 'bm_hall');
+    expect(hall.geometry.objects.find((o) => o.id === 'chest-1').art).toMatchObject({
+      imageId: bigger.id,
+      width: 128,
+    });
+    // Each use is kept once.
+    expect((await imageDoc(bigger.id)).usedIn).toHaveLength(2);
+    // Put back as it was for the next tests.
+    await ok('set_object_art', { worldId: ids.world, kind: 'rune-stone', imageId: null });
+    await ok('set_object_art', {
+      worldId: ids.world,
+      mapId: 'bm_hall',
+      objectId: 'chest-1',
+      imageId: null,
+    });
+  });
+
   test('taking art away: an object’s own, a kind’s (keeping its name and size, or going whole)', async () => {
     await ok('set_object_art', {
       worldId: ids.world,
