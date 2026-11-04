@@ -256,10 +256,16 @@ describe('checks', () => {
     ).toEqual(expect.arrayContaining(['at[0] must name the place that opens the next map.']));
   });
 
-  test('a point on a grid, a square off it or on an area map, are refused', () => {
+  test('a point on a grid is in feet (L-922); off it, or a square off it or on an area map, refused', () => {
     const down = levels.pathTo(WORLD, 'dock').slice(0, 3);
-    expect(levels.validateAt(WORLD, [...down, { mapId: 'deck', point: { x: 1, y: 1 } }])).toEqual([
-      'at[3]: a grid is stood on by square (cell), not point.',
+    expect(
+      levels.validateAt(WORLD, [...down, { mapId: 'deck', point: { x: 11.5, y: 3.75 } }])
+    ).toEqual([]);
+    const { width, height } = WORLD.maps.deck.space;
+    expect(
+      levels.validateAt(WORLD, [...down, { mapId: 'deck', point: { x: width * 5 + 1, y: 1 } }])
+    ).toEqual([
+      `at[3].point must be on The station deck in feet (0–${width * 5}, 0–${height * 5}).`,
     ]);
     expect(levels.validateAt(WORLD, [...down, { mapId: 'deck', cell: { x: 20, y: 0 } }])).toEqual([
       'at[3].cell must be a square on The station deck.',

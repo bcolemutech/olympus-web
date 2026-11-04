@@ -12,7 +12,7 @@
  *                                 know to walk to)
  *     | { refused }               the target can't be reached: unseen, or
  *                                 no way to a square beside it
- *     | { kind: 'map', name, cell, squares, thisTurn }
+ *     | { kind: 'map', name, cell, squares, feet, thisTurn }
  *                                 on the battle map: the square beside it to
  *                                 walk to, how far (as movement counts) and
  *                                 whether it's reached this turn
@@ -85,6 +85,8 @@ function mapPlan(canonWorld, save, proposedAction, known) {
         name: thing.name,
         cell: c,
         squares: (step.walked || []).length + rest.length,
+        // How far, in feet (L-922).
+        feet: step.feet,
         thisTurn: !step.turn.plan,
       };
     }

@@ -6,14 +6,14 @@ const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
 const { discoveredBy } = require('./discovery');
 const { apOf, turnStateOf } = require('../loom-models');
-const { planOn, doorStatesOf, doorSides, pricesFor } = require('./steps');
+const { planOn, doorStatesOf, pricesFor, viewPrices } = require('./steps');
+const { knownMap } = require('./known-map');
 const { walksTown, townPlanOf, streetOf } = require('./town-steps');
 const ground = require('../loom-canon/ground');
 const artOf = require('../loom-canon/art');
 const townSeen = require('./town-seen');
 const { foundIn } = require('./town-found');
 const townPaths = require('../loom-canon/town-paths');
-const layers = require('../loom-canon/layers');
 const seen = require('./seen');
 const travel = require('../loom-canon/travel');
 const journeys = require('../loom-canon/journeys');
@@ -393,12 +393,13 @@ function combatView(canonWorld, save) {
 }
 
 function battleView(canonWorld, save, record) {
-  const { map, cell } = maps.positionOf(canonWorld, save);
+  const { map, cell, point } = maps.positionOf(canonWorld, save);
   if (!map) return null;
   const doors = doorStatesOf(save, map.id);
   const inSight = seen.inSightNow(canonWorld, save).squares;
   const known = Object.assign(seen.squaresOf(record, map), inSight);
   const on = (square) => Boolean(known[square.x + ',' + square.y]);
+  const ground = knownMap(map, on, doors);
 
   const host = maps.hostOf(canonWorld, save);
   const isPlace = host && Boolean((canonWorld.places || {})[host.id]);
@@ -439,6 +440,13 @@ function battleView(canonWorld, save, record) {
     height: map.height,
     image: artOf.forPlayer(artOf.mapArt(map)),
     here: { x: cell.x, y: cell.y },
+    // Where in it, in feet, and how wide the character is (L-922), for the
+    // grid view's paths (../loom-canon/map-paths.js).
+    herePoint: { x: point.x, y: point.y },
+    size: {
+      id: sheets.sizeOf(sheets.sheetOf(save)),
+      width: sheets.widthOf(sheets.sheetOf(save)),
+    },
     host: host ? { id: host.id, name: host.name } : null,
     entries: (map.entries || []).filter(on).map((e) => ({ id: e.id, x: e.x, y: e.y })),
     exits: (map.exits || []).filter(on).map((e) => {
@@ -462,19 +470,13 @@ function battleView(canonWorld, save, record) {
     // Its areas (#670), as far as they've been seen: a label, never a target.
     areas: seenAreas(map, known, takenSquares(map, cell, people)),
     hereArea: (mapAreas.areaAt(map, cell) || {}).name || null,
-    // Its layers (L-624), as far as they've been seen, each door in this
-    // save's state, so the grid view's paths are the server's.
-    walls: seenWalls(map, on),
-    doors: (map.doors || [])
-      .filter((d) => doorSides(d).some(on))
-      .map((d) => ({
-        id: d.id,
-        name: d.name,
-        from: d.from,
-        to: d.to,
-        state: layers.doorState(d, doors),
-      })),
-    obstacles: seenObstacles(map, on),
+    // Its layers (L-624) and geometry (L-921), as far as they've been seen,
+    // each door in this save's state: the map a move is planned on, so the
+    // grid view's paths are the server's (./known-map.js; L-922).
+    walls: ground.walls,
+    doors: ground.doors,
+    obstacles: ground.obstacles,
+    ...(ground.geometry ? { geometry: ground.geometry } : {}),
     // Hazards in sight (L-815; EF9): the squares of each in sight now, to
     // draw while it's seen, and the condition it puts on.
     hazards: hazards.seenOn(map, inSight, doors).map(({ hazard, squares }) => {
@@ -532,74 +534,6 @@ function takenSquares(map, here, people) {
   );
 }
 
-// The runs of a map's walls along the sides of squares seen (`on`): each wall
-// is cut at the sides of squares not seen on either hand, every run kept
-// running the way its wall did.
-function seenWalls(map, on) {
-  const runs = [];
-  (map.walls || []).forEach((wall) => {
-    const points = wall.points || [];
-    for (let i = 1; i < points.length; i++) {
-      const a = points[i - 1];
-      const b = points[i];
-      const dx = Math.sign(b.x - a.x);
-      const dy = Math.sign(b.y - a.y);
-      if (Boolean(dx) === Boolean(dy)) continue; // not along a grid line
-      const length = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
-      let start = null;
-      for (let k = 0; k <= length; k++) {
-        // The side from a + k to a + k + 1, between the squares either hand.
-        let seenSide = false;
-        if (k < length) {
-          const x = a.x + dx * k + Math.min(dx, 0);
-          const y = a.y + dy * k + Math.min(dy, 0);
-          seenSide = dx ? on({ x, y: y - 1 }) || on({ x, y }) : on({ x: x - 1, y }) || on({ x, y });
-        }
-        if (seenSide && start === null) start = k;
-        if (!seenSide && start !== null) {
-          runs.push({
-            points: [
-              { x: a.x + dx * start, y: a.y + dy * start },
-              { x: a.x + dx * k, y: a.y + dy * k },
-            ],
-          });
-          start = null;
-        }
-      }
-    }
-  });
-  return runs;
-}
-
-// A map's obstacles on squares seen (`on`): whole where all of it is seen,
-// else cut into its seen runs along each row.
-function seenObstacles(map, on) {
-  const pieces = [];
-  (map.obstacles || []).forEach((o) => {
-    const w = o.w || 1;
-    const h = o.h || 1;
-    const piece = (x, y, width) => ({ id: o.id, name: o.name, kind: o.kind, x, y, w: width, h: 1 });
-    const rows = [];
-    for (let y = o.y; y < o.y + h; y++) {
-      let start = null;
-      for (let x = o.x; x <= o.x + w; x++) {
-        const seenHere = x < o.x + w && on({ x, y });
-        if (seenHere && start === null) start = x;
-        if (!seenHere && start !== null) {
-          rows.push(piece(start, y, x - start));
-          start = null;
-        }
-      }
-    }
-    if (rows.length === h && rows.every((r) => r.w === w)) {
-      pieces.push({ id: o.id, name: o.name, kind: o.kind, x: o.x, y: o.y, w, h });
-    } else {
-      pieces.push(...rows);
-    }
-  });
-  return pieces;
-}
-
 // The plan shows only while it's for the map the save stands on (L-613), or
 // the town it walks (L-664).
 function turnView(save, canonWorld) {
@@ -635,8 +569,9 @@ function turnView(save, canonWorld) {
 function pricesView(canonWorld, save) {
   const prices = pricesFor(canonWorld, save);
   const { map } = maps.positionOf(canonWorld, save);
-  const doors = {};
-  for (const door of (map && map.doors) || []) doors[door.id] = prices.door(door);
+  // A step's, difficult ground's and a door's, and each door's own (of the
+  // map's layers and its geometry, L-922): as the server plans a move.
+  const { move, difficult, door, doors } = viewPrices(canonWorld, save, map);
   // And each action's, for the click menu (L-837): a feature's own cost by
   // id; Infinity (a condition's 'never') is sent as null.
   const finite = (n) => (Number.isFinite(n) ? n : null);
@@ -646,14 +581,7 @@ function pricesView(canonWorld, save) {
   for (const id of ['speak', 'standUp', 'lock', 'object', 'withdraw', 'dodge', 'attack']) {
     actions[id] = finite(prices.of(id));
   }
-  return {
-    move: prices.move,
-    difficult: prices.difficult,
-    door: prices.door(null),
-    doors,
-    features,
-    actions,
-  };
+  return { move, difficult, door, doors, features, actions };
 }
 
 module.exports = { mapView, townView, battleView, turnView };

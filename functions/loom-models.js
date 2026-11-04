@@ -338,6 +338,17 @@ function validateSave(data) {
     errors.push('cell must be { x, y } (whole numbers, 0 or more) or null');
   }
   // On the street in a town with ground (L-662).
+  // Where on its battle map, in feet (L-922): in its square, which `cell` is.
+  if (
+    data.gridPoint !== undefined &&
+    data.gridPoint !== null &&
+    !(
+      typeof data.gridPoint === 'object' &&
+      [data.gridPoint.x, data.gridPoint.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1000)
+    )
+  ) {
+    errors.push('gridPoint must be { x, y } in feet (0 to 1000 each way) or null');
+  }
   if (
     data.townPoint !== undefined &&
     data.townPoint !== null &&

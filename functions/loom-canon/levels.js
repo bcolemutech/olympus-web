@@ -32,7 +32,8 @@
  *
  * A save stands at `save.at` (MP2): [{ mapId, placeId }…] from the top map
  * down, its last step where it is on the last map: a place (`placeId`), a
- * point (`point: { x, y }`) or a square (`cell: { x, y }`). Its discovered
+ * point (`point: { x, y }`; on a grid, in feet, L-922) or a square (`cell: { x, y }`,
+ * read as its centre). Its discovered
  * places are kept by map (`discovered: { [mapId]: [placeId] }`).
  *
  * Town places from before L-900 share `places` until the migration (L-902):
@@ -327,9 +328,15 @@ function validateAt(world, at) {
     }
     const { width, height } = map.space || {};
     if (step.point !== undefined) {
-      if (map.kind === 'grid')
-        errors.push(`${where}: a grid is stood on by square (cell), not point.`);
-      else if (!inside(step.point, width, height)) {
+      // On a grid a point is in feet (L-922; a square is 5 ft).
+      if (map.kind === 'grid') {
+        if (!inside(step.point, width * 5, height * 5)) {
+          errors.push(
+            `${where}.point must be on ${map.name || step.mapId} in feet ` +
+              `(0–${width * 5}, 0–${height * 5}).`
+          );
+        }
+      } else if (!inside(step.point, width, height)) {
         errors.push(
           `${where}.point must be on ${map.name || step.mapId} (0–${width}, 0–${height}).`
         );

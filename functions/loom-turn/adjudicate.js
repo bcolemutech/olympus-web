@@ -447,7 +447,12 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
         : person && person.person
           ? person.name
           : null;
-  const mutations = [{ target: 'save', op: 'set-flag', path: 'cell', value: step.cell }, spend];
+  const mutations = [
+    { target: 'save', op: 'set-flag', path: 'cell', value: step.cell },
+    // Where in it, in feet (L-922).
+    { target: 'save', op: 'set-flag', path: 'gridPoint', value: step.point || null },
+    spend,
+  ];
   if (step.opened) {
     // A door opened on the way stays open for this save (L-624).
     const { mapId, doorId } = step.opened;
@@ -519,6 +524,7 @@ function leaveMapBy(exit, host, hostName, canonWorld, characterState = {}) {
       mutations: [
         { target: 'save', op: 'set-flag', path: 'mapId', value: next.id },
         { target: 'save', op: 'set-flag', path: 'cell', value: maps.entryCell(next, to.entry) },
+        { target: 'save', op: 'set-flag', path: 'gridPoint', value: null },
         { op: 'increment', path: 'worldClock', value: 1 },
       ],
       constraints: ['You go by ' + exit.name + ' to ' + next.name + '.'],
@@ -534,6 +540,7 @@ function leaveMapBy(exit, host, hostName, canonWorld, characterState = {}) {
     mutations: [
       { target: 'save', op: 'set-flag', path: 'mapId', value: null },
       { target: 'save', op: 'set-flag', path: 'cell', value: null },
+      { target: 'save', op: 'set-flag', path: 'gridPoint', value: null },
       ...(street
         ? [
             { target: 'save', op: 'set-flag', path: 'placeId', value: null },

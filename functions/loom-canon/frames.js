@@ -29,7 +29,8 @@
  *   frameOf(play, save) the frame a save stands in, and its fields read
  *                      from `at` (or, for a save from before, `at` from them)
  *   atOf(view, save)   where the frame's fields put the save, as `at`
- *   legacyOf(play, at) the frame's fields for a path
+ *   legacyOf(play, at) the frame's fields for a path; a square on a grid is
+ *                      `cell`, and a point in feet in it `gridPoint` (L-922)
  *   geometryOf(play, id) a map's geometry (L-921): a grid's from its battle
  *                      map, a region or area map's from its map doc
  *
@@ -42,6 +43,9 @@
 const levels = require('./levels');
 const plan = require('./level-plan');
 const templates = require('./templates');
+const mapPaths = require('./map-paths');
+// ./maps.js reads frames' world; required when used, so neither waits on the other.
+const maps = () => require('./maps');
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const live = (e) => Boolean(e) && !e.retired;
@@ -269,7 +273,7 @@ function regionIndex(play, at) {
   return -1;
 }
 
-const LEGACY = ['location', 'placeId', 'townPoint', 'mapId', 'cell'];
+const LEGACY = ['location', 'placeId', 'townPoint', 'mapId', 'cell', 'gridPoint'];
 
 // Whether a save's own fields are those a path gives (nulls and absence alike).
 function sameFields(fields, stored) {
@@ -283,7 +287,14 @@ function sameFields(fields, stored) {
  * cell }` (nulls where none), and the frame's region map and prefix.
  */
 function legacyOf(play, at) {
-  const out = { location: null, placeId: null, townPoint: null, mapId: null, cell: null };
+  const out = {
+    location: null,
+    placeId: null,
+    townPoint: null,
+    mapId: null,
+    cell: null,
+    gridPoint: null,
+  };
   const r = Array.isArray(at) ? regionIndex(play, at) : -1;
   if (r < 0) return { fields: out, mapId: play.topMapId, prefix: [] };
   out.location = at[r].placeId || null;
@@ -296,20 +307,35 @@ function legacyOf(play, at) {
     } else if (kind === 'grid') {
       out.mapId = step.mapId;
       const place = step.placeId && levels.placeOf(play, step.placeId);
-      out.cell = step.cell
-        ? { x: step.cell.x, y: step.cell.y }
-        : place && point(place.at)
-          ? { x: place.at.x, y: place.at.y }
-          : null;
+      if (point(step.point)) {
+        // A point in feet (L-922), and the square it is in.
+        out.gridPoint = { x: step.point.x, y: step.point.y };
+        out.cell = mapPaths.squareOf(step.point);
+      } else {
+        out.cell = step.cell
+          ? { x: step.cell.x, y: step.cell.y }
+          : place && point(place.at)
+            ? { x: place.at.x, y: place.at.y }
+            : null;
+      }
     }
   }
   return { fields: out, mapId: at[r].mapId, prefix: at.slice(0, r) };
 }
 
 // The steps from a place down to grid `mapId` (the grid it opens, or one
-// below that through exit places: floors), ending on `cell`.
-function gridSteps(play, hostId, mapId, cell) {
-  const last = { mapId, ...(cell ? { cell: { x: cell.x, y: cell.y } } : {}) };
+// below that through exit places: floors), ending on `cell`, or on a point
+// in feet in it (L-922) when the save has one there.
+function gridSteps(play, hostId, mapId, cell, gridPoint) {
+  const inCell = cell && point(gridPoint) && maps().sameCell(mapPaths.squareOf(gridPoint), cell);
+  const last = {
+    mapId,
+    ...(inCell
+      ? { point: { x: gridPoint.x, y: gridPoint.y } }
+      : cell
+        ? { cell: { x: cell.x, y: cell.y } }
+        : {}),
+  };
   const opened = hostId && levels.openedBy(play, hostId);
   if (!opened || opened === levels.mapOf(play, mapId)) return [last];
   const chain = levels.parentChain(play, mapId);
@@ -347,7 +373,7 @@ function atOf(view, save) {
     }
   }
   if (save.mapId && (view.maps || {})[save.mapId]) {
-    steps.push(...gridSteps(view, host, save.mapId, save.cell));
+    steps.push(...gridSteps(view, host, save.mapId, save.cell, save.gridPoint));
   }
   return steps;
 }
@@ -488,7 +514,14 @@ function peekAt(play, at, mapId) {
   if (i < 0 || mapKind(play, mapId) !== 'region' || !at[i].placeId) return null;
   return {
     view: viewFor(play, mapId, at.slice(0, i)),
-    fields: { location: at[i].placeId, placeId: null, townPoint: null, mapId: null, cell: null },
+    fields: {
+      location: at[i].placeId,
+      placeId: null,
+      townPoint: null,
+      mapId: null,
+      cell: null,
+      gridPoint: null,
+    },
   };
 }
 

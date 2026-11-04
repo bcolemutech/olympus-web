@@ -247,8 +247,18 @@ async function runTurnPipeline(params) {
     return refusal(save, 'There are no streets to walk here.');
   }
 
-  if (action && (action.cell || action.verb === 'continue' || action.verb === 'door')) {
-    const target = action.cell ? { cell: action.cell } : { plan: true };
+  // A move on a battle map: to a square, to a point in feet (L-922), or on
+  // along the plan.
+  const gridPoint = action && action.point && save.mapId ? action.point : null;
+  if (
+    action &&
+    (action.cell || gridPoint || action.verb === 'continue' || action.verb === 'door')
+  ) {
+    const target = action.cell
+      ? { cell: action.cell }
+      : gridPoint
+        ? { point: gridPoint }
+        : { plan: true };
     const step = await db.runTransaction(async (transaction) => {
       const fresh = withAp(
         (await transaction.get(saveRef)).data(),
@@ -281,6 +291,9 @@ async function runTurnPipeline(params) {
           const walked = planned.walked.slice(0, reacted.reached);
           planned = {
             cell: walked.length ? walked[walked.length - 1] : fresh.cell,
+            // Struck down on the way: where in that square it stopped isn't
+            // kept, so it stands at the square's centre.
+            point: walked.length ? null : fresh.gridPoint || null,
             turn: { ...planned.turn, plan: null },
             lines: reacted.lines,
             walked,
@@ -351,6 +364,8 @@ async function runTurnPipeline(params) {
             ...(joined ? { fight: joined.mutations[0].value } : {}),
             ...sides,
             cell: planned.cell,
+            // Where in it, in feet (L-922): a door opened or shut keeps it.
+            gridPoint: planned.door ? fresh.gridPoint || null : planned.point || null,
             turn: planned.turn,
             ...(door ? { [`doors.${door.mapId}.${door.doorId}`]: door.state } : {}),
             updatedAt: FieldValue.serverTimestamp(),
@@ -363,6 +378,7 @@ async function runTurnPipeline(params) {
         ? {
             ...fresh,
             cell: planned.cell,
+            gridPoint: planned.door ? fresh.gridPoint || null : planned.point || null,
             turn: planned.turn,
             ...(planned.sides ? { sides: planned.sides } : {}),
             ...(door
@@ -389,6 +405,7 @@ async function runTurnPipeline(params) {
         narration: [lines.join(' '), struck.narration].filter(Boolean).join(' '),
         step: {
           cell: step.cell,
+          point: step.point || null,
           ap: step.turn.ap,
           plan: step.turn.plan,
           lines,
@@ -415,6 +432,7 @@ async function runTurnPipeline(params) {
         narration: [lines.join(' '), fought.narration].filter(Boolean).join(' '),
         step: {
           cell: step.cell,
+          point: step.point || null,
           ap: step.turn.ap,
           plan: step.turn.plan,
           lines,
@@ -432,6 +450,7 @@ async function runTurnPipeline(params) {
         time: clock.timeView(clock.timeOf(save)),
         step: {
           cell: step.cell || save.cell || null,
+          point: step.cell ? step.point || null : save.gridPoint || null,
           ap: (step.turn || turnStateOf(save)).ap,
           plan: step.turn ? step.turn.plan : turnStateOf(save).plan,
           lines,
@@ -890,12 +909,18 @@ function rollWords(canonWorld, proposedAction) {
 async function previewTurn({ save, saveRef, canonWorld }, actionText, proposedAction, walk) {
   const inFight = Boolean(combat.play.fightOf(save));
   const moving = MOVING.test(proposedAction.verb);
-  const squares = (n) => (n === 1 ? '1 square' : n + ' squares');
+  // How far, in feet since L-922; in squares for a walk worked out before.
+  const far = (w) =>
+    Number.isFinite(w.feet)
+      ? w.feet + ' ft'
+      : w.squares === 1
+        ? '1 square'
+        : w.squares + ' squares';
   const lines = [];
   if (walk && walk.kind === 'map') {
     lines.push(
       'Walk ' +
-        squares(walk.squares) +
+        far(walk) +
         ' to ' +
         walk.name +
         (walk.thisTurn

@@ -1651,13 +1651,15 @@ function writeTools({ writer, systems, studio }) {
           .describe(
             'The whole sheet: { attributes: { [id]: score }, skills: { [id]: rank }, ' +
               'resources: { [id]: { current } }, level, traits: [id], conditions: [], ' +
-              'attacks?: [attack] }. Speed is worked out by the system. null removes it.'
+              'attacks?: [attack], size? }. size is tiny, small, medium (the default), large, huge ' +
+              'or gargantuan: how narrow a gap they pass (L-922). Speed is worked out by the ' +
+              'system. null removes it.'
           ),
         statBlock: blockRef
           .optional()
           .describe(
             'Or the short form: { attributes (every one), skills?, resources?, level?, traits?, ' +
-              'attacks? }; or a named stat block’s id (L-393; list_stat_blocks), whose changes ' +
+              'attacks?, size? }; or a named stat block’s id (L-393; list_stat_blocks), whose changes ' +
               'reach them.'
           ),
         overrides: overrides.optional(),

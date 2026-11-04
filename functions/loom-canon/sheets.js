@@ -25,6 +25,13 @@
  *     levelsReady number                     levels earned, not taken: worked out
  *     uses?:      { skills, attacks }        successes counted toward rising
  *     attackRanks? { [attackId]: rank }      each attack's rank, 0 when not listed
+ *     size?:      id                         its size class (L-922; SZ1): tiny,
+ *                                            small, medium (none), large, huge or
+ *                                            gargantuan, each a width in feet that
+ *                                            decides the gaps it passes
+ *                                            (../loom-canon/map-paths.js SIZES); a
+ *                                            system names them in its words
+ *                                            (`"size-large": "Big"`)
  *     speed:      number                     action points a turn (L-831), worked
  *                                            out: see apFor; a turn's movement
  *                                            until turns run on AP (L-832)
@@ -47,6 +54,7 @@
 const formula = require('./formula');
 const clock = require('./clock');
 const conditions = require('./conditions');
+const mapPaths = require('./map-paths');
 const attacks = require('../loom-modules/combat/attacks');
 // Required where used: it reads attacks, which read this.
 const advancement = () => require('../loom-modules/advancement');
@@ -276,6 +284,13 @@ function validateSheet(system, sheet) {
     }
   }
 
+  // Size (L-922): one of the size classes, medium when there's none.
+  if (sheet.size !== undefined && !mapPaths.sizeOf(sheet.size)) {
+    errors.push(
+      `The size "${sheet.size}" isn't one of ${mapPaths.SIZES.map((z) => z.id).join(', ')}.`
+    );
+  }
+
   // Traits and conditions (the pool is worked out, not checked: apFor).
   if (!Array.isArray(sheet.traits)) errors.push('traits must be a list.');
   else {
@@ -309,7 +324,7 @@ function validateSheet(system, sheet) {
 // The short form a template's figures carry (L-790), and a quick way to give
 // a named character a sheet: every attribute, and only what differs from the
 // defaults besides: `{ attributes, skills?, resources?, level?, traits?,
-// attacks? }`.
+// attacks?, size? }`.
 // A skill left out is untrained, a resource left out full, the level the
 // lowest.
 
@@ -334,8 +349,26 @@ function sheetFromStatBlock(system, block) {
   }
   if (isObject(block.resources)) Object.assign(sheet.resources, block.resources);
   if (block.attacks !== undefined) sheet.attacks = block.attacks;
+  if (block.size !== undefined) sheet.size = block.size;
   sheet.ap = apFor(system, sheet);
   return sheet;
+}
+
+/** A sheet's size class (L-922): its own, else medium. */
+function sizeOf(sheet) {
+  return sheet && mapPaths.sizeOf(sheet.size) ? sheet.size : mapPaths.DEFAULT_SIZE;
+}
+
+/** A sheet's width in feet, for the gaps it passes (L-922). */
+function widthOf(sheet) {
+  return mapPaths.widthOf(sizeOf(sheet));
+}
+
+/** A size's name in a system's words (`"size-large": "Big"`), else its own. */
+function sizeName(system, id) {
+  const words = (system && system.words) || {};
+  const own = words['size-' + id];
+  return typeof own === 'string' && own ? own : id.charAt(0).toUpperCase() + id.slice(1);
 }
 
 /** A save's character's sheet, or null for one made before sheets. */
@@ -540,4 +573,7 @@ module.exports = {
   maxima,
   sheetOf,
   traitsOf,
+  sizeOf,
+  widthOf,
+  sizeName,
 };

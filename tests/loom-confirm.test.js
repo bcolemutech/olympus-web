@@ -200,7 +200,8 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
     const asked = await type(ref, 'talk to Mira');
     expect(asked).toMatchObject({ refused: true, confirm: { action: 'talk to Mira' } });
     expect(asked.confirm.lines).toEqual([
-      'Walk 6 squares to Mira.',
+      // 30.4 ft to the square beside her (L-922).
+      'Walk 30 ft to Mira.',
       'Then: Talk to Mira.',
       'No roll.',
       'Costs 2 AP.',
@@ -216,8 +217,8 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
     save = await saved(ref);
     expect(beside(save.cell, { x: 9, y: 1 })).toBe(true);
     expect(save.pending).toBeUndefined();
-    // The 6 squares walked and the 2 AP the words cost (L-832).
-    expect(save.turn.ap).toBe(20 - 6 - 2);
+    // The 30.4 ft walked, 7 AP (L-922), and the 2 AP the words cost (L-832).
+    expect(save.turn.ap).toBe(20 - 7 - 2);
     expect(done.narration).toMatch(/She looks up\.$/);
     // Talking rolls nothing, and INTERPRET was asked once, when typed.
     expect(done.roll).toBeUndefined();
@@ -333,13 +334,14 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
     mockState.intent = { verb: 'use', targets: ['feature:tap'], params: {} };
     const asked = await type(ref, 'pull the ale tap');
     expect(asked.confirm.lines[0]).toMatch(
-      /^Walk \d+ squares to the ale tap: more than this turn, so you stop partway/
+      /^Walk \d+ ft to the ale tap: more than this turn, so you stop partway/
     );
     const done = await confirm(ref);
     expect(done.narration).toMatch(/The rest of the way to the ale tap is kept for next turn\.$/);
     const save = await saved(ref);
-    // Its 2 AP walked, the action not taken.
-    expect(save.turn).toMatchObject({ ap: 0, moved: 2 });
+    // Its 2 AP walked (10 ft, on a diagonal: into one square), the action
+    // not taken.
+    expect(save.turn).toMatchObject({ ap: 0, moved: 1 });
     expect(save.cell).not.toEqual({ x: 1, y: 5 });
   });
 

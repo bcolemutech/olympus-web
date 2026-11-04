@@ -312,6 +312,9 @@ describe('a visit to the Gull & Anchor', () => {
       height: 8,
       image: null,
       here: { x: 1, y: 4 },
+      // Where in it, in feet, and how wide the character is (L-922).
+      herePoint: { x: 7.5, y: 22.5 },
+      size: { id: 'medium', width: 2.5 },
       host: { id: 'plc_1_tavern', name: 'The Gull & Anchor' },
       entries: [
         { id: 'door', x: 1, y: 4 },
@@ -782,15 +785,19 @@ describe('moving without the GM (L-613)', () => {
       suggestedActions: [],
       // The time, for the map's clock (L-376).
       time: { seconds: 8 * 3600, label: 'Day 1, morning' },
+      // 42.7 ft from the door's middle to the hearth's: 9 AP (L-922).
       step: {
         cell: { x: 9, y: 1 },
-        ap: 12,
+        point: { x: 47.5, y: 7.5 },
+        ap: 11,
         plan: null,
         lines: ["You're at the hearth."],
       },
     });
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 9, y: 1 } });
-    expect(await turnOf()).toEqual({ n: 1, ap: 12, kept: 0, plan: null, moved: 8 });
+    expect((await saveOf(saveId)).gridPoint).toEqual({ x: 47.5, y: 7.5 });
+    // The squares walked into, along the straight line.
+    expect(await turnOf()).toEqual({ n: 1, ap: 11, kept: 0, plan: null, moved: 11 });
     expect(await recorded()).toBe(before);
     expect(mockCallGemini).not.toHaveBeenCalled();
   });
@@ -805,12 +812,13 @@ describe('moving without the GM (L-613)', () => {
     expect(step.ap).toBe(0);
     expect(step.lines).toEqual(["That's as far as your AP takes you. End your turn to go on."]);
     expect(step.plan).toMatchObject({ layer: 'battleMap', mapId: 'bm_tavern', to: { x: 9, y: 4 } });
-    expect(step.plan.path.map((s) => [s.x, s.cost])).toEqual([
-      [5, 1],
-      [6, 2],
-      [7, 3],
+    // The squares still to go (L-922: the way is found afresh each move).
+    expect(step.plan.path.map((s) => [s.x, s.y])).toEqual([
+      [5, 4],
+      [6, 4],
+      [7, 4],
       [8, 4],
-      [9, 5],
+      [9, 4],
     ]);
     // With no movement left, a move goes nowhere but is planned.
     const again = await stepTo(saveId, { x: 4, y: 1 });
@@ -820,32 +828,34 @@ describe('moving without the GM (L-613)', () => {
   });
 
   test('Continue next turn walks the plan; End turn says how far you went', async () => {
-    // A character with a speed of 4: its world's system works its AP pool out as 4
-    // (L-811). The hearth (8 away) takes two turns.
+    // A character with a speed of 5: its world's system works its AP pool out as 5
+    // (L-811). The hearth (42.7 ft, 9 AP) takes two turns.
     const systems = require('../functions/loom-canon/systems');
     const slow = { ...systems.BUILT_IN['d20-fantasy'], id: 'slow-d20', name: 'Slow d20' };
-    slow.sheet = { ...slow.sheet, ap: '4' };
+    slow.sheet = { ...slow.sheet, ap: '5' };
     await systems.setSystem(db, slow, { uid: 'test' });
     const version = (await worldRef.get()).data().canonVersion;
     await worldRef.update({ systemId: 'slow-d20', canonVersion: version + 1 });
     await db
       .collection('loom_saves')
       .doc(saveId)
-      .update({ turn: { n: 1, ap: 4, kept: 0, plan: null } });
+      .update({ turn: { n: 1, ap: 5, kept: 0, plan: null } });
     await stepTo(saveId, { x: 9, y: 1 });
     expect((await continueOn(saveId)).step.lines).toEqual([OUT_OF_AP]);
     const before = (await saveOf(saveId)).time;
     expect(before).toBe(8 * 3600); // a game made by loomCreateSave starts on Day 1, 08:00
-    expect((await endTurn(saveId)).narration).toBe('Turn 1 ends. You moved 4 squares.');
+    // 25 ft on the straight line crosses 7 squares.
+    expect((await endTurn(saveId)).narration).toBe('Turn 1 ends. You moved 7 squares.');
     // A battle-map turn is 6 seconds of game time (L-371; game time T4).
     expect((await saveOf(saveId)).time).toBe(before + 6);
     const { step } = await continueOn(saveId);
-    expect(step).toMatchObject({ cell: { x: 9, y: 1 }, ap: 0, plan: null });
+    // The rest, 17.7 ft: 4 AP.
+    expect(step).toMatchObject({ cell: { x: 9, y: 1 }, ap: 1, plan: null });
     expect(step.lines).toEqual(["You're at the hearth."]);
     expect((await endTurn(saveId)).narration).toBe(
       'Turn 2 ends. You moved 4 squares, to the hearth.'
     );
-    expect(await turnOf()).toEqual({ n: 3, ap: 4, kept: 0, plan: null });
+    expect(await turnOf()).toEqual({ n: 3, ap: 5, kept: 0, plan: null });
     expect((await continueOn(saveId)).step.lines).toEqual([
       'You have no way planned. Tap where to go.',
     ]);
@@ -875,7 +885,8 @@ describe('moving without the GM (L-613)', () => {
     expect(answer.step).toBeUndefined();
     expect(answer.narration).toBe('You go on.');
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_cellar', cell: { x: 5, y: 5 } });
-    expect((await turnOf()).ap).toBe(10);
+    // 52.2 ft to the stairs' middle: 11 AP (L-922).
+    expect((await turnOf()).ap).toBe(9);
     expect(await lastResolution(saveId)).toMatchObject({
       outcome: 'success',
       constraints: ['You go by the cellar stairs to The cellar.'],
@@ -985,8 +996,9 @@ describe('typed actions and the turn (L-614)', () => {
     playerTypes('move', 'feature:bar');
     expect((await type('go to the bar')).narration).toBe('You go on.');
     expect(await where(saveId)).toMatchObject({ cell: { x: 3, y: 2 } });
-    // The search's 10 AP, and the 2 squares to the bar.
-    expect(await turnOf()).toMatchObject({ ap: 8, moved: 2 });
+    // The search's 10 AP, and the 14.1 ft to the bar, 3 AP (L-922): the
+    // diagonal touches 4 squares on the way.
+    expect(await turnOf()).toMatchObject({ ap: 7, moved: 4 });
     await endTurn(saveId);
     playerTypes('search');
     await type('search the bar');
@@ -1002,7 +1014,8 @@ describe('typed actions and the turn (L-614)', () => {
       constraints: ['You move to the hearth.'],
     });
     expect(await where(saveId)).toMatchObject({ cell: { x: 9, y: 1 } });
-    expect(await turnOf()).toEqual({ n: 1, ap: 12, kept: 0, plan: null, moved: 8 });
+    // As the tap: 9 AP, 11 squares walked into (L-922).
+    expect(await turnOf()).toEqual({ n: 1, ap: 11, kept: 0, plan: null, moved: 11 });
   });
 
   test('past reach, a typed move heads that way and keeps the plan', async () => {
@@ -1039,11 +1052,12 @@ describe('typed actions and the turn (L-614)', () => {
   test('the narrator is told the turn: the AP left of the pool', async () => {
     playerTypes('move', 'feature:bar');
     await type('go to the bar');
-    expect(prompts.narrate.at(-1)).toContain('Turn 1. Action points left: 18 of 20.');
+    // The bar is 14.1 ft away: 3 AP (L-922).
+    expect(prompts.narrate.at(-1)).toContain('Turn 1. Action points left: 17 of 20.');
     playerTypes('talk', 'chr_brannoch');
     await type('hail the innkeeper');
     // A few words cost 2 (L-832).
-    expect(prompts.narrate.at(-1)).toContain('Turn 1. Action points left: 16 of 20.');
+    expect(prompts.narrate.at(-1)).toContain('Turn 1. Action points left: 15 of 20.');
   });
 
   test('standing on an exit, leaving by it costs nothing', async () => {
@@ -1417,23 +1431,40 @@ describe('what a save has seen (L-632)', () => {
   });
 
   test('squares walked before a door opens are seen with it shut', async () => {
-    // Up the kitchen wall from (5, 7): the walk opens the door and stops at
-    // (5, 3). (6, 0) would be in sight from (5, 4) with the door open, but
-    // not from (5, 3), where it opened.
+    // From (1, 0) toward (10, 1): the walk opens the door from beside it, at
+    // (5, 2) (within 5 ft of it, L-922), and stops there. Through the open
+    // door, (9, 5) would be in sight from squares on the way, but not from
+    // (5, 2), where it opened; nor with the door shut.
+    const open = { 'kitchen-door': 'open' };
     const tavern = (await tavernRef().get()).data();
-    expect(sight.inSight(tavern, { x: 5, y: 4 }, { 'kitchen-door': 'open' })['6,0']).toBe(true);
+    const walkedBefore = [
+      { x: 2, y: 0 },
+      { x: 2, y: 1 },
+      { x: 3, y: 1 },
+      { x: 3, y: 2 },
+      { x: 4, y: 2 },
+    ];
+    const fromStop = sight.inSight(tavern, { x: 5, y: 2 }, open);
+    const shut = Object.assign({}, ...walkedBefore.map((sq) => sight.inSight(tavern, sq, {})));
+    const throughOnly = new Set(
+      walkedBefore
+        .flatMap((sq) => Object.keys(sight.inSight(tavern, sq, open)))
+        .filter((k) => !fromStop[k] && !shut[k])
+    );
+    expect(throughOnly.has('9,5')).toBe(true);
     const { saveId } = await newGame();
-    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 5, y: 7 });
-    // Seen before, through the open door from (5, 3), so the hearth is known
-    // (L-635); (6, 0) wasn't in sight from there.
-    const before = sight.inSight(tavern, { x: 5, y: 3 }, { 'kitchen-door': 'open' });
-    expect(before['6,0']).toBeUndefined();
+    await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 0 });
+    // Every other square seen before (L-635), so the way is known.
+    const before = {};
+    for (let x = 0; x < 12; x++) {
+      for (let y = 0; y < 8; y++) if (!throughOnly.has(x + ',' + y)) before[x + ',' + y] = true;
+    }
     await remember(saveId, 'bm_tavern', before);
-    const { step } = await stepTo(saveId, { x: 9, y: 1 });
-    expect(step).toMatchObject({ cell: { x: 5, y: 3 }, lines: ['You open the kitchen door.'] });
+    const { step } = await stepTo(saveId, { x: 10, y: 1 });
+    expect(step).toMatchObject({ cell: { x: 5, y: 2 }, lines: ['You open the kitchen door.'] });
+    expect(step.plan).toMatchObject({ to: { x: 10, y: 1 } });
     const seen = await seenOn(saveId, 'bm_tavern');
-    expect(seen['9,1']).toBe(true);
-    expect(seen['6,0']).toBeUndefined();
+    for (const k of throughOnly) expect({ [k]: seen[k] }).toEqual({ [k]: undefined });
   });
 
   test('down the cellar stairs, the cellar has its own record, from its entry', async () => {
