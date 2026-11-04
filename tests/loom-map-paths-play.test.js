@@ -182,11 +182,16 @@ describe('a move through a narrow gap, four maps down', () => {
 
   test('a point in feet can be walked to, not only a square', async () => {
     await seed('point', { x: 2, y: 4 });
-    const answer = await play('point', { verb: 'move', point: { x: 40, y: 30 } });
-    expect(answer.step.point).toEqual({ x: 40, y: 30 });
-    expect(answer.step.cell).toEqual({ x: 8, y: 6 });
+    // Seen through the gap (L-923: the bulkhead hides the rest beyond it).
+    const answer = await play('point', { verb: 'move', point: { x: 44, y: 23 } });
+    expect(answer.step.point).toEqual({ x: 44, y: 23 });
+    expect(answer.step.cell).toEqual({ x: 8, y: 4 });
     const save = await saveOf('point');
-    expect(save.gridPoint).toEqual({ x: 40, y: 30 });
+    expect(save.gridPoint).toEqual({ x: 44, y: 23 });
+    // From this side, a point behind the bulkhead hasn't been seen: refused.
+    await seed('hidden', { x: 2, y: 4 });
+    const hidden = await play('hidden', { verb: 'move', point: { x: 40, y: 37 } });
+    expect(hidden.narration).toBe("You haven't seen that.");
   });
 
   test('a large character finds no way through the gap', async () => {
