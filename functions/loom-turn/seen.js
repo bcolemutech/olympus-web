@@ -75,7 +75,7 @@ function inSightNow(canonWorld, save, walked, doorsBefore) {
   const { map, cell } = maps.positionOf(canonWorld, save);
   if (!map) return { map: null, squares: {} };
   const doors = doorStatesOf(save, map.id);
-  const squares = sight.inSight(map, cell, doors);
+  const squares = { ...sight.inSight(map, maps.viewerOf(canonWorld, save) || cell, doors) };
   (walked || []).forEach((square) => {
     Object.assign(squares, sight.inSight(map, square, doorsBefore || doors));
   });

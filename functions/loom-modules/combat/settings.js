@@ -72,6 +72,12 @@
  *   wary        whether fighters can be wary (L-392; planning/builders-tools.md
  *               §4.2): challenging before they fight, turned by triggers
  *               (./wary.js). On (true) by default; off, wary reads as hostile.
+ *   highGround  a formula added to an attack from at least 5 ft above the
+ *               target (L-923; DA2), "2"; off (null) unless set
+ *   falls       { per, damage, max } (L-923; DA2): a drop of 10 ft or more
+ *               walked off deals `damage` (a formula) once for each `per`
+ *               feet (10), at most `max` times, then the faller is Prone
+ *               where the system has it. With none, a fall hurts nothing.
  *   flanking    a formula added to a melee attack on someone with a friend of
  *               the attacker on their far side (PS3), "2"; off (null) unless
  *               set, as in both built-in systems.
@@ -100,6 +106,8 @@ const KEYS = [
   'longRange',
   'dodge',
   'flanking',
+  'highGround',
+  'falls',
   'turn',
   'wary',
 ];
@@ -137,6 +145,14 @@ function settingsOf(system) {
     longRange: given.longRange ?? null,
     dodge: given.dodge ?? null,
     flanking: given.flanking ?? null,
+    highGround: given.highGround ?? null,
+    falls: isObject(given.falls)
+      ? {
+          per: Number.isFinite(given.falls.per) && given.falls.per > 0 ? given.falls.per : 10,
+          damage: given.falls.damage ?? null,
+          max: Number.isInteger(given.falls.max) && given.falls.max > 0 ? given.falls.max : null,
+        }
+      : null,
     wary: given.wary !== false,
     turn: {
       actions: isObject(given.turn) && given.turn.actions !== undefined ? given.turn.actions : 1,
@@ -475,9 +491,23 @@ function check(settings, { system, errors, warnings, formula }) {
   if (settings.wary !== undefined && typeof settings.wary !== 'boolean') {
     errors.push(`${at}.wary must be true or false.`);
   }
-  for (const key of ['longRange', 'dodge', 'flanking']) {
+  for (const key of ['longRange', 'dodge', 'flanking', 'highGround']) {
     if (settings[key] !== undefined && settings[key] !== null) {
       formula(settings[key], `${at}.${key}`);
+    }
+  }
+  if (settings.falls !== undefined && settings.falls !== null) {
+    const f = settings.falls;
+    if (!isObject(f)) errors.push(`${at}.falls must be { per, damage, max }.`);
+    else {
+      if (f.per !== undefined && !(Number.isFinite(f.per) && f.per > 0)) {
+        errors.push(`${at}.falls.per must be a number of feet above 0.`);
+      }
+      if (f.damage === undefined) errors.push(`${at}.falls needs damage (a formula).`);
+      else formula(f.damage, `${at}.falls.damage`);
+      if (f.max !== undefined && !(Number.isInteger(f.max) && f.max > 0)) {
+        errors.push(`${at}.falls.max must be a whole number above 0.`);
+      }
     }
   }
   // The attacks themselves are checked against the system once its shape is

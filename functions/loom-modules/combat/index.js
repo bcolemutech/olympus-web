@@ -20,6 +20,7 @@
  *   ./down.js      what 0 means: dying saves, wounds, out; coming round,
  *                  death, fates
  *   ./rests.js     short and long rests, and what can interrupt them
+ *   ./falls.js     a drop walked off: its damage, then Prone (L-923)
  *   ./position.js  reach and range, cover, flanking, Dodge, defending
  *                  reactions (pure)
  *   ./reactions.js what a walk draws: leaving reach, a readied attack (pure)
@@ -38,6 +39,7 @@ module.exports = {
   wary: require('./wary'),
   tactics: require('./tactics'),
   others: require('./others'),
+  falls: require('./falls'),
   down: require('./down'),
   rests: require('./rests'),
   position: require('./position'),

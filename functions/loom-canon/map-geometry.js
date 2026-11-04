@@ -1254,16 +1254,17 @@
    * doors one square long, obstacles by the square) read as geometry in
    * feet (L-922; what L-928 will store for good): its walls as walls; each
    * door in a short wall of its own, which it replaces, keeping its id,
-   * name, key and own AP; solid and low obstacles as closed walls round
-   * their squares (low ones seen over: 3 ft high, not blocking sight); and
-   * difficult squares as gravel costing 2.
+   * name, key and own AP; solid obstacles as tall objects over their
+   * squares (pillars, seen themselves and hiding what's behind them, L-923);
+   * low ones as closed walls round their squares, 3 ft high and not
+   * blocking sight; and difficult squares as gravel costing 2.
    */
   function fromLayers(map) {
     var F = FEET_PER_SQUARE;
     var pt = function (c) {
       return [c.x * F, c.y * F];
     };
-    var out = { ground: [], walls: [], doors: [] };
+    var out = { ground: [], walls: [], doors: [], objects: [] };
     if (!isObject(map)) return out;
     (map.walls || []).forEach(function (wall, i) {
       var points = ((wall && wall.points) || []).filter(function (p) {
@@ -1308,7 +1309,17 @@
           cost: 2,
           shape: { rect: { x: x, y: y, w: w, h: h } },
         });
-      } else if (o.kind === 'solid' || o.kind === 'low') {
+      } else if (o.kind === 'solid') {
+        var pillar = {
+          id: id,
+          kind: 'pillar',
+          at: [x + w / 2, y + h / 2],
+          size: [w, h],
+          blocksSight: true,
+        };
+        if (o.name) pillar.name = o.name;
+        out.objects.push(pillar);
+      } else if (o.kind === 'low') {
         var ring = {
           id: id,
           material: 'stone',
@@ -1320,10 +1331,8 @@
             [x, y],
           ],
         };
-        if (o.kind === 'low') {
-          ring.blocksSight = false;
-          ring.height = 3;
-        }
+        ring.blocksSight = false;
+        ring.height = 3;
         out.walls.push(ring);
       }
     });

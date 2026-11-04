@@ -140,7 +140,12 @@ function lookAt(canonWorld, save, target, { known, inSight } = {}) {
           ' ft from the player.'
   );
   if (steps > 0) {
-    const cover = combat.position.coverOf(map, states, here, cell);
+    const cover = combat.position.coverOf(
+      map,
+      states,
+      maps.viewerOf(canonWorld, save) || here,
+      cell
+    );
     if (cover) facts.push('From where the player stands, it is behind ' + cover + ' cover.');
   }
   return {

@@ -179,6 +179,51 @@ function hazardOutcome(canonWorld, characterState, hazard, dice) {
   };
 }
 
+// A fall from a ledge (L-923; ../loom-modules/combat/falls.js): its damage by
+// the system's `falls`, then Prone; at 0, down by the system's down kind,
+// out of any fight. `{ mutations, constraints, fall }`.
+function fallOutcome(canonWorld, characterState, feet, dice) {
+  const system = checks.systemOf(canonWorld);
+  const r = combat.falls.fall(system, sheetFor(system, characterState), feet, {
+    dice,
+    now: clock.timeOf(characterState),
+  });
+  let sheet = r.sheet;
+  const constraints = r.lines.slice();
+  const more = [];
+  let down = null;
+  if (r.zero) {
+    const fell = combat.down.fall(system, sheet);
+    sheet = fell.sheet;
+    constraints.push(...fell.lines);
+    if (fell.down) {
+      down = fell.down;
+      more.push({ target: 'save', op: 'set-flag', path: 'down', value: fell.down });
+      const inFight = combat.play.fightOf(characterState);
+      if (inFight) {
+        more.push({
+          target: 'save',
+          op: 'set-flag',
+          path: 'fight',
+          value: combat.fight.leave(inFight, combat.fight.PLAYER, 'down'),
+        });
+      }
+    }
+  }
+  return {
+    mutations: [setSheet(sheet), ...more],
+    constraints,
+    fall: { feet: Math.round(feet), damage: r.damage, ...(down ? { down: down.kind } : {}) },
+  };
+}
+
+// A fall walked by a step on the map (index.js runs this turn for it).
+function evaluateFall(proposedAction, characterState, dice, canonWorld) {
+  const feet = Number((proposedAction.params || {}).feet);
+  if (!Number.isFinite(feet) || feet <= 0) return blocked("There's no fall here.");
+  return { outcome: 'failure', ...fallOutcome(canonWorld, characterState, feet, dice) };
+}
+
 // A hazard walked into by a step on the map (index.js runs this turn for it).
 function evaluateHazard(proposedAction, characterState, dice, canonWorld) {
   const id = String((proposedAction.targets || [])[0] || '').replace(/^hazard:/, '');
@@ -406,8 +451,10 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
       ? mapTarget(canonWorld, characterState, map, target)
       : null;
   if (person && person.person) {
-    const inSight = sight.inSight(map, from, doorStatesOf(characterState, map.id));
-    if (!inSight[person.squares[0].x + ',' + person.squares[0].y]) return blocked(NOBODY_SEEN);
+    const viewer = maps.viewerOf(canonWorld, characterState);
+    if (!sight.sees(map, viewer, person.squares[0], doorStatesOf(characterState, map.id))) {
+      return blocked(NOBODY_SEEN);
+    }
     cell = person.squares[0];
   }
   if (!cell && !exit) {
@@ -475,6 +522,17 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
       constraints: out.constraints,
       ...(out.roll ? { roll: out.roll } : {}),
       hazard: out.hazard,
+      walked,
+    };
+  }
+  // A drop walked off stops the walk where it lands: a fall (L-923).
+  if (step.fall) {
+    const out = fallOutcome(canonWorld, characterState, step.fall.feet, diceSource(dice));
+    return {
+      outcome: 'failure',
+      mutations: mutations.concat(out.mutations),
+      constraints: out.constraints,
+      fall: out.fall,
       walked,
     };
   }
@@ -1244,7 +1302,10 @@ function playbackOf(turns, characterState, canonWorld, after) {
   const system = checks.systemOf(canonWorld);
   const { map, cell } = maps.positionOf(canonWorld || {}, after || characterState);
   const doors = map ? doorStatesOf(after || characterState, map.id) : {};
-  const seen = map && cell ? sight.inSight(map, cell, doors) : {};
+  const seen =
+    map && cell
+      ? sight.inSight(map, maps.viewerOf(canonWorld || {}, after || characterState), doors)
+      : {};
   return turns.map((t) => ({
     id: t.id,
     name: t.name,
@@ -1491,7 +1552,11 @@ function mapTarget(canonWorld, characterState, map, target) {
 function outOfSightOrReach(proposedAction, characterState, canonWorld) {
   const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
   if (!map) return null;
-  const inSight = sight.inSight(map, cell, doorStatesOf(characterState, map.id));
+  const inSight = sight.inSight(
+    map,
+    maps.viewerOf(canonWorld || {}, characterState),
+    doorStatesOf(characterState, map.id)
+  );
   const seen = (square) => Boolean(inSight[square.x + ',' + square.y]);
   const near = (square) => Math.max(Math.abs(square.x - cell.x), Math.abs(square.y - cell.y)) <= 1;
   const physical = needsBeside(proposedAction.verb, Boolean(combat.play.fightOf(characterState)));
@@ -2198,6 +2263,8 @@ function evaluate(
     resolution = evaluateEndTurn(characterState, canonWorld, diceSource(dice), choose);
   } else if (proposedAction.verb === 'hazard') {
     resolution = evaluateHazard(proposedAction, characterState, diceSource(dice), canonWorld);
+  } else if (proposedAction.verb === 'fall') {
+    resolution = evaluateFall(proposedAction, characterState, diceSource(dice), canonWorld);
   } else if (proposedAction.verb === 'fight') {
     resolution = evaluateFightStart(characterState, canonWorld, diceSource(dice), choose);
   } else if (WAIT_VERBS[proposedAction.verb]) {
@@ -2246,6 +2313,8 @@ function evaluate(
     ...(resolution.fight ? { fight: Object.freeze({ ...resolution.fight }) } : {}),
     // A hazard walked into (L-815), for the GM.
     ...(resolution.hazard ? { hazard: Object.freeze({ ...resolution.hazard }) } : {}),
+    // A fall from a ledge (L-923), for the GM.
+    ...(resolution.fall ? { fall: Object.freeze({ ...resolution.fall }) } : {}),
     // Everyone else's turns, for the Loom to play out (L-828); not recorded.
     ...(resolution.playback ? { playback: Object.freeze(resolution.playback.slice()) } : {}),
     // The AP the player kept for reactions, and what was left of it (L-837);

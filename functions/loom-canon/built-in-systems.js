@@ -234,6 +234,10 @@ const FANTASY = {
       cover: { partial: '2', heavy: '5' },
       longRange: '-5',
       dodge: '5',
+      // Heights (L-923): +2 from high ground; a fall 1d6 each 10 ft, up to
+      // 20d6.
+      highGround: '2',
+      falls: { per: 10, damage: '1d6', max: 20 },
       // What a new character carries until L-770's weapons.
       attacks: [
         {
@@ -490,6 +494,10 @@ const SCIFI = {
       cover: { partial: '1', heavy: '2' },
       longRange: '-1',
       dodge: '2',
+      // Heights (L-923): a success more from high ground; a fall 1 each 10
+      // ft, up to 5.
+      highGround: '1',
+      falls: { per: 10, damage: '1', max: 5 },
       // What a new character carries until L-770's weapons.
       attacks: [
         {

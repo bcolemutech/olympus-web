@@ -243,12 +243,8 @@ function reactToWalk(
       if (!attack) continue;
       const was = position.bandOf(attack, w, prev);
       const now2 = position.bandOf(attack, w, cur);
-      const seen = !attack.range || position.sees(map, doors, w.cell, cur.cell);
-      if (
-        !now2 ||
-        !seen ||
-        (was && (!attack.range || position.sees(map, doors, w.cell, prev.cell)))
-      ) {
+      const seen = !attack.range || position.sees(map, doors, w, cur);
+      if (!now2 || !seen || (was && (!attack.range || position.sees(map, doors, w, prev)))) {
         continue;
       }
       delete c.readied;

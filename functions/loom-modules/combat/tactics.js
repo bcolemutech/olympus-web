@@ -29,8 +29,9 @@
  *
  * A fighter fleeing heads for the nearest way off the map. Paths are the
  * player's (../../loom-canon/map-paths.js; L-922), at the fighter's width, in
- * feet: through people but never ending on one, and never through a closed
- * door (figures don't open them). Distances are in feet: reach and range
+ * feet: through people but never ending on one, never through a closed
+ * door (figures don't open them) and never off a drop of 10 ft or more
+ * (L-923). Distances are in feet: reach and range
  * edge to edge (position.js bandOf), the nearest foe by where each stands,
  * beside within 5 ft.
  *
@@ -44,9 +45,6 @@ const maps = require('../../loom-canon/maps');
 const apRules = require('../../loom-canon/ap');
 
 const key = (cell) => cell.x + ',' + cell.y;
-const sees = (map, doors, from, to) => Boolean(sight.inSight(map, from, doors)[key(to)]);
-// A person's square: a fighter's `cell`, or a square given as it is.
-const cellOf = (v) => (v && v.cell ? v.cell : v);
 // How far apart two people are, centre to centre, in feet (L-922).
 const feet = (a, b) => mapPaths.feetBetween(a, b);
 const BESIDE = mapPaths.FEET; // within 5 ft, edge to edge
@@ -66,7 +64,7 @@ function facingTo(from, to) {
  */
 function canHit(map, doors, attack, from, target) {
   const band = mapPaths.bandOf(attack, from, target);
-  if (attack.range) return Boolean(band) && sees(map, doors, cellOf(from), cellOf(target));
+  if (attack.range) return Boolean(band) && sight.sees(map, from, target, doors);
   return Boolean(band);
 }
 
@@ -126,9 +124,11 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
   const pool = onAp ? Math.max(0, Math.floor(me.ap)) : 0;
   const free = (cell) => maps.sameCell(cell, me.cell) || !occupied.has(key(cell));
   const width = me.width > 0 ? me.width : mapPaths.widthOf();
-  const meSpot = { cell: me.cell, point: mapPaths.spotOf(me).point, width };
+  // Where they stand, and their size for their eyes (L-923).
+  const sized = me.size ? { size: me.size } : {};
+  const meSpot = { cell: me.cell, point: mapPaths.spotOf(me).point, width, ...sized };
   // Where the fighter would be at a station of a walk, or at a square's spot.
-  const here = (st) => ({ cell: st.square, point: { x: st.x, y: st.y }, width });
+  const here = (st) => ({ cell: st.square, point: { x: st.x, y: st.y }, width, ...sized });
   // What an attack costs (nothing with AP off: one a turn).
   const costOf = (attack) => {
     if (!onAp || !attack) return 0;
@@ -162,6 +162,8 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
       width,
       states: shut,
       prices: onAp ? me.prices : undefined,
+      // Nor do they walk off a drop (L-923).
+      drops: 'never',
       ...(goal === true
         ? {}
         : { blocked: (sq) => exitAt(sq) && !(goal && maps.sameCell(goal, sq)) }),
@@ -370,7 +372,7 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
       ? approach(
           target,
           blade.range.normal,
-          (spot) => reaches(spot) && sees(map, doors, spot.cell, target.cell),
+          (spot) => reaches(spot) && sight.sees(map, spot, target, doors),
           budget
         )
       : approach(

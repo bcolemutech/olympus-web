@@ -1750,7 +1750,11 @@ describe('people on the map (L-642)', () => {
     const sees = sight.inSight((await tavernRef().get()).data(), step.cell, {});
     expect(sees['9,2']).toBe(true);
     expect(await peopleOn()).toEqual(
-      expect.arrayContaining([{ id: 'chr_old_mags', name: 'Old Mags', x: 9, y: 2, width: 2.5 }])
+      // Just come into view round the doorway: most of her behind the wall
+      // (L-923: cover from the geometry).
+      expect.arrayContaining([
+        { id: 'chr_old_mags', name: 'Old Mags', x: 9, y: 2, width: 2.5, cover: 'heavy' },
+      ])
     );
     const on = await continueOn(saveId);
     expect(on.step.cell).toEqual({ x: 10, y: 6 });

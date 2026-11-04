@@ -100,6 +100,19 @@ function positionOf(world, save) {
   return { map, cell, point: pointIn(cell, save.gridPoint) };
 }
 
+/**
+ * Where a save's character looks from on its battle map (L-923): its
+ * square, its point in feet and its size (for its eyes' height,
+ * ./sight.js), the size from `sized` (by default the same save). Null off
+ * a map.
+ */
+function viewerOf(world, save, sized = save) {
+  const { cell, point } = positionOf(world, save);
+  if (!cell) return null;
+  const sheet = (sized && sized.character && sized.character.sheet) || {};
+  return { cell, point, ...(sheet.size ? { size: sheet.size } : {}) };
+}
+
 /** A point in feet if it lies in a square, else the square's centre (L-922). */
 function pointIn(cell, point) {
   if (
@@ -257,6 +270,7 @@ module.exports = {
   inBounds,
   entryCell,
   positionOf,
+  viewerOf,
   pointIn,
   arrivalMutations,
   sameCell,

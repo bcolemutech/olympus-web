@@ -326,17 +326,31 @@ describe('on a 64 × 64 map, every step', () => {
     }
   }
 
+  // Timed in plain Node, as the functions run: Jest's sandbox makes Math's
+  // calls several times slower, which the rules (L-923) make many of.
+  const timeLooks = (map, doorStates) => {
+    const { execFileSync } = require('child_process');
+    const script = `
+      const sight = require(${JSON.stringify(require.resolve('../functions/loom-canon/sight'))});
+      const { map, states } = JSON.parse(process.argv[1]);
+      const sq = (x, y) => ({ x, y });
+      [sq(0, 0), sq(32, 32), sq(5, 60), sq(63, 20)].forEach((f) => sight.inSight(map, f, states));
+      // Looks are kept, so each one timed is from a square not looked from before.
+      const fresh = Array.from({ length: 40 }, (_, n) => sq((n * 7 + 2) % 64, (n * 13 + 5) % 64));
+      const started = process.hrtime.bigint();
+      fresh.forEach((f) => sight.inSight(map, f, states));
+      process.stdout.write(String(Number(process.hrtime.bigint() - started) / 1e6 / fresh.length));
+    `;
+    return Number(
+      execFileSync(process.execPath, ['-e', script, JSON.stringify({ map, states: doorStates })])
+    );
+  };
+
   test.each([
     ['open ground', open, undefined],
     ['a hall of pillars', hall, undefined],
     ['rooms with their doors open', rooms, states],
   ])('%s: well within 25 ms a look', (name, map, doorStates) => {
-    const stands = [sq(0, 0), sq(32, 32), sq(5, 60), sq(63, 20)];
-    stands.forEach((from) => sight.inSight(map, from, doorStates)); // warm up
-    const started = process.hrtime.bigint();
-    const looks = 40;
-    for (let n = 0; n < looks; n++) sight.inSight(map, stands[n % stands.length], doorStates);
-    const each = Number(process.hrtime.bigint() - started) / 1e6 / looks;
-    expect(each).toBeLessThan(25);
+    expect(timeLooks(map, doorStates)).toBeLessThan(25);
   });
 });

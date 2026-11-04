@@ -133,6 +133,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
           cell: playerCell,
           point: playerPoint,
           width: widthOf(sheet),
+          ...(sheet && sheet.size ? { size: sheet.size } : {}),
           sheet,
           max: maxOf(sheet),
         });
@@ -147,6 +148,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         side: c.side,
         cell: character.cell,
         width: widthOf(s),
+        ...(s && s.size ? { size: s.size } : {}),
         sheet: s,
         max: maxOf(s),
       });
@@ -244,6 +246,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         cell: me.cell,
         ...(me.point ? { point: me.point } : {}),
         width: me.width,
+        ...(me.size ? { size: me.size } : {}),
         side: c.side,
         role: figures.roleOf(system, { ...character, sheet: mine }),
         posture: figures.postureOf(character),
@@ -355,7 +358,12 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         point: { x: st.x, y: st.y },
       };
     };
-    const meSpot = { cell: me.cell, ...(me.point ? { point: me.point } : {}), width: me.width };
+    const meSpot = {
+      cell: me.cell,
+      ...(me.point ? { point: me.point } : {}),
+      width: me.width,
+      ...(me.size ? { size: me.size } : {}),
+    };
     const fell = (how) => {
       states[id] = { ...(states[id] || {}), sheet: mine, down: how };
       f = fight.leave(f, id, 'down');
@@ -373,7 +381,12 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
     // Where they strike from: where the walk ended, or where they stood.
     const last = there.reached ? plan.path[there.reached - 1] : null;
     const from = last
-      ? { cell: last.square, point: { x: last.x, y: last.y }, width: me.width }
+      ? {
+          cell: last.square,
+          point: { x: last.x, y: last.y },
+          width: me.width,
+          ...(me.size ? { size: me.size } : {}),
+        }
       : meSpot;
     // One blow at `target` from `from`; returns its record, or null when
     // the attack can't be made (out of ammunition).
