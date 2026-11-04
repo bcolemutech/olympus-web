@@ -5,10 +5,14 @@
  * an attacker and their target stand, and what it adds to the roll, by the
  * system's settings (./settings.js). No model decides anything (CB0).
  *
- *   Reach and range (PS1)  a melee attack reaches someone within its reach
- *                  in squares (1: beside); a ranged one someone in sight
- *                  within its long range, past its normal range with the
- *                  system's `longRange` added to the roll
+ *   Reach and range (PS1)  a melee attack reaches someone within its reach;
+ *                  a ranged one someone in sight within its long range, past
+ *                  its normal range with the system's `longRange` added to
+ *                  the roll. Reach and ranges are in squares of 5 ft,
+ *                  measured in feet edge to edge between where each stands
+ *                  (L-922, maps-from-data.md DS1; ../../loom-canon/
+ *                  map-paths.js bandOf): a reach of 1 touches anyone beside,
+ *                  a diagonal too
  *   Cover (PS2)    the line from the attacker's square's centre to the
  *                  target's: across a wall or a door that isn't open, or
  *                  through a solid obstacle, heavy cover (they are seen round
@@ -32,6 +36,7 @@
 
 const layers = require('../../loom-canon/layers');
 const sight = require('../../loom-canon/sight');
+const mapPaths = require('../../loom-canon/map-paths');
 const { settingsOf } = require('./settings');
 
 const COVER_NAMES = { partial: 'Partial cover', heavy: 'Heavy cover' };
@@ -40,18 +45,17 @@ const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const RANK = { null: 0, partial: 1, heavy: 2 };
 const more = (a, b) => (RANK[b] > RANK[a] ? b : a);
 
+// A person's square: a fighter's `cell`, or a square given as it is.
+const cellOf = (v) => (v && v.cell ? v.cell : v);
+
 /**
  * How far an attack reaches from `from` to `to` (PS1): 'reach' (melee, in
  * reach), 'normal' or 'long' (ranged), or null (out of reach or range).
- * Sight is the caller's.
+ * Each a fighter ({ cell, point?, width? }) or a square (its centre), in
+ * feet (L-922). Sight is the caller's.
  */
 function bandOf(attack, from, to) {
-  const away = distance(from, to);
-  if (attack.range) {
-    if (away <= attack.range.normal) return 'normal';
-    return away <= attack.range.long ? 'long' : null;
-  }
-  return away <= (attack.reach || 1) ? 'reach' : null;
+  return mapPaths.bandOf(attack, from, to);
 }
 
 /**
@@ -156,16 +160,18 @@ function defendOf(system, sheet, attack) {
 
 /**
  * What position adds to an attack from `from` at `to` (PS1–PS3, TN5):
- * `{ band, cover, flanked, bonus: [term], guard: [term] }`. `friends` are the
- * squares of the attacker's friends standing; `dodging` whether the target
+ * `{ band, cover, flanked, bonus: [term], guard: [term] }`, each a fighter
+ * or a square. `friends` are the squares of the attacker's friends standing; `dodging` whether the target
  * took the Dodge action. Reach, range and sight are checked by the caller
  * (band null: out of reach or range).
  */
 function termsFor(system, { map, doors, attack, from, to, friends = [], dodging = false }) {
   const s = settingsOf(system);
   const band = bandOf(attack, from, to);
-  const cover = coverOf(map, doors, from, to);
-  const flank = !attack.range && s.flanking !== null && flanked(from, to, friends);
+  // Cover and flanking by their squares.
+  const cover = coverOf(map, doors, cellOf(from), cellOf(to));
+  const flank =
+    !attack.range && s.flanking !== null && flanked(cellOf(from), cellOf(to), friends.map(cellOf));
   const bonus = [];
   const guard = [];
   if (band === 'long' && s.longRange !== null)

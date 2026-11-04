@@ -306,16 +306,29 @@ describe('areas on a grid, in line of effect', () => {
       Array.from({ length: open.width }, (_, x) => (squares[`${x},${y}`] ? '#' : '.')).join('')
     );
 
-  test('a burst: every square within its radius, as movement counts squares', () => {
+  test('a burst: every square whose centre is within its radius, a true circle (L-922)', () => {
+    // 5 ft: the squares beside, not the diagonals (7.1 ft away).
     expect(picture(areas.squaresOf(open, { shape: 'burst', x: 4, y: 4, radius: 1 }))).toEqual([
       '.........',
       '.........',
       '.........',
+      '....#....',
       '...###...',
-      '...###...',
-      '...###...',
+      '....#....',
       '.........',
       '.........',
+      '.........',
+    ]);
+    // 15 ft: a circle, not a square of squares.
+    expect(picture(areas.squaresOf(open, { shape: 'burst', x: 4, y: 4, radius: 3 }))).toEqual([
+      '.........',
+      '....#....',
+      '..#####..',
+      '..#####..',
+      '.#######.',
+      '..#####..',
+      '..#####..',
+      '....#....',
       '.........',
     ]);
   });
@@ -326,7 +339,7 @@ describe('areas on a grid, in line of effect', () => {
     ).toEqual([
       '.........',
       '.........',
-      '..#####..',
+      '....#....',
       '...###...',
       '.........',
       '.........',
@@ -336,7 +349,7 @@ describe('areas on a grid, in line of effect', () => {
     ]);
   });
 
-  test('a line: a strip out from beside its origin, diagonals counted as one square', () => {
+  test('a line: a strip out from beside its origin, its length true on a diagonal', () => {
     expect(
       picture(
         areas.squaresOf(open, { shape: 'line', x: 0, y: 4, length: 3, facing: 'east', width: 1 })
@@ -359,7 +372,8 @@ describe('areas on a grid, in line of effect', () => {
       length: 3,
       facing: 'southeast',
     });
-    expect(Object.keys(diagonal).sort()).toEqual(['1,1', '2,2', '3,3']);
+    // 15 ft along a diagonal: two squares (each 7.1 ft on), not three.
+    expect(Object.keys(diagonal).sort()).toEqual(['1,1', '2,2']);
   });
 
   test('a square (or a cube): its origin the top-left', () => {
@@ -400,8 +414,8 @@ describe('areas on a grid, in line of effect', () => {
     const aura = { shape: 'aura', radius: 1 };
     const here = areas.squaresOf(open, aura, { at: { x: 1, y: 1 } });
     const there = areas.squaresOf(open, aura, { at: { x: 6, y: 6 } });
-    expect(here['0,0'] && !here['6,6']).toBe(true);
-    expect(there['6,6'] && there['7,7'] && !there['1,1']).toBe(true);
+    expect(here['0,1'] && !here['6,6']).toBe(true);
+    expect(there['6,6'] && there['7,6'] && !there['1,1']).toBe(true);
     const people = [
       { id: 'source', cell: { x: 6, y: 6 } },
       { id: 'near', cell: { x: 7, y: 6 } },
@@ -411,6 +425,34 @@ describe('areas on a grid, in line of effect', () => {
     expect(
       areas.caught(there, people, { sourceId: 'source', includeSource: true }).map((p) => p.id)
     ).toEqual(['source', 'near']);
+  });
+
+  test('a burst catches people by distance from where they stand, not by square (L-922)', () => {
+    // A burst of 1 (5 ft) at (4, 4): its centre (22.5, 22.5) ft.
+    const burst = { shape: 'burst', x: 4, y: 4, radius: 1 };
+    const people = [
+      { id: 'beside', cell: { x: 5, y: 4 } }, // 5 ft: caught
+      { id: 'diagonal', cell: { x: 5, y: 5 } }, // 7.1 ft at its centre: not
+      // In the same diagonal square, at a point 4.2 ft from the centre: caught.
+      { id: 'leaning', cell: { x: 5, y: 5 }, point: { x: 25.5, y: 25.5 } },
+      // In a square beside it, but at its far edge, 7.4 ft out: not.
+      { id: 'edge', cell: { x: 5, y: 4 }, point: { x: 29.9, y: 22.5 } },
+      { id: 'far', cell: { x: 0, y: 0 } },
+    ];
+    expect(areas.catches(open, burst, people).map((p) => p.id)).toEqual(['beside', 'leaning']);
+    // Out of line of effect: behind a wall, at any distance.
+    const walled = {
+      ...open,
+      walls: [
+        {
+          points: [
+            { x: 5, y: 0 },
+            { x: 5, y: 9 },
+          ],
+        },
+      ],
+    };
+    expect(areas.catches(walled, burst, people).map((p) => p.id)).toEqual([]);
   });
 
   test('a bad area is refused, each problem named', () => {

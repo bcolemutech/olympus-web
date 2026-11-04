@@ -30,6 +30,7 @@ const maps = require('../../loom-canon/maps');
 const sight = require('../../loom-canon/sight');
 const checks = require('../../loom-canon/checks');
 const sheets = require('../../loom-canon/sheets');
+const mapPaths = require('../../loom-canon/map-paths');
 const fight = require('./fight');
 const others = require('./others');
 const down = require('./down');
@@ -87,6 +88,25 @@ function sheetFor(world, save, character) {
   if (f && f.sheet) return f.sheet;
   if (character.sheet) return character.sheet;
   return sheets.defaultSheet(checks.systemOf(world));
+}
+
+/**
+ * Where someone stands for distances (L-922): { cell, point, width }, their
+ * point in feet (or their square's centre) and their width by their size.
+ */
+function spotOf(world, save, character) {
+  return {
+    cell: character.cell,
+    ...(character.point ? { point: character.point } : {}),
+    width: mapPaths.widthOf((sheetFor(world, save, character) || {}).size),
+  };
+}
+
+/** Where the player stands for distances (L-922): their point and width. */
+function playerSpot(world, save) {
+  const { cell, point } = maps.positionOf(world || {}, save);
+  if (!cell) return null;
+  return { cell, point, width: mapPaths.widthOf((sheets.sheetOf(save) || {}).size) };
 }
 
 // The characters standing on the map the save is on, and not down in it.
@@ -564,6 +584,8 @@ module.exports = {
   figureOf,
   downOf,
   sheetFor,
+  spotOf,
+  playerSpot,
   standingHere,
   ending,
   SIDES,

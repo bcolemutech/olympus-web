@@ -128,6 +128,26 @@ describe.each(Object.keys(CASES))('position under %s', (id) => {
     });
   });
 
+  describe('in feet (L-922; maps-from-data.md DS1)', () => {
+    test('edge to edge: a diagonal beside is in reach; where they stand and how wide counts', () => {
+      const sword = { reach: 1 };
+      const pike = { reach: 2 };
+      // Beside on a diagonal: 7.1 ft between centres, 4.6 ft apart.
+      expect(position.bandOf(sword, { x: 2, y: 5 }, { x: 3, y: 6 })).toBe('reach');
+      // Two out on a diagonal: 11.6 ft apart, past a reach of 2 (10 ft).
+      expect(position.bandOf(pike, { x: 2, y: 5 }, { x: 4, y: 7 })).toBeNull();
+      // Two squares out, both leaning in: 6 ft between them, in reach.
+      const me = { cell: { x: 2, y: 5 }, point: { x: 14.5, y: 27.5 } };
+      const them = { cell: { x: 4, y: 5 }, point: { x: 20.5, y: 27.5 } };
+      expect(position.bandOf(sword, me, { x: 4, y: 5 })).toBeNull();
+      expect(position.bandOf(sword, me, them)).toBe('reach');
+      // A huge foe (10 ft wide) two squares out is within a sword's reach.
+      expect(position.bandOf(sword, { x: 2, y: 5 }, { cell: { x: 4, y: 5 }, width: 10 })).toBe(
+        'reach'
+      );
+    });
+  });
+
   describe('cover (PS2)', () => {
     test('through a low obstacle partial, a solid one heavy; open ground none', () => {
       const from = { x: 1, y: 5 };
@@ -331,6 +351,38 @@ describe.each(Object.keys(CASES))('position under %s', (id) => {
         dice: faces(c.high),
         rolled: (check, against) => ({ ...check, against }),
       });
+
+    test('a burst thrown at a foe catches those within it by distance (L-922)', () => {
+      const attacksModule = require('../functions/loom-modules/combat/attacks');
+      const flask = {
+        ...attacksModule.attackOf(system, null, c.ranged, { player: true }),
+        id: 'flask',
+        name: 'Flask',
+        area: { shape: 'burst', radius: 1 },
+      };
+      const foe = (x, y) => ({
+        locationId: 'ruin',
+        side: 'hostile',
+        cell: { x, y },
+        sheet: sheetWith(c.defender),
+      });
+      const world = worldOf(room(), { cell: { x: 6, y: 5 } });
+      // Wim beside Grell (5 ft from the burst's centre): caught. Nim on the
+      // diagonal (7.1 ft): not, though a square of squares would take him.
+      world.characters.wim = { id: 'wim', name: 'Wim', ...foe(7, 5) };
+      world.characters.nim = { id: 'nim', name: 'Nim', ...foe(7, 6) };
+      const thrower = {
+        ...save,
+        character: { name: 'Tam', sheet: { ...sheetWith(), attacks: [flask] } },
+      };
+      const shot = attackTurn.attackTurn(figures.withFigures(world, thrower), thrower, {
+        targetId: 'grell',
+        params: { attack: 'flask' },
+        dice: faces(c.high),
+        rolled: (check, against) => ({ ...check, against }),
+      });
+      expect(shot.attack.targets.map((t) => t.id)).toEqual(['grell', 'wim']);
+    });
 
     test('no line of sight: refused, nothing spent', () => {
       const walled = room({

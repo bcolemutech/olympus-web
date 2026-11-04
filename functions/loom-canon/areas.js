@@ -2,14 +2,15 @@
 
 /**
  * Areas on battle maps (planning/game-systems.md §3 EF2, EF7, §4.10; L-815 /
- * #642): the squares a burst, cone, line, square or aura covers. A square is
- * in when its centre is inside the shape, measured in squares from the
- * centre of the origin's as movement counts them (a diagonal step is one
- * square, grid-paths.js), so a burst is a square of squares; and it is in
- * line of effect from the origin: the
+ * #642): what a burst, cone, line, square or aura covers. Its sizes are in
+ * squares of 5 ft, and it is a true shape in feet (L-922, maps-from-data.md
+ * DS1): a burst a circle round the origin's centre, a cone a quarter circle
+ * out from it, a line a strip of its length. A square is in when its centre
+ * is inside the shape; a person is caught when the point they stand at is
+ * (catches); and either must be in line of effect from the origin: the
  * sight rules (./sight.js), so walls, closed doors and solid obstacles block
- * it. Pure geometry: who is caught is the caller's (everyone in the squares,
- * friend or foe; the source left out unless it says otherwise).
+ * it. Who is caught is everyone so placed, friend or foe; the source left
+ * out unless it says otherwise.
  *
  *   Area
  *     shape   'burst' { radius }            a circle around the origin
@@ -28,6 +29,7 @@
  */
 
 const sight = require('./sight');
+const mapPaths = require('./map-paths');
 
 const SHAPES = ['burst', 'cone', 'line', 'square', 'aura'];
 const MAX_REACH = 30; // squares
@@ -82,27 +84,40 @@ function validateArea(map, area) {
   return errors;
 }
 
-// Whether a square's centre, (dx, dy) squares from the origin's, is inside.
+const FEET = mapPaths.FEET;
+
+// Whether a point (dx, dy) ft from the centre of the origin's square is
+// inside the shape (L-922: true shapes, sizes in squares of 5 ft).
 function inside(area, dx, dy) {
-  const dist = Math.max(Math.abs(dx), Math.abs(dy)); // in squares, as movement counts them
+  const dist = Math.hypot(dx, dy);
   switch (area.shape) {
     case 'burst':
     case 'aura':
-      return dist <= area.radius + EDGE;
-    case 'square':
-      return dx >= 0 && dy >= 0 && dx < area.size && dy < area.size;
+      return dist <= area.radius * FEET + EDGE;
+    case 'square': {
+      // Its squares: the origin's the top-left one.
+      const h = FEET / 2;
+      return (
+        dx >= -h - EDGE && dy >= -h - EDGE && dx < area.size * FEET - h && dy < area.size * FEET - h
+      );
+    }
     case 'cone': {
-      if (dist === 0 || dist > area.length + EDGE) return false;
+      if (dist <= EDGE || dist > area.length * FEET + EDGE) return false;
       const [fx, fy] = FACINGS[area.facing];
-      const cos = (dx * fx + dy * fy) / (Math.hypot(dx, dy) * Math.hypot(fx, fy));
+      const cos = (dx * fx + dy * fy) / (dist * Math.hypot(fx, fy));
       return cos >= CONE_COS - EDGE;
     }
     case 'line': {
       const [fx, fy] = FACINGS[area.facing];
-      // Along it in steps (a diagonal step is one square), across it in squares.
-      const along = (dx * fx + dy * fy) / (fx * fx + fy * fy);
-      const across = Math.abs(dx * fy - dy * fx) / Math.hypot(fx, fy);
-      return along > EDGE && along <= area.length + EDGE && across <= (area.width || 1) / 2 + EDGE;
+      const n = Math.hypot(fx, fy);
+      // Along it and across it, in feet.
+      const along = (dx * fx + dy * fy) / n;
+      const across = Math.abs(dx * fy - dy * fx) / n;
+      return (
+        along > EDGE &&
+        along <= area.length * FEET + EDGE &&
+        across <= ((area.width || 1) * FEET) / 2 + EDGE
+      );
     }
     default:
       return false;
@@ -119,7 +134,7 @@ function squaresOf(map, area, { states = {}, at = null } = {}) {
   const out = {};
   if (!origin || !Number.isInteger(origin.x) || !Number.isInteger(origin.y)) return out;
   const seen = sight.inSight(map, origin, states);
-  const reach = Math.ceil(area.radius || area.length || area.size || 1) + 1;
+  const reach = Math.ceil(area.radius || area.length || area.size || 1) + 2;
   for (
     let y = Math.max(0, origin.y - reach);
     y <= Math.min(map.height - 1, origin.y + reach);
@@ -131,15 +146,40 @@ function squaresOf(map, area, { states = {}, at = null } = {}) {
       x++
     ) {
       const key = x + ',' + y;
-      if (seen[key] && inside(area, x - origin.x, y - origin.y)) out[key] = true;
+      if (seen[key] && inside(area, (x - origin.x) * FEET, (y - origin.y) * FEET)) out[key] = true;
     }
   }
   return out;
 }
 
 /**
- * Who an area catches (EF7): of `people` ({ id, cell }), those standing in
- * its squares, the source (`sourceId`) left out unless `includeSource`.
+ * Who an area catches (EF7; L-922: by distance): of `people` ({ id, cell,
+ * point? }), those whose point (or their square's centre) is inside its true
+ * shape, in line of effect from its origin; the source (`sourceId`) left
+ * out unless `includeSource`. `states` and `at` as squaresOf's.
+ */
+function catches(
+  map,
+  area,
+  people,
+  { states = {}, at = null, sourceId = null, includeSource = false } = {}
+) {
+  const origin = area.shape === 'aura' ? at : { x: area.x, y: area.y };
+  if (!origin || !Number.isInteger(origin.x) || !Number.isInteger(origin.y)) return [];
+  const seen = sight.inSight(map, origin, states);
+  const centre = mapPaths.centreOf(origin);
+  return (people || []).filter((p) => {
+    if (!p.cell || (!includeSource && sourceId && p.id === sourceId)) return false;
+    if (!seen[p.cell.x + ',' + p.cell.y]) return false;
+    const spot = mapPaths.spotOf(p);
+    return Boolean(spot) && inside(area, spot.point.x - centre.x, spot.point.y - centre.y);
+  });
+}
+
+/**
+ * Who an area's squares hold (EF7): of `people` ({ id, cell }), those on
+ * them, the source (`sourceId`) left out unless `includeSource`. For an area
+ * already worked out as squares; `catches` measures where people stand.
  */
 function caught(squares, people, { sourceId = null, includeSource = false } = {}) {
   return (people || []).filter(
@@ -150,4 +190,4 @@ function caught(squares, people, { sourceId = null, includeSource = false } = {}
   );
 }
 
-module.exports = { SHAPES, FACINGS, MAX_REACH, validateArea, squaresOf, caught };
+module.exports = { SHAPES, FACINGS, MAX_REACH, validateArea, squaresOf, catches, caught };

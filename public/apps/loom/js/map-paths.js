@@ -43,6 +43,10 @@
   //   walk(plan, path, ap, opts)  how far a move gets: stations walked, AP
   //                               spent, a door opened
   //   reachable(plan, from, ap)   the squares whose centres a move reaches
+  //   costsFrom(plan, from)       the cheapest way to each square, for choosing
+  //   spotOf, feetBetween, gapBetween, bandOf   distances in feet (DS1):
+  //                               between people, edge to edge, and how far
+  //                               an attack reaches
   //
   // This file is kept in two places with the same bytes, functions/loom-canon/
   // map-paths.js and public/apps/loom/js/map-paths.js (the page loads it as
@@ -1129,75 +1133,179 @@
     return out;
   }
 
-  /**
-   * The squares whose centres (or the spot nearest it the character fits)
-   * a move from `from` reaches with `ap` to spend, through no closed door:
-   * [{ x, y, ap }].
-   */
-  function reachable(plan, from, ap) {
-    if (!(plan.prices.move < Infinity)) return [];
+  // The cheapest weight from `from` to every point of the fine grid (and the
+  // gaps) within `limit`, through no closed door, at any angle (Theta*, as
+  // pathTo): { id: weight }, and the points by id.
+  function weightsFrom(plan, from, limit) {
+    var best = {};
+    var where = {};
+    if (!(plan.prices.move < Infinity)) return { best: best, where: where };
     var start = pt(from);
     plan.allow = [squareOf(start)];
     var rs = startRadius(plan, start);
-    var out = [];
     if (rs < 0) {
       plan.allow = [];
-      return out;
+      return { best: best, where: where };
     }
-    var limit = ap + 1 - ROUND; // a weight rounding up to `ap` or less
-    var best = {};
+    var prev = {};
     var done = {};
     var open = heap();
     best.start = 0;
+    where.start = start;
     open.push(0, { id: 'start', p: start });
     var guard = 0;
     while (open.size() && guard++ < 400000) {
       var cur = open.pop();
       if (done[cur.id]) continue;
       done[cur.id] = true;
-      var g = best[cur.id];
       var nexts =
         cur.id === 'start'
           ? plan.around(start, NEAR).filter(function (n) {
               return plan.clear(start, n, rs);
             })
-          : plan.neighbours(cur.n);
+          : plan.neighbours(cur.n).filter(function (n) {
+              return plan.link(cur.n, n);
+            });
+      var parent = prev[cur.id];
       for (var k = 0; k < nexts.length; k++) {
         var n = nexts[k];
         if (done[n.id]) continue;
-        if (cur.id !== 'start' && !plan.link(cur.n, n)) continue;
-        if (plan.doorsOn(cur.p, n).length) continue;
-        var total = g + plan.weight(cur.p, n);
+        var total = Infinity;
+        var from2 = cur.id;
+        if (parent !== undefined) {
+          var pp = where[parent];
+          var clearFrom = parent === 'start' ? plan.clear(pp, n, rs) : plan.clear(pp, n);
+          if (clearFrom && !plan.doorsOn(pp, n).length) {
+            total = best[parent] + plan.weight(pp, n);
+            from2 = parent;
+          }
+        }
+        if (!plan.doorsOn(cur.p, n).length) {
+          var step = best[cur.id] + plan.weight(cur.p, n);
+          if (step < total - EPS) {
+            total = step;
+            from2 = cur.id;
+          }
+        }
         if (!(total < limit)) continue;
         if (best[n.id] === undefined || total < best[n.id] - EPS) {
           best[n.id] = total;
-          open.push(total, { id: n.id, p: pt(n), n: n });
+          prev[n.id] = from2;
+          where[n.id] = pt(n);
+          open.push(total, { id: n.id, p: where[n.id], n: n });
         }
       }
     }
-    // A square is reached when its spot is: the centre, or the point
-    // nearest it on the fine grid.
+    plan.allow = [];
+    return { best: best, where: where };
+  }
+
+  // A square's spot as a fine-grid point's id (spotIn), or null.
+  function spotId(plan, cell) {
+    var spot = spotIn(plan, cell);
+    if (!spot) return null;
+    return { spot: spot, id: Math.round(spot.x / STEP) + ',' + Math.round(spot.y / STEP) };
+  }
+
+  /**
+   * The cheapest way from `from` to each square's spot, for choosing where to
+   * go (a foe closing in, L-836): a function of a square giving { spot,
+   * weight }, or null where it isn't reached (within `limit`, a weight).
+   */
+  function costsFrom(plan, from, limit) {
+    var found = weightsFrom(plan, from, limit === undefined ? Infinity : limit);
+    return function (cell) {
+      var s = spotId(plan, cell);
+      if (!s) return null;
+      var w = found.best[s.id];
+      if (w === undefined) {
+        // Where it stands now.
+        var here = squareOf(from);
+        if (here.x === cell.x && here.y === cell.y) return { spot: pt(from), weight: 0 };
+        return null;
+      }
+      return { spot: s.spot, weight: w };
+    };
+  }
+
+  /**
+   * The squares whose centres (or the spot nearest it the character fits)
+   * a move from `from` reaches with `ap` to spend, through no closed door:
+   * [{ x, y, ap }].
+   */
+  function reachable(plan, from, ap) {
+    var found = weightsFrom(plan, from, ap + 1 - ROUND); // a weight rounding up to `ap`
     var seen = {};
-    Object.keys(best).forEach(function (id) {
+    Object.keys(found.best).forEach(function (id) {
       if (id === 'start' || id.charAt(0) === 'g') return;
       var parts = id.split(',');
       var n = plan.node(+parts[0], +parts[1]);
       if (!n) return;
       var sq = squareOf(n);
       var key = sq.x + ',' + sq.y;
-      var spot = spotIn(plan, sq);
-      if (!spot || Math.abs(spot.x - n.x) > EPS || Math.abs(spot.y - n.y) > EPS) return;
-      var cost = apFor(best[id]);
+      var s = spotId(plan, sq);
+      if (!s || s.id !== id) return;
+      var cost = apFor(found.best[id]);
       if (cost > ap) return;
       if (!seen[key] || cost < seen[key].ap) seen[key] = { x: sq.x, y: sq.y, ap: cost };
     });
-    plan.allow = [];
-    Object.keys(seen).forEach(function (key) {
-      out.push(seen[key]);
+    var out = Object.keys(seen).map(function (key) {
+      return seen[key];
     });
     return out.sort(function (a, b) {
       return a.y - b.y || a.x - b.x;
     });
+  }
+
+  // ── Distances (DS1) ─────────────────────────────────────────────────
+
+  /**
+   * Where someone stands, as a spot: { point (in feet), width }. From a
+   * spot, someone with a `cell` (and a `point` in it, L-922) and a `width`,
+   * or a bare square ({ x, y }), read as its centre. Medium's width when
+   * none is known.
+   */
+  function spotOf(v, width) {
+    if (!v) return null;
+    var w = v.width > 0 ? v.width : width > 0 ? width : widthOf(DEFAULT_SIZE);
+    var p = v.point;
+    var cell = v.cell || (v.point ? null : v);
+    if (p && isFinite(p.x) && isFinite(p.y)) {
+      var sq = squareOf(p);
+      if (!cell || (sq.x === cell.x && sq.y === cell.y)) return { point: pt(p), width: w };
+    }
+    if (!cell || !isFinite(cell.x) || !isFinite(cell.y)) return null;
+    return { point: centreOf(cell), width: w };
+  }
+
+  /** How far apart two people stand, centre to centre, in feet. */
+  function feetBetween(a, b) {
+    var p = spotOf(a);
+    var q = spotOf(b);
+    return p && q ? dist(p.point, q.point) : Infinity;
+  }
+
+  /** The gap between two people, edge to edge, in feet (0 when they touch). */
+  function gapBetween(a, b) {
+    var p = spotOf(a);
+    var q = spotOf(b);
+    if (!p || !q) return Infinity;
+    return Math.max(0, dist(p.point, q.point) - (p.width + q.width) / 2);
+  }
+
+  /**
+   * How far an attack reaches from one person to another (PS1, DS1): 'reach'
+   * (melee, within its reach), 'normal' or 'long' (ranged), or null. Reach
+   * and ranges are in squares of 5 ft, measured in feet, edge to edge: a
+   * reach of 1 touches anyone beside, a diagonal too. Sight is the caller's.
+   */
+  function bandOf(attack, from, to) {
+    var gap = gapBetween(from, to);
+    if (attack.range) {
+      if (gap <= attack.range.normal * FEET + 1e-6) return 'normal';
+      return gap <= attack.range.long * FEET + 1e-6 ? 'long' : null;
+    }
+    return gap <= (attack.reach || 1) * FEET + 1e-6 ? 'reach' : null;
   }
 
   var api = {
@@ -1221,6 +1329,11 @@
     cutBefore: cutBefore,
     squaresOf: squaresOf,
     reachable: reachable,
+    costsFrom: costsFrom,
+    spotOf: spotOf,
+    feetBetween: feetBetween,
+    gapBetween: gapBetween,
+    bandOf: bandOf,
   };
 
   if (typeof window !== 'undefined') {

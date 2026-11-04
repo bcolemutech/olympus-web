@@ -35,10 +35,10 @@ const { settingsOf } = require('./settings');
 const { attacksOf } = require('./attacks');
 const { strike, spendAmmo } = require('./strike');
 const position = require('./position');
+const mapPaths = require('../../loom-canon/map-paths');
 
 const PLAYER = 'player';
 const copyOf = (v) => JSON.parse(JSON.stringify(v));
-const { distance } = position;
 
 /** Whether two sides are against each other: the hostile against everyone else. */
 function opposed(a, b) {
@@ -117,14 +117,18 @@ function defendingOf(system, f, id, sheet, attack) {
 }
 
 /**
- * Reactions to someone walking `path` (squares, in order) from `from`, in
- * fight `f`. `mover` { id, side, name, sheet, you? }; `fighters` everyone
- * else standing on the map in the fight, [{ id, side, name, cell, sheet }];
+ * Reactions to someone walking `path` from `from`, in fight `f`: squares in
+ * order, or the stations of a walk in feet ({ x, y, square }, L-922), `from`
+ * a square or where they stand ({ cell, point }). Reach is measured in feet,
+ * edge to edge (position.bandOf): leaving it is the first step that takes
+ * them out of it. `mover` { id, side, name, sheet, you? }; `fighters` everyone
+ * else standing on the map in the fight, [{ id, side, name, cell, point?,
+ * width?, sheet }];
  * `withdrawn` the mover took the Withdraw action. `map`, `doors` for sight
  * and cover; `now` the time, for effects.
  *
  * Returns `{ fight, sheet (the mover's), down (null, 'dead' or 'out'),
- * reached (how many squares of the path they walked), lines, struck:
+ * reached (how many steps of the path they walked), lines, struck:
  * [{ by, attack, hit, damage? }], sheets: { [id]: sheet } (the reactors'
  * sheets that changed: ammunition) }`.
  */
@@ -141,6 +145,15 @@ function reactToWalk(
   const mine = f.combatants[mover.id] || {};
   const name = mover.you ? 'You' : mover.name;
   const watchers = fighters.filter((w) => w.id !== mover.id && opposed(w.side, mover.side));
+  // Where the mover is at each step: a station's point, a fighter's spot, or
+  // a square's centre; with their width (L-922).
+  const width = mapPaths.widthOf((mover.sheet || {}).size);
+  const spotAt = (p) =>
+    p && p.square
+      ? { cell: p.square, point: { x: p.x, y: p.y }, width }
+      : p && p.cell
+        ? { ...p, width: p.width || width }
+        : { cell: p, width };
 
   // One reactor's attack at the mover standing on `at`, paid from what
   // they kept (`cost`; a readied attack's 0, paid when readied).
@@ -159,7 +172,7 @@ function reactToWalk(
       map,
       doors,
       attack,
-      from: w.cell,
+      from: w,
       to: at,
       friends,
       dodging: Boolean(mine.dodging),
@@ -198,10 +211,10 @@ function reactToWalk(
     return true;
   };
 
-  let prev = from;
+  let prev = spotAt(from);
   let reached = 0;
   for (let k = 0; k < path.length && !down; k++) {
-    const cur = path[k];
+    const cur = spotAt(path[k]);
     // Leaving someone's reach (PS4): struck where they stand, before the step.
     if (!withdrawn) {
       for (const w of watchers) {
@@ -210,8 +223,8 @@ function reactToWalk(
         if (!attack) continue;
         const cost = reactionCost(system, w.sheet, 'attack', attack);
         if (!canReact(system, f, w, cost)) continue;
-        const reach = attack.reach || 1;
-        if (distance(prev, w.cell) > reach || distance(cur, w.cell) <= reach) continue;
+        // In their reach before the step, out of it after (in feet, L-922).
+        if (!position.bandOf(attack, w, prev) || position.bandOf(attack, w, cur)) continue;
         const whose = w.id === PLAYER ? 'your' : w.name + "'s";
         fire(w, attack, prev, `${name} ${mover.you ? 'leave' : 'leaves'} ${whose} reach.`, cost);
       }
@@ -228,10 +241,14 @@ function reactToWalk(
           (a) => a.id === c.readied.attack
         ) || null;
       if (!attack) continue;
-      const was = position.bandOf(attack, w.cell, prev);
-      const now2 = position.bandOf(attack, w.cell, cur);
-      const seen = !attack.range || position.sees(map, doors, w.cell, cur);
-      if (!now2 || !seen || (was && (!attack.range || position.sees(map, doors, w.cell, prev)))) {
+      const was = position.bandOf(attack, w, prev);
+      const now2 = position.bandOf(attack, w, cur);
+      const seen = !attack.range || position.sees(map, doors, w.cell, cur.cell);
+      if (
+        !now2 ||
+        !seen ||
+        (was && (!attack.range || position.sees(map, doors, w.cell, prev.cell)))
+      ) {
         continue;
       }
       delete c.readied;

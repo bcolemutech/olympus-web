@@ -41,7 +41,6 @@ const NOBODY = "You don't see anyone like that here.";
 
 const blocked = (line) => ({ outcome: 'blocked', mutations: [], constraints: [line] });
 const setSave = (path, value) => ({ target: 'save', op: 'set-flag', path, value });
-const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 // The eight ways out from a square, by the direction to another.
 function facingTo(from, to) {
@@ -96,12 +95,15 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
   const pick = chosen(system, mine, params.attack);
   if (pick.refused) return blocked(pick.refused);
   const attack = pick.attack;
-  const away = distance(cell, person.cell);
+  // Reach and range in feet, edge to edge (L-922).
+  const me = play.playerSpot(world, save);
+  const them = play.spotOf(world, save, person);
+  const band = position.bandOf(attack, me, them);
   if (attack.range) {
-    if (away > attack.range.long) {
+    if (!band) {
       return blocked(`${person.name} is out of range of your ${attack.name.toLowerCase()}.`);
     }
-  } else if (away > (attack.reach || 1)) {
+  } else if (!band) {
     return blocked(
       `${person.name} is out of reach of your ${attack.name.toLowerCase()}: get closer.`
     );
@@ -118,8 +120,8 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
       attack.area.shape === 'cone' || attack.area.shape === 'line'
         ? { ...attack.area, x: cell.x, y: cell.y, facing: facingTo(cell, person.cell) }
         : { ...attack.area, x: person.cell.x, y: person.cell.y };
-    const squares = areas.squaresOf(map, placed, { states: doors });
-    targets = areas.caught(squares, standing);
+    // Caught by where they stand (L-922).
+    targets = areas.catches(map, placed, standing, { states: doors });
     if (!targets.some((t) => t.id === person.id)) targets.unshift(person);
   }
 
@@ -169,8 +171,8 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
     map,
     doors,
     attack,
-    from: cell,
-    to: person.cell,
+    from: me,
+    to: them,
     friends,
     dodging: Boolean(f && f.combatants[person.id] && f.combatants[person.id].dodging),
   });
