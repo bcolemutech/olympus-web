@@ -113,7 +113,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
     - **Areas are true shapes in feet** (`areas.js`): a burst or aura a circle, a cone 90° wide, a line 5 ft wide; a person is caught by where they stand (`areas.catches`), not by which squares the shape covers.
     - **Opportunity attacks** are checked at each station of a walk (every 1.25 ft), so leaving reach is noticed where it happens; a walk struck down stops at that station.
     - **Figures stand at points too:** `save.figures[id].point` beside `cell`, by the same rule as the save's. Foes and named characters plan on the same planner as the player (closed doors count as locked to them: they don't open doors), choose where to go by its costs, and their turns record their squares (`path`) and points (`points`) for the page to play out.
-    - **Still by squares, for now:** line of effect, cover and flanking (L-923 moves sight to the geometry), and an area's anchor square. A distance said to the GM or in a named turn's choices is in feet ("30 ft away", "move 15 ft and strike").
+    - **Still by squares, for now:** line of effect and flanking, and an area's anchor square (cover moved to the geometry with L-923). A distance said to the GM or in a named turn's choices is in feet ("30 ft away", "move 15 ft and strike").
     - **`cell: "auto"`, the builders' reach checks and "an entry reaches an exit"** use `map-paths.js` `squaresReached` (a medium character, doors open unless locked), and place nearest in feet. `grid-paths.js` and `layers.js`' step rules (`canStep`, `pathOptions`, `reachable`) are gone; `layers.js` keeps what lies between squares, the ground and the checks.
     - **A turn's `moved`** is the feet walked, and End turn says "You moved 35 ft."
     - **A converted map plays the same:** a battle map whose layers are also stored as geometry (as L-928 will do) plays a scripted fight line for line as it did with layers alone.
@@ -131,6 +131,18 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 - **Line of sight** against the real lines and shapes; doors and windows by their state and flags; heights decide sight over low walls and from ledges.
 - **Fog** stays soft (L-724), now shaped by the geometry.
 - **High ground** and falls follow heights; the GM is told heights in sight.
+- **Decided before building L-923 (the user, 2026-11-04):**
+  - **Sight by eye level:** a wall or object hides what's beyond it when its top (the floor under it plus its `height`; none, full height) reaches the viewer's eyes: the floor they stand on plus their size's eyes (tiny 1 ft, small 2.5, medium 5, large 10, huge 20, gargantuan 30). Not a true 3D line to each target: faster, and enough for low walls and ledges.
+  - **Ledges:** a rise of more than 2.5 ft can't be walked up (climbing comes later; stairs and ramps are ground with heights in steps); a drop of 10 ft or more can be walked off and is a fall; smaller drops are free.
+  - **Rules as system data:** two combat settings, `highGround` (a formula added to an attack from at least 5 ft above the target) and `falls` (`{ per, damage, max }`), set in both built-ins (d20: +2, 1d6 per 10 ft up to 20d6; pool: +1, 1 per 10 ft up to 5); unset, they do nothing.
+  - **Fog:** what's in sight and seen is worked out on the geometry but kept and sent by the square, as before; L-924 draws the fog to the exact sight lines.
+- **As built (L-923, 2026-11-04):**
+  - **`sight.js` on the geometry** (a map's own, with its layers read as geometry): the region seen from the eyes is cast to every end and crossing of what hides; a square is in sight when more than a line of it falls in that region, so nothing is seen through where two walls meet or along a line grazing a wall's end; a square something that hides stands in is in sight when its face there is seen. On old layered maps it agrees square for square with a plain ray caster on 80 random maps. Looks are kept per map; a fresh look on a 64 × 64 hall of 441 pillars takes about 7 ms in Node. `sight.sees` answers one square; `inSight` returns the kept squares, frozen.
+  - **What hides:** walls (not glass, bars or a fence), doors not open and not see-through (a gate, a glass door), windows not see-through, and objects that hide (the catalog's tall ones, or their own `blocksSight`), each only where its top reaches the eyes. The ground never hides anything. Old solid obstacles read as tall objects (pillars), so they are seen themselves and hide what's behind; low ones stay 3 ft walls that hide nothing.
+  - **Viewers look from where they stand:** the save's point and its sheet's size (`maps.viewerOf`), a figure's point and size.
+  - **Cover from the geometry:** five lines from the attacker's eyes to points across the target's width; four or more stopped by something that hides, heavy; any stopped, or crossing something that stops movement but doesn't hide (a low wall, a table, glass or bars), partial.
+  - **Falls** (`combat/falls.js`): the walk stops where a drop of 10 ft or more lands, ADJUDICATE rolls the system's damage and puts on Prone (at 0, down by the system's down kind), and NARRATE is told the fall. Foes never walk off a drop.
+  - **The GM is told heights** when anyone in sight, or the player, stands off the floor ("Heights: the player stands 10 ft up; Grell is 10 ft below the player.").
 
 ### 4.4 Objects (RD3, OB1)
 
