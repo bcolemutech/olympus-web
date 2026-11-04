@@ -252,7 +252,16 @@ function withFigures(world, save) {
     const s = states[c.id];
     if (!s) return sided(c);
     if (s.gone) return { ...c, retired: true, gone: s.gone };
-    return sided(s.cell ? { ...c, cell: { x: s.cell.x, y: s.cell.y } } : c);
+    // Where they stand: their square, and their point in it in feet (L-922).
+    return sided(
+      s.cell
+        ? {
+            ...c,
+            cell: { x: s.cell.x, y: s.cell.y },
+            ...(s.point ? { point: { x: s.point.x, y: s.point.y } } : {}),
+          }
+        : c
+    );
   };
   for (const [id, c] of Object.entries(world.characters || {})) characters[id] = place(c);
   if (onMap) {

@@ -21,6 +21,12 @@ const combat = require('../functions/loom-modules/combat');
 const tactics = require('../functions/loom-modules/combat/tactics');
 const menu = require('../functions/loom-modules/combat/menu');
 const reactions = require('../functions/loom-modules/combat/reactions');
+const mapPaths = require('../functions/loom-canon/map-paths');
+
+// What a walk costs: its stations' weight at the last, 1 AP per 5 ft rounded
+// up (L-922).
+const apOf = (walk) => (walk.length ? mapPaths.apFor(walk[walk.length - 1].weight) : 0);
+const lastSquare = (walk) => walk[walk.length - 1].square;
 
 const { others } = combat;
 const copyOf = (v) => JSON.parse(JSON.stringify(v));
@@ -30,7 +36,14 @@ const high = (sides) => sides;
 const CASES = {
   'd20-fantasy': {
     system: BUILT_IN['d20-fantasy'],
-    club: { id: 'club', name: 'Club', reach: 1, attack: '1d20 + 4', damage: '1d6', type: 'bludgeoning' },
+    club: {
+      id: 'club',
+      name: 'Club',
+      reach: 1,
+      attack: '1d20 + 4',
+      damage: '1d6',
+      type: 'bludgeoning',
+    },
     sling: {
       id: 'sling',
       name: 'Sling',
@@ -52,7 +65,14 @@ const CASES = {
   },
   'pool-scifi': {
     system: BUILT_IN['pool-scifi'],
-    club: { id: 'club', name: 'Club', reach: 1, attack: 'count(4d10, >= 7)', damage: '1d2', type: 'kinetic' },
+    club: {
+      id: 'club',
+      name: 'Club',
+      reach: 1,
+      attack: 'count(4d10, >= 7)',
+      damage: '1d2',
+      type: 'kinetic',
+    },
     sling: {
       id: 'sling',
       name: 'Sling',
@@ -100,7 +120,14 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
     return sheet;
   };
   const armed = () => ({ ...sheets.defaultSheet(system), attacks: [c.club, c.sling] });
-  const player = () => ({ id: 'player', name: 'you', side: 'party', cell: PLAYER_CELL, sheet: tough(), max: 500 });
+  const player = () => ({
+    id: 'player',
+    name: 'you',
+    side: 'party',
+    cell: PLAYER_CELL,
+    sheet: tough(),
+    max: 500,
+  });
 
   // A fighter's turn as tactics plan it, with their pool and prices as
   // others.js gives them.
@@ -196,7 +223,7 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
           // What it adds up to: its steps, its blows, its readied shot.
           const blows = p.attack ? (1 + p.repeat) * me.attackAp[p.attack.attack.id] : 0;
           const ready = p.ready ? me.attackAp[p.ready.id] : 0;
-          expect(p.path.length + p.back.length + blows + ready).toBe(p.spent);
+          expect(apOf(p.path) + apOf(p.back) + blows + ready).toBe(p.spent);
         }
       }
     }
@@ -207,7 +234,9 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
     expect(beside).toMatchObject({ path: [], repeat: 1, spent: 20 });
     expect(beside.attack).toMatchObject({ attack: { id: 'club' }, target: { id: 'player' } });
     const far = plan(meOf({ cell: { x: 8, y: 3 } }));
-    expect(far.path).toHaveLength(5);
+    // 25 ft to the square beside the player: 5 AP, and one blow.
+    expect(apOf(far.path)).toBe(5);
+    expect(lastSquare(far.path)).toEqual({ x: 3, y: 3 });
     expect(far).toMatchObject({ repeat: 0, spent: 15 });
     // An attack of its own cost: four blows of 5.
     const quick = { ...c.club, ap: 5 };
@@ -225,8 +254,8 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
     expect(p.attack).not.toBeNull();
     expect(p.repeat).toBe(0);
     expect(p.back.length).toBeGreaterThan(0);
-    expect(away(p.back[p.back.length - 1], PLAYER_CELL)).toBeGreaterThan(1);
-    expect(p.spent).toBe(10 + p.back.length);
+    expect(away(lastSquare(p.back), PLAYER_CELL)).toBeGreaterThan(1);
+    expect(p.spent).toBe(10 + apOf(p.back));
   });
 
   test('a guard strikes once and keeps the rest; its kept AP strikes the player leaving its reach', () => {
@@ -247,7 +276,9 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
       mover: { id: 'player', side: 'party', name: 'Tam', you: true, sheet: tough() },
       from: PLAYER_CELL,
       path: [{ x: 1, y: 3 }],
-      fighters: [{ id: 'grell', side: 'hostile', name: 'Grell', cell: { x: 3, y: 3 }, sheet: armed() }],
+      fighters: [
+        { id: 'grell', side: 'hostile', name: 'Grell', cell: { x: 3, y: 3 }, sheet: armed() },
+      ],
       dice: high,
     });
     expect(r.struck).toEqual([expect.objectContaining({ by: 'grell', attack: 'club' })]);
@@ -273,7 +304,9 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
       mover: { id: 'player', side: 'party', name: 'Tam', you: true, sheet: tough() },
       from: { x: 25, y: 3 },
       path: [{ x: 24, y: 3 }],
-      fighters: [{ id: 'grell', side: 'hostile', name: 'Grell', cell: { x: 8, y: 3 }, sheet: armed() }],
+      fighters: [
+        { id: 'grell', side: 'hostile', name: 'Grell', cell: { x: 8, y: 3 }, sheet: armed() },
+      ],
       dice: high,
     });
     expect(r.struck).toEqual([expect.objectContaining({ by: 'grell', attack: 'sling' })]);
@@ -310,10 +343,12 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
   test('fleeing spends AP on its steps: twice as dear, half as far', () => {
     const me = meOf({ fleeing: true, cell: { x: 11, y: 3 } });
     const free = plan(me, { foes: [] });
-    expect(free.path).toHaveLength(11);
+    // 55 ft to the way out: 11 AP.
+    expect(lastSquare(free.path)).toEqual({ x: 0, y: 3 });
     expect(free).toMatchObject({ fled: true, spent: 11 });
     const prone = plan({ ...me, prices: { move: 2, difficult: 4 } }, { foes: [] });
-    expect(prone.path).toHaveLength(10);
+    // 20 AP at 2 a step is 50 ft: a square short.
+    expect(lastSquare(prone.path)).toEqual({ x: 1, y: 3 });
     expect(prone.fled).toBe(false);
     expect(prone.spent).toBe(20);
   });
@@ -338,7 +373,7 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
     const full = menu.choicesFor(input(20)).map((o) => o.text);
     expect(full).toEqual(
       expect.arrayContaining([
-        'move 3 squares and strike the player with your club (13 AP, keeping 7 to react)',
+        'move 15 ft and strike the player with your club (13 AP, keeping 7 to react)',
         'stay where you are and Dodge: harder to hit until your next turn (8 AP, keeping 12 to react)',
         'stay where you are (0 AP, keeping 20 to react)',
       ])
@@ -355,7 +390,11 @@ describe.each(Object.keys(CASES))('foes on AP under %s', (id) => {
     expect(apRules.isOff(off)).toBe(true);
     const sheet = sheets.defaultSheet(off);
     expect(others.apInputOf(off, sheet, [c.club])).toEqual({});
-    const p = plan({ ...meOf({}, sheet), ...{ ap: undefined, attackAp: undefined, prices: undefined }, speed: 6 });
+    const p = plan({
+      ...meOf({}, sheet),
+      ...{ ap: undefined, attackAp: undefined, prices: undefined },
+      speed: 6,
+    });
     expect(p).toMatchObject({ repeat: 0, ready: null, spent: 0 });
     expect(p.attack).not.toBeNull();
   });

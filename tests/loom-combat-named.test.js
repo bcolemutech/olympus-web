@@ -153,7 +153,9 @@ describe.each(Object.keys(CASES))('named turns under %s', (id) => {
     expect(new Set(asked.menu.choices.map((o) => o.id)).size).toBe(texts.length);
     expect(texts).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/^shoot the player with your sling, then ready your sling \(20 AP\)$/),
+        expect.stringMatching(
+          /^shoot the player with your sling, then ready your sling \(20 AP\)$/
+        ),
         expect.stringMatching(/the player/),
         // Each with its cost, keeping the rest to react (L-836).
         'stay where you are and Dodge: harder to hit until your next turn (8 AP, keeping 12 to react)',
@@ -166,7 +168,7 @@ describe.each(Object.keys(CASES))('named turns under %s', (id) => {
       side: 'hostile',
       combatNotes: 'Cowardly at heart: hits from afar, runs if cornered.',
     });
-    expect(asked.menu.situation[0].line).toBe('the player (foe), 7 squares away');
+    expect(asked.menu.situation[0].line).toBe('the player (foe), 35 ft away');
   });
 
   test('a legal choice is played: Dodge, standing their ground', () => {
@@ -301,7 +303,7 @@ describe.each(Object.keys(CASES))('named turns under %s', (id) => {
     expect(prompt).toContain(
       'HOW THEY FIGHT: Cowardly at heart: hits from afar, runs if cornered.'
     );
-    expect(prompt).toContain('- the player (foe), 7 squares away');
+    expect(prompt).toContain('- the player (foe), 35 ft away');
     expect(prompt).toContain('- o1: ');
   });
 });

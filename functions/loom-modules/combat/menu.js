@@ -28,9 +28,21 @@
  */
 
 const tactics = require('./tactics');
+const mapPaths = require('../../loom-canon/map-paths');
 
 const MAX_CHOICES = 24;
-const squares = (n) => (n === 1 ? '1 square' : n + ' squares');
+
+// How far a walk goes, in feet (L-922): from where they stand through its
+// stations.
+function feetOf(me, path) {
+  let at = mapPaths.spotOf(me).point;
+  let total = 0;
+  for (const st of path) {
+    total += Math.hypot(st.x - at.x, st.y - at.y);
+    at = st;
+  }
+  return Math.round(total);
+}
 
 const TIMES = ['', ' twice', ' three times', ' four times'];
 const times = (n) => (n === 1 ? '' : TIMES[n - 1] || ` ${n} times`);
@@ -82,7 +94,7 @@ function choicesFor(input) {
   const keeps = (cost) => (pool - cost > 0 ? `, keeping ${pool - cost} to react` : '');
   const planned = (patch) =>
     tactics.planTurn({ ...input, me: { ...me, fleeing: false, ...patch } });
-  const moved = (plan) => (plan.path.length ? `move ${squares(plan.path.length)} and ` : '');
+  const moved = (plan) => (plan.path.length ? `move ${feetOf(me, plan.path)} ft and ` : '');
 
   if (!me.noAction) {
     for (const foe of foes) {
@@ -100,7 +112,7 @@ function choicesFor(input) {
           const often = times(1 + (plan.repeat || 0));
           add(`${moved(plan)}${attack.range ? 'shoot' : 'strike'} ${who}${often}${using}`, plan);
         } else if (plan.path.length) {
-          add(`close on ${who} (${squares(plan.path.length)}), out of reach this turn`, {
+          add(`close on ${who} (${feetOf(me, plan.path)} ft), out of reach this turn`, {
             ...plan,
             attack: null,
           });
