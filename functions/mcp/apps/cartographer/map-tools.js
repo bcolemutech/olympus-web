@@ -6,6 +6,7 @@ const { ToolError } = require('../../registry');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
+const layerGeometry = require('../../../loom-canon/layer-geometry');
 const mapPaths = require('../../../loom-canon/map-paths');
 const areas = require('../../../loom-canon/areas');
 const mapAreas = require('../../../loom-canon/map-areas');
@@ -365,6 +366,15 @@ function standingWarnings(world, map) {
   });
 }
 
+// A battle map's layers are stored as its geometry too (L-928; EX4): given
+// new layers, what its old ones made is replaced by what the new ones make,
+// its own items kept. The field to write: the geometry, or a delete when
+// nothing is left.
+function geometryField(before, next) {
+  const geometry = layerGeometry.relayered(before || {}, next);
+  return Object.keys(geometry).length ? geometry : FieldValue.delete();
+}
+
 const layerCounts = (map) => ({
   walls: (map.walls || []).length,
   doors: (map.doors || []).length,
@@ -576,9 +586,12 @@ function mapTools({ writer }) {
           const misfit = def.hazards.length
             ? hazards.validate(systemOf(world), def, def.hazards).errors
             : [];
+          // Its layers as geometry too (L-928), its own geometry kept.
+          const geometry = layerGeometry.relayered(before || {}, def);
           const doc = {
             id,
             ...def,
+            ...(Object.keys(geometry).length ? { geometry } : {}),
             image: before ? before.image || null : null,
             generic:
               args.generic === undefined ? (before ? before.generic || null : null) : args.generic,
@@ -642,7 +655,9 @@ function mapTools({ writer }) {
         'area they stand in and which they can see; "go to the back room" walks into it. Keep ' +
         'features for what players use: the lever, the altar. Each list given replaces that list; an ' +
         'empty list clears it; one left out is kept. A place’s own map needs these to count in ' +
-        'full toward its score. Check them against the art with view_image. ' +
+        'full toward its score. Check them against the art with view_image. Walls, doors and ' +
+        'obstacles are kept as the map’s geometry too (walls, doors, pillars, low walls and rough ' +
+        'ground, in feet), which play reads. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -669,6 +684,9 @@ function mapTools({ writer }) {
           const next = { ...map, ...fields };
           checkLayers(next);
           checkAreas(next);
+          if (given.some((l) => layerGeometry.LAYERS.includes(l))) {
+            fields.geometry = geometryField(map, next);
+          }
           e.update(e.ref('battleMaps', map.id), fields);
           const result = {
             map: views.battleMapRow(
@@ -823,5 +841,6 @@ module.exports = {
   checkLayers,
   checkAreas,
   layerWarnings,
+  geometryField,
   shapes: { entry, exit, feature, AREAS, LAYER_SHAPES, label },
 };

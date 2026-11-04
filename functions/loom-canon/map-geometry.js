@@ -1252,12 +1252,13 @@
   /**
    * A battle map's layers from before (layers.js: walls along grid lines,
    * doors one square long, obstacles by the square) read as geometry in
-   * feet (L-922; what L-928 will store for good): its walls as walls; each
-   * door in a short wall of its own, which it replaces, keeping its id,
-   * name, key and own AP; solid obstacles as tall objects over their
-   * squares (pillars, seen themselves and hiding what's behind them, L-923);
-   * low ones as closed walls round their squares, 3 ft high and not
-   * blocking sight; and difficult squares as gravel costing 2.
+   * feet (L-922; stored for good by L-928, ./layer-geometry.js): its walls
+   * as walls; each door in a short wall of its own, which it replaces,
+   * keeping its id, name, key, own AP, long action and lock's difficulty;
+   * solid obstacles as tall objects over their squares (pillars, seen
+   * themselves and hiding what's behind them, L-923); low ones as closed
+   * walls round their squares, 3 ft high and not blocking sight; and
+   * difficult squares as gravel costing 2.
    */
   function fromLayers(map) {
     var F = FEET_PER_SQUARE;
@@ -1293,6 +1294,9 @@
       if (door.name) item.name = door.name;
       if (door.key) item.unlocks = { key: door.key };
       if (num(door.ap)) item.ap = door.ap;
+      // Picking or forcing it (L-833, L-928): kept for the rules that read them.
+      if (isObject(door.long)) item.long = door.long;
+      if (num(door.difficulty)) item.difficulty = door.difficulty;
       out.doors.push(item);
     });
     (map.obstacles || []).forEach(function (o, i) {

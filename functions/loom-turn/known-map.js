@@ -2,6 +2,7 @@
 
 const geo = require('../loom-canon/map-geometry');
 const layers = require('../loom-canon/layers');
+const layerGeometry = require('../loom-canon/layer-geometry');
 
 /**
  * A battle map as far as a save has seen it (planning/the-loom-movement-and-
@@ -172,17 +173,26 @@ function touchesSeen(corners, on) {
 
 // A map's stored geometry cut to what touches a square seen: only what moving
 // and drawing read, hidden things left out, each door in the save's state
-// (`states`). Null when it has none.
+// (`states`). Null when it has none. While the map still has its old layers,
+// what they convert to (L-928; ../loom-canon/layer-geometry.js) is left out
+// too: the layers seen are sent instead, as before.
 function seenGeometry(map, on, states = {}) {
   const stored = map && map.geometry;
   if (!geo.hasGeometry(stored)) return null;
   const hidden = new Set(
     (stored.hidden || []).map((h) => (typeof h === 'string' ? h : h && h.id)).filter(Boolean)
   );
+  const made = layerGeometry.madeBy(map);
   const out = {};
   for (const key of DRAWN) {
     const kept = (stored[key] || [])
-      .filter((item) => item && !hidden.has(item.id) && touchesSeen(cornersOf(key, item), on))
+      .filter(
+        (item) =>
+          item &&
+          !hidden.has(item.id) &&
+          !layerGeometry.isMade(made, key, item) &&
+          touchesSeen(cornersOf(key, item), on)
+      )
       .map((item) =>
         key === 'doors' && states[item.id]
           ? { ...item, state: states[item.id] }

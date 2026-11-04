@@ -183,6 +183,24 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 - **Towns** with ground are drawn from it.
 - **Azgaar worlds** are converted from their saved exports: coasts and biomes into ground, rivers and routes into lines, burgs into places. With L-710's conversion of regions and terrain.
 - **Tracing (AU3):** Claude can trace an image into data, or keep the image and make its walls and doors precise.
+- **Decided before building L-928 (the user, 2026-11-04):**
+  - **Three PRs**, since the code can read only the geometry once the live worlds are converted (a merge deploys at once):
+    - first the conversion: the layers stored as geometry beside them, a dry-run-then-apply workflow whose report carries the replay, and the grid tools writing both. The user runs it on Nisia and The Border March;
+    - then the layers dropped: the code reads only the geometry, the grid tools become shortcuts that write geometry, and the workflow clears the old fields;
+    - then towns drawn from their ground, the Azgaar conversion and the tracing guidance.
+  - **Azgaar exports, uploaded on the page:** imports delete their upload once the world is built, so no export was saved. An Azgaar world on the Cartographer page gets "Convert its map": its full export is uploaded once and converted on the server into its top map's geometry. New imports convert at once. A slimmed copy of Nisia's full export, with its cell outlines and rivers, becomes the test fixture.
+  - **Features stay named spots,** like entries, exits and areas: they aren't layers. L-926 (objects' actions) decides whether they become objects, which as things stand would be drawn as boxes with a question mark over every map's art.
+  - **Art always wins** where a map has both art and data (EX2, at every level): Nisia's world map keeps its Azgaar picture, and its converted data is drawn once its art is removed over MCP. Towns with art keep it.
+- **As built (L-928, first PR, 2026-11-04):**
+  - **The conversion** (`functions/loom-canon/layer-geometry.js` `converted`) stores what play has read since L-922: a map's own geometry, and its layers read as geometry beside it (`fromLayers`, which now also keeps a door's long action and lock difficulty), its own items winning on an id, normalized. Every id is kept: doors keep their own, so a save's door states and wary triggers on them still find them; walls, doorways and obstacles keep the ids `fromLayers` gives them (`layer-wall-0`, `layer-doorway-<door>`, `layer-<obstacle>`). So the stored items shadow the ones read from the layers one for one, and nothing plays differently while both are there. The map a save is sent (`known-map.js`) leaves out the stored items its layers make while it still has layers, so it is the same before and after.
+  - **The Convert Map Layers workflow** (`.github/workflows/convert-map-layers.yml`, `scripts/convert-map-layers.js`, `functions/cartographer/convert-layers.js`), like L-902's: a dry run reports, then apply with confirm "convert". It writes `geometry` on each battle map that has layers and whose stored geometry differs, and moves the world's `canonVersion` on once. Running it again writes nothing. Generic maps, floors reached by exits and templates (whose instances are made from them as the world loads) convert with them. Grid maps in `maps` keep the copies of the layers L-902 made, which nothing reads.
+  - **The replay is in the report:** each map's questions are asked of it as played now and of its geometry alone, with its layers dropped:
+    - the cost of the way, and where it ends, from each entry, exit, feature and figure (up to 16) to every square, for a medium and a large character;
+    - the squares the entries reach, as `cell: "auto"` and the builders' checks ask, and with every door open;
+    - the squares in sight from each of those spots.
+
+    Any answer that differs is listed. It matches on random maps, and catches a conversion that loses a lock or a wall.
+  - **The grid tools write both** (`set_battle_map`, `set_map_layers`, `set_grid`): new layers replace, item for item, what the old ones made in the geometry (`relayered`), keeping the map's own items. `set_battle_map` replacing a map keeps its own geometry, which it used to drop.
 
 ### 4.8 Tools and generators (AU1, AU2)
 
