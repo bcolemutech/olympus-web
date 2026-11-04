@@ -167,7 +167,6 @@
     return g && typeof g.height === 'number' && isFinite(g.height) ? g.height : 0;
   }
 
-
   // ── Small geometry ──────────────────────────────────────────────────
 
   function closest(p, a, b) {
