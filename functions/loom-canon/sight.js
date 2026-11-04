@@ -751,14 +751,17 @@ function outline(map, from, states, options) {
   if (!view) return null;
   const r = view.region;
   const n = r.angles.length;
-  const round = (v) => Math.round(v * 100) / 100;
+  const round = (v) => Math.round(v * 100) / 100 || 0; // never -0
   const out = [];
   for (let i = 0; i < n; i++) {
     const p = (i + n - 1) % n;
     const q = (i + 1) % n;
-    const cross =
-      (r.xs[i] - r.xs[p]) * (r.ys[q] - r.ys[p]) - (r.ys[i] - r.ys[p]) * (r.xs[q] - r.xs[p]);
-    if (abs(cross) < 1e-6) continue; // on a straight run
+    const ax = r.xs[i] - r.xs[p];
+    const ay = r.ys[i] - r.ys[p];
+    const bx = r.xs[q] - r.xs[p];
+    const by = r.ys[q] - r.ys[p];
+    // On a straight run: the turn there is nothing, however close the points.
+    if (abs(ax * by - ay * bx) <= 1e-9 * hyp(ax, ay) * hyp(bx, by)) continue;
     out.push(round(r.xs[i]), round(r.ys[i]));
   }
   return out;
