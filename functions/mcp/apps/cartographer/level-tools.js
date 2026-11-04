@@ -832,6 +832,10 @@ function levelTools({ writer, worldFor }) {
           mapTools.checkLayers(def);
           mapTools.checkAreas(def);
           const fields = Object.fromEntries(given.map((k) => [k, def[k]]));
+          // Its layers as geometry too (L-928).
+          if (given.some((k) => ['walls', 'doors', 'obstacles'].includes(k))) {
+            fields.geometry = mapTools.geometryField(before, { ...before, ...def });
+          }
           fields.revision = (before.revision || 0) + 1;
           e.update(e.ref('battleMaps', args.mapId), fields);
           const warnings = mapTools.layerWarnings({ ...before, ...def });

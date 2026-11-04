@@ -33,7 +33,7 @@ function solidPng(width, height) {
   return PNG.sync.write(img);
 }
 const { initializeApp } = require(require.resolve('firebase-admin/app', { paths: [functionsDir] }));
-const { getFirestore } = require(
+const { getFirestore, FieldValue } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
 );
 
@@ -41,6 +41,7 @@ const { parseAzgaarExport } = require('../functions/cartographer/parse');
 const { mapToCanon } = require('../functions/cartographer/map');
 const { loadDraftWorld } = require('../functions/cartographer/load');
 const loomCanon = require('../functions/loom-canon');
+const layerGeometry = require('../functions/loom-canon/layer-geometry');
 const town = require('../functions/loom-canon/town');
 const { cartographerApp } = require('../functions/mcp/apps/cartographer');
 const { createFirestoreWorldReader } = require('../functions/mcp/apps/cartographer/reader');
@@ -913,6 +914,43 @@ describe('walls, doors and obstacles (L-622)', () => {
     expect(read).toMatchObject({ walls: WALLS, doors: DOORS, obstacles: OBSTACLES });
     const listed = await ok('list_battle_maps', { worldId: W });
     expect(listed.maps.find((m) => m.id === mapId)).toMatchObject({ hasLayers: true });
+  });
+
+  test('the layers are stored as its geometry too (L-928), and kept so as they change', async () => {
+    const geometry = (doc) => doc.geometry || {};
+    const ids = (list) => (list || []).map((i) => i.id);
+    let doc = await mapDoc(W, mapId);
+    expect(geometry(doc)).toEqual(layerGeometry.converted({ ...doc, geometry: {} }));
+    expect(ids(geometry(doc).walls)).toEqual([
+      'layer-wall-0',
+      'layer-wall-1',
+      'layer-doorway-inner',
+      'layer-table',
+    ]);
+    expect(ids(geometry(doc).doors)).toEqual(['inner']);
+    expect(ids(geometry(doc).objects)).toEqual(['layer-pillar']);
+    // Its own geometry beside them is kept through a change of layers and
+    // a map replaced whole. (Written here directly, with a new canonVersion
+    // so the tools read it.)
+    const own = async (fields) => {
+      await worlds().doc(W).collection('battleMaps').doc(mapId).update(fields);
+      await worlds()
+        .doc(W)
+        .update({ canonVersion: FieldValue.increment(1) });
+    };
+    await own({ 'geometry.lights': [{ id: 'lamp', at: [10, 10], radius: 10 }] });
+    await ok('set_map_layers', { worldId: W, mapId, obstacles: [OBSTACLES[1]] });
+    doc = await mapDoc(W, mapId);
+    expect(ids(geometry(doc).lights)).toEqual(['lamp']);
+    expect(ids(geometry(doc).walls)).not.toContain('layer-table');
+    expect(ids(geometry(doc).objects)).toEqual(['layer-pillar']);
+    await ok('set_battle_map', { worldId: W, mapId, ...ROOM });
+    doc = await mapDoc(W, mapId);
+    expect(ids(geometry(doc).lights)).toEqual(['lamp']);
+    expect(ids(geometry(doc).doors)).toEqual(['inner']);
+    // Back as it was, with no light.
+    await ok('set_map_layers', { worldId: W, mapId, obstacles: OBSTACLES });
+    await own({ 'geometry.lights': FieldValue.delete() });
   });
 
   test('view_image draws them, and its legend numbers the door and obstacles (L-623)', async () => {
