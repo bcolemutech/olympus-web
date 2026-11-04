@@ -28,7 +28,8 @@
  *
  *   inSight(map, from, states, options)  the squares in sight, keyed "x,y"
  *   sees(map, from, to, states, options) whether one square is
- *   viewOf(map, from, states, options)   the region seen, for cover
+ *   viewOf(map, from, states, options)   the region seen, and what hides
+ *   linesTo(map, from, to, states, o)    lines across a target, for cover
  *
  * `from` is a square ({ x, y }, its centre) or someone where they stand
  * ({ cell, point?, size? }); `options` { eye } (feet above the floor) or
@@ -281,7 +282,30 @@ function blockersOf(map, c, states, level) {
       }
     }
   });
+  // What stops movement but doesn't hide from these eyes, for cover: a low
+  // wall, glass or bars, a door that can be seen through, a table.
+  const barriers = [];
+  geo.edges(c, states).forEach((e) => {
+    if (!e.blocksMove) return;
+    const a = { x: e.a[0], y: e.a[1] };
+    const b = { x: e.b[0], y: e.b[1] };
+    const owner = e.kind === 'wall' ? e.item : (c.byId[hosts[e.id]] || {}).item || e.item;
+    if (e.blocksSight && topOf(c, owner && owner.height, sidesOf(a, b)) >= level) return;
+    barriers.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
+  });
+  c.objects.forEach((o) => {
+    if (o.item.blocksMove === false) return;
+    if (objects.some((h) => h.item === o.item)) return;
+    o.rings.forEach((r) => {
+      for (let i = 0; i < r.length; i++) {
+        const p = r[i];
+        const q = r[(i + 1) % r.length];
+        barriers.push({ ax: p[0], ay: p[1], bx: q[0], by: q[1] });
+      }
+    });
+  });
   // The map's edge: every look ends there.
+  const inside = segs.length;
   add({ x: 0, y: 0 }, { x: W, y: 0 });
   add({ x: W, y: 0 }, { x: W, y: H });
   add({ x: W, y: H }, { x: 0, y: H });
@@ -301,6 +325,8 @@ function blockersOf(map, c, states, level) {
   });
   return remember(kept.blockers, k, {
     segs,
+    inside,
+    barriers,
     objects,
     holding,
     grid,
@@ -668,6 +694,51 @@ function sees(map, from, to, states, options) {
   return squareSeen(view, cell);
 }
 
+// Whether segment p–q crosses any of `list` ({ ax, ay, bx, by }), short of
+// its ends.
+function crossesAny(list, count, p, q) {
+  const len = hyp(q.x - p.x, q.y - p.y);
+  if (!len) return false;
+  const dx = (q.x - p.x) / len;
+  const dy = (q.y - p.y) / len;
+  for (let i = 0; i < count; i++) {
+    const s = list[i];
+    const t = rayHit(p.x, p.y, dx, dy, s.ax, s.ay, s.bx, s.by);
+    if (t > 1e-6 && t < len - 1e-6) return true;
+  }
+  return false;
+}
+
+/**
+ * The lines from `from`'s eyes to points across `to` (someone where they
+ * stand, { cell, point?, width? }, or a square), for cover (L-923; combat
+ * PS2): five lines to points spread across the target's width, square to
+ * the line between them. `{ blocked, covered }`: how many something that
+ * hides from those eyes stops, and how many of the rest cross something
+ * that stops movement but doesn't hide (a low wall, glass, a table).
+ */
+function linesTo(map, from, to, states, options) {
+  const view = viewOf(map, from, states, options);
+  const spot = mapPaths.spotOf(to);
+  if (!view || !spot) return { blocked: 0, covered: 0 };
+  const p = view.viewer.point;
+  const t = spot.point;
+  const len = hyp(t.x - p.x, t.y - p.y);
+  if (!len) return { blocked: 0, covered: 0 };
+  const px = -(t.y - p.y) / len;
+  const py = (t.x - p.x) / len;
+  const b = view.blockers;
+  let blocked = 0;
+  let covered = 0;
+  for (const k of [-2, -1, 0, 1, 2]) {
+    const off = (k / 2) * (spot.width / 2);
+    const q = { x: t.x + px * off, y: t.y + py * off };
+    if (crossesAny(b.segs, b.inside, p, q)) blocked++;
+    else if (crossesAny(b.barriers, b.barriers.length, p, q)) covered++;
+  }
+  return { blocked, covered };
+}
+
 /**
  * The height of someone's eyes where they stand on a battle map, in feet:
  * the floor's height plus their size's eyes (for the GM, and high ground).
@@ -677,4 +748,4 @@ function eyeLevel(map, from, options) {
   return viewer ? viewer.level : 0;
 }
 
-module.exports = { inSight, sees, viewOf, eyeLevel, inRegion, rayHit };
+module.exports = { inSight, sees, viewOf, linesTo, eyeLevel, inRegion, rayHit };

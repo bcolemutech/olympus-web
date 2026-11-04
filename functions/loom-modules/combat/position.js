@@ -13,12 +13,15 @@
  *                  (L-922, maps-from-data.md DS1; ../../loom-canon/
  *                  map-paths.js bandOf): a reach of 1 touches anyone beside,
  *                  a diagonal too
- *   Cover (PS2)    the line from the attacker's square's centre to the
- *                  target's: across a wall or a door that isn't open, or
- *                  through a solid obstacle, heavy cover (they are seen round
- *                  a corner, or past the obstacle's edge); past a wall's end,
- *                  or through a low obstacle, partial. The system's `cover`
- *                  term is added to their defence
+ *   Cover (PS2)    from the geometry (L-923; coverOf): lines from the
+ *                  attacker's eyes across the target; most stopped by
+ *                  something that hides (round a corner, behind a pillar),
+ *                  heavy; some, or crossing a low wall, a table or glass,
+ *                  partial. The system's `cover` term is added to their
+ *                  defence
+ *   High ground    an attacker standing at least 5 ft above the target
+ *                  (L-923; DA2): the system's `highGround` term added to the
+ *                  roll; off unless set
  *   Flanking (PS3) a melee attack on someone with a friend of the attacker
  *                  standing on their far side: the system's `flanking` term
  *                  added to the roll; off unless set
@@ -34,15 +37,14 @@
  * Pure.
  */
 
-const layers = require('../../loom-canon/layers');
 const sight = require('../../loom-canon/sight');
 const mapPaths = require('../../loom-canon/map-paths');
 const { settingsOf } = require('./settings');
 
 const COVER_NAMES = { partial: 'Partial cover', heavy: 'Heavy cover' };
+// How much higher an attacker stands for high ground (L-923), in feet.
+const HIGH_GROUND = 5;
 const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-const RANK = { null: 0, partial: 1, heavy: 2 };
-const more = (a, b) => (RANK[b] > RANK[a] ? b : a);
 
 // A person's square: a fighter's `cell`, or a square given as it is.
 const cellOf = (v) => (v && v.cell ? v.cell : v);
@@ -58,73 +60,31 @@ function bandOf(attack, from, to) {
 }
 
 /**
- * The steps a line from `from`'s centre to `to`'s takes across the grid, in
- * order: each `{ from, to }` between neighbouring squares, diagonal where it
- * passes exactly through a corner. Whole numbers only: the line crosses
- * column edge i at (2i − 1)·|dy| and row edge j at (2j − 1)·|dx|, scaled.
+ * The cover a target at `to` has from an attacker at `from` (PS2), on a map
+ * with its doors as the save has them: null, 'partial' or 'heavy'. From the
+ * geometry (L-923; ../../loom-canon/sight.js linesTo): five lines from the
+ * attacker's eyes to points across the target; four or more stopped by
+ * something that hides (round a corner, behind a pillar), heavy; any
+ * stopped (half behind a wall's end), or crossing something that stops movement but doesn't hide (a
+ * low wall, a table, glass or bars), partial. Each a fighter ({ cell,
+ * point?, width?, size? }) or a square.
  */
-function stepsOf(from, to) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const ax = Math.abs(dx);
-  const ay = Math.abs(dy);
-  const sx = Math.sign(dx);
-  const sy = Math.sign(dy);
-  const steps = [];
-  let at = { x: from.x, y: from.y };
-  let i = 1;
-  let j = 1;
-  while (i <= ax || j <= ay) {
-    const tx = i <= ax ? (2 * i - 1) * ay : Infinity;
-    const ty = j <= ay ? (2 * j - 1) * ax : Infinity;
-    let next;
-    if (tx === ty) {
-      next = { x: at.x + sx, y: at.y + sy };
-      i += 1;
-      j += 1;
-    } else if (tx < ty) {
-      next = { x: at.x + sx, y: at.y };
-      i += 1;
-    } else {
-      next = { x: at.x, y: at.y + sy };
-      j += 1;
-    }
-    steps.push({ from: at, to: next });
-    at = next;
-  }
-  return steps;
+function coverOf(map, doors, from, to) {
+  if (!map || !from || !to) return null;
+  const { blocked, covered } = sight.linesTo(map, from, to, doors || {});
+  if (blocked >= 4) return 'heavy';
+  return blocked || covered ? 'partial' : null;
 }
 
 /**
- * The cover a target at `to` has from an attacker at `from` (PS2), on a map
- * with its doors as the save has them: null, 'partial' or 'heavy'.
+ * Whether an attacker at `from` stands on high ground over `to` (L-923;
+ * DA2): their floor at least HIGH_GROUND feet above the target's.
  */
-function coverOf(map, doors, from, to) {
-  if (!map) return null;
-  let cover = null;
-  const shut = (door) => door && layers.doorState(door, doors || {}) !== 'open';
-  for (const step of stepsOf(from, to)) {
-    const there = layers.between(map, step.from, step.to);
-    const diagonal = step.from.x !== step.to.x && step.from.y !== step.to.y;
-    if (diagonal) {
-      // Past a corner a wall or door touches: its end, or round it.
-      if (there.wall) {
-        const a = layers.between(map, step.from, { x: step.to.x, y: step.from.y });
-        const b = layers.between(map, step.from, { x: step.from.x, y: step.to.y });
-        const c = layers.between(map, { x: step.to.x, y: step.from.y }, step.to);
-        const d = layers.between(map, { x: step.from.x, y: step.to.y }, step.to);
-        const closed = (e) => e.wall || shut(e.door);
-        const round = (closed(a) || closed(c)) && (closed(b) || closed(d));
-        cover = more(cover, round ? 'heavy' : 'partial');
-      }
-    } else if (there.wall || shut(there.door)) cover = more(cover, 'heavy');
-    if (!(step.to.x === to.x && step.to.y === to.y)) {
-      const ground = layers.groundAt(map, step.to);
-      if (ground === 'solid') cover = more(cover, 'heavy');
-      else if (ground === 'low') cover = more(cover, 'partial');
-    }
-  }
-  return cover;
+function onHighGround(map, from, to) {
+  const a = mapPaths.spotOf(from);
+  const b = mapPaths.spotOf(to);
+  if (!map || !a || !b) return false;
+  return mapPaths.floorAt(map, a.point) - mapPaths.floorAt(map, b.point) >= HIGH_GROUND - 1e-9;
 }
 
 /** Whether someone at `target` is flanked by an attacker at `from` (PS3): a friend opposite. */
@@ -170,8 +130,9 @@ function defendOf(system, sheet, attack) {
 function termsFor(system, { map, doors, attack, from, to, friends = [], dodging = false }) {
   const s = settingsOf(system);
   const band = bandOf(attack, from, to);
-  // Cover and flanking by their squares.
-  const cover = coverOf(map, doors, cellOf(from), cellOf(to));
+  // Cover from the geometry (L-923); flanking by their squares.
+  const cover = coverOf(map, doors, from, to);
+  const high = s.highGround !== null && onHighGround(map, from, to);
   const flank =
     !attack.range && s.flanking !== null && flanked(cellOf(from), cellOf(to), friends.map(cellOf));
   const bonus = [];
@@ -179,18 +140,20 @@ function termsFor(system, { map, doors, attack, from, to, friends = [], dodging 
   if (band === 'long' && s.longRange !== null)
     bonus.push({ name: 'Long range', value: s.longRange });
   if (flank) bonus.push({ name: 'Flanking', value: s.flanking });
+  if (high) bonus.push({ name: 'High ground', value: s.highGround });
   if (cover && s.cover[cover] !== null)
     guard.push({ name: COVER_NAMES[cover], value: s.cover[cover] });
   if (dodging && s.dodge !== null) guard.push({ name: 'Dodging', value: s.dodge });
-  return { band, cover, flanked: flank, bonus, guard };
+  return { band, cover, flanked: flank, highGround: high, bonus, guard };
 }
 
 module.exports = {
   COVER_NAMES,
   distance,
   bandOf,
-  stepsOf,
+  HIGH_GROUND,
   coverOf,
+  onHighGround,
   flanked,
   sees,
   defendOf,

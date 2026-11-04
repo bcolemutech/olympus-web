@@ -244,10 +244,13 @@ function planStep(canonWorld, save, target, known) {
   };
   // Each square walked into: a hazard entered stops the walk there (L-815),
   // as does someone coming into view.
+  // A drop of FALL or more walked off (L-923) stops it where it lands: a fall.
+  const dropOf = (before, st) => mover.floor(before) - mover.floor(st);
   const intoSquare = (st, before) =>
-    !maps.sameCell(st.square, before.square) &&
-    (cameIntoView(eyes(st.square, { x: st.x, y: st.y }), doors).length > 0 ||
-      Boolean(hazards.enteredBy(map, before.square, st.square, doors)));
+    dropOf(before, st) >= mapPaths.FALL - 1e-9 ||
+    (!maps.sameCell(st.square, before.square) &&
+      (cameIntoView(eyes(st.square, { x: st.x, y: st.y }), doors).length > 0 ||
+        Boolean(hazards.enteredBy(map, before.square, st.square, doors))));
   // The move, as the grid view previews it (map-paths.js moveTo): the spot
   // in the square the character fits, the way there, short of someone
   // standing there, and as far as the AP goes. With AP off (L-838) the walk
@@ -285,7 +288,16 @@ function planStep(canonWorld, save, target, known) {
   const stations = went.walked;
   const before = squares.length > 1 ? squares[squares.length - 2] : from;
   const hazard = squares.length ? hazards.enteredBy(map, before, stop, doors) : null;
-  const into = hazard ? { hazard: { id: hazard.id, name: hazard.name, mapId: map.id } } : {};
+  // The walk's last step a fall (L-923): how far.
+  const landed = went.walked.length
+    ? dropOf(went.walked.length > 1 ? went.walked[went.walked.length - 2] : start, stopAt)
+    : 0;
+  const into = {
+    ...(hazard ? { hazard: { id: hazard.id, name: hazard.name, mapId: map.id } } : {}),
+    ...(landed >= mapPaths.FALL - 1e-9
+      ? { fall: { feet: Math.round(landed), mapId: map.id } }
+      : {}),
+  };
   // What the walk leaves of the turn: its AP, the squares walked, and any
   // long action, ended by walking off.
   const off = walkedOff(turn, went.walked.length > 0);
@@ -336,7 +348,9 @@ function planStep(canonWorld, save, target, known) {
   const lines = off.lines
     .concat(door ? ['You open ' + (door.name || 'the door') + '.'] : [])
     .concat(seenLines)
-    .concat(!apOff && (!ap || (!door && !seenLines.length && !hazard)) ? [OUT_OF_AP] : []);
+    .concat(
+      !apOff && (!ap || (!door && !seenLines.length && !hazard && !into.fall)) ? [OUT_OF_AP] : []
+    );
   return {
     feet,
     cell: { x: stop.x, y: stop.y },

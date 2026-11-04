@@ -402,6 +402,26 @@ async function runTurnPipeline(params) {
         : fresh;
       return { ...planned, summary: fresh.recentSummary || '', after };
     });
+    if (step.fall) {
+      // Walked off a drop (L-923): a fall, narrated.
+      const fell = await runTurnPipeline({
+        ...params,
+        action: { verb: 'fall', feet: step.fall.feet },
+      });
+      const lines = step.lines || [];
+      return {
+        ...fell,
+        narration: [lines.join(' '), fell.narration].filter(Boolean).join(' '),
+        step: {
+          cell: step.cell,
+          point: step.point || null,
+          ap: step.turn.ap,
+          plan: step.turn.plan,
+          lines,
+          fall: step.fall.feet,
+        },
+      };
+    }
     if (step.hazard) {
       // Walked into a hazard (L-815): it triggers, narrated.
       const struck = await runTurnPipeline({
@@ -529,6 +549,9 @@ async function runTurnPipeline(params) {
   } else if (action && action.verb === 'hazard') {
     actionText = 'walk into ' + action.name;
     proposedAction = { verb: 'hazard', targets: ['hazard:' + action.hazard], params: {} };
+  } else if (action && action.verb === 'fall') {
+    actionText = 'walk off a drop of ' + action.feet + ' ft';
+    proposedAction = { verb: 'fall', targets: [], params: { feet: Number(action.feet) } };
   } else if (action && action.verb === 'suggested') {
     // One of the GM's suggestions (#673): read from its verb and target when
     // it names them and needs no roll worked out, else by INTERPRET as typed.

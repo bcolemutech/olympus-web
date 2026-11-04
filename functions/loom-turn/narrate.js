@@ -12,6 +12,7 @@ const { turnStateOf, apOf } = require('../loom-models');
 const { doorStatesOf, doorSides } = require('./steps');
 const layers = require('../loom-canon/layers');
 const sight = require('../loom-canon/sight');
+const mapPaths = require('../loom-canon/map-paths');
 const { recordOf, squaresOf, peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
@@ -240,6 +241,28 @@ function checkName(canonWorld) {
   };
 }
 
+// "Heights: the player stands 10 ft up; Grell is 10 ft below the player.",
+// or null when everyone in sight stands on the floor (L-923).
+function heightsLine(map, here, people) {
+  const floor = (p) => mapPaths.floorAt(map, p);
+  const mine = floor(here);
+  const theirs = people.map(({ character, cell }) => ({
+    name: character.name,
+    h: floor(character.point || mapPaths.centreOf(cell)),
+  }));
+  if (!mine && theirs.every((t) => t.h === mine)) return null;
+  const rel = (h) =>
+    h === mine
+      ? 'level with the player'
+      : Math.abs(h - mine) + ' ft ' + (h > mine ? 'above' : 'below') + ' the player';
+  return (
+    'Heights: the player stands ' +
+    (mine ? Math.abs(mine) + ' ft ' + (mine > 0 ? 'up' : 'down') : 'on the floor') +
+    theirs.map((t) => '; ' + t.name + ' is ' + rel(t.h)).join('') +
+    '.'
+  );
+}
+
 function buildMapSection(canonWorld, position, save, resolution, view) {
   const { map, cell } = maps.positionOf(canonWorld, position);
   const host = maps.hostOf(canonWorld, position);
@@ -317,6 +340,10 @@ function buildMapSection(canonWorld, position, save, resolution, view) {
     'Nobody else on this map is in sight: never describe anyone else here as seen or heard ' +
       'nearby.'
   );
+  // Heights (L-923; DA2): where the player stands, and anyone in sight
+  // higher or lower than them.
+  const heights = heightsLine(map, maps.positionOf(canonWorld, position).point, people);
+  if (heights) lines.push(heights);
   // Its doors, as they stand once this resolves (L-626): this save's own. A
   // door is seen from either side of it.
   const states = doorsAfter(save, map, resolution);
@@ -522,6 +549,18 @@ function buildEffectsSection(save, resolution, canonWorld) {
         (HAZARD_WORDS[hazard.outcome] || hazard.outcome) +
         (hazard.condition ? ': ' + hazard.condition + '.' : '.') +
         ' Narrate it happening to them, by that outcome.'
+    );
+  }
+  // A fall from a ledge (L-923).
+  const fell = resolution.fall;
+  if (fell) {
+    lines.push(
+      'FALL: the player walked off a drop and fell ' +
+        fell.feet +
+        ' ft' +
+        (fell.damage ? ', hurt by the landing' : ', landing unhurt') +
+        (fell.down ? ', and is down' : '') +
+        '. Narrate the fall and the landing.'
     );
   }
   const on = conditions.activeOn(system, sheet);

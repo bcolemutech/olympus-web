@@ -405,6 +405,8 @@ function battleView(canonWorld, save, record) {
 
   const host = maps.hostOf(canonWorld, save);
   const isPlace = host && Boolean((canonWorld.places || {})[host.id]);
+  // Where the player looks from, for the cover each has (L-923).
+  const viewer = maps.viewerOf(canonWorld, save) || cell;
   const people = host
     ? Object.values(canonWorld.characters || {})
         .filter((c) => !c.retired)
@@ -434,8 +436,8 @@ function battleView(canonWorld, save, record) {
             ...(c.figure ? { figure: true } : {}),
             // The cover they have from where the player stands (L-828;
             // combat PS2), for Attack's note and the grid.
-            ...(c.cell && combat.position.coverOf(map, doors, cell, c.cell)
-              ? { cover: combat.position.coverOf(map, doors, cell, c.cell) }
+            ...(spot && combat.position.coverOf(map, doors, viewer, spot)
+              ? { cover: combat.position.coverOf(map, doors, viewer, spot) }
               : {}),
           };
         })

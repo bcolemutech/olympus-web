@@ -29,8 +29,9 @@
  *
  * A fighter fleeing heads for the nearest way off the map. Paths are the
  * player's (../../loom-canon/map-paths.js; L-922), at the fighter's width, in
- * feet: through people but never ending on one, and never through a closed
- * door (figures don't open them). Distances are in feet: reach and range
+ * feet: through people but never ending on one, never through a closed
+ * door (figures don't open them) and never off a drop of 10 ft or more
+ * (L-923). Distances are in feet: reach and range
  * edge to edge (position.js bandOf), the nearest foe by where each stands,
  * beside within 5 ft.
  *
@@ -161,6 +162,8 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
       width,
       states: shut,
       prices: onAp ? me.prices : undefined,
+      // Nor do they walk off a drop (L-923).
+      drops: 'never',
       ...(goal === true
         ? {}
         : { blocked: (sq) => exitAt(sq) && !(goal && maps.sameCell(goal, sq)) }),
