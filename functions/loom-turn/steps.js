@@ -231,19 +231,22 @@ function planStep(canonWorld, save, target, known) {
 
   // Someone not in sight where the walk starts stops it where they come
   // into view (with the doors as they were; L-642).
+  // Seen from their eyes where they stand, by their size (L-923).
   const doors = doorStatesOf(save, map.id);
-  const atStart = sight.inSight(map, from, doors);
+  const size = (sheetOf(save) || {}).size;
+  const eyes = (cell, point) => ({ cell, ...(point ? { point } : {}), ...(size ? { size } : {}) });
+  const atStart = sight.inSight(map, eyes(from, start), doors);
   const unseen = people.filter((p) => !atStart[key(p.cell)]);
-  const cameIntoView = (cell, states) => {
+  const cameIntoView = (at, states) => {
     if (!unseen.length) return [];
-    const now = sight.inSight(map, cell, states);
+    const now = sight.inSight(map, at.cell ? at : eyes(at), states);
     return unseen.filter((p) => now[key(p.cell)]);
   };
   // Each square walked into: a hazard entered stops the walk there (L-815),
   // as does someone coming into view.
   const intoSquare = (st, before) =>
     !maps.sameCell(st.square, before.square) &&
-    (cameIntoView(st.square, doors).length > 0 ||
+    (cameIntoView(eyes(st.square, { x: st.x, y: st.y }), doors).length > 0 ||
       Boolean(hazards.enteredBy(map, before.square, st.square, doors)));
   // The move, as the grid view previews it (map-paths.js moveTo): the spot
   // in the square the character fits, the way there, short of someone

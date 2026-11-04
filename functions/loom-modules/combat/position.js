@@ -40,7 +40,6 @@ const mapPaths = require('../../loom-canon/map-paths');
 const { settingsOf } = require('./settings');
 
 const COVER_NAMES = { partial: 'Partial cover', heavy: 'Heavy cover' };
-const key = (cell) => cell.x + ',' + cell.y;
 const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 const RANK = { null: 0, partial: 1, heavy: 2 };
 const more = (a, b) => (RANK[b] > RANK[a] ? b : a);
@@ -135,9 +134,12 @@ function flanked(from, target, friends) {
   return (friends || []).some((f) => f && f.x === far.x && f.y === far.y);
 }
 
-/** Whether someone at `from` sees `to`, with the save's doors. */
+/**
+ * Whether someone at `from` sees `to`, with the save's doors: each a fighter
+ * ({ cell, point?, size? }) or a square (L-923: from their eyes).
+ */
 function sees(map, doors, from, to) {
-  return Boolean(sight.inSight(map, from, doors || {})[key(to)]);
+  return sight.sees(map, from, to, doors || {});
 }
 
 /**

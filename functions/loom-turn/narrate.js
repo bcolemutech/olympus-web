@@ -212,7 +212,11 @@ function doorsAfter(save, map, resolution) {
 async function mapSightAfter(canonWorld, save, position, resolution, known, saveRef) {
   const { map, cell } = maps.positionOf(canonWorld, position);
   if (!map) return null;
-  const inSight = sight.inSight(map, cell, doorsAfter(save, map, resolution));
+  const inSight = sight.inSight(
+    map,
+    maps.viewerOf(canonWorld, position, save) || cell,
+    doorsAfter(save, map, resolution)
+  );
   let before = known;
   if (position.mapId !== save.mapId) {
     const { record } = saveRef ? await recordOf(null, saveRef, map.id) : { record: null };

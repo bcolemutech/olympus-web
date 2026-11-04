@@ -66,7 +66,7 @@ function mapPlan(canonWorld, save, proposedAction, known) {
   if (!map) return null;
   const inFight = Boolean(combat.play.fightOf(save));
   if (!needsBeside(proposedAction.verb, inFight)) return null;
-  const inSight = sight.inSight(map, from, doorStatesOf(save, map.id));
+  const inSight = sight.inSight(map, maps.viewerOf(canonWorld, save), doorStatesOf(save, map.id));
   for (const target of proposedAction.targets || []) {
     const thing = mapTarget(canonWorld, save, map, target);
     if (!thing || thing.door) continue;

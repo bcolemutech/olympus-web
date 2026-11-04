@@ -38,6 +38,11 @@
   // from before read as geometry beside it (map-geometry.js fromLayers),
   // the stored geometry's items winning where ids are the same (geometryOf).
   //
+  //   Heights (DA2) a size's eyes stand `eyeOf` above the floor (`floorAt`,
+  //                 the ground's height); a ledge's edge more than STEP_UP
+  //                 high can't be walked up, and a drop of FALL or more
+  //                 walked off is a fall (L-923)
+  //
   //   planner(map, options)       the map as a character moves on it
   //   pathTo(plan, from, to)      the cheapest way, { points, ap, feet, … }
   //   walk(plan, path, ap, opts)  how far a move gets: stations walked, AP
@@ -66,14 +71,21 @@
   var ROUND = 1e-6; // AP rounding's tolerance: 15 ft is 3 AP, never 4
   var NEAR = 2 * STEP; // how far a gap's middle, the start or the goal links to the grid
   var MAX_GAPS = 5000;
+  // Heights (L-923; DA2): a rise of more than STEP_UP can't be walked up (a
+  // ledge's edge); a drop of FALL or more is a fall.
+  var STEP_UP = 2.5;
+  var FALL = 10;
 
+  // Each size's width and the height of its eyes above the floor (L-923;
+  // DA2: a wall or object hides what's beyond it when its top reaches the
+  // eyes).
   var SIZES = [
-    { id: 'tiny', width: 1 },
-    { id: 'small', width: 1.5 },
-    { id: 'medium', width: 2.5 },
-    { id: 'large', width: 5 },
-    { id: 'huge', width: 10 },
-    { id: 'gargantuan', width: 15 },
+    { id: 'tiny', width: 1, eye: 1 },
+    { id: 'small', width: 1.5, eye: 2.5 },
+    { id: 'medium', width: 2.5, eye: 5 },
+    { id: 'large', width: 5, eye: 10 },
+    { id: 'huge', width: 10, eye: 20 },
+    { id: 'gargantuan', width: 15, eye: 30 },
   ];
   var DEFAULT_SIZE = 'medium';
 
@@ -85,6 +97,11 @@
   /** A size's width in feet: medium (2.5) for none, or one that isn't a size. */
   function widthOf(size) {
     return (sizeOf(size) || sizeOf(DEFAULT_SIZE)).width;
+  }
+
+  /** How high a size's eyes are above the floor, in feet (L-923). */
+  function eyeOf(size) {
+    return (sizeOf(size) || sizeOf(DEFAULT_SIZE)).eye;
   }
 
   /** The centre of a square, in feet: where a square from before stands. */
@@ -138,6 +155,18 @@
     if (merged && map && typeof map === 'object') merged.set(map, out);
     return out;
   }
+
+  /**
+   * The floor's height at a point in feet on a battle map (L-923; DA2): its
+   * ground's `height` there, else 0.
+   */
+  function floorAt(map, point) {
+    if (!map || !point) return 0;
+    var c = geo.compile(geometryOf(map));
+    var g = c.ground.length ? geo.groundAt(c, [point.x, point.y]) : null;
+    return g && typeof g.height === 'number' && isFinite(g.height) ? g.height : 0;
+  }
+
 
   // ── Small geometry ──────────────────────────────────────────────────
 
@@ -273,6 +302,12 @@
    *   blocked  (square) → true for a square never walked into: one the save
    *            hasn't seen, an exit that isn't where it's going. The squares
    *            a move starts and ends in are always allowed.
+   *   drops    'never' for someone who won't walk off a drop of FALL or
+   *            more (foes, L-923); by default a drop is walked off: a fall
+   *
+   * Heights (L-923; DA2): where ground meets ground more than STEP_UP
+   * higher, its edge can't be walked up; walked down, a drop of FALL or more
+   * is a fall (the walk's caller stops there: ../loom-turn/steps.js).
    */
   function planner(map, options) {
     var o = options || {};
@@ -327,6 +362,74 @@
     addSegment([W, 0], [W, H]);
     addSegment([W, H], [0, H]);
     addSegment([0, H], [0, 0]);
+
+    // The floor's height at a point (L-923): the ground's there, else 0.
+    var heightAt = function (p) {
+      var g = c.ground.length ? geo.groundAt(c, [p.x, p.y]) : null;
+      return g && typeof g.height === 'number' && isFinite(g.height) ? g.height : 0;
+    };
+    // Ledges: ground edges with more than STEP_UP between their two sides.
+    var ledges = buckets();
+    var hasLedges = false;
+    var noDrops = o.drops === 'never';
+    c.ground.forEach(function (g) {
+      if (typeof g.item.height !== 'number' || !g.item.height) return;
+      g.rings.forEach(function (ring) {
+        for (var i = 0; i < ring.length; i++) {
+          var a = { x: ring[i][0], y: ring[i][1] };
+          var b = { x: ring[(i + 1) % ring.length][0], y: ring[(i + 1) % ring.length][1] };
+          var len = dist(a, b);
+          if (!len) continue;
+          var mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          var offX = (-(b.y - a.y) / len) * 0.05;
+          var offY = ((b.x - a.x) / len) * 0.05;
+          var one = heightAt({ x: mid.x + offX, y: mid.y + offY });
+          var two = heightAt({ x: mid.x - offX, y: mid.y - offY });
+          if (Math.abs(one - two) <= STEP_UP + EPS) continue;
+          hasLedges = true;
+          ledges.add(
+            { a: a, b: b },
+            Math.min(a.x, b.x),
+            Math.min(a.y, b.y),
+            Math.max(a.x, b.x),
+            Math.max(a.y, b.y)
+          );
+        }
+      });
+    });
+    // Whether a straight move from a to b goes up a ledge (or, for those who
+    // won't, off a drop of FALL or more).
+    var ledgeBlocks = function (a, b) {
+      if (!hasLedges) return false;
+      var len = dist(a, b);
+      if (!len) return false;
+      var e = 0.02 / len;
+      var blocked = false;
+      ledges.near(
+        Math.min(a.x, b.x),
+        Math.min(a.y, b.y),
+        Math.max(a.x, b.x),
+        Math.max(a.y, b.y),
+        function (s) {
+          var t = crossing(a, b, s.a, s.b);
+          if (t === null) return true;
+          var before = heightAt({
+            x: a.x + (b.x - a.x) * Math.max(0, t - e),
+            y: a.y + (b.y - a.y) * Math.max(0, t - e),
+          });
+          var after = heightAt({
+            x: a.x + (b.x - a.x) * Math.min(1, t + e),
+            y: a.y + (b.y - a.y) * Math.min(1, t + e),
+          });
+          if (after - before > STEP_UP + EPS || (noDrops && before - after >= FALL - EPS)) {
+            blocked = true;
+            return false;
+          }
+          return true;
+        }
+      );
+      return blocked;
+    };
 
     // Ground with a price of its own, and the edges where it changes.
     var grounds = buckets();
@@ -438,6 +541,7 @@
       );
       if (!ok) return false;
       if (insideSolid(a) || insideSolid(b)) return false;
+      if (ledgeBlocks(a, b)) return false;
       if (blockedSquare) {
         var len = dist(a, b);
         var n = Math.max(1, Math.ceil(len / 0.5));
@@ -560,12 +664,16 @@
         b.room >= r + 0.9 &&
         dist(a, b) <= 1.8 &&
         !insideSolid(a) &&
-        !insideSolid(b)
+        !insideSolid(b) &&
+        !ledgeBlocks(a, b)
       ) {
         return true;
       }
       return plan.clear(a, b);
     };
+
+    /** The floor's height at a point, in feet (L-923). */
+    plan.floor = heightAt;
 
     // The middle of every gap between two things in the way, a little wider
     // than the character: a point the path can pass through.
@@ -1383,6 +1491,10 @@
     DEFAULT_SIZE: DEFAULT_SIZE,
     sizeOf: sizeOf,
     widthOf: widthOf,
+    eyeOf: eyeOf,
+    STEP_UP: STEP_UP,
+    FALL: FALL,
+    floorAt: floorAt,
     centreOf: centreOf,
     squareOf: squareOf,
     apFor: apFor,

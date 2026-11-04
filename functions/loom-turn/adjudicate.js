@@ -406,8 +406,10 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
       ? mapTarget(canonWorld, characterState, map, target)
       : null;
   if (person && person.person) {
-    const inSight = sight.inSight(map, from, doorStatesOf(characterState, map.id));
-    if (!inSight[person.squares[0].x + ',' + person.squares[0].y]) return blocked(NOBODY_SEEN);
+    const viewer = maps.viewerOf(canonWorld, characterState);
+    if (!sight.sees(map, viewer, person.squares[0], doorStatesOf(characterState, map.id))) {
+      return blocked(NOBODY_SEEN);
+    }
     cell = person.squares[0];
   }
   if (!cell && !exit) {
@@ -1244,7 +1246,10 @@ function playbackOf(turns, characterState, canonWorld, after) {
   const system = checks.systemOf(canonWorld);
   const { map, cell } = maps.positionOf(canonWorld || {}, after || characterState);
   const doors = map ? doorStatesOf(after || characterState, map.id) : {};
-  const seen = map && cell ? sight.inSight(map, cell, doors) : {};
+  const seen =
+    map && cell
+      ? sight.inSight(map, maps.viewerOf(canonWorld || {}, after || characterState), doors)
+      : {};
   return turns.map((t) => ({
     id: t.id,
     name: t.name,
@@ -1491,7 +1496,11 @@ function mapTarget(canonWorld, characterState, map, target) {
 function outOfSightOrReach(proposedAction, characterState, canonWorld) {
   const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
   if (!map) return null;
-  const inSight = sight.inSight(map, cell, doorStatesOf(characterState, map.id));
+  const inSight = sight.inSight(
+    map,
+    maps.viewerOf(canonWorld || {}, characterState),
+    doorStatesOf(characterState, map.id)
+  );
   const seen = (square) => Boolean(inSight[square.x + ',' + square.y]);
   const near = (square) => Math.max(Math.abs(square.x - cell.x), Math.abs(square.y - cell.y)) <= 1;
   const physical = needsBeside(proposedAction.verb, Boolean(combat.play.fightOf(characterState)));

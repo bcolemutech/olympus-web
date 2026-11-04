@@ -99,6 +99,9 @@ function spotOf(world, save, character) {
     cell: character.cell,
     ...(character.point ? { point: character.point } : {}),
     width: mapPaths.widthOf((sheetFor(world, save, character) || {}).size),
+    ...((sheetFor(world, save, character) || {}).size
+      ? { size: sheetFor(world, save, character).size }
+      : {}),
   };
 }
 
@@ -106,7 +109,8 @@ function spotOf(world, save, character) {
 function playerSpot(world, save) {
   const { cell, point } = maps.positionOf(world || {}, save);
   if (!cell) return null;
-  return { cell, point, width: mapPaths.widthOf((sheets.sheetOf(save) || {}).size) };
+  const size = (sheets.sheetOf(save) || {}).size;
+  return { cell, point, width: mapPaths.widthOf(size), ...(size ? { size } : {}) };
 }
 
 // The characters standing on the map the save is on, and not down in it.
@@ -122,7 +126,11 @@ function standingHere(world, save) {
 function hostilesInSight(world, save) {
   const { map, cell } = maps.positionOf(world || {}, save);
   if (!map || !cell) return [];
-  const seen = sight.inSight(map, cell, ((save && save.doors) || {})[map.id] || {});
+  const seen = sight.inSight(
+    map,
+    maps.viewerOf(world || {}, save),
+    ((save && save.doors) || {})[map.id] || {}
+  );
   return standingHere(world, save).filter(
     (c) => sideOf(c) === 'hostile' && seen[c.cell.x + ',' + c.cell.y]
   );

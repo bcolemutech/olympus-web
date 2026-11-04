@@ -85,8 +85,8 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
   const host = maps.hostOf(world, save);
   if (!maps.standingAt(world, host).some((c) => c.id === person.id)) return null;
   const doors = ((save && save.doors) || {})[map.id] || {};
-  const seen = sight.inSight(map, cell, doors);
-  if (!seen[person.cell.x + ',' + person.cell.y]) return blocked(NOBODY);
+  if (!sight.sees(map, maps.viewerOf(world || {}, save), person.cell, doors))
+    return blocked(NOBODY);
   const down = play.downOf(save, person.id);
   if (down) return blocked(`${person.name} is already down.`);
 
