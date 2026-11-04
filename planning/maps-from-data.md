@@ -164,6 +164,18 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 - **The engine draws** ground, then walls, doors and windows, then objects, then light and shading by height, then fog; the world's accent may tint.
 - **Maps with art (EX2)** draw their art in place of ground and walls, and still draw objects.
 - **Loading (PL4):** a map shows a progress effect while its textures load and its shapes draw; drawing is cached per map revision; never a frozen screen.
+- **Decided before building L-924 (the user, 2026-11-04):**
+  - **All three levels, one painter:** grids draw from their geometry now; loomGetMap also sends a region or area map's own geometry, and the world and town views draw it under their places when a map has some. Azgaar art and town ground stay as they are until L-928 converts them.
+  - **The cache in memory, per session:** a map's drawing is kept while the Loom is open, so going back to a map, or a turn that changes nothing drawn, draws nothing again; a reload draws again.
+  - **Light is drawing only:** dark areas are shaded and lights glow through them; sight and the rules ignore light for now (a later story, L-927's noticing or its own, can make darkness hide things).
+  - **CI installs Chromium,** so the drawing tests and the screenshot comparison run on every PR (the swatch page's test with them).
+- **As built (L-924, 2026-11-04):**
+  - **One painter, `paint.js`** (`Loom.mapPaint`), for the grid, town and world views: ground as its material's tile repeating in map space, shading by height (higher lighter, lower darker, a shadow along each ledge), lines and walls as strips of their material along their lines, doors and windows by state (a closed door across its gap, an open one swung on its hinge, a locked one tinted red), objects with their art (their own, their world's for their kind, the catalog's, else the box with a question mark), then dark areas and lights (bright to their radius, dimmer to `dim`). The fog stays the views' own, over it. The world's own accent tints the ground and walls a little.
+  - **Maps with art (EX2):** the art in place of ground, lines, walls and windows; doors over it as lines by their state, as before; objects on top. On a grid with art, the pillars old solid obstacles convert to are the art's own and aren't drawn again.
+  - **Built in map units, one display object per item,** kept by what it is (kind, id and data) per map, at most eight maps kept: painting again builds only what changed (a door opened builds that door). Building runs 8 ms at a time across frames, never blocking input. A large dungeon (36 rooms, 144 objects, 72 doors) draws in about 150 ms with the CPU slowed four times.
+  - **The progress effect** (`progress.js`): a bar along the top of the map panel with a shimmer and "Drawing the map…", shown after 150 ms (a map drawn at once never flickers it) until the drawing is done.
+  - **The fog to the sight lines:** loomGetMap sends the outline of what's in sight (`fog.view`, from `sight.outline`), and the grid view dims what's been seen outside it, finer than before (12 px a square), so a wall's shadow and a doorway's cone show as they are. The dark over what's never been seen stays by the square.
+  - **What the page is sent:** a grid's lines and lights with what's seen of it; objects' art and the world's object kinds' art as links only (`known-map.js` `drawnGeometry`, `artLink`; never the library's records, A5); a region or area map's geometry whole (hidden things left out) and its space.
 
 ### 4.7 Today's maps (EX1–EX3, AU3)
 
