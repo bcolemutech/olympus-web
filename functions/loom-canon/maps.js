@@ -212,24 +212,23 @@ function squareProblem(world, map, host, cell, selfId) {
 
 /**
  * The open square nearest `from` (L-394; planning/builders-tools.md §4.4):
- * by rings of distance, in reading order within each, the first that
- * `isOpen(cell)` passes, preferring one a walk from an entry reaches
- * (locked doors open). Null when there is none.
+ * by distance in feet (L-922), in reading order where that's the same, the
+ * first that `isOpen(cell)` passes, preferring one a walk from an entry
+ * reaches (locked doors open). Null when there is none.
  */
 function nearestOpen(map, from, isOpen) {
-  const reached = layers.reachable(map, map.entries || [], () => true);
+  const reached = mapPaths.squaresReached(map, map.entries || [], { open: () => true });
+  const cells = [];
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) cells.push({ x, y, d: Math.hypot(x - from.x, y - from.y) });
+  }
+  cells.sort((a, b) => a.d - b.d || a.y - b.y || a.x - b.x);
   let fallback = null;
-  const most = Math.max(map.width, map.height);
-  for (let d = 0; d <= most; d++) {
-    for (let y = from.y - d; y <= from.y + d; y++) {
-      for (let x = from.x - d; x <= from.x + d; x++) {
-        if (Math.max(Math.abs(x - from.x), Math.abs(y - from.y)) !== d) continue;
-        const cell = { x, y };
-        if (!inBounds(map, cell) || !isOpen(cell)) continue;
-        if (reached[x + ',' + y]) return cell;
-        if (!fallback) fallback = cell;
-      }
-    }
+  for (const { x, y } of cells) {
+    const cell = { x, y };
+    if (!isOpen(cell)) continue;
+    if (reached[x + ',' + y]) return cell;
+    if (!fallback) fallback = cell;
   }
   return fallback;
 }

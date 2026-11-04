@@ -435,10 +435,11 @@ function afterFight(world, save, { dice } = {}) {
  * The player's walk in a fight (L-823; PS4): stepping out of a foe's reach
  * draws its attack, unless they withdrew this turn (`turn.withdrawn`). A
  * blow that drops them stops the walk where they were struck, and they fall
- * by the system's down kind (./down.js). `walked` the squares stepped on.
+ * by the system's down kind (./down.js). `walked` the walk's stations, in
+ * feet (map-paths.js walk; L-922), or squares, read as their centres.
  *
  * Returns null out of a fight or when nobody reacts; else `{ reached,
- * fight, sheet, down, figures, lines }`: how many squares they walked, the
+ * fight, sheet, down, figures, lines }`: how many of them they walked, the
  * fight (reactions spent; the player out if down), their sheet, their fall
  * (`save.down`, or null), every reactor's state (`save.figures`).
  */
@@ -453,7 +454,7 @@ function walkReactions(world, save, walked, { dice }) {
       id: c.id,
       side: f.combatants[c.id].side,
       name: c.name,
-      cell: c.cell,
+      ...spotOf(world, save, c),
       sheet: sheetFor(world, save, c),
     }));
   const r = reactions.reactToWalk(system, {
@@ -461,7 +462,7 @@ function walkReactions(world, save, walked, { dice }) {
     doors: ((save && save.doors) || {})[map.id] || {},
     fight: f,
     mover: { id: PLAYER, side: 'party', name: 'you', you: true, sheet: sheets.sheetOf(save) },
-    from: cell,
+    from: playerSpot(world, save),
     path: walked,
     fighters,
     withdrawn: Boolean(save.turn && save.turn.withdrawn),

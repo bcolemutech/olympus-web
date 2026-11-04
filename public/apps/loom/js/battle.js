@@ -401,24 +401,34 @@
     window.requestAnimationFrame(frame);
   }
 
-  // Where the token is drawn: along its walk (a square in STEP_MS), or where it stands.
-  function tokenCentre() {
-    var anim = battle.anim;
-    if (!anim) return spot(hereFeet());
-    var left = Math.max(0, ((now() - anim.t0) / STEP_MS) * MP.FEET);
-    var pts = anim.points;
+  // The point `feet` along a walk's points, in feet; its end past that.
+  function along(pts, feet) {
+    var left = Math.max(0, feet);
     for (var i = 1; i < pts.length; i++) {
       var len = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
       if (left <= len && len > 0) {
         var f = left / len;
-        return spot({
+        return {
           x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f,
           y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f,
-        });
+        };
       }
       left -= len;
     }
-    return spot(pts[pts.length - 1]);
+    return pts[pts.length - 1];
+  }
+
+  // Where the token is drawn: along its walk (5 ft in STEP_MS), or where it stands.
+  function tokenCentre() {
+    var anim = battle.anim;
+    if (!anim) return spot(hereFeet());
+    return spot(along(anim.points, ((now() - anim.t0) / STEP_MS) * MP.FEET));
+  }
+
+  // Where someone in sight stands, in feet (L-922): their point, else their
+  // square's centre.
+  function personFeet(person) {
+    return person.point || MP.centreOf(person);
   }
 
   // The squares this turn's AP reaches, as runs along each row.
@@ -870,7 +880,7 @@
         n.people.addChild(token.container);
       }
       people[person.id || person.name] = true;
-      var c = centre(person);
+      var c = spot(personFeet(person));
       token.container.visible = true;
       token.container.scale.set(px);
       // Their side shows in a fight's colours (L-828): foes red, friends
@@ -879,7 +889,8 @@
       token.update({
         x: c.x,
         y: c.y,
-        radius: Math.max(5, cellPx * 0.32),
+        // As wide as they are (L-922), a medium one's as before.
+        radius: Math.max(5, cellPx * Math.max(0.32, (person.width || 0) / MP.FEET / 2)),
         name: person.name,
         fill:
           person.side === 'hostile'
@@ -899,7 +910,7 @@
     n.labels.removeChildren();
     var label = function (cell, text, colour) {
       var node = Loom.draw.label(text, 11.5);
-      var c = centre(cell);
+      var c = cell.point ? spot(cell.point) : centre(cell);
       node.style.fill = colour || COLOURS.label;
       node.alpha = faded(cell);
       node.scale.set(px);
@@ -950,18 +961,22 @@
       o.roundRect(r[0], r[1], r[2], r[3], r[4]).stroke({ width: 2 * px, color: COLOURS.selected });
     }
     // Someone selected (L-828; UI2): your attacks' reach and range around
-    // you (long range dashed), and their cover from where you stand.
+    // you (long range dashed), and their cover from where you stand. In feet
+    // (L-922): a ring where their middle must be for the attack to reach
+    // them, edge to edge.
     var target = battle.selected && personAt(battle.selected);
     var combat = combatOf();
     if (target && combat && !target.down) {
-      var around = function (r) {
-        var x0 = Math.max(0, d.here.x - r);
-        var y0 = Math.max(0, d.here.y - r);
-        var x1 = Math.min(d.width - 1, d.here.x + r);
-        var y1 = Math.min(d.height - 1, d.here.y + r);
-        var a = square({ x: x0, y: y0 });
-        var b = square({ x: x1 + 1, y: y1 + 1 });
-        return [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }, a];
+      var me = spot(hereFeet());
+      var edges = (((d.size && d.size.width) || 2.5) + (target.width || 2.5)) / 2;
+      var around = function (squares) {
+        var r = ((squares * MP.FEET + edges) / MP.FEET) * CELL;
+        var ring = [];
+        for (var i = 0; i <= 72; i++) {
+          var t = (i / 72) * 2 * Math.PI;
+          ring.push({ x: me.x + r * Math.cos(t), y: me.y + r * Math.sin(t) });
+        }
+        return ring;
       };
       combat.attacks.forEach(function (a) {
         if (a.range) {
@@ -1261,14 +1276,12 @@
   }
 
   // How far an attack reaches someone from here: 'reach', 'normal' or
-  // 'long' (range), or null, as the server reads it (position.js bandOf).
-  function bandOf(attack, cell) {
-    var away = distance(battle.data.here, cell);
-    if (attack.range) {
-      if (away <= attack.range.normal) return 'normal';
-      return away <= attack.range.long ? 'long' : null;
-    }
-    return away <= (attack.reach || 1) ? 'reach' : null;
+  // 'long' (range), or null, as the server reads it: in feet, edge to edge
+  // (map-paths.js bandOf; L-922).
+  function bandOf(attack, person) {
+    var d = battle.data;
+    var me = { point: hereFeet(), width: d.size && d.size.width };
+    return MP.bandOf(attack, me, { point: personFeet(person), width: person.width });
   }
 
   var BAND_WORDS = { reach: 'in reach', normal: 'in range', long: 'long range' };
@@ -1324,7 +1337,7 @@
         : band
           ? short(a.ap)
           : a.range
-            ? 'Out of range (' + a.range.long + ' squares).'
+            ? 'Out of range (' + a.range.long * MP.FEET + ' ft).'
             : 'Out of reach: get closer.';
       var note = [
         apText(a.ap),
@@ -1454,23 +1467,25 @@
   function playOut(turns, faster) {
     var d = battle.data;
     if (!d || faster || reducedMotion()) return;
+    // Where each stands, in feet (L-922).
     var where = {};
     (d.people || []).forEach(function (p) {
-      if (p.x !== undefined) where[p.id] = { x: p.x, y: p.y };
+      if (p.x !== undefined) where[p.id] = personFeet(p);
     });
     var steps = [];
     var t = 0;
     turns.forEach(function (turn) {
       var from = where[turn.id];
-      var path = turn.path || [];
+      // The walk's points in feet; from before, its squares' centres.
+      var path = turn.points || (turn.path || []).map(MP.centreOf);
       if (!from && path.length) from = path[0];
       if (!from) return;
-      var cells = [from].concat(path);
-      var walk = (cells.length - 1) * STEP_MS;
+      var pts = [from].concat(path);
+      var walk = (lengthOf(pts) / MP.FEET) * STEP_MS;
       var card = turn.attack && turn.attack.card ? cardText(turn) : null;
-      steps.push({ id: turn.id, cells: cells, t0: t, walk: walk, card: card });
+      steps.push({ id: turn.id, pts: pts, t0: t, walk: walk, card: card });
       t += walk + (card ? CARD_MS : 0);
-      where[turn.id] = cells[cells.length - 1];
+      where[turn.id] = pts[pts.length - 1];
     });
     if (!steps.length) return;
     battle.playback = { steps: steps, t0: now(), end: t, last: where };
@@ -1511,16 +1526,11 @@
     var at = {};
     pb.steps.forEach(function (st) {
       if (t < st.t0) {
-        if (!at[st.id]) at[st.id] = centre(st.cells[0]);
+        if (!at[st.id]) at[st.id] = spot(st.pts[0]);
         return;
       }
       var u = Math.min(1, (t - st.t0) / Math.max(1, st.walk));
-      var span = (st.cells.length - 1) * u;
-      var i = Math.min(Math.floor(span), Math.max(0, st.cells.length - 2));
-      var f = st.cells.length > 1 ? Math.min(1, span - i) : 0;
-      var a = centre(st.cells[i]);
-      var b = centre(st.cells[Math.min(i + 1, st.cells.length - 1)]);
-      at[st.id] = { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+      at[st.id] = spot(along(st.pts, lengthOf(st.pts) * u));
       if (st.card && t >= st.t0 + st.walk && t < st.t0 + st.walk + CARD_MS) {
         var node = Loom.draw.label(st.card, 12);
         node.style.fill = COLOURS.card;

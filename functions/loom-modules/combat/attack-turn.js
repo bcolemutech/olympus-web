@@ -217,8 +217,11 @@ function attackTurn(world, save, { targetId, params = {}, dice, rolled }) {
       reactions.pay(system, f, r.id, paid.sheet, paid.cost);
     }
     lines.push(...r.lines);
+    // Their state as the save has it (where they've moved to, in feet), with
+    // the blow taken.
+    const was = ((save && save.figures) || {})[r.id] || {};
     mutations.push(
-      setSave('figures.' + r.id, { sheet: r.sheet, ...(r.down ? { down: r.down } : {}) })
+      setSave('figures.' + r.id, { ...was, sheet: r.sheet, ...(r.down ? { down: r.down } : {}) })
     );
     if (r.down && f && f.combatants[r.id]) f = fight.leave(f, r.id, 'down');
   }

@@ -1,4 +1,4 @@
-/* global module, window */
+/* global module, window, require */
 (function () {
   'use strict';
 
@@ -21,10 +21,9 @@
   // the grid points between them, so square (x, y) runs from corner (x, y) to
   // (x + 1, y + 1), as in SVG art's coordinates.
   //
-  // Movement (canStep): a step can't cross a wall or a locked door, nor end on
-  // a solid or low square; a diagonal can't squeeze past a corner a wall or
-  // door touches, nor between solid or low squares beside it. Paths, costs and
-  // doors in play build on this (L-624, L-625).
+  // Movement is in feet (L-922): layers are read as geometry
+  // (map-geometry.js fromLayers) and moved over by map-paths.js, which also
+  // says whether an entry reaches an exit (check).
   //
   // This file is kept in two places with the same bytes, functions/loom-canon/
   // layers.js and public/apps/loom/js/layers.js (the Loom page loads it as
@@ -137,11 +136,6 @@
     return obstacle ? obstacle.kind : 'open';
   }
 
-  function blocking(map, x, y) {
-    var obstacle = compile(map).cells[cellKey(x, y)];
-    return Boolean(obstacle) && (obstacle.kind === 'solid' || obstacle.kind === 'low');
-  }
-
   /**
    * What lies between two neighbouring squares: a wall, and the door on the
    * edge between them (side by side), or, on a diagonal, whether a wall or
@@ -157,25 +151,6 @@
     return { wall: Boolean(layers.walls[key]), door: layers.doors[key] || null };
   }
 
-  /**
-   * Whether a step between neighbouring squares is possible. `open(door)`
-   * says whether a door lets you through (by default, any that isn't
-   * locked: a closed one opens).
-   */
-  function canStep(map, a, b, open) {
-    if (b.x < 0 || b.y < 0 || b.x >= map.width || b.y >= map.height) return false;
-    if (blocking(map, b.x, b.y)) return false;
-    var there = between(map, a, b);
-    if (there.wall) return false;
-    if (there.door) {
-      return open ? Boolean(open(there.door)) : !there.door.locked;
-    }
-    if (a.x !== b.x && a.y !== b.y) {
-      return !blocking(map, a.x, b.y) && !blocking(map, b.x, a.y);
-    }
-    return true;
-  }
-
   // ── Paths (L-624 / #449) ───────────────────────────
 
   /**
@@ -185,56 +160,6 @@
   function doorState(door, states) {
     var saved = states && states[door.id];
     return saved || (door.locked ? 'locked' : 'closed');
-  }
-
-  /**
-   * The path rules for a map and a save's doors, as grid-paths.js options:
-   * exits are stepped onto, never through (`avoid`); a step costs its price,
-   * by default 1, or 2 onto difficult ground, and 1 more to open a closed
-   * door on the way (`cost`; Infinity where canStep says no, or past a
-   * locked door); `opens` names the closed door a step opens, where a walk
-   * stops, and `openCost` what opening it costs. The server and the Loom
-   * page share these, so a preview is the move.
-   *
-   * `prices` (L-832; planning/action-points.md §4.2) are a character's in
-   * action points: { move, difficult, door }, `door` a number or a
-   * function of the door (its own `ap`), each defaulting as above.
-   */
-  function pathOptions(map, states, prices) {
-    var price = prices || {};
-    var move = price.move >= 1 ? price.move : 1;
-    var difficult = price.difficult >= 1 ? price.difficult : 2;
-    var doorCost = function (door) {
-      var c = typeof price.door === 'function' ? price.door(door) : price.door;
-      return typeof c === 'number' && c >= 0 ? c : 1;
-    };
-    var passable = function (door) {
-      return doorState(door, states) !== 'locked';
-    };
-    var closedDoor = function (a, b) {
-      var door = between(map, a, b).door;
-      return door && doorState(door, states) === 'closed' ? door : null;
-    };
-    var byId = {};
-    (map.doors || []).forEach(function (door) {
-      byId[door.id] = door;
-    });
-    return {
-      avoid: map.exits || [],
-      cost: function (a, b) {
-        if (!canStep(map, a, b, passable)) return Infinity;
-        var base = groundAt(map, b) === 'difficult' ? difficult : move;
-        var door = closedDoor(a, b);
-        return door ? base + doorCost(door) : base;
-      },
-      opens: function (a, b) {
-        var door = closedDoor(a, b);
-        return door ? door.id : null;
-      },
-      openCost: function (id) {
-        return byId[id] ? doorCost(byId[id]) : 1;
-      },
-    };
   }
 
   // ── Checks ─────────────────────────────────────────
@@ -255,42 +180,18 @@
     );
   }
 
-  /**
-   * The squares a walk from `starts` can reach, by "x,y": along steps canStep
-   * allows (locked doors shut, unless `open(door)` says otherwise: L-394),
-   * never on from an exit, since stepping on one leaves (an exit is reached,
-   * but not walked through).
-   */
-  function reachable(map, starts, open) {
-    var exits = {};
-    (map.exits || []).forEach(function (e) {
-      exits[cellKey(e.x, e.y)] = true;
-    });
-    var seen = {};
-    var queue = [];
-    starts.forEach(function (start) {
-      seen[cellKey(start.x, start.y)] = true;
-      queue.push({ x: start.x, y: start.y, first: true });
-    });
-    while (queue.length) {
-      var at = queue.shift();
-      if (!at.first && exits[cellKey(at.x, at.y)]) continue;
-      for (var dx = -1; dx <= 1; dx++) {
-        for (var dy = -1; dy <= 1; dy++) {
-          var next = { x: at.x + dx, y: at.y + dy };
-          var key = cellKey(next.x, next.y);
-          if ((!dx && !dy) || seen[key] || !canStep(map, at, next, open)) continue;
-          seen[key] = true;
-          queue.push(next);
-        }
-      }
-    }
-    return seen;
+  // map-paths.js, read when needed (it reads layers through map-geometry.js,
+  // and the page loads it after this file).
+  function paths() {
+    return typeof module === 'object' && module.exports
+      ? require('./map-paths')
+      : window.Loom.mapPaths;
   }
 
-  // Whether `entry` can walk to an exit (or is one).
+  // Whether `entry` can walk to an exit (or is one), as a medium character
+  // in feet (L-922).
   function reachesExit(map, entry) {
-    var reached = reachable(map, [entry]);
+    var reached = paths().squaresReached(map, [entry]);
     return (map.exits || []).some(function (e) {
       return reached[cellKey(e.x, e.y)];
     });
@@ -467,14 +368,11 @@
     KINDS: KINDS,
     compile: compile,
     between: between,
-    canStep: canStep,
     obstacleAt: obstacleAt,
     groundAt: groundAt,
     hasLayers: hasLayers,
-    reachable: reachable,
     check: check,
     doorState: doorState,
-    pathOptions: pathOptions,
   };
 
   if (typeof window !== 'undefined') {

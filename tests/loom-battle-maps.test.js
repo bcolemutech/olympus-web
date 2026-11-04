@@ -27,8 +27,7 @@ const { loomCreateSave, loomDeleteSave, loomPlayTurn, loomGetMap } = require('..
 const { OUT_OF_AP } = require('../functions/loom-turn/steps');
 const { unpack, withSquares } = require('../functions/loom-turn/seen');
 const sight = require('../functions/loom-canon/sight');
-const gridPaths = require('../functions/loom-canon/grid-paths');
-const layers = require('../functions/loom-canon/layers');
+const mapPaths = require('../functions/loom-canon/map-paths');
 
 const fs = require('fs');
 const path = require('path');
@@ -1576,13 +1575,14 @@ describe('what a save has seen (L-632)', () => {
       const tavern = (await tavernRef().get()).data();
       const from = { x: 1, y: 0 };
       expect(sight.inSight(tavern, from, {})['2,5']).toBeUndefined();
-      const quickest = gridPaths.pathTo(
-        tavern,
-        from,
-        { x: 3, y: 7 },
-        layers.pathOptions(tavern, {})
+      // In feet (L-922): round the pillar's corner and on through (2, 5).
+      const plan = mapPaths.planner(tavern, {});
+      const quickest = mapPaths.pathTo(
+        plan,
+        mapPaths.centreOf(from),
+        mapPaths.centreOf({ x: 3, y: 7 })
       );
-      expect(quickest.path).toContainEqual({ x: 2, y: 5, cost: 5 });
+      expect(mapPaths.squaresOf(mapPaths.stations(plan, quickest))).toContainEqual({ x: 2, y: 5 });
 
       const { saveId } = await newGame();
       await standAt(saveId, 'plc_1_tavern', 'bm_tavern', from);
@@ -1738,7 +1738,7 @@ describe('people on the map (L-642)', () => {
   test('the grid view gets the squares of those in sight only', async () => {
     await standAt(saveId, 'plc_1_tavern', 'bm_tavern', { x: 1, y: 1 });
     expect(await peopleOn()).toEqual(
-      expect.arrayContaining([{ id: 'chr_wim', name: 'Wim', x: 3, y: 4 }])
+      expect.arrayContaining([{ id: 'chr_wim', name: 'Wim', x: 3, y: 4, width: 2.5 }])
     );
     expect((await peopleOn()).map((p) => p.id)).not.toContain('chr_old_mags');
   });
@@ -1752,7 +1752,7 @@ describe('people on the map (L-642)', () => {
     const sees = sight.inSight((await tavernRef().get()).data(), step.cell, {});
     expect(sees['9,2']).toBe(true);
     expect(await peopleOn()).toEqual(
-      expect.arrayContaining([{ id: 'chr_old_mags', name: 'Old Mags', x: 9, y: 2 }])
+      expect.arrayContaining([{ id: 'chr_old_mags', name: 'Old Mags', x: 9, y: 2, width: 2.5 }])
     );
     const on = await continueOn(saveId);
     expect(on.step.cell).toEqual({ x: 10, y: 6 });

@@ -11,6 +11,7 @@ const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
+const mapPaths = require('../../../loom-canon/map-paths');
 const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
 const { validateSheet } = require('../../../loom-canon/sheets');
@@ -429,8 +430,8 @@ function squareFor(world, host, spec, selfId) {
 // it can only through a locked door, or not at all.
 function reachWarning(map, cell, what) {
   const key = `${cell.x},${cell.y}`;
-  if (layers.reachable(map, map.entries || [])[key]) return null;
-  if (layers.reachable(map, map.entries || [], () => true)[key]) {
+  if (mapPaths.squaresReached(map, map.entries || [])[key]) return null;
+  if (mapPaths.squaresReached(map, map.entries || [], { open: () => true })[key]) {
     return `${what} on ${map.name} is behind a locked door: only someone who opens it gets there.`;
   }
   return `Nobody can reach ${what} from an entry of ${map.name}: it's walled in.`;

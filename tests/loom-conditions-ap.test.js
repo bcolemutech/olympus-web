@@ -87,7 +87,7 @@ describe.each([
   test('Prone doubles a walk’s cost; standing up costs its 5 and ends it', () => {
     const prone = withCondition('prone', { turns: 5 });
     const walk = planStep(world, standing(prone), { cell: { x: 5, y: 2 } });
-    expect(walk.turn).toMatchObject({ ap: 20 - 3 * 2, moved: 3 });
+    expect(walk.turn).toMatchObject({ ap: 20 - 3 * 2, moved: 15 });
     const stood = evaluate(
       { verb: 'stand', targets: [], params: {} },
       {},

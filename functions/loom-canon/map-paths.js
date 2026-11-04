@@ -43,6 +43,8 @@
   //   walk(plan, path, ap, opts)  how far a move gets: stations walked, AP
   //                               spent, a door opened
   //   reachable(plan, from, ap)   the squares whose centres a move reaches
+  //   squaresReached(map, starts) the squares a walk from them gets to, for
+  //                               builders' checks
   //   costsFrom(plan, from)       the cheapest way to each square, for choosing
   //   spotOf, feetBetween, gapBetween, bandOf   distances in feet (DS1):
   //                               between people, edge to edge, and how far
@@ -1257,6 +1259,72 @@
     });
   }
 
+  /**
+   * The squares someone can walk to from `starts` (squares), by "x,y"
+   * (L-394, L-922): those whose centre, or the spot in them nearest it they
+   * fit, a walk reaches, as wide as `options.width` (medium by default).
+   * Doors as `options.open(door)` says (by default any not locked: a closed
+   * one opens); never on through an exit, since stepping on one leaves: an
+   * exit is reached, not walked through. For builders' checks and placing
+   * people; with no limit on AP.
+   */
+  function squaresReached(map, starts, options) {
+    var o = options || {};
+    var states = {};
+    (geometryOf(map).doors || []).forEach(function (door) {
+      var open = o.open ? o.open(door) : door.state !== 'locked';
+      states[door.id] = open ? 'open' : 'locked';
+    });
+    var exits = {};
+    (map.exits || []).forEach(function (e) {
+      exits[e.x + ',' + e.y] = true;
+    });
+    var plan = planner(map, { width: o.width, states: states });
+    var seen = {};
+    var visited = {};
+    var queue = [];
+    var push = function (n) {
+      if (visited[n.id]) return;
+      visited[n.id] = n;
+      queue.push(n);
+    };
+    (starts || []).forEach(function (start) {
+      seen[start.x + ',' + start.y] = true;
+      var at = spotIn(plan, start);
+      if (!at) return;
+      var rs = startRadius(plan, at);
+      if (rs < 0) return;
+      plan.around(at, NEAR).forEach(function (n) {
+        if (plan.clear(at, n, rs)) push(n);
+      });
+    });
+    // A flood over the fine grid: a point in an exit is reached, never
+    // walked on from.
+    for (var k = 0; k < queue.length; k++) {
+      var n = queue[k];
+      var sq = squareOf(n);
+      if (exits[sq.x + ',' + sq.y] && !seen[sq.x + ',' + sq.y]) continue;
+      var next = plan.neighbours(n);
+      for (var m = 0; m < next.length; m++) {
+        if (!visited[next[m].id] && plan.link(n, next[m])) push(next[m]);
+      }
+    }
+    // A square is reached when its spot is; an exit when any point in it is.
+    Object.keys(visited).forEach(function (id) {
+      var in2 = squareOf(visited[id]);
+      if (exits[in2.x + ',' + in2.y]) seen[in2.x + ',' + in2.y] = true;
+    });
+    for (var y = 0; y < (map.height || 0); y++) {
+      for (var x = 0; x < (map.width || 0); x++) {
+        var key = x + ',' + y;
+        if (seen[key] || exits[key]) continue;
+        var s2 = spotId(plan, { x: x, y: y });
+        if (s2 && visited[s2.id]) seen[key] = true;
+      }
+    }
+    return seen;
+  }
+
   // ── Distances (DS1) ─────────────────────────────────────────────────
 
   /**
@@ -1329,6 +1397,7 @@
     cutBefore: cutBefore,
     squaresOf: squaresOf,
     reachable: reachable,
+    squaresReached: squaresReached,
     costsFrom: costsFrom,
     spotOf: spotOf,
     feetBetween: feetBetween,

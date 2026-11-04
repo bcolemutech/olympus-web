@@ -6,6 +6,7 @@ const { ToolError } = require('../../registry');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const layers = require('../../../loom-canon/layers');
+const mapPaths = require('../../../loom-canon/map-paths');
 const areas = require('../../../loom-canon/areas');
 const mapAreas = require('../../../loom-canon/map-areas');
 const apRules = require('../../../loom-canon/ap');
@@ -335,9 +336,9 @@ function layerWarnings(map) {
         'as its own map earns only half its score for a map. Add them with set_map_layers.',
     ];
   }
-  const reached = layers.reachable(map, map.entries || []);
+  const reached = mapPaths.squaresReached(map, map.entries || []);
   // Locked doors open (L-394): what lies behind one isn't walled in.
-  const unlocked = layers.reachable(map, map.entries || [], () => true);
+  const unlocked = mapPaths.squaresReached(map, map.entries || [], { open: () => true });
   const near = (f, by) =>
     [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => by[`${f.x + dx},${f.y + dy}`]));
   return (map.features || [])

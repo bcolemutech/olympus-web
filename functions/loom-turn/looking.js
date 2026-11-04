@@ -26,11 +26,11 @@ const layers = require('../loom-canon/layers');
 const hazards = require('../loom-canon/hazards');
 const mapAreas = require('../loom-canon/map-areas');
 const combat = require('../loom-modules/combat');
+const mapPaths = require('../loom-canon/map-paths');
 const { doorStatesOf, doorSides } = require('./steps');
 
 const key = (c) => c.x + ',' + c.y;
 const coords = (c) => '(' + c.x + ', ' + c.y + ')';
-const squares = (n) => (n === 1 ? '1 square' : n + ' squares');
 
 // The obstacle covering a square, if any.
 function obstacleAt(map, cell) {
@@ -49,7 +49,7 @@ const KIND = {
 };
 
 function lookAt(canonWorld, save, target, { known, inSight } = {}) {
-  const { map, cell: here } = maps.positionOf(canonWorld, save);
+  const { map, cell: here, point: herePoint } = maps.positionOf(canonWorld, save);
   if (!map) return { refused: "There's no map here to look at." };
   const states = doorStatesOf(save, map.id);
   const sees = (c) => !inSight || Boolean(inSight[key(c)]);
@@ -134,7 +134,10 @@ function lookAt(canonWorld, save, target, { known, inSight } = {}) {
       ? 'It is where the player stands.'
       : steps === 1
         ? 'It is beside the player.'
-        : 'It is ' + squares(steps) + ' from the player.'
+        : // How far, in feet, from where the player stands (L-922).
+          'It is ' +
+          Math.round(mapPaths.feetBetween(herePoint ? { point: herePoint } : here, cell)) +
+          ' ft from the player.'
   );
   if (steps > 0) {
     const cover = combat.position.coverOf(map, states, here, cell);
