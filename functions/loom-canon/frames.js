@@ -112,8 +112,12 @@ function asLocation(play, id, place) {
             ...(under.ground ? { ground: under.ground } : {}),
             ...(under.space && under.space.size ? { size: under.space.size } : {}),
             ...(under.image ? { image: under.image } : {}),
-            // Its geometry (L-921, GE5), read with geometryOf.
+            // Its geometry (L-921, GE5), read with geometryOf, and its space
+            // (L-924: the town view draws it).
             ...(isObject(under.geometry) ? { geometry: under.geometry } : {}),
+            ...(under.space && under.space.width
+              ? { space: { width: under.space.width, height: under.space.height } }
+              : {}),
           },
         }
       : {}),

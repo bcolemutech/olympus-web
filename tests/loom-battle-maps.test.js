@@ -342,7 +342,13 @@ describe('a visit to the Gull & Anchor', () => {
       areas: [], // none here (#670)
       hereArea: null,
       // Open ground, all in sight: 96 bits set, 12 bytes of 0xff (L-633).
-      fog: { seen: '/'.repeat(16), inSight: '/'.repeat(16) },
+      fog: {
+        seen: '/'.repeat(16),
+        inSight: '/'.repeat(16),
+        // What's in sight, to the sight lines (L-924): with no walls yet, all
+        // of the room, 60 × 40 ft.
+        view: [0, 0, 60, 0, 60, 40, 0, 40],
+      },
     });
     expect(view.town).toMatchObject({ locationId: 'loc_1', here: 'plc_1_tavern' });
   });

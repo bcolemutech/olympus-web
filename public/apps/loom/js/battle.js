@@ -55,14 +55,6 @@
     exitLabel: 0xffab91,
     feature: 0xffb74d,
     dark: 0x0a0e1a,
-    wall: 0xe9e4d8,
-    solid: 0x080a10,
-    solidEdge: 0x3a4050,
-    low: 0xcdaa7d,
-    difficult: 0x9aa0a6,
-    dot: 0xbebebe,
-    door: 0xffb74d,
-    doorLocked: 0xe57373,
     reach: 0xffb74d,
     path: 0xffb74d,
     selected: 0xffffff,
@@ -83,6 +75,8 @@
   var FOG_DIM = 0.6; // seen before, out of sight now
   var FOG_SCALE = 4; // fog texture pixels a square, before it is stretched
   var FOG_BLUR = 3; // px of that texture: the feathered edge, about ¾ of a square
+  var FOG_DIM_SCALE = 12; // the dimming's texture pixels a square: its edge follows the sight lines (L-924)
+  var FOG_DIM_BLUR = 2; // px of that texture: a soft edge, a sixth of a square
   var MIST = 0.16; // the drifting mist over unseen ground, at its thickest (K3)
   var MIST_RGB = '84,98,128';
   var MIST_PERIOD = 9; // s for the mist to thin and thicken
@@ -572,6 +566,7 @@
       scene: new PIXI.Container(),
       ground: new PIXI.Graphics(),
       art: new PIXI.Sprite(),
+      painted: new PIXI.Container(), // the map drawn from its data (L-924; paint.js)
       fogDim: new PIXI.Sprite(),
       under: new PIXI.Graphics(), // reach, grid, layers, entries, exits, features
       people: new PIXI.Container(),
@@ -583,7 +578,7 @@
       cards: new PIXI.Container(), // foes' cards while their turns play out (L-828)
     };
     n.art.alpha = 0.95;
-    n.scene.addChild(n.ground, n.art, n.fogDim, n.under, n.people, n.fogDark, n.mist);
+    n.scene.addChild(n.ground, n.art, n.painted, n.fogDim, n.under, n.people, n.fogDark, n.mist);
     n.scene.addChild(n.labels, n.over, n.you.container, n.cards);
     container.addChild(n.scene);
     battle.nodes = n;
@@ -595,11 +590,45 @@
     return h - Math.floor(h);
   }
 
+  // The dimming of what's been seen, cut to the region in sight now (L-924):
+  // drawn finer than the dark, so its edge follows the sight lines (a wall's
+  // shadow, a doorway's cone), and softened a little.
+  function dimOutside(d, seen, view) {
+    var scale = FOG_DIM_SCALE;
+    var raw = document.createElement('canvas');
+    raw.width = d.width * scale;
+    raw.height = d.height * scale;
+    var ctx = raw.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,' + FOG_DIM + ')';
+    for (var y = 0; y < d.height; y++) {
+      for (var x = 0; x < d.width; x++) {
+        if (seen(y * d.width + x)) ctx.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+    var px = scale / MP.FEET; // canvas pixels a foot
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.moveTo(view[0] * px, view[1] * px);
+    for (var k = 2; k + 1 < view.length; k += 2) ctx.lineTo(view[k] * px, view[k + 1] * px);
+    ctx.closePath();
+    ctx.fill();
+    var soft = document.createElement('canvas');
+    soft.width = raw.width;
+    soft.height = raw.height;
+    var sctx = soft.getContext('2d');
+    if ('filter' in sctx) sctx.filter = 'blur(' + FOG_DIM_BLUR + 'px)';
+    sctx.drawImage(raw, 0, 0);
+    var texture = window.PIXI.Texture.from(soft);
+    texture.source.scaleMode = 'linear';
+    return texture;
+  }
+
   // The fog as two textures (A3), a few pixels a square, blurred for soft
   // edges and stretched over the grid smoothly: the dimming of squares seen
   // before, and the dark of squares never seen, with a faint grain.
   function fogTextures(d) {
-    var key = d.id + '|' + d.fog.seen + '|' + d.fog.inSight;
+    var view = Array.isArray(d.fog.view) && d.fog.view.length >= 6 ? d.fog.view : null;
+    var key = d.id + '|' + d.fog.seen + '|' + d.fog.inSight + '|' + (view ? view.join(',') : '');
     if (battle.fogTextures.key === key) return battle.fogTextures;
     var seen = unpacked(d.fog.seen);
     var inSight = unpacked(d.fog.inSight);
@@ -637,9 +666,13 @@
     }, MIST_RGB);
     battle.fogTextures = {
       key: key,
-      dim: make(function (i) {
-        return seen(i) && !inSight(i) ? FOG_DIM : 0;
-      }),
+      // Dimmed: seen before; in sight now, the region seen, to its exact
+      // edge (L-924, from the server's sight outline), else by the square.
+      dim: view
+        ? dimOutside(d, seen, view)
+        : make(function (i) {
+            return seen(i) && !inSight(i) ? FOG_DIM : 0;
+          }),
       dark: make(function (i, x, y) {
         if (seen(i)) return 0;
         unseen += 1;
@@ -651,13 +684,55 @@
     return battle.fogTextures;
   }
 
-  // Diagonal hatching inside a rectangle (low obstacles), lines `gap` apart.
-  function hatch(g, x0, y0, x1, y1, gap) {
-    for (var c = x0 + y0 + gap / 2; c < x1 + y1; c += gap) {
-      var xa = Math.max(x0, c - y1);
-      var xb = Math.min(x1, c - y0);
-      if (xb > xa) g.moveTo(xa, c - xa).lineTo(xb, c - xb);
+  // The world's own accent, for the painter's tint (RD4): set on the page
+  // only when the world has one (theme.js useAccent).
+  function accent() {
+    var v = document.documentElement.style.getPropertyValue('--loom-accent').trim();
+    var m = /^#([0-9a-f]{6})$/i.exec(v);
+    return m ? parseInt(m[1], 16) : null;
+  }
+
+  // The map as the painter draws it (L-924): its geometry with its layers
+  // from before read as geometry (map-paths.js geometryOf), each door in
+  // this save's state. Over a map's own art (EX2), the obstacles its layers
+  // made objects of are the art's own and aren't drawn again.
+  function paintMap(n, d) {
+    var states = {};
+    (d.doors || []).forEach(function (door) {
+      states[door.id] = door.state;
+    });
+    var merged = MP.geometryOf(d);
+    var geometry = {};
+    Object.keys(merged).forEach(function (k) {
+      geometry[k] = merged[k];
+    });
+    geometry.doors = (merged.doors || []).map(function (door) {
+      if (!states[door.id]) return door;
+      var copy = {};
+      Object.keys(door).forEach(function (k) {
+        copy[k] = door[k];
+      });
+      copy.state = states[door.id];
+      return copy;
+    });
+    if (d.image) {
+      geometry.objects = (merged.objects || []).filter(function (o) {
+        return String(o.id).indexOf('layer-') !== 0;
+      });
     }
+    var root = Loom.mapPaint.paint(n.painted, 'battle:' + d.id, geometry, {
+      tile: MP.FEET,
+      wall: 1.5,
+      art: Boolean(d.image),
+      tint: accent(),
+      worldKinds: d.objectKinds || null,
+      onProgress: engine.progress,
+      onChange: function () {
+        engine.draw();
+      },
+    });
+    root.position.set(PAD, PAD);
+    root.scale.set(CELL / MP.FEET);
   }
 
   function rebuild(view) {
@@ -673,6 +748,12 @@
       .rect(PAD, PAD, gw, gh)
       .fill({ color: COLOURS.ground })
       .stroke({ width: px, color: COLOURS.groundEdge, alpha: 0.25 });
+
+    // The map drawn from its data (L-924), when what's sent of it changes.
+    if (battle.paintedFor !== d) {
+      battle.paintedFor = d;
+      paintMap(n, d);
+    }
 
     // The art is stretched to the grid, as Claude sees it in view_image.
     var art = d.image && battle.art && battle.art.ready(d.image);
@@ -753,63 +834,16 @@
       });
     }
 
-    // The layers (L-627): on a plain grid, obstacles and walls.
+    // The map itself, ground, walls, doors, windows, objects and light, is
+    // the painter's (L-924; paint.js), under all this. A door selected
+    // (L-627) is marked over it.
     var wallWidth = Math.max(3, cellPx / 7) * px;
-    if (!d.image) {
-      (d.obstacles || []).forEach(function (o) {
-        var a = square(o);
-        var w = (o.w || 1) * CELL;
-        var h = (o.h || 1) * CELL;
-        if (o.kind === 'solid') {
-          g.rect(a.x, a.y, w, h)
-            .fill({ color: COLOURS.solid, alpha: 0.88 })
-            .stroke({ width: 1.5 * px, color: COLOURS.solidEdge });
-        } else if (o.kind === 'low') {
-          hatch(g, a.x, a.y, a.x + w, a.y + h, 8 * px * Math.SQRT2);
-          g.stroke({ width: 3 * px, color: COLOURS.low, alpha: 0.75 });
-          g.rect(a.x, a.y, w, h).stroke({ width: 1.5 * px, color: COLOURS.low });
-        } else {
-          var gap = 9 * px;
-          if ((w / gap) * (h / gap) < 4000) {
-            for (var dx = gap / 2; dx < w; dx += gap) {
-              for (var dy = gap / 2; dy < h; dy += gap) g.circle(a.x + dx, a.y + dy, 1.6 * px);
-            }
-            g.fill({ color: COLOURS.dot, alpha: 0.8 });
-          }
-          Loom.draw.polyline(
-            g,
-            [
-              { x: a.x, y: a.y },
-              { x: a.x + w, y: a.y },
-              { x: a.x + w, y: a.y + h },
-              { x: a.x, y: a.y + h },
-              { x: a.x, y: a.y },
-            ],
-            [4 * px, 3 * px]
-          );
-          g.stroke({ width: 1.5 * px, color: COLOURS.difficult });
-        }
-      });
-      (d.walls || []).forEach(function (w) {
-        Loom.draw.polyline(g, (w.points || []).map(square));
-        g.stroke({ width: wallWidth, color: COLOURS.wall, cap: 'square', join: 'miter' });
-      });
-    }
-
-    // Doors, always, by their state for this save.
     (d.doors || []).forEach(function (door) {
+      if (battle.selectedDoor !== door.id) return;
       var a = square(door.from);
       var b = square(door.to);
-      if (battle.selectedDoor === door.id) {
-        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-        g.stroke({ width: wallWidth + 8 * px, color: COLOURS.selected, alpha: 0.45 });
-      }
-      Loom.draw.line(g, a, b, door.state === 'open' ? [3 * px, 4 * px] : null);
-      g.stroke({
-        width: wallWidth + 2 * px,
-        color: door.state === 'locked' ? COLOURS.doorLocked : COLOURS.door,
-        alpha: door.state === 'open' ? 0.85 : 1,
-      });
+      g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke({ width: wallWidth + 8 * px, color: COLOURS.selected, alpha: 0.45 });
     });
 
     // Hazards in sight (L-815; EF9): their squares tinted, their edge drawn

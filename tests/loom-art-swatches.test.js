@@ -7,9 +7,9 @@
  * box with a question mark; and a file that goes missing is reported, not
  * silently drawn blank.
  *
- * It needs Playwright and its Chromium, which the repo doesn't install: where
- * they are missing the suite is skipped, with a note. (The environment this is
- * written in has both.)
+ * It needs Playwright (in the tests' dependencies) and its Chromium, which CI
+ * installs (L-924): where the browser is missing the suite is skipped, with
+ * a note.
  *
  * Run: cd tests && npx jest loom-art-swatches --verbose
  */

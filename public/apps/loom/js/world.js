@@ -143,11 +143,19 @@
     var PIXI = window.PIXI;
     var backdrop = new PIXI.Graphics();
     var art = new PIXI.Sprite();
+    var painted = new PIXI.Container(); // the region map drawn from its data (L-924)
     var routes = new PIXI.Graphics();
     var pins = new PIXI.Graphics();
     var labels = new PIXI.Container();
-    container.addChild(backdrop, art, routes, pins, labels);
-    world.nodes = { backdrop: backdrop, art: art, routes: routes, pins: pins, labels: labels };
+    container.addChild(backdrop, art, painted, routes, pins, labels);
+    world.nodes = {
+      backdrop: backdrop,
+      art: art,
+      painted: painted,
+      routes: routes,
+      pins: pins,
+      labels: labels,
+    };
   }
 
   var line = Loom.draw.line;
@@ -172,6 +180,39 @@
     return label;
   }
 
+  // The world's own accent, for the painter's tint (RD4).
+  function accent() {
+    var v = document.documentElement.style.getPropertyValue('--loom-accent').trim();
+    var m = /^#([0-9a-f]{6})$/i.exec(v);
+    return m ? parseInt(m[1], 16) : null;
+  }
+
+  // Paints the region map's geometry once per change, and places it with
+  // the camera every draw: map units to the world map's.
+  function paintRegion(n, data, view) {
+    var g = data.map && data.map.geometry;
+    var space = data.map && data.map.space;
+    n.painted.visible = Boolean(g && space && space.width);
+    if (!n.painted.visible) return;
+    if (world.paintedFor !== data) {
+      world.paintedFor = data;
+      world.paintRoot = Loom.mapPaint.paint(n.painted, 'region:' + (data.mapId || 'top'), g, {
+        tile: space.width / 32,
+        wall: space.width / 400,
+        art: Boolean(data.map.image),
+        tint: accent(),
+        onProgress: engine.progress,
+        onChange: function () {
+          engine.draw();
+        },
+      });
+    }
+    if (world.paintRoot) {
+      world.paintRoot.position.set(view.x, view.y);
+      world.paintRoot.scale.set((view.scale * data.map.width) / space.width);
+    }
+  }
+
   function draw(container, view) {
     if (!world.nodes) build(container);
     var n = world.nodes;
@@ -194,6 +235,11 @@
       n.art.height = data.map.height * view.scale;
       world.art.sharpen(Loom.draw.devicePx(Math.max(n.art.width, n.art.height)));
     }
+
+    // The region map drawn from its data (L-924; paint.js), under the
+    // routes and places, when it has some: its art (EX2) in place of its
+    // ground and lines.
+    paintRegion(n, data, view);
 
     var byId = {};
     positioned().forEach(function (p) {

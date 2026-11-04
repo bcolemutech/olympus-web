@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The Loom's drawers, for tests</title>
+    <!--
+      The Loom's drawers on the real map engine (public/apps/loom/js/:
+      battle.js, town.js and world.js), with the store and the menus stubbed,
+      for headless Chrome (tests/loom-paint.test.js; L-924 / #728): a map as
+      loomGetMap sends it, drawn with the painter, the fog and the tokens.
+    -->
+    <link rel="stylesheet" href="/apps/loom/loom.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #101318;
+      }
+      #panel {
+        position: relative;
+        width: 960px;
+        height: 640px;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="panel"></div>
+    <script src="/pixi.min.js"></script>
+    <script>
+      window.__store = { map: null, save: { characterName: 'Tam' }, ui: {} };
+      window.Loom = {
+        state: { turnInProgress: false },
+        ui: { html: function () {}, render: function () {} },
+        store: { get: () => window.__store },
+        map: { render: () => window.Loom.engine.draw() },
+        play: {},
+        artKey: (image) => (image ? image.url || null : null),
+        artUrl: (image) => Promise.resolve(image.url),
+      };
+    </script>
+    <script src="/apps/loom/js/map-math.js"></script>
+    <script src="/apps/loom/js/materials.js"></script>
+    <script src="/apps/loom/js/map-geometry.js"></script>
+    <script src="/apps/loom/js/map-paths.js"></script>
+    <script src="/apps/loom/js/town-layout.js"></script>
+    <script src="/apps/loom/js/town-paths.js"></script>
+    <script src="/apps/loom/js/progress.js"></script>
+    <script src="/apps/loom/js/paint.js"></script>
+    <script src="/apps/loom/js/engine.js"></script>
+    <script src="/apps/loom/js/draw.js"></script>
+    <script src="/apps/loom/js/battle.js"></script>
+    <script src="/apps/loom/js/town.js"></script>
+    <script src="/apps/loom/js/world.js"></script>
+    <script>
+      window.__progress = [];
+      // Shows a map as loomGetMap sends it, on the level `level` (battle,
+      // town or world); resolves once it's drawn.
+      window.__show = async function (data, turn, level = 'battle') {
+        const engine = Loom.engine;
+        if (!engine.ready()) {
+          engine.mount(document.getElementById('panel'), {
+            bounds: () => window.__bounds(),
+            onTap() {},
+            onHover() {},
+            onCamera: () => engine.draw(),
+          });
+        }
+        await engine.ready();
+        if (!engine.__watched) {
+          const progress = engine.progress;
+          engine.progress = function (f) {
+            window.__progress.push(f);
+            progress(f);
+          };
+          engine.__watched = true;
+        }
+        window.__progress = [];
+        window.__store.map = { combat: null, fight: null, character: null };
+        engine.setLevel(level);
+        const size = engine.size();
+        if (level === 'battle') {
+          window.__bounds = () => Loom.battle.bounds();
+          Loom.battle.setData(data, turn);
+          engine.setView(Loom.mapMath.fit(Loom.battle.framePoints(), size, window.__bounds()));
+        } else if (level === 'town') {
+          window.__bounds = () => Loom.town.BOUNDS;
+          Loom.town.setData(data, turn);
+          engine.setView(Loom.mapMath.fit(Loom.town.framePoints(), size, window.__bounds()));
+        } else {
+          window.__bounds = () => ({ width: data.map.width, height: data.map.height });
+          Loom.world.setData(data);
+          const corners = [
+            { x: 0, y: 0 },
+            { x: data.map.width, y: data.map.height },
+          ];
+          engine.setView(Loom.mapMath.fit(corners, size, window.__bounds()));
+        }
+        await new Promise((resolve) => {
+          const check = () => {
+            const last = window.__progress[window.__progress.length - 1];
+            if (window.__progress.length && last === null) return resolve();
+            setTimeout(check, 50);
+          };
+          check();
+        });
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      };
+    </script>
+  </body>
+</html>

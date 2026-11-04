@@ -123,15 +123,21 @@ function seenDoors(map, on, states) {
 }
 
 const MOVING = ['ground', 'walls', 'doors', 'windows', 'objects'];
+// What the grid view draws besides (L-924): lines and lights.
+const DRAWN = MOVING.concat(['lines', 'lights']);
 const FEET = geo.FEET_PER_SQUARE;
 
 // The corners of an item's shape, in feet, for whether it touches a square.
 function cornersOf(key, item) {
   const out = [];
   const add = (rings) => rings.forEach((ring) => ring.forEach((p) => out.push(p)));
-  if (key === 'walls') {
+  if (key === 'walls' || key === 'lines') {
     const read = geo.linesOf(item.points);
     if (read.lines) add(read.lines);
+  } else if (key === 'lights' && !item.shape) {
+    const at = Array.isArray(item.at) ? item.at : item.at ? [item.at.x, item.at.y] : null;
+    const r = Number(item.radius) || 0;
+    if (at) out.push([at[0] - r, at[1] - r], [at[0] + r, at[1] + r]);
   } else if (key === 'doors' || key === 'windows') {
     [item.from, item.to].forEach((p) => {
       if (Array.isArray(p)) out.push(p);
@@ -174,12 +180,42 @@ function seenGeometry(map, on, states = {}) {
     (stored.hidden || []).map((h) => (typeof h === 'string' ? h : h && h.id)).filter(Boolean)
   );
   const out = {};
-  for (const key of MOVING) {
+  for (const key of DRAWN) {
     const kept = (stored[key] || [])
       .filter((item) => item && !hidden.has(item.id) && touchesSeen(cornersOf(key, item), on))
       .map((item) =>
-        key === 'doors' && states[item.id] ? { ...item, state: states[item.id] } : item
+        key === 'doors' && states[item.id]
+          ? { ...item, state: states[item.id] }
+          : key === 'objects' && item.art
+            ? { ...item, art: artLink(item.art) }
+            : item
       );
+    if (kept.length) out[key] = kept;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+// A library image as the page draws it: its link only, never its record
+// (A5; L-924).
+function artLink(art) {
+  return art && art.link ? { link: art.link } : null;
+}
+
+/**
+ * A map's geometry as the page draws it, whole (a region or area map's,
+ * L-924): what's drawn only, hidden things left out, objects' art as links.
+ * Null when it has none.
+ */
+function drawnGeometry(stored) {
+  if (!geo.hasGeometry(stored)) return null;
+  const hidden = new Set(
+    (stored.hidden || []).map((h) => (typeof h === 'string' ? h : h && h.id)).filter(Boolean)
+  );
+  const out = {};
+  for (const key of DRAWN) {
+    const kept = (stored[key] || [])
+      .filter((item) => item && !hidden.has(item.id))
+      .map((item) => (key === 'objects' && item.art ? { ...item, art: artLink(item.art) } : item));
     if (kept.length) out[key] = kept;
   }
   return Object.keys(out).length ? out : null;
@@ -206,6 +242,8 @@ function statesOf(known) {
 }
 
 module.exports = {
+  drawnGeometry,
+  artLink,
   doorSides,
   knownMap,
   seenWalls,

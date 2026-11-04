@@ -785,6 +785,65 @@
   display: block;
 }
 
+/* The map's progress effect while it draws (L-924; PL4): a bar across the
+   top of the panel, a shimmer running along it, and a quiet label. */
+.loom-map-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.loom-map-progress[hidden] {
+  display: none;
+}
+
+.loom-map-progress-bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--loom-accent) 70%, transparent),
+    var(--loom-accent),
+    color-mix(in srgb, var(--loom-accent) 70%, transparent)
+  );
+  background-size: 200% 100%;
+  transition: width 0.2s ease-out;
+  animation: loom-map-progress-shimmer 1.4s linear infinite;
+}
+
+.loom-map-progress-label {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--loom-muted);
+  background: rgba(10, 14, 26, 0.75);
+  border-radius: 999px;
+}
+
+@keyframes loom-map-progress-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loom-map-progress-bar {
+    animation: none;
+    transition: none;
+  }
+}
+
 .loom-map-controls {
   position: absolute;
   top: 0.6rem;

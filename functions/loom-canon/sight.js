@@ -30,6 +30,7 @@
  *   sees(map, from, to, states, options) whether one square is
  *   viewOf(map, from, states, options)   the region seen, and what hides
  *   linesTo(map, from, to, states, o)    lines across a target, for cover
+ *   outline(map, from, states, options)  the region seen as points, for the fog
  *
  * `from` is a square ({ x, y }, its centre) or someone where they stand
  * ({ cell, point?, size? }); `options` { eye } (feet above the floor) or
@@ -740,6 +741,33 @@ function linesTo(map, from, to, states, options) {
 }
 
 /**
+ * The outline of what `from` sees (L-924, for the fog drawn to the sight
+ * lines): the region seen as a flat list of points in feet, [x0, y0, x1, y1,
+ * …], in order round the eyes, points on a straight run left out, each to
+ * the hundredth of a foot. Null off the grid.
+ */
+function outline(map, from, states, options) {
+  const view = viewOf(map, from, states, options);
+  if (!view) return null;
+  const r = view.region;
+  const n = r.angles.length;
+  const round = (v) => Math.round(v * 100) / 100 || 0; // never -0
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const p = (i + n - 1) % n;
+    const q = (i + 1) % n;
+    const ax = r.xs[i] - r.xs[p];
+    const ay = r.ys[i] - r.ys[p];
+    const bx = r.xs[q] - r.xs[p];
+    const by = r.ys[q] - r.ys[p];
+    // On a straight run: the turn there is nothing, however close the points.
+    if (abs(ax * by - ay * bx) <= 1e-9 * hyp(ax, ay) * hyp(bx, by)) continue;
+    out.push(round(r.xs[i]), round(r.ys[i]));
+  }
+  return out;
+}
+
+/**
  * The height of someone's eyes where they stand on a battle map, in feet:
  * the floor's height plus their size's eyes (for the GM, and high ground).
  */
@@ -748,4 +776,4 @@ function eyeLevel(map, from, options) {
   return viewer ? viewer.level : 0;
 }
 
-module.exports = { inSight, sees, viewOf, linesTo, eyeLevel, inRegion, rayHit };
+module.exports = { inSight, sees, viewOf, outline, linesTo, eyeLevel, inRegion, rayHit };
