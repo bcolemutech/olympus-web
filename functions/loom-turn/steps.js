@@ -16,8 +16,8 @@ const { doorSides, knownMap } = require('./known-map');
  * Moving without the GM (planning/the-loom-movement-and-vision.md §3;
  * L-613 / #443): a move on a battle map, to a square or along the plan, is
  * worked out by the rules alone. The save walks the cheapest path as far as
- * its action points allow (grid-paths.js; L-832), and the rest of the path
- * becomes its plan, which `continue` picks up next turn. Nothing is narrated: a step
+ * its action points allow (map-paths.js, in feet; L-832, L-922), and the
+ * rest of the path becomes its plan, which `continue` picks up next turn. Nothing is narrated: a step
  * answers with plain lines, and isn't written to the turn history.
  *
  * A path that reaches an exit leaves by it, as before, and that is narrated
@@ -25,9 +25,9 @@ const { doorSides, knownMap } = require('./known-map');
  * the way somewhere else, since stepping onto one leaves.
  *
  * Paths go around the map's walls, locked doors and obstacles (L-624 /
- * #449; layers.pathOptions), each step priced in AP by the system's cost
- * table as the character pays it (L-832; ../loom-canon/ap.js pricesOf): a
- * square 1, difficult ground 2, by default. A closed door on the way is
+ * #449), through any gap as wide as the character (L-922), priced in AP by
+ * the system's cost table as the character pays it (L-832; ../loom-canon/
+ * ap.js pricesOf): 1 per 5 ft, difficult ground 2, rounded up once a move. A closed door on the way is
  * opened (its door cost) and the walk stops there, the rest kept as the
  * plan, so the player sees what's beyond before going on; the save
  * remembers the door open (`save.doors[mapId][doorId]`). Walking off ends a
@@ -179,8 +179,9 @@ const inFeet = (map, p) =>
  * is the save's turn after the move: AP spent, the plan set or cleared.
  * `point` is where it stops, in feet, and `cell` the square that is in
  * (L-922), and `feet` how long the whole way is. `walked` lists the squares
- * stepped into, in order, for what is
- * seen on the way (./seen.js; L-632). `known` is the squares the save knows,
+ * stepped into, in order, for what is seen on the way (./seen.js; L-632),
+ * and `stations` the walk in feet (map-paths.js walk), for the reactions it
+ * draws. `known` is the squares the save knows,
  * keyed "x,y" (L-635): only those are headed for or walked over. Without it,
  * every square is (for the rules alone, as in tests).
  */
@@ -276,6 +277,9 @@ function planStep(canonWorld, save, target, known) {
   const squares = mapPaths
     .squaresOf(went.walked)
     .filter((sq, i) => i > 0 || !maps.sameCell(sq, from));
+  // The walk as it went, in feet: each station `{ x, y, square, weight }`,
+  // for the reactions it draws in a fight, by distance (L-922).
+  const stations = went.walked;
   const before = squares.length > 1 ? squares[squares.length - 2] : from;
   const hazard = squares.length ? hazards.enteredBy(map, before, stop, doors) : null;
   const into = hazard ? { hazard: { id: hazard.id, name: hazard.name, mapId: map.id } } : {};
@@ -283,7 +287,13 @@ function planStep(canonWorld, save, target, known) {
   // long action, ended by walking off.
   const off = walkedOff(turn, went.walked.length > 0);
   const ap = apOff ? turn.ap : turn.ap - spent;
-  const after = { ...off.turn, ap, moved: (turn.moved || 0) + squares.length };
+  // How far it walked, in feet (L-922), for End turn's line.
+  let walkedFeet = 0;
+  went.walked.reduce((a, b) => {
+    walkedFeet += Math.hypot(b.x - a.x, b.y - a.y);
+    return b;
+  }, start);
+  const after = { ...off.turn, ap, moved: (turn.moved || 0) + Math.round(walkedFeet) };
   const door = went.opened ? doorOn(map, went.opened) : null;
   // Who came into view: on the way, or from where it ends, through a door
   // just opened.
@@ -296,7 +306,9 @@ function planStep(canonWorld, save, target, known) {
   if (went.reached) {
     const { exit, feature } = maps.at(map, to);
     // The squares walked to it, for the reactions it draws in a fight (L-823).
-    if (exit) return { exit, spent, turn: { ...after, plan: null }, walked: squares, feet };
+    if (exit) {
+      return { exit, spent, turn: { ...after, plan: null }, walked: squares, stations, feet };
+    }
     return {
       feet,
       cell: { x: to.x, y: to.y },
@@ -309,6 +321,7 @@ function planStep(canonWorld, save, target, known) {
         .concat(seenLines),
       ...(seenLines.length ? { seenLines } : {}),
       walked: squares,
+      stations,
       ...into,
     };
   }
@@ -338,6 +351,7 @@ function planStep(canonWorld, save, target, known) {
     lines,
     ...(seenLines.length ? { seenLines } : {}),
     walked: squares,
+    stations,
     ...(door ? { opened: { mapId: map.id, doorId: door.id } } : {}),
     ...into,
   };

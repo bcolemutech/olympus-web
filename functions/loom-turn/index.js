@@ -25,6 +25,7 @@ const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const clock = require('../loom-canon/clock');
 const maps = require('../loom-canon/maps');
 const layers = require('../loom-canon/layers');
+const mapPaths = require('../loom-canon/map-paths');
 const { systemOf } = require('../loom-canon/checks');
 const { withAp } = require('../loom-canon/sheets');
 const apRules = require('../loom-canon/ap');
@@ -274,9 +275,10 @@ async function runTurnPipeline(params) {
           : planStep(canonWorld, fresh, target, found && knownTo(canonWorld, fresh, found.record));
       // In a fight, stepping out of a foe's reach draws its attack (L-823;
       // PS4); struck down, the walk stops there.
+      const walk = planned.stations || planned.walked;
       const reacted =
-        planned.walked && (planned.cell || planned.exit)
-          ? combat.play.walkReactions(canonWorld, fresh, planned.walked, { dice: rollDie })
+        walk && (planned.cell || planned.exit)
+          ? combat.play.walkReactions(canonWorld, fresh, walk, { dice: rollDie })
           : null;
       const struck = reacted
         ? {
@@ -287,13 +289,20 @@ async function runTurnPipeline(params) {
           }
         : {};
       if (reacted) {
-        if (reacted.reached < planned.walked.length) {
-          const walked = planned.walked.slice(0, reacted.reached);
+        if (reacted.reached < walk.length) {
+          // Struck down on the way: it stops at the station it was struck
+          // at, in feet (L-922).
+          const went = walk.slice(0, reacted.reached);
+          const last = went.length ? went[went.length - 1] : null;
+          const from = fresh.cell;
+          const walked = planned.stations
+            ? mapPaths
+                .squaresOf(went)
+                .filter((sq, i) => i > 0 || sq.x !== from.x || sq.y !== from.y)
+            : went;
           planned = {
-            cell: walked.length ? walked[walked.length - 1] : fresh.cell,
-            // Struck down on the way: where in that square it stopped isn't
-            // kept, so it stands at the square's centre.
-            point: walked.length ? null : fresh.gridPoint || null,
+            cell: last ? last.square || last : fresh.cell,
+            point: last ? (last.square ? { x: last.x, y: last.y } : null) : fresh.gridPoint || null,
             turn: { ...planned.turn, plan: null },
             lines: reacted.lines,
             walked,

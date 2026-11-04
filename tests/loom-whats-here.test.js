@@ -201,7 +201,7 @@ describe.each(Object.keys(mockCases))("what's here under %s", (id) => {
     expect(prompt).toContain('The player looks at (2, 0), in sight now.');
     expect(prompt).toContain('- A feature: the ale tap.');
     expect(prompt).toContain('- It is in the taproom.');
-    expect(prompt).toContain('- It is 3 squares from the player.');
+    expect(prompt).toContain('- It is 15 ft from the player.');
     expect(prompt).toContain('Describe only this spot');
     // Nothing behind the shut door reaches the GM.
     expect(prompt).not.toContain('Grell');
@@ -237,7 +237,7 @@ describe.each(Object.keys(mockCases))("what's here under %s", (id) => {
     const ref = await onTheMap(`${id}-fallback`, { x: 2, y: 3 });
     const answer = await look(ref, { cell: { x: 2, y: 0 } });
     expect(answer.narration).toBe(
-      'A feature: the ale tap. It is in the taproom. It is 3 squares from you.'
+      'A feature: the ale tap. It is in the taproom. It is 15 ft from you.'
     );
     mockState.down = false;
   });

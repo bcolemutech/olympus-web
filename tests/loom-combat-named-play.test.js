@@ -177,7 +177,7 @@ describe.each(Object.keys(mockCases))('named turns in play under %s', (id) => {
     const answer = await endTurn(ref);
     expect(turnPrompts).toHaveLength(1);
     expect(turnPrompts[0]).toContain(`HOW THEY FIGHT: ${NOTES}`);
-    expect(turnPrompts[0]).toContain('- the player (foe), 6 squares away');
+    expect(turnPrompts[0]).toContain('- the player (foe), 30 ft away');
     const save = (await ref.get()).data();
     expect(save.fight.combatants.grell.dodging).toBe(true);
     expect(save.fight).toMatchObject({ round: 2, turn: 'player' });

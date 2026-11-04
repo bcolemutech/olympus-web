@@ -173,7 +173,7 @@ describe.each(Object.keys(mockCases))('AP off in play, from %s', (id) => {
     // Across the hall in one go: steps are free.
     const walked = await play(ref, { action: { verb: 'move', cell: { x: 10, y: 2 } } });
     expect(walked.step).toMatchObject({ cell: { x: 10, y: 2 } });
-    expect((await saved(ref)).turn).toMatchObject({ ap: 20, moved: 9 });
+    expect((await saved(ref)).turn).toMatchObject({ ap: 20, moved: 45 });
     // The lever: the turn's action.
     const used = await play(ref, { action: { verb: 'use', feature: 'lever' } });
     expect(used.refused).toBeUndefined();

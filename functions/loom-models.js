@@ -144,7 +144,7 @@ function validateWorldState(data) {
 //     reserved   AP set aside for a readied attack (L-833; KP3), lost at
 //                the next turn if it never fires
 //     plan       the rest of a path, kept for the next turn
-//     moved      squares walked this turn, for End turn's line
+//     moved      feet walked this turn, for End turn's line (L-922)
 //     long       a long action under way (CT4): { key, name, put, need }
 //     withdrawn  moving out of reach draws no attacks this turn (L-823)
 //     acted      with AP off (L-838; `ap: false`): the turn's action is
@@ -194,7 +194,7 @@ function validateTurnState(turn) {
     errors.push('turn.reserved must be a whole number from 0 to ' + MAX_AP);
   }
   if (turn.moved !== undefined && !whole(turn.moved, 100000)) {
-    errors.push('turn.moved must be a whole number of squares');
+    errors.push('turn.moved must be a whole number of feet');
   }
   if (
     turn.long !== undefined &&

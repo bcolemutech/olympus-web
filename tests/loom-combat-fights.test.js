@@ -313,6 +313,7 @@ describe.each(Object.keys(mockCases))('fights under %s', (id) => {
     // Neutral: walking up to them starts nothing.
     const walk = await play(ref.id, { action: { verb: 'move', cell: { x: 5, y: 2 } } });
     expect(walk.step.fight).toBeUndefined();
+    const walked = walk.step.ap;
     expect((await saved(ref)).fight).toBeUndefined();
     mockState.intent = { verb: 'attack', targets: ['grell'], params: {} };
     const hit = await play(ref.id, { actionText: 'attack Grell' });
@@ -324,8 +325,8 @@ describe.each(Object.keys(mockCases))('fights under %s', (id) => {
       turn: 'player',
       combatants: { grell: { side: 'hostile', joined: true } },
     });
-    // The blow cost its 10 AP (L-832), after the squares walked to it.
-    expect(save.turn.ap).toBe(save.character.sheet.ap - (save.turn.moved || 0) - 10);
+    // The blow cost its 10 AP (L-832), after the walk to it.
+    expect(save.turn.ap).toBe(walked - 10);
     expect(prompts[prompts.length - 1]).toContain(
       'FIGHT STARTS: a fight breaks out as the player attacks'
     );

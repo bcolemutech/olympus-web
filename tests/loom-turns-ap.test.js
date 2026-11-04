@@ -97,7 +97,7 @@ describe.each([
     const world = worldOf();
     const across = planStep(world, standing({ x: 2, y: 2 }), { cell: { x: 4, y: 2 } });
     // One square of mud (2) and one of open ground (1).
-    expect(across.turn).toMatchObject({ ap: 17, moved: 2 });
+    expect(across.turn).toMatchObject({ ap: 17, moved: 10 });
     const light = copyOf(built);
     light.sheet.optional = [...new Set([...(light.sheet.optional || []), 'traits'])];
     light.sheet.traits = [
@@ -107,7 +107,7 @@ describe.each([
     const footed = planStep(worldOf(light), standing({ x: 2, y: 2 }, {}, light, ['light-footed']), {
       cell: { x: 4, y: 2 },
     });
-    expect(footed.turn).toMatchObject({ ap: 18, moved: 2 });
+    expect(footed.turn).toMatchObject({ ap: 18, moved: 10 });
   });
 
   test('a door on the way is opened for its own cost, and the walk stops there', () => {

@@ -186,7 +186,7 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
     expect(step.step.lines.join(' ')).not.toContain('reach');
     const save = await saved(ref);
     expect(healthOf(save)).toBe(full);
-    expect(save.turn).toMatchObject({ withdrawn: true, moved: 2 });
+    expect(save.turn).toMatchObject({ withdrawn: true, moved: 10 });
     expect(save.turn.ap).toBe(20 - 5 - 2);
     // More, while the AP left pays for it (L-832): a Dodge is 8; then not again.
     await play(ref.id, { action: { verb: 'dodge' } });

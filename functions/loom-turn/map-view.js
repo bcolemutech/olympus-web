@@ -354,7 +354,9 @@ function fogOf(canonWorld, save, settlement, record, walks) {
  *     seen, with the square to label it on and the area the save stands in;
  *   - the people found at the place: those standing on a square (`cell`,
  *     §6) only while it's in sight, with their square (`x`, `y`) for their
- *     token (L-642); the rest, who have no square yet, listed;
+ *     token (L-642), where in it they stand in feet if they've moved
+ *     (`point`) and how wide they are (`width`, L-922); the rest, who have
+ *     no square yet, listed;
  *   - `fog: { seen, inSight }`, the squares seen (ever, this one included)
  *     and in sight now, packed as ./seen.js packs them (one bit a square,
  *     y × width + x, lowest bit first, in base64), for the grid view's fog.
@@ -416,10 +418,15 @@ function battleView(canonWorld, save, record) {
         .map((c) => {
           // Down in this save (L-822): dead or knocked out where they fell.
           const down = combat.play.downOf(save, c.id);
+          // Where in their square they stand, in feet, and how wide they
+          // are (L-922), for their token and the menu's reach.
+          const spot = c.cell ? combat.play.spotOf(canonWorld, save, c) : null;
           return {
             id: c.id,
             name: c.name,
             ...(c.cell ? { x: c.cell.x, y: c.cell.y } : {}),
+            ...(spot && spot.point ? { point: { x: spot.point.x, y: spot.point.y } } : {}),
+            ...(spot ? { width: spot.width } : {}),
             ...(down ? { down } : {}),
             // Their side, when they have one (L-824); a figure placed from a
             // stat block says so.

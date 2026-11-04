@@ -23,7 +23,7 @@
 
 const maps = require('./maps');
 const town = require('./town');
-const layers = require('./layers');
+const mapPaths = require('./map-paths');
 
 const TOWN_SIDE = 1000; // a town's square, as places' positions use it (./town.js)
 const FIELDS = ['cell', 'townPoint', 'worldPoint'];
@@ -167,17 +167,15 @@ function defaultPosition(world, character) {
   }
   const { map, host } = expected;
   const entry = maps.entryCell(map);
-  const reached = layers.reachable(map, map.entries || []);
+  const reached = mapPaths.squaresReached(map, map.entries || []);
   let best = null;
   let bestRank = null;
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
       const cell = { x, y };
       if (maps.squareProblem(world, map, host, cell, character.id)) continue;
-      const rank = [
-        reached[x + ',' + y] ? 0 : 1,
-        Math.max(Math.abs(x - entry.x), Math.abs(y - entry.y)),
-      ];
+      // Reached first, then nearest the entry in feet (L-922).
+      const rank = [reached[x + ',' + y] ? 0 : 1, Math.hypot(x - entry.x, y - entry.y)];
       if (!best || rank[0] < bestRank[0] || (rank[0] === bestRank[0] && rank[1] < bestRank[1])) {
         best = cell;
         bestRank = rank;

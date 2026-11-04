@@ -355,7 +355,7 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
 
     test('a brute closes in and strikes with its melee attack', () => {
       const p = plan(fighter({ attacks: [c.block().attacks[0]] }), [foe('player', { x: 2, y: 3 })]);
-      const end = p.path[p.path.length - 1];
+      const end = p.path[p.path.length - 1].square;
       expect(Math.max(Math.abs(end.x - 2), Math.abs(end.y - 3))).toBe(1);
       expect(p.attack).toMatchObject({
         attack: { id: c.block().attacks[0].id },
@@ -371,7 +371,7 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
           blocked: [{ x: 3, y: 3 }],
         }
       );
-      const end = p.path[p.path.length - 1];
+      const end = p.path[p.path.length - 1].square;
       expect(Math.max(Math.abs(end.x - 2), Math.abs(end.y - 3))).toBe(1);
       expect(end).not.toEqual({ x: 3, y: 3 });
       expect(p.attack).not.toBeNull();
@@ -383,7 +383,7 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
       ]);
       expect(p.attack).not.toBeNull();
       expect(p.back.length).toBeGreaterThan(0);
-      const end = p.back[p.back.length - 1];
+      const end = p.back[p.back.length - 1].square;
       expect(Math.max(Math.abs(end.x - 2), Math.abs(end.y - 3))).toBeGreaterThan(1);
     });
 
@@ -394,7 +394,7 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
       const near = plan(fighter({ role: 'archer', cell: { x: 3, y: 3 } }), [
         foe('player', { x: 2, y: 3 }),
       ]);
-      const end = near.path[near.path.length - 1];
+      const end = near.path[near.path.length - 1].square;
       expect(Math.max(Math.abs(end.x - 2), Math.abs(end.y - 3))).toBeGreaterThan(1);
       expect(near.attack).toMatchObject({ attack: { id: c.bow.id } });
     });
@@ -441,7 +441,8 @@ describe.each(Object.keys(CASES))('foes under %s', (id) => {
         foe('player', { x: 5, y: 5 }),
       ]);
       expect(p.fled).toBe(true);
-      expect(p.path[p.path.length - 1]).toEqual({ x: 0, y: 3 });
+      // Its walk is stations in feet, the last in the way out's square (L-922).
+      expect(p.path[p.path.length - 1].square).toEqual({ x: 0, y: 3 });
     });
   });
 

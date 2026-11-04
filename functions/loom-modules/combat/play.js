@@ -30,6 +30,7 @@ const maps = require('../../loom-canon/maps');
 const sight = require('../../loom-canon/sight');
 const checks = require('../../loom-canon/checks');
 const sheets = require('../../loom-canon/sheets');
+const mapPaths = require('../../loom-canon/map-paths');
 const fight = require('./fight');
 const others = require('./others');
 const down = require('./down');
@@ -87,6 +88,25 @@ function sheetFor(world, save, character) {
   if (f && f.sheet) return f.sheet;
   if (character.sheet) return character.sheet;
   return sheets.defaultSheet(checks.systemOf(world));
+}
+
+/**
+ * Where someone stands for distances (L-922): { cell, point, width }, their
+ * point in feet (or their square's centre) and their width by their size.
+ */
+function spotOf(world, save, character) {
+  return {
+    cell: character.cell,
+    ...(character.point ? { point: character.point } : {}),
+    width: mapPaths.widthOf((sheetFor(world, save, character) || {}).size),
+  };
+}
+
+/** Where the player stands for distances (L-922): their point and width. */
+function playerSpot(world, save) {
+  const { cell, point } = maps.positionOf(world || {}, save);
+  if (!cell) return null;
+  return { cell, point, width: mapPaths.widthOf((sheets.sheetOf(save) || {}).size) };
 }
 
 // The characters standing on the map the save is on, and not down in it.
@@ -415,10 +435,11 @@ function afterFight(world, save, { dice } = {}) {
  * The player's walk in a fight (L-823; PS4): stepping out of a foe's reach
  * draws its attack, unless they withdrew this turn (`turn.withdrawn`). A
  * blow that drops them stops the walk where they were struck, and they fall
- * by the system's down kind (./down.js). `walked` the squares stepped on.
+ * by the system's down kind (./down.js). `walked` the walk's stations, in
+ * feet (map-paths.js walk; L-922), or squares, read as their centres.
  *
  * Returns null out of a fight or when nobody reacts; else `{ reached,
- * fight, sheet, down, figures, lines }`: how many squares they walked, the
+ * fight, sheet, down, figures, lines }`: how many of them they walked, the
  * fight (reactions spent; the player out if down), their sheet, their fall
  * (`save.down`, or null), every reactor's state (`save.figures`).
  */
@@ -433,7 +454,7 @@ function walkReactions(world, save, walked, { dice }) {
       id: c.id,
       side: f.combatants[c.id].side,
       name: c.name,
-      cell: c.cell,
+      ...spotOf(world, save, c),
       sheet: sheetFor(world, save, c),
     }));
   const r = reactions.reactToWalk(system, {
@@ -441,7 +462,7 @@ function walkReactions(world, save, walked, { dice }) {
     doors: ((save && save.doors) || {})[map.id] || {},
     fight: f,
     mover: { id: PLAYER, side: 'party', name: 'you', you: true, sheet: sheets.sheetOf(save) },
-    from: cell,
+    from: playerSpot(world, save),
     path: walked,
     fighters,
     withdrawn: Boolean(save.turn && save.turn.withdrawn),
@@ -564,6 +585,8 @@ module.exports = {
   figureOf,
   downOf,
   sheetFor,
+  spotOf,
+  playerSpot,
   standingHere,
   ending,
   SIDES,

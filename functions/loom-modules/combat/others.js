@@ -46,7 +46,10 @@ const position = require('./position');
 const reactions = require('./reactions');
 const menu = require('./menu');
 const apRules = require('../../loom-canon/ap');
-const layers = require('../../loom-canon/layers');
+const mapPaths = require('../../loom-canon/map-paths');
+
+// A fighter's width in feet, by their size (L-922).
+const widthOf = (sheet) => mapPaths.widthOf((sheet || {}).size);
 
 /** What a fighter keeps of `left` AP for reactions: none below 0, the system's limit above (KP2). */
 function keptFrom(system, left) {
@@ -102,7 +105,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
   let rounds = 0;
   let ended = null;
   let playerDown = null;
-  const { map, cell: playerCell } = maps.positionOf(world, save);
+  const { map, cell: playerCell, point: playerPoint } = maps.positionOf(world, save);
   const doors = ((save && save.doors) || {})[map ? map.id : ''] || {};
   const view = () => figures.withFigures(world, { ...save, figures: states });
   const sheetOf = (id, character) =>
@@ -123,13 +126,30 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       const c = f.combatants[id];
       if (!c || c.out) continue;
       if (id === PLAYER) {
-        out.push({ id, name: 'you', side: 'party', cell: playerCell, sheet, max: maxOf(sheet) });
+        out.push({
+          id,
+          name: 'you',
+          side: 'party',
+          cell: playerCell,
+          point: playerPoint,
+          width: widthOf(sheet),
+          sheet,
+          max: maxOf(sheet),
+        });
         continue;
       }
       const character = world2.characters[id];
       if (!character || character.retired || !character.cell) continue;
       const s = sheetOf(id, character);
-      out.push({ ...character, id, side: c.side, cell: character.cell, sheet: s, max: maxOf(s) });
+      out.push({
+        ...character,
+        id,
+        side: c.side,
+        cell: character.cell,
+        width: widthOf(s),
+        sheet: s,
+        max: maxOf(s),
+      });
     }
     return out;
   };
@@ -222,6 +242,8 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       me: {
         id,
         cell: me.cell,
+        ...(me.point ? { point: me.point } : {}),
+        width: me.width,
         side: c.side,
         role: figures.roleOf(system, { ...character, sheet: mine }),
         posture: figures.postureOf(character),
@@ -310,25 +332,36 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         } else states[rid] = { ...(states[rid] || {}), sheet: s };
       }
       if (r.struck.length) record.reactions = (record.reactions || []).concat(r.struck);
+      // The stations walked (L-922): their length at the fighter's prices,
+      // rounded up once for the walk; the squares walked into, and the
+      // points, for the walk played out on the map.
       const walked = path.slice(0, r.reached);
-      const rules = layers.pathOptions(map, doors, prices);
-      walked.forEach((step, k) => {
-        const cost = rules.cost(k ? walked[k - 1] : from, step);
-        spentAp += Number.isFinite(cost) ? cost : prices.move;
-      });
-      record.path.push(...walked);
-      if (walked.length) moved(walked[walked.length - 1]);
+      if (walked.length) {
+        spentAp += mapPaths.apFor(walked[walked.length - 1].weight);
+        const squares = mapPaths
+          .squaresOf(walked)
+          .filter((sq, i) => i > 0 || !maps.sameCell(sq, (from && from.cell) || from));
+        record.path.push(...squares);
+        record.points = (record.points || []).concat(walked.map((st) => ({ x: st.x, y: st.y })));
+        moved(walked[walked.length - 1]);
+      }
       return r;
     };
-    const moved = (cell) => {
-      states[id] = { ...(states[id] || {}), cell: { x: cell.x, y: cell.y } };
+    // Where they stand after a walk: its last station's square and point.
+    const moved = (st) => {
+      states[id] = {
+        ...(states[id] || {}),
+        cell: { x: st.square.x, y: st.square.y },
+        point: { x: st.x, y: st.y },
+      };
     };
+    const meSpot = { cell: me.cell, ...(me.point ? { point: me.point } : {}), width: me.width };
     const fell = (how) => {
       states[id] = { ...(states[id] || {}), sheet: mine, down: how };
       f = fight.leave(f, id, 'down');
       turns.push(record);
     };
-    const there = walk(plan.path, me.cell);
+    const there = walk(plan.path, meSpot);
     if (there.down) return fell(there.down);
     if (plan.fled && there.reached === plan.path.length) {
       states[id] = { ...(states[id] || {}), sheet: mine, gone: 'fled' };
@@ -337,7 +370,11 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
       turns.push(record);
       return;
     }
-    const from = record.path.length ? record.path[record.path.length - 1] : me.cell;
+    // Where they strike from: where the walk ended, or where they stood.
+    const last = there.reached ? plan.path[there.reached - 1] : null;
+    const from = last
+      ? { cell: last.square, point: { x: last.x, y: last.y }, width: me.width }
+      : meSpot;
     // One blow at `target` from `from`; returns its record, or null when
     // the attack can't be made (out of ammunition).
     const strikeAt = (attack, target) => {
@@ -354,7 +391,7 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
         doors,
         attack,
         from,
-        to: target.cell,
+        to: target,
         friends: friends.filter((x) => x.cell).map((x) => x.cell),
         dodging: Boolean(theirs.dodging),
       });
@@ -534,8 +571,6 @@ function playOthers(world, save, { dice, current = false, now = 0, choose = null
   }
 }
 
-const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
-
 // How the fight looks to a fighter (L-825), for the model choosing their
 // turn: each other fighter standing, foe or friend, how far, how hurt.
 function situationOf(me, all, side, health) {
@@ -555,10 +590,11 @@ function situationOf(me, all, side, health) {
       return {
         name: x.id === PLAYER ? 'the player' : x.name,
         foe,
-        away: distance(me.cell, x.cell),
+        // In feet, between where each stands (L-922).
+        away: Math.round(mapPaths.feetBetween(me, x)),
         line:
           `${x.id === PLAYER ? 'the player' : x.name} (${foe ? 'foe' : 'friend'}), ` +
-          `${distance(me.cell, x.cell)} squares away${hurt}`,
+          `${Math.round(mapPaths.feetBetween(me, x))} ft away${hurt}`,
       };
     });
 }

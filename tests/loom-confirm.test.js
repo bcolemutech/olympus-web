@@ -339,9 +339,8 @@ describe.each(Object.keys(mockCases))('confirm first under %s', (id) => {
     const done = await confirm(ref);
     expect(done.narration).toMatch(/The rest of the way to the ale tap is kept for next turn\.$/);
     const save = await saved(ref);
-    // Its 2 AP walked (10 ft, on a diagonal: into one square), the action
-    // not taken.
-    expect(save.turn).toMatchObject({ ap: 0, moved: 1 });
+    // Its 2 AP walked (10 ft), the action not taken.
+    expect(save.turn).toMatchObject({ ap: 0, moved: 10 });
     expect(save.cell).not.toEqual({ x: 1, y: 5 });
   });
 

@@ -114,7 +114,7 @@ describe.each([
       cell: { x: 10, y: 2 },
     });
     expect(step.cell).toEqual({ x: 10, y: 2 });
-    expect(step.turn).toMatchObject({ ap: 3, plan: null, moved: 10 });
+    expect(step.turn).toMatchObject({ ap: 3, plan: null, moved: 50 });
     expect(step.lines).toEqual([]);
   });
 

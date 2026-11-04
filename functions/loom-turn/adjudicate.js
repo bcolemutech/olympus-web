@@ -1089,7 +1089,7 @@ function evaluateGeneric(proposedAction, dice, characterState, canonWorld) {
 // (L-613 / #443). The turn takes its length of game time (L-371; game time
 // T4): 6 s on a battle map, 5 min anywhere else, from timeRules.
 function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
-  // The squares walked this turn (L-832: the turn counts them).
+  // How far the player walked this turn, in feet (L-832, L-922).
   const spent = turnStateOf(characterState).moved || 0;
   const { map, cell } = maps.positionOf(canonWorld || {}, characterState);
   const ends = clock.timeOf(characterState) + clock.turnSeconds(canonWorld, Boolean(map));
@@ -1162,12 +1162,7 @@ function evaluateEndTurn(characterState, canonWorld, dice, choose = null) {
   let moved = '';
   if (map && spent > 0) {
     const feature = maps.at(map, cell).feature;
-    moved =
-      ' You moved ' +
-      spent +
-      (spent === 1 ? ' square' : ' squares') +
-      (feature ? ', to ' + feature.name : '') +
-      '.';
+    moved = ' You moved ' + spent + ' ft' + (feature ? ', to ' + feature.name : '') + '.';
   }
   // A long action under way carries into the next turn, unless the player
   // was hurt meanwhile (CT4): that interrupts it.
