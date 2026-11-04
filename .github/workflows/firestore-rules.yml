@@ -47,6 +47,11 @@ jobs:
       - name: Install test dependencies
         run: npm run test:install
 
+      # The map painter's and the art swatches' headless tests (L-924, L-925)
+      # run in the Chromium of the Playwright the tests pin.
+      - name: Install Chromium for the headless tests
+        run: cd tests && npx playwright install --with-deps chromium
+
       - name: Run Firestore rules tests
         run: firebase emulators:exec --only firestore,storage --project demo-olympus-rules-test "cd tests && npm test"
         env:

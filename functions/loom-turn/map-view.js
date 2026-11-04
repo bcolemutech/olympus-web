@@ -7,7 +7,9 @@ const mapAreas = require('../loom-canon/map-areas');
 const { discoveredBy } = require('./discovery');
 const { apOf, turnStateOf } = require('../loom-models');
 const { planOn, doorStatesOf, pricesFor, viewPrices } = require('./steps');
-const { knownMap } = require('./known-map');
+const { knownMap, artLink, drawnGeometry } = require('./known-map');
+const sight = require('../loom-canon/sight');
+const levels = require('../loom-canon/levels');
 const { walksTown, townPlanOf, streetOf } = require('./town-steps');
 const ground = require('../loom-canon/ground');
 const artOf = require('../loom-canon/art');
@@ -164,9 +166,22 @@ function mapView(canonWorld, save, record, townRecord) {
             image: artOf.forPlayer(artOf.worldMapArt(canonWorld)),
             // A world made from scratch (L-391): its plain colour, under any art.
             ...(map.backdrop ? { backdrop: map.backdrop } : {}),
+            // The region map's own geometry, whole (L-924), and its space,
+            // for drawing it under the places.
+            ...regionDrawing(canonWorld),
           }
         : null,
   };
+}
+
+// The region map the view shows: its geometry to draw (L-924; maps-from-
+// data.md §4.6), and its space, or nothing.
+function regionDrawing(canonWorld) {
+  const id = canonWorld.frame && canonWorld.frame.mapId;
+  const region = id ? levels.mapOf(canonWorld, id) : null;
+  const geometry = region ? drawnGeometry(region.geometry) : null;
+  if (!geometry || !region.space) return {};
+  return { geometry, space: { width: region.space.width, height: region.space.height } };
 }
 
 // The level-up offer kept on the save (L-843's levelOffer), or null.
@@ -317,8 +332,18 @@ function townView(canonWorld, save, discovered, townRecord) {
     // 0–1000 square: { url (a library image, L-704) or path (Cloud
     // Storage), width, height }, or null. Never the image's record (A5).
     image: artOf.forPlayer(artOf.townArt(settlement)),
+    // Its area map's geometry, whole (L-924), and its space, for drawing.
+    ...townDrawing(settlement),
     ...walking,
   };
+}
+
+// A town's area map as the page draws it (L-924): its geometry and space.
+function townDrawing(settlement) {
+  const t = (settlement && settlement.town) || {};
+  const geometry = drawnGeometry(t.geometry);
+  if (!geometry || !t.space) return {};
+  return { geometry, space: { width: t.space.width, height: t.space.height } };
 }
 
 /**
@@ -507,8 +532,31 @@ function battleView(canonWorld, save, record) {
     fog: {
       seen: seen.pack(known, map.width, map.height),
       inSight: seen.pack(inSight, map.width, map.height),
+      // What's in sight now as it is seen (L-924): the outline of the
+      // region seen from the player's eyes, in feet, for the fog's edge.
+      view: sight.outline(map, maps.viewerOf(canonWorld, save) || cell, doors),
     },
+    // The world's own art for kinds of object (L-925), as links (A5).
+    ...(objectKindsView(canonWorld) ? { objectKinds: objectKindsView(canonWorld) } : {}),
   };
+}
+
+// The world's own object kinds as the page draws them (L-924): each kind's
+// art as a link, its name and size; null when it has none.
+function objectKindsView(canonWorld) {
+  const kinds = (canonWorld && canonWorld.objectKinds) || {};
+  const out = {};
+  Object.keys(kinds).forEach((id) => {
+    const k = kinds[id] || {};
+    const art = artLink(k.art);
+    if (!art && !k.size) return;
+    out[id] = {
+      ...(art ? { art } : {}),
+      ...(Array.isArray(k.size) ? { size: k.size.slice() } : {}),
+      ...(k.name ? { name: k.name } : {}),
+    };
+  });
+  return Object.keys(out).length ? out : null;
 }
 
 // A map's areas cut down to the squares seen (`known`), those with none

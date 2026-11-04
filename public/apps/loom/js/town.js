@@ -524,6 +524,7 @@
       ground: new PIXI.Graphics(),
       art: new PIXI.Sprite(),
       shapes: new PIXI.Graphics(),
+      painted: new PIXI.Container(), // its area map drawn from its data (L-924)
       fog: new PIXI.Sprite(),
       mist: new PIXI.Sprite(),
       shimmer: new PIXI.Graphics(), // the water's shimmer, over a town drawn from its ground
@@ -535,7 +536,7 @@
       you: Loom.draw.token(),
     };
     n.art.alpha = 0.9;
-    container.addChild(n.ground, n.art, n.shapes, n.shimmer, n.fog, n.mist);
+    container.addChild(n.ground, n.art, n.shapes, n.painted, n.shimmer, n.fog, n.mist);
     container.addChild(n.paths, n.pins, n.routes, n.labels, n.walk);
     container.addChild(n.you.container);
     town.nodes = n;
@@ -672,6 +673,41 @@
   }
 
   /** Draws the town for a view in town coordinates (+ PAD). */
+  // The world's own accent, for the painter's tint (RD4).
+  function accent() {
+    var v = document.documentElement.style.getPropertyValue('--loom-accent').trim();
+    var m = /^#([0-9a-f]{6})$/i.exec(v);
+    return m ? parseInt(m[1], 16) : null;
+  }
+
+  // Paints the town's area map once per change and places it with the
+  // camera every draw: its units to the town's 0–1000.
+  function paintArea(n, data, view, hasArt) {
+    var g = data.geometry;
+    var space = data.space;
+    n.painted.visible = Boolean(g && space && space.width);
+    if (!n.painted.visible) return;
+    var metres = data.size || 1000;
+    if (town.paintedFor !== data) {
+      town.paintedFor = data;
+      town.paintRoot = Loom.mapPaint.paint(n.painted, 'area:' + data.locationId, g, {
+        tile: (space.width / metres) * 3, // a tile 3 m across
+        wall: (space.width / metres) * 0.6,
+        art: hasArt,
+        tint: accent(),
+        onProgress: engine.progress,
+        onChange: function () {
+          engine.draw();
+        },
+      });
+    }
+    if (town.paintRoot) {
+      var at = M.toScreen(view, PAD, PAD);
+      town.paintRoot.position.set(at.x, at.y);
+      town.paintRoot.scale.set((view.scale * SPAN) / space.width);
+    }
+  }
+
   function draw(container, view) {
     if (!town.nodes) build(container);
     var n = town.nodes;
@@ -709,6 +745,8 @@
     n.shapes.clear();
     n.shimmer.clear();
     if (data.ground && !art) drawGround(n.shapes, view, n.shimmer);
+    // Its area map drawn from its data (L-924; paint.js), over its ground.
+    paintArea(n, data, view, Boolean(image));
     n.fog.visible = Boolean(data.fog);
     if (data.fog) {
       n.fog.texture = fogTexture(data.fog);

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The Loom's painter, for tests</title>
+    <!--
+      The map painter (public/apps/loom/js/paint.js; L-924 / #728) on its own,
+      with PixiJS served from the tests' own copy, for headless Chrome
+      (tests/loom-paint.test.js). Nothing here needs a sign-in or the network.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #101318;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <script src="/pixi.min.js"></script>
+    <script>
+      window.Loom = {};
+    </script>
+    <script src="/apps/loom/js/materials.js"></script>
+    <script src="/apps/loom/js/map-geometry.js"></script>
+    <script src="/apps/loom/js/paint.js"></script>
+    <script>
+      window.__progress = [];
+      window.__ready = (async function () {
+        const app = new PIXI.Application();
+        await app.init({
+          width: 960,
+          height: 640,
+          background: 0x101318,
+          antialias: true,
+          preference: ['webgl'],
+          autoStart: false,
+          resolution: 1,
+        });
+        document.getElementById('stage').appendChild(app.canvas);
+        const art = new PIXI.Sprite();
+        const host = new PIXI.Container();
+        app.stage.addChild(art, host);
+        window.__app = app;
+        // Draws a map: its art first (a data URL), then the painter's work,
+        // placed at `place` ({ x, y, scale }). Resolves once all of it is built.
+        window.__draw = function (key, geometry, options, place, image) {
+          return new Promise(async (resolve) => {
+            art.visible = false;
+            if (image) {
+              art.texture = await PIXI.Assets.load(image);
+              art.position.set(place.x, place.y);
+              art.width = place.width * place.scale;
+              art.height = place.height * place.scale;
+              art.visible = true;
+            }
+            let done = false;
+            let root = null;
+            const finish = () => {
+              app.render();
+              resolve(Loom.mapPaint.stats());
+            };
+            root = Loom.mapPaint.paint(
+              host,
+              key,
+              geometry,
+              Object.assign({}, options, {
+                onProgress(f) {
+                  window.__progress.push(f);
+                  if (f === null) {
+                    done = true;
+                    if (root) finish();
+                  }
+                },
+                onChange() {
+                  app.render();
+                },
+              })
+            );
+            root.position.set(place.x, place.y);
+            root.scale.set(place.scale);
+            app.render();
+            if (done) finish();
+          });
+        };
+      })();
+    </script>
+  </body>
+</html>

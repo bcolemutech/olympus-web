@@ -44,6 +44,7 @@
     panel: null,
     host: null,
     menuHost: null,
+    progress: null, // the map's progress effect while it draws (L-924)
     hooks: null, // from map.js: bounds, size, onTap, onHover, onCamera
     layers: {}, // level → { container, draw, hit }
     level: null, // the engine level showing, or null
@@ -553,6 +554,8 @@
     engine.menuHost = document.createElement('div');
     engine.menuHost.className = 'loom-map-menu-host';
     panel.appendChild(engine.menuHost);
+    // The progress effect while a map draws (L-924; PL4).
+    engine.progress = Loom.mapProgress ? Loom.mapProgress.create(panel) : null;
 
     panel.addEventListener('pointerdown', onPointerDown);
     panel.addEventListener('pointermove', onPointerMove);
@@ -631,6 +634,10 @@
       return Boolean(engine.ambient);
     },
     zoomBy: zoomBy,
+    /** Shows how far a map's drawing has got (0–1), or hides it (null; L-924). */
+    progress: function (fraction) {
+      if (engine.progress) engine.progress.set(fraction);
+    },
     openMenu: openMenu,
     closeMenu: closeMenu,
     size: size,
