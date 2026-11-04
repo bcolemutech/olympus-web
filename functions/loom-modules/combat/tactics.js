@@ -162,18 +162,31 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
       width,
       states: shut,
       prices: onAp ? me.prices : undefined,
-      blocked: (sq) => goal !== true && exitAt(sq) && !(goal && maps.sameCell(goal, sq)),
+      ...(goal === true
+        ? {}
+        : { blocked: (sq) => exitAt(sq) && !(goal && maps.sameCell(goal, sq)) }),
     });
+  // The cheapest way to each square within `budget` (a weight in AP; with
+  // AP off, squares), for choosing where to go this turn.
+  const costsWithin = (from, budget) => mapPaths.costsFrom(ways, from, budget + 1e-6);
   const ways = plannerFor(null);
 
   // Walking from `from` (a spot) to a square as far as `budget` goes,
   // stopping where `enough` holds, never ending on someone.
+  // The ways found, kept: a turn may try the same one with two budgets.
+  const found = new Map();
+  const wayTo = (planner, from, to) => {
+    const k = [from.x, from.y, to.x, to.y].join(',');
+    if (planner !== ways) return mapPaths.pathTo(planner, from, to);
+    if (!found.has(k)) found.set(k, mapPaths.pathTo(planner, from, to));
+    return found.get(k);
+  };
   const walkFrom = (from, toCell, budget, enough, planner = ways) => {
     if (!budget) return [];
     const spot = mapPaths.spotIn(planner, toCell);
-    const found = spot && mapPaths.pathTo(planner, from.point, spot);
-    if (!found) return [];
-    return mapPaths.walk(planner, found, budget, {
+    const way = spot && wayTo(planner, from.point, spot);
+    if (!way) return [];
+    return mapPaths.walk(planner, way, budget, {
       stop: (st) => Boolean(enough && enough(here(st)) && free(st.square)),
       stand: (st) => free(st.square),
     }).walked;
@@ -182,10 +195,11 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
 
   // Closing on a target: the cheapest way to a free square from which `ok`
   // holds (in reach, or in range and sight), within `radius` squares of it,
-  // walked as far as `budget` goes; around whoever stands in the way.
+  // that `budget` reaches; else as far towards it as `budget` goes. Around
+  // whoever stands in the way.
   const approach = (target, radius, ok, budget) => {
     if (!budget) return [];
-    const costs = mapPaths.costsFrom(ways, meSpot.point);
+    const costs = costsWithin(meSpot.point, budget);
     let best = null;
     for (let y = target.cell.y - radius; y <= target.cell.y + radius; y++) {
       for (let x = target.cell.x - radius; x <= target.cell.x + radius; x++) {
@@ -198,17 +212,15 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
     }
     if (!best) return walkTo(target.cell, budget, ok);
     if (!best.weight) return [];
-    const found = mapPaths.pathTo(ways, meSpot.point, best.spot);
-    return found
-      ? mapPaths.walk(ways, found, budget, { stand: (st) => free(st.square) }).walked
-      : [];
+    const way = wayTo(ways, meSpot.point, best.spot);
+    return way ? mapPaths.walk(ways, way, budget, { stand: (st) => free(st.square) }).walked : [];
   };
 
   // Stepping from `from` (a spot) to a square out of every foe's reach (more
   // than 5 ft from them), as far as `budget` goes, where `ok` holds.
   const stepAway = (from, budget, ok = () => true) => {
     if (!budget) return [];
-    const costs = mapPaths.costsFrom(ways, from.point);
+    const costs = costsWithin(from.point, budget);
     const r = Math.ceil(budget) + 1;
     const c0 = from.cell;
     let best = null;
@@ -225,10 +237,8 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
       }
     }
     if (!best || !best.weight) return [];
-    const found = mapPaths.pathTo(ways, from.point, best.spot);
-    return found
-      ? mapPaths.walk(ways, found, budget, { stand: (st) => free(st.square) }).walked
-      : [];
+    const way = wayTo(ways, from.point, best.spot);
+    return way ? mapPaths.walk(ways, way, budget, { stand: (st) => free(st.square) }).walked : [];
   };
 
   // Fleeing: to the nearest exit, with all they have.

@@ -795,8 +795,8 @@ describe('moving without the GM (L-613)', () => {
     });
     expect(await where(saveId)).toMatchObject({ mapId: 'bm_tavern', cell: { x: 9, y: 1 } });
     expect((await saveOf(saveId)).gridPoint).toEqual({ x: 47.5, y: 7.5 });
-    // The squares walked into, along the straight line.
-    expect(await turnOf()).toEqual({ n: 1, ap: 11, kept: 0, plan: null, moved: 11 });
+    // How far it walked, in feet: 42.7 (L-922).
+    expect(await turnOf()).toEqual({ n: 1, ap: 11, kept: 0, plan: null, moved: 43 });
     expect(await recorded()).toBe(before);
     expect(mockCallGemini).not.toHaveBeenCalled();
   });
@@ -843,17 +843,16 @@ describe('moving without the GM (L-613)', () => {
     expect((await continueOn(saveId)).step.lines).toEqual([OUT_OF_AP]);
     const before = (await saveOf(saveId)).time;
     expect(before).toBe(8 * 3600); // a game made by loomCreateSave starts on Day 1, 08:00
-    // 25 ft on the straight line crosses 7 squares.
-    expect((await endTurn(saveId)).narration).toBe('Turn 1 ends. You moved 7 squares.');
+    // On the straight line, as far as 5 AP goes: to the last point on the way
+    // within 25 ft (L-922).
+    expect((await endTurn(saveId)).narration).toBe('Turn 1 ends. You moved 24 ft.');
     // A battle-map turn is 6 seconds of game time (L-371; game time T4).
     expect((await saveOf(saveId)).time).toBe(before + 6);
     const { step } = await continueOn(saveId);
     // The rest, 17.7 ft: 4 AP.
     expect(step).toMatchObject({ cell: { x: 9, y: 1 }, ap: 1, plan: null });
     expect(step.lines).toEqual(["You're at the hearth."]);
-    expect((await endTurn(saveId)).narration).toBe(
-      'Turn 2 ends. You moved 4 squares, to the hearth.'
-    );
+    expect((await endTurn(saveId)).narration).toBe('Turn 2 ends. You moved 18 ft, to the hearth.');
     expect(await turnOf()).toEqual({ n: 3, ap: 5, kept: 0, plan: null });
     expect((await continueOn(saveId)).step.lines).toEqual([
       'You have no way planned. Tap where to go.',
@@ -995,9 +994,8 @@ describe('typed actions and the turn (L-614)', () => {
     playerTypes('move', 'feature:bar');
     expect((await type('go to the bar')).narration).toBe('You go on.');
     expect(await where(saveId)).toMatchObject({ cell: { x: 3, y: 2 } });
-    // The search's 10 AP, and the 14.1 ft to the bar, 3 AP (L-922): the
-    // diagonal touches 4 squares on the way.
-    expect(await turnOf()).toMatchObject({ ap: 7, moved: 4 });
+    // The search's 10 AP, and the 14.1 ft to the bar, 3 AP (L-922).
+    expect(await turnOf()).toMatchObject({ ap: 7, moved: 14 });
     await endTurn(saveId);
     playerTypes('search');
     await type('search the bar');
@@ -1013,8 +1011,8 @@ describe('typed actions and the turn (L-614)', () => {
       constraints: ['You move to the hearth.'],
     });
     expect(await where(saveId)).toMatchObject({ cell: { x: 9, y: 1 } });
-    // As the tap: 9 AP, 11 squares walked into (L-922).
-    expect(await turnOf()).toEqual({ n: 1, ap: 11, kept: 0, plan: null, moved: 11 });
+    // As the tap: 9 AP, 42.7 ft walked (L-922).
+    expect(await turnOf()).toEqual({ n: 1, ap: 11, kept: 0, plan: null, moved: 43 });
   });
 
   test('past reach, a typed move heads that way and keeps the plan', async () => {

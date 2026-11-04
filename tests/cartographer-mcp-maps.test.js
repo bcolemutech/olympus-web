@@ -1447,7 +1447,8 @@ describe('hazards (L-815)', () => {
         ]),
       }),
     ]);
-    expect(map.hazards[0].squares).toHaveLength(25);
+    // A true circle in feet (L-922), its corners left out.
+    expect(map.hazards[0].squares).toHaveLength(21);
   });
 
   test('a hazard that is wrong is refused, each problem named', async () => {

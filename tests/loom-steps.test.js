@@ -33,11 +33,13 @@ const standing = (cell, turn = {}) => ({
 
 test('a move in reach arrives; at a feature it says so; it lists the squares walked', () => {
   // From (2, 2)'s centre to the chest's, straight: 30.4 ft, so 7 AP (L-922).
-  expect(planStep(WORLD, standing({ x: 2, y: 2 }, { ap: 7 }), { cell: { x: 8, y: 1 } })).toEqual({
+  const step = planStep(WORLD, standing({ x: 2, y: 2 }, { ap: 7 }), { cell: { x: 8, y: 1 } });
+  expect(step).toEqual({
     feet: 30, // the whole way, for the confirm card
     cell: { x: 8, y: 1 },
     point: { x: 42.5, y: 7.5 },
-    turn: { n: 1, ap: 0, kept: 0, plan: null, moved: 7 },
+    // How far it walked, in feet (L-922).
+    turn: { n: 1, ap: 0, kept: 0, plan: null, moved: 30 },
     lines: ["You're at the chest."],
     walked: [
       { x: 3, y: 2 },
@@ -48,7 +50,11 @@ test('a move in reach arrives; at a feature it says so; it lists the squares wal
       { x: 7, y: 1 },
       { x: 8, y: 1 },
     ],
+    // The walk in feet, for the reactions it draws (L-922).
+    stations: expect.any(Array),
   });
+  const last = step.stations[step.stations.length - 1];
+  expect(last).toMatchObject({ x: 42.5, y: 7.5, square: { x: 8, y: 1 } });
 });
 
 test('a walk out of AP a step short of its point, in its square, has arrived', () => {
@@ -143,13 +149,14 @@ test('reaching an exit leaves by it; an exit is never on the way', () => {
     exit: ROOM.exits[0],
     feet: 15,
     spent: 3,
-    turn: { n: 1, ap: 3, kept: 0, plan: null, moved: 3 },
+    turn: { n: 1, ap: 3, kept: 0, plan: null, moved: 15 },
     // The squares walked to it, for the blows it draws in a fight (L-823).
     walked: [
       { x: 2, y: 3 },
       { x: 1, y: 3 },
       { x: 0, y: 3 },
     ],
+    stations: expect.any(Array),
   });
   // Heading past the door, one square at a time: never onto it (that would
   // leave), and the plan goes around it.

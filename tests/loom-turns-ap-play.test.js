@@ -179,7 +179,7 @@ describe.each(Object.keys(mockCases))('turns on AP in play under %s', (id) => {
     // The attack: 10; it starts the fight.
     await play(ref, { verb: 'attack', target: 'grell' });
     let save = await saved(ref);
-    expect(save.turn).toMatchObject({ n: 1, ap: 1, moved: 6 });
+    expect(save.turn).toMatchObject({ n: 1, ap: 1, moved: 30 });
     // It started a fight (over at once if the blow felled him).
     expect(save.figures.grell).toBeDefined();
     // Another it can't pay for: refused, nothing spent.
