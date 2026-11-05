@@ -98,7 +98,7 @@ jest.mock('../functions/loom-canon', () => {
             geo: { ...COAST.locations['free-city-of-marabel'].geo, kind: 'settlement' },
           },
         },
-        battleMaps: {
+        battleMaps: jest.requireActual('./helpers/grid').gridMaps({
           bm_hall: {
             id: 'bm_hall',
             name: 'The hall',
@@ -122,7 +122,7 @@ jest.mock('../functions/loom-canon', () => {
             hazards: [],
             figures: mockState.groups,
           },
-        },
+        }),
       };
     },
   };

@@ -73,7 +73,7 @@ jest.mock('../functions/loom-canon', () => {
             sheet: guardSheet,
           },
         },
-        battleMaps: {
+        battleMaps: jest.requireActual('./helpers/grid').gridMaps({
           bm_deck: {
             id: 'bm_deck',
             name: 'The deck',
@@ -109,7 +109,7 @@ jest.mock('../functions/loom-canon', () => {
               },
             ],
           },
-        },
+        }),
       };
     },
   };

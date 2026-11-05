@@ -1258,7 +1258,7 @@
    * solid obstacles as tall objects over their squares (pillars, seen
    * themselves and hiding what's behind them, L-923); low ones as closed
    * walls round their squares, 3 ft high and not blocking sight; and
-   * difficult squares as gravel costing 2.
+   * difficult squares as gravel costing 2; each obstacle keeping its name.
    */
   function fromLayers(map) {
     var F = FEET_PER_SQUARE;
@@ -1307,12 +1307,14 @@
       var y = o.y * F;
       var id = 'layer-' + (o.id || 'obstacle-' + i);
       if (o.kind === 'difficult') {
-        out.ground.push({
+        var rough = {
           id: id,
           material: 'gravel',
           cost: 2,
           shape: { rect: { x: x, y: y, w: w, h: h } },
-        });
+        };
+        if (o.name) rough.name = o.name;
+        out.ground.push(rough);
       } else if (o.kind === 'solid') {
         var pillar = {
           id: id,
@@ -1337,6 +1339,7 @@
         };
         ring.blocksSight = false;
         ring.height = 3;
+        if (o.name) ring.name = o.name;
         out.walls.push(ring);
       }
     });

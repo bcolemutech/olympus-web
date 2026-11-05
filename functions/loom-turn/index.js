@@ -24,7 +24,7 @@ const { lookInTown, townRecordOf } = require('./town-seen');
 const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const clock = require('../loom-canon/clock');
 const maps = require('../loom-canon/maps');
-const layers = require('../loom-canon/layers');
+const mapDoors = require('../loom-canon/doors');
 const mapPaths = require('../loom-canon/map-paths');
 const { systemOf } = require('../loom-canon/checks');
 const { withAp } = require('../loom-canon/sheets');
@@ -335,13 +335,13 @@ async function runTurnPipeline(params) {
         // Wary figures turned by the areas walked into or the door opened
         // (L-392); those turned hostile in a fight join it.
         const here = maps.positionOf(canonWorld, fresh).map;
-        const doorOf = door && here && (here.doors || []).find((d) => d.id === door.doorId);
+        const doorOf = door && here && mapDoors.doorOf(here, door.doorId);
         const turned = combat.wary.react(canonWorld, { ...fresh, cell: planned.cell, doors }, [
           ...combat.wary.walkEvents(here, fresh.cell, planned.walked),
           ...(doorOf
             ? combat.wary.doorEvents(
                 door.doorId,
-                layers.doorState(doorOf, doorStatesOf(fresh, door.mapId)),
+                mapDoors.stateOf(doorOf, doorStatesOf(fresh, door.mapId)),
                 door.state,
                 { keyed: true }
               )

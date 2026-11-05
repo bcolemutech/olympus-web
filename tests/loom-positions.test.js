@@ -18,7 +18,7 @@ const {
   positionView,
 } = require('../functions/loom-canon/positions');
 
-const INN = {
+const INN = require('./helpers/grid').gridMap({
   id: 'bm_inn',
   name: 'The Gull & Anchor',
   width: 8,
@@ -27,7 +27,7 @@ const INN = {
   exits: [{ id: 'out', name: 'the front door', x: 0, y: 3, to: 'out' }],
   features: [],
   obstacles: [{ id: 'table', name: 'a table', kind: 'low', x: 4, y: 1 }],
-};
+});
 const RUIN = { ...INN, id: 'bm_ruin', name: 'The ruin' };
 
 // Burdendal (a town) with an inn (its own map) and a market (no map yet); a

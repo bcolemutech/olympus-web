@@ -3,8 +3,8 @@
 /**
  * Today's battle maps converted (planning/maps-from-data.md §4.7, EX4;
  * L-928 / #732): every battle map's walls, doors and obstacles stored as its
- * geometry, beside its layers, with a replay showing each plays the same on
- * its geometry alone (functions/cartographer/convert-layers.js).
+ * geometry and the layers deleted, with a replay showing each plays the same
+ * on its geometry alone (functions/cartographer/convert-layers.js).
  *
  * Usage:
  *   FIREBASE_SERVICE_ACCOUNT='<json>' APPLY=false node scripts/convert-map-layers.js [worldId…]
@@ -64,10 +64,13 @@ try {
     lines.push(
       `### ${r.name} (${r.worldId})`,
       '',
-      `- ${r.converted} of ${r.maps} battle maps have layers to convert; ` +
-        `${apply ? 'wrote' : 'would write'} ${r.changed}` +
-        (r.changed === 0 ? ' (already converted).' : ':') +
+      `- ${r.converted} maps (of ${r.maps} battle maps) have layers to convert; ` +
+        `${apply ? 'stored' : 'would store'} their geometry and ` +
+        `${apply ? 'deleted' : 'would delete'} their layers` +
+        (r.changed === 0 ? ' (none: already converted).' : ':') +
         (r.changed ? ' ' + r.changedIds.join(', ') + (r.changed > 50 ? ', …' : '') + '.' : ''),
+      `- ${r.gridCopies} grid maps' copies of their battle map's layers ` +
+        `${apply ? 'deleted' : 'to delete'}.`,
       `- The replay: ${rp.matched} of ${rp.maps} maps play the same on their geometry alone ` +
         `(${rp.checks} checks: ways from each entry, exit, feature and figure, reach and sight).`,
       ...(rp.differences.length

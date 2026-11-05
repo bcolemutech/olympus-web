@@ -201,6 +201,21 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 
     Any answer that differs is listed. It matches on random maps, and catches a conversion that loses a lock or a wall.
   - **The grid tools write both** (`set_battle_map`, `set_map_layers`, `set_grid`): new layers replace, item for item, what the old ones made in the geometry (`relayered`), keeping the map's own items. `set_battle_map` replacing a map keeps its own geometry, which it used to drop.
+  - **Applied 2026-11-05** to Nisia and The Border March: all 56 battle maps written, and the replay matched on every one (1,483 checks).
+- **As built (L-928, second PR, 2026-11-05): the layers dropped.**
+  - **Play reads only the geometry.** `map-paths.js` `geometryOf` is a map's stored geometry and nothing else.
+    - **Doors** come from the geometry through `functions/loom-canon/doors.js`: a door by id, its state for a save (the save's, else the map's, else closed), its key (`unlocks.key`), and the two squares either side of its middle, which it is opened and seen from. Hidden doors are left out.
+    - **What covers a square** (`maps.blockerAt`; what an obstacle was): an object that blocks the way (solid if it hides, else low), a closed wall round the square's middle (low if it hides nothing), or ground that costs more (difficult). Standing, placing and looking ask it.
+    - **The map a save is sent** (`known-map.js`) is its exits and its geometry as far as seen, each door in the save's state; the battle view takes its doors from it for clicks and selection.
+    - A feature's squares "beside" it are those with no wall, door or window between, other than what the feature itself sits on.
+    - Grading's "walls or obstacles" asks whether the geometry has ground, walls, doors, windows or objects (`layer-geometry.js` `hasShapes`).
+  - **The grid tools are shortcuts onto the geometry.** `set_battle_map`, `set_map_layers` and `set_grid` take walls, doors and obstacles in squares and corners, as before, and store only what they make.
+    - What the layers made is told by its ids: walls, doorways and obstacles start `layer-`, and a door sits in the doorway named after it. New layers replace that, and keep the map's own items.
+    - `get_battle_map` and `view_image` read the walls, doors and obstacles back from the geometry (`layersOf`).
+    - `layers.js` keeps only the shapes' checks, on the server: the page's copy is gone, since nothing there read it.
+  - **Obstacles keep their names** in the geometry: low walls and rough ground now carry them, as pillars did.
+  - **The workflow now deletes the layers.** Convert Map Layers stores each battle map's geometry again, from its layers (adding the obstacles' names), and deletes `walls`, `doors` and `obstacles`. It also deletes the copies L-902 left on grid maps in `maps`, and converts any grid map there with no battle map of its own. Its replay compares the map as it played before (its layers read as geometry beside what was stored) with its geometry alone.
+  - **Every grid test plays on the geometry alone.** Tests write their maps in squares and corners and store them through `tests/helpers/grid.js` (`gridMap`), the same conversion.
 
 ### 4.8 Tools and generators (AU1, AU2)
 

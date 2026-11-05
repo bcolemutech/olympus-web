@@ -115,8 +115,9 @@ describe('battle maps', () => {
 
 describe('battle-map layers (L-623)', () => {
   // A back room: an inner wall at x = 4 with a locked door in its gap at
-  // y 2–3, a low table, a solid pillar and rubble.
-  const ROOM = {
+  // y 2–3, a low table, a solid pillar and rubble; stored as geometry (L-928),
+  // which view_image reads them back from.
+  const ROOM = require('./helpers/grid').gridMap({
     id: 'bm_room',
     name: 'The back room',
     width: 8,
@@ -152,7 +153,7 @@ describe('battle-map layers (L-623)', () => {
       { id: 'pillar', name: 'a pillar', kind: 'solid', x: 6, y: 4 },
       { id: 'rubble', name: 'rubble', kind: 'difficult', x: 1, y: 5, w: 2 },
     ],
-  };
+  });
   // The share of a rectangle's pixels near a colour.
   const share = (img, x0, y0, x1, y1, rgb, slack = 45) => {
     let near_ = 0;

@@ -1,5 +1,7 @@
 'use strict';
 
+const { gridMap } = require('../helpers/grid');
+
 /**
  * A world three maps deep in the levels model (planning/map-levels.md §5;
  * L-903), as loadWorld gives it: maps and places in the new shape, none of
@@ -137,7 +139,8 @@ function andorWorld(id = 'andor') {
  */
 function andorWithTemplates(id = 'andor-templates') {
   const w = andorWorld(id);
-  w.maps.tpl_moon = {
+  // Its hatch stored as geometry, as the grid tools store it (L-928).
+  w.maps.tpl_moon = gridMap({
     kind: 'grid',
     template: true,
     parent: null,
@@ -147,7 +150,7 @@ function andorWithTemplates(id = 'andor-templates') {
     exits: [{ id: 'lift', name: 'the lift', x: 0, y: 3 }],
     doors: [{ id: 'hatch', name: 'the hatch', from: { x: 1, y: 3 }, to: { x: 2, y: 3 } }],
     features: [{ id: 'beacon', name: 'the beacon', x: 5, y: 2 }],
-  };
+  });
   w.maps.tpl_hamlet = {
     kind: 'area',
     template: true,

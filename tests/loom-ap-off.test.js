@@ -25,7 +25,7 @@ const copyOf = (v) => JSON.parse(JSON.stringify(v));
 const high = (sides) => sides;
 
 // A hall: mud down column 3, an altar to work at (a long action of 30 AP).
-const HALL = {
+const HALL = require('./helpers/grid').gridMap({
   id: 'bm',
   name: 'The hall',
   width: 12,
@@ -34,7 +34,7 @@ const HALL = {
   exits: [{ id: 'out', name: 'the way out', x: 0, y: 5, to: 'out' }],
   features: [{ id: 'altar', name: 'the altar', x: 1, y: 1, long: { ap: 30 } }],
   obstacles: [{ id: 'mud', name: 'mud', kind: 'difficult', x: 3, y: 0, h: 6 }],
-};
+});
 
 describe.each([
   ['d20-fantasy', BUILT_IN['d20-fantasy']],

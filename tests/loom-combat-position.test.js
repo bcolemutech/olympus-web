@@ -69,7 +69,7 @@ const CASES = {
 };
 
 // A room 40 × 10, open unless given layers.
-const room = (layers = {}) => ({
+const room = (layers = {}) => jest.requireActual('./helpers/grid').gridMap({
   id: 'bm',
   name: 'Room',
   width: 40,

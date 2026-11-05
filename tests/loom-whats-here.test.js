@@ -31,7 +31,7 @@ const rect = (x0, y0, x1, y1) => [
 // An inn 12 × 6: a wall down x = 6 with a shut door in it; west of it the
 // taproom with its ale tap and a table, and Mira; east of it the back room,
 // and Grell.
-const mockInn = () => ({
+const mockInn = () => jest.requireActual('./helpers/grid').gridMap({
   id: 'bm_inn',
   name: 'The inn',
   width: 12,

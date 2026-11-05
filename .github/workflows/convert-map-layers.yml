@@ -2,9 +2,9 @@ name: Convert Map Layers
 
 # Today's battle maps converted (planning/maps-from-data.md §4.7, EX4;
 # L-928): every battle map's walls, doors and obstacles stored as its
-# geometry, beside its layers, which play goes on reading until the code
-# reads only the geometry. The summary has a replay: each map's ways, reach
-# and sight asked of it as played now and of its geometry alone.
+# geometry and the layers deleted (play reads only the geometry). The summary
+# has a replay: each map's ways, reach and sight as it played before and on
+# its geometry alone.
 #
 # Run it with apply off first: the summary shows what it would write, the
 # replay, and what to look at. Then run it with apply on and confirm set to

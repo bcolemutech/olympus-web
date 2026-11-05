@@ -23,7 +23,7 @@ const SCIFI = BUILT_IN['pool-scifi'];
 
 // A hall 12 × 5, in at the west: mud down column 2, a wall at x = 4 with
 // the gate in it at y 2–3, and Grell, minding his own business, at (8, 2).
-const mockHall = () => ({
+const mockHall = () => jest.requireActual('./helpers/grid').gridMap({
   id: 'bm_hall',
   name: 'The hall',
   width: 12,

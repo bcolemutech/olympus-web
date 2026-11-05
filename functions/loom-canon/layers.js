@@ -1,9 +1,10 @@
-/* global module, window, require */
+/* global module, require */
 (function () {
   'use strict';
 
-  // A battle map's layers (planning/the-loom-movement-and-vision.md §4;
-  // L-621 / #446): walls, doors and obstacles over its grid.
+  // A battle map's walls, doors and obstacles as the grid tools take them
+  // (planning/the-loom-movement-and-vision.md §4; L-621 / #446), the grid
+  // shortcuts of planning/maps-from-data.md §4.7 (L-928 / #732):
   //
   //   walls:     [{ points: [{ x, y }, …] }]  — lines along the grid lines,
   //              between integer corners (0…width, 0…height), each run
@@ -17,18 +18,18 @@
   //              pillar), `low` blocks movement only (a table, the bar, a pit),
   //              `difficult` costs 2 a square (rubble, mud)
   //
-  // A map without layers is open ground. Squares are { x, y }; corners are
-  // the grid points between them, so square (x, y) runs from corner (x, y) to
-  // (x + 1, y + 1), as in SVG art's coordinates.
+  // Squares are { x, y }; corners are the grid points between them, so square
+  // (x, y) runs from corner (x, y) to (x + 1, y + 1), as in SVG art's
+  // coordinates.
   //
-  // Movement is in feet (L-922): layers are read as geometry
-  // (map-geometry.js fromLayers) and moved over by map-paths.js, which also
-  // says whether an entry reaches an exit (check).
+  // They are stored as the map's geometry (./layer-geometry.js, through
+  // ./map-geometry.js fromLayers) and never themselves: since L-928 play
+  // reads only the geometry, and these are read back from it for the tools.
+  // `check` keeps what's given sound, and its last check, that every entry
+  // reaches an exit, walks the map's geometry (./map-paths.js), so `map`
+  // carries the geometry they make.
   //
-  // This file is kept in two places with the same bytes, functions/loom-canon/
-  // layers.js and public/apps/loom/js/layers.js (the Loom page loads it as
-  // Loom.mapLayers, for previews; L-624), and a test fails if they differ:
-  // change both.
+  // Server only (the page's copy went with L-928).
 
   var KINDS = ['solid', 'low', 'difficult'];
   var compiled = typeof WeakMap === 'function' ? new WeakMap() : null;
@@ -117,49 +118,9 @@
     return layers;
   }
 
-  // The edge between two squares side by side.
-  function edgeBetween(a, b) {
-    if (b.x === a.x + 1) return down(b.x, a.y);
-    if (b.x === a.x - 1) return down(a.x, a.y);
-    if (b.y === a.y + 1) return across(a.x, b.y);
-    return across(a.x, a.y);
-  }
-
   /** The obstacle on a square, or null. */
   function obstacleAt(map, cell) {
     return compile(map).cells[cellKey(cell.x, cell.y)] || null;
-  }
-
-  /** A square's ground: 'open', or the kind of obstacle on it. */
-  function groundAt(map, cell) {
-    var obstacle = obstacleAt(map, cell);
-    return obstacle ? obstacle.kind : 'open';
-  }
-
-  /**
-   * What lies between two neighbouring squares: a wall, and the door on the
-   * edge between them (side by side), or, on a diagonal, whether a wall or
-   * door touches the corner it squeezes past (`wall: true`).
-   */
-  function between(map, a, b) {
-    var layers = compile(map);
-    if (a.x !== b.x && a.y !== b.y) {
-      var corner = cellKey(Math.max(a.x, b.x), Math.max(a.y, b.y));
-      return { wall: Boolean(layers.corners[corner]), door: null };
-    }
-    var key = edgeBetween(a, b);
-    return { wall: Boolean(layers.walls[key]), door: layers.doors[key] || null };
-  }
-
-  // ── Paths (L-624 / #449) ───────────────────────────
-
-  /**
-   * A door's state for a save: what the save records (`states`, by door id:
-   * 'open', 'closed' or 'locked'), else closed, or locked if the map says so.
-   */
-  function doorState(door, states) {
-    var saved = states && states[door.id];
-    return saved || (door.locked ? 'locked' : 'closed');
   }
 
   // ── Checks ─────────────────────────────────────────
@@ -180,12 +141,9 @@
     );
   }
 
-  // map-paths.js, read when needed (it reads layers through map-geometry.js,
-  // and the page loads it after this file).
+  // map-paths.js, read when needed.
   function paths() {
-    return typeof module === 'object' && module.exports
-      ? require('./map-paths')
-      : window.Loom.mapPaths;
+    return require('./map-paths');
   }
 
   // Whether `entry` can walk to an exit (or is one), as a medium character
@@ -357,27 +315,10 @@
     return problems;
   }
 
-  /** Whether a map has any layers at all. */
-  function hasLayers(map) {
-    return Boolean(
-      (map.walls || []).length || (map.doors || []).length || (map.obstacles || []).length
-    );
-  }
-
   var api = {
     KINDS: KINDS,
-    compile: compile,
-    between: between,
-    obstacleAt: obstacleAt,
-    groundAt: groundAt,
-    hasLayers: hasLayers,
     check: check,
-    doorState: doorState,
   };
 
-  if (typeof window !== 'undefined') {
-    window.Loom = window.Loom || {};
-    window.Loom.mapLayers = api;
-  }
-  if (typeof module === 'object' && module.exports) module.exports = api;
+  module.exports = api;
 })();

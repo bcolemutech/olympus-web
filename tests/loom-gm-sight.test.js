@@ -29,7 +29,7 @@ const run = (a, b) => ({ points: [a, b] });
 
 // A vault under a ruin: the stair room (x < 6), with the chest, and behind
 // the iron door the inner room (x ≥ 6), with the altar and a tunnel out.
-const VAULT = {
+const VAULT = require('./helpers/grid').gridMap({
   id: 'bm_vault',
   name: 'The vault',
   width: 10,
@@ -46,7 +46,7 @@ const VAULT = {
   ],
   walls: [run(sq(6, 0), sq(6, 2)), run(sq(6, 3), sq(6, 6))],
   doors: [{ id: 'iron-door', name: 'the iron door', from: sq(6, 2), to: sq(6, 3) }],
-};
+});
 const WORLD = {
   id: 'w-ruin',
   name: 'The Ruin',

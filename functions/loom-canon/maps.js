@@ -16,9 +16,10 @@
  *                               — to: 'out' (back to the town, or the world), or
  *                                 { map, entry } (onto another map: a floor, a wing)
  *     features: [{ id, name, x, y }]   — named cells: the bar, the altar, the well
- *     walls, doors, obstacles   — what blocks movement and sight (L-621; ./layers.js):
- *                                 walls along the grid lines, doors in them, and
- *                                 solid, low or difficult squares; none is open ground
+ *     geometry                  — what blocks movement and sight, in feet (L-921;
+ *                                 ./map-geometry.js): ground, walls, doors, windows,
+ *                                 objects…; the walls, doors and obstacles of before
+ *                                 (L-621) are stored in it and dropped (L-928)
  *     generic: { kind, terrain } | null — reusable, assignable to any number of places
  *     revision                  — counts the times its grid was replaced (L-641): what
  *                                 saves had seen of an older one is forgotten
@@ -33,7 +34,8 @@
  */
 
 const town = require('./town');
-const layers = require('./layers');
+const geo = require('./map-geometry');
+const materials = require('./materials');
 const mapPaths = require('./map-paths');
 
 const MAX_SIDE = 64;
@@ -195,6 +197,60 @@ function standingAt(world, host) {
   );
 }
 
+const isPair = (p) => Array.isArray(p) && p.length >= 2;
+const sameCorner = (a, b) => Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+
+/**
+ * What covers a square's middle on a battle map, from its geometry (L-928;
+ * what an obstacle was): `{ id, name, kind }`, `kind` 'solid' for something
+ * that blocks the way and hides (a pillar, a statue), 'low' for something
+ * that blocks the way only, or a closed wall round it (a table, the bar, a
+ * pit's rail), 'difficult' for ground that costs more (rubble); or null.
+ * Hidden things are left out.
+ */
+function blockerAt(map, cell) {
+  const g = mapPaths.geometryOf(map);
+  if (!g || !Object.keys(g).length) return null;
+  const c = geo.compile(g);
+  const middle = [(cell.x + 0.5) * mapPaths.FEET, (cell.y + 0.5) * mapPaths.FEET];
+  const shown = (item) => !c.hidden[item.id];
+  for (let i = c.objects.length - 1; i >= 0; i--) {
+    const { item, rings } = c.objects[i];
+    if (!shown(item) || item.blocksMove === false) continue;
+    if (!rings.some((ring) => geo.pointInShape(middle, ring))) continue;
+    const kind = materials.objectKind(item.kind);
+    const hides =
+      typeof item.blocksSight === 'boolean' ? item.blocksSight : Boolean(kind && kind.blocksSight);
+    return {
+      id: item.id,
+      name: item.name || (kind && kind.name.toLowerCase()) || item.kind,
+      kind: hides ? 'solid' : 'low',
+    };
+  }
+  for (const { item, lines } of c.walls) {
+    if (!shown(item) || item.blocksMove === false) continue;
+    const ring = lines.find(
+      (l) => l.length >= 4 && isPair(l[0]) && sameCorner(l[0], l[l.length - 1])
+    );
+    if (!ring || !geo.pointInShape(middle, ring)) continue;
+    return {
+      id: item.id,
+      name: item.name || 'a wall',
+      kind: item.blocksSight === false ? 'low' : 'solid',
+    };
+  }
+  const ground = geo.groundAt(c, middle);
+  if (ground && shown(ground) && (ground.cost === 'never' || ground.cost >= 2)) {
+    const info = materials.materialOf('ground', ground.material);
+    return {
+      id: ground.id,
+      name: ground.name || (info && info.name.toLowerCase()) || ground.material,
+      kind: ground.cost === 'never' ? 'low' : 'difficult',
+    };
+  }
+  return null;
+}
+
 /**
  * Why nobody can stand on a square of a place's map, or null: off the grid,
  * on something that blocks (solid or low), on an entry or an exit, or on
@@ -204,7 +260,7 @@ function standingAt(world, host) {
 function squareProblem(world, map, host, cell, selfId) {
   const at = `(${cell.x}, ${cell.y})`;
   if (!inBounds(map, cell)) return `${at} is off the ${map.width} × ${map.height} grid`;
-  const obstacle = layers.obstacleAt(map, cell);
+  const obstacle = blockerAt(map, cell);
   if (obstacle && obstacle.kind !== 'difficult') {
     return `${at} is ${obstacle.name} (${obstacle.kind})`;
   }
@@ -280,4 +336,5 @@ module.exports = {
   standingOn,
   standingAt,
   squareProblem,
+  blockerAt,
 };

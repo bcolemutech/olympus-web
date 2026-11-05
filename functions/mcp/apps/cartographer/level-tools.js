@@ -828,13 +828,24 @@ function levelTools({ writer, worldFor }) {
           if (!given.length) throw new ToolError(`Give one of ${LISTS.join(', ')}.`);
           const def = { name: before.name, width: before.width, height: before.height };
           for (const k of LISTS) def[k] = args[k] !== undefined ? args[k] : before[k] || [];
+          // Its walls, doors and obstacles as geometry (L-928): those given,
+          // else its own.
+          const grid = mapTools.withGrid(before, {
+            walls: args.walls,
+            doors: args.doors,
+            obstacles: args.obstacles,
+          });
+          const LAYERS = ['walls', 'doors', 'obstacles'];
+          for (const k of LAYERS) def[k] = grid[k];
+          def.geometry = grid.geometry;
           mapTools.checkMap(world, args.mapId, def);
           mapTools.checkLayers(def);
           mapTools.checkAreas(def);
-          const fields = Object.fromEntries(given.map((k) => [k, def[k]]));
-          // Its layers as geometry too (L-928).
-          if (given.some((k) => ['walls', 'doors', 'obstacles'].includes(k))) {
-            fields.geometry = mapTools.geometryField(before, { ...before, ...def });
+          const fields = Object.fromEntries(
+            given.filter((k) => !LAYERS.includes(k)).map((k) => [k, def[k]])
+          );
+          if (given.some((k) => LAYERS.includes(k))) {
+            Object.assign(fields, mapTools.gridFields(before, grid));
           }
           fields.revision = (before.revision || 0) + 1;
           e.update(e.ref('battleMaps', args.mapId), fields);

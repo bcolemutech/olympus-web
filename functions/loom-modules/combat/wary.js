@@ -33,6 +33,7 @@
 
 const maps = require('../../loom-canon/maps');
 const mapAreas = require('../../loom-canon/map-areas');
+const mapDoors = require('../../loom-canon/doors');
 const { settingsOf } = require('./settings');
 
 const WARY = 'wary';
@@ -131,8 +132,8 @@ function validateAgainst(system, map, { challenge, triggers } = {}, where = '') 
   }
   if (map && Array.isArray(triggers)) {
     const ids = {
-      doorOpened: (map.doors || []).map((d) => d.id),
-      doorForced: (map.doors || []).map((d) => d.id),
+      doorOpened: mapDoors.doorsOf(map).map((d) => d.id),
+      doorForced: mapDoors.doorsOf(map).map((d) => d.id),
       featureTouched: (map.features || []).map((f) => f.id),
       enteredArea: (map.areas || []).map((a) => a.id),
     };

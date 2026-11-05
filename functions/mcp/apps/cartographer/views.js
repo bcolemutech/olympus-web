@@ -18,7 +18,7 @@ const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
 const mapAreas = require('../../../loom-canon/map-areas');
 const positions = require('../../../loom-canon/positions');
-const layers = require('../../../loom-canon/layers');
+const layerGeometry = require('../../../loom-canon/layer-geometry');
 const ground = require('../../../loom-canon/ground');
 const artOf = require('../../../loom-canon/art');
 const routes = require('../../../loom-canon/routes');
@@ -704,9 +704,9 @@ function battleMapRow(world, map) {
     size: { width: map.width, height: map.height },
     generic: map.generic || null,
     hasImage: Boolean(map.image),
-    // Walls, doors or obstacles (L-622): what a place's own map needs to
-    // count in full toward its score.
-    hasLayers: layers.hasLayers(map),
+    // Walls, doors or obstacles (L-622), in its geometry since L-928: what a
+    // place's own map needs to count in full toward its score.
+    hasLayers: layerGeometry.hasShapes(map),
     usedBy: usersOf(world, map.id).length,
     ...(map.retired ? { retired: true } : {}),
   };
@@ -788,9 +788,9 @@ function battleMapDetail(world, map) {
     entries: map.entries || [],
     exits: (map.exits || []).map((exit) => ({ ...exit, to: exitTo(exit) })),
     features: map.features || [],
-    walls: map.walls || [],
-    doors: map.doors || [],
-    obstacles: map.obstacles || [],
+    // Its walls, doors and obstacles in corners and squares, read back from
+    // its geometry (L-928), as set_map_layers takes them.
+    ...layerGeometry.layersOf(map.geometry),
     // Its areas (#670), with how many squares each holds.
     areas: (map.areas || []).map((area) => ({
       ...area,

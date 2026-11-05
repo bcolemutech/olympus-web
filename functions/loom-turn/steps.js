@@ -2,7 +2,7 @@
 
 const mapPaths = require('../loom-canon/map-paths');
 const maps = require('../loom-canon/maps');
-const layers = require('../loom-canon/layers');
+const mapDoors = require('../loom-canon/doors');
 const sight = require('../loom-canon/sight');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
@@ -116,28 +116,21 @@ function planPoint(plan) {
   return plan.to ? mapPaths.centreOf(plan.to) : null;
 }
 
-/** A door on a map by id: one of its layers' doors, or of its geometry (L-922). */
+/** A door on a map by id, from its geometry (L-922, L-928; ../loom-canon/doors.js). */
 function doorOn(map, id) {
-  return (
-    (map.doors || []).find((d) => d.id === id) ||
-    (mapPaths.geometryOf(map).doors || []).find((d) => d.id === id) ||
-    null
-  );
+  return mapDoors.doorOf(map, id);
 }
 
 /**
  * A character's AP prices as the grid view is sent them (loomGetMap's turn
  * `prices`): a square's, difficult ground's, a door's, and each door's own
- * (of the map's layers and its geometry), with its conditions in them.
+ * (of its geometry), with its conditions in them.
  */
 function viewPrices(canonWorld, save, map) {
   const prices = pricesFor(canonWorld, save);
-  const doors = {};
-  for (const door of (map && map.doors) || []) doors[door.id] = prices.door(door);
-  for (const door of (map && mapPaths.geometryOf(map).doors) || []) {
-    if (doors[door.id] === undefined) doors[door.id] = prices.door(door);
-  }
-  return { move: prices.move, difficult: prices.difficult, door: prices.door(null), doors };
+  const own = {};
+  for (const door of (map && mapDoors.doorsOf(map)) || []) own[door.id] = prices.door(door);
+  return { move: prices.move, difficult: prices.difficult, door: prices.door(null), doors: own };
 }
 
 /**
@@ -385,9 +378,10 @@ const itemName = (item) =>
 
 /** Whether the save's character carries a door's key (L-626). */
 function hasKey(save, door) {
-  if (!door.key) return false;
+  const key = mapDoors.keyOf(door);
+  if (!key) return false;
   const inventory = (save && save.character && save.character.inventory) || [];
-  return inventory.some((item) => itemName(item) === itemName(door.key));
+  return inventory.some((item) => itemName(item) === itemName(key));
 }
 
 /** Whether a square is beside a door: on either side of it. */
@@ -404,13 +398,13 @@ function besideDoor(door, cell) {
 function planDoor(canonWorld, save, doorId, open) {
   const { map, cell } = maps.positionOf(canonWorld, save);
   if (!map || !(map.exits || []).length) return { refused: "There's no map here to move on." };
-  const door = (map.doors || []).find((d) => d.id === doorId);
+  const door = mapDoors.doorOf(map, doorId);
   if (!door) return { refused: "There's no such door here." };
   const name = door.name || 'the door';
   if (!besideDoor(door, cell)) {
     return { refused: 'You need to be beside ' + name + '.' };
   }
-  const state = layers.doorState(door, doorStatesOf(save, map.id));
+  const state = mapDoors.stateOf(door, doorStatesOf(save, map.id));
   // A locked door opens with its key, in one go (L-626 / #451).
   const withKey = open && state === 'locked' && hasKey(save, door);
   if (open && state === 'open') return { refused: capitalised(name) + ' is already open.' };
@@ -428,7 +422,7 @@ function planDoor(canonWorld, save, doorId, open) {
     turn: { ...turn, ap: turn.ap - cost },
     lines: [
       withKey
-        ? 'You unlock ' + name + ' with ' + door.key + ' and open it.'
+        ? 'You unlock ' + name + ' with ' + mapDoors.keyOf(door) + ' and open it.'
         : (open ? 'You open ' : 'You close ') + name + '.',
     ],
     door: { mapId: map.id, doorId: door.id, state: open ? 'open' : 'closed' },

@@ -4,6 +4,7 @@ const { callGemini } = require('../gemini');
 const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
 const { doorSides } = require('./steps');
+const mapDoors = require('../loom-canon/doors');
 const { peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
@@ -237,7 +238,7 @@ function mapEntities(canonWorld, save, known) {
       kind: 'way out of here',
       seen: at(e),
     })),
-    (onMap.doors || []).map((d) => ({
+    mapDoors.doorsOf(onMap).map((d) => ({
       id: 'door:' + d.id,
       name: d.name || 'a door',
       kind: 'door here',

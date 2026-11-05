@@ -16,7 +16,7 @@ const effects = require('../loom-canon/effects');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
 const sheets = require('../loom-canon/sheets');
-const layers = require('../loom-canon/layers');
+const mapDoors = require('../loom-canon/doors');
 const sight = require('../loom-canon/sight');
 const ground = require('../loom-canon/ground');
 const { planTownStep, walksTown, nearestWayOut } = require('./town-steps');
@@ -1526,7 +1526,7 @@ function mapTarget(canonWorld, characterState, map, target) {
       : null;
   const spot = named('feature:', map.features) || named('exit:', map.exits);
   if (spot) return { name: spot.name, squares: [spot] };
-  const door = named('door:', map.doors);
+  const door = named('door:', mapDoors.doorsOf(map));
   if (door) return { name: door.name || 'the door', squares: doorSides(door), door: true };
   // Someone here (as the grid view lists them: at this place in town, or at
   // this point of interest), standing on a square.
@@ -1592,9 +1592,9 @@ function spendOf(proposedAction, characterState, canonWorld, map) {
     );
     return t ? (list || []).find((item) => item.id === t.slice(prefix.length)) || null : null;
   };
-  const door = map && named('door:', map.doors);
+  const door = map && named('door:', mapDoors.doorsOf(map));
   if (door) {
-    const state = layers.doorState(door, doorStatesOf(characterState, map.id));
+    const state = mapDoors.stateOf(door, doorStatesOf(characterState, map.id));
     const picking = state === 'locked' && !hasKey(characterState, door);
     return picking
       ? { spend: 'lock', what: 'picking the lock', long: door.long, name: door.name }
@@ -1816,7 +1816,7 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
   );
   // No such door, or not beside it: turned down by the door's own rules,
   // spending nothing.
-  const door = doorTarget && map && (map.doors || []).find((d) => d.id === doorTarget.slice(5));
+  const door = doorTarget && map && mapDoors.doorOf(map, doorTarget.slice(5));
   if (doorTarget && !(door && besideDoor(door, maps.positionOf(canonWorld, characterState).cell))) {
     return evaluateDoorAttempt(
       proposedAction,
@@ -2032,7 +2032,7 @@ function fightFrom(proposedAction, resolution, characterState, canonWorld) {
 // door opens or closes as asked.
 function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canonWorld) {
   const { map, cell } = maps.positionOf(canonWorld, characterState);
-  const door = map && (map.doors || []).find((d) => d.id === doorId);
+  const door = map && mapDoors.doorOf(map, doorId);
   if (!door) {
     return {
       outcome: 'invalid_target',
@@ -2042,7 +2042,7 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
   }
   const name = door.name || 'the door';
   if (!besideDoor(door, cell)) return blocked('You need to be beside ' + name + '.');
-  const state = layers.doorState(door, doorStatesOf(characterState, map.id));
+  const state = mapDoors.stateOf(door, doorStatesOf(characterState, map.id));
   const set = (value) => ({
     target: 'save',
     op: 'set-flag',
@@ -2076,7 +2076,7 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
     return {
       outcome: 'success',
       mutations: [set('open')],
-      constraints: ['You unlock ' + name + ' with ' + door.key + ' and open it.'],
+      constraints: ['You unlock ' + name + ' with ' + mapDoors.keyOf(door) + ' and open it.'],
     };
   }
   // The lock's difficulty wins over any proposed (DC3), placed on the
@@ -2157,7 +2157,7 @@ function eventsOf(proposedAction, resolution, characterState, canonWorld) {
   for (const m of resolution.mutations) {
     const door = m.target === 'save' && /^doors\.([^.]+)\.(.+)$/.exec(m.path || '');
     if (!door || door[1] !== map.id) continue;
-    const was = layers.doorState((map.doors || []).find((d) => d.id === door[2]) || {}, before);
+    const was = mapDoors.stateOf(mapDoors.doorOf(map, door[2]) || { id: door[2] }, before);
     events.push(...combat.wary.doorEvents(door[2], was, m.value, { keyed: !resolution.roll }));
   }
   for (const t of proposedAction.targets || []) {

@@ -14,6 +14,17 @@
 
 const sight = require('../functions/loom-canon/sight');
 const reference = require('./helpers/sight-reference');
+const { gridMap } = require('./helpers/grid');
+
+// The maps here are written in squares and corners and stored as geometry
+// (L-928; ./helpers/grid.js), once each, before sight reads them; the plain
+// ray caster reads them as written.
+const stored = new WeakMap();
+const asStored = (map) => {
+  if (!stored.has(map)) stored.set(map, gridMap(map));
+  return stored.get(map);
+};
+const inSight = (map, ...rest) => sight.inSight(asStored(map), ...rest);
 
 const sq = (x, y) => ({ x, y });
 const run = (a, b) => ({ points: [a, b] });
@@ -21,7 +32,7 @@ const run = (a, b) => ({ points: [a, b] });
 // A map's squares in sight from `from`, row by row: `@` is you, `o` in sight,
 // `.` hidden.
 function picture(map, from, states) {
-  const seen = sight.inSight(map, from, states);
+  const seen = inSight(map, from, states);
   const rows = [];
   for (let y = 0; y < map.height; y++) {
     let row = '';
@@ -46,7 +57,7 @@ describe('line of sight', () => {
   test('on open ground, every square is in sight, wherever you stand', () => {
     const open = { width: 12, height: 8 };
     [sq(0, 0), sq(5, 3), sq(11, 7)].forEach((from) => {
-      expect(Object.keys(sight.inSight(open, from))).toHaveLength(96);
+      expect(Object.keys(inSight(open, from))).toHaveLength(96);
     });
   });
 
@@ -89,7 +100,7 @@ describe('line of sight', () => {
 
   test("the save's door decides: open shows the room; closed and locked hide it", () => {
     const locked = BACK_ROOM({ locked: true, key: 'brass key' });
-    const backRoom = (states) => Boolean(sight.inSight(locked, sq(6, 3), states)['10,3']);
+    const backRoom = (states) => Boolean(inSight(locked, sq(6, 3), states)['10,3']);
     expect(backRoom()).toBe(false);
     expect(backRoom({ 'back-door': 'locked' })).toBe(false);
     expect(backRoom({ 'back-door': 'closed' })).toBe(false); // picked, still shut
@@ -123,7 +134,7 @@ describe('line of sight', () => {
         { id: 'rubble', name: 'rubble', kind: 'difficult', x: 7, y: 0, w: 2, h: 8 },
       ],
     };
-    expect(Object.keys(sight.inSight(map, sq(1, 4)))).toHaveLength(96);
+    expect(Object.keys(inSight(map, sq(1, 4)))).toHaveLength(96);
   });
 
   test("around a wall's end you see out at an angle; a line only grazing it sees nothing", () => {
@@ -200,10 +211,10 @@ describe('line of sight', () => {
         },
       ],
     };
-    expect(sight.inSight(box, sq(2, 2))).toEqual({ '2,2': true });
-    expect(sight.inSight(box, sq(-1, 2))).toEqual({});
-    expect(sight.inSight(box, sq(6, 0))).toEqual({});
-    expect(sight.inSight(box, null)).toEqual({});
+    expect(inSight(box, sq(2, 2))).toEqual({ '2,2': true });
+    expect(inSight(box, sq(-1, 2))).toEqual({});
+    expect(inSight(box, sq(6, 0))).toEqual({});
+    expect(inSight(box, null)).toEqual({});
   });
 });
 
@@ -275,7 +286,7 @@ describe('against a plain ray caster', () => {
     for (let m = 0; m < 80; m++) {
       const { map, states, stands } = randomMap(random);
       stands.forEach((from) => {
-        const seen = sight.inSight(map, from, states);
+        const seen = inSight(map, from, states);
         for (let x = 0; x < map.width; x++) {
           for (let y = 0; y < map.height; y++) {
             squares++;
@@ -342,7 +353,11 @@ describe('on a 64 × 64 map, every step', () => {
       process.stdout.write(String(Number(process.hrtime.bigint() - started) / 1e6 / fresh.length));
     `;
     return Number(
-      execFileSync(process.execPath, ['-e', script, JSON.stringify({ map, states: doorStates })])
+      execFileSync(process.execPath, [
+        '-e',
+        script,
+        JSON.stringify({ map: asStored(map), states: doorStates }),
+      ])
     );
   };
 

@@ -331,7 +331,7 @@ function checkAreas(map) {
 // What to warn about once a map's layers pass: none at all, and features
 // nobody can get to (on or beside them) from an entry.
 function layerWarnings(map) {
-  if (!layers.hasLayers(map)) {
+  if (!layerGeometry.hasShapes(map)) {
     return [
       'It has no walls, doors or obstacles: players walk anywhere on it, and a place with it ' +
         'as its own map earns only half its score for a map. Add them with set_map_layers.',
@@ -366,13 +366,40 @@ function standingWarnings(world, map) {
   });
 }
 
-// A battle map's layers are stored as its geometry too (L-928; EX4): given
-// new layers, what its old ones made is replaced by what the new ones make,
-// its own items kept. The field to write: the geometry, or a delete when
-// nothing is left.
-function geometryField(before, next) {
-  const geometry = layerGeometry.relayered(before || {}, next);
-  return Object.keys(geometry).length ? geometry : FieldValue.delete();
+// A battle map as the grid tools see it (L-928; EX4): its walls, doors and
+// obstacles in squares and corners (its old fields while it has them, else
+// read back from its geometry), each of `layers` given in place of its own,
+// and `geometry`, what they make with the map's own items kept: what's
+// checked, and what's stored. The layers themselves are never stored.
+function withGrid(map, layers = {}) {
+  const m = map || {};
+  const own = layerGeometry.hasLayers(m)
+    ? { walls: m.walls || [], doors: m.doors || [], obstacles: m.obstacles || [] }
+    : layerGeometry.layersOf(m.geometry);
+  const grid = {};
+  for (const k of layerGeometry.LAYERS) grid[k] = layers[k] !== undefined ? layers[k] : own[k];
+  const geometry = layerGeometry.converted({ ...grid, geometry: layerGeometry.ownOf(m.geometry) });
+  return { ...m, ...grid, geometry };
+}
+
+// The fields a grid tool writes for new layers: the geometry (or a delete
+// when nothing is left), and the old fields deleted where the map still has
+// them.
+function gridFields(map, grid) {
+  const fields = {
+    geometry: Object.keys(grid.geometry).length ? grid.geometry : FieldValue.delete(),
+  };
+  for (const k of layerGeometry.LAYERS)
+    if (map && map[k] !== undefined) fields[k] = FieldValue.delete();
+  return fields;
+}
+
+// A map as stored: without the grid tools' lists.
+function stored(map) {
+  const out = { ...map };
+  for (const k of layerGeometry.LAYERS) delete out[k];
+  if (out.geometry && !Object.keys(out.geometry).length) delete out.geometry;
+  return out;
 }
 
 const layerCounts = (map) => ({
@@ -574,9 +601,16 @@ function mapTools({ writer }) {
             features: args.features || [],
           };
           checkMap(world, id, def);
-          for (const layer of ['walls', 'doors', 'obstacles', 'areas']) {
-            def[layer] = args[layer] || (before && before[layer]) || [];
-          }
+          // Its walls, doors and obstacles as geometry (L-928): those given,
+          // else its own; its own geometry kept.
+          const grid = withGrid(before, {
+            walls: args.walls,
+            doors: args.doors,
+            obstacles: args.obstacles,
+          });
+          for (const layer of layerGeometry.LAYERS) def[layer] = grid[layer];
+          def.geometry = grid.geometry;
+          def.areas = args.areas || (before && before.areas) || [];
           checkLayers(def);
           checkAreas(def);
           // Its hazards are kept (L-815); any that no longer fit are said.
@@ -586,12 +620,9 @@ function mapTools({ writer }) {
           const misfit = def.hazards.length
             ? hazards.validate(systemOf(world), def, def.hazards).errors
             : [];
-          // Its layers as geometry too (L-928), its own geometry kept.
-          const geometry = layerGeometry.relayered(before || {}, def);
           const doc = {
             id,
-            ...def,
-            ...(Object.keys(geometry).length ? { geometry } : {}),
+            ...stored(def),
             image: before ? before.image || null : null,
             generic:
               args.generic === undefined ? (before ? before.generic || null : null) : args.generic,
@@ -609,7 +640,7 @@ function mapTools({ writer }) {
           };
           if (!before) result.created = true;
           const warnings = [
-            ...layerWarnings(doc),
+            ...layerWarnings({ ...doc, ...grid }),
             ...standingWarnings(world, doc),
             ...views.areaWarnings(doc),
           ];
@@ -655,9 +686,10 @@ function mapTools({ writer }) {
         'area they stand in and which they can see; "go to the back room" walks into it. Keep ' +
         'features for what players use: the lever, the altar. Each list given replaces that list; an ' +
         'empty list clears it; one left out is kept. A place’s own map needs these to count in ' +
-        'full toward its score. Check them against the art with view_image. Walls, doors and ' +
-        'obstacles are kept as the map’s geometry too (walls, doors, pillars, low walls and rough ' +
-        'ground, in feet), which play reads. ' +
+        'full toward its score. Check them against the art with view_image. A shortcut: walls, ' +
+        'doors and obstacles are stored as the map’s geometry (walls, doors, pillars, low walls ' +
+        'and rough ground, in feet), which is what play reads, and get_battle_map reads them ' +
+        'back. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -680,18 +712,23 @@ function mapTools({ writer }) {
               'Give walls, doors or obstacles, or areas (an empty list clears them).'
             );
           }
-          const fields = Object.fromEntries(given.map((l) => [l, args[l]]));
-          const next = { ...map, ...fields };
+          const grid = withGrid(map, {
+            walls: args.walls,
+            doors: args.doors,
+            obstacles: args.obstacles,
+          });
+          const next = { ...grid, ...(args.areas !== undefined ? { areas: args.areas } : {}) };
           checkLayers(next);
           checkAreas(next);
-          if (given.some((l) => layerGeometry.LAYERS.includes(l))) {
-            fields.geometry = geometryField(map, next);
-          }
+          const fields = {
+            ...(args.areas !== undefined ? { areas: args.areas } : {}),
+            ...(given.some((l) => layerGeometry.LAYERS.includes(l)) ? gridFields(map, grid) : {}),
+          };
           e.update(e.ref('battleMaps', map.id), fields);
           const result = {
             map: views.battleMapRow(
-              { ...world, battleMaps: { ...world.battleMaps, [map.id]: next } },
-              next
+              { ...world, battleMaps: { ...world.battleMaps, [map.id]: stored(next) } },
+              stored(next)
             ),
             layers: layerCounts(next),
             updated: given,
@@ -841,6 +878,8 @@ module.exports = {
   checkLayers,
   checkAreas,
   layerWarnings,
-  geometryField,
+  withGrid,
+  gridFields,
+  stored,
   shapes: { entry, exit, feature, AREAS, LAYER_SHAPES, label },
 };

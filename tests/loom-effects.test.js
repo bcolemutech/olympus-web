@@ -384,7 +384,7 @@ describe('areas on a grid, in line of effect', () => {
 
   test('a wall blocks it, and a closed door does until it is open', () => {
     // A wall down the line x = 5, with a door in it at y 4.
-    const walled = {
+    const walled = jest.requireActual('./helpers/grid').gridMap({
       ...open,
       walls: [
         {
@@ -401,7 +401,7 @@ describe('areas on a grid, in line of effect', () => {
         },
       ],
       doors: [{ id: 'door', name: 'the door', from: { x: 5, y: 4 }, to: { x: 5, y: 5 } }],
-    };
+    });
     const burst = { shape: 'burst', x: 4, y: 4, radius: 2 };
     const shut = areas.squaresOf(walled, burst);
     expect(Object.keys(shut).filter((k) => Number(k.split(',')[0]) >= 5)).toEqual([]);
@@ -441,7 +441,7 @@ describe('areas on a grid, in line of effect', () => {
     ];
     expect(areas.catches(open, burst, people).map((p) => p.id)).toEqual(['beside', 'leaning']);
     // Out of line of effect: behind a wall, at any distance.
-    const walled = {
+    const walled = jest.requireActual('./helpers/grid').gridMap({
       ...open,
       walls: [
         {
@@ -451,7 +451,7 @@ describe('areas on a grid, in line of effect', () => {
           ],
         },
       ],
-    };
+    });
     expect(areas.catches(walled, burst, people).map((p) => p.id)).toEqual([]);
   });
 

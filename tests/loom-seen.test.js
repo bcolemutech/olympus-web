@@ -13,6 +13,7 @@
  */
 
 const { pack, unpack, squaresOf, inSightNow, withSquares } = require('../functions/loom-turn/seen');
+const { gridMap } = require('./helpers/grid');
 const { battleView } = require('../functions/loom-turn/map-view');
 
 const keys = (...squares) => Object.fromEntries(squares.map(([x, y]) => [x + ',' + y, true]));
@@ -86,7 +87,7 @@ describe('the record', () => {
 describe('what a save sees now', () => {
   // A room and a closet east of a wall at x = 3, through a door in its gap
   // at y 1–2.
-  const ROOM = {
+  const ROOM = gridMap({
     id: 'bm_room',
     width: 6,
     height: 4,
@@ -107,7 +108,7 @@ describe('what a save sees now', () => {
       },
     ],
     doors: [{ id: 'closet', name: 'the closet door', from: { x: 3, y: 1 }, to: { x: 3, y: 2 } }],
-  };
+  });
   const world = { battleMaps: { bm_room: ROOM } };
   const save = (cell, doors) => ({ mapId: 'bm_room', cell, doors: doors && { bm_room: doors } });
   const closet = (squares) => Object.keys(squares).filter((key) => Number(key.split(',')[0]) >= 3);
@@ -143,7 +144,8 @@ describe('what the grid view is sent (L-633)', () => {
   // way through. The save stands at (2, 1) in the west; once, it saw (6, 0)
   // in the east (its record says so).
   const sq = (x, y) => ({ x, y });
-  const RUIN = {
+  // Written in squares and corners, stored as geometry (L-928).
+  const RUIN_GRID = {
     id: 'bm_ruin',
     name: 'The ruin',
     width: 8,
@@ -175,6 +177,7 @@ describe('what the grid view is sent (L-633)', () => {
       { id: 'rubble', name: 'rubble', kind: 'difficult', x: 2, y: 3, w: 4 }, // both halves
     ],
   };
+  const RUIN = gridMap(RUIN_GRID);
   const world = {
     locations: { loc_9: { id: 'loc_9', name: 'The ruin', battleMap: { mapId: 'bm_ruin' } } },
     places: {},
@@ -196,39 +199,32 @@ describe('what the grid view is sent (L-633)', () => {
     expect(view.features.map((f) => f.id)).toEqual(['altar', 'urn']);
   });
 
-  test('walls only along the sides of squares seen, cut where they pass out of it', () => {
-    expect(view.walls).toEqual([
-      { points: [sq(4, 0), sq(4, 4)] },
-      { points: [sq(0, 4), sq(4, 4)] },
+  // Its geometry (L-928: nothing else) as far as seen: what touches a
+  // square seen, then or now, whole.
+  const ids = (list) => (list || []).map((i) => i.id);
+  test('what touches a square seen is sent whole; the rest is not', () => {
+    // The wall between the halves and the south edge run along squares in
+    // sight; the trapdoor, and its doorway, touch (6, 0), seen once; the
+    // wall and the cell door in the east touch nothing seen.
+    expect(ids(view.geometry.walls)).toEqual([
+      'layer-wall-0',
+      'layer-wall-2',
+      'layer-doorway-trap',
+      'layer-table',
     ]);
+    expect(view.walls).toBeUndefined();
+    expect(view.obstacles).toBeUndefined();
+    // The table and the rubble whole, though the rubble runs into the east.
+    expect(ids(view.geometry.ground)).toEqual(['layer-rubble']);
+    expect(view.geometry.ground[0].shape).toEqual({ rect: { x: 10, y: 15, w: 20, h: 5 } });
   });
 
-  test('a wall cut in the middle is sent as its runs, each running its way', () => {
-    // A wall drawn east to west along the north edge: the west half is in
-    // sight, and of the east only (6, 0) and (7, 0) were seen.
-    const map = { ...RUIN, walls: [RUIN.walls[0], { points: [sq(8, 0), sq(0, 0)] }] };
-    const seenEast = withSquares(null, map, keys([6, 0], [7, 0]));
-    const ends = battleView({ ...world, battleMaps: { bm_ruin: map } }, save, seenEast);
-    expect(ends.walls).toEqual([
-      RUIN.walls[0],
-      { points: [sq(8, 0), sq(6, 0)] },
-      { points: [sq(4, 0), sq(0, 0)] },
-    ]);
-  });
-
-  test("doors beside a square seen, in the save's state", () => {
-    expect(view.doors).toEqual([
-      { id: 'trap', name: 'the trapdoor', from: sq(6, 1), to: sq(7, 1), state: 'closed' },
+  test("doors touching a square seen, in the save's state", () => {
+    expect(view.geometry.doors).toEqual([
+      expect.objectContaining({ id: 'trap', name: 'the trapdoor', state: 'closed' }),
     ]);
     const opened = battleView(world, { ...save, doors: { bm_ruin: { trap: 'open' } } }, record);
-    expect(opened.doors[0].state).toBe('open');
-  });
-
-  test('obstacles cut down to the squares seen; whole where all of it is', () => {
-    expect(view.obstacles).toEqual([
-      { id: 'table', name: 'a table', kind: 'low', x: 0, y: 0, w: 2, h: 1 },
-      { id: 'rubble', name: 'rubble', kind: 'difficult', x: 2, y: 3, w: 2, h: 1 },
-    ]);
+    expect(opened.geometry.doors[0].state).toBe('open');
   });
 
   test('people on a square only while it is in sight, with it (L-642); those with none, listed', () => {
@@ -251,7 +247,7 @@ describe('what the grid view is sent (L-633)', () => {
     const fresh = battleView(world, save, null);
     expect(fresh.fog.seen).toBe(fresh.fog.inSight);
     expect(fresh.features.map((f) => f.id)).toEqual(['altar']);
-    expect(fresh.doors).toEqual([]);
+    expect(fresh.geometry.doors).toBeUndefined();
   });
 
   test('the art is sent whole, under the fog', () => {
