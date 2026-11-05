@@ -278,7 +278,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 | `seed-categories.yml` | Manual dispatch | Populate Symposium categories |
 | `set-storage-cors.yml` | Manual dispatch | Apply `storage-cors.json` to the Storage bucket, so the Loom's map engine can draw art from it (dry run, then apply) |
 | `migrate-map-levels.yml` | Manual dispatch | Write every world's world map, towns, town places and battle maps into maps and places (L-902; `scripts/migrate-map-levels.js`): a dry run reports what it would write, then apply with confirm "migrate"; running it again writes nothing |
-| `convert-map-layers.yml` | Manual dispatch | Store every battle map's walls, doors and obstacles as its geometry and delete the layers (and the copies on grid maps; L-928; `scripts/convert-map-layers.js`, `functions/cartographer/convert-layers.js`): a dry run reports what it would write and a replay (each map's ways, reach and sight as it played before and on its geometry alone), then apply with confirm "convert"; running it again writes nothing |
+| `convert-map-layers.yml` | Manual dispatch | Store every battle map's walls, doors and obstacles as its geometry and delete the layers (and the copies on grid maps; L-928; `scripts/convert-map-layers.js`, `functions/cartographer/convert-layers.js`): a dry run reports what it would write and a replay (each map's ways, reach and sight as it played before and on its geometry alone), then apply (no confirm word: a dry run first is the check); running it again writes nothing |
 | `studio-generate.yml` | Manual dispatch | Make images with the real model by hand: one image, or the big-map trial; spends money, so it asks for confirm "spend" |
 
 **Required secret:** `FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00`
