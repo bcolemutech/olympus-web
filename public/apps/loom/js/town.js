@@ -547,8 +547,9 @@
   }
 
   // The town's shapes, for a town without art; its water again on `shimmer`,
-  // which the ambient touches bring and take away (K3).
-  function drawGround(g, view, shimmer) {
+  // which the ambient touches bring and take away (K3). A town drawn from its
+  // ground by the painter (L-928; `plain` false) keeps only the shimmer.
+  function drawGround(g, view, shimmer, plain) {
     var ground = town.data.ground;
     var flat = function (shape) {
       var out = [];
@@ -559,15 +560,18 @@
       return out;
     };
     (ground.water || []).forEach(function (shape) {
-      g.poly(flat(shape))
-        .fill({ color: COLOURS.water, alpha: 0.45 })
-        .stroke({ width: 1, color: COLOURS.waterEdge, alpha: 0.8 });
+      if (plain) {
+        g.poly(flat(shape))
+          .fill({ color: COLOURS.water, alpha: 0.45 })
+          .stroke({ width: 1, color: COLOURS.waterEdge, alpha: 0.8 });
+      }
       if (shimmer) shimmer.poly(flat(shape)).fill({ color: COLOURS.waterEdge, alpha: 1 });
     });
     if (shimmer) {
       shimmer.visible = Boolean((ground.water || []).length) && !reducedMotion();
       shimmer.alpha = 0;
     }
+    if (!plain) return;
     (ground.crossings || []).forEach(function (shape) {
       var ford = shape.kind === 'ford';
       g.poly(flat(shape))
@@ -741,11 +745,12 @@
       n.art.height = h * view.scale;
     }
 
-    // Without art, the town's shapes (L-664); over them, the fog (L-672).
+    // Without art, the town's shapes (L-664), or, sent drawn from its ground
+    // (L-928), the painter's; over them, the fog (L-672).
     n.shapes.clear();
     n.shimmer.clear();
-    if (data.ground && !art) drawGround(n.shapes, view, n.shimmer);
-    // Its area map drawn from its data (L-924; paint.js), over its ground.
+    if (data.ground && !art) drawGround(n.shapes, view, n.shimmer, !data.geometry);
+    // Its area map drawn from its data (L-924; paint.js), its ground among it.
     paintArea(n, data, view, Boolean(image));
     n.fog.visible = Boolean(data.fog);
     if (data.fog) {

@@ -140,6 +140,7 @@ Settled with the user through a questionnaire (2026-10-10). Items marked † too
 
 - **The importer** moves behind a "legacy" link (AZ1).
 - **The layer (AZ2):** a local dry-run script reads each Azgaar world's saved export, traces province cells into region polygons and biome cells into terrain areas (Azgaar's biomes mapped to the built-in list), and writes them.
+  - *Note (2026-11-05, from L-928):* imports never kept their exports, and Nisia's full export is lost; the repo's slim copy has no cell outlines. So Nisia's layer can't come from it: it has to be painted or traced from its map image. This is for L-710's gap sheet when it is next.
 - **Fields (AZ3):**
   - The `source` block stays as a record but nothing reads it.
   - Azgaar biome numbers are replaced by the location's terrain from the layer.

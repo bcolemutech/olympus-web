@@ -256,3 +256,38 @@ describe('the walking grid', () => {
     expect(ground.compile(GROUND).blocked.length).toBe((1000 / ground.CELL) ** 2);
   });
 });
+
+// Drawn from its ground (planning/maps-from-data.md §4.7, EX3; L-928).
+describe('drawn from its ground', () => {
+  const geo = require('../functions/loom-canon/map-geometry');
+  const ids = (list) => (list || []).map((i) => i.id);
+
+  test('streets, water, crossings, roofs and walls, each its material and name', () => {
+    const g = ground.geometryOf({
+      ...GROUND,
+      crossings: [BRIDGE, { name: 'the ford', kind: 'ford', points: rect(800, 470, 840, 530) }],
+    });
+    // Later lies over earlier: the streets, then the river, its crossings,
+    // the roofs.
+    expect(ids(g.ground)).toEqual([
+      'town-streets',
+      'town-water-0',
+      'town-crossing-0',
+      'town-crossing-1',
+      'town-building-0',
+    ]);
+    expect(g.ground.map((x) => x.material)).toEqual(['cobble', 'water', 'wood', 'gravel', 'roof']);
+    expect(g.ground[0].shape).toEqual({ rect: { x: 0, y: 0, w: 1000, h: 1000 } });
+    // A roof is raised a little, for the painter's shading and shadows.
+    expect(g.ground[4]).toMatchObject({ name: 'the Gull', height: 10 });
+    expect(g.walls).toEqual([
+      expect.objectContaining({ id: 'town-wall-0', material: 'stone', name: 'the town wall' }),
+    ]);
+    expect(geo.check(g, { width: 1000, height: 1000 })).toEqual([]);
+  });
+
+  test('no ground, nothing drawn from it', () => {
+    expect(ground.geometryOf(undefined)).toEqual({});
+    expect(ground.geometryOf({ buildings: [], water: [] })).toEqual({});
+  });
+});

@@ -420,4 +420,63 @@ describe('the grid view', () => {
       await page.close();
     }
   );
+  withBrowser('a town with ground draws from it (L-928); a town with art keeps its art', async () => {
+    const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(origin + '/fixtures/paint/drawers.html');
+    const ground = require('../functions/loom-canon/ground');
+    const rect = (x, y, w, h) => [
+      { x, y },
+      { x: x + w, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h },
+    ];
+    const shapes = {
+      buildings: [{ name: 'the mill', points: rect(200, 200, 120, 80) }],
+      water: [{ name: 'the Dal', points: rect(0, 480, 1000, 40) }],
+      crossings: [{ name: 'the bridge', points: rect(480, 470, 40, 60) }],
+      walls: [
+        {
+          name: 'the town wall',
+          points: [
+            { x: 100, y: 100 },
+            { x: 900, y: 100 },
+          ],
+        },
+      ],
+    };
+    // As loomGetMap sends a town with ground (map-view.js townDrawing).
+    const town = (id, image) => ({
+      locationId: id,
+      name: 'Burdendal',
+      here: null,
+      at: null,
+      next: [],
+      places: [],
+      links: [],
+      exits: [],
+      image,
+      ground: shapes,
+      geometry: ground.geometryOf(shapes),
+      space: { width: 1000, height: 1000 },
+    });
+    await page.evaluate(([d]) => window.__show(d, null, 'town'), [town('loc_burden', null)]);
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('area:loc_burden'));
+    expect(drawn.filter((d) => d.kind === 'ground').map((d) => [d.id, d.art])).toEqual([
+      ['town-streets', '/apps/loom/art/materials/ground-cobble.svg'],
+      ['town-water-0', '/apps/loom/art/materials/ground-water.svg'],
+      ['town-crossing-0', '/apps/loom/art/materials/ground-wood.svg'],
+      ['town-building-0', '/apps/loom/art/materials/ground-roof.svg'],
+    ]);
+    expect(drawn.filter((d) => d.kind === 'wall').map((d) => d.id)).toEqual(['town-wall-0']);
+    // With art, the art is the town's ground and walls: nothing of them drawn.
+    await page.evaluate(([d]) => window.__show(d, null, 'town'), [
+      town('loc_arted', { url: '/fixtures/paint/art.svg', width: 1000, height: 1000 }),
+    ]);
+    const arted = await page.evaluate(() => Loom.mapPaint.describe('area:loc_arted'));
+    expect(arted.filter((d) => d.kind === 'ground' || d.kind === 'wall')).toEqual([]);
+    expect(errors).toEqual([]);
+    await page.close();
+  });
 });

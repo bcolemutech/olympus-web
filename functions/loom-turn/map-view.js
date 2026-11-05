@@ -339,11 +339,32 @@ function townView(canonWorld, save, discovered, townRecord) {
 }
 
 // A town's area map as the page draws it (L-924): its geometry and space.
+// A town with ground is drawn from it (L-928; EX3: its streets, roofs, water,
+// crossings and walls, ../loom-canon/ground.js geometryOf), under its area
+// map's own geometry, whose items win on an id; the town's 0–1000 square is
+// its space when its map gives none.
 function townDrawing(settlement) {
   const t = (settlement && settlement.town) || {};
-  const geometry = drawnGeometry(t.geometry);
-  if (!geometry || !t.space) return {};
-  return { geometry, space: { width: t.space.width, height: t.space.height } };
+  const fromGround = ground.geometryOf(t.ground);
+  const own = t.geometry && typeof t.geometry === 'object' ? t.geometry : {};
+  const taken = new Set();
+  Object.values(own).forEach((list) =>
+    (Array.isArray(list) ? list : []).forEach((item) => item && item.id && taken.add(item.id))
+  );
+  const merged = {};
+  for (const key of new Set([...Object.keys(fromGround), ...Object.keys(own)])) {
+    const under = (fromGround[key] || []).filter((item) => !taken.has(item.id));
+    merged[key] = under.concat(Array.isArray(own[key]) ? own[key] : []);
+  }
+  const geometry = drawnGeometry(merged);
+  const space =
+    t.space && t.space.width
+      ? { width: t.space.width, height: t.space.height }
+      : Object.keys(fromGround).length
+        ? { width: town.TOWN_SIDE, height: town.TOWN_SIDE }
+        : null;
+  if (!geometry || !space) return {};
+  return { geometry, space };
 }
 
 /**

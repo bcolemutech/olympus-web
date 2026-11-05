@@ -38,6 +38,7 @@
 
 const town = require('./town');
 const paths = require('./town-paths');
+const geo = require('./map-geometry');
 
 const SIDE = 1000; // the town square, as town.TOWN_SIDE
 const CELL = paths.CELL; // the walking grid's squares, in town units
@@ -323,10 +324,90 @@ function walkablePlaces(world, settlement) {
   return walk(world, settlement, groundOf(settlement)).walkable;
 }
 
+// ── Drawn from its ground (L-928; EX3) ─────────────────────────────────
+
+// Its materials (./materials.js): the streets between the shapes, roofs seen
+// from above (a little raised, so the painter shades them and lays a shadow
+// along their edges), water, a bridge's planks or a ford's stones, and a
+// town wall of stone.
+const DRAWN = Object.freeze({
+  streets: 'cobble',
+  building: 'roof',
+  water: 'water',
+  bridge: 'wood',
+  ford: 'gravel',
+  wall: 'stone',
+});
+const ROOF = 10; // a roof's height above the street, for the shading
+
+const pointsOf = (shape) => ((shape && shape.points) || []).filter(isPoint).map((p) => [p.x, p.y]);
+
+/**
+ * A town's ground as the geometry the painter draws a town from
+ * (planning/maps-from-data.md §4.7, EX3; L-928), in its 0–1000 square: the
+ * streets over the whole square, then its water, its crossings (a bridge's
+ * planks, a ford's stones), its buildings' roofs, and its walls. Each item
+ * keeps its shape's name. Not stored: worked out when the town is sent, so
+ * it is always the ground players walk (and a town with art keeps its art,
+ * the painter drawing only what's on top of it). Normalized ({} without
+ * ground).
+ */
+function geometryOf(ground) {
+  const g = groundOf({ town: { ground } });
+  if (!g || !hasGround({ town: { ground } })) return {};
+  const named = (item, shape) => (shape && shape.name ? { ...item, name: shape.name } : item);
+  const out = {
+    ground: [
+      {
+        id: 'town-streets',
+        material: DRAWN.streets,
+        shape: { rect: { x: 0, y: 0, w: SIDE, h: SIDE } },
+      },
+    ],
+    walls: [],
+  };
+  (g.water || []).forEach((shape, i) => {
+    const points = pointsOf(shape);
+    if (points.length >= 3) {
+      out.ground.push(
+        named({ id: 'town-water-' + i, material: DRAWN.water, shape: points }, shape)
+      );
+    }
+  });
+  (g.crossings || []).forEach((shape, i) => {
+    const points = pointsOf(shape);
+    const material = shape.kind === 'ford' ? DRAWN.ford : DRAWN.bridge;
+    if (points.length >= 3) {
+      out.ground.push(named({ id: 'town-crossing-' + i, material, shape: points }, shape));
+    }
+  });
+  (g.buildings || []).forEach((shape, i) => {
+    const points = pointsOf(shape);
+    if (points.length >= 3) {
+      out.ground.push(
+        named(
+          { id: 'town-building-' + i, material: DRAWN.building, shape: points, height: ROOF },
+          shape
+        )
+      );
+    }
+  });
+  (g.walls || []).forEach((shape, i) => {
+    const points = pointsOf(shape);
+    if (points.length >= 2) {
+      out.walls.push(named({ id: 'town-wall-' + i, material: DRAWN.wall, points }, shape));
+    }
+  });
+  if (!out.walls.length) delete out.walls;
+  return geo.normalize(out);
+}
+
 module.exports = {
   CELL,
   LIMITS,
   KINDS,
+  DRAWN,
+  geometryOf,
   groundOf,
   hasGround,
   shapeProblems,

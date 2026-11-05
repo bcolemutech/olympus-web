@@ -492,7 +492,12 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'the people in the wilderness at their world points. People are teal diamonds. The ' +
           'legend ties each number to its id, name and cell or position. Without art, a battle ' +
           'map or town is drawn on a plain background, so its layout can still be checked. Art ' +
-          'is uploaded on the Cartographer page.',
+          'is uploaded on the Cartographer page. Tracing art into data (L-928): look at the ' +
+          'map, read where its walls, doors, furniture, streets, houses and water fall on the ' +
+          'grid, set them (set_map_layers on a battle map, set_town_ground or set_area_ground on ' +
+          'a town), then look again and move what doesn’t sit on the art. A map keeps its art, ' +
+          'drawn in place of its floors and walls, so tracing it only makes play match what ' +
+          'players see; without art, the data is drawn from its materials.',
         inputSchema: {
           worldId,
           of: z.enum(['battleMap', 'town', 'world']).describe('What to see.'),
