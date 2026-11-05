@@ -214,10 +214,12 @@ function planMap(map, { replayIt = true } = {}) {
   };
 }
 
-// The old fields' deletes, for the ones a doc has.
-function deletes(doc) {
+// The old fields' deletes, for the ones a doc has. `fieldValue` is the
+// FieldValue of the SDK `db` comes from: a delete made by another copy of
+// it (the script's db is its own) isn't one Firestore will take.
+function deletes(doc, fieldValue) {
   const out = {};
-  for (const k of layerGeometry.LAYERS) if (doc[k] !== undefined) out[k] = FieldValue.delete();
+  for (const k of layerGeometry.LAYERS) if (doc[k] !== undefined) out[k] = fieldValue.delete();
   return out;
 }
 
@@ -231,7 +233,11 @@ function deletes(doc) {
  * deleted; `gridCopies` the grid maps whose copies of their battle map's
  * layers are deleted (written, or with `apply` false would be).
  */
-async function convertWorld(db, worldId, { apply = false, replayIt = true } = {}) {
+async function convertWorld(
+  db,
+  worldId,
+  { apply = false, replayIt = true, fieldValue = FieldValue } = {}
+) {
   const ref = db.collection('loom_worlds').doc(worldId);
   const snap = await ref.get();
   if (!snap.exists) return { worldId, missing: true };
@@ -280,11 +286,13 @@ async function convertWorld(db, worldId, { apply = false, replayIt = true } = {}
     ...withLayers.map(
       (p) => (b) =>
         b.update(ref.collection(p.collection).doc(p.id), {
-          geometry: Object.keys(p.geometry).length ? p.geometry : FieldValue.delete(),
-          ...deletes(p.data),
+          geometry: Object.keys(p.geometry).length ? p.geometry : fieldValue.delete(),
+          ...deletes(p.data, fieldValue),
         })
     ),
-    ...copies.map((d) => (b) => b.update(ref.collection('maps').doc(d.id), deletes(d.data()))),
+    ...copies.map(
+      (d) => (b) => b.update(ref.collection('maps').doc(d.id), deletes(d.data(), fieldValue))
+    ),
   ];
   if (apply && writes.length) {
     for (let i = 0; i < writes.length; i += 400) {
@@ -299,11 +307,20 @@ async function convertWorld(db, worldId, { apply = false, replayIt = true } = {}
   return report;
 }
 
-/** Converts every world's battle maps (or those named): one report each. */
-async function run(db, { apply = false, worldIds = null, replayIt = true } = {}) {
+/**
+ * Converts every world's battle maps (or those named): one report each.
+ * `fieldValue` is the FieldValue of the SDK `db` comes from (by default the
+ * functions' own; the script passes its own).
+ */
+async function run(
+  db,
+  { apply = false, worldIds = null, replayIt = true, fieldValue = FieldValue } = {}
+) {
   const ids = worldIds || (await db.collection('loom_worlds').get()).docs.map((d) => d.id);
   const reports = [];
-  for (const id of ids) reports.push(await convertWorld(db, id, { apply, replayIt }));
+  for (const id of ids) {
+    reports.push(await convertWorld(db, id, { apply, replayIt, fieldValue }));
+  }
   return reports;
 }
 

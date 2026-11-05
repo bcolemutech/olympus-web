@@ -21,7 +21,7 @@
 import { createRequire } from 'module';
 import { appendFileSync } from 'fs';
 import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const require = createRequire(import.meta.url);
 const convert = require('../functions/cartographer/convert-layers.js');
@@ -50,9 +50,12 @@ const where = (d) =>
 
 try {
   initializeApp(credential ? { credential } : {});
+  // Its own FieldValue, from the same copy of the SDK as its db: the
+  // functions' copy's deletes aren't ones this db will take.
   const reports = await convert.run(getFirestore(), {
     apply,
     worldIds: worldIds.length ? worldIds : null,
+    fieldValue: FieldValue,
   });
   const lines = [`## Battle maps converted (${apply ? 'applied' : 'dry run'})`, ''];
   for (const r of reports) {
