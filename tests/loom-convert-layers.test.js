@@ -65,7 +65,9 @@ jest.mock('../functions/loom-canon', () => {
             sheet: (() => {
               const s = sheetsReal.defaultSheet(system);
               s.resources.health = { current: 30 };
-              s.attacks = [{ id: 'club', name: 'Club', reach: 1, attack: '1d20 + 10', damage: '1' }];
+              s.attacks = [
+                { id: 'club', name: 'Club', reach: 1, attack: '1d20 + 10', damage: '1' },
+              ];
               return s;
             })(),
           },
@@ -220,6 +222,42 @@ test('running it twice changes nothing', async () => {
   const [again] = await convert.run(db, { worldIds: [WORLD], apply: true, replayIt: false });
   expect(again).toMatchObject({ changed: 0, changedIds: [], gridCopies: 0, applied: false });
   expect((await world().get()).data().canonVersion).toBe(4);
+});
+
+// As the workflow's script runs it (scripts/convert-map-layers.js): its db
+// from its own copy of the SDK, not the functions', with that copy's
+// FieldValue; a delete from the functions' copy is one this db won't take.
+test('run as the script runs it, with its own copy of the SDK', async () => {
+  const { initializeApp } = require('firebase-admin/app');
+  const {
+    getFirestore: ownFirestore,
+    FieldValue: ownFieldValue,
+  } = require('firebase-admin/firestore');
+  const app = initializeApp({ projectId: PROJECT }, 'convert-script');
+  const own = ownFirestore(app);
+  const other = own.collection('loom_worlds').doc('convert-script');
+  await other.set({ name: 'The Script Test', status: 'published', canonVersion: 1 });
+  await other
+    .collection('battleMaps')
+    .doc('bm_hall')
+    .set({ id: 'bm_hall', ...HALL });
+  await other
+    .collection('maps')
+    .doc('bm_hall')
+    .set({ id: 'bm_hall', kind: 'grid', name: 'The hall', walls: HALL.walls });
+  const [report] = await convert.run(own, {
+    worldIds: ['convert-script'],
+    apply: true,
+    replayIt: false,
+    fieldValue: ownFieldValue,
+  });
+  expect(report).toMatchObject({ changed: 1, gridCopies: 1, applied: true });
+  const hall = (await other.collection('battleMaps').doc('bm_hall').get()).data();
+  expect(hall.walls).toBeUndefined();
+  expect(hall.geometry.doors.map((d) => d.id)).toEqual(['mid']);
+  const grid = (await other.collection('maps').doc('bm_hall').get()).data();
+  expect(grid.walls).toBeUndefined();
+  await own.recursiveDelete(other);
 });
 
 describe('a fight on the converted hall plays as before', () => {
