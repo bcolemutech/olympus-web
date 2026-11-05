@@ -396,7 +396,7 @@ const CRITERIA = Object.freeze([
       }
       if (kind !== 'own') return { progress: 0, message: 'It has no battle map.' };
       const map = require('./maps').mapOf(world, entity);
-      if (map && !require('./layers').hasLayers(map)) {
+      if (map && !require('./layer-geometry').hasShapes(map)) {
         return {
           progress: 0.5,
           need: 'layers',
@@ -621,7 +621,7 @@ const CRITERIA = Object.freeze([
     need: 'layers',
     tool: 'set_map_layers',
     check: (world, map) =>
-      require('./layers').hasLayers(map)
+      require('./layer-geometry').hasShapes(map)
         ? met()
         : { progress: 0, message: 'It has no walls or obstacles.' },
   },

@@ -54,7 +54,7 @@ const PORT_GROUND = {
     },
   ],
 };
-const RUIN_MAP = {
+const RUIN_MAP = require('./helpers/grid').gridMap({
   id: 'bm_ruin',
   name: 'The ruin',
   width: 4,
@@ -71,7 +71,7 @@ const RUIN_MAP = {
     },
   ],
   generic: null,
-};
+});
 function world(overrides = {}) {
   const w = withTowns(world.bare(overrides), 'port', 'town');
   const gate = w.places[gateId('port')];
@@ -348,7 +348,7 @@ describe('battle maps and their layers (L-622, L-628)', () => {
   });
 
   test('its own map without walls or obstacles earns half', () => {
-    const bare = { ...RUIN_MAP, id: 'bm_bare', walls: [] };
+    const bare = { ...RUIN_MAP, id: 'bm_bare', geometry: {} };
     const result = ruinWith({ mapId: 'bm_bare' }, bare);
     expect(result.grade).toBe('playable');
     expect(ownMap(result)).toMatchObject({ met: false, progress: 0.5 });
@@ -359,11 +359,11 @@ describe('battle maps and their layers (L-622, L-628)', () => {
         message: 'Its battle map has no walls or obstacles.',
       })
     );
-    const blocked = {
+    const blocked = require('./helpers/grid').gridMap({
       ...bare,
       id: 'bm_rubble',
       obstacles: [{ id: 'r', kind: 'difficult', x: 3, y: 3 }],
-    };
+    });
     expect(ownMap(ruinWith({ mapId: 'bm_rubble' }, blocked)).met).toBe(true);
   });
 

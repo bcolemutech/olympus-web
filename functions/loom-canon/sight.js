@@ -229,9 +229,13 @@ function objectHides(item) {
  * edge among them, kept in 5 ft cells; and the objects that hide, each
  * with its outline and its box.
  */
+// The map's size, part of every key: its edge hides too, and maps of other
+// sizes may share a geometry (a template's instances, a copy of a map).
+const sizeKey = (map) => (map.width || 0) + 'x' + (map.height || 0);
+
 function blockersOf(map, c, states, level) {
   const kept = keptFor(c);
-  const k = statesKey(c, states) + '|' + level;
+  const k = sizeKey(map) + '|' + statesKey(c, states) + '|' + level;
   if (kept.blockers.has(k)) return kept.blockers.get(k);
   const W = (map.width || 0) * FEET;
   const H = (map.height || 0) * FEET;
@@ -654,7 +658,16 @@ function viewOf(map, from, states, options) {
   const c = geo.compile(mapPaths.geometryOf(map));
   const blockers = blockersOf(map, c, states, viewer.level);
   const kept = keptFor(c);
-  const k = statesKey(c, states) + '|' + viewer.level + '|' + viewer.point.x + ',' + viewer.point.y;
+  const k =
+    sizeKey(map) +
+    '|' +
+    statesKey(c, states) +
+    '|' +
+    viewer.level +
+    '|' +
+    viewer.point.x +
+    ',' +
+    viewer.point.y;
   let region = kept.views.get(k);
   if (!region) region = remember(kept.views, k, regionOf(blockers, viewer.point));
   return { viewer, blockers, region, key: k, kept, width: map.width, height: map.height };

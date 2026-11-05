@@ -25,7 +25,7 @@ const FANTASY = BUILT_IN['d20-fantasy'];
 const SCIFI = BUILT_IN['pool-scifi'];
 
 // A hall 10 × 5, in at the west door; a winch on the north wall.
-const mockHall = () => ({
+const mockHall = () => jest.requireActual('./helpers/grid').gridMap({
   id: 'bm_hall',
   name: 'The hall',
   width: 10,

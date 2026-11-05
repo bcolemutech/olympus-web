@@ -33,7 +33,6 @@
  */
 
 const maps = require('../../loom-canon/maps');
-const layers = require('../../loom-canon/layers');
 const sheets = require('../../loom-canon/sheets');
 const { attacksOf } = require('./attacks');
 const wary = require('./wary');
@@ -107,7 +106,7 @@ function validateTactics(t, where = 'tactics') {
 // Why a figure can't stand on a square, or null: what blocks, an entry, an
 // exit, or someone in `taken` ("x,y" → name).
 function whyNot(map, cell, taken) {
-  const obstacle = layers.obstacleAt(map, cell);
+  const obstacle = maps.blockerAt(map, cell);
   if (obstacle && obstacle.kind !== 'difficult') return ` is ${obstacle.name} (${obstacle.kind}).`;
   if ((map.entries || []).some((e) => maps.sameCell(e, cell))) {
     return ' is an entry, where players arrive.';

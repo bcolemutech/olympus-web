@@ -10,7 +10,7 @@ const { isPlayable } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
-const layers = require('../../../loom-canon/layers');
+const geo = require('../../../loom-canon/map-geometry');
 const mapPaths = require('../../../loom-canon/map-paths');
 const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
@@ -408,12 +408,15 @@ function squareFor(world, host, spec, selfId) {
         `${map.name} has no feature "${spec.feature}". get_battle_map lists its features.`
       );
     }
+    // Beside it: nothing between (a wall, a door or a window; what the
+    // feature itself sits on doesn't count), from its geometry (L-928).
+    const compiled = geo.compile(mapPaths.geometryOf(map));
+    const sits = maps.blockerAt(map, feature);
+    const middle = (c) => [(c.x + 0.5) * mapPaths.FEET, (c.y + 0.5) * mapPaths.FEET];
     const beside = NEIGHBOURS.map(([dx, dy]) => ({ x: feature.x + dx, y: feature.y + dy })).filter(
-      (c) => {
-        if (!maps.inBounds(map, c)) return false;
-        const edge = layers.between(map, c, feature);
-        return !edge.wall && !edge.door;
-      }
+      (c) =>
+        maps.inBounds(map, c) &&
+        !geo.hits(compiled, middle(c), middle(feature)).some((h) => !sits || h.id !== sits.id)
     );
     cell =
       [{ x: feature.x, y: feature.y }, ...beside].find(

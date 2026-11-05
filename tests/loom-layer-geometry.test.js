@@ -6,16 +6,17 @@
  *
  *   - a map's walls, doors and obstacles convert to walls, doors, pillars,
  *     low walls and rough ground, every id kept, the doors' locks, keys, AP,
- *     long actions and difficulty with them; features, entries, exits,
- *     hazards and figures are left as they are; the geometry is sound;
+ *     long actions and difficulty and the obstacles' names with them;
+ *     features, entries, exits, hazards and figures are left as they are;
+ *     the geometry is sound;
  *   - converting again changes nothing; a map's own geometry is kept, its
  *     own items winning on an id;
- *   - new layers given by a grid tool replace what the old ones made, and
- *     nothing else;
- *   - the map a save is sent (known-map.js) is the same before and after;
- *   - the replay: the same ways, reach and sight on the geometry alone, on
- *     the fixture and on random maps; and it catches a conversion that lost
- *     a lock or a wall.
+ *   - the grid tools' shortcut: the layers read back from the geometry, and
+ *     new ones replacing what the old ones made, and nothing else;
+ *   - the map a save is sent (known-map.js) is its geometry alone;
+ *   - the replay: the same ways, reach and sight on the geometry alone as
+ *     with the layers read beside it, on the fixture and on random maps; and
+ *     it catches a conversion that lost a lock or a wall.
  *
  * Run: cd tests && npx jest loom-layer-geometry
  */
@@ -95,7 +96,7 @@ describe('converting a battle map’s layers', () => {
     ]);
     // The table a low wall round its squares, hiding nothing; the pillar a
     // pillar that hides; the rubble rough ground.
-    expect(g.walls[3]).toMatchObject({ height: 3, blocksSight: false });
+    expect(g.walls[3]).toMatchObject({ height: 3, blocksSight: false, name: 'a table' });
     expect(g.objects).toEqual([
       {
         id: 'layer-pillar',
@@ -112,6 +113,7 @@ describe('converting a battle map’s layers', () => {
         material: 'gravel',
         cost: 2,
         shape: { rect: { x: 30, y: 15, w: 5, h: 5 } },
+        name: 'rubble',
       },
     ]);
     expect(geo.check(g, { width: 50, height: 35 })).toEqual([]);
@@ -127,11 +129,25 @@ describe('converting a battle map’s layers', () => {
     const g = layerGeometry.converted(map);
     const stored = { ...map, geometry: JSON.parse(JSON.stringify(g)) };
     expect(layerGeometry.converted(stored)).toEqual(g);
-    expect(convert.planMap(stored, { replayIt: false }).changed).toBe(false);
-    expect(layerGeometry.isConverted(stored)).toBe(true);
-    expect(layerGeometry.isConverted(map)).toBe(false);
+    expect(convert.geometryFor(stored)).toEqual(g);
+    // Its layers dropped, there is nothing left to convert.
+    const dropped = convert.afterOf(stored, g);
+    expect(dropped.walls).toBeUndefined();
+    expect(convert.planMap(dropped)).toMatchObject({ geometry: null, changed: false });
     const plain = { id: 'bm_plain', width: 4, height: 4, entries: [sq(0, 0)] };
     expect(convert.planMap(plain)).toMatchObject({ geometry: null, changed: false, replay: null });
+  });
+
+  test('a first conversion without obstacles’ names is made again with them', () => {
+    const map = hall();
+    const g = layerGeometry.converted(map);
+    // As L-928's first run stored it: low walls and rough ground unnamed.
+    const first = {
+      ...g,
+      walls: g.walls.map(({ name, ...w }) => w),
+      ground: g.ground.map(({ name, ...x }) => x),
+    };
+    expect(convert.geometryFor({ ...map, geometry: first })).toEqual(g);
   });
 
   test('a map’s own geometry is kept, its own items winning on an id', () => {
@@ -147,42 +163,54 @@ describe('converting a battle map’s layers', () => {
     expect(ids(g.walls)).toContain('layer-doorway-mid');
   });
 
+  test('the layers read back from the geometry, as the grid tools show them', () => {
+    const map = hall();
+    const g = layerGeometry.converted(map);
+    expect(layerGeometry.layersOf(g)).toEqual({
+      walls: map.walls,
+      doors: map.doors,
+      obstacles: map.obstacles,
+    });
+    expect(layerGeometry.layersOf({})).toEqual({ walls: [], doors: [], obstacles: [] });
+  });
+
   test('new layers from a grid tool replace what the old ones made, and nothing else', () => {
     const map = hall();
-    map.geometry = layerGeometry.converted({
+    const stored = layerGeometry.converted({
       ...map,
       geometry: geo.normalize({ lights: [{ id: 'lamp', at: [10, 10], radius: 10 }] }),
     });
-    // The table moved, the rubble gone, the door unlocked.
-    const next = {
-      ...map,
+    // The table moved, the rubble gone, the door unlocked; the walls kept.
+    const g = layerGeometry.withLayers(stored, {
       doors: [{ ...map.doors[0], locked: false }],
       obstacles: [
         { id: 'table', name: 'a table', kind: 'low', x: 1, y: 5, w: 2 },
         map.obstacles[1],
       ],
-    };
-    const g = layerGeometry.relayered(map, next);
+    });
     expect(ids(g.lights)).toEqual(['lamp']);
     expect(g.ground).toBeUndefined();
     expect(g.doors[0].state).toBe('closed');
+    expect(ids(g.walls)).toEqual(['layer-wall-0', 'layer-wall-1', 'layer-doorway-mid', 'layer-table']);
     const table = g.walls.find((w) => w.id === 'layer-table');
     expect(table.points).toBe('M5 25L15 25L15 30L5 30L5 25');
-    expect(g).toEqual(layerGeometry.converted({ ...next, geometry: { lights: g.lights } }));
-    // No layers left: only its own.
-    const bare = layerGeometry.relayered(map, { ...map, walls: [], doors: [], obstacles: [] });
+    // None left: only its own.
+    const bare = layerGeometry.withLayers(stored, { walls: [], doors: [], obstacles: [] });
     expect(bare).toEqual({ lights: g.lights });
+    expect(layerGeometry.hasShapes({ geometry: bare })).toBe(false);
+    expect(layerGeometry.hasShapes({ geometry: g })).toBe(true);
   });
 
-  test('the map a save is sent is the same before and after', () => {
-    const map = hall();
-    const converted = { ...map, geometry: layerGeometry.converted(map) };
+  test('the map a save is sent is its geometry, each door in the save’s state', () => {
+    const map = convert.afterOf(hall(), layerGeometry.converted(hall()));
     // Seen: the west half and the door.
-    const on = (c) => c.x <= 5;
-    const states = { mid: 'open' };
-    expect(knownMap(converted, on, states)).toEqual(knownMap(map, on, states));
-    const all = () => true;
-    expect(knownMap(converted, all, {})).toEqual(knownMap(map, all, {}));
+    const known = knownMap(map, (c) => c.x <= 5, { mid: 'open' });
+    expect(Object.keys(known).sort()).toEqual(['exits', 'geometry', 'height', 'id', 'width']);
+    expect(known.geometry.doors).toEqual([
+      expect.objectContaining({ id: 'mid', state: 'open', name: 'the iron door' }),
+    ]);
+    // The pillar on the far side isn't sent.
+    expect(known.geometry.objects).toBeUndefined();
   });
 });
 
@@ -199,10 +227,11 @@ describe('the replay', () => {
     const map = hall();
     const g = layerGeometry.converted(map);
     const unlocked = { ...g, doors: [{ ...g.doors[0], state: 'closed' }] };
-    const lost = convert.replay(map, convert.afterOf(map, unlocked));
+    const before = convert.beforeOf(map);
+    const lost = convert.replay(before, convert.afterOf(map, unlocked));
     expect(lost.differences.map((d) => d.check)).toContain('reach');
     const holed = { ...g, walls: g.walls.filter((w) => w.id !== 'layer-wall-0') };
-    const seen = convert.replay(map, convert.afterOf(map, holed));
+    const seen = convert.replay(before, convert.afterOf(map, holed));
     expect(seen.differences.map((d) => d.check)).toEqual(expect.arrayContaining(['way', 'sight']));
   });
 

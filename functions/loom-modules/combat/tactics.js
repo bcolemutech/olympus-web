@@ -153,7 +153,7 @@ function planTurn({ me, foes, friends = [], occupied, map, doors = {}, health = 
   // closed door bars the way (figures don't open doors); an exit is never on
   // the way, but the one at `goal` (all of them, `goal` true: fleeing).
   const shut = {};
-  for (const door of (mapPaths.geometryOf(map).doors || []).concat(map.doors || [])) {
+  for (const door of mapPaths.geometryOf(map).doors || []) {
     shut[door.id] = doors[door.id] === 'open' ? 'open' : 'locked';
   }
   const exitAt = (sq) => (map.exits || []).some((e) => maps.sameCell(e, sq));

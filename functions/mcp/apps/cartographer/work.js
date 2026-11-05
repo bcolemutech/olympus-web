@@ -14,7 +14,7 @@ const {
   QUALITY,
 } = require('../../../loom-canon/grading');
 const maps = require('../../../loom-canon/maps');
-const layers = require('../../../loom-canon/layers');
+const layerGeometry = require('../../../loom-canon/layer-geometry');
 const positions = require('../../../loom-canon/positions');
 const ground = require('../../../loom-canon/ground');
 const { hopsFrom, usersOf } = require('./views');
@@ -168,7 +168,7 @@ const gateNeeds = (checklist) =>
 function mapInfo(world, entity) {
   const status = maps.kindOf(world, entity) || 'none';
   if (status !== 'own') return { battleMap: status };
-  return { battleMap: 'own', layers: layers.hasLayers(maps.mapOf(world, entity)) };
+  return { battleMap: 'own', layers: layerGeometry.hasShapes(maps.mapOf(world, entity)) };
 }
 
 // Closed places: on the map, and in towns.

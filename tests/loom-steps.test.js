@@ -23,7 +23,7 @@ const ROOM = {
   exits: [{ id: 'door', name: 'the door', x: 0, y: 3, to: 'out' }],
   features: [{ id: 'chest', name: 'the chest', x: 8, y: 1 }],
 };
-const WORLD = { battleMaps: { bm_room: ROOM } };
+const WORLD = { battleMaps: require('./helpers/grid').gridMaps({ bm_room: ROOM }) };
 const standing = (cell, turn = {}) => ({
   mapId: 'bm_room',
   cell,
@@ -228,7 +228,7 @@ describe('people on squares (L-642)', () => {
   // Wim in the open at (3, 4).
   const PEOPLE = {
     locations: { poi_ruin: { id: 'poi_ruin', name: 'The Ruin', battleMap: { mapId: 'bm_room' } } },
-    battleMaps: {
+    battleMaps: require('./helpers/grid').gridMaps({
       bm_room: {
         ...ROOM,
         walls: [
@@ -240,7 +240,7 @@ describe('people on squares (L-642)', () => {
           },
         ],
       },
-    },
+    }),
     characters: {
       chr_mags: { id: 'chr_mags', name: 'Old Mags', locationId: 'poi_ruin', cell: { x: 7, y: 3 } },
       chr_wim: { id: 'chr_wim', name: 'Wim', locationId: 'poi_ruin', cell: { x: 3, y: 4 } },
@@ -340,7 +340,7 @@ test('refusals: no map, off it, already there', () => {
 });
 
 test('a map with no exits holds nobody: there is no moving on it', () => {
-  const sealed = { battleMaps: { bm_room: { ...ROOM, exits: [] } } };
+  const sealed = { battleMaps: require('./helpers/grid').gridMaps({ bm_room: { ...ROOM, exits: [] } }) };
   expect(planStep(sealed, standing({ x: 1, y: 1 }), { cell: { x: 2, y: 2 } })).toEqual({
     refused: "There's no map here to move on.",
   });
@@ -349,7 +349,7 @@ test('a map with no exits holds nobody: there is no moving on it', () => {
 describe('walls and doors (L-624)', () => {
   // The room again, split by a wall at x = 5 with a door in the gap at y 2–3.
   const WALLED = {
-    battleMaps: {
+    battleMaps: require('./helpers/grid').gridMaps({
       bm_room: {
         ...ROOM,
         walls: [
@@ -368,7 +368,7 @@ describe('walls and doors (L-624)', () => {
         ],
         doors: [{ id: 'inner', name: 'the inner door', from: { x: 5, y: 2 }, to: { x: 5, y: 3 } }],
       },
-    },
+    }),
   };
 
   test('a closed door on the way is opened (2 AP), and the walk stops there', () => {
@@ -462,7 +462,7 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
   // The room once more: the inner door at x = 5, y 2–3, locked, its key the
   // brass key.
   const LOCKED = (door = {}) => ({
-    battleMaps: {
+    battleMaps: require('./helpers/grid').gridMaps({
       bm_room: {
         ...ROOM,
         walls: [
@@ -491,7 +491,7 @@ describe('locked doors: keys, and picking or forcing (L-626)', () => {
           },
         ],
       },
-    },
+    }),
   });
   const beside = (inventory = [], extra = {}) => ({
     ...standing({ x: 4, y: 2 }),

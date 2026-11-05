@@ -3,25 +3,30 @@
 /**
  * Today's battle maps converted (planning/maps-from-data.md §4.7, EX4;
  * L-928 / #732): each battle map's walls, doors and obstacles stored as its
- * geometry, in its battle map document (GE5), beside the layers, which play
- * goes on reading until the code reads only the geometry (L-928's second
- * PR). Generic maps, floors reached by exits and templates (whose instances
- * are made from them as the world loads) convert with them. Features,
- * entries, exits, areas, hazards and figures aren't layers and stay as they
- * are; their ids and squares don't change.
+ * geometry, in its battle map document (GE5), and the layers deleted: play
+ * reads only the geometry. Generic maps, floors reached by exits and
+ * templates (whose instances are made from them as the world loads) convert
+ * with them. Features, entries, exits, areas, hazards and figures aren't
+ * layers and stay as they are; their ids and squares don't change.
  *
  *   walls      → walls, along the same lines (stone)
  *   doors      → doors (wood), each in a short wall of its own, keeping its
  *                id, name, lock, key, own AP, long action and difficulty
  *   obstacles  → solid: pillars (objects that hide); low: walls round their
  *                squares, 3 ft high, hiding nothing; difficult: ground (gravel)
- *                costing 2
+ *                costing 2; each keeping its name
  *
- * as ../loom-canon/layer-geometry.js `converted` makes it: what play reads
- * now, stored.
+ * as ../loom-canon/layer-geometry.js makes it: what the layers made before
+ * (ids starting "layer-", and doors in doorways of that name) made again
+ * from the layers, and the map's own items kept. The first run (L-928's
+ * first PR) stored the geometry beside the layers; this one stores it again
+ * (now with obstacles' names) and deletes the layers, and the copies of them
+ * L-902 left on grid maps in `maps`. A grid map in `maps` with no battle map
+ * document of its own is converted the same way.
  *
  * The replay (`replay`): for each map, the same questions asked of it as
- * played now and of its geometry alone, the layers dropped: the cost of the
+ * played before (its layers read as geometry beside what was stored, the
+ * stored items winning on an id) and of its geometry alone: the cost of the
  * way from each entry, exit, feature and figure to every square, for a
  * medium and a large character; the squares reached from the entries (as
  * `cell: "auto"` and the builders' checks ask, and with every door open);
@@ -34,6 +39,7 @@
  * running it twice changes nothing.
  */
 
+const { FieldValue } = require('firebase-admin/firestore');
 const geo = require('../loom-canon/map-geometry');
 const mapPaths = require('../loom-canon/map-paths');
 const sight = require('../loom-canon/sight');
@@ -45,9 +51,21 @@ const ROUND = 1e-6;
 
 // ── The replay ────────────────────────────────────────────────────────
 
-/** The map with its layers dropped and `geometry` stored: what play will read. */
+/** The map with its layers dropped and `geometry` stored: what play reads. */
 function afterOf(map, geometry) {
-  return { ...map, walls: [], doors: [], obstacles: [], geometry };
+  const out = { ...map, geometry };
+  for (const k of layerGeometry.LAYERS) delete out[k];
+  return out;
+}
+
+/** The map as it played before: its layers read as geometry beside what was stored. */
+function beforeOf(map) {
+  return { ...map, geometry: layerGeometry.converted(map) };
+}
+
+/** The geometry a map stores: what its layers make, made again, its own items kept. */
+function geometryFor(map) {
+  return layerGeometry.converted({ ...map, geometry: layerGeometry.ownOf(map.geometry) });
 }
 
 // The squares the replay starts from: entries, exits, features and figures,
@@ -169,9 +187,10 @@ function replay(before, after) {
 
 /**
  * One battle map: `{ id, layers, geometry, changed, problems, replay }`:
- * its layers' counts, the geometry to store, whether it differs from what's
- * stored, the geometry's problems (map-geometry.js `check`), and the replay.
- * A map without layers has nothing to convert (`geometry` null).
+ * its layers' counts, the geometry to store, whether the map changes (its
+ * geometry differs from what's stored, or it has layers to delete), the
+ * geometry's problems (map-geometry.js `check`), and the replay. A map
+ * without layers has nothing to convert (`geometry` null).
  */
 function planMap(map, { replayIt = true } = {}) {
   const layers = {
@@ -182,37 +201,60 @@ function planMap(map, { replayIt = true } = {}) {
   if (!layerGeometry.hasLayers(map)) {
     return { id: map.id, layers, geometry: null, changed: false, problems: [], replay: null };
   }
-  const geometry = layerGeometry.converted(map);
+  const geometry = geometryFor(map);
   const F = geo.FEET_PER_SQUARE;
   const problems = geo.check(geometry, { width: map.width * F, height: map.height * F });
-  const changed = layerGeometry.stable(map.geometry || {}) !== layerGeometry.stable(geometry);
   return {
     id: map.id,
     layers,
     geometry,
-    changed,
+    changed: true,
     problems,
-    replay: replayIt ? replay(map, afterOf(map, geometry)) : null,
+    replay: replayIt ? replay(beforeOf(map), afterOf(map, geometry)) : null,
   };
+}
+
+// The old fields' deletes, for the ones a doc has.
+function deletes(doc) {
+  const out = {};
+  for (const k of layerGeometry.LAYERS) if (doc[k] !== undefined) out[k] = FieldValue.delete();
+  return out;
 }
 
 // ── In Firestore ──────────────────────────────────────────────────────
 
 /**
  * Converts one world's battle maps: `{ worldId, name, maps, converted,
- * changed, changedIds, problems, replay: { maps, checks, matched,
- * differences }, applied }`, `changed` how many differ from what is stored
- * (written, or with `apply` false would be).
+ * changed, changedIds, gridCopies, problems, replay: { maps, checks,
+ * matched, differences }, applied }`: `converted` the battle maps (and grid
+ * maps without one) with layers, each stored as geometry with its layers
+ * deleted; `gridCopies` the grid maps whose copies of their battle map's
+ * layers are deleted (written, or with `apply` false would be).
  */
 async function convertWorld(db, worldId, { apply = false, replayIt = true } = {}) {
   const ref = db.collection('loom_worlds').doc(worldId);
   const snap = await ref.get();
   if (!snap.exists) return { worldId, missing: true };
   const meta = snap.data();
-  const docs = (await ref.collection('battleMaps').get()).docs;
-  const plans = docs.map((d) => planMap({ ...d.data(), id: d.id }, { replayIt }));
+  const [battleDocs, mapDocs] = await Promise.all(
+    ['battleMaps', 'maps'].map(async (name) => (await ref.collection(name).get()).docs)
+  );
+  const battleIds = new Set(battleDocs.map((d) => d.id));
+  // Grid maps with no battle map document play from their own (frames.js).
+  const grids = mapDocs.filter((d) => (d.data() || {}).kind === 'grid');
+  const native = grids.filter((d) => !battleIds.has(d.id));
+  const copies = grids.filter(
+    (d) => battleIds.has(d.id) && layerGeometry.hasLayers(d.data() || {})
+  );
+  const plans = [
+    ...battleDocs.map((d) => ({ collection: 'battleMaps', doc: d })),
+    ...native.map((d) => ({ collection: 'maps', doc: d })),
+  ].map(({ collection, doc }) => ({
+    collection,
+    data: doc.data(),
+    ...planMap({ ...doc.data(), id: doc.id }, { replayIt }),
+  }));
   const withLayers = plans.filter((p) => p.geometry);
-  const changedPlans = withLayers.filter((p) => p.changed);
   const problems = withLayers.flatMap((p) => p.problems.map((x) => `${p.id}: ${x}`));
   const differences = withLayers.flatMap((p) =>
     p.replay ? p.replay.differences.map((d) => ({ map: p.id, ...d })) : []
@@ -220,10 +262,11 @@ async function convertWorld(db, worldId, { apply = false, replayIt = true } = {}
   const report = {
     worldId,
     name: meta.name || worldId,
-    maps: plans.length,
+    maps: battleDocs.length,
     converted: withLayers.length,
-    changed: changedPlans.length,
-    changedIds: changedPlans.slice(0, 50).map((p) => p.id),
+    changed: withLayers.length,
+    changedIds: withLayers.slice(0, 50).map((p) => p.id),
+    gridCopies: copies.length,
     problems,
     replay: {
       maps: withLayers.filter((p) => p.replay).length,
@@ -233,14 +276,20 @@ async function convertWorld(db, worldId, { apply = false, replayIt = true } = {}
     },
     applied: false,
   };
-  if (apply && changedPlans.length) {
-    for (let i = 0; i < changedPlans.length; i += 400) {
+  const writes = [
+    ...withLayers.map(
+      (p) => (b) =>
+        b.update(ref.collection(p.collection).doc(p.id), {
+          geometry: Object.keys(p.geometry).length ? p.geometry : FieldValue.delete(),
+          ...deletes(p.data),
+        })
+    ),
+    ...copies.map((d) => (b) => b.update(ref.collection('maps').doc(d.id), deletes(d.data()))),
+  ];
+  if (apply && writes.length) {
+    for (let i = 0; i < writes.length; i += 400) {
       const batch = db.batch();
-      changedPlans
-        .slice(i, i + 400)
-        .forEach((p) =>
-          batch.update(ref.collection('battleMaps').doc(p.id), { geometry: p.geometry })
-        );
+      writes.slice(i, i + 400).forEach((w) => w(batch));
       await batch.commit();
     }
     // A new canonVersion, so every cached copy reloads.
@@ -258,4 +307,14 @@ async function run(db, { apply = false, worldIds = null, replayIt = true } = {})
   return reports;
 }
 
-module.exports = { SIZES, afterOf, spotsOf, replay, planMap, convertWorld, run };
+module.exports = {
+  SIZES,
+  afterOf,
+  beforeOf,
+  geometryFor,
+  spotsOf,
+  replay,
+  planMap,
+  convertWorld,
+  run,
+};

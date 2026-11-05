@@ -10,7 +10,7 @@ const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
 const { turnStateOf, apOf } = require('../loom-models');
 const { doorStatesOf, doorSides } = require('./steps');
-const layers = require('../loom-canon/layers');
+const mapDoors = require('../loom-canon/doors');
 const sight = require('../loom-canon/sight');
 const mapPaths = require('../loom-canon/map-paths');
 const { recordOf, squaresOf, peopleInSight } = require('./seen');
@@ -347,11 +347,11 @@ function buildMapSection(canonWorld, position, save, resolution, view) {
   // Its doors, as they stand once this resolves (L-626): this save's own. A
   // door is seen from either side of it.
   const states = doorsAfter(save, map, resolution);
-  const door = (d) => (d.name || 'a door') + ' (' + layers.doorState(d, states) + ')';
-  const doorsNow = (map.doors || []).filter((d) => doorSides(d).some(inSight));
-  const doorsThen = (map.doors || []).filter(
-    (d) => !doorSides(d).some(inSight) && doorSides(d).some(known)
-  );
+  const door = (d) => (d.name || 'a door') + ' (' + mapDoors.stateOf(d, states) + ')';
+  const doorsNow = mapDoors.doorsOf(map).filter((d) => doorSides(d).some(inSight));
+  const doorsThen = mapDoors
+    .doorsOf(map)
+    .filter((d) => !doorSides(d).some(inSight) && doorSides(d).some(known));
   if (doorsNow.length) lines.push('Doors: ' + doorsNow.map(door).join('; ') + '.');
   if (doorsThen.length) {
     lines.push('Doors remembered' + AWAY + doorsThen.map(door).join('; ') + '.');

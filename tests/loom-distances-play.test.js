@@ -11,9 +11,10 @@
  *     when reach was counted in squares, is 11.6 ft and out of it, and draws
  *     his attack;
  *   - a fight on a converted map plays as before: the same scripted fight on
- *     a hall with walls, a door and obstacles as layers, and on the hall with
- *     those layers also stored as its geometry (layer-geometry.js
- *     `converted`, as L-928 stores them; EX4), ends the same, line for line.
+ *     a hall with walls, a door and obstacles as layers, read as geometry
+ *     beside it as before L-928, and on the hall with those layers stored as
+ *     its geometry and dropped (as L-928 stores them; EX4), ends the same,
+ *     line for line.
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest loom-distances-play --verbose"
@@ -63,12 +64,16 @@ const mockHall = () => ({
   ],
   hazards: [],
 });
-// The same hall with its layers stored as geometry too, as L-928 does.
-const mockConverted = () => {
+// The hall as it played before L-928: its layers read as geometry beside it
+// (they are ignored now, and its geometry is what they made); and converted,
+// its layers stored as geometry and dropped (./helpers/grid.js), as the
+// Convert Map Layers workflow does.
+const mockLayered = () => {
   const layerGeometry = jest.requireActual('../functions/loom-canon/layer-geometry');
   const hall = mockHall();
   return { ...hall, geometry: layerGeometry.converted(hall) };
 };
+const mockConverted = () => jest.requireActual('./helpers/grid').gridMap(mockHall());
 const mockCases = {
   'd20-fantasy': { system: FANTASY, hit: '1d20 + 10' },
   'pool-scifi': { system: SCIFI, hit: 'count(8d10, >= 7)' },
@@ -110,7 +115,7 @@ jest.mock('../functions/loom-canon', () => {
             })(),
           },
         },
-        battleMaps: { bm_hall: mockState.hall === 'converted' ? mockConverted() : mockHall() },
+        battleMaps: { bm_hall: mockState.hall === 'converted' ? mockConverted() : mockLayered() },
       };
     },
   };

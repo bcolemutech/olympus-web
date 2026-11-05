@@ -55,7 +55,7 @@ describe('instances', () => {
     // As play sees it: Io's battle map is its instance, with the template's layers.
     const sol = frames.viewFor(play, 'sol');
     expect(sol.locations.pl_io.battleMap).toEqual({ mapId: 'tpl_moon__pl_io' });
-    expect(sol.battleMaps['tpl_moon__pl_io'].doors[0].id).toBe('hatch');
+    expect(sol.battleMaps['tpl_moon__pl_io'].geometry.doors[0].id).toBe('hatch');
     expect(play.maps.tpl_moon.template).toBe(true);
   });
 

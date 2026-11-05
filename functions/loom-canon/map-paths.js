@@ -34,9 +34,9 @@
   //                 its centre (centreOf), and the square a point is in is
   //                 squareOf.
   //
-  // A battle map's geometry is its own (`geometry`, L-921) with its layers
-  // from before read as geometry beside it (map-geometry.js fromLayers),
-  // the stored geometry's items winning where ids are the same (geometryOf).
+  // A battle map's geometry is its own (`geometry`, L-921; geometryOf). Its
+  // layers from before are stored as geometry and dropped (L-928), and are
+  // never read here.
   //
   //   Heights (DA2) a size's eyes stand `eyeOf` above the floor (`floorAt`,
   //                 the ground's height); a ledge's edge more than STEP_UP
@@ -125,35 +125,17 @@
 
   // ── The geometry a battle map is moved on ───────────────────────────
 
-  var merged = typeof WeakMap === 'function' ? new WeakMap() : null;
+  // An empty geometry for each map that has none, kept per map: what's kept
+  // for a geometry (its compiled shapes, its looks) is then the map's own.
+  var empties = typeof WeakMap === 'function' ? new WeakMap() : null;
 
-  /**
-   * A battle map's geometry for moving: its own, with its layers from before
-   * read as geometry beside it; where an id is in both, its own.
-   */
+  /** A battle map's geometry for moving (its own, L-921), or an empty one. */
   function geometryOf(map) {
-    if (merged && map && typeof map === 'object' && merged.has(map)) return merged.get(map);
-    var layers = geo.fromLayers(map);
     var stored = map && map.geometry;
-    var out = layers;
-    if (geo.hasGeometry(stored)) {
-      out = {};
-      var taken = {};
-      geo.LISTS.forEach(function (key) {
-        (stored[key] || []).forEach(function (item) {
-          if (item && item.id) taken[item.id] = true;
-        });
-      });
-      geo.LISTS.forEach(function (key) {
-        var own = Array.isArray(stored[key]) ? stored[key] : [];
-        var old = (layers[key] || []).filter(function (item) {
-          return !taken[item.id];
-        });
-        if (own.length || old.length) out[key] = own.concat(old);
-      });
-    }
-    if (merged && map && typeof map === 'object') merged.set(map, out);
-    return out;
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) return stored;
+    if (!map || typeof map !== 'object' || !empties) return {};
+    if (!empties.has(map)) empties.set(map, {});
+    return empties.get(map);
   }
 
   /**
@@ -1155,8 +1137,8 @@
     var o = options || {};
     var opened = o.opened || {};
     var states = {};
-    (view.doors || []).forEach(function (door) {
-      states[door.id] = door.state;
+    (geometryOf(view).doors || []).forEach(function (door) {
+      if (door.state) states[door.id] = door.state;
     });
     Object.keys(opened).forEach(function (id) {
       states[id] = opened[id];

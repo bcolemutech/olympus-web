@@ -24,7 +24,7 @@ const copyOf = (v) => JSON.parse(JSON.stringify(v));
 
 // A hall, 10 by 6: a strip of mud (difficult) across column 3, a wall at
 // x = 6 with a door in it at y 2–3, an altar beside the start, and an exit.
-const HALL = {
+const HALL = jest.requireActual('./helpers/grid').gridMap({
   id: 'bm_hall',
   name: 'The hall',
   width: 10,
@@ -48,7 +48,7 @@ const HALL = {
     },
   ],
   doors: [{ id: 'iron', name: 'the iron door', from: { x: 6, y: 2 }, to: { x: 6, y: 3 }, ap: 5 }],
-};
+});
 
 describe.each([
   ['d20-fantasy', BUILT_IN['d20-fantasy']],

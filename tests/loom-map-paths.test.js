@@ -19,6 +19,8 @@ const path = require('path');
 const vm = require('vm');
 const mp = require('../functions/loom-canon/map-paths');
 const geo = require('../functions/loom-canon/map-geometry');
+const { gridMap } = require('./helpers/grid');
+const layerGeometry = require('../functions/loom-canon/layer-geometry');
 const sheets = require('../functions/loom-canon/sheets');
 const apRules = require('../functions/loom-canon/ap');
 const { BUILT_IN } = require('../functions/loom-canon/systems');
@@ -30,7 +32,9 @@ const seen = require('../functions/loom-turn/seen');
 // at x 31–34 (stored geometry, off the grid lines; its middle the middle of
 // column 6) and none other, and a strip of mud
 // (difficult) down column 9 from today's layers.
-const HALL = {
+// Written in squares (its mud) beside its own geometry, stored as geometry
+// (L-928; ./helpers/grid.js).
+const RAW_HALL = {
   id: 'bm_hall',
   name: 'The hall',
   width: 12,
@@ -60,6 +64,8 @@ const HALL = {
     ],
   }),
 };
+
+const HALL = gridMap(RAW_HALL);
 
 const SYSTEMS = [
   ['d20-fantasy', BUILT_IN['d20-fantasy']],
@@ -146,8 +152,8 @@ describe.each(SYSTEMS)('under %s', (_id, system) => {
     });
   };
 
-  const DOORED = {
-    ...HALL,
+  const DOORED = gridMap({
+    ...RAW_HALL,
     id: 'bm_hall',
     walls: [
       {
@@ -165,11 +171,11 @@ describe.each(SYSTEMS)('under %s', (_id, system) => {
     ],
     doors: [{ id: 'iron', name: 'the iron door', from: { x: 4, y: 3 }, to: { x: 4, y: 4 }, ap: 5 }],
     obstacles: [
-      ...HALL.obstacles,
+      ...RAW_HALL.obstacles,
       { id: 'pillar', name: 'a pillar', kind: 'solid', x: 2, y: 5 },
       { id: 'table', name: 'a table', kind: 'low', x: 6, y: 6, w: 2 },
     ],
-  };
+  });
   const FIXTURES = [
     [
       'open ground and the gap',
@@ -435,7 +441,7 @@ describe('paths in feet', () => {
   });
 
   test('a closed door on the way is opened from beside it, for its cost', () => {
-    const doored = {
+    const doored = gridMap({
       id: 'd',
       width: 12,
       height: 8,
@@ -454,7 +460,7 @@ describe('paths in feet', () => {
         },
       ],
       doors: [{ id: 'iron', from: { x: 4, y: 3 }, to: { x: 4, y: 4 } }],
-    };
+    });
     const plan = mp.planner(doored, { prices: { move: 1, difficult: 2, door: 3 } });
     const way = mp.pathTo(plan, { x: 2.5, y: 17.5 }, { x: 37.5, y: 17.5 });
     expect(way.doors).toEqual([{ id: 'iron', at: 0 }]);
@@ -488,7 +494,7 @@ describe('paths in feet', () => {
     expect(squares.every((s) => s.ap <= 2)).toBe(true);
   });
 
-  test('layers from before are read as geometry: walls, doors in walls, obstacles', () => {
+  test('layers from before are stored as geometry: walls, doors in walls, obstacles', () => {
     const layered = {
       width: 8,
       height: 6,
@@ -530,14 +536,16 @@ describe('paths in feet', () => {
       height: 3,
     });
     expect(g.ground[0]).toMatchObject({ cost: 2, shape: { rect: { x: 5, y: 20, w: 10, h: 5 } } });
-    // A map's own geometry is read beside them, its items winning on an id.
-    const both = mp.geometryOf({
+    // Stored (L-928), a map's own geometry is kept beside them, its items
+    // winning on an id; and play reads only what's stored, never the layers.
+    const both = layerGeometry.converted({
       ...layered,
       geometry: { walls: [{ id: 'layer-p', material: 'brick', points: 'M0 0 L5 0' }] },
     });
     expect(both.walls.filter((w) => w.id === 'layer-p')).toEqual([
       { id: 'layer-p', material: 'brick', points: 'M0 0 L5 0' },
     ]);
+    expect(mp.geometryOf(layered)).toEqual({});
   });
 });
 

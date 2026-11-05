@@ -28,6 +28,7 @@ const { OUT_OF_AP } = require('../functions/loom-turn/steps');
 const { unpack, withSquares } = require('../functions/loom-turn/seen');
 const sight = require('../functions/loom-canon/sight');
 const mapPaths = require('../functions/loom-canon/map-paths');
+const { gridMap, gridFields, layersSeen } = require('./helpers/grid');
 
 const fs = require('fs');
 const path = require('path');
@@ -334,9 +335,6 @@ describe('a visit to the Gull & Anchor', () => {
         { id: 'hearth', name: 'the hearth', x: 9, y: 1 },
       ],
       // Characters have no cells yet: listed, not placed.
-      walls: [],
-      doors: [],
-      obstacles: [],
       people: [{ id: 'chr_brannoch', name: 'Brannoch the Innkeeper' }],
       hazards: [], // none here (L-815)
       areas: [], // none here (#670)
@@ -678,7 +676,7 @@ describe('grading with battle maps (on in play since L-622)', () => {
       },
     },
     battleMaps: {
-      bm_own: {
+      bm_own: gridMap({
         id: 'bm_own',
         name: 'The Ruin',
         width: 4,
@@ -692,7 +690,7 @@ describe('grading with battle maps (on in play since L-622)', () => {
             ],
           },
         ],
-      },
+      }),
       bm_generic: {
         id: 'bm_generic',
         name: 'An inn',
@@ -753,7 +751,7 @@ describe('grading with battle maps (on in play since L-622)', () => {
       met: true,
     });
     // Its own map needs walls, doors or obstacles (L-628).
-    w.battleMaps.bm_own = { ...w.battleMaps.bm_own, walls: [] };
+    w.battleMaps.bm_own = { ...w.battleMaps.bm_own, geometry: {} };
     const bare = grading.gradeLocation(w, w.locations.ruin, { layers });
     expect(ownMap(bare)).toMatchObject({ met: false, progress: 0.5 });
     expect(bare.checklist).toContainEqual(
@@ -1097,11 +1095,11 @@ describe('walls and doors on the way (L-624)', () => {
   const tavernRef = () => worldRef.collection('battleMaps').doc('bm_tavern');
   let saveId;
   beforeAll(async () => {
-    await tavernRef().update(WALL);
+    await tavernRef().update(gridFields(WALL, FieldValue));
     await bump();
   });
   afterAll(async () => {
-    await tavernRef().update({ walls: [], doors: [] });
+    await tavernRef().update(gridFields({}, FieldValue));
     await bump();
   });
   beforeEach(async () => {
@@ -1122,16 +1120,21 @@ describe('walls and doors on the way (L-624)', () => {
     // 4 squares to the door, and 2 to open it (L-832).
     expect(save.turn.ap).toBe(14);
     const view = await loomGetMap.run({ data: { worldId: WORLD, saveId }, auth: PLAYER });
-    expect(view.battleMap.doors).toEqual([
-      {
-        id: 'kitchen-door',
-        name: 'the kitchen door',
-        from: { x: 6, y: 3 },
-        to: { x: 6, y: 4 },
-        state: 'open',
-      },
-    ]);
-    expect(view.battleMap.walls).toEqual(WALL.walls);
+    // Its geometry as far as seen (L-928: nothing else), the door open.
+    expect(layersSeen(view.battleMap)).toEqual({
+      walls: WALL.walls,
+      doors: [
+        {
+          id: 'kitchen-door',
+          name: 'the kitchen door',
+          from: { x: 6, y: 3 },
+          to: { x: 6, y: 4 },
+          state: 'open',
+        },
+      ],
+      obstacles: [],
+    });
+    expect(view.battleMap.walls).toBeUndefined();
   });
 
   test('Continue goes on through the open door', async () => {
@@ -1213,22 +1216,26 @@ describe('walls and doors on the way (L-624)', () => {
   });
 
   test('the wall is never walked through: no door, no way', async () => {
-    await tavernRef().update({
-      doors: [],
-      walls: [
+    await tavernRef().update(
+      gridFields(
         {
-          points: [
-            { x: 6, y: 0 },
-            { x: 6, y: 8 },
+          walls: [
+            {
+              points: [
+                { x: 6, y: 0 },
+                { x: 6, y: 8 },
+              ],
+            },
           ],
         },
-      ],
-    });
+        FieldValue
+      )
+    );
     await bump();
     expect((await stepTo(saveId, { x: 9, y: 1 })).step.lines).toEqual([
       "There's no way there from here.",
     ]);
-    await tavernRef().update(WALL);
+    await tavernRef().update(gridFields(WALL, FieldValue));
     await bump();
   });
 });
@@ -1279,11 +1286,11 @@ describe('locked doors (L-626)', () => {
     return saveId;
   };
   beforeAll(async () => {
-    await tavernRef().update(LOCKED);
+    await tavernRef().update(gridFields(LOCKED, FieldValue));
     await bump();
   });
   afterAll(async () => {
-    await tavernRef().update({ walls: [], doors: [] });
+    await tavernRef().update(gridFields({}, FieldValue));
     await bump();
   });
   beforeEach(() => {
@@ -1370,11 +1377,14 @@ describe('what a save has seen (L-632)', () => {
   const kitchenOpen = (saveId) =>
     db.collection('loom_saves').doc(saveId).update({ 'doors.bm_tavern.kitchen-door': 'open' });
   beforeAll(async () => {
-    await tavernRef().update(KITCHEN);
+    await tavernRef().update({ ...gridFields(KITCHEN, FieldValue), features: KITCHEN.features });
     await bump();
   });
   afterAll(async () => {
-    await tavernRef().update({ walls: [], doors: [], features: MAPS.bm_tavern.features });
+    await tavernRef().update({
+      ...gridFields({}, FieldValue),
+      features: MAPS.bm_tavern.features,
+    });
     await bump();
   });
   beforeEach(() => {
@@ -1543,10 +1553,16 @@ describe('what a save has seen (L-632)', () => {
   });
 
   describe('moves only on ground you know (L-635)', () => {
+    // The kitchen's walls and door kept, a pillar beside them.
     const pillar = (x, y) =>
-      tavernRef().update({ obstacles: [{ id: 'pillar', name: 'a pillar', kind: 'solid', x, y }] });
+      tavernRef().update(
+        gridFields(
+          { ...KITCHEN, obstacles: [{ id: 'pillar', name: 'a pillar', kind: 'solid', x, y }] },
+          FieldValue
+        )
+      );
     afterEach(async () => {
-      await tavernRef().update({ obstacles: [] });
+      await tavernRef().update(gridFields(KITCHEN, FieldValue));
       await bump();
     });
 
@@ -1637,8 +1653,8 @@ describe('what a save has seen (L-632)', () => {
       expect(ids(grid.features)).toEqual(['bar', 'stool']);
       expect(ids(grid.exits)).toEqual(['front-door']);
       expect(ids(grid.entries)).toEqual(['door']);
-      expect(grid.walls).toEqual(KITCHEN.walls);
-      expect(grid.doors).toEqual([{ ...KITCHEN.doors[0], state: 'closed' }]);
+      expect(layersSeen(grid).walls).toEqual(KITCHEN.walls);
+      expect(layersSeen(grid).doors).toEqual([{ ...KITCHEN.doors[0], state: 'closed' }]);
       expect(Object.keys(fogOf(grid).seen)).toHaveLength(48);
 
       await stepTo(saveId, { x: 5, y: 3 });
@@ -1685,16 +1701,21 @@ describe('people on the map (L-642)', () => {
   };
   let saveId;
   beforeAll(async () => {
-    await tavernRef().update({
-      walls: [
+    await tavernRef().update(
+      gridFields(
         {
-          points: [
-            { x: 6, y: 0 },
-            { x: 6, y: 3 },
+          walls: [
+            {
+              points: [
+                { x: 6, y: 0 },
+                { x: 6, y: 3 },
+              ],
+            },
           ],
         },
-      ],
-    });
+        FieldValue
+      )
+    );
     for (const [id, person] of Object.entries(PEOPLE)) {
       await characters()
         .doc(id)
@@ -1709,7 +1730,7 @@ describe('people on the map (L-642)', () => {
     await bump();
   });
   afterAll(async () => {
-    await tavernRef().update({ walls: [] });
+    await tavernRef().update(gridFields({}, FieldValue));
     for (const id of Object.keys(PEOPLE)) await characters().doc(id).delete();
     await bump();
   });

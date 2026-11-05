@@ -1,17 +1,24 @@
 'use strict';
 
 /**
- * A battle map's layers (functions/loom-canon/layers.js; planning/the-loom-
- * movement-and-vision.md §4; L-621 / #446): walls along the grid lines, doors
- * in them, obstacles on squares; what lies between two squares, the squares
- * a walk in feet reaches over them (map-paths.js, L-922), and the checks that
- * keep a map playable. Pure.
+ * A battle map's walls, doors and obstacles as the grid tools take them
+ * (functions/loom-canon/layers.js; planning/the-loom-movement-and-vision.md
+ * §4; L-621 / #446): walls along the grid lines, doors in them, obstacles on
+ * squares, stored as the map's geometry (L-928, which play reads alone):
+ * what covers a square, the squares a walk in feet reaches over them
+ * (map-paths.js, L-922), and the checks that keep a map playable. Pure.
  *
  * Run: cd tests && npx jest loom-map-layers --verbose
  */
 
 const layers = require('../functions/loom-canon/layers');
+const layerGeometry = require('../functions/loom-canon/layer-geometry');
 const mapPaths = require('../functions/loom-canon/map-paths');
+const maps = require('../functions/loom-canon/maps');
+const { gridMap } = require('./helpers/grid');
+
+// The checks see the grid tools' lists, and walk the geometry they make.
+const check = (m) => layers.check({ ...m, geometry: layerGeometry.converted(m) });
 
 // The Gull & Anchor, walled: a back room east of a wall at x = 8, through
 // the back door at its gap (8, 3)–(8, 4); a low bar, a solid pillar and
@@ -54,27 +61,22 @@ const TAVERN = () => ({
 });
 const sq = (x, y) => ({ x, y });
 
-describe('what lies between squares, and walking past it', () => {
-  const map = TAVERN();
+describe('what covers a square, and walking past it', () => {
+  const map = gridMap(TAVERN());
   const reached = (m, from, open) => mapPaths.squaresReached(m, [from], { open });
 
-  test('a wall between two squares side by side', () => {
-    expect(layers.between(map, sq(7, 1), sq(8, 1))).toEqual({ wall: true, door: null });
+  test('the map plays on its geometry alone', () => {
+    expect(map.walls).toBeUndefined();
+    expect(map.doors).toBeUndefined();
+    expect(map.obstacles).toBeUndefined();
+    expect(layerGeometry.hasShapes(map)).toBe(true);
   });
 
-  test('a door in the gap', () => {
-    expect(layers.between(map, sq(7, 3), sq(8, 3)).door).toMatchObject({ id: 'back-door' });
-  });
-
-  test('a diagonal past a corner a wall or door touches', () => {
-    expect(layers.between(map, sq(7, 2), sq(8, 3))).toEqual({ wall: true, door: null });
-  });
-
-  test('the ground: solid and low obstacles, difficult ground, open floor', () => {
-    expect(layers.groundAt(map, sq(4, 2))).toBe('low');
-    expect(layers.groundAt(map, sq(3, 6))).toBe('difficult');
-    expect(layers.groundAt(map, sq(9, 1))).toBe('open');
-    expect(layers.obstacleAt(map, sq(5, 2))).toMatchObject({ id: 'bar' });
+  test('what covers a square: solid and low obstacles, difficult ground, open floor', () => {
+    expect(maps.blockerAt(map, sq(4, 2))).toEqual({ id: 'layer-bar', name: 'the bar', kind: 'low' });
+    expect(maps.blockerAt(map, sq(6, 6))).toMatchObject({ name: 'a pillar', kind: 'solid' });
+    expect(maps.blockerAt(map, sq(3, 6))).toMatchObject({ name: 'rubble', kind: 'difficult' });
+    expect(maps.blockerAt(map, sq(9, 1))).toBeNull();
   });
 
   // Walking is in feet now (L-922): the layers read as geometry, walked over
@@ -88,10 +90,10 @@ describe('what lies between squares, and walking past it', () => {
   });
 
   test('a locked door is no way through, unless it is opened', () => {
-    const locked = {
+    const locked = gridMap({
       ...TAVERN(),
       doors: [{ ...TAVERN().doors[0], locked: true, key: 'brass key' }],
-    };
+    });
     expect(reached(locked, sq(1, 1))['9,1']).toBeUndefined();
     expect(reached(locked, sq(1, 1), () => true)['9,1']).toBe(true);
     expect(reached(map, sq(1, 1), () => false)['9,1']).toBeUndefined();
@@ -107,20 +109,19 @@ describe('what lies between squares, and walking past it', () => {
     expect(reached(corridor, sq(0, 0))).toEqual({ '0,0': true, '1,0': true });
   });
 
-  test('a map without layers is open ground', () => {
+  test('a map without walls, doors or obstacles is open ground', () => {
     const open = { width: 4, height: 4, entries: [], exits: [] };
-    expect(layers.hasLayers(open)).toBe(false);
-    expect(layers.hasLayers(map)).toBe(true);
+    expect(layerGeometry.hasShapes(open)).toBe(false);
     expect(Object.keys(reached(open, sq(1, 1)))).toHaveLength(16);
-    expect(layers.check(open)).toEqual([]);
+    expect(check(open)).toEqual([]);
   });
 });
 
 describe('the checks', () => {
-  const problemsWith = (change) => layers.check({ ...TAVERN(), ...change(TAVERN()) });
+  const problemsWith = (change) => check({ ...TAVERN(), ...change(TAVERN()) });
 
   test('the walled tavern passes', () => {
-    expect(layers.check(TAVERN())).toEqual([]);
+    expect(check(TAVERN())).toEqual([]);
   });
 
   test.each([
@@ -216,7 +217,7 @@ describe('the checks', () => {
   });
 
   test('a feature may sit on an obstacle (the bar)', () => {
-    expect(layers.check(TAVERN())).toEqual([]); // the bar's feature is on the low bar
+    expect(check(TAVERN())).toEqual([]); // the bar's feature is on the low bar
   });
 
   test('an entry walled in is refused; nobody is stranded', () => {
@@ -252,24 +253,6 @@ describe('the checks', () => {
       exits: [{ id: 'aisle-out', x: 1, y: 2, to: 'out' }],
       walls: [{ points: [sq(0, 0), sq(3, 0), sq(3, 3), sq(0, 3), sq(0, 0)] }],
     };
-    expect(layers.check(stall)).toEqual([]);
-  });
-});
-
-describe("the browser's copy (L-624)", () => {
-  const fs = require('fs');
-  const path = require('path');
-  const vm = require('vm');
-  const served = path.join(__dirname, '../public/apps/loom/js/layers.js');
-
-  test('is identical to the server’s, and loads as Loom.mapLayers', () => {
-    expect(fs.readFileSync(served, 'utf8')).toBe(
-      fs.readFileSync(path.join(__dirname, '../functions/loom-canon/layers.js'), 'utf8')
-    );
-    const page = { window: { Loom: {} } };
-    vm.runInNewContext(fs.readFileSync(served, 'utf8'), page);
-    expect(typeof page.window.Loom.mapLayers.between).toBe('function');
-    const html = fs.readFileSync(path.join(__dirname, '../public/apps/loom/index.html'), 'utf8');
-    expect(html).toContain('<script src="/apps/loom/js/layers.js"></script>');
+    expect(check(stall)).toEqual([]);
   });
 });

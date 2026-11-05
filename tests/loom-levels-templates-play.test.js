@@ -149,7 +149,11 @@ test('a door opened there stays open for that save and that moon only', async ()
   expect(save.mapId).toBe('tpl_moon__pl_europa');
   expect(save.doors || {}).toEqual({});
   const view = await mapOf('europa');
-  expect(view.battleMap.doors).toEqual([expect.objectContaining({ id: 'hatch', state: 'closed' })]);
+  expect(view.battleMap.geometry.doors).toEqual([
+    expect.objectContaining({ id: 'hatch', state: 'closed' }),
+  ]);
   const io = await mapOf('io-door');
-  expect(io.battleMap.doors).toEqual([expect.objectContaining({ id: 'hatch', state: 'open' })]);
+  expect(io.battleMap.geometry.doors).toEqual([
+    expect.objectContaining({ id: 'hatch', state: 'open' }),
+  ]);
 });

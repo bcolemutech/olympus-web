@@ -9,14 +9,14 @@
  *   - a dry run reports the maps it would write and the replay, and writes
  *     nothing;
  *   - applied, each battle map with layers stores them as its geometry, its
- *     own geometry kept, its layers, features, hazards and figures as they
- *     were; one without layers is left alone; the world's canonVersion moves
- *     on once;
+ *     own geometry kept, and its layers are deleted, its features, hazards
+ *     and figures as they were; a grid map's copies of its battle map's
+ *     layers are deleted; one without layers is left alone; the world's
+ *     canonVersion moves on once;
  *   - running it twice changes nothing;
- *   - a scripted fight on the hall as it was stored before and after plays
- *     the same, line for line (on its geometry alone, the layers dropped,
- *     the code reads only geometry in L-928's second PR; the replay checks
- *     its ways, reach and sight on it now).
+ *   - a scripted fight on the hall as it played before (its layers read as
+ *     geometry beside what was stored) and on its geometry alone after plays
+ *     the same, line for line.
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest loom-convert-layers --verbose"
@@ -153,6 +153,11 @@ beforeAll(async () => {
       .doc(id)
       .set({ id, ...doc });
   }
+  // The hall's grid map, with the copy of its layers L-902 left there.
+  await world()
+    .collection('maps')
+    .doc('bm_hall')
+    .set({ id: 'bm_hall', kind: 'grid', name: 'The hall', walls: HALL.walls, doors: HALL.doors });
 });
 afterAll(async () => {
   crypto.randomInt.mockRestore();
@@ -174,6 +179,7 @@ test('a dry run reports the maps and the replay, and writes nothing', async () =
     converted: 2,
     changed: 2,
     changedIds: ['bm_gate', 'bm_hall'],
+    gridCopies: 1,
     problems: [],
     replay: { maps: 2, matched: 2, differences: [] },
     applied: false,
@@ -184,7 +190,7 @@ test('a dry run reports the maps and the replay, and writes nothing', async () =
   expect((await world().get()).data().canonVersion).toBe(3);
 });
 
-test('applied, the layers are stored as geometry, and nothing else changes', async () => {
+test('applied, the layers are stored as geometry and deleted, and nothing else changes', async () => {
   const [report] = await convert.run(db, { worldIds: [WORLD], apply: true });
   expect(report).toMatchObject({ changed: 2, applied: true });
   const hall = await mapDoc('bm_hall');
@@ -192,9 +198,15 @@ test('applied, the layers are stored as geometry, and nothing else changes', asy
   expect(hall.geometry.doors.map((d) => d.id)).toEqual(['mid']);
   expect(hall.geometry.objects.map((o) => o.id)).toEqual(['layer-pillar']);
   expect(geo.check(hall.geometry, { width: 60, height: 35 })).toEqual([]);
-  // Everything it had, as it was.
+  // Everything else it had, as it was; its layers gone, and read back from
+  // its geometry as they were.
   const { geometry, ...rest } = hall;
-  expect(rest).toEqual(stored);
+  const { walls, doors, obstacles, ...others } = stored;
+  expect(rest).toEqual(others);
+  expect(layerGeometry.layersOf(geometry)).toEqual({ walls, doors, obstacles });
+  // The grid map's copies are gone.
+  const grid = (await world().collection('maps').doc('bm_hall').get()).data();
+  expect(grid).toEqual({ id: 'bm_hall', kind: 'grid', name: 'The hall' });
   // The gate's own lamp is kept beside its wall.
   const gate = await mapDoc('bm_gate');
   expect(gate.geometry.lights).toEqual(GATE.geometry.lights);
@@ -206,7 +218,7 @@ test('applied, the layers are stored as geometry, and nothing else changes', asy
 
 test('running it twice changes nothing', async () => {
   const [again] = await convert.run(db, { worldIds: [WORLD], apply: true, replayIt: false });
-  expect(again).toMatchObject({ changed: 0, changedIds: [], applied: false });
+  expect(again).toMatchObject({ changed: 0, changedIds: [], gridCopies: 0, applied: false });
   expect((await world().get()).data().canonVersion).toBe(4);
 });
 
@@ -287,7 +299,8 @@ describe('a fight on the converted hall plays as before', () => {
   }
 
   test('before and after, line for line', async () => {
-    const before = await playThrough('before', stored);
+    // Before: its layers read as geometry beside it, as play read them.
+    const before = await playThrough('before', convert.beforeOf(stored));
     const after = await playThrough('after', await mapDoc('bm_hall'));
     // It was a fight: Grell came into view, moved and struck.
     expect(before.states.some((s) => s.fight)).toBe(true);

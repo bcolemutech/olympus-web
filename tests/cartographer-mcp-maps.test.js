@@ -172,6 +172,13 @@ afterAll(async () => {
 
 const mapDoc = async (worldId, id) =>
   (await worlds().doc(worldId).collection('battleMaps').doc(id).get()).data();
+// A battle map as stored, its walls, doors and obstacles read back from its
+// geometry (L-928): the doc keeps none of its own.
+const layersOn = async (worldId, id) => {
+  const doc = await mapDoc(worldId, id);
+  for (const k of ['walls', 'doors', 'obstacles']) expect(doc[k]).toBeUndefined();
+  return { ...doc, ...layerGeometry.layersOf(doc.geometry) };
+};
 
 // The Gull & Anchor's ground floor: a door out, stairs down, a bar.
 const TAVERN = {
@@ -905,7 +912,7 @@ describe('walls, doors and obstacles (L-622)', () => {
       updated: ['walls', 'doors', 'obstacles'],
     });
     expect(result.warnings).toBeUndefined();
-    expect(await mapDoc(W, mapId)).toMatchObject({
+    expect(await layersOn(W, mapId)).toMatchObject({
       walls: WALLS,
       doors: DOORS,
       obstacles: OBSTACLES,
@@ -916,11 +923,13 @@ describe('walls, doors and obstacles (L-622)', () => {
     expect(listed.maps.find((m) => m.id === mapId)).toMatchObject({ hasLayers: true });
   });
 
-  test('the layers are stored as its geometry too (L-928), and kept so as they change', async () => {
+  test('the layers are stored as its geometry (L-928), its own kept as they change', async () => {
     const geometry = (doc) => doc.geometry || {};
     const ids = (list) => (list || []).map((i) => i.id);
     let doc = await mapDoc(W, mapId);
-    expect(geometry(doc)).toEqual(layerGeometry.converted({ ...doc, geometry: {} }));
+    expect(geometry(doc)).toEqual(
+      layerGeometry.converted({ walls: WALLS, doors: DOORS, obstacles: OBSTACLES })
+    );
     expect(ids(geometry(doc).walls)).toEqual([
       'layer-wall-0',
       'layer-wall-1',
@@ -972,7 +981,7 @@ describe('walls, doors and obstacles (L-622)', () => {
       layers: { walls: 2, doors: 1, obstacles: 0 },
       updated: ['obstacles'],
     });
-    expect(await mapDoc(W, mapId)).toMatchObject({ walls: WALLS, doors: DOORS, obstacles: [] });
+    expect(await layersOn(W, mapId)).toMatchObject({ walls: WALLS, doors: DOORS, obstacles: [] });
     await ok('set_map_layers', { worldId: W, mapId, obstacles: OBSTACLES });
   });
 
@@ -1028,7 +1037,7 @@ describe('walls, doors and obstacles (L-622)', () => {
   test('a locked door can name its key and its lock difficulty (L-626)', async () => {
     const locked = [{ ...DOORS[0], locked: true, key: 'the brass key', difficulty: 18 }];
     await ok('set_map_layers', { worldId: W, mapId, doors: locked });
-    expect((await mapDoc(W, mapId)).doors).toEqual(locked);
+    expect((await layersOn(W, mapId)).doors).toEqual(locked);
     expect(
       (
         await call('set_map_layers', {
@@ -1044,7 +1053,7 @@ describe('walls, doors and obstacles (L-622)', () => {
   test('a door and a feature can have their own AP cost and be long actions (L-831, L-832)', async () => {
     const stiff = [{ ...DOORS[0], ap: 10 }];
     await ok('set_map_layers', { worldId: W, mapId, doors: stiff });
-    expect((await mapDoc(W, mapId)).doors).toEqual(stiff);
+    expect((await layersOn(W, mapId)).doors).toEqual(stiff);
     for (const ap of [0, 2.5, 201]) {
       const bad = await call('set_map_layers', { worldId: W, mapId, doors: [{ ...DOORS[0], ap }] });
       expect(bad.isError).toBe(true);
@@ -1053,7 +1062,7 @@ describe('walls, doors and obstacles (L-622)', () => {
     // A long action (L-832): its AP in all, kept as given.
     const long = [{ ...DOORS[0], long: { ap: 30 } }];
     await ok('set_map_layers', { worldId: W, mapId, doors: long });
-    expect((await mapDoc(W, mapId)).doors).toEqual(long);
+    expect((await layersOn(W, mapId)).doors).toEqual(long);
     await ok('set_map_layers', { worldId: W, mapId, doors: DOORS });
     const lever = [{ ...ROOM.features[0], ap: 8, long: { ap: 40 } }];
     await ok('set_battle_map', { worldId: W, mapId, ...ROOM, features: lever });
@@ -1089,13 +1098,13 @@ describe('walls, doors and obstacles (L-622)', () => {
   test('replacing the grid keeps the layers; a grid they no longer fit is refused', async () => {
     const result = await ok('set_battle_map', { worldId: W, mapId, ...ROOM, width: 9 });
     expect(result.map.hasLayers).toBe(true);
-    expect(await mapDoc(W, mapId)).toMatchObject({ width: 9, walls: WALLS, obstacles: OBSTACLES });
+    expect(await layersOn(W, mapId)).toMatchObject({ width: 9, walls: WALLS, obstacles: OBSTACLES });
     expect(await refused('set_battle_map', { worldId: W, mapId, ...ROOM, height: 5 })).toMatch(
       /Wall 2: every point must be a whole-number corner on the grid/
     );
     // Layers given with the grid replace the ones it had.
     await ok('set_battle_map', { worldId: W, mapId, ...ROOM, obstacles: [] });
-    expect((await mapDoc(W, mapId)).obstacles).toEqual([]);
+    expect((await layersOn(W, mapId)).obstacles).toEqual([]);
   });
 });
 

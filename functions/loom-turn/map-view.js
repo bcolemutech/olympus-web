@@ -504,12 +504,10 @@ function battleView(canonWorld, save, record) {
     // Its areas (#670), as far as they've been seen: a label, never a target.
     areas: seenAreas(map, known, takenSquares(map, cell, people)),
     hereArea: (mapAreas.areaAt(map, cell) || {}).name || null,
-    // Its layers (L-624) and geometry (L-921), as far as they've been seen,
-    // each door in this save's state: the map a move is planned on, so the
-    // grid view's paths are the server's (./known-map.js; L-922).
-    walls: ground.walls,
-    doors: ground.doors,
-    obstacles: ground.obstacles,
+    // Its geometry (L-921; its layers of before stored in it, L-928), as far
+    // as it's been seen, each door in this save's state: the map a move is
+    // planned on, so the grid view's paths are the server's (./known-map.js;
+    // L-922).
     ...(ground.geometry ? { geometry: ground.geometry } : {}),
     // Hazards in sight (L-815; EF9): the squares of each in sight now, to
     // draw while it's seen, and the condition it puts on.

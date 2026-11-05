@@ -234,7 +234,7 @@ describe.each(Object.keys(CASES))('checks under %s (the two-configuration rule)'
   });
 
   describe('in ADJUDICATE', () => {
-    const ROOM = {
+    const ROOM = jest.requireActual('./helpers/grid').gridMap({
       id: 'bm_room',
       name: 'A room',
       width: 10,
@@ -266,7 +266,7 @@ describe.each(Object.keys(CASES))('checks under %s (the two-configuration rule)'
           difficulty: 15,
         },
       ],
-    };
+    });
     const world = {
       system,
       battleMaps: { bm_room: ROOM },

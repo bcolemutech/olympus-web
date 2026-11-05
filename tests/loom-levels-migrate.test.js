@@ -134,7 +134,7 @@ const FIXTURE = {
         exits: [{ id: 'out', name: 'the road', x: 0, y: 3, to: 'out' }],
         features: [],
       },
-      bm_ruin: {
+      bm_ruin: require('./helpers/grid').gridMap({
         name: 'The ruin',
         width: 10,
         height: 8,
@@ -175,7 +175,7 @@ const FIXTURE = {
             ],
           },
         ],
-      },
+      }),
       bm_cellar: {
         name: 'The cellar',
         width: 6,
@@ -377,7 +377,8 @@ test('the fixture world migrates to the expected maps and places', async () => {
     connections: ['pl_inn'],
   });
   // Grids: the generic one shared with no parent; the ruin under its place,
-  // its layers and figures carried over; the cellar under the stair.
+  // its figures carried over (its geometry stays in its battle map, GE5);
+  // the cellar under the stair.
   expect(world.maps.bm_gate).toMatchObject({
     kind: 'grid',
     parent: null,
@@ -387,7 +388,6 @@ test('the fixture world migrates to the expected maps and places', async () => {
     kind: 'grid',
     parent: { mapId: 'map_world', placeId: 'loc_ruin' },
     space: { width: 10, height: 8, squareSize: 1.5 },
-    doors: FIXTURE.collections.battleMaps.bm_ruin.doors,
     figures: FIXTURE.collections.battleMaps.bm_ruin.figures,
   });
   expect(world.maps.bm_cellar.parent).toEqual({ mapId: 'bm_ruin', placeId: 'bm_ruin~exit~stair' });

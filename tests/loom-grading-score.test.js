@@ -46,7 +46,7 @@ const layers = { ...LAYER_CHECKS, town: () => true };
 const criterion = (id) => CRITERIA.find((c) => c.id === id);
 const check = (id, world, entity, kind) => criterion(id).check(world, entity, { kind, layers });
 
-const MAP = {
+const MAP = require('./helpers/grid').gridMap({
   id: 'bm_inn',
   name: 'The inn',
   width: 8,
@@ -60,7 +60,7 @@ const MAP = {
   ],
   walls: [{ points: [SQUARE[0], SQUARE[1]] }],
   generic: null,
-};
+});
 
 function world(overrides = {}) {
   return {
@@ -301,7 +301,7 @@ describe('point of interest and place criteria', () => {
   test('its own map with walls; half without; none for a generic one', () => {
     const w = world();
     expect(check('place.ownMap', w, w.places.plc_inn, 'place')).toEqual({ progress: 1 });
-    const bare = without(w, 'battleMaps', 'bm_inn', { walls: [] });
+    const bare = without(w, 'battleMaps', 'bm_inn', { geometry: {} });
     expect(check('place.ownMap', bare, bare.places.plc_inn, 'place')).toMatchObject({
       progress: 0.5,
       need: 'layers',
@@ -400,7 +400,7 @@ describe('character, battle map, realm and world criteria', () => {
   test('a battle map: walls, art, features and exits', () => {
     const w = world();
     expect(gradeBattleMap(w, MAP)).toMatchObject({ score: 100 });
-    const bare = { ...MAP, walls: [], image: null, features: [MAP.features[0]], exits: [] };
+    const bare = { ...MAP, geometry: {}, image: null, features: [MAP.features[0]], exits: [] };
     expect(check('battleMap.layers', w, bare).progress).toBe(0);
     expect(check('battleMap.art', w, bare).progress).toBe(0);
     expect(check('battleMap.features', w, bare)).toMatchObject({ progress: 0.5, have: 1 });
@@ -684,9 +684,10 @@ function nisia({ sheets = true } = {}) {
       width: m.width,
       height: m.height,
       image: m.hasImage ? { path: 'art', width: m.width, height: m.height } : null,
-      walls: many(m.walls, () => ({ points: [] })),
-      doors: many(m.doors, () => ({})),
-      obstacles: many(m.obstacles, () => ({})),
+      // Its walls, doors or obstacles, in its geometry (L-928).
+      ...(m.walls || m.doors || m.obstacles
+        ? { geometry: { walls: [{ id: 'w', material: 'stone', points: 'M0 0 L5 0' }] } }
+        : {}),
       features: many(m.features, (i) => ({ id: `f${i}` })),
       exits: many(m.exits, (i) => ({ id: `e${i}` })),
       entries: many(m.entries, (i) => ({ id: `n${i}` })),

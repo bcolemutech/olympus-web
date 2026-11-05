@@ -42,7 +42,7 @@ const CASES = {
 // The Hulks: a hold 12 × 6, in at the west. Two guards stand mid-deck; the
 // hold grating (a locked door) on the deck's edge above (8, 1); a lever at (10, 5); the hold
 // itself, an area, the east end.
-const hulks = (group, extra = {}) => ({
+const hulks = (group, extra = {}) => jest.requireActual('./helpers/grid').gridMap({
   id: 'bm',
   name: 'The Hulks',
   width: 12,

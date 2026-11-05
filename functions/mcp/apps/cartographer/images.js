@@ -5,6 +5,7 @@ const jpeg = require('jpeg-js');
 const { pngDimensions } = require('../../../cartographer/service');
 const { isSvg, normaliseColours } = require('../../../cartographer/svg');
 const mapAreas = require('../../../loom-canon/map-areas');
+const layerGeometry = require('../../../loom-canon/layer-geometry');
 
 // Images Claude can see (planning/the-loom-layered-worlds.md §9; L-355 /
 // #417): a town's art, a battle map's art, or the world map, scaled down for
@@ -381,6 +382,9 @@ function gridLine(c, a, b, cw, ch, colour, width) {
  * place whose copy of the map they stand on).
  */
 function renderBattleMap(map, art, people = [], { sight = null } = {}) {
+  // Its walls, doors and obstacles in squares and corners, read back from
+  // its geometry (L-928), as the grid tools take them.
+  if (!layerGeometry.hasLayers(map)) map = { ...map, ...layerGeometry.layersOf(map.geometry) };
   let base;
   if (art) {
     base = scaleDown(decode(art));

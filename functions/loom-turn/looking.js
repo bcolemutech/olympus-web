@@ -22,7 +22,7 @@
  */
 
 const maps = require('../loom-canon/maps');
-const layers = require('../loom-canon/layers');
+const mapDoors = require('../loom-canon/doors');
 const hazards = require('../loom-canon/hazards');
 const mapAreas = require('../loom-canon/map-areas');
 const combat = require('../loom-modules/combat');
@@ -32,15 +32,8 @@ const { doorStatesOf, doorSides } = require('./steps');
 const key = (c) => c.x + ',' + c.y;
 const coords = (c) => '(' + c.x + ', ' + c.y + ')';
 
-// The obstacle covering a square, if any.
-function obstacleAt(map, cell) {
-  return (
-    (map.obstacles || []).find(
-      (o) =>
-        cell.x >= o.x && cell.x < o.x + (o.w || 1) && cell.y >= o.y && cell.y < o.y + (o.h || 1)
-    ) || null
-  );
-}
+// What covers a square, if anything (L-928: from the map's geometry).
+const obstacleAt = maps.blockerAt;
 
 const KIND = {
   solid: 'blocks the way and the view',
@@ -56,14 +49,14 @@ function lookAt(canonWorld, save, target, { known, inSight } = {}) {
   const knows = (c) => !known || Boolean(known[key(c)]);
 
   if (target.door) {
-    const door = (map.doors || []).find((d) => d.id === target.door);
+    const door = mapDoors.doorOf(map, target.door);
     if (!door || !doorSides(door).some(knows)) return { refused: "You haven't seen that door." };
     const now = doorSides(door).some(sees);
     const name = door.name || 'a door';
     return {
       at: name,
       inSight: now,
-      facts: ['A door: ' + name + ', ' + layers.doorState(door, states) + '.'],
+      facts: ['A door: ' + name + ', ' + mapDoors.stateOf(door, states) + '.'],
       empty: false,
     };
   }
@@ -90,11 +83,12 @@ function lookAt(canonWorld, save, target, { known, inSight } = {}) {
     );
   }
   // Doors along its sides, as this save left them.
-  (map.doors || [])
+  mapDoors
+    .doorsOf(map)
     .filter((d) => doorSides(d).some((s) => s.x === cell.x && s.y === cell.y))
     .forEach((d) =>
       facts.push(
-        'A door beside it: ' + (d.name || 'a door') + ', ' + layers.doorState(d, states) + '.'
+        'A door beside it: ' + (d.name || 'a door') + ', ' + mapDoors.stateOf(d, states) + '.'
       )
     );
   // A hazard, only while it is in sight (L-815).
@@ -178,7 +172,7 @@ function lookTargetOf(canonWorld, save, proposedAction) {
       : null;
   const thing = named('feature:', map.features) || named('exit:', map.exits);
   if (thing) return { cell: { x: thing.x, y: thing.y } };
-  const door = named('door:', map.doors);
+  const door = named('door:', mapDoors.doorsOf(map));
   if (door) return { door: door.id };
   const person = maps
     .standingAt(canonWorld, maps.hostOf(canonWorld, save))

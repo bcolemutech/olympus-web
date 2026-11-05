@@ -188,28 +188,46 @@
     return !battle.known || battle.known(cell.y * battle.data.width + cell.x);
   }
 
+  // The doors seen of the map, each in this save's state: its geometry's
+  // (L-922; since L-928 nothing else), as the server sends them.
+  function doorsOf(d) {
+    return ((d && d.geometry) || {}).doors || [];
+  }
+
   function doorById(id) {
     return (
-      (battle.data.doors || []).filter(function (d) {
+      doorsOf(battle.data).filter(function (d) {
         return d.id === id;
       })[0] || null
     );
   }
 
-  // The two squares a door stands between (as the server's steps.js has it).
+  // A door's ends in feet.
+  function endsOf(door) {
+    var at = function (p) {
+      return Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y };
+    };
+    return [at(door.from), at(door.to)];
+  }
+
+  // The two squares either side of a door's middle (as the server's
+  // loom-canon/doors.js has it): for a door along a grid line, the squares
+  // it stands between.
   function doorSides(door) {
-    if (door.from.x === door.to.x) {
-      var y = Math.min(door.from.y, door.to.y);
-      return [
-        { x: door.from.x - 1, y: y },
-        { x: door.from.x, y: y },
-      ];
-    }
-    var x = Math.min(door.from.x, door.to.x);
-    return [
-      { x: x, y: door.from.y - 1 },
-      { x: x, y: door.from.y },
-    ];
+    var ends = endsOf(door);
+    var a = ends[0];
+    var b = ends[1];
+    var mx = (a.x + b.x) / 2;
+    var my = (a.y + b.y) / 2;
+    var len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    var nx = (-(b.y - a.y) / len) * (MP.FEET / 4);
+    var ny = ((b.x - a.x) / len) * (MP.FEET / 4);
+    var sq = function (x, y) {
+      return { x: Math.floor(x / MP.FEET + 1e-9), y: Math.floor(y / MP.FEET + 1e-9) };
+    };
+    return [sq(mx - nx, my - ny), sq(mx + nx, my + ny)].sort(function (p, q) {
+      return p.x + p.y - (q.x + q.y);
+    });
   }
 
   function besideDoor(door) {
@@ -219,9 +237,7 @@
   }
 
   function doorName(id) {
-    var door = (battle.data.doors || []).filter(function (d) {
-      return d.id === id;
-    })[0];
+    var door = doorById(id);
     return door ? door.name || 'a door' : 'a door';
   }
 
@@ -692,28 +708,15 @@
     return m ? parseInt(m[1], 16) : null;
   }
 
-  // The map as the painter draws it (L-924): its geometry with its layers
-  // from before read as geometry (map-paths.js geometryOf), each door in
-  // this save's state. Over a map's own art (EX2), the obstacles its layers
-  // made objects of are the art's own and aren't drawn again.
+  // The map as the painter draws it (L-924): its geometry as far as seen,
+  // each door in this save's state (as the server sends it). Over a map's
+  // own art (EX2), the obstacles its layers of before made objects of
+  // (L-928) are the art's own and aren't drawn again.
   function paintMap(n, d) {
-    var states = {};
-    (d.doors || []).forEach(function (door) {
-      states[door.id] = door.state;
-    });
     var merged = MP.geometryOf(d);
     var geometry = {};
     Object.keys(merged).forEach(function (k) {
       geometry[k] = merged[k];
-    });
-    geometry.doors = (merged.doors || []).map(function (door) {
-      if (!states[door.id]) return door;
-      var copy = {};
-      Object.keys(door).forEach(function (k) {
-        copy[k] = door[k];
-      });
-      copy.state = states[door.id];
-      return copy;
     });
     if (d.image) {
       geometry.objects = (merged.objects || []).filter(function (o) {
@@ -838,10 +841,11 @@
     // the painter's (L-924; paint.js), under all this. A door selected
     // (L-627) is marked over it.
     var wallWidth = Math.max(3, cellPx / 7) * px;
-    (d.doors || []).forEach(function (door) {
+    doorsOf(d).forEach(function (door) {
       if (battle.selectedDoor !== door.id) return;
-      var a = square(door.from);
-      var b = square(door.to);
+      var ends = endsOf(door);
+      var a = square({ x: ends[0].x / MP.FEET, y: ends[0].y / MP.FEET });
+      var b = square({ x: ends[1].x / MP.FEET, y: ends[1].y / MP.FEET });
       g.moveTo(a.x, a.y).lineTo(b.x, b.y);
       g.stroke({ width: wallWidth + 8 * px, color: COLOURS.selected, alpha: 0.45 });
     });
@@ -1121,17 +1125,19 @@
 
   // The door under a point (within a fifth of a square of its line), or null.
   function doorAt(m) {
-    var gx = (m.x - PAD) / CELL;
-    var gy = (m.y - PAD) / CELL;
+    var p = { x: ((m.x - PAD) / CELL) * MP.FEET, y: ((m.y - PAD) / CELL) * MP.FEET };
     return (
-      (battle.data.doors || []).filter(function (dr) {
-        var x0 = Math.min(dr.from.x, dr.to.x);
-        var x1 = Math.max(dr.from.x, dr.to.x);
-        var y0 = Math.min(dr.from.y, dr.to.y);
-        var y1 = Math.max(dr.from.y, dr.to.y);
-        var dx = Math.max(x0 - gx, 0, gx - x1);
-        var dy = Math.max(y0 - gy, 0, gy - y1);
-        return Math.sqrt(dx * dx + dy * dy) <= DOOR_HIT;
+      doorsOf(battle.data).filter(function (dr) {
+        var ends = endsOf(dr);
+        var a = ends[0];
+        var b = ends[1];
+        var vx = b.x - a.x;
+        var vy = b.y - a.y;
+        var len2 = vx * vx + vy * vy || 1;
+        var t = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2));
+        var dx = p.x - (a.x + t * vx);
+        var dy = p.y - (a.y + t * vy);
+        return Math.sqrt(dx * dx + dy * dy) <= DOOR_HIT * MP.FEET;
       })[0] || null
     );
   }
