@@ -9,7 +9,9 @@
  *     among it; objects' art and the world's own kinds' art as links only
  *     (never the library's records, A5); and the fog's outline of what's in
  *     sight, to the sight lines;
- *   - in the station (an area map): its geometry whole, and its space;
+ *   - in the station (an area map): its geometry whole, and its space; drawn
+ *     from its ground too (L-928; EX3: streets, roofs, water, walls) under
+ *     its own geometry;
  *   - on Vega (a region map): its geometry whole, and its space;
  *   - hidden things are never sent.
  *
@@ -73,9 +75,29 @@ const mockWorld = (() => {
       hidden: ['hatch'],
     }),
   };
-  // The station and Vega: a little of each, drawn whole.
+  // The station and Vega: a little of each, drawn whole; the station has
+  // ground too (a depot, a pool and a fence).
+  const rect = (x, y, rw, rh) => [
+    { x, y },
+    { x: x + rw, y },
+    { x: x + rw, y: y + rh },
+    { x, y: y + rh },
+  ];
   w.maps.station = {
     ...w.maps.station,
+    ground: {
+      buildings: [{ name: 'the depot', points: rect(200, 200, 100, 100) }],
+      water: [{ name: 'the pool', points: rect(600, 600, 100, 50) }],
+      walls: [
+        {
+          name: 'the fence',
+          points: [
+            { x: 100, y: 950 },
+            { x: 900, y: 950 },
+          ],
+        },
+      ],
+    },
     geometry: geo.normalize({
       ground: [
         { id: 'deck', material: 'metal', shape: { rect: { x: 100, y: 100, w: 800, h: 800 } } },
@@ -198,11 +220,21 @@ describe('what the painter is sent', () => {
   });
 
   test('in the station: its area map drawn whole, with its space; hidden things left out', async () => {
-    await standing('station', [...down, { mapId: 'station', point: { x: 500, y: 900 } }]);
+    // At the dock (a town with ground shows only the places found, L-673).
+    await standing('station', [...down, { mapId: 'station', placeId: 'pl_dock' }]);
     const { town } = await mapOf('station');
     expect(town.space).toEqual({ width: 1000, height: 1000 });
-    expect(town.geometry.ground.map((g) => g.id)).toEqual(['deck']);
-    expect(town.geometry.walls.map((w) => w.id)).toEqual(['hull']);
+    // Its ground drawn (L-928), under its own geometry.
+    expect(town.geometry.ground.map((g) => g.id)).toEqual([
+      'town-streets',
+      'town-water-0',
+      'town-building-0',
+      'deck',
+    ]);
+    expect(town.geometry.ground[2]).toMatchObject({ material: 'roof', name: 'the depot' });
+    expect(town.geometry.walls.map((w) => w.id)).toEqual(['town-wall-0', 'hull']);
+    // The ground itself still comes for walking.
+    expect(town.ground.buildings).toHaveLength(1);
     expect(town.geometry.objects).toBeUndefined();
     expect(town.geometry.hidden).toBeUndefined();
   });

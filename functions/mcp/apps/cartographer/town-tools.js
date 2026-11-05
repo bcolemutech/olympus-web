@@ -539,7 +539,10 @@ function townTools({ writer }) {
         'be walkable from a way in, or the ground is refused with the reasons. Each list given ' +
         'replaces that list; an empty list clears it; one left out is kept (get_town with ' +
         'groundShapes shows them). Once a town has ground, moving or adding places must keep ' +
-        'their doors so. Check it against the art with view_image. A shortcut: the town is ' +
+        'their doors so. Check it against the art with view_image: to trace the art, follow its ' +
+        'blocks of houses, its river and its walls, then look again and move what doesn’t sit ' +
+        'on it. A town with ground and no art is drawn from it (cobbled streets, roofs, water, ' +
+        'bridges and fords, stone walls); a town with art keeps its art. A shortcut: the town is ' +
         'its area map (map_town_<location>) in get_map; set_area_ground does the same for an ' +
         'area map made with add_map. ' +
         editNote,

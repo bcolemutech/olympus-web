@@ -864,7 +864,9 @@ function levelTools({ writer, worldFor }) {
         'An area map’s ground, as set_town_ground gives a town’s: buildings and water as ' +
         'polygons, walls as lines, crossings over water, in its 0–1000 square; every place’s ' +
         'position its door, on open ground and walkable from a way in. Each list given ' +
-        'replaces it, one left out is kept. For a town in today’s shape, set_town_ground. ' +
+        'replaces it, one left out is kept. Without art, it is drawn from its ground; trace ' +
+        'art with view_image as set_town_ground says. For a town in today’s shape, ' +
+        'set_town_ground. ' +
         editNote,
       inputSchema: {
         worldId,

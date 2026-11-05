@@ -686,7 +686,10 @@ function mapTools({ writer }) {
         'area they stand in and which they can see; "go to the back room" walks into it. Keep ' +
         'features for what players use: the lever, the altar. Each list given replaces that list; an ' +
         'empty list clears it; one left out is kept. A place’s own map needs these to count in ' +
-        'full toward its score. Check them against the art with view_image. A shortcut: walls, ' +
+        'full toward its score. To trace the art: view_image it, follow its walls along the ' +
+        'nearest grid lines, put each door in the gap where the art has one, a table or a ' +
+        'counter as a low obstacle, a pillar or a statue as a solid one; then view_image again ' +
+        'and move what doesn’t sit on the art. A shortcut: walls, ' +
         'doors and obstacles are stored as the map’s geometry (walls, doors, pillars, low walls ' +
         'and rough ground, in feet), which is what play reads, and get_battle_map reads them ' +
         'back. ' +

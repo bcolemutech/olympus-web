@@ -1,6 +1,6 @@
 # The Loom — Maps Drawn From Their Data — Design Document v0.1
 
-**Status:** Decided (2026-10-28). Revised 2026-11-03 after L-900 shipped (GE5, EX4). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#725–#733, §6).
+**Status:** Decided (2026-10-28). Revised 2026-11-03 after L-900 shipped (GE5, EX4), and 2026-11-05 (EX1 dropped: Nisia's Azgaar export was lost; §4.7, §5). The gap sheet (§3) is answered. Sub-issues filed 2026-10-28 (#725–#733, §6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-920 (#710), Phase 10 — Levels and Vehicles (milestone #26). From idea #709.
 **Built:** right after L-900 (map levels to any depth) and before L-710 (worlds without Azgaar), so L-710's regions and terrain use this geometry from the start.
@@ -68,7 +68,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 
 | ID      | Question                     | Decision                                                                                                                                                                                                                                                     |
 | ------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **EX1** | Azgaar worlds                | **Converted into map data** (coasts, rivers, biomes as terrain, burgs, routes) and drawn                                                                                                                                                                     |
+| **EX1** | Azgaar worlds                | **Converted into map data** (coasts, rivers, biomes as terrain, burgs, routes) and drawn. **Dropped 2026-11-05** (the user): imports never kept their exports, and Nisia's is lost (§4.7)                                                                    |
 | **EX2** | Maps with art                | **Battle-map art stays an option,** image or SVG (the user's note): nothing breaks, and rich environments stay possible. **A map with art doesn't draw its floors and walls,** but always draws its objects: with their art, or the box with a question mark |
 | **EX3** | Towns                        | **Drawn from their ground;** towns with only art keep it                                                                                                                                                                                                     |
 | **EX4** | Old grid layers (2026-11-03) | **Converted, then dropped:** a dry-run-then-apply workflow like L-902's converts every battle map; once a replay of scripted fights gives the same paths, sight and costs, the code reads only the geometry and today's layers go                            |
@@ -188,9 +188,14 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
     - first the conversion: the layers stored as geometry beside them, a dry-run-then-apply workflow whose report carries the replay, and the grid tools writing both. The user runs it on Nisia and The Border March;
     - then the layers dropped: the code reads only the geometry, the grid tools become shortcuts that write geometry, and the workflow clears the old fields;
     - then towns drawn from their ground, the Azgaar conversion and the tracing guidance.
-  - **Azgaar exports, uploaded on the page:** imports delete their upload once the world is built, so no export was saved. An Azgaar world on the Cartographer page gets "Convert its map": its full export is uploaded once and converted on the server into its top map's geometry. New imports convert at once. A slimmed copy of Nisia's full export, with its cell outlines and rivers, becomes the test fixture.
+  - **Azgaar exports, uploaded on the page:** imports delete their upload once the world is built, so no export was saved. An Azgaar world on the Cartographer page gets "Convert its map": its full export is uploaded once and converted on the server into its top map's geometry. New imports convert at once. A slimmed copy of Nisia's full export, with its cell outlines and rivers, becomes the test fixture. *Overtaken 2026-11-05: Nisia's full export is lost.*
   - **Features stay named spots,** like entries, exits and areas: they aren't layers. L-926 (objects' actions) decides whether they become objects, which as things stand would be drawn as boxes with a question mark over every map's art.
   - **Art always wins** where a map has both art and data (EX2, at every level): Nisia's world map keeps its Azgaar picture, and its converted data is drawn once its art is removed over MCP. Towns with art keep it.
+- **Decided 2026-11-05 (the user), after Nisia's full Azgaar export was found lost:** **EX1 is dropped from L-928.**
+  - No Azgaar world can be converted: imports never kept their exports, and the repo's slim copy of Nisia's has no cell outlines or rivers. Nisia keeps its art, which wins anyway.
+  - The epic's exit criterion "Nisia's world map is drawn from its converted Azgaar data" becomes "a region map is drawn from its own data" (§5), already shown headless since L-924.
+  - Nisia's coasts and terrain come later: Claude can trace its map image with L-929's tools (AU3), or L-710's region layer (L-715) can paint them. L-717's plan to convert Azgaar worlds' layers from their saved exports (AZ2) is affected the same way (noted in `worlds-without-azgaar.md`).
+  - The "Convert its map" upload isn't built. The third PR is towns drawn from their ground, and tracing guidance.
 - **As built (L-928, first PR, 2026-11-04):**
   - **The conversion** (`functions/loom-canon/layer-geometry.js` `converted`) stores what play has read since L-922: a map's own geometry, and its layers read as geometry beside it (`fromLayers`, which now also keeps a door's long action and lock difficulty), its own items winning on an id, normalized. Every id is kept: doors keep their own, so a save's door states and wary triggers on them still find them; walls, doorways and obstacles keep the ids `fromLayers` gives them (`layer-wall-0`, `layer-doorway-<door>`, `layer-<obstacle>`). So the stored items shadow the ones read from the layers one for one, and nothing plays differently while both are there. The map a save is sent (`known-map.js`) leaves out the stored items its layers make while it still has layers, so it is the same before and after.
   - **The Convert Map Layers workflow** (`.github/workflows/convert-map-layers.yml`, `scripts/convert-map-layers.js`, `functions/cartographer/convert-layers.js`), like L-902's: a dry run reports, then apply with confirm "convert". It writes `geometry` on each battle map that has layers and whose stored geometry differs, and moves the world's `canonVersion` on once. Running it again writes nothing. Generic maps, floors reached by exits and templates (whose instances are made from them as the world loads) convert with them. Grid maps in `maps` keep the copies of the layers L-902 made, which nothing reads.
@@ -216,6 +221,15 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
   - **Obstacles keep their names** in the geometry: low walls and rough ground now carry them, as pillars did.
   - **The workflow now deletes the layers.** Convert Map Layers stores each battle map's geometry again, from its layers (adding the obstacles' names), and deletes `walls`, `doors` and `obstacles`. It also deletes the copies L-902 left on grid maps in `maps`, and converts any grid map there with no battle map of its own. Its replay compares the map as it played before (its layers read as geometry beside what was stored) with its geometry alone.
   - **Every grid test plays on the geometry alone.** Tests write their maps in squares and corners and store them through `tests/helpers/grid.js` (`gridMap`), the same conversion.
+- **As built (L-928, third PR, 2026-11-05): towns drawn from their ground, and tracing.**
+  - **Towns with ground are drawn from it (EX3).** loomGetMap sends a town's ground as geometry (`ground.js` `geometryOf`), worked out each time, never stored, so it is always the ground players walk. The town's own geometry lies over it, its items winning on an id.
+    - The streets are cobbles over the whole 0–1000 square.
+    - Water, bridges (planks) and fords (stones) lie on the streets.
+    - Buildings are roofs, raised 10 so the painter lightens them and lays a shadow along their edges.
+    - Walls are stone.
+    - Each item keeps its shape's name.
+  - **The town view paints them** in place of its plain shapes, and keeps the water's shimmer. A town with art keeps its art, the painter drawing only what lies on top of it (EX2).
+  - **Tracing (AU3)** is guidance in the tools' descriptions: `view_image` says how to trace art into data and that a map keeps its art; `set_map_layers` says how to follow a battle map's art onto the grid; `set_town_ground` and `set_area_ground` say how to follow a town's.
 
 ### 4.8 Tools and generators (AU1, AU2)
 
@@ -230,7 +244,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 
 ## 5. Exit criterion
 
-A dungeon built over MCP from data alone, with no image, draws with character from its materials; a wall runs at an angle off the old grid lines and hides what it should; a character slips through a gap narrower than a square; a secret door is found by searching; a ledge gives high ground; bandits appear at a spawn point. Nisia's world map is drawn from its converted Azgaar data.
+A dungeon built over MCP from data alone, with no image, draws with character from its materials; a wall runs at an angle off the old grid lines and hides what it should; a character slips through a gap narrower than a square; a secret door is found by searching; a ledge gives high ground; bandits appear at a spawn point. A region map is drawn from its own data (revised 2026-11-05 from "Nisia's world map is drawn from its converted Azgaar data": Nisia's export was lost, §4.7).
 
 ---
 
@@ -245,7 +259,7 @@ A dungeon built over MCP from data alone, with no image, draws with character fr
 | L-925 (#729) | **Materials and the object catalog:** the built-in set and its art, made with the studio and committed; assigning over MCP; a world's own object art; the box with a question mark           | —            | Sonnet |
 | L-926 (#730) | **Objects:** their settings, containers, locks and what unlocks them, descriptions and card art, their click-menu actions and costs                                                          | L-921        | Sonnet |
 | L-927 (#731) | **Hidden things and spawns:** noticing and Search, traps as hidden hazards, spawn points, generic maps' spawns filled by the GM or an event                                                  | L-923        | Sonnet |
-| L-928 (#732) | **Today's maps:** battle-map layers converted, towns drawn from ground, Azgaar exports converted to region data, art kept; tracing                                                           | L-921        | Opus   |
+| L-928 (#732) | **Today's maps:** battle-map layers converted, towns drawn from ground, art kept; tracing (Azgaar exports converted to region data: dropped 2026-11-05, §4.7)                                | L-921        | Opus   |
 | L-929 (#733) | **Tools and generators:** the MCP tools, `view_image` of the data, seeded generators (rooms and corridors, caves, interiors, decks); the grading criterion                                   | L-921        | Sonnet |
 
 **Order:** L-921 and L-925 first. L-922, L-923, L-926, L-928 and L-929 follow L-921; L-924 follows L-925; L-927 follows L-923.
