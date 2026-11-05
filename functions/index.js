@@ -552,6 +552,10 @@ function requireLoomAuth(request) {
  *    or { worldId, saveId, action: { verb: 'dash' | 'dodge' | 'withdraw' | 'stand' } },
  *       { verb: 'ready', attack?, target? } or { verb: 'use', feature } — a
  *       fight's other actions (L-823); no model reads them but Use's
+ *    or { worldId, saveId, action: { verb: 'object', object, act } } — an
+ *       object's own action (open, search, unlock, or one of its own; L-926),
+ *       rolled and priced by the rules, narrated; { verb: 'look', object }
+ *       asks what's there, as for a square or a door
  * A walk in town is worked out without the model too, and returns step:
  * { townPoint, ap, plan, lines } (plus `entered`, and `turns` for
  * walk-there).
@@ -642,13 +646,24 @@ exports.loomPlayTurn = onCall(async (request) => {
           (action.attack === undefined || id(action.attack)) &&
           (action.target === undefined || goodTarget)) ||
         (action.verb === 'use' && id(action.feature)));
-    // "What's here?" on a battle map (#672): a square, or a door.
+    // An object's action chosen from its menu (L-926): open, search, unlock
+    // or one of its own.
+    const objectId = (v) => typeof v === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(v);
+    const objecting =
+      typeof action === 'object' &&
+      action.verb === 'object' &&
+      objectId(action.object) &&
+      typeof action.act === 'string' &&
+      /^[a-z][a-z0-9-]{0,23}$/.test(action.act);
+    // "What's here?" on a battle map (#672): a square, a door or an object.
     const looking =
       typeof action === 'object' &&
       action.verb === 'look' &&
       (action.door !== undefined
         ? typeof action.door === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(action.door)
-        : isCell(action.cell));
+        : action.object !== undefined
+          ? objectId(action.object)
+          : isCell(action.cell));
     // Taking a level offered at a long rest (L-843): the choices are checked
     // by the advancement module.
     const levelling =
@@ -661,6 +676,7 @@ exports.loomPlayTurn = onCall(async (request) => {
     if (
       !bare &&
       !door &&
+      !objecting &&
       !moving &&
       !attacking &&
       !resting &&
@@ -677,7 +693,8 @@ exports.loomPlayTurn = onCall(async (request) => {
           '{ verb: "attack", target: <character id>, attack?, subdue? }, ' +
           '{ verb: "rest", rest: "short" | "long" }, { verb: "dash" | "dodge" | "withdraw" | "stand" }, ' +
           '{ verb: "ready", attack?, target? }, { verb: "use", feature: <feature id> }, ' +
-          '{ verb: "look", cell: { x, y } | door: <door id> }, ' +
+          '{ verb: "object", object: <object id>, act: <action id> }, ' +
+          '{ verb: "look", cell: { x, y } | door: <door id> | object: <object id> }, ' +
           '{ verb: "suggested", text, act?: { verb, target? } }, { verb: "confirm" }, ' +
           '{ verb: "levelUp", choices: { attributes?, skills?, traits?, attacks? } } ' +
           'or { verb: "end-turn" }.'
@@ -719,39 +736,46 @@ exports.loomPlayTurn = onCall(async (request) => {
                   : action.verb === 'look'
                     ? action.door !== undefined
                       ? { verb: 'look', door: action.door }
-                      : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
-                    : action.verb === 'door'
-                      ? { verb: 'door', door: action.door, open: action.open }
-                      : action.verb === 'rest'
-                        ? { verb: 'rest', rest: action.rest }
-                        : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(
-                              action.verb
-                            )
-                          ? {
-                              verb: action.verb,
-                              ...(action.attack ? { attack: action.attack } : {}),
-                              ...(action.target ? { target: action.target } : {}),
-                              ...(action.feature ? { feature: action.feature } : {}),
-                            }
-                          : action.verb === 'attack'
+                      : action.object !== undefined
+                        ? { verb: 'look', object: action.object }
+                        : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
+                    : action.verb === 'object'
+                      ? { verb: 'object', object: action.object, act: action.act }
+                      : action.verb === 'door'
+                        ? { verb: 'door', door: action.door, open: action.open }
+                        : action.verb === 'rest'
+                          ? { verb: 'rest', rest: action.rest }
+                          : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(
+                                action.verb
+                              )
                             ? {
-                                verb: 'attack',
-                                target: action.target,
+                                verb: action.verb,
                                 ...(action.attack ? { attack: action.attack } : {}),
-                                ...(action.subdue ? { subdue: true } : {}),
+                                ...(action.target ? { target: action.target } : {}),
+                                ...(action.feature ? { feature: action.feature } : {}),
                               }
-                            : action.verb === 'end-turn' ||
-                                action.verb === 'continue' ||
-                                action.verb === 'confirm'
-                              ? { verb: action.verb }
-                              : action.point !== undefined
-                                ? {
-                                    verb: action.verb,
-                                    point: { x: action.point.x, y: action.point.y },
-                                  }
-                                : typeof action.target === 'string'
-                                  ? { verb: action.verb, target: action.target }
-                                  : { verb: 'move', cell: { x: action.cell.x, y: action.cell.y } },
+                            : action.verb === 'attack'
+                              ? {
+                                  verb: 'attack',
+                                  target: action.target,
+                                  ...(action.attack ? { attack: action.attack } : {}),
+                                  ...(action.subdue ? { subdue: true } : {}),
+                                }
+                              : action.verb === 'end-turn' ||
+                                  action.verb === 'continue' ||
+                                  action.verb === 'confirm'
+                                ? { verb: action.verb }
+                                : action.point !== undefined
+                                  ? {
+                                      verb: action.verb,
+                                      point: { x: action.point.x, y: action.point.y },
+                                    }
+                                  : typeof action.target === 'string'
+                                    ? { verb: action.verb, target: action.target }
+                                    : {
+                                        verb: 'move',
+                                        cell: { x: action.cell.x, y: action.cell.y },
+                                      },
           }
         : { actionText: actionText.trim() }),
     });

@@ -2,6 +2,7 @@
 
 const geo = require('../loom-canon/map-geometry');
 const mapDoors = require('../loom-canon/doors');
+const mapObjects = require('../loom-canon/objects');
 
 /**
  * A battle map as far as a save has seen it (planning/the-loom-movement-and-
@@ -90,14 +91,24 @@ function seenGeometry(map, on, states = {}) {
       .filter((item) => item && !hidden.has(item.id) && touchesSeen(cornersOf(key, item), on))
       .map((item) =>
         key === 'doors'
-          ? { ...item, state: mapDoors.stateOf(item, states) }
-          : key === 'objects' && item.art
-            ? { ...item, art: artLink(item.art) }
+          ? mapDoors.forPlayer({ ...item, state: mapDoors.stateOf(item, states) })
+          : key === 'objects'
+            ? playerObject(item)
             : item
       );
     if (kept.length) out[key] = kept;
   }
   return Object.keys(out).length ? out : null;
+}
+
+// An object as the page is sent it (L-926): its art and card art as links
+// only (A5), and none of what it holds, what unlocks it or how hard its lock is.
+function playerObject(item) {
+  return mapObjects.forPlayer({
+    ...item,
+    ...(item.art ? { art: artLink(item.art) } : {}),
+    ...(item.cardArt ? { cardArt: artLink(item.cardArt) } : {}),
+  });
 }
 
 // A library image as the page draws it: its link only, never its record
@@ -120,7 +131,9 @@ function drawnGeometry(stored) {
   for (const key of DRAWN) {
     const kept = (stored[key] || [])
       .filter((item) => item && !hidden.has(item.id))
-      .map((item) => (key === 'objects' && item.art ? { ...item, art: artLink(item.art) } : item));
+      .map((item) =>
+        key === 'objects' ? playerObject(item) : key === 'doors' ? mapDoors.forPlayer(item) : item
+      );
     if (kept.length) out[key] = kept;
   }
   return Object.keys(out).length ? out : null;

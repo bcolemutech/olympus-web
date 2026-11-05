@@ -91,6 +91,11 @@ function doorStatesOf(save, mapId) {
   return ((save && save.doors) || {})[mapId] || {};
 }
 
+/** The states of a save's objects that open on a map (L-926), by object id. */
+function objectStatesOf(save, mapId) {
+  return ((save && save.objects) || {})[mapId] || {};
+}
+
 const key = (cell) => cell.x + ',' + cell.y;
 const besideOf = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) === 1;
 
@@ -439,6 +444,7 @@ module.exports = {
   viewPrices,
   doorOn,
   doorStatesOf,
+  objectStatesOf,
   doorSides,
   hasKey,
   besideDoor,

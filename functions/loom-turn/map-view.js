@@ -3,10 +3,11 @@
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
+const mapObjects = require('../loom-canon/objects');
 const mapAreas = require('../loom-canon/map-areas');
 const { discoveredBy } = require('./discovery');
 const { apOf, turnStateOf } = require('../loom-models');
-const { planOn, doorStatesOf, pricesFor, viewPrices } = require('./steps');
+const { planOn, doorStatesOf, objectStatesOf, hasKey, pricesFor, viewPrices } = require('./steps');
 const { knownMap, artLink, drawnGeometry } = require('./known-map');
 const sight = require('../loom-canon/sight');
 const levels = require('../loom-canon/levels');
@@ -440,6 +441,44 @@ function combatView(canonWorld, save) {
   };
 }
 
+/**
+ * The objects of a battle map the save has seen that there is something to do
+ * with (L-926): `{ objects: [{ id, name, state?, description?, cardArt?,
+ * actions: [{ id, name, cost?, long? }] }] }`, or nothing. `cost` is what
+ * this character pays (their traits and conditions in it), left out with AP
+ * off; `long` the AP of a long action. The page draws the menu and the card.
+ */
+function objectsView(canonWorld, save, map, on) {
+  const system = checks.systemOf(canonWorld);
+  const prices = apRules.pricesOf(system, sheets.sheetOf(save));
+  const free = apRules.isOff(system);
+  const states = objectStatesOf(save, map.id);
+  const rows = mapObjects
+    .usableOf(map)
+    .filter((o) => mapObjects.squaresOf(map, o).some(on))
+    .map((o) => {
+      const state = mapObjects.stateOf(o, states);
+      const actions = mapObjects.actionsOf(o, state, { hasKey: hasKey(save, o) }).map((a) => ({
+        id: a.id,
+        name: a.name,
+        ...(free ? {} : { cost: prices.of(a.spend, a.own) }),
+        ...(a.long ? { long: a.long } : {}),
+      }));
+      return {
+        id: o.id,
+        name: mapObjects.nameOf(o),
+        ...(state ? { state } : {}),
+        ...(o.description ? { description: o.description } : {}),
+        // What it holds, once it has been opened (and not before).
+        ...(state === 'open' && mapObjects.contentsOf(o)
+          ? { contents: mapObjects.contentsOf(o) }
+          : {}),
+        actions,
+      };
+    });
+  return rows.length ? { objects: rows } : {};
+}
+
 function battleView(canonWorld, save, record) {
   const { map, cell, point } = maps.positionOf(canonWorld, save);
   if (!map) return null;
@@ -522,6 +561,9 @@ function battleView(canonWorld, save, record) {
       // A long action's AP (CT4), for the menu's Use (L-837).
       ...(f.long && Number.isInteger(f.long.ap) ? { long: { ap: f.long.ap } } : {}),
     })),
+    // The objects there is something to do with that it has seen (L-926): each
+    // with its state and what its menu offers this character, at its AP cost.
+    ...objectsView(canonWorld, save, map, on),
     // Its areas (#670), as far as they've been seen: a label, never a target.
     areas: seenAreas(map, known, takenSquares(map, cell, people)),
     hereArea: (mapAreas.areaAt(map, cell) || {}).name || null,

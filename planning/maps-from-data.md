@@ -103,7 +103,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 - **Compact shapes** (#735 gap 16): points as `[[x, y], …]` or SVG path data; circles and rectangles as shapes of their own.
 - **Moving off the grid (L-922, 2026-11-03):**
   - **Two PRs** (the user's choice, 2026-11-03): first moving (sizes, paths and AP in feet, a save's point, the walk, the page's preview), then distances (combat's reach, ranges and areas, opportunity attacks, tactics, named turns, wary triggers and `cell: "auto"` in feet; foes' moves; `grid-paths.js` retired).
-  - **The planner**, `map-paths.js`: a fine grid at 1.25 ft, each point nudged up to half a step to where the character fits, plus a point in the middle of every narrow gap and a ring round every corner; searched at any angle (Theta*), then pulled straight by the cheapest way through its own points. Shortest paths come within 1% of the true ones.
+  - **The planner**, `map-paths.js`: a fine grid at 1.25 ft, each point nudged up to half a step to where the character fits, plus a point in the middle of every narrow gap and a ring round every corner; searched at any angle (Theta\*), then pulled straight by the cheapest way through its own points. Shortest paths come within 1% of the true ones.
   - **Old layers are read as geometry** in memory (`map-geometry.js` `fromLayers`: each door in a short wall of its own, solid and low obstacles as closed walls, difficult squares as ground costing 2), beside a map's own geometry, its items winning on an id. L-928 stores it.
   - **Rules settled in building:** a walk that runs out of AP inside the square it was going to has arrived; a closed door on the way is opened from the first point within 5 ft of it (beside it, as before); walking up to someone already beside you is refused, as before.
   - **The preview is the charge by construction:** the server plans a move on the map as far as the save has seen it (`functions/loom-turn/known-map.js`, which the grid view is sent) with the view's prices, through the same `viewPlanner` and `moveTo` the page runs. Hidden things are left out of it, so a hidden door leaves its wall whole.
@@ -150,6 +150,28 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
 - **Containers** hold items once L-770 lands; until then, their contents are described.
 - **Art:** the world's own (a transparent PNG from the studio, assigned over MCP), else the built-in catalog's, else **a box with a question mark**.
 - **Click menu:** an object's actions (open, search, unlock, use) cost their AP (L-830).
+- **Decided before building L-926 (the user, 2026-11-05):**
+  - **Two PRs:** first the server (settings, state, actions through `loomPlayTurn`, "What's here?", the GM and INTERPRET told, wary triggers, what the page is sent), then the page (the click menu, the card, headless tests).
+  - **Features and objects both stay.** Features remain named spots (decided 2026-11-04); objects are the richer thing over the geometry and share features' AP rules. A wary trigger's `featureTouched` may name either. Nothing is converted, so nothing becomes a "?" box.
+  - **The card is on the click menu:** clicking an object opens the menu with its card across the top (card art, name, description, state) and its actions below, each at its AP cost. No new panel.
+- **As built (L-926, first PR, server, 2026-11-05):**
+  - **An object's settings**, checked with the rest of the geometry (`map-geometry.js` `check`, both copies):
+    - `name`, `description` (600 letters), `cardArt` (a library image, as `art`);
+    - `container` (`true`, or `{ contents?, search? }`: what it holds, described until L-770; `search` makes opening it a search, a bookshelf);
+    - `locked` (needs a container), `unlocks` (`{ key?, action? }`: the item that opens it, or `action`, an object's id or `id.action` whose use unlocks it), `difficulty` (5–30), `ap` (its own cost), `long` (`{ ap }`, a long action: picking the lock over turns);
+    - `actions` (up to 8 of `{ id, name?, ap?, long?, text? }`: its own, a lever's Pull; the ids `open`, `search`, `unlock`, `close` and `look` are its own).
+    - An `unlocks.action` on a door or object must name an object with that action.
+  - **The rules** are `functions/loom-canon/objects.js`, as `doors.js` is for doors: which objects there is something to do with, a name (its own, else "the" and its kind's), its state, the squares it covers (for reach and sight), what a proposed action is, what the menu offers, what using one unlocks, and what the page is sent.
+  - **State per save**, `save.objects[mapId][id]` ('closed', 'open' or 'locked'), as `save.doors` is; a container starts 'closed', or 'locked' if it says so. Only containers keep state: a lever's use unlocks what names it and is not itself remembered.
+  - **Actions** go through ADJUDICATE as `object:<id>` targets, reach and cost as any action on the map:
+    - **Open or search** a closed container: it opens, and the GM is told what it holds, or that it is empty. An open one is a no-op.
+    - **A locked container** is unlocked and opened by its key, for the price of handling an object. Without the key, **opening or searching it is refused**, spending nothing. **Unlocking it** (picking or forcing) rolls the system's lock check against its difficulty (15 if it has none); a success leaves it unlocked (closed), for the lock price, a long action where it says so. Opening it is then another action.
+    - **One of its own actions:** its text (or "You pull the lever."), and each door or object that names it in `unlocks.action` and is still locked becomes unlocked; one in sight is named, any other "Somewhere nearby, a lock gives way."
+    - **Costs:** `object` (5 in both built-ins) over the object's or action's own `ap`, `lock` for picking; the same in both systems' prices.
+  - **The menu's action** is `{ verb: 'object', object, act }`, no model reading it; typed ones ("open the chest", "pick the lock", "pull the lever") reach the same rules through INTERPRET, which lists `object:<id>` among what the save has seen. A trigger on `featureTouched` fires for an object touched.
+  - **"What's here?"** on an object (`{ verb: 'look', object }`, a typed look, or its square) gives its name, description and state, what it holds only once open, and what can be done with it; never its key or its lock's difficulty. NARRATE is told the objects in sight and their states.
+  - **What the page is sent:** `battleMap.objects`, each seen object there is something to do with: `{ id, name, state?, description?, contents? (once open), actions: [{ id, name, cost?, long? }] }`, `cost` this character's price (none with AP off). Its geometry carries each object with its art and card art as links only, and **no key, lock difficulty, contents or action text**.
+  - **A fix found on the way (L-928 part 2):** doors in the geometry went to the page whole, with the key that opens them, the lever that unlocks them and their lock's difficulty, which the page's view never carried before. Doors are now sent without them (`doors.js` `forPlayer`).
 
 ### 4.5 Hidden things, spawns and generic maps (DA3, DA4, DA1b)
 
@@ -188,7 +210,7 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
     - first the conversion: the layers stored as geometry beside them, a dry-run-then-apply workflow whose report carries the replay, and the grid tools writing both. The user runs it on Nisia and The Border March;
     - then the layers dropped: the code reads only the geometry, the grid tools become shortcuts that write geometry, and the workflow clears the old fields;
     - then towns drawn from their ground, the Azgaar conversion and the tracing guidance.
-  - **Azgaar exports, uploaded on the page:** imports delete their upload once the world is built, so no export was saved. An Azgaar world on the Cartographer page gets "Convert its map": its full export is uploaded once and converted on the server into its top map's geometry. New imports convert at once. A slimmed copy of Nisia's full export, with its cell outlines and rivers, becomes the test fixture. *Overtaken 2026-11-05: Nisia's full export is lost.*
+  - **Azgaar exports, uploaded on the page:** imports delete their upload once the world is built, so no export was saved. An Azgaar world on the Cartographer page gets "Convert its map": its full export is uploaded once and converted on the server into its top map's geometry. New imports convert at once. A slimmed copy of Nisia's full export, with its cell outlines and rivers, becomes the test fixture. _Overtaken 2026-11-05: Nisia's full export is lost._
   - **Features stay named spots,** like entries, exits and areas: they aren't layers. L-926 (objects' actions) decides whether they become objects, which as things stand would be drawn as boxes with a question mark over every map's art.
   - **Art always wins** where a map has both art and data (EX2, at every level): Nisia's world map keeps its Azgaar picture, and its converted data is drawn once its art is removed over MCP. Towns with art keep it.
 - **Decided 2026-11-05 (the user), after Nisia's full Azgaar export was found lost:** **EX1 is dropped from L-928.**
@@ -205,8 +227,10 @@ Settled with the user through a questionnaire (2026-10-28) and four follow-ups (
     - the squares in sight from each of those spots.
 
     Any answer that differs is listed. It matches on random maps, and catches a conversion that loses a lock or a wall.
+
   - **The grid tools write both** (`set_battle_map`, `set_map_layers`, `set_grid`): new layers replace, item for item, what the old ones made in the geometry (`relayered`), keeping the map's own items. `set_battle_map` replacing a map keeps its own geometry, which it used to drop.
   - **Applied 2026-11-05** to Nisia and The Border March: all 56 battle maps written, and the replay matched on every one (1,483 checks).
+
 - **As built (L-928, second PR, 2026-11-05): the layers dropped.**
   - **Play reads only the geometry.** `map-paths.js` `geometryOf` is a map's stored geometry and nothing else.
     - **Doors** come from the geometry through `functions/loom-canon/doors.js`: a door by id, its state for a save (the save's, else the map's, else closed), its key (`unlocks.key`), and the two squares either side of its middle, which it is opened and seen from. Hidden doors are left out.

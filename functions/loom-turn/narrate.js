@@ -9,8 +9,9 @@ const mapAreas = require('../loom-canon/map-areas');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
 const { turnStateOf, apOf } = require('../loom-models');
-const { doorStatesOf, doorSides } = require('./steps');
+const { doorStatesOf, objectStatesOf, doorSides } = require('./steps');
 const mapDoors = require('../loom-canon/doors');
+const mapObjects = require('../loom-canon/objects');
 const sight = require('../loom-canon/sight');
 const mapPaths = require('../loom-canon/map-paths');
 const { recordOf, squaresOf, peopleInSight } = require('./seen');
@@ -201,6 +202,18 @@ function doorsAfter(save, map, resolution) {
   return states;
 }
 
+// The same for objects that open (L-926): this save's states, as this leaves them.
+function objectsAfter(save, map, resolution) {
+  const states = { ...objectStatesOf(save, map.id) };
+  const prefix = 'objects.' + map.id + '.';
+  for (const m of (resolution && resolution.mutations) || []) {
+    if (m.target === 'save' && m.path.indexOf(prefix) === 0) {
+      states[m.path.slice(prefix.length)] = m.value;
+    }
+  }
+  return states;
+}
+
 /**
  * What the player sees and remembers of the battle map they stand on once
  * this resolves (planning/the-loom-movement-and-vision.md §5; L-636 / #459):
@@ -356,6 +369,24 @@ function buildMapSection(canonWorld, position, save, resolution, view) {
   if (doorsThen.length) {
     lines.push('Doors remembered' + AWAY + doorsThen.map(door).join('; ') + '.');
   }
+  // Objects there is something to do with (L-926), as they stand once this
+  // resolves: what they are and their state; what a closed one holds is
+  // never said, only once it is opened (and then in the resolution).
+  const objectStates = objectsAfter(save, map, resolution);
+  const objectLine = (o) => {
+    const state = mapObjects.stateOf(o, objectStates);
+    return (
+      mapObjects.nameOf(o) +
+      (o.description ? ', ' + o.description : '') +
+      (state ? ' (' + state + ')' : '') +
+      ((o.actions || []).length
+        ? ' [' + o.actions.map((a) => (a.name || a.id).toLowerCase()).join(', ') + ']'
+        : '')
+    );
+  };
+  const here = (o) => mapObjects.squaresOf(map, o);
+  const objectsNow = mapObjects.usableOf(map).filter((o) => here(o).some(inSight));
+  if (objectsNow.length) lines.push('Objects: ' + objectsNow.map(objectLine).join('; ') + '.');
   const exits = (map.exits || []).filter(known);
   if (exits.length) {
     lines.push('Ways out (the only ways on from here):');

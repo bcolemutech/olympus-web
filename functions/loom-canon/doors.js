@@ -14,6 +14,7 @@
  *   keyOf(door)           the inventory item that unlocks it, or null
  *   sidesOf(door)         the two squares either side of its middle, the
  *                         ones it is opened from and seen from
+ *   forPlayer(door)       the door as the page is sent it (no secrets)
  *
  * Pure.
  */
@@ -80,4 +81,17 @@ function sidesOf(door) {
   return [sq(mx - nx, my - ny), sq(mx + nx, my + ny)].sort((p, q) => p.x + p.y - (q.x + q.y));
 }
 
-module.exports = { FEET, doorsOf, doorOf, stateOf, keyOf, sidesOf };
+/**
+ * A door as the page is sent it: what it is, where it stands and its state,
+ * never what unlocks it or how hard its lock is (the page's view before
+ * L-928 carried neither).
+ */
+function forPlayer(door) {
+  const out = { ...door };
+  delete out.unlocks;
+  delete out.difficulty;
+  delete out.long;
+  return out;
+}
+
+module.exports = { FEET, doorsOf, doorOf, stateOf, keyOf, sidesOf, forPlayer };

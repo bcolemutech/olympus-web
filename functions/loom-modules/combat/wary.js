@@ -34,6 +34,7 @@
 const maps = require('../../loom-canon/maps');
 const mapAreas = require('../../loom-canon/map-areas');
 const mapDoors = require('../../loom-canon/doors');
+const mapObjects = require('../../loom-canon/objects');
 const { settingsOf } = require('./settings');
 
 const WARY = 'wary';
@@ -134,7 +135,10 @@ function validateAgainst(system, map, { challenge, triggers } = {}, where = '') 
     const ids = {
       doorOpened: mapDoors.doorsOf(map).map((d) => d.id),
       doorForced: mapDoors.doorsOf(map).map((d) => d.id),
-      featureTouched: (map.features || []).map((f) => f.id),
+      // A feature, or an object there is something to do with (L-926).
+      featureTouched: (map.features || [])
+        .map((f) => f.id)
+        .concat(mapObjects.usableOf(map).map((o) => o.id)),
       enteredArea: (map.areas || []).map((a) => a.id),
     };
     triggers.forEach((t, i) => {

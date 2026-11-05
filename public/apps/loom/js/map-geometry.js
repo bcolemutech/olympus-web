@@ -23,8 +23,14 @@
   //            segment in a wall; never walked through; seen through by its
   //            material, or open
   //   objects  [{ id, kind, at, size, turn?, height?, name?, blocksMove?,
-  //            blocksSight?, … }] — at its centre, `size` [w, h] (or one
-  //            number), turned `turn` degrees; its settings are L-926's
+  //            blocksSight?, description?, cardArt?, container?, locked?,
+  //            unlocks?, difficulty?, ap?, long?, actions? }] — at its
+  //            centre, `size` [w, h] (or one number), turned `turn` degrees;
+  //            usable (L-926): `container` { contents?, search? } holds what
+  //            it describes; `locked`, opened by `unlocks` { key?, action? }
+  //            (an item, or an object's id, or "id.action": its use
+  //            unlocks it) or picked at `difficulty`; `actions` [{ id,
+  //            name?, ap?, long?, text? }] its own (a lever's Pull)
   //   zones    [{ id, name?, shape }] — named or not (DA1b)
   //   spawns   [{ id, name?, at | shape, what?, count? }] (DA4)
   //   lights   [{ id, at, radius, dim? }] a source, or [{ id, shape, dark:
@@ -57,6 +63,9 @@
   // differ: change both.
 
   var FEET_PER_SQUARE = 5;
+  // An object's own actions (L-926): their ids, and those it has of its own.
+  var ACTION_ID = /^[a-z][a-z0-9-]{0,23}$/;
+  var RESERVED_ACTIONS = ['open', 'search', 'unlock', 'close', 'look'];
   var LISTS = [
     'ground',
     'lines',
@@ -985,6 +994,95 @@
       return p;
     }
 
+    // What an object can be used for (L-926): checked where it is, with its
+    // `unlocks` read the way a door's is.
+    function wholeNumber(v, min, max) {
+      return num(v) && Math.floor(v) === v && v >= min && v <= max;
+    }
+    function text(name, field, v, max) {
+      if (v !== undefined && !(typeof v === 'string' && v.trim() && v.length <= max)) {
+        problems.push(
+          name + ' has a ' + field + ' that isn’t text of ' + max + ' letters or fewer.'
+        );
+      }
+    }
+    function lock(name, raw) {
+      var u = raw.unlocks;
+      var ok =
+        isObject(u) &&
+        (typeof u.key === 'string' || typeof u.action === 'string') &&
+        Object.keys(u).every(function (k) {
+          return (k === 'key' || k === 'action') && typeof u[k] === 'string' && u[k];
+        });
+      if (u !== undefined && !ok)
+        problems.push(name + '.unlocks must be { key } or { action }, or both.');
+    }
+    function objectSettings(name, raw) {
+      text(name, 'name', raw.name, 80);
+      text(name, 'description', raw.description, 600);
+      if (raw.cardArt !== undefined && !isObject(raw.cardArt)) {
+        problems.push(name + ' has a cardArt that isn’t an image.');
+      }
+      if (raw.container !== undefined) {
+        var c = raw.container;
+        if (c !== true && !isObject(c)) {
+          problems.push(name + '.container must be true or { contents?, search? }.');
+        } else if (isObject(c)) {
+          text(name + '.container', 'contents', c.contents, 600);
+          if (c.search !== undefined && typeof c.search !== 'boolean') {
+            problems.push(name + '.container.search must be true or false.');
+          }
+        }
+      }
+      if (raw.locked !== undefined && typeof raw.locked !== 'boolean') {
+        problems.push(name + '.locked must be true or false.');
+      }
+      if (raw.locked === true && raw.container === undefined) {
+        problems.push(name + ' is locked but isn’t a container: there is nothing to open.');
+      }
+      lock(name, raw);
+      if (raw.difficulty !== undefined && !wholeNumber(raw.difficulty, 5, 30)) {
+        problems.push(name + ' has a lock difficulty that isn’t a whole number from 5 to 30.');
+      }
+      if (raw.ap !== undefined && !wholeNumber(raw.ap, 1, 200)) {
+        problems.push(name + ' has an ap that isn’t a whole number from 1 to 200.');
+      }
+      if (raw.long !== undefined && !(isObject(raw.long) && wholeNumber(raw.long.ap, 1, 1000))) {
+        problems.push(name + '.long must be { ap }, a whole number from 1 to 1000.');
+      }
+      if (raw.actions !== undefined) {
+        if (!Array.isArray(raw.actions) || raw.actions.length > 8) {
+          problems.push(name + '.actions must be a list of 8 or fewer.');
+        } else {
+          var made = {};
+          raw.actions.forEach(function (a, n) {
+            var an = name + '.actions[' + n + ']';
+            if (!isObject(a) || typeof a.id !== 'string' || !ACTION_ID.test(a.id)) {
+              problems.push(
+                an + ' needs an id: lower-case letters, digits and -, starting with a letter.'
+              );
+              return;
+            }
+            an = name + '.actions.' + a.id;
+            if (RESERVED_ACTIONS.indexOf(a.id) !== -1) {
+              problems.push(
+                an + ' uses an id the object has of its own (' + RESERVED_ACTIONS.join(', ') + ').'
+              );
+            } else if (has(made, a.id)) problems.push(name + ' has two actions "' + a.id + '".');
+            made[a.id] = true;
+            text(an, 'name', a.name, 40);
+            text(an, 'text', a.text, 300);
+            if (a.ap !== undefined && !wholeNumber(a.ap, 1, 200)) {
+              problems.push(an + ' has an ap that isn’t a whole number from 1 to 200.');
+            }
+            if (a.long !== undefined && !(isObject(a.long) && wholeNumber(a.long.ap, 1, 1000))) {
+              problems.push(an + '.long must be { ap }, a whole number from 1 to 1000.');
+            }
+          });
+        }
+      }
+    }
+
     LISTS.forEach(function (key) {
       (geometry[key] || []).forEach(function (raw, i) {
         if (key === 'hidden') return;
@@ -1068,6 +1166,7 @@
           if (ring && pointOf(raw.at) && !outside(pointOf(raw.at), bounds, eps)) {
             inBounds(name, ring);
           }
+          objectSettings(name, raw);
         } else if (key === 'zones') {
           if (raw.name !== undefined && typeof raw.name !== 'string')
             problems.push(name + ' has a name that isn’t text.');
@@ -1144,6 +1243,34 @@
         }
       });
       taken.push({ key: key, span: host.span, name: name });
+    });
+
+    // `unlocks.action` names an object that can be used: its id, or "id.action".
+    var usable = {};
+    (geometry.objects || []).forEach(function (o) {
+      if (isObject(o) && typeof o.id === 'string' && Array.isArray(o.actions)) {
+        usable[o.id] = o.actions.map(function (a) {
+          return a && a.id;
+        });
+      }
+    });
+    ['doors', 'objects'].forEach(function (key) {
+      (geometry[key] || []).forEach(function (raw) {
+        var u = isObject(raw) && raw.unlocks;
+        if (!u || typeof u.action !== 'string') return;
+        var parts = u.action.split('.');
+        var label = key + '.' + (raw.id || '?');
+        if (!has(usable, parts[0])) {
+          problems.push(
+            label + ' is unlocked by "' + u.action + '", which is no object with actions.'
+          );
+        } else if (
+          parts.length > 1 &&
+          (parts.length > 2 || usable[parts[0]].indexOf(parts[1]) === -1)
+        ) {
+          problems.push(label + ' is unlocked by "' + u.action + '", an action the object lacks.');
+        }
+      });
     });
 
     // Hidden things name things there are, once each.

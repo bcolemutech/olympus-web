@@ -11,12 +11,21 @@ const clock = require('../loom-canon/clock');
 const travel = require('../loom-canon/travel');
 const journeys = require('../loom-canon/journeys');
 const checks = require('../loom-canon/checks');
-const { planStep, heldBy, doorStatesOf, doorSides, hasKey, besideDoor } = require('./steps');
+const {
+  planStep,
+  heldBy,
+  doorStatesOf,
+  objectStatesOf,
+  doorSides,
+  hasKey,
+  besideDoor,
+} = require('./steps');
 const effects = require('../loom-canon/effects');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
 const sheets = require('../loom-canon/sheets');
 const mapDoors = require('../loom-canon/doors');
+const mapObjects = require('../loom-canon/objects');
 const sight = require('../loom-canon/sight');
 const ground = require('../loom-canon/ground');
 const { planTownStep, walksTown, nearestWayOut } = require('./town-steps');
@@ -1528,6 +1537,11 @@ function mapTarget(canonWorld, characterState, map, target) {
   if (spot) return { name: spot.name, squares: [spot] };
   const door = named('door:', mapDoors.doorsOf(map));
   if (door) return { name: door.name || 'the door', squares: doorSides(door), door: true };
+  // An object (L-926): the squares it covers; the player is beside it when beside any.
+  const object = named('object:', mapObjects.allOf(map));
+  if (object) {
+    return { name: mapObjects.nameOf(object), squares: mapObjects.squaresOf(map, object) };
+  }
   // Someone here (as the grid view lists them: at this place in town, or at
   // this point of interest), standing on a square.
   const person = (canonWorld.characters || {})[target];
@@ -1600,6 +1614,8 @@ function spendOf(proposedAction, characterState, canonWorld, map) {
       ? { spend: 'lock', what: 'picking the lock', long: door.long, name: door.name }
       : { spend: 'door', what: 'a door', own: door.ap, name: door.name };
   }
+  const object = map && named('object:', mapObjects.allOf(map));
+  if (object) return objectSpend(object, proposedAction, characterState, map);
   const feature = map && named('feature:', map.features);
   const long = params.long || (feature && feature.long);
   if (LOOKING.test(verb) && !long) return { spend: null };
@@ -1826,6 +1842,19 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
       canonWorld
     );
   }
+  const objectTarget = (proposedAction.targets || []).find(
+    (t) => typeof t === 'string' && t.indexOf('object:') === 0
+  );
+  // No such object: turned down by the object's own rules, spending nothing.
+  if (objectTarget && !(map && mapObjects.objectOf(map, objectTarget.slice(7)))) {
+    return evaluateObjectAttempt(
+      proposedAction,
+      objectTarget.slice(7),
+      characterState,
+      dice,
+      canonWorld
+    );
+  }
   const priced = spendOf(proposedAction, characterState, canonWorld, map);
   const paid = payFor(characterState, canonWorld, map, priced, longKey(proposedAction));
   if (paid.refused) return { ...blocked(paid.refused), plain: true };
@@ -1837,9 +1866,11 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
       ruled: true,
     };
   }
-  const resolution = doorTarget
-    ? evaluateDoorAttempt(proposedAction, doorTarget.slice(5), characterState, dice, canonWorld)
-    : evaluateGeneric(proposedAction, dice, characterState, canonWorld);
+  const resolution = objectTarget
+    ? evaluateObjectAttempt(proposedAction, objectTarget.slice(7), characterState, dice, canonWorld)
+    : doorTarget
+      ? evaluateDoorAttempt(proposedAction, doorTarget.slice(5), characterState, dice, canonWorld)
+      : evaluateGeneric(proposedAction, dice, characterState, canonWorld);
   if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return resolution;
   const fought = fightFrom(proposedAction, resolution, characterState, canonWorld);
   return {
@@ -2026,6 +2057,173 @@ function fightFrom(proposedAction, resolution, characterState, canonWorld) {
   return null;
 }
 
+// What an action at an object costs (L-926; L-832): picking a lock its lock
+// price (a long action where the object says so), anything else the price of
+// handling an object or its own, the object's or its action's.
+function objectSpend(object, proposedAction, characterState, map) {
+  const name = mapObjects.nameOf(object);
+  const what = mapObjects.intent(object, proposedAction);
+  const state = mapObjects.stateOf(object, objectStatesOf(characterState, map.id));
+  if (what && what.act === 'action') {
+    const a = what.action;
+    return {
+      spend: 'object',
+      what: 'using ' + name,
+      own: a.ap !== undefined ? a.ap : object.ap,
+      long: a.long,
+      name,
+    };
+  }
+  // Only an explicit unlock (picking or forcing) works at the lock; opening a
+  // locked object without its key is turned down (evaluateObjectAttempt).
+  if (what && what.act === 'unlock' && state === 'locked' && !hasKey(characterState, object)) {
+    return { spend: 'lock', what: 'picking the lock', long: object.long, name };
+  }
+  return { spend: 'object', what: 'handling ' + name, own: object.ap, name };
+}
+
+// The doors and objects using one of an object's actions unlocks (L-926):
+// those named by an `unlocks.action` and still locked for this save.
+function unlockedByUse(map, characterState, object, action) {
+  const doorStates = doorStatesOf(characterState, map.id);
+  const objectStates = objectStatesOf(characterState, map.id);
+  return mapObjects
+    .unlockedBy(map, object.id, action.id)
+    .filter(({ list, item }) =>
+      list === 'doors'
+        ? mapDoors.stateOf(item, doorStates) === 'locked'
+        : mapObjects.stateOf(item, objectStates) === 'locked'
+    );
+}
+
+// An action at an object beside the player (L-926 / #730): opening or
+// searching a container, which a locked one needs unlocked first (with its
+// key, or picked or forced, rolled against its lock's difficulty), or one of
+// the object's own actions, a lever's Pull, which unlocks what names it.
+function evaluateObjectAttempt(proposedAction, objectId, characterState, dice, canonWorld) {
+  const { map } = maps.positionOf(canonWorld || {}, characterState);
+  const object = map && mapObjects.objectOf(map, objectId);
+  if (!object) {
+    return {
+      outcome: 'invalid_target',
+      mutations: [],
+      constraints: ["There's no such thing here."],
+    };
+  }
+  const name = mapObjects.nameOf(object);
+  const Name = name.charAt(0).toUpperCase() + name.slice(1);
+  const what = mapObjects.intent(object, proposedAction);
+  if (!what) {
+    return {
+      outcome: 'no_op',
+      mutations: [],
+      constraints: ["There's nothing to do with " + name + ' like that.'],
+    };
+  }
+  const set = (list, id, value) => ({
+    target: 'save',
+    op: 'set-flag',
+    path: `${list}.${map.id}.${id}`,
+    value,
+  });
+  // One of its own actions: its text, and what it unlocks.
+  if (what.act === 'action') {
+    const a = what.action;
+    const unlocked = unlockedByUse(map, characterState, object, a);
+    const inSight = sight.inSight(
+      map,
+      maps.viewerOf(canonWorld, characterState),
+      doorStatesOf(characterState, map.id)
+    );
+    const seen = (u) =>
+      (u.list === 'doors' ? doorSides(u.item) : mapObjects.squaresOf(map, u.item)).some(
+        (s) => inSight[s.x + ',' + s.y]
+      );
+    const lines = [a.text || 'You ' + (a.name || a.id).toLowerCase() + ' ' + name + '.'];
+    unlocked.forEach((u) => {
+      const what = u.list === 'doors' ? u.item.name || 'a door' : mapObjects.nameOf(u.item);
+      lines.push(
+        seen(u)
+          ? what.charAt(0).toUpperCase() + what.slice(1) + ' unlocks.'
+          : 'Somewhere nearby, a lock gives way.'
+      );
+    });
+    return {
+      outcome: 'success',
+      mutations: unlocked.map((u) => set(u.list, u.item.id, 'closed')),
+      constraints: lines,
+    };
+  }
+  const state = mapObjects.stateOf(object, objectStatesOf(characterState, map.id));
+  const holds = mapObjects.contentsOf(object);
+  const told = holds ? 'It holds ' + holds + '.' : 'It is empty.';
+  const searching = what.act === 'search' || mapObjects.searches(object);
+  if (state === 'open') {
+    return {
+      outcome: 'no_op',
+      mutations: [],
+      constraints: [Name + ' is already ' + (searching ? 'searched' : 'open') + '. ' + told],
+    };
+  }
+  if (what.act === 'unlock' && state !== 'locked') {
+    return { outcome: 'no_op', mutations: [], constraints: [Name + " isn't locked."] };
+  }
+  const opened = (opening) => ({
+    outcome: 'success',
+    mutations: [set('objects', object.id, 'open')],
+    constraints: [opening, told],
+  });
+  if (state === 'closed') return opened('You ' + (searching ? 'search ' : 'open ') + name + '.');
+  // Locked: its key opens it; without, only unlocking it (picking or forcing)
+  // is tried, the rest turned down.
+  if (!hasKey(characterState, object) && what.act !== 'unlock') {
+    return blocked(Name + ' is locked.');
+  }
+  if (hasKey(characterState, object)) {
+    return opened(
+      'You unlock ' +
+        name +
+        ' with ' +
+        mapObjects.keyOf(object) +
+        ' and ' +
+        (searching ? 'search it.' : 'open it.')
+    );
+  }
+  const system = checks.systemOf(canonWorld);
+  const proposed = (proposedAction.params && proposedAction.params.check) || null;
+  const names = proposed && (proposed.skill || proposed.attribute);
+  const check =
+    names && !checks.refusal(system, { ...proposed, rung: undefined })
+      ? { skill: proposed.skill, attribute: proposed.attribute }
+      : system.checks.lock || {};
+  const lock = checks.rollCheck(system, {
+    check,
+    character: characterState.character || null,
+    difficulty: checks.canonRung(
+      system,
+      object.difficulty !== undefined && object.difficulty !== null
+        ? object.difficulty
+        : DEFAULT_LOCK_DIFFICULTY
+    ),
+    dice,
+  });
+  const roll = rolled(lock, 'the lock on ' + name, system);
+  if (roll.success) {
+    return {
+      outcome: 'success',
+      roll,
+      mutations: [set('objects', object.id, 'closed')],
+      constraints: ['The lock gives way: ' + name + ' is unlocked.'],
+    };
+  }
+  return {
+    outcome: 'failure',
+    roll,
+    mutations: [],
+    constraints: ['The lock on ' + name + ' holds.'],
+  };
+}
+
 // A typed attempt at a door beside the player (L-626 / #451): with its key, a
 // locked door unlocks and opens; picked or forced, it's rolled against the
 // lock's difficulty, and unlocked (for this save) on a success. An unlocked
@@ -2163,6 +2361,10 @@ function eventsOf(proposedAction, resolution, characterState, canonWorld) {
   for (const t of proposedAction.targets || []) {
     if (typeof t === 'string' && t.indexOf('feature:') === 0) {
       events.push({ on: 'featureTouched', target: t.slice(8) });
+    }
+    // An object touched counts the same (L-926): a trigger may name either.
+    if (typeof t === 'string' && t.indexOf('object:') === 0) {
+      events.push({ on: 'featureTouched', target: t.slice(7) });
     }
   }
   if (resolution.walked) events.push(...combat.wary.walkEvents(map, cell, resolution.walked));

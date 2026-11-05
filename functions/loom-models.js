@@ -300,6 +300,9 @@ function validDoors(doors) {
   );
 }
 
+// The same for objects that open (L-926): { [mapId]: { [objectId]: state } }.
+const validObjects = validDoors;
+
 function validateSave(data) {
   const errors = [];
   if (!data || typeof data !== 'object') return { valid: false, errors: ['not an object'] };
@@ -415,6 +418,10 @@ function validateSave(data) {
   // The save's doors on battle maps (L-624): { [mapId]: { [doorId]: state } }.
   if (data.doors !== undefined && !validDoors(data.doors)) {
     errors.push("doors must be { mapId: { doorId: 'open' | 'closed' | 'locked' } }");
+  }
+  // The save's objects on battle maps (L-926): containers opened, locks undone.
+  if (data.objects !== undefined && !validObjects(data.objects)) {
+    errors.push("objects must be { mapId: { objectId: 'open' | 'closed' | 'locked' } }");
   }
   // The save's turn (L-611); older saves have none and start a fresh one.
   if (data.turn !== undefined) {
@@ -545,6 +552,8 @@ function makeSave(fields) {
     time: fields.time === undefined ? clock.START : fields.time, // Day 1, 08:00 (L-371)
     // Doors this save has opened, closed or unlocked on battle maps (L-624).
     ...(fields.doors !== undefined ? { doors: fields.doors } : {}),
+    // Objects this save has opened, searched or unlocked (L-926).
+    ...(fields.objects !== undefined ? { objects: fields.objects } : {}),
     // The foes and story moments it has been paid experience for (L-841,
     // L-842; advancement XP3): ids, each paid once. None yet reads as [].
     ...(fields.earned ? { earned: fields.earned } : {}),
