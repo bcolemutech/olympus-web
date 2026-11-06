@@ -9,6 +9,7 @@ const { writeTools } = require('./write-tools');
 const { townTools } = require('./town-tools');
 const { mapTools } = require('./map-tools');
 const { levelTools } = require('./level-tools');
+const { patchTools } = require('./patch-tools');
 const { studioTools } = require('./studio-tools');
 const { materialTools } = require('./material-tools');
 const { systemTools } = require('./system-tools');
@@ -770,6 +771,7 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
       ...townTools({ writer }),
       ...mapTools({ writer }),
       ...levelTools({ writer, worldFor }),
+      ...patchTools({ writer, worldFor }),
       // Materials and the object catalog (L-925): list them, give a world's own art.
       ...materialTools({ studio, writer, worldFor }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
