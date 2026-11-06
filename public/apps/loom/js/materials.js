@@ -32,9 +32,25 @@
   var ART_BASE = '/apps/loom/art/';
   var KINDS = ['ground', 'line', 'wall', 'door', 'window'];
   var FALLBACK_ART = 'objects/unknown.svg';
+  // Art made as pictures (with the image studio; planning/art-spike.md §5.4)
+  // rather than drawn by scripts/build-art.js: its path, without the
+  // extension, listed here when its file is a PNG, with how many tiles a
+  // ground picture spans (a 15 ft picture of flagstones spans 3; strips and
+  // objects 1). Everything else is SVG, a ground tile spanning 1. The painter
+  // scales each picture by its own size, so a PNG can be sharper than 64 px.
+  var PNG_ART = {};
+
+  function artFile(base) {
+    return base + (PNG_ART[base] ? '.png' : '.svg');
+  }
+
+  function spanOf(base) {
+    return PNG_ART[base] || 1;
+  }
 
   function m(kind, id, name, flags) {
-    var out = { kind: kind, id: id, name: name, art: 'materials/' + kind + '-' + id + '.svg' };
+    var base = 'materials/' + kind + '-' + id;
+    var out = { kind: kind, id: id, name: name, art: artFile(base), span: spanOf(base) };
     if (flags)
       Object.keys(flags).forEach(function (k) {
         out[k] = flags[k];
@@ -119,7 +135,7 @@
   ];
 
   function o(id, name, group, size, flags) {
-    var out = { id: id, name: name, group: group, size: size, art: 'objects/' + id + '.svg' };
+    var out = { id: id, name: name, group: group, size: size, art: artFile('objects/' + id) };
     if (flags)
       Object.keys(flags).forEach(function (k) {
         out[k] = flags[k];

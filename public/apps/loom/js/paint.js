@@ -117,6 +117,11 @@
     return glow;
   }
 
+  function spanOfMaterial(kind, id) {
+    var m = mat.materialOf(kind, id);
+    return (m && m.span) || 1;
+  }
+
   function materialUrl(kind, id) {
     var m = mat.materialOf(kind, id);
     return m ? mat.artUrl(m.art) : null;
@@ -181,8 +186,12 @@
     var uy = dy / len;
     s.position.set(a.x - ux * ext, a.y - uy * ext);
     s.rotation = Math.atan2(dy, dx);
-    var sy = thick / STRIP_PX.h;
-    s.tileScale.set(fit ? (len + 2 * ext) / STRIP_PX.w : sy, sy);
+    // Scaled by the picture's own size, so art sharper than 64 × 16 (a
+    // studio-made PNG) draws the same size as the SVG it replaces.
+    var h = texture.height || STRIP_PX.h;
+    var w = texture.width || STRIP_PX.w;
+    var sy = thick / h;
+    s.tileScale.set(fit ? (len + 2 * ext) / w : sy, sy);
     return s;
   }
 
@@ -233,6 +242,7 @@
         var read = geo.ringsOf(item.shape);
         if (!read.rings) return;
         var url = materialUrl('ground', item.material);
+        var span = spanOfMaterial('ground', item.material);
         add('ground', 'ground', item, i, [url], function () {
           var gfx = new PIXI.Graphics();
           var texture = loaded(url);
@@ -240,7 +250,9 @@
             ? (function () {
                 var pattern = new PIXI.FillPattern(texture, 'repeat');
                 var m = new PIXI.Matrix();
-                m.scale(tile / TILE_PX, tile / TILE_PX);
+                // A picture spans `span` tiles, whatever its pixel size.
+                var px = (texture.width || TILE_PX) / span;
+                m.scale(tile / px, tile / px);
                 pattern.setTransform(m);
                 return { fill: pattern };
               })()
