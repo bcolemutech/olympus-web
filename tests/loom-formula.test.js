@@ -325,6 +325,7 @@ describe('a system’s formulas, checked on save', () => {
     const s = fantasy();
     s.sheet.skills = s.sheet.skills.filter((k) => k.attribute !== 'WIS');
     s.modules = {}; // its combat settings notice with Perception, a WIS skill
+    delete s.checks.notice; // and so does its noticing check (L-927)
     s.checks.formula = '2d6 + modifier';
     expect(validateSystem(s).warnings).toEqual([
       "Attribute WIS isn't used by any skill or formula.",

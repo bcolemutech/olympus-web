@@ -1744,6 +1744,48 @@ describe('figures, tactics and danger (L-824)', () => {
     ).toMatch(/combatNotes/);
   });
 
+  test('a place’s encounters table (L-927): checked against the stat blocks, read back, removed', async () => {
+    const WOLF = {
+      id: 'wolf',
+      name: 'Wolf',
+      statBlock: { attributes: { STR: 12, DEX: 14, CON: 12, INT: 3, WIS: 12, CHA: 6 } },
+    };
+    await ok('set_stat_block', { worldId: W, blocks: [WOLF] });
+    const rows = [{ what: 'wolf', count: 3, weight: 2 }];
+    const set = await ok('update_location', { worldId: W, locationId: 'poi_1', encounters: rows });
+    expect(set.updated).toContain('encounters');
+    expect((await ok('get_location', { worldId: W, locationId: 'poi_1' })).encounters).toEqual(rows);
+    // A stat block the world doesn't have, and a count out of range, are refused with reasons.
+    expect(
+      await refused('update_location', {
+        worldId: W,
+        locationId: 'poi_1',
+        encounters: [{ what: 'dragon' }],
+      })
+    ).toMatch(/"dragon" isn't one of the world's stat blocks/);
+    expect(
+      await refused('update_location', {
+        worldId: W,
+        locationId: 'poi_1',
+        encounters: [{ what: 'wolf', count: 0 }],
+      })
+    ).toMatch(/count/);
+    // A place in town takes one too; [] removes it.
+    await ok('update_place', {
+      worldId: W,
+      placeId: 'plc_1_the-gull-anchor',
+      encounters: [{ what: 'wolf' }],
+    });
+    const town = await ok('get_town', { worldId: W, locationId: 'loc_1' });
+    expect(town.places.find((p) => p.id === 'plc_1_the-gull-anchor').encounters).toEqual([
+      { what: 'wolf' },
+    ]);
+    await ok('update_location', { worldId: W, locationId: 'poi_1', encounters: [] });
+    expect(
+      (await ok('get_location', { worldId: W, locationId: 'poi_1' })).encounters
+    ).toBeUndefined();
+  });
+
   test('a place in town takes a danger too', async () => {
     const result = await ok('update_place', {
       worldId: W,

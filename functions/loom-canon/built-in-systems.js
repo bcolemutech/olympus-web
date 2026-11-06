@@ -135,6 +135,8 @@ const FANTASY = {
     },
     // Picking a lock (L-626 locks): Thievery, by Dexterity.
     lock: { skill: 'Thievery' },
+    // Noticing what is hidden (L-927): Perception, by Wisdom.
+    notice: { skill: 'Perception' },
     ladder: [
       { name: 'Easy', value: 10 },
       { name: 'Moderate', value: 13 },
@@ -385,6 +387,8 @@ const SCIFI = {
     },
     // Getting through a lock: Tech, by Mind.
     lock: { skill: 'Tech' },
+    // Noticing what is hidden (L-927): Notice, by Mind.
+    notice: { skill: 'Notice' },
     // Successes needed.
     ladder: [
       { name: 'Easy', value: 1 },

@@ -159,7 +159,7 @@ function tierSection(canonWorld) {
     `- "standard" (${t.standard} AP): most things: searching a chest, persuading ` +
     'someone, climbing onto a table, forcing a stuck window.\n' +
     `- "major" (${t.major} AP): a whole turn's effort: barricading a door, binding a ` +
-    'wound properly, hauling someone up a wall, searching a whole room.\n' +
+    'wound properly, hauling someone up a wall, setting a snare.\n' +
     'When unsure, "standard".\n\n'
   );
 }
@@ -203,7 +203,11 @@ function attacksSection(canonWorld, save) {
     // Objects (L-926): the rules open, search, unlock and work them.
     'An object in the known-entities list ("object:<id>") is opened ("open"), searched ' +
     '("search"), unlocked or its lock picked or forced ("unlock"), or worked ("use", or its ' +
-    'own verb) with that id as the target; the rules roll any lock, so never add a check.\n\n'
+    'own verb) with that id as the target; the rules roll any lock, so never add a check. ' +
+    // Hidden things (L-927): the rules roll the noticing check and price it.
+    'Searching the room or the area for what is hidden (a secret door, a trap) with no ' +
+    'object named is "search" with no targets; the rules roll the check and price it, so ' +
+    'never add a check or a tier to it.\n\n'
   );
 }
 

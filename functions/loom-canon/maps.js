@@ -37,6 +37,7 @@ const town = require('./town');
 const geo = require('./map-geometry');
 const materials = require('./materials');
 const mapPaths = require('./map-paths');
+const secrets = require('./secrets');
 
 const MAX_SIDE = 64;
 
@@ -96,8 +97,10 @@ function entryCell(map, entryId) {
  * on its own (an arrival, a fall, a save from before) reads as its centre.
  */
 function positionOf(world, save) {
-  const map = save && save.mapId && (world.battleMaps || {})[save.mapId];
-  if (!map) return { map: null, cell: null, point: null };
+  const stored = save && save.mapId && (world.battleMaps || {})[save.mapId];
+  if (!stored) return { map: null, cell: null, point: null };
+  // As this save sees it (L-927): what it has found is no longer hidden.
+  const map = secrets.reveal(stored, save);
   const cell = inBounds(map, save.cell) ? save.cell : entryCell(map);
   return { map, cell, point: pointIn(cell, save.gridPoint) };
 }

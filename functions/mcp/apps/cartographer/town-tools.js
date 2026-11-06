@@ -7,7 +7,7 @@ const { normalizeName } = require('../../../loom-turn/interpret');
 const town = require('../../../loom-canon/town');
 const ground = require('../../../loom-canon/ground');
 const { SOURCES } = require('../../../cartographer/sources');
-const { worldId, entityId } = require('./schemas');
+const { worldId, entityId, encounters } = require('./schemas');
 const views = require('./views');
 const { helpers } = require('./write-tools');
 
@@ -31,7 +31,17 @@ const { helpers } = require('./write-tools');
 // layoutReport): what still keeps the layout from working, if anything.
 // Removing places is retire_entity (type 'place'), in write-tools.js.
 
-const { existing, live, checkName, newId, describe, changedFields, requireSome, placeIn } = helpers;
+const {
+  existing,
+  live,
+  checkName,
+  newId,
+  describe,
+  changedFields,
+  requireSome,
+  placeIn,
+  encounterFields,
+} = helpers;
 const ROUTES = ['road', 'trail', 'sea'];
 const MAX_LINKS = 12;
 const TOWN_SPAN = 1000;
@@ -300,7 +310,8 @@ function townTools({ writer }) {
       description:
         'Change a place in town: its name, kind, description, whether it is a way in and out ' +
         '(entranceFor; null makes it an ordinary place), its rules (requiresAbility, null ' +
-        'removes it), its position, or its danger (none, low, high). Setting a description, ' +
+        'removes it), its position, its danger (none, low, high), or its encounters (the table ' +
+        'its map’s generic spawns are filled from when a rest is broken). Setting a description, ' +
         'even the current text, marks it ' +
         'written up. A town keeps at least one way in and out. ' +
         editNote,
@@ -334,6 +345,7 @@ function townTools({ writer }) {
             'How dangerous it is (L-824): a dangerous place is graded on having hostile figures ' +
               'or characters placed there; none is the default.'
           ),
+        encounters: encounters.optional(),
       },
       annotations: replacing,
       handler: (ctx, args) => {
@@ -345,6 +357,7 @@ function townTools({ writer }) {
           'rules',
           'position',
           'danger',
+          'encounters',
         ]);
         return edit(ctx, args, (e) => {
           const { world } = e;
@@ -377,6 +390,7 @@ function townTools({ writer }) {
           if (args.danger !== undefined && args.danger !== (place.danger || 'none')) {
             fields.danger = args.danger === 'none' ? FieldValue.delete() : args.danger;
           }
+          Object.assign(fields, encounterFields(world, place, args.encounters));
           if (args.position === null && place.position) fields.position = FieldValue.delete();
           else if (args.position) fields.position = args.position;
           if (Object.keys(fields).length) e.update(e.ref('places', place.id), fields);

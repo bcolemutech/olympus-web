@@ -1607,6 +1607,17 @@
         item('Stand up', 'ends lying down', 'stand', null, 'stand up', actionCost('standUp'))
       );
     }
+    // Search what is in sight for what is hidden (L-927): a secret door, a trap.
+    items.push(
+      item(
+        'Search',
+        'for what is hidden in sight',
+        'search',
+        null,
+        'search the area',
+        actionCost('search')
+      )
+    );
     if (!fight) return items;
     items.push(
       item(

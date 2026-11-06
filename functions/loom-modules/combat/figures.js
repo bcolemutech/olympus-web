@@ -223,6 +223,15 @@ function validateFigures(world, system, map, list) {
 }
 
 /**
+ * The groups a save has had spawned on a map (L-927; ./spawns.js), from
+ * `save.spawned[mapId]`: figures of the save's, shaped like `place_figures`'.
+ */
+function spawnedOn(save, mapId) {
+  const list = save && isObject(save.spawned) ? save.spawned[mapId] : null;
+  return Array.isArray(list) ? list.filter(isObject) : [];
+}
+
+/**
  * The world as a save sees it (L-824): the figures on the map it stands on,
  * standing at its place as characters do (with their side, role, posture and
  * sheet), and every fighter where the save has them: moved (`cell`), or gone
@@ -265,7 +274,8 @@ function withFigures(world, save) {
   for (const [id, c] of Object.entries(world.characters || {})) characters[id] = place(c);
   if (onMap) {
     const isPlace = Boolean((world.places || {})[host.id]);
-    for (const group of map.figures || []) {
+    // Those placed on the map, and those this save's events have spawned there (L-927).
+    for (const group of (map.figures || []).concat(spawnedOn(save, map.id))) {
       for (const f of instancesOf(system, group, world)) {
         if (characters[f.id]) continue; // a character of that id wins
         characters[f.id] = place({
@@ -293,5 +303,6 @@ module.exports = {
   validateTactics,
   validateFigures,
   placeAuto,
+  spawnedOn,
   withFigures,
 };

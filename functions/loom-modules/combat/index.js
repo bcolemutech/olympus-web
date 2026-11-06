@@ -15,6 +15,7 @@
  *   ./attack-turn.js  the player's attack as a turn, for ADJUDICATE
  *   ./figures.js   figures placed from stat blocks, roles and postures, and
  *                  the world as a save sees it (withFigures)
+ *   ./spawns.js    a map's spawns, filled by events with figures (L-927)
  *   ./tactics.js   an unnamed fighter's turn by role and posture (pure)
  *   ./others.js    everyone else's turns, morale, the player falling
  *   ./down.js      what 0 means: dying saves, wounds, out; coming round,
@@ -36,6 +37,7 @@ module.exports = {
   strike: require('./strike'),
   attackTurn: require('./attack-turn'),
   figures: require('./figures'),
+  spawns: require('./spawns'),
   wary: require('./wary'),
   tactics: require('./tactics'),
   others: require('./others'),

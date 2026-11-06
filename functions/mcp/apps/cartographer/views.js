@@ -376,6 +376,10 @@ function locationDetail(world, location) {
   if (geo.kind !== 'settlement') result.battleMap = mapRef(world, location);
   // How dangerous it is (L-824).
   if (geo.kind !== 'settlement') result.danger = location.danger || 'none';
+  // What a generic spawn on its map is filled from when a rest is broken (L-927).
+  if (geo.kind !== 'settlement' && (location.encounters || []).length) {
+    result.encounters = location.encounters;
+  }
   // What Azgaar says about a town: the seeds for its layout (L-341).
   if (geo.seeds) result.seeds = geo.seeds;
   // Its town layout, if it has one (L-342, L-343): see get_town for the rest.
@@ -563,6 +567,7 @@ function townDetail(world, settlement, { groundShapes = false } = {}) {
           : {}),
         // How dangerous it is (L-824).
         danger: place.danger || 'none',
+        ...((place.encounters || []).length ? { encounters: place.encounters } : {}),
         grade: graded.grade,
         band: graded.band,
         score: graded.score,

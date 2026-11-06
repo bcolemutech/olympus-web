@@ -556,6 +556,9 @@ function requireLoomAuth(request) {
  *       object's own action (open, search, unlock, or one of its own; L-926),
  *       rolled and priced by the rules, narrated; { verb: 'look', object }
  *       asks what's there, as for a square or a door
+ *    or { worldId, saveId, action: { verb: 'search' } } — searches the area
+ *       for what is hidden (L-927): the noticing check rolled for everything
+ *       in sight not yet found, at the standard AP price; no model reads it
  * A walk in town is worked out without the model too, and returns step:
  * { townPoint, ap, plan, lines } (plus `entered`, and `turns` for
  * walk-there).
@@ -591,7 +594,11 @@ exports.loomPlayTurn = onCall(async (request) => {
     const hasPoint = action.point !== undefined;
     const bare =
       typeof action === 'object' &&
-      (action.verb === 'end-turn' || action.verb === 'continue' || action.verb === 'confirm');
+      (action.verb === 'end-turn' ||
+        action.verb === 'continue' ||
+        action.verb === 'confirm' ||
+        // Search the area for what is hidden (L-927), chosen on your own square.
+        action.verb === 'search');
     // One of the GM's suggestions, chosen (#673): its text, and its verb and
     // target when it named them.
     const suggestion =
@@ -763,7 +770,8 @@ exports.loomPlayTurn = onCall(async (request) => {
                                 }
                               : action.verb === 'end-turn' ||
                                   action.verb === 'continue' ||
-                                  action.verb === 'confirm'
+                                  action.verb === 'confirm' ||
+                                  action.verb === 'search'
                                 ? { verb: action.verb }
                                 : action.point !== undefined
                                   ? {

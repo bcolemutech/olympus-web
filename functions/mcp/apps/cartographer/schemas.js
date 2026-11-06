@@ -60,4 +60,31 @@ const triggers = z
   .max(MAX_TRIGGERS)
   .describe('What turns them (L-392): each { on, target?, then }.');
 
-module.exports = { worldId, entityId, systemId, challenge, triggers };
+// A place's table of encounters (L-927; loom-modules/combat/spawns.js): what a
+// generic spawn is filled with when an event (a broken rest) fills the map.
+const encounters = z
+  .array(
+    z.strictObject({
+      what: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9-]{0,39}$/)
+        .describe('A stat block of the world (list_stat_blocks): "wolf".'),
+      count: z.number().int().min(1).max(20).optional().describe('How many (1 by default).'),
+      weight: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('How likely this row is against the others (1 by default).'),
+    })
+  )
+  .max(20)
+  .describe(
+    'Rows of { what, count?, weight? }: a spawn on this place’s map that names no one ' +
+      '(a generic one) is filled with a row chosen by weight each time an event fills the map ' +
+      '(a rest broken somewhere dangerous), so the same map brings different figures. ' +
+      '[] removes the table.'
+  );
+
+module.exports = { worldId, entityId, systemId, challenge, triggers, encounters };

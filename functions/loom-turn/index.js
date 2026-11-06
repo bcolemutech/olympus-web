@@ -35,6 +35,7 @@ const frames = require('../loom-canon/frames');
 const levelRules = require('../loom-modules/advancement/level-up');
 const levelUps = require('./level-up');
 const { FieldValue } = require('firebase-admin/firestore');
+const noticing = require('./noticing');
 
 /**
  * Thrown by pipeline stages to signal a specific HttpsError code the
@@ -349,6 +350,21 @@ async function runTurnPipeline(params) {
             : []),
         ]);
         const sides = Object.fromEntries(turned.map((t) => ['sides.' + t.id, t.side]));
+        // Hidden things now in sight get their passive check, once (L-927).
+        const noticed = noticing.passive(
+          canonWorld,
+          {
+            ...fresh,
+            cell: planned.cell,
+            gridPoint: planned.door ? fresh.gridPoint || null : planned.point || null,
+            doors,
+          },
+          rollDie
+        );
+        const secrets = Object.fromEntries(noticed.mutations.map((m) => [m.path, m.value]));
+        if (noticed.lines.length) {
+          planned = { ...planned, lines: (planned.lines || []).concat(noticed.lines) };
+        }
         const sided = combat.wary.withTurned({ ...fresh, cell: planned.cell, doors }, turned);
         const joined = turned.length
           ? combat.play.joinFight(
@@ -373,6 +389,7 @@ async function runTurnPipeline(params) {
             ...struck,
             ...(joined ? { fight: joined.mutations[0].value } : {}),
             ...sides,
+            ...secrets,
             cell: planned.cell,
             // Where in it, in feet (L-922): a door opened or shut keeps it.
             gridPoint: planned.door ? fresh.gridPoint || null : planned.point || null,
@@ -532,6 +549,11 @@ async function runTurnPipeline(params) {
           : [],
       params: action.attack ? { attack: String(action.attack) } : {},
     };
+  } else if (action && action.verb === 'search') {
+    // Search the area for what is hidden (L-927): no model reads it. Pricing
+    // and the check are the rules' (../loom-turn/adjudicate.js evaluateSearch).
+    actionText = 'search the area';
+    proposedAction = { verb: 'search', targets: [], params: {} };
   } else if (action && action.verb === 'object') {
     // An object's action chosen from its menu (L-926): no model reads it.
     const here = maps.positionOf(canonWorld, save).map;

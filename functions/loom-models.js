@@ -303,6 +303,25 @@ function validDoors(doors) {
 // The same for objects that open (L-926): { [mapId]: { [objectId]: state } }.
 const validObjects = validDoors;
 
+// Groups of figures a save's events have spawned (L-927): { [mapId]: [group] }.
+function validSpawned(spawned) {
+  return (
+    isPlainObject(spawned) &&
+    Object.values(spawned).every((list) => Array.isArray(list) && list.every(isPlainObject))
+  );
+}
+
+// What a save has found of hidden things (L-927): { [mapId]: { [key]: 'found' | 'missed' } }.
+function validSecrets(secrets) {
+  return (
+    isPlainObject(secrets) &&
+    Object.values(secrets).every(
+      (byKey) =>
+        isPlainObject(byKey) && Object.values(byKey).every((s) => s === 'found' || s === 'missed')
+    )
+  );
+}
+
 function validateSave(data) {
   const errors = [];
   if (!data || typeof data !== 'object') return { valid: false, errors: ['not an object'] };
@@ -422,6 +441,14 @@ function validateSave(data) {
   // The save's objects on battle maps (L-926): containers opened, locks undone.
   if (data.objects !== undefined && !validObjects(data.objects)) {
     errors.push("objects must be { mapId: { objectId: 'open' | 'closed' | 'locked' } }");
+  }
+  // Figures its events have spawned on battle maps (L-927).
+  if (data.spawned !== undefined && !validSpawned(data.spawned)) {
+    errors.push('spawned must be { mapId: [group] }');
+  }
+  // What it has found of hidden things on battle maps (L-927).
+  if (data.secrets !== undefined && !validSecrets(data.secrets)) {
+    errors.push("secrets must be { mapId: { thingId: 'found' | 'missed' } }");
   }
   // The save's turn (L-611); older saves have none and start a fresh one.
   if (data.turn !== undefined) {
@@ -554,6 +581,10 @@ function makeSave(fields) {
     ...(fields.doors !== undefined ? { doors: fields.doors } : {}),
     // Objects this save has opened, searched or unlocked (L-926).
     ...(fields.objects !== undefined ? { objects: fields.objects } : {}),
+    // Hidden things it has found, or missed the passive check for (L-927).
+    ...(fields.secrets !== undefined ? { secrets: fields.secrets } : {}),
+    // Figures its events have spawned (L-927).
+    ...(fields.spawned !== undefined ? { spawned: fields.spawned } : {}),
     // The foes and story moments it has been paid experience for (L-841,
     // L-842; advancement XP3): ids, each paid once. None yet reads as [].
     ...(fields.earned ? { earned: fields.earned } : {}),
