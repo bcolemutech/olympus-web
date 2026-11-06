@@ -77,15 +77,16 @@ const HOW_TO = {
   battleMap:
     'Give it a battle map: draw one with set_battle_map, or pick a generic one from ' +
     'list_battle_maps, then assign_battle_map. A generic map opens a place; only its own ' +
-    'map, with walls, doors or obstacles, counts in full toward its score.',
+    'map, drawn (floors and walls, or art), counts in full toward its score.',
   ground:
     'Give the town its ground: set_town_ground, with its buildings, water, walls and ' +
     'crossings (bridges and fords) in the town’s 0–1000 square, lined up with its art. ' +
     'Doors (place positions) must be on open ground and walkable from a way in; get_town ' +
     'shows what is wrong.',
-  layers:
-    'Give its battle map walls, doors and obstacles: set_map_layers (or with the grid, ' +
-    'set_battle_map). Check them against the art with view_image.',
+  drawn:
+    'Draw its battle map from data: floors with set_ground and walls with set_walls (doors, ' +
+    'windows and objects go in them: set_doors, set_windows, set_objects), or give it art. ' +
+    'It is drawn when it has art, or both floors and walls. Check it with view_image.',
   townArt:
     'Give the town art: a town image from the studio’s library, with studio_assign (target ' +
     'town), or upload it on the Cartographer page. Check it with view_image.',
@@ -168,7 +169,7 @@ const gateNeeds = (checklist) =>
 function mapInfo(world, entity) {
   const status = maps.kindOf(world, entity) || 'none';
   if (status !== 'own') return { battleMap: status };
-  return { battleMap: 'own', layers: layerGeometry.hasShapes(maps.mapOf(world, entity)) };
+  return { battleMap: 'own', drawn: layerGeometry.drawnOf(maps.mapOf(world, entity)) };
 }
 
 // Closed places: on the map, and in towns.
@@ -324,7 +325,7 @@ function scoreGroups(
     if (band && graded.band !== band) continue;
     for (const criterion of graded.criteria || []) {
       if (criterion.met) continue;
-      if (need && criterion.need !== need && !(need === 'battleMap' && criterion.need === 'layers'))
+      if (need && criterion.need !== need && !(need === 'battleMap' && criterion.need === 'drawn'))
         continue;
       const missingWeight = criterion.weight * (1 - criterion.progress);
       // The same work with the same tool: realms and regions apart, say.

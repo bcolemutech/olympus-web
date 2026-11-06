@@ -712,6 +712,8 @@ function battleMapRow(world, map) {
     // Walls, doors or obstacles (L-622), in its geometry since L-928: what a
     // place's own map needs to count in full toward its score.
     hasLayers: layerGeometry.hasShapes(map),
+    // How much of it is drawn from its data (PL2; L-929): full, part or none.
+    drawn: layerGeometry.drawnOf(map),
     usedBy: usersOf(world, map.id).length,
     ...(map.retired ? { retired: true } : {}),
   };

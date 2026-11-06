@@ -25,6 +25,9 @@
  *                           obstacles }`, each one given replacing that one):
  *                           the grid tools' shortcut
  *   hasShapes(map)          whether a map's geometry has anything to play on
+ *   drawnOf(map)            how much of it is drawn from its data (PL2):
+ *                           'full' with floors and walls, 'part' with one,
+ *                           'none' with neither
  *
  * Every id is kept: doors keep theirs, so a save's door states and wary
  * triggers on them still find them. Features, entries, exits, areas, hazards
@@ -214,6 +217,19 @@ function hasShapes(map) {
   );
 }
 
+/**
+ * How much of a grid is drawn from its data (planning/maps-from-data.md PL2;
+ * L-929): enough to draw it is floors (ground) and walls; one alone is part of
+ * it. Doors and windows stand in walls and objects stand on floors, so they
+ * add nothing without them. Art is counted by the grading, not here.
+ */
+function drawnOf(map) {
+  const g = map && isObject(map.geometry) ? map.geometry : {};
+  const floors = (g.ground || []).length > 0;
+  const walls = (g.walls || []).length > 0;
+  return floors && walls ? 'full' : floors || walls ? 'part' : 'none';
+}
+
 module.exports = {
   LAYERS,
   stable,
@@ -224,4 +240,5 @@ module.exports = {
   layersOf,
   withLayers,
   hasShapes,
+  drawnOf,
 };

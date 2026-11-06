@@ -526,3 +526,76 @@ describe('a save keeps what it has seen of a map', () => {
     expect(await held()).toEqual({});
   });
 });
+
+describe('view_image draws the geometry as it was built', () => {
+  const view = (args) => call('view_image', { worldId: W, ...args });
+  const legendOf = (result) => result.structuredContent;
+
+  test('a grid: numbered with the ids to patch each by, its geometry counted', async () => {
+    const result = await view({ of: 'battleMap', id: M });
+    expect(result.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+    const legend = legendOf(result);
+    expect(legend.geometry).toMatchObject({ ground: 2, walls: 3, doors: 1, windows: 1 });
+    const types = legend.markers.map((m) => `${m.type}:${m.id}`);
+    expect(types).toEqual(expect.arrayContaining(['door:gate', 'object:chest', 'object:lever']));
+    expect(legend.markers.find((m) => m.id === 'chest')).toMatchObject({
+      type: 'object',
+      kind: 'chest',
+      usable: true,
+    });
+    expect(legend.options).toEqual({ heights: true, hidden: true });
+    expect(legend.reading).toMatch(/get_geometry/);
+  });
+
+  test('without what is hidden, as players see it; heights off', async () => {
+    await ok('set_hidden', { worldId: W, mapId: M, set: [{ id: 'chest', dc: 'Hard' }] });
+    const mine = legendOf(await view({ of: 'battleMap', id: M }));
+    expect(mine.markers.find((m) => m.type === 'hidden')).toMatchObject({
+      id: 'chest',
+      dc: 'Hard',
+    });
+    const players = legendOf(await view({ of: 'battleMap', id: M, hidden: false, heights: false }));
+    expect(players.markers.find((m) => m.type === 'hidden')).toBeUndefined();
+    expect(players.markers.find((m) => m.id === 'chest')).toBeUndefined();
+    expect(players.options).toEqual({ heights: false, hidden: false });
+    await ok('set_hidden', { worldId: W, mapId: M, remove: ['chest'] });
+  });
+
+  test('fog from a point in feet, as sightFrom does from an entry', async () => {
+    const fogged = legendOf(await view({ of: 'battleMap', id: M, from: { x: 7.5, y: 32.5 } }));
+    expect(fogged.sight.from).toBe('7.5, 32.5 ft');
+    expect(fogged.sight.squaresSeen).toBeGreaterThan(0);
+    expect(fogged.sight.squaresSeen).toBeLessThan(12 * 8);
+    expect(
+      await refused('view_image', { worldId: W, of: 'battleMap', id: M, from: { x: 500, y: 5 } })
+    ).toMatch(/320|off The crypt/);
+    expect(
+      await refused('view_image', { worldId: W, of: 'battleMap', id: M, from: { x: 300, y: 5 } })
+    ).toMatch(/off The crypt's 12 × 8 grid/);
+    expect(
+      await refused('view_image', {
+        worldId: W,
+        of: 'battleMap',
+        id: M,
+        sightFrom: 'in',
+        from: { x: 5, y: 5 },
+      })
+    ).toMatch(/sightFrom \(an entry\) or from \(a point\), not both/);
+  });
+
+  test('of map: a region map in its own units; a grid as a battle map; anything else refused', async () => {
+    const region = await view({ of: 'map', id: 'map_world' });
+    expect(region.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+    expect(legendOf(region)).toMatchObject({
+      of: 'map',
+      kind: 'region',
+      geometry: { ground: 1 },
+    });
+    const grid = await view({ of: 'map', id: M });
+    expect(legendOf(grid)).toMatchObject({ of: 'battleMap', id: M });
+    expect(await refused('view_image', { worldId: W, of: 'map', id: 'map_nowhere' })).toMatch(
+      /is no grid, or region or area map made with add_map/
+    );
+    expect(await refused('view_image', { worldId: W, of: 'map' })).toMatch(/Give the/);
+  });
+});

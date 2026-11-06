@@ -170,33 +170,29 @@ describe('battle-map layers (L-623)', () => {
   test.each([
     ['plain ground', null],
     ['art', 'art'],
-  ])(
-    'on %s: walls white on their grid line, the door amber, obstacles shaded by kind',
-    (_l, art) => {
-      const { jpeg: jpg, legend } = images.renderBattleMap(ROOM, art ? png(800, 600) : null);
-      const img = decoded(jpg);
-      const cw = legend.cellSize.width;
-      const ch = legend.cellSize.height;
-      // The wall: on the line x = 4, white; a square to either side, not.
-      expect(near(pixel(img, 4 * cw, 0.5 * ch), [255, 255, 255])).toBe(true);
-      expect(near(pixel(img, 4 * cw, 4.5 * ch), [255, 255, 255])).toBe(true);
-      expect(near(pixel(img, 3.5 * cw, 4.5 * ch), [255, 255, 255])).toBe(false);
-      // The door: amber, in the wall's gap.
-      expect(near(pixel(img, 4 * cw, 2.7 * ch), [255, 183, 77])).toBe(true);
-      // The pillar: solid, filled dark.
-      expect(share(img, 6.2 * cw, 4.2 * ch, 6.8 * cw, 4.8 * ch, [12, 14, 20], 40)).toBeGreaterThan(
-        0.6
-      );
-      // The table: hatched, part tan and part ground.
-      const hatched = share(img, 2.2 * cw, 1.2 * ch, 3.8 * cw, 1.8 * ch, [205, 170, 125], 50);
-      expect(hatched).toBeGreaterThan(0.1);
-      expect(hatched).toBeLessThan(0.7);
-      // The rubble: dotted, mostly ground with light dots.
-      const dotted = share(img, 1.2 * cw, 5.2 * ch, 2.8 * cw, 5.8 * ch, [190, 190, 190], 50);
-      expect(dotted).toBeGreaterThan(0.01);
-      expect(dotted).toBeLessThan(0.35);
+  ])('on %s: walls on their grid line, the door, and what the obstacles became', (_l, art) => {
+    const { jpeg: jpg, legend } = images.renderBattleMap(ROOM, art ? png(800, 600) : null);
+    const img = decoded(jpg);
+    const cw = legend.cellSize.width;
+    const ch = legend.cellSize.height;
+    // The wall: on the line x = 4, white; a square to either side, not.
+    expect(near(pixel(img, 4 * cw, 0.5 * ch), [255, 255, 255])).toBe(true);
+    expect(near(pixel(img, 4 * cw, 4.5 * ch), [255, 255, 255])).toBe(true);
+    expect(near(pixel(img, 3.5 * cw, 4.5 * ch), [255, 255, 255])).toBe(false);
+    // The door: locked, so red, in the wall's gap (L-929: drawn from its geometry).
+    expect(near(pixel(img, 4 * cw, 2.7 * ch), [225, 95, 75], 50)).toBe(true);
+    // The pillar: an object, a box where the ground was.
+    const ground = pixel(img, 5.5 * cw, 5.5 * ch);
+    expect(share(img, 6.2 * cw, 4.2 * ch, 6.8 * cw, 4.8 * ch, ground, 25)).toBeLessThan(0.3);
+    // The table: a low wall round its squares, its edge in wall stone.
+    expect(near(pixel(img, 3 * cw, 1 * ch), [225, 225, 230], 50)).toBe(true);
+    // The rubble: difficult ground, gravel (with art, only its rim shows).
+    if (!art) {
+      expect(
+        share(img, 1.2 * cw, 5.2 * ch, 2.8 * cw, 5.8 * ch, [150, 146, 140], 30)
+      ).toBeGreaterThan(0.5);
     }
-  );
+  });
 
   test('the legend numbers the door and each obstacle, after the rest', () => {
     const { legend } = images.renderBattleMap(ROOM, null);
@@ -236,7 +232,9 @@ describe('battle-map layers (L-623)', () => {
         cells: { x: 1, y: 5, w: 2, h: 1 },
       },
     ]);
-    expect(legend.reading).toMatch(/white lines are walls and amber bars doors/);
+    expect(legend.reading).toMatch(
+      /walls are drawn at any angle, coloured by material, doors amber/
+    );
   });
 
   test('a map without layers draws as before, with none in the legend', () => {

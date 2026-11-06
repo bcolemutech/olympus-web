@@ -229,7 +229,11 @@ test('closed places come first; then the score’s work, grouped, most points fi
 });
 
 test('list_work pages the entities within a criterion (L-395)', async () => {
-  const first = groupOf(await work({ limit: 100, offset: 719 }), 'realm.description', 'update_region');
+  const first = groupOf(
+    await work({ limit: 100, offset: 719 }),
+    'realm.description',
+    'update_region'
+  );
   const paged = groupOf(
     await work({ limit: 100, offset: 719, entityLimit: 50, entityOffset: 10 }),
     'realm.description',
@@ -483,7 +487,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   expect(overview).toMatchObject({ score: overview.completion.score, band: 'playable' });
   expect(overview.completion).toMatchObject({
     graded: true,
-    rubricVersion: 10,
+    rubricVersion: 11,
     band: 'playable',
     places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
@@ -520,7 +524,7 @@ test('get_character and get_battle_map show their score, band and weighted check
   const map = await ok('get_battle_map', { worldId: WORLD, mapId: GATEWAY.id });
   expect(map).toMatchObject({ grade: 'playable', score: expect.any(Number) });
   expect(map.checklist.map((c) => [c.id, c.weight])).toEqual([
-    ['battleMap.layers', 30],
+    ['battleMap.drawn', 30],
     ['battleMap.art', 30],
     ['battleMap.features', 20],
     ['battleMap.exits', 20],

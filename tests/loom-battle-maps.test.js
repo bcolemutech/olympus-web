@@ -756,8 +756,8 @@ describe('grading with battle maps (on in play since L-622)', () => {
     expect(ownMap(bare)).toMatchObject({ met: false, progress: 0.5 });
     expect(bare.checklist).toContainEqual(
       expect.objectContaining({
-        need: 'layers',
-        message: 'Its battle map has no walls or obstacles.',
+        need: 'drawn',
+        message: 'Its battle map is not drawn: it has no floors or walls, and no art.',
       })
     );
     w.battleMaps.bm_own.retired = true;
