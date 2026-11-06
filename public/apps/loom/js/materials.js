@@ -38,7 +38,36 @@
   // ground picture spans (a 15 ft picture of flagstones spans 3; strips and
   // objects 1). Everything else is SVG, a ground tile spanning 1. The painter
   // scales each picture by its own size, so a PNG can be sharper than 64 px.
-  var PNG_ART = {};
+  var PNG_ART = {
+    'materials/ground-flagstone': 5,
+    'materials/ground-stone': 5,
+    'materials/ground-marble': 5,
+    'materials/ground-rock': 5,
+    'materials/ground-dirt': 5,
+    'materials/ground-wood': 5,
+    'materials/ground-water': 5,
+    'materials/wall-stone': 1,
+    'materials/wall-rock': 1,
+    'materials/door-wood': 1,
+    'materials/door-iron': 1,
+    'materials/wall-brick': 1,
+    'materials/line-stream': 1,
+    'materials/window-glass': 1,
+    'objects/crate': 1,
+    'objects/brazier': 1,
+    'objects/statue': 1,
+    'objects/pillar': 1,
+    'objects/chest': 1,
+    'objects/barrel': 1,
+    'objects/bed': 1,
+    'objects/sarcophagus': 1,
+    'objects/cauldron': 1,
+    'objects/rug': 1,
+    'objects/table': 1,
+    'objects/chair': 1,
+    'objects/wardrobe': 1,
+    'objects/bench': 1,
+  };
 
   function artFile(base) {
     return base + (PNG_ART[base] ? '.png' : '.svg');
