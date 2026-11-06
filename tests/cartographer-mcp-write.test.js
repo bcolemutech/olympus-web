@@ -203,6 +203,7 @@ test('exposes the write tools with honest hints', async () => {
     'create_world',
     'disconnect_locations',
     'disconnect_places',
+    'generate_map',
     'place_figures',
     'publish_world',
     'retire_entity',
