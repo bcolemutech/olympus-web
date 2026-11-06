@@ -900,5 +900,5 @@ module.exports = {
   withGrid,
   gridFields,
   stored,
-  shapes: { entry, exit, feature, AREAS, LAYER_SHAPES, label },
+  shapes: { entry, exit, feature, AREAS, LAYER_SHAPES, label, generic },
 };

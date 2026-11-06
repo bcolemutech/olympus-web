@@ -12,7 +12,9 @@
  *   - a region map takes them too, and a world map in today's shape does not;
  *   - features, entries and exits are patched by id the same way;
  *   - moving one exit keeps a save's seen map (a patch never bumps `revision`),
- *     where replacing the grid makes players forget it.
+ *     where replacing the grid makes players forget it;
+ *   - generate_map writes a seeded first draft as an ordinary battle map, the
+ *     same from the same seed, for each kind, which the patch tools then edit.
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest cartographer-mcp-patch --verbose"
@@ -35,6 +37,8 @@ const { getFirestore } = require(
   require.resolve('firebase-admin/firestore', { paths: [functionsDir] })
 );
 const seen = require('../functions/loom-turn/seen');
+const geo = require('../functions/loom-canon/map-geometry');
+const generators = require('../functions/loom-canon/map-generators');
 const { cartographerApp } = require('../functions/mcp/apps/cartographer');
 const { createFirestoreWorldReader } = require('../functions/mcp/apps/cartographer/reader');
 const { createFirestoreWorldWriter } = require('../functions/mcp/apps/cartographer/writer');
@@ -597,5 +601,153 @@ describe('view_image draws the geometry as it was built', () => {
       /is no grid, or region or area map made with add_map/
     );
     expect(await refused('view_image', { worldId: W, of: 'map' })).toMatch(/Give the/);
+  });
+});
+
+describe('generate_map: a seeded first draft to edit', () => {
+  const docOf = async (id) => (await worlds().doc(W).collection('battleMaps').doc(id).get()).data();
+
+  test('a dungeon from a seed, written as an ordinary battle map, the same from the same seed', async () => {
+    const made = await ok('generate_map', {
+      worldId: W,
+      name: 'The deep halls',
+      kind: 'rooms',
+      seed: 99,
+    });
+    expect(made).toMatchObject({
+      created: true,
+      generated: { kind: 'rooms', seed: 99, version: generators.VERSION, width: 32, height: 32 },
+      map: { name: 'The deep halls', size: { width: 32, height: 32 }, drawn: 'full' },
+      entries: [{ id: 'way-in' }],
+      exits: [{ id: 'way-out', to: 'out' }],
+    });
+    expect(made.rooms.length).toBeGreaterThanOrEqual(2);
+    expect(made.counts).toMatchObject({ ground: expect.any(Number), doors: expect.any(Number) });
+    expect(made.next).toMatch(/set_zones/);
+
+    // Stored as the pure generator makes it, with how it was made.
+    const doc = await docOf(made.map.id);
+    const pure = generators.generate('rooms', { seed: 99 });
+    expect(doc.geometry).toEqual(geo.normalize(pure.geometry));
+    expect(doc.entries).toEqual(pure.entries);
+    expect(doc.exits).toEqual(pure.exits);
+    expect(doc.sources).toEqual({
+      map: 'mcp',
+      generated: { kind: 'rooms', seed: 99, version: generators.VERSION },
+    });
+
+    // The same seed again, the same map.
+    const again = await ok('generate_map', {
+      worldId: W,
+      name: 'The deep halls again',
+      kind: 'rooms',
+      seed: 99,
+    });
+    expect(again.map.id).not.toBe(made.map.id);
+    expect((await docOf(again.map.id)).geometry).toEqual(doc.geometry);
+
+    // view_image draws it from its data.
+    const view = await call('view_image', { worldId: W, of: 'battleMap', id: made.map.id });
+    expect(view.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+    expect(view.structuredContent.geometry).toMatchObject({
+      walls: doc.geometry.walls.length,
+      zones: made.rooms.length,
+    });
+  });
+
+  test('then edited with the patch tools: a room named, a door hidden, the exit moved', async () => {
+    const made = await ok('generate_map', {
+      worldId: W,
+      name: 'The old manse',
+      kind: 'interior',
+      seed: 'manse',
+    });
+    const mapId = made.map.id;
+    expect(
+      await ok('set_zones', { worldId: W, mapId, set: [{ id: 'room-1', name: 'the parlour' }] })
+    ).toMatchObject({ changed: ['room-1'] });
+    await ok('set_hidden', { worldId: W, mapId, set: [{ id: 'door-1', dc: 15 }] });
+    await ok('set_exits', {
+      worldId: W,
+      mapId,
+      set: [{ id: 'way-out', name: 'the lane', x: 0, y: made.generated.height - 1 }],
+    });
+    const back = await ok('get_geometry', { worldId: W, mapId, lists: ['zones', 'hidden'] });
+    expect(back.geometry.zones.find((z) => z.id === 'room-1')).toMatchObject({
+      name: 'the parlour',
+    });
+    expect(back.geometry.hidden).toEqual([{ id: 'door-1', dc: 15 }]);
+    expect((await docOf(mapId)).exits[0]).toMatchObject({ name: 'the lane', x: 0 });
+  });
+
+  test('each kind, and a deck of either style; no seed makes a new map and says its seed', async () => {
+    for (const [kind, style] of [
+      ['caves'],
+      ['interior'],
+      ['deck', 'sailing'],
+      ['deck', 'starship'],
+    ]) {
+      const made = await ok('generate_map', {
+        worldId: W,
+        name: `A ${style || kind}`,
+        kind,
+        seed: 5,
+        ...(style ? { style } : {}),
+      });
+      expect(made).toMatchObject({ created: true, generated: { kind, seed: 5 } });
+      if (style) expect(made.generated.style).toBe(style);
+      expect(made.map.drawn).toBe('full');
+    }
+    const unseeded = await ok('generate_map', {
+      worldId: W,
+      name: 'Somewhere dark',
+      kind: 'caves',
+    });
+    expect(Number.isInteger(unseeded.generated.seed)).toBe(true);
+    expect((await docOf(unseeded.map.id)).geometry).toEqual(
+      geo.normalize(generators.generate('caves', { seed: unseeded.generated.seed }).geometry)
+    );
+  });
+
+  test('replacing a map’s grid makes players forget it', async () => {
+    const first = await ok('generate_map', {
+      worldId: W,
+      name: 'The cellar',
+      kind: 'rooms',
+      seed: 1,
+    });
+    const replaced = await ok('generate_map', {
+      worldId: W,
+      mapId: first.map.id,
+      name: 'The cellar',
+      kind: 'caves',
+      seed: 2,
+    });
+    expect(replaced.created).toBeUndefined();
+    expect(replaced.map.id).toBe(first.map.id);
+    expect(replaced.warnings[0]).toMatch(/start over/);
+    expect(await docOf(first.map.id)).toMatchObject({
+      revision: 1,
+      sources: { generated: { kind: 'caves', seed: 2 } },
+    });
+  });
+
+  test('refused with its reason, and nothing written', async () => {
+    const before = (await worlds().doc(W).collection('battleMaps').get()).size;
+    expect(
+      await refused('generate_map', { worldId: W, name: 'Tiny', kind: 'rooms', width: 12 })
+    ).toMatch(/from 16 to 64/);
+    expect(
+      await refused('generate_map', { worldId: W, name: 'Odd', kind: 'rooms', style: 'sailing' })
+    ).toMatch(/takes no style/);
+    expect(
+      await refused('generate_map', {
+        worldId: W,
+        mapId: 'bm_nowhere',
+        name: 'Gone',
+        kind: 'caves',
+      })
+    ).toMatch(/bm_nowhere|battle map/i);
+    expect((await worlds().doc(W).collection('battleMaps').get()).size).toBe(before);
   });
 });
