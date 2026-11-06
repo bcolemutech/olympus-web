@@ -896,6 +896,7 @@ module.exports = {
   checkLayers,
   checkAreas,
   layerWarnings,
+  standingWarnings,
   withGrid,
   gridFields,
   stored,

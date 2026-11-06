@@ -253,6 +253,7 @@ describe('connector surface', () => {
       'get_battle_map',
       'get_character',
       'get_faction',
+      'get_geometry',
       'get_location',
       'get_lore',
       'get_map',
