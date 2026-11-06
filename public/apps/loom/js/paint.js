@@ -58,6 +58,11 @@
   var STEP_UP = 2.5; // a ledge: more than this between two floors (DA2)
   var OPEN_SWING = (75 * Math.PI) / 180; // an open door's swing
   var LOCKED = 0xff9e9e;
+  // The three-quarter view (art spike, spike branch only): a foot of height
+  // rises this far up the screen, and a wall with no height of its own is
+  // this tall.
+  var OBLIQUE = 0.6;
+  var WALL_FT = 8;
   var LIGHT_RGB = '255,214,150';
   var COLOURS = { door: 0xffb74d, doorLocked: 0xe57373, dark: 0x05070d, ledge: 0x05070d };
 
@@ -195,6 +200,30 @@
     return s;
   }
 
+  // Three-quarter view: a wall's (or a closed door's) front face, a picture
+  // repeating along the segment and standing `h` up the screen from its foot,
+  // the south edge of the wall's thickness.
+  function face(texture, a, b, h, thick, stretch) {
+    var PIXI = window.PIXI;
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len || Math.abs(dx) < 1e-6) return null; // a north-south wall shows only its top
+    var s = new PIXI.TilingSprite({ texture: texture, width: len, height: h });
+    var ux = dx / len;
+    var uy = dy / len;
+    s.setFromMatrix(new PIXI.Matrix(ux, uy, 0, 1, a.x, a.y + thick / 2 - h));
+    var th = texture.height || 64;
+    var tw = texture.width || 64;
+    s.tileScale.set(stretch ? len / tw : h / th, h / th);
+    s.tint = 0xdedede;
+    return s;
+  }
+
+  function lifted(p, h) {
+    return { x: p.x, y: p.y - h };
+  }
+
   function segmentsOf(points) {
     var out = [];
     for (var i = 1; i < points.length; i++) out.push([pt(points[i - 1]), pt(points[i])]);
@@ -299,6 +328,37 @@
       list('walls').forEach(function (item, i) {
         var url = materialUrl('wall', item.material);
         var edges = byWall[item.id] || [];
+        if (o.view === 'oblique') {
+          var faceUrl = mat.artUrl('materials/wall-' + item.material + '-face.png');
+          var h =
+            (typeof item.height === 'number' && item.height > 0 ? item.height : WALL_FT) * OBLIQUE;
+          edges.forEach(function (e, k) {
+            var a = pt(e.a);
+            var b = pt(e.b);
+            var foot = Math.max(a.y, b.y) + thick / 2;
+            add(
+              'objects',
+              'wall',
+              { id: item.id + ':' + k, e: e, m: item.material },
+              Math.round(foot * 100),
+              [url, faceUrl],
+              function () {
+                var c = new PIXI.Container();
+                var top = loaded(url);
+                var front = loaded(faceUrl) || top;
+                var f = front ? face(front, a, b, h, thick, false) : null;
+                if (f) {
+                  if (!loaded(faceUrl)) f.tint = 0x9a9a9a;
+                  c.addChild(f);
+                }
+                var t = top ? strip(top, lifted(a, h), lifted(b, h), thick, false, true) : null;
+                if (t) c.addChild(t);
+                return c;
+              }
+            );
+          });
+          return;
+        }
         add('walls', 'wall', item, i, [url], function () {
           var c = new PIXI.Container();
           var texture = loaded(url);
@@ -324,40 +384,72 @@
 
     list('doors').forEach(function (item, i) {
       var url = o.art ? null : materialUrl('door', item.material);
-      add('openings', 'door', item, i + 1000, [url], function () {
-        var a = pt(item.from);
-        var b = pt(item.to);
-        if (!a || !b) return new PIXI.Container();
-        var state = item.state || 'closed';
-        if (o.art) return doorLine(a, b, state, thick);
-        var texture = loaded(url);
-        if (!texture) return doorLine(a, b, state, thick);
-        if (state === 'open') {
-          // Swung on its hinge, `from`.
-          var len = Math.hypot(b.x - a.x, b.y - a.y);
-          var angle = Math.atan2(b.y - a.y, b.x - a.x) + OPEN_SWING;
-          var swung = { x: a.x + Math.cos(angle) * len, y: a.y + Math.sin(angle) * len };
-          var leaf = strip(texture, a, swung, thick * 0.6, true, false);
-          leaf.alpha = 0.9;
-          return leaf;
+      var doorFoot =
+        o.view === 'oblique' && item.from && item.to
+          ? Math.max(pt(item.from).y, pt(item.to).y) + thick / 2
+          : null;
+      add(
+        doorFoot === null ? 'openings' : 'objects',
+        'door',
+        item,
+        doorFoot === null ? i + 1000 : Math.round(doorFoot * 100) + 1,
+        [url],
+        function () {
+          var a = pt(item.from);
+          var b = pt(item.to);
+          if (!a || !b) return new PIXI.Container();
+          var state = item.state || 'closed';
+          if (o.art) return doorLine(a, b, state, thick);
+          var texture = loaded(url);
+          if (!texture) return doorLine(a, b, state, thick);
+          if (state === 'open') {
+            // Swung on its hinge, `from`.
+            var len = Math.hypot(b.x - a.x, b.y - a.y);
+            var angle = Math.atan2(b.y - a.y, b.x - a.x) + OPEN_SWING;
+            var swung = { x: a.x + Math.cos(angle) * len, y: a.y + Math.sin(angle) * len };
+            var leaf = strip(texture, a, swung, thick * 0.6, true, false);
+            leaf.alpha = 0.9;
+            return leaf;
+          }
+          if (o.view === 'oblique') {
+            var dh = WALL_FT * OBLIQUE * 0.85;
+            var df = face(texture, a, b, dh, thick, true);
+            if (df) {
+              if (state === 'locked') df.tint = LOCKED;
+              return df;
+            }
+          }
+          var shut = strip(texture, a, b, thick, true, false);
+          if (state === 'locked') shut.tint = LOCKED;
+          return shut;
         }
-        var shut = strip(texture, a, b, thick, true, false);
-        if (state === 'locked') shut.tint = LOCKED;
-        return shut;
-      });
+      );
     });
 
     list('objects').forEach(function (item, i) {
       var url = objectUrl(item, o.worldKinds);
-      add('objects', 'object', item, i, [url, mat.artUrl(mat.FALLBACK_ART)], function () {
-        var at = pt(item.at);
-        var size = Array.isArray(item.size)
-          ? item.size
-          : typeof item.size === 'number'
-            ? [item.size, item.size]
-            : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
+      var objSize = Array.isArray(item.size)
+        ? item.size
+        : typeof item.size === 'number'
+          ? [item.size, item.size]
+          : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
+      var objAt = pt(item.at);
+      var objOrder =
+        o.view === 'oblique' && objAt ? Math.round((objAt.y + objSize[1] / 2) * 100) + 2 : i;
+      add('objects', 'object', item, objOrder, [url, mat.artUrl(mat.FALLBACK_ART)], function () {
+        var at = objAt;
+        var size = objSize;
         var texture = loaded(url) || loaded(mat.artUrl(mat.FALLBACK_ART));
         if (!at || !texture) return new PIXI.Container();
+        if (o.view === 'oblique') {
+          // Standing on the south edge of its footprint, as tall as its picture.
+          var up = new PIXI.Sprite(texture);
+          up.anchor.set(0.5, 1);
+          up.position.set(at.x, at.y + size[1] / 2);
+          up.width = size[0];
+          up.height = (size[0] * (texture.height || 1)) / (texture.width || 1);
+          return up;
+        }
         var s = new PIXI.Sprite(texture);
         s.anchor.set(0.5);
         s.position.set(at.x, at.y);

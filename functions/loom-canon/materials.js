@@ -67,6 +67,11 @@
     'objects/chair': 1,
     'objects/wardrobe': 1,
     'objects/bench': 1,
+    'objects/bookshelf': 1,
+    'objects/altar': 1,
+    'objects/anvil': 1,
+    'objects/well': 1,
+    'objects/lever': 1,
   };
 
   function artFile(base) {
