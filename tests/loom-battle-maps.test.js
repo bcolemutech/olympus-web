@@ -690,6 +690,8 @@ describe('grading with battle maps (on in play since L-622)', () => {
             ],
           },
         ],
+        // Rubble is difficult ground: floors, so the map is drawn (PL2; L-929).
+        obstacles: [{ id: 'rubble', name: 'rubble', kind: 'difficult', x: 3, y: 3 }],
       }),
       bm_generic: {
         id: 'bm_generic',
@@ -744,13 +746,13 @@ describe('grading with battle maps (on in play since L-622)', () => {
     }
   });
 
-  test('its own map scores, in full with walls; a retired map counts as none', () => {
+  test('its own map scores, in full when drawn; a retired map counts as none', () => {
     const w = base();
     w.locations.ruin.battleMap = { mapId: 'bm_own' };
     expect(ownMap(grading.gradeLocation(w, w.locations.ruin, { layers }))).toMatchObject({
       met: true,
     });
-    // Its own map needs walls, doors or obstacles (L-628).
+    // Its own map needs floors and walls, or art (L-628; PL2, L-929).
     w.battleMaps.bm_own = { ...w.battleMaps.bm_own, geometry: {} };
     const bare = grading.gradeLocation(w, w.locations.ruin, { layers });
     expect(ownMap(bare)).toMatchObject({ met: false, progress: 0.5 });
