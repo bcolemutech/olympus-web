@@ -1,7 +1,7 @@
 # The Loom — Game Art Spike — Report
 
-**Status:** Done (2026-11-06). The spike scoped in [`art-spike.md`](./art-spike.md). Direction chosen by the user at checkpoint 2: **studio-led** (§6).
-**Spent:** $2.24 of the $30 cap, for 32 charged images. 3 more failed while the model was busy, and failures aren't charged.
+**Status:** Done (2026-11-06). The spike scoped in [`art-spike.md`](./art-spike.md). Direction chosen by the user at checkpoint 2: **studio-led** (§6). Extended the same day to try a three-quarter view (§7); the user then chose **three-quarter** for the art epic.
+**Spent:** $2.58 of the $30 cap: $2.24 for 32 charged images in the top-down round, $0.34 for 5 in the three-quarter extension. 3 more failed while the model was busy, and failures aren't charged.
 **Branch:** `spike/game-art` keeps the trial art and its renders. Merged: this report, `scripts/art/`, and the PNG switch in `materials.js` and the painter (§5).
 
 ---
@@ -109,7 +109,7 @@ _The painter's test dungeon: today's SVG, the studio's art, and Kenney's Rogueli
 
 ## 6. Recommendation and the epic's open questions
 
-**Direction (the user, checkpoint 2): studio-led, building on the approved look.** SVG stays as the fallback.
+**Direction (the user, checkpoint 2): studio-led, building on the approved look.** SVG stays as the fallback. **View (the user, after §7): three-quarter.** The questions below are read for that view; §7.3 adds its own.
 
 **A projection.** A full setting is about 150–300 assets: at $0.08 each, about $12–25 of generation, plus review. All four reference games, sharing some assets, would be about $50–80 over time. The cost that matters is review time and Claude's time, not money.
 
@@ -120,8 +120,48 @@ _The painter's test dungeon: today's SVG, the studio's art, and Kenney's Rogueli
 3. **Variants:** how many per floor, and does the painter choose among them per area?
 4. **Blending where floors meet:** soft masks between materials, now or later?
 5. **Contact shadows** under objects, drawn by the painter: in this epic?
-6. **Tall furniture:** accept a sliver of front (bookshelves, wardrobes, altars, anvils), or keep retrying for true top-down?
+6. **Tall furniture:** settled by the three-quarter view, where every prop shows its front (§7).
 7. **Lined textures (wood):** generate them seamless another way (as strips, or by edit), or accept faint seams?
 8. **Order of settings:** sword and sorcery first (the dungeon set), then steampunk, wizarding and space?
 9. **Review:** you approve each batch on a board, or only samples?
 10. **Culling** off-screen items: needed once maps are large. With this epic or after?
+
+---
+
+## 7. Extension: a three-quarter view
+
+Kenney's angled tiles raised the question of whether a three-quarter view, as in classic top-down RPGs, gives a better picture. The user extended the spike to try it (2026-11-06): an **oblique three-quarter view**, as a **painter prototype** on `spike/game-art`, within the remaining budget.
+
+![The same interior both ways](./art-spike/three-quarter.jpg)
+
+_A generated interior drawn by the engine, top-down (left) and three-quarter (right), from a distance and close up._
+
+### 7.1 What was built (spike branch only)
+
+- **The painter's `view: 'oblique'` option.** The rules, sight, fog and clicks are untouched, because the map's coordinates don't change.
+  - **Walls:** each has a front face rising up the screen, 0.6 of its height (8 ft unless set), with its top strip moved up onto it. An angled wall gets a slanted face; a north-south wall shows only its top.
+  - **Closed doors and windows** are upright panels in the wall.
+  - **Walls, doors and objects share one layer,** ordered by how far down the screen their foot stands, so nearer things cover farther ones.
+  - **Objects** stand on the south edge of their footprint, as wide as their catalog size and as tall as their picture.
+- **The art:**
+  - a style, "Loom painted three-quarter" (`sty_c43cfb0435b04cf0`), with the room vignette and the front-on chest as its references;
+  - two prop sheets (18 props);
+  - stone and brick wall faces.
+  - Floors are the top-down ones, which look the same from either angle.
+
+### 7.2 Findings
+
+- **The model draws three-quarter view naturally.** **18 of 18 props were usable first time** (top-down: 14 of 24), including the bookshelf, altar and anvil that never came out top-down, and a well and a lever besides. Wall faces came out right at once, where wall tops never did.
+- **The look:** rooms read as built spaces with height and depth, closer to a game than a plan. Props are easier to tell apart standing up.
+- **The engine cost is small.** The prototype is about 100 lines in `paint.js`. Drawing time is unchanged: 0.22 s for the interior either way, unthrottled.
+- **Props' angles vary:** some face the viewer square-on (chest, barrel, wardrobe, pillar), others are turned diagonally, nearer isometric (crate, table, altar, bench, sarcophagus). An oblique view wants them all square-on: a prompt rule, and a reason to reject in review.
+- **Walls hide what's behind them,** as they should in this view. In play that hides tokens and the floor just north of a wall.
+
+### 7.3 Questions the three-quarter view adds
+
+11. **Seeing behind walls:** fade a wall's face when a token or the cursor is behind it, cut walls down to a stub near the player, or both?
+12. **Tokens:** keep L-930's round framed portraits lying flat on the floor, or stand them up (a portrait on a base, or a figure)? That would change L-930's design before it's built.
+13. **Wall height and the angle:** one height for every wall (8 ft) and one angle (0.6), or per material and per world?
+14. **Faces for every wall material:** each needs its own face art (wood, rock, metal, hedge…), with the top's darkened texture as a stand-in until it has one.
+15. **Open doors:** a door seen side-on when open, drawn how?
+16. **Tall objects at the map's top edge** reach up past it: clip them, or leave a margin?
