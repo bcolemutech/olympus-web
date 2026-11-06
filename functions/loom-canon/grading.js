@@ -46,7 +46,7 @@
 // world's cover image (L-704); 6: a world's game system (L-801); 7: a named
 // character's sheet (L-813); 8: a fighter's attacks (L-822); 9: foes at a
 // dangerous place (L-824); 10: templates on a large map's places (L-906).
-const RUBRIC_VERSION = 10;
+const RUBRIC_VERSION = 11;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -70,7 +70,7 @@ const WEIGHTS = Object.freeze({
   settlement: { residents: 15, lore: 10, townArt: 15, description: 20, loreLinks: 5, ground: 10 },
   place: { ownMap: 15, mapArt: 10, someone: 15, lore: 30, description: 10, foes: 10 },
   character: { description: 25, lore: 15, faction: 10, sheet: 20, attacks: 15 },
-  battleMap: { layers: 30, art: 30, features: 20, exits: 20 },
+  battleMap: { drawn: 30, art: 30, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
   world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15, templates: 10 },
 });
@@ -273,6 +273,32 @@ function ownMap(world, entity, layers) {
 // (./art.js).
 const hasArt = (thing) => Boolean(thing && require('./art').fromRef(thing.image));
 
+// What a grid with no art and not enough data to draw lacks (PL2; L-929): the
+// tool that would give it.
+function undrawn(map) {
+  const how = require('./layer-geometry').drawnOf(map);
+  const g = (map && map.geometry) || {};
+  if (how === 'part' && (g.ground || []).length) {
+    return {
+      need: 'drawn',
+      tool: 'set_walls',
+      message: 'Its battle map has floors but no walls: draw them (set_walls), or give it art.',
+    };
+  }
+  if (how === 'part') {
+    return {
+      need: 'drawn',
+      tool: 'set_ground',
+      message: 'Its battle map has walls but no floors: draw them (set_ground), or give it art.',
+    };
+  }
+  return {
+    need: 'drawn',
+    tool: 'set_ground',
+    message: 'Its battle map is not drawn: it has no floors or walls, and no art.',
+  };
+}
+
 /**
  * The criteria registry (planning/the-loom-grading.md §4.1). Each is
  * { id, kinds, weight, feature, label, need, tool, check }: `check(world,
@@ -386,7 +412,7 @@ const CRITERIA = Object.freeze([
     kinds: ['poi', 'place'],
     weight: WEIGHTS.place.ownMap,
     feature: 'L-628',
-    label: 'Its own battle map, with walls',
+    label: 'Its own battle map, drawn',
     need: 'battleMap',
     tool: 'set_battle_map',
     check: (world, entity, { layers }) => {
@@ -396,13 +422,9 @@ const CRITERIA = Object.freeze([
       }
       if (kind !== 'own') return { progress: 0, message: 'It has no battle map.' };
       const map = require('./maps').mapOf(world, entity);
-      if (map && !require('./layer-geometry').hasShapes(map)) {
-        return {
-          progress: 0.5,
-          need: 'layers',
-          tool: 'set_map_layers',
-          message: 'Its battle map has no walls or obstacles.',
-        };
+      // Drawn from its data, or art (PL2; L-929): half without.
+      if (map && !hasArt(map) && require('./layer-geometry').drawnOf(map) !== 'full') {
+        return { progress: 0.5, ...undrawn(map) };
       }
       return met();
     },
@@ -613,17 +635,21 @@ const CRITERIA = Object.freeze([
 
   // Battle maps.
   {
-    id: 'battleMap.layers',
+    // Its data is enough to draw it, or it has art (PL2; L-929): floors and
+    // walls drawn from the geometry, half for one of them.
+    id: 'battleMap.drawn',
     kinds: ['battleMap'],
-    weight: WEIGHTS.battleMap.layers,
-    feature: 'L-628',
-    label: 'Walls or obstacles',
-    need: 'layers',
-    tool: 'set_map_layers',
-    check: (world, map) =>
-      require('./layer-geometry').hasShapes(map)
-        ? met()
-        : { progress: 0, message: 'It has no walls or obstacles.' },
+    weight: WEIGHTS.battleMap.drawn,
+    feature: 'L-929',
+    label: 'Drawn: floors and walls, or art',
+    need: 'drawn',
+    tool: 'set_ground',
+    check: (world, map) => {
+      if (hasArt(map)) return met();
+      const how = require('./layer-geometry').drawnOf(map);
+      if (how === 'full') return met();
+      return { progress: how === 'part' ? 0.5 : 0, ...undrawn(map) };
+    },
   },
   {
     id: 'battleMap.art',

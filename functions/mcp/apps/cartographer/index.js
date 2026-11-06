@@ -26,6 +26,8 @@ const town = require('../../../loom-canon/town');
 const maps = require('../../../loom-canon/maps');
 const positions = require('../../../loom-canon/positions');
 const sightOf = require('../../../loom-canon/sight');
+const levels = require('../../../loom-canon/levels');
+const { modelOf } = require('./level-tools');
 const figures = require('../../../loom-modules/combat/figures');
 const { systemOf } = require('../../../loom-canon/checks');
 
@@ -73,7 +75,7 @@ const NEEDS = [
   'town',
   'battleMap',
   'ground',
-  'layers',
+  'drawn',
   'townArt',
   'mapArt',
   'features',
@@ -486,7 +488,13 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'fifth line labelled), numbered markers for entries, exits, features, the people ' +
           'standing on it and its figures (coloured by side: red hostile, green party, yellow ' +
           'wary, teal neutral; sightFrom an entry shades what can’t be seen from it), and its ' +
-          'areas outlined with their names; towns with numbered markers at their places’ positions, the people ' +
+          'areas outlined with their names; its geometry (L-929) is drawn as it is built: ' +
+          'floors by material, brighter the higher, walls at any angle, doors by state, ' +
+          'windows, objects, zones, spawns, lights, notes and what is hidden, each numbered ' +
+          'with the id to patch it by (get_geometry, set_ground and the rest); hidden false ' +
+          'draws it as players see it, and from shades what a player standing at a point in ' +
+          'feet can’t see. of map draws any grid, or a region or area map made with ' +
+          'add_map, in its own units with its places; towns with numbered markers at their places’ positions, the people ' +
           'about town at their town points, their links, the 0–1000 grid, and their ground ' +
           '(set_town_ground: buildings, water, walls and crossings, see-through over the art); ' +
           'the world map with ' +
@@ -501,10 +509,39 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'players see; without art, the data is drawn from its materials.',
         inputSchema: {
           worldId,
-          of: z.enum(['battleMap', 'town', 'world']).describe('What to see.'),
-          id: entityId('battle map or settlement', 'list_battle_maps or find_locations')
+          of: z
+            .enum(['battleMap', 'map', 'town', 'world'])
+            .describe(
+              'What to see. map: any grid, or a region or area map made with add_map, drawn ' +
+                'from its geometry (list_maps).'
+            ),
+          id: entityId(
+            'battle map, map or settlement',
+            'list_battle_maps, list_maps or find_locations'
+          )
             .optional()
-            .describe('The battle map, or the settlement (for its town). Not for the world map.'),
+            .describe(
+              'The battle map or map, or the settlement (for its town). Not for the world map.'
+            ),
+          heights: z
+            .boolean()
+            .optional()
+            .describe('Shade floors by height: higher brighter, lower darker (default true).'),
+          hidden: z
+            .boolean()
+            .optional()
+            .describe(
+              'Draw what is hidden (L-927), marked in magenta (default true: you built it); ' +
+                'false draws the map as players see it, without them.'
+            ),
+          from: z
+            .strictObject({ x: z.number().min(0).max(320), y: z.number().min(0).max(320) })
+            .optional()
+            .describe(
+              'A battle map only: a point in feet. Shades what can’t be seen from there, as a ' +
+                'player standing there sees it with doors as the map has them (sightFrom does ' +
+                'the same from an entry).'
+            ),
           sightFrom: z
             .string()
             .regex(/^[A-Za-z0-9_-]{1,40}$/)
@@ -545,59 +582,95 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           };
           let rendered;
           try {
-            if (args.of === 'battleMap') {
+            if (args.of === 'battleMap' || args.of === 'map') {
               needId();
-              const map = entityFor(
-                world,
-                'battleMaps',
-                args.id,
-                'battle map',
-                'Use list_battle_maps to see them.'
-              );
-              // Who stands on it (L-684), at whichever place's copy, and its
-              // figures (L-394), each with their side.
-              const people = maps
-                .standingOn(world, map)
-                .map(({ character, host, cell }) => ({
-                  id: character.id,
-                  name: character.name,
-                  x: cell.x,
-                  y: cell.y,
-                  side: character.side || 'neutral',
-                  at: { id: host.id, name: host.name },
-                }))
-                .concat(
-                  (map.figures || []).flatMap((g) =>
-                    figures.instancesOf(systemOf(world), g, world).map((f) => ({
-                      id: f.id,
-                      name: f.name,
-                      x: f.cell.x,
-                      y: f.cell.y,
-                      side: f.side,
-                      figure: g.id,
-                    }))
-                  )
-                );
-              // What can be seen from an entry (L-394).
-              let sight = null;
-              if (args.sightFrom) {
-                const entry = (map.entries || []).find((e) => e.id === args.sightFrom);
-                if (!entry) {
+              // Any grid is a battle map; a region or area map is drawn from its
+              // geometry, in its own units (L-929).
+              const grid = (world.battleMaps || {})[args.id];
+              const stored = !grid && args.of === 'map' ? (world.maps || {})[args.id] : null;
+              const options = { heights: args.heights !== false, hidden: args.hidden !== false };
+              if (stored && !stored.retired && ['region', 'area'].includes(stored.kind)) {
+                const model = modelOf(world);
+                const places = levels
+                  .placesOn(model, args.id)
+                  .map((id) => ({ id, ...(levels.placeOf(model, id) || {}) }))
+                  .filter((p) => !p.retired);
+                rendered = images.renderMap(stored, places, options);
+              } else {
+                if (args.of === 'map' && !grid) {
                   throw new ToolError(
-                    `${map.name} has no entry "${args.sightFrom}" (` +
-                      ((map.entries || []).map((e) => e.id).join(', ') || 'none') +
-                      ').'
+                    `"${args.id}" is no grid, or region or area map made with add_map. ` +
+                      'list_maps shows them; a world map or town in today’s shape is seen with ' +
+                      'of world or town.'
                   );
                 }
-                sight = { from: entry.id, seen: sightOf.inSight(map, entry, {}) };
+                const map = entityFor(
+                  world,
+                  'battleMaps',
+                  args.id,
+                  'battle map',
+                  'Use list_battle_maps to see them.'
+                );
+                // Who stands on it (L-684), at whichever place's copy, and its
+                // figures (L-394), each with their side.
+                const people = maps
+                  .standingOn(world, map)
+                  .map(({ character, host, cell }) => ({
+                    id: character.id,
+                    name: character.name,
+                    x: cell.x,
+                    y: cell.y,
+                    side: character.side || 'neutral',
+                    at: { id: host.id, name: host.name },
+                  }))
+                  .concat(
+                    (map.figures || []).flatMap((g) =>
+                      figures.instancesOf(systemOf(world), g, world).map((f) => ({
+                        id: f.id,
+                        name: f.name,
+                        x: f.cell.x,
+                        y: f.cell.y,
+                        side: f.side,
+                        figure: g.id,
+                      }))
+                    )
+                  );
+                // What can be seen from an entry (L-394), or from a point in feet.
+                let sight = null;
+                if (args.sightFrom && args.from) {
+                  throw new ToolError('Give sightFrom (an entry) or from (a point), not both.');
+                }
+                if (args.sightFrom) {
+                  const entry = (map.entries || []).find((e) => e.id === args.sightFrom);
+                  if (!entry) {
+                    throw new ToolError(
+                      `${map.name} has no entry "${args.sightFrom}" (` +
+                        ((map.entries || []).map((e) => e.id).join(', ') || 'none') +
+                        ').'
+                    );
+                  }
+                  sight = { from: entry.id, seen: sightOf.inSight(map, entry, {}) };
+                } else if (args.from) {
+                  const cell = { x: Math.floor(args.from.x / 5), y: Math.floor(args.from.y / 5) };
+                  if (!maps.inBounds(map, cell)) {
+                    throw new ToolError(
+                      `(${args.from.x}, ${args.from.y}) ft is off ${map.name}'s ${map.width} × ` +
+                        `${map.height} grid (${map.width * 5} × ${map.height * 5} ft).`
+                    );
+                  }
+                  sight = {
+                    from: `${args.from.x}, ${args.from.y} ft`,
+                    seen: sightOf.inSight(map, { cell, point: args.from }, {}),
+                  };
+                }
+                const mapPiece = artOf.mapArt(map);
+                rendered = images.renderBattleMap(
+                  map,
+                  mapPiece ? await load(mapPiece) : null,
+                  people,
+                  { sight, ...options }
+                );
               }
-              const mapPiece = artOf.mapArt(map);
-              rendered = images.renderBattleMap(
-                map,
-                mapPiece ? await load(mapPiece) : null,
-                people,
-                { sight }
-              );
             } else if (args.of === 'town') {
               needId();
               const settlement = entityFor(

@@ -191,7 +191,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(10);
+    expect(RUBRIC_VERSION).toBe(11);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -301,10 +301,10 @@ describe('point of interest and place criteria', () => {
   test('its own map with walls; half without; none for a generic one', () => {
     const w = world();
     expect(check('place.ownMap', w, w.places.plc_inn, 'place')).toEqual({ progress: 1 });
-    const bare = without(w, 'battleMaps', 'bm_inn', { geometry: {} });
+    const bare = without(w, 'battleMaps', 'bm_inn', { geometry: {}, image: null });
     expect(check('place.ownMap', bare, bare.places.plc_inn, 'place')).toMatchObject({
       progress: 0.5,
-      need: 'layers',
+      need: 'drawn',
     });
     const generic = without(w, 'battleMaps', 'bm_inn', { generic: { kind: 'tavern' } });
     expect(check('place.ownMap', generic, generic.places.plc_inn, 'place')).toEqual({
@@ -397,11 +397,59 @@ describe('character, battle map, realm and world criteria', () => {
     });
   });
 
+  test('a battle map is drawn when its data is enough to draw it, or it has art (PL2; L-929)', () => {
+    const w = world();
+    const geo = require('../functions/loom-canon/map-geometry');
+    const layerGeometry = require('../functions/loom-canon/layer-geometry');
+    const floor = { id: 'floor', material: 'stone', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } };
+    const wall = {
+      id: 'wall',
+      material: 'stone',
+      points: [
+        [0, 0],
+        [60, 0],
+      ],
+    };
+    const bare = { ...MAP, geometry: {}, image: null };
+    const given = (shapes) => ({ ...bare, geometry: geo.normalize(shapes) });
+    // Floors and walls: drawn from its data.
+    const both = given({ ground: [floor], walls: [wall] });
+    expect(layerGeometry.drawnOf(both)).toBe('full');
+    expect(check('battleMap.drawn', w, both)).toEqual({ progress: 1 });
+    // Neither: not drawn, and it says what would draw it.
+    expect(layerGeometry.drawnOf(bare)).toBe('none');
+    expect(check('battleMap.drawn', w, bare)).toMatchObject({
+      progress: 0,
+      need: 'drawn',
+      tool: 'set_ground',
+      message: 'Its battle map is not drawn: it has no floors or walls, and no art.',
+    });
+    // One of them: half, and the other is what it lacks.
+    expect(check('battleMap.drawn', w, given({ ground: [floor] }))).toMatchObject({
+      progress: 0.5,
+      tool: 'set_walls',
+      message: 'Its battle map has floors but no walls: draw them (set_walls), or give it art.',
+    });
+    expect(check('battleMap.drawn', w, given({ walls: [wall] }))).toMatchObject({
+      progress: 0.5,
+      tool: 'set_ground',
+      message: 'Its battle map has walls but no floors: draw them (set_ground), or give it art.',
+    });
+    // Doors, windows and objects stand in walls and on floors: alone, nothing.
+    const door = { id: 'd', material: 'wood', from: [10, 0], to: [15, 0] };
+    const chest = { id: 'c', kind: 'chest', at: [10, 10], size: [3, 2] };
+    expect(check('battleMap.drawn', w, given({ doors: [door], objects: [chest] })).progress).toBe(
+      0
+    );
+    // Art alone is enough.
+    expect(check('battleMap.drawn', w, { ...bare, image: MAP.image })).toEqual({ progress: 1 });
+  });
+
   test('a battle map: walls, art, features and exits', () => {
     const w = world();
     expect(gradeBattleMap(w, MAP)).toMatchObject({ score: 100 });
     const bare = { ...MAP, geometry: {}, image: null, features: [MAP.features[0]], exits: [] };
-    expect(check('battleMap.layers', w, bare).progress).toBe(0);
+    expect(check('battleMap.drawn', w, bare).progress).toBe(0);
     expect(check('battleMap.art', w, bare).progress).toBe(0);
     expect(check('battleMap.features', w, bare)).toMatchObject({ progress: 0.5, have: 1 });
     expect(check('battleMap.exits', w, bare).progress).toBe(0);

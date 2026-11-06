@@ -6,6 +6,7 @@ const { pngDimensions } = require('../../../cartographer/service');
 const { isSvg, normaliseColours } = require('../../../cartographer/svg');
 const mapAreas = require('../../../loom-canon/map-areas');
 const layerGeometry = require('../../../loom-canon/layer-geometry');
+const { makePainter } = require('./geometry-image');
 
 // Images Claude can see (planning/the-loom-layered-worlds.md §9; L-355 /
 // #417): a town's art, a battle map's art, or the world map, scaled down for
@@ -244,6 +245,10 @@ function marker(c, x, y, n, shape, colour, size) {
   number(c, n, x + r + 2, y - r - 2, labelScale(c));
 }
 
+// The geometry's colours and shapes (L-929; ./geometry-image.js), on these helpers.
+const painter = makePainter({ fillRect, fillCircle, line, number, labelScale });
+const FEET = 5; // a square of a grid
+
 // ── PNG in, JPEG out ──────────────────────────────────────────────────────
 
 // Art bytes (PNG, or SVG text) as pixels on the plain background: any
@@ -339,38 +344,19 @@ function drawInto(c, img, x0, y0, w, h) {
 
 // ── What Claude sees ──────────────────────────────────────────────────────
 
-// An obstacle's squares, shaded by kind: solid filled dark, low hatched,
-// difficult dotted; each outlined in its colour.
-function obstacle(c, o, cw, ch) {
-  const x0 = o.x * cw;
-  const y0 = o.y * ch;
-  const w = (o.w || 1) * cw;
-  const h = (o.h || 1) * ch;
-  const colour = COLOURS[o.kind] || COLOURS.solid;
-  const gap = Math.max(4, Math.round(Math.min(cw, ch) / 5));
-  const dot = Math.max(2, Math.round(gap / 4));
-  for (let y = Math.floor(y0); y < Math.ceil(y0 + h); y++) {
-    for (let x = Math.floor(x0); x < Math.ceil(x0 + w); x++) {
-      const on =
-        o.kind === 'low'
-          ? (x + y) % gap < Math.max(1, gap / 3)
-          : o.kind === 'difficult'
-            ? x % gap < dot && y % gap < dot
-            : true;
-      if (on) blend(c, x, y, colour);
-    }
-  }
-  const edge = [colour[0], colour[1], colour[2], 255];
-  line(c, x0, y0, x0 + w - 1, y0, edge, 2);
-  line(c, x0, y0 + h - 1, x0 + w - 1, y0 + h - 1, edge, 2);
-  line(c, x0, y0, x0, y0 + h - 1, edge, 2);
-  line(c, x0 + w - 1, y0, x0 + w - 1, y0 + h - 1, edge, 2);
-}
-
 // A line along the grid between two corners: a dark edge under a bright core.
 function gridLine(c, a, b, cw, ch, colour, width) {
   line(c, a.x * cw, a.y * ch, b.x * cw, b.y * ch, COLOURS.outline, width + 2);
   line(c, a.x * cw, a.y * ch, b.x * cw, b.y * ch, colour, width);
+}
+
+// How many each list of a geometry has, for the legend.
+function countsOf(geometry) {
+  return Object.fromEntries(
+    Object.keys(geometry || {})
+      .filter((k) => Array.isArray(geometry[k]) && geometry[k].length)
+      .map((k) => [k, geometry[k].length])
+  );
 }
 
 /**
@@ -381,7 +367,12 @@ function gridLine(c, a, b, cw, ch, colour, width) {
  * people standing on it (L-684: `people`, [{ id, name, x, y, at }], `at` the
  * place whose copy of the map they stand on).
  */
-function renderBattleMap(map, art, people = [], { sight = null } = {}) {
+function renderBattleMap(
+  map,
+  art,
+  people = [],
+  { sight = null, heights = true, hidden = true } = {}
+) {
   // Its walls, doors and obstacles in squares and corners, read back from
   // its geometry (L-928), as the grid tools take them.
   if (!layerGeometry.hasLayers(map)) map = { ...map, ...layerGeometry.layersOf(map.geometry) };
@@ -394,6 +385,11 @@ function renderBattleMap(map, art, people = [], { sight = null } = {}) {
   }
   const cw = base.width / map.width;
   const ch = base.height / map.height;
+  // Its geometry (L-929): floors, lines and dark areas under the grid, the rest
+  // over it below. Pixels a foot, a square being 5 ft.
+  const scale = { x: cw / FEET, y: ch / FEET };
+  const geometry = map.geometry || {};
+  const under = painter.paintUnder(base, geometry, scale, { art: Boolean(art), heights, hidden });
   for (let gx = 0; gx <= map.width; gx++) {
     const major = gx % 5 === 0 || gx === map.width;
     line(base, gx * cw, 0, gx * cw, base.height - 1, major ? COLOURS.gridMajor : COLOURS.gridLine);
@@ -406,17 +402,26 @@ function renderBattleMap(map, art, people = [], { sight = null } = {}) {
   for (let gx = 0; gx < map.width; gx += 5) number(base, gx, gx * cw + 2, 2, ls);
   for (let gy = 5; gy < map.height; gy += 5) number(base, gy, 2, gy * ch + 2, ls);
 
-  // The layers (L-623): obstacles under the walls, doors over them.
-  const thick = Math.max(3, Math.round(Math.min(cw, ch) / 8));
-  (map.obstacles || []).forEach((o) => obstacle(base, o, cw, ch));
-  (map.walls || []).forEach((wall) => {
-    const points = wall.points || [];
-    for (let i = 1; i < points.length; i++) {
-      gridLine(base, points[i - 1], points[i], cw, ch, COLOURS.wall, thick);
+  // Walls, doors, windows, objects and the rest of the geometry (L-929), at any
+  // angle, over the grid. Their markers are numbered after the others below.
+  const queued = [];
+  painter.paintOver(
+    base,
+    geometry,
+    scale,
+    {
+      hidden,
+      skipDoors: (map.doors || []).map((d) => d.id),
+      // The obstacles the grid tools number (made into objects, `layer-` before the id).
+      skipObjects: (map.obstacles || []).flatMap((o) => [o.id, 'layer-' + o.id]),
+    },
+    (type, info, x, y, shape, colour) => {
+      queued.push({ type, info, x, y, shape, colour });
+      return 0;
     }
-  });
-  (map.doors || []).forEach((d) => gridLine(base, d.from, d.to, cw, ch, COLOURS.door, thick + 2));
-  // Areas (#670): their outlines, dashed apart from the walls by colour.
+  );
+  // Areas (#670): their outlines, apart from the walls by colour.
+  const thick = Math.max(3, Math.round(Math.min(cw, ch) / 8));
   const areaLine = Math.max(2, Math.round(thick / 2));
   (map.areas || []).forEach((a) => {
     const corners = a.polygon || [];
@@ -494,6 +499,15 @@ function renderBattleMap(map, art, people = [], { sight = null } = {}) {
     });
     number(base, n, o.x * cw + 3, o.y * ch + 3, ls);
   });
+  // What the geometry has beside them (L-929): windows aside, each numbered
+  // thing with its id, to patch it by.
+  const size = Math.max(4, Math.min(cw, ch) / 3);
+  queued.forEach((q) => {
+    const n = markers.length + 1;
+    markers.push({ n, type: q.type, ...q.info });
+    if (q.shape) marker(base, q.x, q.y, n, q.shape, q.colour, Math.max(4, size * 0.8));
+    else number(base, n, q.x - 3, q.y - 3, ls);
+  });
 
   return {
     jpeg: encode(base),
@@ -511,14 +525,24 @@ function renderBattleMap(map, art, people = [], { sight = null } = {}) {
         'diamonds people (at: the place they stand at); each marker is at the centre of its ' +
         'cell, numbered as below. People and figures (type figure: placed with ' +
         'place_figures, group their group) are coloured by side: red hostile, green party, ' +
-        'yellow wary, teal neutral. With sightFrom, squares the entry can’t see are shaded ' +
-        'dark, and each person says whether they are seen. Layers: white lines are walls ' +
-        'and amber bars doors, both on the grid lines between squares (corner (x, y) is the ' +
-        'top-left of square (x, y)); obstacles are shaded by kind: solid filled dark, low ' +
-        'hatched, difficult dotted. Doors are numbered at their middle, obstacles at their ' +
-        'top-left square. Violet outlines are areas, along the grid lines, numbered at their ' +
+        'yellow wary, teal neutral. With sightFrom (an entry) or from (a point, in feet), ' +
+        'squares it can’t see are shaded dark, and each person says whether they are seen. ' +
+        'Its geometry (a square is 5 ft; points are in feet): floors are filled by material, ' +
+        'brighter the higher (a number is a height in feet) and darker the deeper, an ' +
+        'orange rim costly ground and a red one ground nothing crosses; lines are rivers, ' +
+        'roads and pipes; walls are drawn at any angle, coloured by material, doors amber ' +
+        '(red locked, pale open) and windows cyan; objects are boxes by group, a red-edged ' +
+        'one locked; teal outlines are zones, red outlines and circles spawns, yellow ' +
+        'circles lights (black shades dark areas), violet circles notes and magenta ' +
+        'diamonds what is hidden (hidden false draws the map as players see it, without ' +
+        'them). Doors, objects with a name or a setting, zones, spawns, lights, notes and ' +
+        'hidden things are numbered, with the id to patch each by (get_geometry, set_ground ' +
+        'and the rest). Violet outlines are areas, along the grid lines, numbered at their ' +
         'middle square.',
       walls: (map.walls || []).length,
+      geometry: countsOf(geometry),
+      ...(under.heights.length ? { heights: under.heights } : {}),
+      options: { heights, hidden },
       sides: { hostile: 'red', party: 'green', wary: 'yellow', neutral: 'teal' },
       ...(sight
         ? {
@@ -528,6 +552,101 @@ function renderBattleMap(map, art, people = [], { sight = null } = {}) {
             },
           }
         : {}),
+      markers,
+    },
+  };
+}
+
+// A grid step in map units that gives about ten lines across: 1, 2, 5, 10, 20…
+function niceStep(span) {
+  const raw = span / 10;
+  const pow = 10 ** Math.floor(Math.log10(raw || 1));
+  const n = raw / pow;
+  return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * pow;
+}
+
+const hexColour = (text) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(text || ''));
+  return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null;
+};
+
+/**
+ * A region or area map made with add_map (L-929): its geometry in the map's own
+ * units (coasts and terrain, streets and footprints), on a plain background (its
+ * `backdrop` colour, if it has one), a grid with its lines labelled, and numbered
+ * markers for its places (`places`: [{ id, name, kind, at }]) and for what the
+ * geometry holds (as a battle map's).
+ */
+function renderMap(map, places = [], { heights = true, hidden = true } = {}) {
+  const space = map.space || { width: 1000, height: 1000 };
+  const k = 1200 / Math.max(space.width, space.height);
+  const backdrop = hexColour((map.backdrop || {}).colour) || COLOURS.plain;
+  const base = canvas(
+    Math.max(1, Math.round(space.width * k)),
+    Math.max(1, Math.round(space.height * k)),
+    backdrop
+  );
+  const geometry = map.geometry || {};
+  const under = painter.paintUnder(base, geometry, k, { heights, hidden });
+  const step = niceStep(Math.max(space.width, space.height));
+  const ls = labelScale(base);
+  for (let gx = 0; gx <= space.width + 1e-9; gx += step) {
+    const major = Math.round(gx / step) % 5 === 0;
+    line(base, gx * k, 0, gx * k, base.height - 1, major ? COLOURS.gridMajor : COLOURS.gridLine);
+    if (major && gx < space.width) number(base, Math.round(gx), gx * k + 2, 2, ls);
+  }
+  for (let gy = 0; gy <= space.height + 1e-9; gy += step) {
+    const major = Math.round(gy / step) % 5 === 0;
+    line(base, 0, gy * k, base.width - 1, gy * k, major ? COLOURS.gridMajor : COLOURS.gridLine);
+    if (major && gy > 0 && gy < space.height) number(base, Math.round(gy), 2, gy * k + 2, ls);
+  }
+  const queued = [];
+  painter.paintOver(base, geometry, k, { hidden }, (type, info, x, y, shape, colour) => {
+    queued.push({ type, info, x, y, shape, colour });
+    return 0;
+  });
+  const markers = [];
+  places.forEach((p) => {
+    if (!p.at) return;
+    const n = markers.length + 1;
+    markers.push({
+      n,
+      type: 'place',
+      id: p.id,
+      name: p.name,
+      ...(p.kind ? { kind: p.kind } : {}),
+      at: p.at,
+    });
+    marker(base, p.at.x * k, p.at.y * k, n, 'circle', COLOURS.place, 7);
+  });
+  queued.forEach((q) => {
+    const n = markers.length + 1;
+    markers.push({ n, type: q.type, ...q.info });
+    if (q.shape) marker(base, q.x, q.y, n, q.shape, q.colour, 6);
+    else number(base, n, q.x - 3, q.y - 3, ls);
+  });
+  return {
+    jpeg: encode(base),
+    legend: {
+      of: 'map',
+      id: map.id,
+      name: map.name,
+      kind: map.kind,
+      space,
+      image: { width: base.width, height: base.height },
+      scale: round(k),
+      gridStep: step,
+      reading:
+        'The map’s own units, from the top-left; every fifth grid line is brighter and ' +
+        'labelled. Blue circles are places (numbered as below). Its geometry: floors and ' +
+        'terrain filled by material, brighter the higher (a number is a height) and darker ' +
+        'the deeper; lines are rivers, roads and streets; walls, doors, windows, objects, ' +
+        'zones, spawns, lights, notes and hidden things as on a battle map (hidden false ' +
+        'draws the map without what is hidden). Each numbered thing says the id to patch it ' +
+        'by (get_geometry, set_ground and the rest).',
+      geometry: countsOf(geometry),
+      ...(under.heights.length ? { heights: under.heights } : {}),
+      options: { heights, hidden },
       markers,
     },
   };
@@ -711,6 +830,7 @@ function viewLibraryImage(bytes, format, size = {}) {
 module.exports = {
   MAX_SIDE,
   renderBattleMap,
+  renderMap,
   renderTown,
   renderWorld,
   scaleDown,

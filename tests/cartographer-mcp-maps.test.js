@@ -510,10 +510,10 @@ describe('assigning maps', () => {
     const work = await ok('list_work', { worldId: W, need: 'battleMap', limit: 100 });
     expect(entitiesOf(work, 'battleMap')).toContain('poi_1');
     // The Gull & Anchor has its own map, but no walls yet: still listed.
-    expect(entitiesOf(work, 'layers')).toContain('plc_1_the-gull-anchor');
+    expect(entitiesOf(work, 'drawn')).toContain('plc_1_the-gull-anchor');
     // And maps without walls of their own (battle maps are scored too).
     expect(
-      scored(work).every((g) => ['place.ownMap', 'battleMap.layers'].includes(g.criterion))
+      scored(work).every((g) => ['place.ownMap', 'battleMap.drawn'].includes(g.criterion))
     ).toBe(true);
     expect(
       work.items
@@ -521,7 +521,7 @@ describe('assigning maps', () => {
         .every((i) => i.missing.includes('battleMap') || i.battleMap !== 'own')
     ).toBe(true);
     expect(work.howTo.battleMap).toMatch(/set_battle_map/);
-    // Walled, it leaves the battle-map list.
+    // Walled, it is half drawn: still listed until it has floors (PL2).
     await ok('set_map_layers', {
       worldId: W,
       mapId: 'bm_the-gull-anchor-ground-floor',
@@ -535,7 +535,15 @@ describe('assigning maps', () => {
       ],
     });
     const after = await ok('list_work', { worldId: W, need: 'battleMap', limit: 100 });
-    expect(entitiesOf(after, 'layers')).not.toContain('plc_1_the-gull-anchor');
+    expect(entitiesOf(after, 'drawn')).toContain('plc_1_the-gull-anchor');
+    // With floors it is drawn from its data, and leaves the list.
+    await ok('set_ground', {
+      worldId: W,
+      mapId: 'bm_the-gull-anchor-ground-floor',
+      set: [{ id: 'floor', material: 'wood', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } }],
+    });
+    const drawn = await ok('list_work', { worldId: W, need: 'battleMap', limit: 100 });
+    expect(entitiesOf(drawn, 'drawn')).not.toContain('plc_1_the-gull-anchor');
     // Closed places still say where their map stands.
     const all = await ok('list_work', { worldId: W, kind: 'poi', limit: 1 });
     expect(['none', 'generic', 'own']).toContain(all.items[0].battleMap);
@@ -1098,7 +1106,11 @@ describe('walls, doors and obstacles (L-622)', () => {
   test('replacing the grid keeps the layers; a grid they no longer fit is refused', async () => {
     const result = await ok('set_battle_map', { worldId: W, mapId, ...ROOM, width: 9 });
     expect(result.map.hasLayers).toBe(true);
-    expect(await layersOn(W, mapId)).toMatchObject({ width: 9, walls: WALLS, obstacles: OBSTACLES });
+    expect(await layersOn(W, mapId)).toMatchObject({
+      width: 9,
+      walls: WALLS,
+      obstacles: OBSTACLES,
+    });
     expect(await refused('set_battle_map', { worldId: W, mapId, ...ROOM, height: 5 })).toMatch(
       /Wall 2: every point must be a whole-number corner on the grid/
     );
@@ -1754,7 +1766,9 @@ describe('figures, tactics and danger (L-824)', () => {
     const rows = [{ what: 'wolf', count: 3, weight: 2 }];
     const set = await ok('update_location', { worldId: W, locationId: 'poi_1', encounters: rows });
     expect(set.updated).toContain('encounters');
-    expect((await ok('get_location', { worldId: W, locationId: 'poi_1' })).encounters).toEqual(rows);
+    expect((await ok('get_location', { worldId: W, locationId: 'poi_1' })).encounters).toEqual(
+      rows
+    );
     // A stat block the world doesn't have, and a count out of range, are refused with reasons.
     expect(
       await refused('update_location', {

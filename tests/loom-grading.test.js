@@ -347,24 +347,47 @@ describe('battle maps and their layers (L-622, L-628)', () => {
     );
   });
 
-  test('its own map without walls or obstacles earns half', () => {
-    const bare = { ...RUIN_MAP, id: 'bm_bare', geometry: {} };
+  test('its own map with no floors or walls and no art earns half', () => {
+    const bare = { ...RUIN_MAP, id: 'bm_bare', geometry: {}, image: null };
     const result = ruinWith({ mapId: 'bm_bare' }, bare);
     expect(result.grade).toBe('playable');
     expect(ownMap(result)).toMatchObject({ met: false, progress: 0.5 });
     expect(result.checklist).toContainEqual(
       expect.objectContaining({
-        need: 'layers',
-        tool: 'set_map_layers',
-        message: 'Its battle map has no walls or obstacles.',
+        need: 'drawn',
+        tool: 'set_ground',
+        message: 'Its battle map is not drawn: it has no floors or walls, and no art.',
       })
     );
-    const blocked = require('./helpers/grid').gridMap({
-      ...bare,
-      id: 'bm_rubble',
-      obstacles: [{ id: 'r', kind: 'difficult', x: 3, y: 3 }],
+    // Floors alone (rubble is difficult ground) or walls alone is half drawn;
+    // floors and walls are enough to draw it (PL2).
+    const gridMap = require('./helpers/grid').gridMap;
+    const rubble = [{ id: 'r', kind: 'difficult', x: 3, y: 3 }];
+    const floors = gridMap({ ...bare, id: 'bm_rubble', obstacles: rubble });
+    expect(ownMap(ruinWith({ mapId: 'bm_rubble' }, floors))).toMatchObject({
+      met: false,
+      progress: 0.5,
     });
-    expect(ownMap(ruinWith({ mapId: 'bm_rubble' }, blocked)).met).toBe(true);
+    expect(ruinWith({ mapId: 'bm_rubble' }, floors).checklist).toContainEqual(
+      expect.objectContaining({ need: 'drawn', tool: 'set_walls' })
+    );
+    const walls = [
+      {
+        points: [
+          { x: 0, y: 0 },
+          { x: 2, y: 0 },
+        ],
+      },
+    ];
+    const walled = gridMap({ ...bare, id: 'bm_walls', walls });
+    expect(ruinWith({ mapId: 'bm_walls' }, walled).checklist).toContainEqual(
+      expect.objectContaining({ need: 'drawn', tool: 'set_ground' })
+    );
+    const drawn = gridMap({ ...bare, id: 'bm_drawn', walls, obstacles: rubble });
+    expect(ownMap(ruinWith({ mapId: 'bm_drawn' }, drawn)).met).toBe(true);
+    // Art is enough too.
+    const art = { ...bare, id: 'bm_art', image: RUIN_MAP.image };
+    if (RUIN_MAP.image) expect(ownMap(ruinWith({ mapId: 'bm_art' }, art)).met).toBe(true);
   });
 
   test('its own walled map scores above a generic one', () => {
@@ -409,7 +432,7 @@ describe('whole worlds', () => {
     const summary = gradeWorld(w);
     expect(summary).toMatchObject({
       graded: true,
-      rubricVersion: 10,
+      rubricVersion: 11,
       inTown: { total: 2, ...none, playable: 2 },
       places: {
         total: 3,
