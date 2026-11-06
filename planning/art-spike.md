@@ -1,6 +1,6 @@
 # The Loom — Game Art Spike — Scope v0.1
 
-**Status:** Scoped (2026-11-06). Not an epic: a time-boxed experiment whose report decides whether, and how, an art epic is designed.
+**Status:** Done (2026-11-06): see [`art-spike-report.md`](./art-spike-report.md). The user chose a studio-led art epic at checkpoint 2. Scoped 2026-11-06.
 **Project:** Olympus (`olympus-dfa00`)
 **Follows:** L-920 maps drawn from their data (#710, shipped 2026-11-06)
 **Related:** [`maps-from-data.md`](./maps-from-data.md) (RD1–RD4, OB1, L-924, L-925), [`the-image-studio.md`](./the-image-studio.md)
