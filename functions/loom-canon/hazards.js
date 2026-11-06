@@ -16,6 +16,10 @@
  *                  `against` a rung, a number on the d20 scale locks use, or
  *                  a formula; `when` apply and/or endOfTurn
  *     description? what it looks like, for the GM
+ *     hidden?      true or { dc }: a trap, not drawn or sent to the page until
+ *                  the save finds it (./hidden.js; L-927), by a passive check
+ *                  or a Search. Unfound it still springs when walked into, and
+ *                  the walk finds it
  *
  * A step triggers a hazard when it goes from a square outside it to one
  * inside; walking on within it doesn't again. Pure.
@@ -27,6 +31,18 @@ const effects = require('./effects');
 const MAX_HAZARDS = 30;
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const key = (cell) => cell.x + ',' + cell.y;
+
+// A hazard's `hidden` setting (L-927): true, or { dc } of a number or a rung's name.
+function validHidden(hidden) {
+  if (hidden === true) return true;
+  if (!isObject(hidden)) return false;
+  return (
+    Object.keys(hidden).every((k) => k === 'dc') &&
+    (hidden.dc === undefined ||
+      (typeof hidden.dc === 'number' && Number.isFinite(hidden.dc) && hidden.dc >= 0) ||
+      (typeof hidden.dc === 'string' && hidden.dc.trim().length > 0))
+  );
+}
 
 /** The squares a hazard covers, keyed "x,y", for a save's doors (`states`). */
 function squaresOf(map, hazard, states = {}) {
@@ -57,6 +73,9 @@ function validate(system, map, hazards) {
       areas.validateArea(map, h.area).forEach((e) => errors.push(`${at}: ${e}`));
     }
     effects.validateEffect(system, h.effect).forEach((e) => errors.push(`${at}: ${e}`));
+    if (h.hidden !== undefined && !validHidden(h.hidden)) {
+      errors.push(`${at}: hidden must be true or { dc } (a number from 0, or a rung's name).`);
+    }
     if (errors.length) return undefined;
     const squares = squaresOf(map, h);
     if (!Object.keys(squares).length) errors.push(`${at} covers no square.`);
@@ -92,9 +111,14 @@ function enteredBy(map, from, to, states = {}) {
   return null;
 }
 
-/** The hazards in sight, each with the squares of it in sight (EF9): for the grid view. */
+/**
+ * The hazards in sight, each with the squares of it in sight (EF9): for the
+ * grid view. A hidden one not yet found (on a map as the save sees it,
+ * ./secrets.js) is left out: it is only sprung.
+ */
 function seenOn(map, inSight, states = {}) {
   return (map.hazards || [])
+    .filter((hazard) => !hazard.hidden)
     .map((hazard) => ({
       hazard,
       squares: Object.keys(squaresOf(map, hazard, states)).filter((k) => inSight[k]),

@@ -26,6 +26,8 @@ const conditions = require('../loom-canon/conditions');
 const sheets = require('../loom-canon/sheets');
 const mapDoors = require('../loom-canon/doors');
 const mapObjects = require('../loom-canon/objects');
+const secrets = require('../loom-canon/secrets');
+const noticing = require('./noticing');
 const sight = require('../loom-canon/sight');
 const ground = require('../loom-canon/ground');
 const { planTownStep, walksTown, nearestWayOut } = require('./town-steps');
@@ -174,8 +176,15 @@ function hazardOutcome(canonWorld, characterState, hazard, dice) {
     { now, dice, turnSeconds: clock.turnSeconds(canonWorld, true) }
   );
   const changed = result.outcome === 'applied' || result.outcome === 'replaced';
+  // A trap sprung is a trap found (L-927).
+  const mapId = characterState.mapId;
+  const key = secrets.keyOf(hazard.id, true);
+  const revealing =
+    hazard.hidden && mapId && secrets.statesOf(characterState, mapId)[key] !== 'found'
+      ? [{ target: 'save', op: 'set-flag', path: `secrets.${mapId}.${key}`, value: 'found' }]
+      : [];
   return {
-    mutations: changed ? [setSheet(result.sheet)] : [],
+    mutations: (changed ? [setSheet(result.sheet)] : []).concat(revealing),
     constraints: ['You walk into ' + hazard.name + '.', result.line],
     ...(result.roll ? { roll: rolled(result.roll, 'save: ' + hazard.name, system) } : {}),
     hazard: {
@@ -1439,22 +1448,31 @@ function evaluateRest(kind, characterState, canonWorld, dice, choose = null) {
     rest: { kind, hours: result.hours, ...(result.interrupted ? { interrupted: true } : {}) },
   };
   if (!result.interrupted) return resolution;
-  // Broken: hostiles at the place come for the player.
-  const after = {
+  // Broken: the map's spawns fill (L-927), and hostiles at the place come for
+  // the player.
+  const base = {
     ...characterState,
     time: result.to,
     character: { ...characterState.character, sheet: result.sheet },
   };
-  const fought = fightStarted(after, canonWorld, {
-    by: 'event',
-    ambushers: 'hostile',
-    dice,
-    choose,
-  });
+  const spawned = combat.spawns.fill(canonWorld, base, { dice });
+  const after = spawned.groups.length
+    ? { ...base, spawned: { ...(base.spawned || {}), [base.mapId]: spawned.all } }
+    : base;
+  const fought = fightStarted(
+    after,
+    spawned.groups.length ? combat.figures.withFigures(canonWorld, after) : canonWorld,
+    {
+      by: 'event',
+      ambushers: 'hostile',
+      dice,
+      choose,
+    }
+  );
   if (!fought) return resolution;
   return {
     ...resolution,
-    mutations: mutations.concat(fought.mutations),
+    mutations: mutations.concat(spawned.mutations, fought.mutations),
     constraints: resolution.constraints.concat(fought.constraints),
     roll: fought.roll,
     fight: fought.fight,
@@ -1618,6 +1636,10 @@ function spendOf(proposedAction, characterState, canonWorld, map) {
   if (object) return objectSpend(object, proposedAction, characterState, map);
   const feature = map && named('feature:', map.features);
   const long = params.long || (feature && feature.long);
+  // Searching the area for what is hidden (L-927): a standard action.
+  if (verb === 'search' && map && !feature && !(proposedAction.targets || []).length) {
+    return { spend: 'tier', tier: 'standard', what: 'searching' };
+  }
   if (LOOKING.test(verb) && !long) return { spend: null };
   if (SPEAKING.test(verb) && !long) return { spend: 'speak', what: 'speaking' };
   if (feature || HANDLING.test(verb)) {
@@ -1866,11 +1888,17 @@ function evaluateAction(proposedAction, characterState, dice, canonWorld) {
       ruled: true,
     };
   }
+  const searching =
+    map &&
+    String(proposedAction.verb || '').toLowerCase() === 'search' &&
+    priced.what === 'searching';
   const resolution = objectTarget
     ? evaluateObjectAttempt(proposedAction, objectTarget.slice(7), characterState, dice, canonWorld)
     : doorTarget
       ? evaluateDoorAttempt(proposedAction, doorTarget.slice(5), characterState, dice, canonWorld)
-      : evaluateGeneric(proposedAction, dice, characterState, canonWorld);
+      : searching
+        ? evaluateSearch(characterState, dice, canonWorld)
+        : evaluateGeneric(proposedAction, dice, characterState, canonWorld);
   if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return resolution;
   const fought = fightFrom(proposedAction, resolution, characterState, canonWorld);
   return {
@@ -2315,6 +2343,39 @@ function evaluateDoorAttempt(proposedAction, doorId, characterState, dice, canon
   };
 }
 
+// Searching the area (L-927; DA3): the noticing check rolled for everything
+// in sight not yet found, a hit finding it. Said the same whether anything
+// was left, so it never tells; the AP is spent either way (evaluateAction).
+function evaluateSearch(characterState, dice, canonWorld) {
+  const found = noticing.search(canonWorld, characterState, dice);
+  return {
+    outcome: 'success',
+    mutations: found.mutations,
+    constraints: found.lines.length
+      ? found.lines
+      : ['You search the area carefully and find nothing new.'],
+  };
+}
+
+// What an action leaves in sight (L-927; DA3): each hidden thing newly in
+// sight gets its passive check, once. A hit is told to the GM; a miss is only
+// remembered, so only Search finds it after.
+function afterNoticing(resolution, characterState, canonWorld, dice) {
+  if (['blocked', 'invalid_target', 'no_op'].includes(resolution.outcome)) return resolution;
+  const after = JSON.parse(JSON.stringify(characterState));
+  applyStateMutations(
+    after,
+    resolution.mutations.filter((m) => m.target === 'save')
+  );
+  const noticed = noticing.passive(canonWorld, after, dice);
+  if (!noticed.mutations.length) return resolution;
+  return {
+    ...resolution,
+    mutations: resolution.mutations.concat(noticed.mutations),
+    constraints: resolution.constraints.concat(noticed.lines),
+  };
+}
+
 // After a move (L-821): leaving the fight's map ends it (fled); arriving
 // in sight of a hostile, out of one, starts one. Its lines follow the move's,
 // and its roll card is the turn's when the move rolled none.
@@ -2488,6 +2549,9 @@ function evaluate(
       choose
     );
   }
+
+  // Hidden things now in sight get their passive check (L-927).
+  resolution = afterNoticing(resolution, characterState, canonWorld, diceSource(dice));
 
   // Resolution is immutable once produced — NARRATE (L-113) can color it, never change it.
   // A move on a battle map also says which squares it walked through, and a

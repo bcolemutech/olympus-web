@@ -37,6 +37,9 @@
   //            true }] a dark area
   //   notes    [{ id, text, at? | shape?, sense? }] — for the GM
   //   hidden   [{ id, dc? }] (or ids) — any of the above, hidden until found
+  //            (L-927: `dc`, how hard it is to notice: a number on the d20
+  //            scale, or a rung's name; walls, lines, doors, windows,
+  //            objects and ground can be noticed, the rest are never drawn)
   //
   // Points are [x, y] (or { x, y }). A shape (an area) is a list of points,
   // SVG path data ('M0 0 H10 V10 H0 Z', curves and arcs flattened; several
@@ -1285,8 +1288,12 @@
         problems.push('hidden names "' + entry.id + '", which isn’t in the geometry.');
       else if (has(seen, entry.id)) problems.push('hidden names "' + entry.id + '" twice.');
       seen[entry.id] = true;
-      if (entry.dc !== undefined && !(num(entry.dc) && entry.dc >= 0)) {
-        problems.push('hidden.' + entry.id + ' has a dc that isn’t a number.');
+      var dcOk =
+        entry.dc === undefined ||
+        (num(entry.dc) && entry.dc >= 0) ||
+        (typeof entry.dc === 'string' && entry.dc.trim().length > 0);
+      if (!dcOk) {
+        problems.push('hidden.' + entry.id + ' has a dc that isn’t a number or a rung’s name.');
       }
     });
     return problems;

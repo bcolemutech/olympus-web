@@ -202,7 +202,16 @@ describe('loomGetMap carries the turn', () => {
         door: 2,
         doors: {},
         // Each action's cost, and each feature's, for the click menu (L-837).
-        actions: { speak: 2, standUp: 5, lock: 5, object: 5, withdraw: 5, dodge: 8, attack: 10 },
+        actions: {
+          speak: 2,
+          standUp: 5,
+          lock: 5,
+          object: 5,
+          withdraw: 5,
+          dodge: 8,
+          attack: 10,
+          search: 10,
+        },
         features: {},
       },
     });

@@ -250,6 +250,21 @@ const hazard = z.strictObject({
     .describe('What it looks like, for the narrator: "a yellow fog, low to the floor".'),
   area: hazardArea,
   effect: hazardEffect,
+  hidden: z
+    .union([
+      z.literal(true),
+      z.strictObject({
+        dc: z
+          .union([z.number().min(0).max(40), z.string().trim().min(1).max(40)])
+          .optional()
+          .describe('How hard it is to notice: a number, or a rung ("Hard"). Default Moderate.'),
+      }),
+    ])
+    .optional()
+    .describe(
+      'A trap the player does not see until they notice or search it out (L-927): true, or ' +
+        '{ dc }. Until then it is not drawn, but it still springs when walked into.'
+    ),
 });
 
 // Figures placed from a stat block (L-824; loom-modules/combat/figures.js).

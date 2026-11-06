@@ -355,14 +355,16 @@ function validateSystem(given) {
     }
     // Action points a turn (L-831; AP1), worked out from the sheet.
     if (sheet.ap !== undefined) formula(sheet.ap, 'sheet.ap');
-    const lock = isObject(s.checks) && isObject(s.checks.lock) ? s.checks.lock : null;
-    if (lock) {
-      if (lock.skill !== undefined && !(sheet.skills || []).some((k) => k && k.id === lock.skill)) {
-        errors.push(`checks.lock.skill "${lock.skill}" isn't one of the system's skills.`);
+    // What picking a lock and noticing what is hidden roll (L-803, L-927).
+    for (const what of ['lock', 'notice']) {
+      const own = isObject(s.checks) && isObject(s.checks[what]) ? s.checks[what] : null;
+      if (!own) continue;
+      if (own.skill !== undefined && !(sheet.skills || []).some((k) => k && k.id === own.skill)) {
+        errors.push(`checks.${what}.skill "${own.skill}" isn't one of the system's skills.`);
       }
-      if (lock.attribute !== undefined && !attributeIds.has(lock.attribute)) {
+      if (own.attribute !== undefined && !attributeIds.has(own.attribute)) {
         errors.push(
-          `checks.lock.attribute "${lock.attribute}" isn't one of the system's attributes.`
+          `checks.${what}.attribute "${own.attribute}" isn't one of the system's attributes.`
         );
       }
     }
@@ -467,9 +469,12 @@ function validateSystem(given) {
     if (checks.ties !== undefined && !['defender', 'attacker'].includes(checks.ties)) {
       errors.push('checks.ties must be "defender" or "attacker".');
     }
-    // What picking a lock rolls (L-803): a skill or an attribute; checked below.
-    if (checks.lock !== undefined && !isObject(checks.lock)) {
-      errors.push('checks.lock must be { skill } or { attribute }.');
+    // What picking a lock rolls (L-803) and what noticing what is hidden rolls
+    // (L-927): a skill or an attribute; checked below.
+    for (const what of ['lock', 'notice']) {
+      if (checks[what] !== undefined && !isObject(checks[what])) {
+        errors.push(`checks.${what} must be { skill } or { attribute }.`);
+      }
     }
     const ladder = checks.ladder;
     if (!Array.isArray(ladder) || ladder.length < 2) {

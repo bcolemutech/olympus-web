@@ -699,6 +699,8 @@ function pricesView(canonWorld, save) {
   for (const id of ['speak', 'standUp', 'lock', 'object', 'withdraw', 'dodge', 'attack']) {
     actions[id] = finite(prices.of(id));
   }
+  // Searching the area for what is hidden (L-927) is a standard action.
+  actions.search = finite(apRules.tierCost(checks.systemOf(canonWorld), 'standard'));
   return { move, difficult, door, doors, features, actions };
 }
 

@@ -19,7 +19,8 @@
  *   - choosing sends that object action, or the look; a lever is clicked
  *     where it stands, its square; scenery gets the ordinary square menu;
  *   - the card's picture is the object's `cardArt`, else its own art;
- *   - the object clicked is selected, and the info card says so.
+ *   - the object clicked is selected, and the info card says so;
+ *   - your own square offers Search (L-927), at the standard AP price.
  *
  * It needs Playwright and its Chromium (in the tests' dependencies; CI
  * installs the browser): where the browser is missing the suite is skipped,
@@ -344,6 +345,26 @@ describe.each(['d20-fantasy', 'pool-scifi'])('an object’s menu and card under 
     expect(after).not.toContain('Object ·');
     await page.close();
   });
+
+  withBrowser(
+    'your own square offers Search at its cost; choosing it sends the search',
+    async () => {
+      // L-927: the rules roll the noticing check over everything in sight.
+      const page = await shown(sentTo(system, stand, { inventory: ['brass key'] }));
+      await clickAt(page, [12.5, 22.5]);
+      await page.waitForSelector('.loom-map-menu');
+      const menu = await menuOf(page);
+      const search = menu.items.find((i) => i.label === 'Search');
+      expect(search).toEqual({
+        label: 'Search',
+        note: `${apRules.tierCost(system, 'standard')} AP · for what is hidden in sight`,
+        disabled: false,
+      });
+      await page.click('.loom-map-menu-item:has-text("Search")');
+      expect(await callsOf(page)).toEqual([['tactic', 'search', null, 'search the area']]);
+      await page.close();
+    }
+  );
 
   withBrowser('its card shows its own card art, else its map art', async () => {
     const vault = VAULT();

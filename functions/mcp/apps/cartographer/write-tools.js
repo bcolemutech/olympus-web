@@ -4,7 +4,7 @@ const { z } = require('zod');
 const { FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const { normalizeName } = require('../../../loom-turn/interpret');
-const { worldId, entityId, systemId, challenge, triggers } = require('./schemas');
+const { worldId, entityId, systemId, challenge, triggers, encounters } = require('./schemas');
 const { SOURCES } = require('../../../cartographer/sources');
 const { isPlayable } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
@@ -16,6 +16,7 @@ const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
 const { validateSheet } = require('../../../loom-canon/sheets');
 const { systemOf } = require('../../../loom-canon/checks');
+const spawns = require('../../../loom-modules/combat/spawns');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
 // design.md §4.1, §4.2; C-7 / #374): Claude adds to, fixes and changes worlds,
@@ -893,7 +894,8 @@ function writeTools({ writer, systems, studio }) {
         'settlement, townSize sets how many metres its town’s 0–1000 square spans (null goes ' +
         'back to the default for its size: village 300, town 600, city 1200, great city 2500; ' +
         'a capital one size larger); get_town shows it. danger (none, low, high) says how ' +
-        'dangerous it is. ' +
+        'dangerous it is. encounters is the table its map’s generic spawns are filled from ' +
+        'when a rest is broken there. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -941,10 +943,19 @@ function writeTools({ writer, systems, studio }) {
             'How dangerous it is (L-824): a dangerous place is graded on having hostile figures ' +
               'or characters placed there; none is the default.'
           ),
+        encounters: encounters.optional(),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description', 'factionIds', 'rules', 'townSize', 'danger']);
+        requireSome(args, [
+          'name',
+          'description',
+          'factionIds',
+          'rules',
+          'townSize',
+          'danger',
+          'encounters',
+        ]);
         return edit(ctx, args, (e) => {
           const { world } = e;
           const place = existing(world, 'location', args.locationId);
@@ -962,6 +973,7 @@ function writeTools({ writer, systems, studio }) {
           if (args.danger !== undefined && args.danger !== (place.danger || 'none')) {
             fields.danger = args.danger === 'none' ? FieldValue.delete() : args.danger;
           }
+          Object.assign(fields, encounterFields(world, place, args.encounters));
           const rules = place.rules || {};
           for (const [key, value] of Object.entries(args.rules || {})) {
             if (value === undefined) continue;
@@ -1953,8 +1965,21 @@ function mapStillNeeded(world, map) {
 }
 
 // Shared with the town tools (./town-tools.js).
+// A place's encounter table as an update (L-927): checked against the world's
+// stat blocks; an empty one removes it.
+function encounterFields(world, place, list) {
+  if (list === undefined) return {};
+  const problems = spawns.validateEncounters(world, list);
+  if (problems.length) throw new ToolError(problems.join(' '));
+  if (!list.length) return place.encounters ? { encounters: FieldValue.delete() } : {};
+  return JSON.stringify(list) === JSON.stringify(place.encounters || null)
+    ? {}
+    : { encounters: list };
+}
+
 const helpers = {
   COLLECTION,
+  encounterFields,
   text,
   name,
   existing,
