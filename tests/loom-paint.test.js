@@ -28,7 +28,6 @@
  * Run: cd tests && npx jest loom-paint --verbose
  */
 
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { PNG } = require('pngjs');
@@ -38,6 +37,7 @@ const sight = require('../functions/loom-canon/sight');
 const seen = require('../functions/loom-turn/seen');
 const { dungeon } = require('./fixtures/paint/dungeon');
 const { large } = require('./fixtures/paint/large');
+const { serveFixtures } = require('./helpers/fixture-server');
 
 let chromium = null;
 try {
@@ -46,15 +46,7 @@ try {
   chromium = null;
 }
 
-const ROOT = path.join(__dirname, '..');
 const BASELINE = path.join(__dirname, 'fixtures/paint/dungeon.png');
-const TYPES = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.svg': 'image/svg+xml',
-  '.css': 'text/css',
-  '.png': 'image/png',
-};
 const PLACE = { x: 0, y: 0, scale: 8, width: 120, height: 80 }; // 120 × 80 ft at 8 px a foot
 const GRID = { tile: 5, wall: 1.5, tint: null };
 
@@ -73,30 +65,7 @@ beforeAll(async () => {
     browser = null;
     return;
   }
-  server = http.createServer((req, res) => {
-    const url = decodeURIComponent(req.url.split('?')[0]);
-    const file =
-      url === '/pixi.min.js'
-        ? path.join(__dirname, 'node_modules/pixi.js/dist/pixi.min.js')
-        : url.startsWith('/fixtures/')
-          ? path.join(__dirname, url)
-          : path.join(ROOT, 'public', url);
-    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
-      res.writeHead(404);
-      res.end();
-      return;
-    }
-    const send = () => {
-      res.writeHead(200, {
-        'content-type': TYPES[path.extname(file)] || 'application/octet-stream',
-      });
-      res.end(fs.readFileSync(file));
-    };
-    if (artDelay && url.startsWith('/apps/loom/art/')) setTimeout(send, artDelay);
-    else send();
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  origin = `http://127.0.0.1:${server.address().port}`;
+  ({ server, origin } = await serveFixtures({ artDelay: () => artDelay }));
 });
 
 afterAll(async () => {

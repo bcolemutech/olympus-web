@@ -133,6 +133,13 @@
     return art.ref ? art.ref.link || null : art.url;
   }
 
+  // The url an object's card shows (L-926): its own card art, else what it
+  // is drawn with.
+  function cardUrl(item, worldKinds) {
+    if (item.cardArt && item.cardArt.link) return item.cardArt.link;
+    return objectUrl(item, worldKinds);
+  }
+
   // ── Small helpers ─────────────────────────────────────────────────────
 
   function pt(p) {
@@ -627,6 +634,8 @@
     forget: forget,
     stats: stats,
     describe: describe,
+    objectUrl: objectUrl,
+    cardUrl: cardUrl,
     LAYERS: LAYERS,
   };
 })();

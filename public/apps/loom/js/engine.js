@@ -487,6 +487,17 @@
     >
       <p class="loom-map-menu-title">${props.title}</p>
       ${props.subtitle && html`<p class="loom-map-menu-subtitle">${props.subtitle}</p>`}
+      ${props.card &&
+      html`<div class="loom-map-menu-card">
+        ${props.card.art &&
+        html`<img class="loom-map-menu-card-art" src=${props.card.art} alt="" />`}
+        <div class="loom-map-menu-card-text">
+          ${props.card.text && html`<p class="loom-map-menu-card-desc">${props.card.text}</p>`}
+          ${(props.card.lines || []).map(function (line, i) {
+            return html`<p key=${i} class="loom-map-menu-card-line">${line}</p>`;
+          })}
+        </div>
+      </div>`}
       ${props.items.map(function (item, i) {
         return html`<button
           key=${i}
@@ -508,20 +519,26 @@
   }
 
   /**
-   * Opens the menu at a point in the panel: { title, subtitle, items: [{
-   * label, onSelect, disabled, note }] }. It closes on a choice, a click
-   * elsewhere, Escape, or when the camera moves.
+   * Opens the menu at a point in the panel: { title, subtitle, card?, items:
+   * [{ label, onSelect, disabled, note }] }. `card` (L-926: an object's)
+   * is { art?, text?, lines? }: its picture, what it looks like and what is
+   * known of it, across the top. It closes on a choice, a click elsewhere,
+   * Escape, or when the camera moves.
    */
   function openMenu(point, menu) {
     var s = size();
     var x = Math.min(point.x + 10, s.width - 230);
-    var y = Math.min(point.y + 10, s.height - (90 + 40 * menu.items.length));
+    var y = Math.min(
+      point.y + 10,
+      s.height - (90 + 40 * menu.items.length + (menu.card ? 110 : 0))
+    );
     ui.render(
       html`<${MapMenu}
         x=${Math.max(8, x)}
         y=${Math.max(8, y)}
         title=${menu.title}
         subtitle=${menu.subtitle}
+        card=${menu.card}
         items=${menu.items}
       />`,
       engine.menuHost
