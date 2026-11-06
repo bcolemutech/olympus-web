@@ -5,6 +5,7 @@ const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
 const { doorSides } = require('./steps');
 const mapDoors = require('../loom-canon/doors');
+const mapObjects = require('../loom-canon/objects');
 const { peopleInSight } = require('./seen');
 const clock = require('../loom-canon/clock');
 const checks = require('../loom-canon/checks');
@@ -198,7 +199,11 @@ function attacksSection(canonWorld, save) {
     'hit, "dodge"; to back away without drawing blows, "withdraw"; to wait with an attack ' +
     'for a foe to come close, "ready" with params.attack and, if they name one, target ' +
     'that foe; to work something beside them (a lever, a winch), "use" with targets ' +
-    '["feature:<id>"]. Never add a check to these.\n\n'
+    '["feature:<id>"]. Never add a check to these.\n' +
+    // Objects (L-926): the rules open, search, unlock and work them.
+    'An object in the known-entities list ("object:<id>") is opened ("open"), searched ' +
+    '("search"), unlocked or its lock picked or forced ("unlock"), or worked ("use", or its ' +
+    'own verb) with that id as the target; the rules roll any lock, so never add a check.\n\n'
   );
 }
 
@@ -217,7 +222,8 @@ function cleanCheck(check, resolve) {
 }
 
 // The things on the battle map a save stands on (L-351), targeted as
-// "feature:<id>", "exit:<id>", "door:<id>" (L-626) and "area:<id>" (#670):
+// "feature:<id>", "exit:<id>", "door:<id>" (L-626), "object:<id>" (L-926)
+// and "area:<id>" (#670):
 // `seen` says whether
 // the save has seen each (`known`, keyed "x,y", L-635; a door, from either
 // side; without it, all have been).
@@ -243,6 +249,14 @@ function mapEntities(canonWorld, save, known) {
       name: d.name || 'a door',
       kind: 'door here',
       seen: doorSides(d).some(at),
+    })),
+    // Objects there is something to do with (L-926): "open the chest", "pull
+    // the lever", "search the shelf".
+    mapObjects.usableOf(onMap).map((o) => ({
+      id: 'object:' + o.id,
+      name: mapObjects.nameOf(o),
+      kind: 'object here (open, search, unlock or use it)',
+      seen: mapObjects.squaresOf(onMap, o).some(at),
     })),
     // Its areas (#670), seen once any square of them is: "go to the back
     // room" walks into one.

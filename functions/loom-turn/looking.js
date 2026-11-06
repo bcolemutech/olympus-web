@@ -23,11 +23,12 @@
 
 const maps = require('../loom-canon/maps');
 const mapDoors = require('../loom-canon/doors');
+const mapObjects = require('../loom-canon/objects');
 const hazards = require('../loom-canon/hazards');
 const mapAreas = require('../loom-canon/map-areas');
 const combat = require('../loom-modules/combat');
 const mapPaths = require('../loom-canon/map-paths');
-const { doorStatesOf, doorSides } = require('./steps');
+const { doorStatesOf, objectStatesOf, doorSides } = require('./steps');
 
 const key = (c) => c.x + ',' + c.y;
 const coords = (c) => '(' + c.x + ', ' + c.y + ')';
@@ -40,6 +41,33 @@ const KIND = {
   low: 'low: it blocks the way',
   difficult: 'hard going',
 };
+
+// What an object is, as the save knows it (L-926): its name and kind, what it
+// looks like, its state, what it holds only once opened, what can be done
+// with it. Never what unlocks it or how hard its lock is.
+function objectFacts(map, object, save) {
+  const name = mapObjects.nameOf(object);
+  const state = mapObjects.stateOf(object, objectStatesOf(save, map.id));
+  const facts = [
+    'An object: ' + name + (object.description ? ', ' + object.description : '') + '.',
+  ];
+  if (object.container) {
+    if (state === 'locked') facts.push('It is locked.');
+    else if (state === 'closed') facts.push('It is closed.');
+    else {
+      const holds = mapObjects.contentsOf(object);
+      facts.push(
+        'It is ' +
+          (mapObjects.searches(object) ? 'searched' : 'open') +
+          ': ' +
+          (holds ? 'it holds ' + holds + '.' : 'it is empty.')
+      );
+    }
+  }
+  const doing = (object.actions || []).map((a) => (a.name || a.id).toLowerCase());
+  if (doing.length) facts.push('It can be used: ' + doing.join(', ') + '.');
+  return facts;
+}
 
 function lookAt(canonWorld, save, target, { known, inSight } = {}) {
   const { map, cell: here, point: herePoint } = maps.positionOf(canonWorld, save);
@@ -61,6 +89,18 @@ function lookAt(canonWorld, save, target, { known, inSight } = {}) {
     };
   }
 
+  if (target.object) {
+    const object = mapObjects.objectOf(map, target.object);
+    const squares = object ? mapObjects.squaresOf(map, object) : [];
+    if (!object || !squares.some(knows)) return { refused: "You haven't seen that." };
+    return {
+      at: mapObjects.nameOf(object),
+      inSight: squares.some(sees),
+      facts: objectFacts(map, object, save),
+      empty: false,
+    };
+  }
+
   const cell = target.cell;
   if (!maps.inBounds(map, cell)) return { refused: "That's off the map." };
   if (!knows(cell)) return { refused: "You haven't seen that spot." };
@@ -72,8 +112,13 @@ function lookAt(canonWorld, save, target, { known, inSight } = {}) {
   if ((map.entries || []).some((e) => e.x === cell.x && e.y === cell.y) && !there.exit) {
     facts.push('Where people come in.');
   }
+  // Objects on it (L-926): what they are; one that blocks isn't said twice.
+  const objectsHere = mapObjects
+    .allOf(map)
+    .filter((o) => mapObjects.squaresOf(map, o).some((s) => s.x === cell.x && s.y === cell.y));
+  objectsHere.forEach((o) => facts.push(...objectFacts(map, o, save)));
   const obstacle = obstacleAt(map, cell);
-  if (obstacle) {
+  if (obstacle && !objectsHere.some((o) => o.id === obstacle.id)) {
     facts.push(
       'An obstacle: ' +
         (obstacle.name || 'something') +
@@ -174,6 +219,8 @@ function lookTargetOf(canonWorld, save, proposedAction) {
   if (thing) return { cell: { x: thing.x, y: thing.y } };
   const door = named('door:', mapDoors.doorsOf(map));
   if (door) return { door: door.id };
+  const object = named('object:', mapObjects.allOf(map));
+  if (object) return { object: object.id };
   const person = maps
     .standingAt(canonWorld, maps.hostOf(canonWorld, save))
     .find((c) => c.id === target);

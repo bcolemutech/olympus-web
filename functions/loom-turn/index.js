@@ -25,6 +25,7 @@ const { foundIn, knownWorld, UNKNOWN } = require('./town-found');
 const clock = require('../loom-canon/clock');
 const maps = require('../loom-canon/maps');
 const mapDoors = require('../loom-canon/doors');
+const mapObjects = require('../loom-canon/objects');
 const mapPaths = require('../loom-canon/map-paths');
 const { systemOf } = require('../loom-canon/checks');
 const { withAp } = require('../loom-canon/sheets');
@@ -530,6 +531,17 @@ async function runTurnPipeline(params) {
           ? [String(action.target)]
           : [],
       params: action.attack ? { attack: String(action.attack) } : {},
+    };
+  } else if (action && action.verb === 'object') {
+    // An object's action chosen from its menu (L-926): no model reads it.
+    const here = maps.positionOf(canonWorld, save).map;
+    const thing = here && mapObjects.objectOf(here, String(action.object || ''));
+    const act = String(action.act || '');
+    actionText = act + ' ' + (thing ? mapObjects.nameOf(thing) : action.object);
+    proposedAction = {
+      verb: act || 'use',
+      targets: ['object:' + String(action.object || '')],
+      params: { act },
     };
   } else if (action && action.verb === 'attack') {
     // An attack chosen on the map (L-822): no model reads it.
