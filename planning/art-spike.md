@@ -152,6 +152,6 @@ The scripts use `sharp`, already a dependency in `functions/`.
 - **Stops early** if, after the style checkpoint and one round of each method, under half the assets are usable: that is the answer, and the report says so.
 - **Out of scope:**
   - animation;
-  - figures and tokens;
+  - tokens (their own epic, L-930 #788, [`tokens.md`](./tokens.md): pictures framed as circular tokens);
   - towns and the world map;
   - building culling, atlases or blending (measured and estimated only).
