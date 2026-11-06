@@ -183,8 +183,17 @@
   }
 
   /**
-   * "What's here?" on the battle map (#672): the GM describes a square, or a
-   * door, from what the player knows of it. Free: the suggestions stay.
+   * An object's action chosen from its menu (L-926): open, search, unlock or
+   * one of its own, at its AP cost; the rules roll any lock.
+   */
+  function objectAction(objectId, act, label) {
+    playTurn({ action: { verb: 'object', object: objectId, act: act } }, label);
+  }
+
+  /**
+   * "What's here?" on the battle map (#672): the GM describes a square, a
+   * door or an object, from what the player knows of it. Free: the
+   * suggestions stay.
    */
   function lookAt(target, label) {
     playTurn({ action: Object.assign({ verb: 'look' }, target) }, label, { keep: true });
@@ -254,6 +263,7 @@
     walkTo: walkTo,
     walkThere: walkThere,
     doorAction: doorAction,
+    objectAction: objectAction,
     suggest: suggest,
     confirm: confirm,
     lookAt: lookAt,

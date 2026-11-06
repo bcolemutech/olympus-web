@@ -5,9 +5,12 @@
     <title>The Loom's drawers, for tests</title>
     <!--
       The Loom's drawers on the real map engine (public/apps/loom/js/:
-      battle.js, town.js and world.js), with the store and the menus stubbed,
-      for headless Chrome (tests/loom-paint.test.js; L-924 / #728): a map as
-      loomGetMap sends it, drawn with the painter, the fog and the tokens.
+      battle.js, town.js and world.js), with the store and the play actions
+      stubbed, for headless Chrome (tests/loom-paint.test.js; L-924 / #728): a
+      map as loomGetMap sends it, drawn with the painter, the fog and the
+      tokens. The click menu is the real one, drawn with Preact and htm (the
+      same versions as the page's, from the tests' copy; tests/loom-objects-
+      menu.test.js, L-926 / #730).
     -->
     <link rel="stylesheet" href="/apps/loom/loom.css" />
     <style>
@@ -27,11 +30,13 @@
   <body>
     <div id="panel"></div>
     <script src="/pixi.min.js"></script>
+    <script src="/preact.umd.js"></script>
+    <script src="/htm.umd.js"></script>
     <script>
       window.__store = { map: null, save: { characterName: 'Tam' }, ui: {} };
       window.Loom = {
         state: { turnInProgress: false },
-        ui: { html: function () {}, render: function () {} },
+        ui: { html: window.htm.bind(window.preact.h), render: window.preact.render },
         store: { get: () => window.__store },
         map: { render: () => window.Loom.engine.draw() },
         play: {},
@@ -61,7 +66,9 @@
         if (!engine.ready()) {
           engine.mount(document.getElementById('panel'), {
             bounds: () => window.__bounds(),
-            onTap() {},
+            onTap(point) {
+              if (window.__level === 'battle') Loom.battle.tap(point, engine.camera.view);
+            },
             onHover() {},
             onCamera: () => engine.draw(),
           });
@@ -78,6 +85,7 @@
         window.__progress = [];
         window.__store.map = { combat: null, fight: null, character: null };
         engine.setLevel(level);
+        window.__level = level;
         const size = engine.size();
         if (level === 'battle') {
           window.__bounds = () => Loom.battle.bounds();

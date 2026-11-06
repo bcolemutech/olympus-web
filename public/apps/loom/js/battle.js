@@ -86,6 +86,7 @@
     turn: null, // loomGetMap's `turn` (L-611): movement left, the plan
     selected: null, // a cell { x, y }
     selectedDoor: null, // a door's id, when a door is clicked (L-627)
+    selectedObject: null, // an object's id, when one there is something to do with is clicked (L-926)
     art: null, // its image (Loom.draw.art): the copy, then the full image (L-727)
     reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
     fog: null, // the fog (L-634): { dark: runs, dim: runs }, as reach's runs
@@ -317,6 +318,9 @@
     walkIfMoved();
     if (battle.selectedDoor && (!battle.data || !doorById(battle.selectedDoor))) {
       battle.selectedDoor = null;
+    }
+    if (battle.selectedObject && (!battle.data || !usable(battle.selectedObject))) {
+      battle.selectedObject = null;
     }
     loadArt(data && data.image);
     computeFog();
@@ -850,6 +854,16 @@
       g.stroke({ width: wallWidth + 8 * px, color: COLOURS.selected, alpha: 0.45 });
     });
 
+    // An object selected (L-926) is outlined the same way.
+    var chosen = battle.selectedObject && objectItem(battle.selectedObject);
+    if (chosen) {
+      var box = hitBox(chosen);
+      var corner = spot({ x: box.x0, y: box.y0 });
+      var far = spot({ x: box.x1, y: box.y1 });
+      g.rect(corner.x, corner.y, far.x - corner.x, far.y - corner.y);
+      g.stroke({ width: wallWidth * 0.6, color: COLOURS.selected, alpha: 0.7 });
+    }
+
     // Hazards in sight (L-815; EF9): their squares tinted, their edge drawn
     // where it meets squares outside them.
     (d.hazards || []).forEach(function (hazard) {
@@ -1094,6 +1108,7 @@
       view.scale,
       battle.selected ? battle.selected.x + ',' + battle.selected.y : '',
       battle.selectedDoor || '',
+      battle.selectedObject || '',
       battle.anim ? 1 : 0,
       battle.playback ? 1 : 0, // names follow their tokens again once it's over
       reducedMotion() ? 'still' : '', // the mist shows only while it may drift
@@ -1122,6 +1137,148 @@
   }
 
   // ── Clicks: the menu (I2) ─────────────────────────
+
+  // ── Objects you can use (L-926) ───────────────────
+
+  // The row the server sent for an object there is something to do with:
+  // { id, name, state?, description?, contents?, actions }.
+  function usable(id) {
+    return (
+      ((battle.data && battle.data.objects) || []).filter(function (o) {
+        return o.id === id;
+      })[0] || null
+    );
+  }
+
+  // Its place in the map's geometry (where, how big, its art): an item of it.
+  function objectItem(id) {
+    return (
+      (((battle.data && battle.data.geometry) || {}).objects || []).filter(function (i) {
+        return i.id === id;
+      })[0] || null
+    );
+  }
+
+  // The box round an object's footprint, in feet.
+  function feetBox(item) {
+    var c = Loom.mapGeometry.compile({ objects: [item] });
+    var ring = c.objects.length ? c.objects[0].rings[0] : null;
+    var at = Array.isArray(item.at) ? item.at : [item.at.x, item.at.y];
+    var xs = ring
+      ? ring.map(function (p) {
+          return p[0];
+        })
+      : [at[0], at[0]];
+    var ys = ring
+      ? ring.map(function (p) {
+          return p[1];
+        })
+      : [at[1], at[1]];
+    return {
+      x0: Math.min.apply(null, xs),
+      y0: Math.min.apply(null, ys),
+      x1: Math.max.apply(null, xs),
+      y1: Math.max.apply(null, ys),
+    };
+  }
+
+  // What a click on it hits and the selection outlines: its footprint, at
+  // least a square, so a lever can be clicked.
+  function hitBox(item) {
+    var b = feetBox(item);
+    var cx = (b.x0 + b.x1) / 2;
+    var cy = (b.y0 + b.y1) / 2;
+    var hw = Math.max((b.x1 - b.x0) / 2, MP.FEET / 2);
+    var hh = Math.max((b.y1 - b.y0) / 2, MP.FEET / 2);
+    return { x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh };
+  }
+
+  // The grid squares it covers, as the server reads them (objects.js squaresOf).
+  function objectSquares(item) {
+    var b = feetBox(item);
+    var F = MP.FEET;
+    var x0 = Math.max(0, Math.floor(b.x0 / F + 1e-9));
+    var y0 = Math.max(0, Math.floor(b.y0 / F + 1e-9));
+    var x1 = Math.min(battle.data.width - 1, Math.max(x0, Math.floor(b.x1 / F - 1e-9)));
+    var y1 = Math.min(battle.data.height - 1, Math.max(y0, Math.floor(b.y1 / F - 1e-9)));
+    var out = [];
+    for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++) out.push({ x: x, y: y });
+    return out;
+  }
+
+  // Whether the player stands beside it: beside any square it covers.
+  function besideObject(item) {
+    return objectSquares(item).some(function (sq) {
+      return distance(sq, battle.data.here) <= 1;
+    });
+  }
+
+  // The object there is something to do with under a point (map
+  // coordinates), the nearest to its middle if two overlap, or null.
+  function objectAt(m) {
+    var p = { x: ((m.x - PAD) / CELL) * MP.FEET, y: ((m.y - PAD) / CELL) * MP.FEET };
+    var best = null;
+    ((battle.data && battle.data.objects) || []).forEach(function (o) {
+      var item = objectItem(o.id);
+      if (!item) return;
+      var b = hitBox(item);
+      if (p.x < b.x0 || p.x > b.x1 || p.y < b.y0 || p.y > b.y1) return;
+      var dx = p.x - (b.x0 + b.x1) / 2;
+      var dy = p.y - (b.y0 + b.y1) / 2;
+      var d2 = dx * dx + dy * dy;
+      if (!best || d2 < best.d2) best = { o: o, item: item, d2: d2 };
+    });
+    return best;
+  }
+
+  var OBJECT_STATES = { locked: 'Locked.', closed: 'Closed.', open: 'Open.' };
+
+  // Its card, across the top of its menu: its picture, what it looks like,
+  // and what is known of it (its state; what it holds once opened).
+  function objectCard(o, item) {
+    var lines = [];
+    if (o.state) {
+      lines.push(
+        o.state === 'open' && item.container && item.container.search
+          ? 'Searched.'
+          : OBJECT_STATES[o.state] || capitalise(o.state) + '.'
+      );
+    }
+    if (o.contents) lines.push('It holds ' + o.contents + '.');
+    return {
+      art: Loom.mapPaint.cardUrl(item, battle.data.objectKinds || null),
+      text: o.description || '',
+      lines: lines,
+    };
+  }
+
+  // Its actions: each at its AP cost, greyed out with the reason when out of
+  // reach, already acted, or the AP left won't pay (L-837); a long one (a
+  // lock picked over turns) is put in as AP allow.
+  function objectItems(o, item) {
+    var beside = besideObject(item);
+    return o.actions.map(function (a) {
+      var why = !beside
+        ? 'Walk beside it to ' + a.name.toLowerCase() + '.'
+        : acted()
+          ? "You've acted this turn."
+          : a.long
+            ? null
+            : short(a.cost);
+      return {
+        label: a.name,
+        disabled: Boolean(why),
+        note:
+          why ||
+          (a.long
+            ? noted(undefined, a.long + ' AP of work, over turns')
+            : noted(a.cost, battle.turn && battle.turn.apOff ? 'your action' : '')),
+        onSelect: function () {
+          Loom.play.objectAction(o.id, a.id, a.name.toLowerCase() + ' ' + o.name);
+        },
+      };
+    });
+  }
 
   // The door under a point (within a fifth of a square of its line), or null.
   function doorAt(m) {
@@ -1274,6 +1431,7 @@
     var door = doorAt(m);
     if (door) {
       battle.selectedDoor = door.id;
+      battle.selectedObject = null;
       battle.selected = null;
       battle.preview = null;
       Loom.map.render();
@@ -1285,6 +1443,24 @@
       return;
     }
     battle.selectedDoor = null;
+    // An object there is something to do with (L-926): its menu, with its card.
+    var hit = objectAt(m);
+    if (hit) {
+      battle.selectedObject = hit.o.id;
+      battle.selected = null;
+      battle.preview = null;
+      Loom.map.render();
+      engine.openMenu(point, {
+        title: capitalise(hit.o.name),
+        subtitle: 'Object' + (hit.o.state ? ' · ' + hit.o.state : ''),
+        card: objectCard(hit.o, hit.item),
+        items: busy(
+          objectItems(hit.o, hit.item).concat([lookItem({ object: hit.o.id, name: hit.o.name })])
+        ),
+      });
+      return;
+    }
+    battle.selectedObject = null;
     var cell = { x: Math.floor((m.x - PAD) / CELL), y: Math.floor((m.y - PAD) / CELL) };
     var inside = cell.x >= 0 && cell.y >= 0 && cell.x < d.width && cell.y < d.height;
     battle.selected = inside ? cell : null;
@@ -1606,12 +1782,19 @@
     }
     var label = cell
       ? "what's here at (" + cell.x + ', ' + cell.y + ')'
-      : 'look at ' + (target.name || 'the door');
+      : 'look at ' + (target.name || (target.object ? 'it' : 'the door'));
     return {
       label: "What's here?",
       note: 'Free',
       onSelect: function () {
-        Loom.play.lookAt(cell ? { cell: { x: cell.x, y: cell.y } } : { door: target.door }, label);
+        Loom.play.lookAt(
+          cell
+            ? { cell: { x: cell.x, y: cell.y } }
+            : target.object
+              ? { object: target.object }
+              : { door: target.door },
+          label
+        );
       },
     };
   }
@@ -1646,6 +1829,18 @@
       info.appendChild(el('p', 'loom-map-info-facts', 'Door · ' + doorStateWord(door)));
       if (!besideDoor(door)) {
         info.appendChild(el('p', 'loom-map-info-status', 'Walk beside it to open or close it.'));
+      }
+      return;
+    }
+    var object = battle.selectedObject && usable(battle.selectedObject);
+    if (object) {
+      info.appendChild(el('h3', 'loom-map-info-name', capitalise(object.name)));
+      info.appendChild(
+        el('p', 'loom-map-info-facts', 'Object' + (object.state ? ' · ' + object.state : ''))
+      );
+      var item = objectItem(object.id);
+      if (item && !besideObject(item)) {
+        info.appendChild(el('p', 'loom-map-info-status', 'Walk beside it to use it.'));
       }
       return;
     }
@@ -1777,9 +1972,12 @@
     bounds: bounds,
     framePoints: framePoints,
     herePoint: herePoint,
+    /** A point in feet (L-922) in map coordinates: where to click it. */
+    mapPoint: spot,
     selectHere: function () {
       selectHere();
       battle.selectedDoor = null;
+      battle.selectedObject = null;
       computePreview();
     },
     tap: tap,

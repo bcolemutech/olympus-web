@@ -1505,6 +1505,50 @@ body.loom-playing .app-divider {
   font-size: 0.75rem;
 }
 
+/* An object's card across the top of its menu (L-926): its picture, what it
+   looks like and what is known of it. */
+.loom-map-menu-card {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  margin: 0 0.2rem 0.3rem;
+  padding: 0.45rem 0.4rem;
+  background: color-mix(in srgb, var(--loom-accent) 7%, transparent);
+  border: 1px solid var(--loom-edge);
+  border-radius: 6px;
+}
+
+.loom-map-menu-card-art {
+  flex: none;
+  width: 3.2rem;
+  height: 3.2rem;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+}
+
+.loom-map-menu-card-text {
+  min-width: 0;
+}
+
+.loom-map-menu-card-text p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.loom-map-menu-card-desc {
+  color: var(--loom-text);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.loom-map-menu-card-line {
+  margin-top: 0.2rem;
+  color: var(--loom-muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
 .loom-map-menu-item {
   display: flex;
   flex-direction: column;
