@@ -697,6 +697,8 @@
       town.paintRoot = Loom.mapPaint.paint(n.painted, 'area:' + data.locationId, g, {
         tile: (space.width / metres) * 3, // a tile 3 m across
         wall: (space.width / metres) * 0.6,
+        // A foot of height, for walls standing (L-941): a town is in metres.
+        feet: space.width / metres / 3.2808,
         art: hasArt,
         tint: accent(),
         onProgress: engine.progress,

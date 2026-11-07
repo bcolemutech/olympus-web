@@ -20,7 +20,9 @@
  *     where it stands, its square; scenery gets the ordinary square menu;
  *   - the card's picture is the object's `cardArt`, else its own art;
  *   - the object clicked is selected, and the info card says so;
- *   - your own square offers Search (L-927), at the standard AP price.
+ *   - your own square offers Search (L-927), at the standard AP price;
+ *   - a click on a standing chest's picture, above its footprint, opens its
+ *     menu (L-941); without a standing picture the same point is a square.
  *
  * It needs Playwright and its Chromium (in the tests' dependencies; CI
  * installs the browser): where the browser is missing the suite is skipped,
@@ -101,8 +103,9 @@ function sentTo(system, cell, { inventory = [], objects, ap = 20, vault = VAULT(
   );
 }
 
-// The page with the vault shown and the play actions recorded.
-async function shown(sent) {
+// The page with the vault shown and the play actions recorded; `prepare`, run
+// on the page first.
+async function shown(sent, prepare) {
   const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -117,6 +120,7 @@ async function shown(sent) {
     Loom.play.lookAt = record('look');
     Loom.play.tactic = record('tactic');
   });
+  if (prepare) await page.evaluate(prepare);
   await page.evaluate(([d, t]) => window.__show(d, t), [sent.data, sent.turn]);
   page.errors = errors;
   return page;
@@ -365,6 +369,27 @@ describe.each(['d20-fantasy', 'pool-scifi'])('an object’s menu and card under 
       await page.close();
     }
   );
+
+  withBrowser('a click on a standing chest’s picture opens its menu (L-941)', async () => {
+    // A tall standing picture, so it rises well above the chest's footprint
+    // (21.5–23.5 ft down): 3 ft wide and, by the picture's shape, 12 ft tall.
+    const tall = () => {
+      Loom.materials.objectKind('chest').stand = '../../../fixtures/paint/pillar-stand.svg';
+    };
+    const above = [7.5, 18.5];
+    const page = await shown(sentTo(system, stand, { inventory: ['brass key'] }), tall);
+    await clickAt(page, above);
+    await page.waitForSelector('.loom-map-menu');
+    expect(await menuOf(page)).toMatchObject({ title: 'The chest', subtitle: 'Object · locked' });
+    expect(page.errors).toEqual([]);
+    await page.close();
+    // Lying flat (no standing picture), the same point is only its square.
+    const flat = await shown(sentTo(system, stand, { inventory: ['brass key'] }));
+    await clickAt(flat, above);
+    await flat.waitForSelector('.loom-map-menu');
+    expect((await menuOf(flat)).title).not.toBe('The chest');
+    await flat.close();
+  });
 
   withBrowser('its card shows its own card art, else its map art', async () => {
     const vault = VAULT();

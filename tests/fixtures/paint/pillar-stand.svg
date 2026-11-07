@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="160" viewBox="0 0 40 160">
+  <!-- A pillar standing, for the three-quarter view's headless tests
+       (tests/loom-paint.test.js; L-941): tall, its foot the bottom edge. -->
+  <rect x="2" y="2" width="36" height="12" fill="#d8d2c4" stroke="#55504a" stroke-width="2"/>
+  <rect x="7" y="14" width="26" height="130" fill="#c8c0b0" stroke="#55504a" stroke-width="2"/>
+  <rect x="2" y="144" width="36" height="14" fill="#d8d2c4" stroke="#55504a" stroke-width="2"/>
+</svg>

@@ -24,6 +24,12 @@
   //                    movement is blocked and sight isn't unless it says
   //   FALLBACK_ART   the box with a question mark
   //
+  // The three-quarter view (planning/game-art.md §4.1, TV5; L-941 / #795): a
+  // wall material may have a picture of its face (`face`), and an object kind
+  // a picture of itself standing (`stand`), named in STAND_ART. A wall with
+  // no face picture shows its top's, darkened; an object with no standing
+  // picture is drawn flat from above, as before (standFor).
+  //
   // This file is kept in two places with the same bytes, functions/loom-canon/
   // materials.js and public/apps/loom/js/materials.js (the page loads it as
   // Loom.materials, and map-geometry.js reads its materials from it), and a
@@ -48,9 +54,22 @@
     return PNG_ART[base] || 1;
   }
 
+  // The three-quarter pictures there are (L-941): a wall material's face,
+  // `materials/wall-<id>-face`, and an object kind's standing picture,
+  // `objects/<id>-stand`, each listed by its path without the extension with
+  // its file's extension. None yet: the first set comes with L-946, and the
+  // art sets of L-944 replace this table.
+  var STAND_ART = {};
+
+  function standFile(base) {
+    return has(STAND_ART, base) ? base + '.' + STAND_ART[base] : null;
+  }
+
   function m(kind, id, name, flags) {
     var base = 'materials/' + kind + '-' + id;
     var out = { kind: kind, id: id, name: name, art: artFile(base), span: spanOf(base) };
+    var face = kind === 'wall' ? standFile(base + '-face') : null;
+    if (face) out.face = face;
     if (flags)
       Object.keys(flags).forEach(function (k) {
         out[k] = flags[k];
@@ -136,6 +155,8 @@
 
   function o(id, name, group, size, flags) {
     var out = { id: id, name: name, group: group, size: size, art: artFile('objects/' + id) };
+    var stand = standFile('objects/' + id + '-stand');
+    if (stand) out.stand = stand;
     if (flags)
       Object.keys(flags).forEach(function (k) {
         out[k] = flags[k];
@@ -217,14 +238,16 @@
 
   /** Every art file the set names, once: materials', objects' and the fallback. */
   function artFiles() {
-    var files = MATERIALS.map(function (item) {
-      return item.art;
-    }).concat(
-      OBJECT_KINDS.map(function (item) {
-        return item.art;
-      }),
-      [FALLBACK_ART]
-    );
+    var files = [];
+    MATERIALS.forEach(function (item) {
+      files.push(item.art);
+      if (item.face) files.push(item.face);
+    });
+    OBJECT_KINDS.forEach(function (item) {
+      files.push(item.art);
+      if (item.stand) files.push(item.stand);
+    });
+    files.push(FALLBACK_ART);
     return files.filter(function (file, i) {
       return files.indexOf(file) === i;
     });
@@ -246,6 +269,22 @@
     var kind = objectKind(item.kind);
     if (kind) return { from: 'catalog', file: kind.art, url: artUrl(kind.art) };
     return { from: 'unknown', file: FALLBACK_ART, url: artUrl(FALLBACK_ART) };
+  }
+
+  /**
+   * The picture an object stands as in the three-quarter view (TV5; L-941),
+   * { file, url }, or null when it is drawn flat from above: the catalog
+   * kind's standing picture, unless the object or its world gives it art of
+   * its own (a library image, seen from above until art sets say otherwise,
+   * L-944).
+   */
+  function standFor(object, worldKinds) {
+    var item = object || {};
+    if (item.art && (item.art.imageId || item.art.link)) return null;
+    var own = worldKinds && has(worldKinds, item.kind) ? worldKinds[item.kind] : null;
+    if (own && own.art && (own.art.imageId || own.art.link)) return null;
+    var kind = objectKind(item.kind);
+    return kind && kind.stand ? { file: kind.stand, url: artUrl(kind.stand) } : null;
   }
 
   /**
@@ -271,6 +310,7 @@
     artUrl: artUrl,
     artFiles: artFiles,
     artFor: artFor,
+    standFor: standFor,
     sizeFor: sizeFor,
   };
 

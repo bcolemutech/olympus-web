@@ -43,6 +43,10 @@
   var engine = Loom.engine;
   var CELL = 40;
   var PAD = 60; // room for the labels of squares at the edge
+  // Room above the grid (L-941, TV4): PAD, or more for walls standing on its
+  // top edge to rise into; set with the map.
+  var TOP = PAD;
+  var RISE_PX = 0; // how far up the screen the tallest wall rises
   var STEP_MS = 110; // the token's walk: a square (5 ft) in this long
   var DOOR_HIT = 0.2; // squares from a door's line that a click picks it
 
@@ -157,12 +161,17 @@
 
   // A cell's middle, in map coordinates.
   function centre(cell) {
-    return { x: PAD + (cell.x + 0.5) * CELL, y: PAD + (cell.y + 0.5) * CELL };
+    return { x: PAD + (cell.x + 0.5) * CELL, y: TOP + (cell.y + 0.5) * CELL };
+  }
+
+  // A point in map coordinates, in feet.
+  function feetOf(m) {
+    return { x: ((m.x - PAD) / CELL) * MP.FEET, y: ((m.y - TOP) / CELL) * MP.FEET };
   }
 
   // A point in feet (L-922) in map coordinates.
   function spot(p) {
-    return { x: PAD + (p.x / MP.FEET) * CELL, y: PAD + (p.y / MP.FEET) * CELL };
+    return { x: PAD + (p.x / MP.FEET) * CELL, y: TOP + (p.y / MP.FEET) * CELL };
   }
 
   // Where the player stands, in feet: sent with the map, else its square's centre.
@@ -311,6 +320,7 @@
     var moved = !battle.data || !data || battle.data.id !== data.id;
     battle.data = data || null;
     battle.turn = turn || null;
+    TOP = topOf(battle.data);
     if (moved) {
       battle.selected = null;
       battle.anim = null;
@@ -327,6 +337,12 @@
     computeReach();
     computePreview();
     changed();
+  }
+
+  // The room above the grid (TV4): its tallest wall's rise, and a little.
+  function topOf(d) {
+    RISE_PX = d ? (Loom.mapPaint.riseOf(MP.geometryOf(d), { feet: 1 }) / MP.FEET) * CELL : 0;
+    return d ? Math.max(PAD, Math.ceil(RISE_PX + 24)) : PAD;
   }
 
   // Whether bit `i` is set in squares packed as the server packs them (one bit
@@ -557,7 +573,7 @@
   function bounds() {
     var d = battle.data;
     return d
-      ? { width: d.width * CELL + 2 * PAD, height: d.height * CELL + 2 * PAD }
+      ? { width: d.width * CELL + 2 * PAD, height: d.height * CELL + TOP + PAD }
       : { width: 1, height: 1 };
   }
 
@@ -565,8 +581,8 @@
   function framePoints() {
     var d = battle.data;
     return [
-      { x: PAD, y: PAD },
-      { x: PAD + d.width * CELL, y: PAD + d.height * CELL },
+      { x: PAD, y: TOP - RISE_PX }, // with the walls standing on its top edge (TV4)
+      { x: PAD + d.width * CELL, y: TOP + d.height * CELL },
     ];
   }
 
@@ -587,19 +603,25 @@
       ground: new PIXI.Graphics(),
       art: new PIXI.Sprite(),
       painted: new PIXI.Container(), // the map drawn from its data (L-924; paint.js)
-      fogDim: new PIXI.Sprite(),
       under: new PIXI.Graphics(), // reach, grid, layers, entries, exits, features
-      people: new PIXI.Container(),
       fogDark: new PIXI.Sprite(),
       mist: new PIXI.Sprite(),
+      // The standing layer (L-941): walls, doors, windows and objects standing
+      // up, and the tokens, in one order by their feet (paint.js); over the
+      // dark so a wall's face can rise over squares not seen, cut to the
+      // columns over the squares seen so nothing beyond them shows.
+      standing: new PIXI.Container(),
+      standMask: new PIXI.Graphics(),
+      fogDim: new PIXI.Sprite(),
       labels: new PIXI.Container(),
       over: new PIXI.Graphics(), // the selected square and the way
       you: Loom.draw.token(),
       cards: new PIXI.Container(), // foes' cards while their turns play out (L-828)
     };
     n.art.alpha = 0.95;
-    n.scene.addChild(n.ground, n.art, n.painted, n.fogDim, n.under, n.people, n.fogDark, n.mist);
-    n.scene.addChild(n.labels, n.over, n.you.container, n.cards);
+    n.you.container.__loomPainted = { layer: 'standing', kind: 'token', id: 'you' };
+    n.scene.addChild(n.ground, n.art, n.painted, n.under, n.fogDark, n.mist);
+    n.scene.addChild(n.standing, n.standMask, n.fogDim, n.labels, n.over, n.cards);
     container.addChild(n.scene);
     battle.nodes = n;
   }
@@ -641,6 +663,53 @@
     var texture = window.PIXI.Texture.from(soft);
     texture.source.scaleMode = 'linear';
     return texture;
+  }
+
+  // A token in the standing layer (L-941), in its place in the order: its
+  // foot, `foot` below its middle (map coordinates).
+  function standToken(container, at, foot) {
+    var stand = battle.data && Loom.mapPaint.standOf('battle:' + battle.data.id);
+    if (!stand) return;
+    if (container.parent !== stand) stand.addChild(container);
+    container.__loomFoot = foot;
+    container.zIndex = at.y + foot;
+    if (container.__loomPainted) {
+      container.__loomPainted.depth =
+        Math.round(((at.y + foot - TOP) / CELL) * MP.FEET * 100) / 100;
+    }
+  }
+
+  // The standing layer cut to the columns over the squares seen (L-941): a
+  // wall's face rises up the screen over the squares beyond it, but nothing
+  // standing on a square never seen shows.
+  function maskStanding(n, d) {
+    var key = d.fog ? d.id + '|' + d.fog.seen + '|' + TOP : null;
+    if (battle.standMaskKey === key) return;
+    battle.standMaskKey = key;
+    var g = n.standMask;
+    g.clear();
+    if (!key) {
+      n.standing.mask = null;
+      g.visible = false;
+      return;
+    }
+    var seen = unpacked(d.fog.seen);
+    var rise = RISE_PX + CELL / 2; // the tallest wall's rise, and some
+    for (var y = 0; y < d.height; y++) {
+      var x = 0;
+      while (x < d.width) {
+        if (!seen(y * d.width + x)) {
+          x += 1;
+          continue;
+        }
+        var x0 = x;
+        while (x < d.width && seen(y * d.width + x)) x += 1;
+        g.rect(PAD + x0 * CELL, TOP + y * CELL - rise, (x - x0) * CELL, CELL + rise);
+      }
+    }
+    g.fill({ color: 0xffffff });
+    g.visible = true;
+    n.standing.mask = g;
   }
 
   // The fog as two textures (A3), a few pixels a square, blurred for soft
@@ -730,6 +799,9 @@
     var root = Loom.mapPaint.paint(n.painted, 'battle:' + d.id, geometry, {
       tile: MP.FEET,
       wall: 1.5,
+      feet: 1,
+      stand: n.standing,
+      standAt: { x: PAD, y: TOP, scale: CELL / MP.FEET },
       art: Boolean(d.image),
       tint: accent(),
       worldKinds: d.objectKinds || null,
@@ -738,7 +810,7 @@
         engine.draw();
       },
     });
-    root.position.set(PAD, PAD);
+    root.position.set(PAD, TOP);
     root.scale.set(CELL / MP.FEET);
   }
 
@@ -752,7 +824,7 @@
 
     n.ground.clear();
     n.ground
-      .rect(PAD, PAD, gw, gh)
+      .rect(PAD, TOP, gw, gh)
       .fill({ color: COLOURS.ground })
       .stroke({ width: px, color: COLOURS.groundEdge, alpha: 0.25 });
 
@@ -761,13 +833,14 @@
       battle.paintedFor = d;
       paintMap(n, d);
     }
+    maskStanding(n, d);
 
     // The art is stretched to the grid, as Claude sees it in view_image.
     var art = d.image && battle.art && battle.art.ready(d.image);
     n.art.visible = Boolean(art);
     if (art) {
       n.art.texture = battle.art.texture;
-      n.art.position.set(PAD, PAD);
+      n.art.position.set(PAD, TOP);
       n.art.width = gw;
       n.art.height = gh;
       battle.art.sharpen(Loom.draw.devicePx(Math.max(gw, gh) * view.scale));
@@ -783,7 +856,7 @@
       pair[0].visible = Boolean(pair[1]);
       if (!pair[1]) return;
       pair[0].texture = pair[1];
-      pair[0].position.set(PAD, PAD);
+      pair[0].position.set(PAD, TOP);
       pair[0].width = gw;
       pair[0].height = gh;
     });
@@ -791,7 +864,7 @@
     var g = n.under;
     g.clear();
     var square = function (cell) {
-      return { x: PAD + cell.x * CELL, y: PAD + cell.y * CELL };
+      return { x: PAD + cell.x * CELL, y: TOP + cell.y * CELL };
     };
 
     // This turn's reach (L-615).
@@ -831,11 +904,11 @@
       [false, true].forEach(function (major) {
         for (var gx = 0; gx <= d.width; gx++) {
           if ((gx % 5 === 0) !== major) continue;
-          g.moveTo(PAD + gx * CELL, PAD).lineTo(PAD + gx * CELL, PAD + gh);
+          g.moveTo(PAD + gx * CELL, TOP).lineTo(PAD + gx * CELL, TOP + gh);
         }
         for (var gy = 0; gy <= d.height; gy++) {
           if ((gy % 5 === 0) !== major) continue;
-          g.moveTo(PAD, PAD + gy * CELL).lineTo(PAD + gw, PAD + gy * CELL);
+          g.moveTo(PAD, TOP + gy * CELL).lineTo(PAD + gw, TOP + gy * CELL);
         }
         g.stroke({ width: px, color: COLOURS.grid, alpha: major ? 0.3 : 0.12 });
       });
@@ -929,7 +1002,11 @@
       if (!token) {
         token = Loom.draw.token();
         battle.tokens[person.id || person.name] = token;
-        n.people.addChild(token.container);
+        token.container.__loomPainted = {
+          layer: 'standing',
+          kind: 'token',
+          id: person.id || person.name,
+        };
       }
       people[person.id || person.name] = true;
       var c = spot(personFeet(person));
@@ -938,11 +1015,13 @@
       // Their side shows in a fight's colours (L-828): foes red, friends
       // green; someone down is faded.
       token.container.alpha = person.down ? 0.45 : 1;
+      var radius = Math.max(5, cellPx * Math.max(0.32, (person.width || 0) / MP.FEET / 2));
+      standToken(token.container, c, radius * px);
       token.update({
         x: c.x,
         y: c.y,
         // As wide as they are (L-922), a medium one's as before.
-        radius: Math.max(5, cellPx * Math.max(0.32, (person.width || 0) / MP.FEET / 2)),
+        radius: radius,
         name: person.name,
         fill:
           person.side === 'hostile'
@@ -1126,6 +1205,7 @@
     var me = tokenCentre();
     var save = Loom.store.get().save;
     n.you.container.scale.set(1 / view.scale);
+    standToken(n.you.container, me, Math.max(5, cellPx * 0.3) / view.scale);
     n.you.update({
       x: me.x,
       y: me.y,
@@ -1216,7 +1296,7 @@
   // The object there is something to do with under a point (map
   // coordinates), the nearest to its middle if two overlap, or null.
   function objectAt(m) {
-    var p = { x: ((m.x - PAD) / CELL) * MP.FEET, y: ((m.y - PAD) / CELL) * MP.FEET };
+    var p = feetOf(m);
     var best = null;
     ((battle.data && battle.data.objects) || []).forEach(function (o) {
       var item = objectItem(o.id);
@@ -1229,6 +1309,20 @@
       if (!best || d2 < best.d2) best = { o: o, item: item, d2: d2 };
     });
     return best;
+  }
+
+  // The object there is something to do with whose standing picture is under
+  // a point (L-941; paint.js standingAt), the front-most, or null.
+  function standingObjectAt(m) {
+    if (!battle.data) return null;
+    var p = feetOf(m);
+    var id = Loom.mapPaint.standingAt('battle:' + battle.data.id, p.x, p.y);
+    if (!id) return null;
+    var o = ((battle.data && battle.data.objects) || []).filter(function (x) {
+      return x.id === id;
+    })[0];
+    var item = o && objectItem(o.id);
+    return item ? { o: o, item: item, d2: 0 } : null;
   }
 
   var OBJECT_STATES = { locked: 'Locked.', closed: 'Closed.', open: 'Open.' };
@@ -1282,7 +1376,7 @@
 
   // The door under a point (within a fifth of a square of its line), or null.
   function doorAt(m) {
-    var p = { x: ((m.x - PAD) / CELL) * MP.FEET, y: ((m.y - PAD) / CELL) * MP.FEET };
+    var p = feetOf(m);
     return (
       doorsOf(battle.data).filter(function (dr) {
         var ends = endsOf(dr);
@@ -1428,7 +1522,9 @@
     }
     var d = battle.data;
     var m = M.toMap(view, point.x, point.y);
-    var door = doorAt(m);
+    // A standing object's picture first (L-941): it rises over what's behind it.
+    var standing = standingObjectAt(m);
+    var door = standing ? null : doorAt(m);
     if (door) {
       battle.selectedDoor = door.id;
       battle.selectedObject = null;
@@ -1444,7 +1540,7 @@
     }
     battle.selectedDoor = null;
     // An object there is something to do with (L-926): its menu, with its card.
-    var hit = objectAt(m);
+    var hit = standing || objectAt(m);
     if (hit) {
       battle.selectedObject = hit.o.id;
       battle.selected = null;
@@ -1461,7 +1557,7 @@
       return;
     }
     battle.selectedObject = null;
-    var cell = { x: Math.floor((m.x - PAD) / CELL), y: Math.floor((m.y - PAD) / CELL) };
+    var cell = { x: Math.floor((m.x - PAD) / CELL), y: Math.floor((m.y - TOP) / CELL) };
     var inside = cell.x >= 0 && cell.y >= 0 && cell.x < d.width && cell.y < d.height;
     battle.selected = inside ? cell : null;
     computePreview();
@@ -1771,6 +1867,7 @@
       if (!token) return;
       token.container.visible = true;
       token.container.position.set(at[id].x, at[id].y);
+      standToken(token.container, at[id], token.container.__loomFoot || 0);
     });
   }
 
@@ -1819,9 +1916,9 @@
     var m = M.toMap(view, point.x, point.y);
     var d = battle.data;
     var gx = (m.x - PAD) / CELL;
-    var gy = (m.y - PAD) / CELL;
+    var gy = (m.y - TOP) / CELL;
     var onGrid = gx >= 0 && gy >= 0 && gx < d.width && gy < d.height;
-    engine.panelCursor(doorAt(m) || onGrid ? 'pointer' : '');
+    engine.panelCursor(standingObjectAt(m) || doorAt(m) || onGrid ? 'pointer' : '');
   }
 
   // ── The card ──────────────────────────────────────
@@ -1949,7 +2046,7 @@
     var me = spot(hereFeet());
     points.push({ x: me.x, y: me.y, colour: '#ffffff', r: 3.5, ring: '#ffb74d' });
     return {
-      rect: { x: PAD, y: PAD, width: d.width * CELL, height: d.height * CELL, fill: '#1a1f2c' },
+      rect: { x: PAD, y: TOP, width: d.width * CELL, height: d.height * CELL, fill: '#1a1f2c' },
       points: points,
     };
   }
@@ -1967,7 +2064,7 @@
     n.mist.alpha = 0.55 + 0.45 * Math.sin(phase);
     n.mist.position.set(
       PAD + Math.sin(phase / 2) * CELL * 0.35,
-      PAD + Math.cos(phase / 3) * CELL * 0.2
+      TOP + Math.cos(phase / 3) * CELL * 0.2
     );
     return true;
   }
