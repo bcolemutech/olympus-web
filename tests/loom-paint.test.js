@@ -24,7 +24,11 @@
  *     slanted face, a door closed, open and locked, and a prop in front of a
  *     wall drawn over it and one behind drawn under it, each against its
  *     screenshot; describe() in the depth order; tokens stand in the order
- *     with the walls; the grid view's top margin.
+ *     with the walls; the grid view's top margin;
+ *   - art sets (planning/game-art.md §4.3; L-944 / #798): a map drawn from
+ *     an atlas matches the same map drawn from single files, the atlas loaded
+ *     once; a set not yet loaded is fetched by its name, and one that isn't
+ *     there leaves the built-in art.
  *
  * It needs Playwright and its Chromium (in the tests' dependencies; CI
  * installs the browser): where the browser is missing the suite is skipped,
@@ -121,13 +125,22 @@ function matchesBaseline(shot, name) {
   expect(diff / (shot.width * shot.height)).toBeLessThan(0.01);
 }
 
-// Standing pictures for the chest and the pillar (L-941): the catalog has
-// none yet (L-946 paints them), so the tests give it their own.
+// Standing pictures for the chest and the pillar (L-941), in a set of the
+// tests' own (L-944): the built-in set has none yet (L-946 paints them).
+const STANDING = { ...GRID, set: 'test-stand' };
 const standing = (page) =>
-  page.evaluate(() => {
-    Loom.materials.objectKind('chest').stand = '../../../fixtures/paint/chest-stand.svg';
-    Loom.materials.objectKind('pillar').stand = '../../../fixtures/paint/pillar-stand.svg';
-  });
+  page.evaluate(() =>
+    Loom.materials.registerSet(
+      {
+        name: 'test-stand',
+        objects: {
+          chest: { stand: { file: 'chest-stand.svg' } },
+          pillar: { stand: { file: 'pillar-stand.svg' } },
+        },
+      },
+      '/fixtures/paint/'
+    )
+  );
 
 // The colour at a point in feet of a screenshot.
 function colourAt(png, xFt, yFt) {
@@ -259,10 +272,10 @@ describe('the painter', () => {
 });
 
 // Draws a map in the painter's page at `scale` px a foot, `top` px down.
-const drawAt = (page, key, geometry, place) =>
+const drawAt = (page, key, geometry, place, options) =>
   page.evaluate(
     ([k, g, o, p]) => window.__draw(k, g, o, p, null),
-    [key, geometry, GRID, { x: 0, ...place }]
+    [key, geometry, options || GRID, { x: 0, ...place }]
   );
 
 // The colour at a point in feet, for a map drawn at `place`.
@@ -292,44 +305,48 @@ function patchIn(png, place, xFt, yFt) {
 
 // What's standing, in the order drawn.
 const standingOf = (drawn) => drawn.filter((d) => d.layer === 'standing');
-const inDepthOrder = (list) =>
-  list.every((d, i) => i === 0 || list[i - 1].depth <= d.depth + 1e-9);
+const inDepthOrder = (list) => list.every((d, i) => i === 0 || list[i - 1].depth <= d.depth + 1e-9);
 
 describe('the three-quarter view (L-941)', () => {
-  withBrowser('the dungeon stands: walls, doors and windows standing, props on their feet', async () => {
-    const page = await painterPage();
-    await standing(page);
-    await draw(page, 'tq-dungeon', geo.normalize(dungeon()));
-    const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-dungeon'));
-    const up = standingOf(drawn);
-    // Walls, doors, windows and the props with standing pictures stand; the
-    // rest lie flat, as before (TV5).
-    for (const kind of ['wall', 'door', 'window']) {
-      expect(drawn.filter((d) => d.kind === kind).every((d) => d.layer === 'standing')).toBe(true);
+  withBrowser(
+    'the dungeon stands: walls, doors and windows standing, props on their feet',
+    async () => {
+      const page = await painterPage();
+      await standing(page);
+      await draw(page, 'tq-dungeon', geo.normalize(dungeon()), STANDING);
+      const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-dungeon'));
+      const up = standingOf(drawn);
+      // Walls, doors, windows and the props with standing pictures stand; the
+      // rest lie flat, as before (TV5).
+      for (const kind of ['wall', 'door', 'window']) {
+        expect(drawn.filter((d) => d.kind === kind).every((d) => d.layer === 'standing')).toBe(
+          true
+        );
+      }
+      expect(up.find((d) => d.id === 'chest').art).toMatch(/chest-stand\.svg$/);
+      expect(up.find((d) => d.id === 'pillar').art).toMatch(/pillar-stand\.svg$/);
+      expect(drawn.find((d) => d.id === 'table')).toMatchObject({ layer: 'objects' });
+      // describe() lists the standing layer in its depth order, by each foot.
+      expect(inDepthOrder(up)).toBe(true);
+      expect(up.find((d) => d.id === 'chest').depth).toBe(13); // its footprint's south edge
+      // Under the light, as before.
+      expect(drawn[drawn.length - 1]).toMatchObject({ layer: 'light' });
+      const shot = PNG.sync.read(await page.screenshot());
+      // The north wall's face rises above the map, into the margin.
+      const face = colourAt(shot, 30, -2);
+      expect(brightness(face)).toBeGreaterThan(30);
+      matchesBaseline(shot, 'dungeon-standing.png');
+      expect(page.errors).toEqual([]);
+      await page.close();
     }
-    expect(up.find((d) => d.id === 'chest').art).toMatch(/chest-stand\.svg$/);
-    expect(up.find((d) => d.id === 'pillar').art).toMatch(/pillar-stand\.svg$/);
-    expect(drawn.find((d) => d.id === 'table')).toMatchObject({ layer: 'objects' });
-    // describe() lists the standing layer in its depth order, by each foot.
-    expect(inDepthOrder(up)).toBe(true);
-    expect(up.find((d) => d.id === 'chest').depth).toBe(13); // its footprint's south edge
-    // Under the light, as before.
-    expect(drawn[drawn.length - 1]).toMatchObject({ layer: 'light' });
-    const shot = PNG.sync.read(await page.screenshot());
-    // The north wall's face rises above the map, into the margin.
-    const face = colourAt(shot, 30, -2);
-    expect(brightness(face)).toBeGreaterThan(30);
-    matchesBaseline(shot, 'dungeon-standing.png');
-    expect(page.errors).toEqual([]);
-    await page.close();
-  });
+  );
 
   withBrowser('a generated interior stands', async () => {
     const page = await painterPage();
     await standing(page);
     const map = generators.generate('interior', { seed: 'three-quarter' });
     const scale = Math.min(900 / (map.width * 5), 560 / (map.height * 5));
-    await drawAt(page, 'tq-interior', map.geometry, { y: 60, scale });
+    await drawAt(page, 'tq-interior', map.geometry, { y: 60, scale }, STANDING);
     const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-interior'));
     const up = standingOf(drawn);
     expect(up.filter((d) => d.kind === 'wall').length).toBeGreaterThan(4);
@@ -396,9 +413,23 @@ describe('the three-quarter view (L-941)', () => {
           },
         ],
         doors: [
-          { id: 'shut', material: 'wood', from: [10, 20], to: [15, 20], wall: 'w', state: 'closed' },
+          {
+            id: 'shut',
+            material: 'wood',
+            from: [10, 20],
+            to: [15, 20],
+            wall: 'w',
+            state: 'closed',
+          },
           { id: 'ajar', material: 'wood', from: [25, 20], to: [30, 20], wall: 'w', state: 'open' },
-          { id: 'vault', material: 'iron', from: [45, 20], to: [50, 20], wall: 'w', state: 'locked' },
+          {
+            id: 'vault',
+            material: 'iron',
+            from: [45, 20],
+            to: [50, 20],
+            wall: 'w',
+            state: 'locked',
+          },
         ],
       }),
       place
@@ -447,7 +478,8 @@ describe('the three-quarter view (L-941)', () => {
           { id: 'behind', kind: 'chest', at: [40, 18], size: [8, 2] },
         ],
       }),
-      place
+      place,
+      STANDING
     );
     const drawn = standingOf(await page.evaluate(() => Loom.mapPaint.describe('tq-props')));
     expect(drawn.map((d) => d.id)).toEqual(['behind', 'w', 'front']);
@@ -468,6 +500,104 @@ describe('the three-quarter view (L-941)', () => {
     ]);
     expect(at).toEqual(['front', 'behind', null]);
     matchesBaseline(shot, 'props-standing.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+});
+
+describe('art sets (L-944)', () => {
+  // The tests' two sets, the same pictures as files and in an atlas
+  // (fixtures/art-sets/, made by the pipeline: webp, then atlas).
+  const register = (page) =>
+    page.evaluate(async () => {
+      for (const dir of ['files', 'atlas']) {
+        const base = '/fixtures/art-sets/' + dir + '/';
+        const manifest = await (await fetch(base + 'manifest.json')).json();
+        const problems = Loom.materials.registerSet(manifest, base);
+        if (problems.length) throw new Error(problems.join(' '));
+      }
+    });
+  const room = () =>
+    geo.normalize({
+      ground: [{ id: 'f', material: 'flagstone', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } }],
+      walls: [
+        {
+          id: 'w',
+          material: 'stone',
+          points: [
+            [5, 15],
+            [55, 15],
+          ],
+        },
+      ],
+      doors: [{ id: 'd', material: 'wood', from: [30, 15], to: [35, 15], wall: 'w' }],
+      objects: [
+        { id: 'chest', kind: 'chest', at: [15, 25], size: [6, 4] },
+        { id: 'pillar', kind: 'pillar', at: [45, 12], size: [3, 3] },
+        { id: 'barrel', kind: 'barrel', at: [25, 32], size: [2.5, 2.5] },
+      ],
+    });
+  const place = { y: 80, scale: 12 };
+
+  withBrowser(
+    'a map drawn from an atlas matches the same map drawn from single files',
+    async () => {
+      const page = await painterPage();
+      const fetched = [];
+      page.on('request', (r) => fetched.push(r.url()));
+      await register(page);
+      await drawAt(page, 'set-files', room(), place, { ...GRID, set: 'fixture-files' });
+      const files = PNG.sync.read(await page.screenshot());
+      const fromFiles = await page.evaluate(() => Loom.mapPaint.describe('set-files'));
+      await page.evaluate(() => Loom.mapPaint.forget('set-files'));
+      await drawAt(page, 'set-atlas', room(), place, { ...GRID, set: 'fixture-atlas' });
+      const atlas = PNG.sync.read(await page.screenshot());
+      const fromAtlas = await page.evaluate(() => Loom.mapPaint.describe('set-atlas'));
+      // The set's pictures: the floor a file in both; the face and the props
+      // files in one, frames of the atlas in the other; the barrel, which
+      // neither set paints, the built-in art lying flat.
+      const art = (drawn, kind, id) => drawn.find((d) => d.kind === kind && d.id === id).art;
+      expect(art(fromFiles, 'ground', 'f')).toBe('/fixtures/art-sets/files/ground/flagstone.webp');
+      expect(art(fromFiles, 'object', 'chest')).toBe('/fixtures/art-sets/files/objects/chest.webp');
+      expect(art(fromAtlas, 'object', 'chest')).toMatch(
+        /^\/fixtures\/art-sets\/atlas\/atlas\/sheet-0\.webp#\d+,\d+,96,80$/
+      );
+      // The wall's top is the built-in one (the set paints only its face).
+      expect(art(fromAtlas, 'wall', 'w')).toBe('/apps/loom/art/materials/wall-stone.svg');
+      expect(art(fromAtlas, 'object', 'barrel')).toBe('/apps/loom/art/objects/barrel.svg');
+      expect(fromAtlas.find((d) => d.id === 'barrel').layer).toBe('objects');
+      // The pillar stands on its foot, 0.95 down its picture.
+      expect(fromAtlas.find((d) => d.id === 'pillar').layer).toBe('standing');
+      // The same drawing either way.
+      const diff = pixelmatch(files.data, atlas.data, null, files.width, files.height, {
+        threshold: 0.1,
+      });
+      expect(diff / (files.width * files.height)).toBeLessThan(0.002);
+      // And the set's art is there at all: the face is the fixture's red brick.
+      const face = patchIn(atlas, place, 15, 13);
+      expect(face.r).toBeGreaterThan(face.g + 20);
+      matchesBaseline(atlas, 'set-atlas.png');
+      // An atlas is loaded once for all its frames.
+      expect(fetched.filter((u) => u.endsWith('/atlas/sheet-0.webp'))).toHaveLength(1);
+      expect(page.errors).toEqual([]);
+      await page.close();
+    }
+  );
+
+  withBrowser('a set not yet loaded is fetched by its name, then the map is drawn', async () => {
+    const page = await painterPage();
+    expect(await page.evaluate(() => Loom.materials.setOf('classic'))).toBeNull();
+    await drawAt(page, 'set-classic', room(), place, { ...GRID, set: 'classic' });
+    expect(await page.evaluate(() => Loom.materials.setOf('classic').name)).toBe('classic');
+    // The classic set paints nothing yet (L-946): the built-in art.
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('set-classic'));
+    expect(drawn.find((d) => d.id === 'chest').art).toBe('/apps/loom/art/objects/chest.svg');
+    // A set that isn't there leaves the built-in art too.
+    await drawAt(page, 'set-none', room(), place, { ...GRID, set: 'no-such-set' });
+    const none = await page.evaluate(() => Loom.mapPaint.describe('set-none'));
+    expect(none.find((d) => d.id === 'f').art).toBe(
+      '/apps/loom/art/materials/ground-flagstone.svg'
+    );
     expect(page.errors).toEqual([]);
     await page.close();
   });
@@ -668,63 +798,67 @@ describe('the grid view', () => {
       await page.close();
     }
   );
-  withBrowser('a town with ground draws from it (L-928); a town with art keeps its art', async () => {
-    const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
-    const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(origin + '/fixtures/paint/drawers.html');
-    const ground = require('../functions/loom-canon/ground');
-    const rect = (x, y, w, h) => [
-      { x, y },
-      { x: x + w, y },
-      { x: x + w, y: y + h },
-      { x, y: y + h },
-    ];
-    const shapes = {
-      buildings: [{ name: 'the mill', points: rect(200, 200, 120, 80) }],
-      water: [{ name: 'the Dal', points: rect(0, 480, 1000, 40) }],
-      crossings: [{ name: 'the bridge', points: rect(480, 470, 40, 60) }],
-      walls: [
-        {
-          name: 'the town wall',
-          points: [
-            { x: 100, y: 100 },
-            { x: 900, y: 100 },
-          ],
-        },
-      ],
-    };
-    // As loomGetMap sends a town with ground (map-view.js townDrawing).
-    const town = (id, image) => ({
-      locationId: id,
-      name: 'Burdendal',
-      here: null,
-      at: null,
-      next: [],
-      places: [],
-      links: [],
-      exits: [],
-      image,
-      ground: shapes,
-      geometry: ground.geometryOf(shapes),
-      space: { width: 1000, height: 1000 },
-    });
-    await page.evaluate(([d]) => window.__show(d, null, 'town'), [town('loc_burden', null)]);
-    const drawn = await page.evaluate(() => Loom.mapPaint.describe('area:loc_burden'));
-    expect(drawn.filter((d) => d.kind === 'ground').map((d) => [d.id, d.art])).toEqual([
-      ['town-streets', '/apps/loom/art/materials/ground-cobble.svg'],
-      ['town-water-0', '/apps/loom/art/materials/ground-water.svg'],
-      ['town-crossing-0', '/apps/loom/art/materials/ground-wood.svg'],
-      ['town-building-0', '/apps/loom/art/materials/ground-roof.svg'],
-    ]);
-    expect(drawn.filter((d) => d.kind === 'wall').map((d) => d.id)).toEqual(['town-wall-0']);
-    // With art, the art is the town's ground and walls: nothing of them drawn.
-    await page.evaluate(([d]) => window.__show(d, null, 'town'), [
-      town('loc_arted', { url: '/fixtures/paint/art.svg', width: 1000, height: 1000 }),
-    ]);
-    const arted = await page.evaluate(() => Loom.mapPaint.describe('area:loc_arted'));
-    expect(arted.filter((d) => d.kind === 'ground' || d.kind === 'wall')).toEqual([]);
-    expect(errors).toEqual([]);
-    await page.close();
-  });
+  withBrowser(
+    'a town with ground draws from it (L-928); a town with art keeps its art',
+    async () => {
+      const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(origin + '/fixtures/paint/drawers.html');
+      const ground = require('../functions/loom-canon/ground');
+      const rect = (x, y, w, h) => [
+        { x, y },
+        { x: x + w, y },
+        { x: x + w, y: y + h },
+        { x, y: y + h },
+      ];
+      const shapes = {
+        buildings: [{ name: 'the mill', points: rect(200, 200, 120, 80) }],
+        water: [{ name: 'the Dal', points: rect(0, 480, 1000, 40) }],
+        crossings: [{ name: 'the bridge', points: rect(480, 470, 40, 60) }],
+        walls: [
+          {
+            name: 'the town wall',
+            points: [
+              { x: 100, y: 100 },
+              { x: 900, y: 100 },
+            ],
+          },
+        ],
+      };
+      // As loomGetMap sends a town with ground (map-view.js townDrawing).
+      const town = (id, image) => ({
+        locationId: id,
+        name: 'Burdendal',
+        here: null,
+        at: null,
+        next: [],
+        places: [],
+        links: [],
+        exits: [],
+        image,
+        ground: shapes,
+        geometry: ground.geometryOf(shapes),
+        space: { width: 1000, height: 1000 },
+      });
+      await page.evaluate(([d]) => window.__show(d, null, 'town'), [town('loc_burden', null)]);
+      const drawn = await page.evaluate(() => Loom.mapPaint.describe('area:loc_burden'));
+      expect(drawn.filter((d) => d.kind === 'ground').map((d) => [d.id, d.art])).toEqual([
+        ['town-streets', '/apps/loom/art/materials/ground-cobble.svg'],
+        ['town-water-0', '/apps/loom/art/materials/ground-water.svg'],
+        ['town-crossing-0', '/apps/loom/art/materials/ground-wood.svg'],
+        ['town-building-0', '/apps/loom/art/materials/ground-roof.svg'],
+      ]);
+      expect(drawn.filter((d) => d.kind === 'wall').map((d) => d.id)).toEqual(['town-wall-0']);
+      // With art, the art is the town's ground and walls: nothing of them drawn.
+      await page.evaluate(
+        ([d]) => window.__show(d, null, 'town'),
+        [town('loc_arted', { url: '/fixtures/paint/art.svg', width: 1000, height: 1000 })]
+      );
+      const arted = await page.evaluate(() => Loom.mapPaint.describe('area:loc_arted'));
+      expect(arted.filter((d) => d.kind === 'ground' || d.kind === 'wall')).toEqual([]);
+      expect(errors).toEqual([]);
+      await page.close();
+    }
+  );
 });

@@ -1,6 +1,7 @@
 'use strict';
 
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
+const artSets = require('../loom-canon/art-sets');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const mapObjects = require('../loom-canon/objects');
@@ -118,14 +119,19 @@ function mapView(canonWorld, save, record, townRecord) {
   }
 
   const map = canonWorld.map;
+  // The art set its maps are drawn with (L-944), on each level's data.
+  const artSet = artSets.setFor(canonWorld).name;
+  const townData = townView(canonWorld, save, discovered, townRecord);
+  const battleData = battleView(canonWorld, save, record);
   return {
     worldId: canonWorld.id,
     name: canonWorld.name,
+    artSet,
     here: save.location || null,
     places,
     links,
-    town: townView(canonWorld, save, discovered, townRecord),
-    battleMap: battleView(canonWorld, save, record),
+    town: townData ? { ...townData, artSet } : townData,
+    battleMap: battleData ? { ...battleData, artSet } : battleData,
     // The turn (L-611 / #441; L-832): which it is, the AP left of the
     // character's pool, any long action under way, any plan kept, and what
     // a step costs them.

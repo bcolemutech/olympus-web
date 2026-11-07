@@ -1,6 +1,7 @@
 'use strict';
 
 const { z } = require('zod');
+const artSets = require('../../../loom-canon/art-sets');
 const { FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const { normalizeName } = require('../../../loom-turn/interpret');
@@ -749,7 +750,9 @@ function writeTools({ writer, systems, studio }) {
         'skips making a character; null removes it), or death (on: a character with no one ' +
         'to help dies; off: they come round captured, robbed or rescued; null: the system’s ' +
         'default), or advancement (false: characters don’t grow in this world; true: they do, ' +
-        'by its system’s rules). Fields you omit are left unchanged. ' +
+        'by its system’s rules), or its art (art.set: the art set its maps are drawn with, ' +
+        'from list_art_sets; "classic", the built-in one, unless set). Fields you omit are ' +
+        'left unchanged. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -793,6 +796,20 @@ function writeTools({ writer, systems, studio }) {
               'world (a one-shot, a fixed-power story): nothing is earned and no level comes; ' +
               'true, the default, grows them by the system’s advancement.'
           ),
+        art: z
+          .object({
+            set: z
+              .string()
+              .regex(/^[a-z0-9][a-z0-9-]{0,39}$/, 'a set’s name, from list_art_sets')
+              .describe('The art set its maps are drawn with (L-944), from list_art_sets.'),
+          })
+          .strict()
+          .optional()
+          .describe(
+            'Its art: { set }, the set of painted pictures its floors, walls, doors, windows ' +
+              'and objects are drawn with. Anything the set lacks is drawn with the built-in ' +
+              'art; an object’s own art (set_object_art) still comes first.'
+          ),
       },
       annotations: replacing,
       handler: async (ctx, args) => {
@@ -805,7 +822,14 @@ function writeTools({ writer, systems, studio }) {
           'startingSheet',
           'death',
           'advancement',
+          'art',
         ]);
+        if (args.art && !Object.prototype.hasOwnProperty.call(artSets.SETS, args.art.set)) {
+          throw new ToolError(
+            `No art set "${args.art.set}". There are: ${Object.keys(artSets.SETS).join(', ')} ` +
+              '(list_art_sets).'
+          );
+        }
         // The system must exist (L-801), read before the edit's transaction.
         const system =
           args.systemId === undefined ? null : systems && (await systems.get(args.systemId));
@@ -868,9 +892,14 @@ function writeTools({ writer, systems, studio }) {
           else if (args.advancement === true && !growing) {
             fields['rules.advancement'] = FieldValue.delete();
           }
+          // Its art set (L-944).
+          if (args.art && args.art.set !== ((world.art || {}).set || artSets.DEFAULT_SET)) {
+            fields['art.set'] = args.art.set;
+          }
           if (Object.keys(fields).length) e.updateWorld(fields);
           return {
             updated: Object.keys(fields).map((f) => f.replace('rules.', '')),
+            ...(args.art ? { art: { set: args.art.set } } : {}),
             world: {
               name: fields.name || world.name,
               ...(system ? { system: { id: system.id, name: system.name } } : {}),

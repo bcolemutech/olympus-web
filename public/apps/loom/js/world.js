@@ -202,6 +202,7 @@
         // A foot of height, for walls standing (L-941): on a region map a
         // wall stands as a wall a foot and a half thick would on a grid.
         feet: space.width / 400 / 1.5,
+        set: data.artSet || null, // the world's art set (L-944)
         art: Boolean(data.map.image),
         tint: accent(),
         onProgress: engine.progress,

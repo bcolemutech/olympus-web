@@ -1,0 +1,9 @@
+{
+  "name": "fixture-oversized",
+  "title": "Fixture, over budget",
+  "description": "A set for the budget test (L-944): a floor 2048 px across for five squares, twice what the budget allows.",
+  "materials": {
+    "ground/flagstone": { "file": "ground/flagstone.webp", "span": 5 }
+  },
+  "objects": {}
+}

@@ -259,3 +259,139 @@ export async function check(file, kind) {
   }
   return out;
 }
+
+// ── Art sets (planning/game-art.md §4.3, EN1, EN2; L-944) ──────────────
+
+const budget = require(path.join(ROOT, 'scripts', 'art', 'budget.cjs'));
+
+/**
+ * A picture made WebP for an art set, fitted within its role's budget
+ * (./budget.cjs): `role` ground (with { span }), strip, face or object (with
+ * { size: [wFeet, dFeet] }). Never made bigger; its shape kept. Lossy at
+ * `quality`, its alpha kept sharper.
+ */
+export async function webp(file, out, role, { span, size, quality = 82 } = {}) {
+  const limits = budget.roleLimits(role, { span, size });
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  await sharp(file)
+    .resize(limits.width, limits.height, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality, alphaQuality: 90, effort: 6 })
+    .toFile(out);
+  const meta = await sharp(out).metadata();
+  return { file: out, width: meta.width, height: meta.height, bytes: fs.statSync(out).size };
+}
+
+/**
+ * Rectangles packed onto sheets no bigger than `max` a side, in shelves,
+ * tallest first, `pad` pixels apart: [{ sheet, x, y }] in the order given,
+ * and each sheet's size. One too big for a sheet is an error.
+ */
+export function pack(sizes, max = 2048, pad = 2) {
+  const order = sizes.map((s, i) => i).sort((a, b) => sizes[b][1] - sizes[a][1] || a - b);
+  const placed = new Array(sizes.length);
+  const sheets = [];
+  let sheet = null;
+  const open = () => {
+    sheet = { width: 0, height: 0, x: pad, y: pad, shelf: 0 };
+    sheets.push(sheet);
+  };
+  open();
+  for (const i of order) {
+    const [w, h] = sizes[i];
+    if (w + 2 * pad > max || h + 2 * pad > max) {
+      throw new Error(`A picture of ${w} × ${h} px won't fit on a ${max} px sheet.`);
+    }
+    if (sheet.x + w + pad > max) {
+      sheet.x = pad;
+      sheet.y += sheet.shelf + pad;
+      sheet.shelf = 0;
+    }
+    if (sheet.y + h + pad > max) open();
+    placed[i] = { sheet: sheets.length - 1, x: sheet.x, y: sheet.y };
+    sheet.x += w + pad;
+    sheet.shelf = Math.max(sheet.shelf, h);
+    sheet.width = Math.max(sheet.width, sheet.x);
+    sheet.height = Math.max(sheet.height, sheet.y + sheet.shelf + pad);
+  }
+  return {
+    placed,
+    sheets: sheets.map((s) => ({ width: s.width, height: s.height })),
+  };
+}
+
+/**
+ * A set's props, decor and wall faces packed into atlases (EN2): every
+ * object's picture (standing or from above) and every wall's face that is a
+ * file of its own goes onto sheets `atlas/sheet-N.webp`, its manifest entry
+ * becoming that sheet's frame, the files it came from removed (unless
+ * `keep`). Floors, strips and lines stay files of their own, since they
+ * repeat. The manifest is written back. Returns the sheets.
+ */
+export async function atlas(dir, { max = budget.LIMITS.atlasPx, pad = 2, keep = false } = {}) {
+  const file = path.join(dir, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const todo = [];
+  const take = (holder, key) => {
+    const p = holder[key];
+    if (p && p.file) todo.push({ holder, key, file: p.file });
+  };
+  for (const e of Object.values(manifest.materials || {})) take(e, 'face');
+  for (const e of Object.values(manifest.objects || {})) {
+    if (e.file) todo.push({ holder: null, entry: e, file: e.file });
+    take(e, 'stand');
+  }
+  if (!todo.length) return [];
+  const sizes = [];
+  for (const t of todo) {
+    const meta = await sharp(path.join(dir, t.file)).metadata();
+    sizes.push([meta.width, meta.height]);
+  }
+  const { placed, sheets } = pack(sizes, max, pad);
+  manifest.atlases = manifest.atlases || {};
+  const existing = Object.keys(manifest.atlases).length;
+  const ids = sheets.map((s, i) => `sheet-${existing + i}`);
+  fs.mkdirSync(path.join(dir, 'atlas'), { recursive: true });
+  const written = [];
+  for (const [n, s] of sheets.entries()) {
+    const parts = todo
+      .map((t, i) => ({ t, i }))
+      .filter(({ i }) => placed[i].sheet === n)
+      .map(({ t, i }) => ({ input: path.join(dir, t.file), left: placed[i].x, top: placed[i].y }));
+    const out = path.join('atlas', `${ids[n]}.webp`);
+    await sharp({
+      create: {
+        width: s.width,
+        height: s.height,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .composite(parts)
+      .webp({ lossless: true, effort: 6 })
+      .toFile(path.join(dir, out));
+    manifest.atlases[ids[n]] = { file: out, width: s.width, height: s.height };
+    written.push({ id: ids[n], file: out, width: s.width, height: s.height, frames: parts.length });
+  }
+  todo.forEach((t, i) => {
+    const at = placed[i];
+    const frame = { atlas: ids[at.sheet], frame: [at.x, at.y, sizes[i][0], sizes[i][1]] };
+    if (t.holder) {
+      const picture = { ...t.holder[t.key], ...frame };
+      delete picture.file;
+      t.holder[t.key] = picture;
+    } else {
+      delete t.entry.file;
+      Object.assign(t.entry, frame);
+    }
+  });
+  if (!keep) {
+    new Set(todo.map((t) => t.file)).forEach((f) => fs.rmSync(path.join(dir, f), { force: true }));
+  }
+  fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
+  return written;
+}
+
+/** A set's folder checked against the size budget (./budget.cjs checkSet). */
+export async function checkBudget(dir) {
+  return budget.checkSet(dir);
+}

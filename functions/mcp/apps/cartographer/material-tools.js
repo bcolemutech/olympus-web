@@ -3,6 +3,7 @@
 const { z } = require('zod');
 const { ToolError } = require('../../registry');
 const catalog = require('../../../loom-canon/materials');
+const artSets = require('../../../loom-canon/art-sets');
 const { worldId } = require('./schemas');
 const { relay } = require('./studio-tools');
 
@@ -13,6 +14,7 @@ const { relay } = require('./studio-tools');
 //                      windows (fixed: none can be added over MCP)
 //   list_object_kinds  the catalog's object kinds, with a world's own, and
 //                      where each one's art comes from
+//   list_art_sets      the art sets a world's maps can be drawn with (L-944)
 //   set_object_art     a world's own art for an object kind, or for a single
 //                      object: a library image of kind "object" (a
 //                      transparent PNG), through the studio's assigner
@@ -107,6 +109,29 @@ function materialTools({ studio, writer, worldFor }) {
           objectKinds: shown,
           ...(args.worldId ? { worldId: args.worldId } : {}),
         };
+      },
+    },
+    {
+      name: 'list_art_sets',
+      title: 'List art sets',
+      description:
+        'The art sets a world’s maps can be drawn with (L-944): each a set of painted ' +
+        'pictures for the built-in materials and object kinds, in a three-quarter view: ' +
+        'floors and their variants, wall tops and faces, doors, windows, lines, and objects ' +
+        'standing. "classic" is the built-in one and the default; anything a set lacks is ' +
+        'drawn with the built-in art. Each set says how much it paints. With worldId, which ' +
+        'set that world uses. Choose one with update_world (art.set).',
+      inputSchema: { worldId: worldId.optional() },
+      annotations: readOnly,
+      handler: async (ctx, args) => {
+        const out = { sets: artSets.listSets() };
+        if (args.worldId) {
+          const { meta } = await worldFor(args.worldId);
+          const art = artSets.setFor(meta);
+          out.worldId = args.worldId;
+          out.world = { set: art.name, ...(art.warning ? { warning: art.warning } : {}) };
+        }
+        return out;
       },
     },
   ];

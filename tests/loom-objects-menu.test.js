@@ -373,11 +373,17 @@ describe.each(['d20-fantasy', 'pool-scifi'])('an object’s menu and card under 
   withBrowser('a click on a standing chest’s picture opens its menu (L-941)', async () => {
     // A tall standing picture, so it rises well above the chest's footprint
     // (21.5–23.5 ft down): 3 ft wide and, by the picture's shape, 12 ft tall.
+    // In an art set of the test's own (L-944).
     const tall = () => {
-      Loom.materials.objectKind('chest').stand = '../../../fixtures/paint/pillar-stand.svg';
+      Loom.materials.registerSet(
+        { name: 'test-tall', objects: { chest: { stand: { file: 'pillar-stand.svg' } } } },
+        '/fixtures/paint/'
+      );
     };
     const above = [7.5, 18.5];
-    const page = await shown(sentTo(system, stand, { inventory: ['brass key'] }), tall);
+    const sent = sentTo(system, stand, { inventory: ['brass key'] });
+    sent.data.artSet = 'test-tall';
+    const page = await shown(sent, tall);
     await clickAt(page, above);
     await page.waitForSelector('.loom-map-menu');
     expect(await menuOf(page)).toMatchObject({ title: 'The chest', subtitle: 'Object · locked' });
