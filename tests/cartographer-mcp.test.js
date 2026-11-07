@@ -260,6 +260,7 @@ describe('connector surface', () => {
       'get_region',
       'get_town',
       'get_world',
+      'list_art_sets',
       'list_battle_maps',
       'list_maps',
       'list_materials',

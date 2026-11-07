@@ -310,6 +310,7 @@ describe('a visit to the Gull & Anchor', () => {
       name: 'The Gull & Anchor, ground floor',
       width: 12,
       height: 8,
+      artSet: 'classic', // the art set it's drawn with (L-944)
       image: null,
       here: { x: 1, y: 4 },
       // Where in it, in feet, and how wide the character is (L-922).
