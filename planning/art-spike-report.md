@@ -1,6 +1,6 @@
 # The Loom — Game Art Spike — Report
 
-**Status:** Done (2026-11-06). The spike scoped in [`art-spike.md`](./art-spike.md). Direction chosen by the user at checkpoint 2: **studio-led** (§6). Extended the same day to try a three-quarter view (§7); the user then chose **three-quarter** for the art epic.
+**Status:** Done (2026-11-06). The spike scoped in [`art-spike.md`](./art-spike.md). Direction chosen by the user at checkpoint 2: **studio-led** (§6). Extended the same day to try a three-quarter view (§7); the user then chose **three-quarter** for the art epic, designed in [`game-art.md`](./game-art.md) (L-940, #794).
 **Spent:** $2.51 of the $30 cap: $2.24 for 32 charged images in the top-down round, $0.27 for 4 in the three-quarter extension. 3 more failed while the model was busy, and failures aren't charged.
 **Branch:** `spike/game-art` keeps the trial art and its renders. Merged: this report, `scripts/art/`, and the PNG switch in `materials.js` and the painter (§5).
 
