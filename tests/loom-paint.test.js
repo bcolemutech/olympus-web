@@ -819,48 +819,6 @@ describe("the painter's finish (L-943)", () => {
     expect(page.errors).toEqual([]);
     await page.close();
   });
-
-  withBrowser('the large dungeon zoomed in draws faster culled than not', async () => {
-    const page = await painterPage();
-    const map = geo.normalize(large());
-    await page.evaluate(
-      ([g]) =>
-        window.__draw('finish-fast', g, { tile: 5, wall: 1.5 }, { x: -1400, y: -1400, scale: 14 }),
-      [map]
-    );
-    // Rounds of 40 frames panning, each finished, alternating culled and
-    // not; each mode's median, so a stall of the browser's GPU doesn't count.
-    const times = await page.evaluate(() => {
-      const app = window.__app;
-      const gl = app.renderer.gl;
-      const root = app.stage.children[1].children[0];
-      const pan = (culled) => {
-        Loom.mapPaint.view('finish-fast', null);
-        root.position.set(-1400, -1400);
-        if (culled) Loom.mapPaint.cull('finish-fast', 960, 640);
-        app.render();
-        gl.finish();
-        const t = performance.now();
-        for (let i = 0; i < 40; i++) {
-          root.position.set(-1400 - i * 2, -1400 - i);
-          if (culled) Loom.mapPaint.cull('finish-fast', 960, 640);
-          app.render();
-          gl.finish();
-        }
-        return performance.now() - t;
-      };
-      const out = { all: [], culled: [] };
-      for (let k = 0; k < 5; k++) {
-        out.all.push(pan(false));
-        out.culled.push(pan(true));
-      }
-      return out;
-    });
-    const median = (list) => list.slice().sort((x, y) => x - y)[Math.floor(list.length / 2)];
-    expect(median(times.culled)).toBeLessThan(median(times.all));
-    expect(page.errors).toEqual([]);
-    await page.close();
-  });
 });
 
 // A battle map as loomGetMap sends it: the dungeon, seen from the wooden hall.
@@ -1122,4 +1080,48 @@ describe('the grid view', () => {
       await page.close();
     }
   );
+});
+
+// Last, so a stall of the browser's GPU it may cause touches no other test.
+describe("the painter's finish (L-943): speed", () => {
+  withBrowser('the large dungeon zoomed in draws faster culled than not', async () => {
+    const page = await painterPage();
+    const map = geo.normalize(large());
+    await page.evaluate(
+      ([g]) =>
+        window.__draw('finish-fast', g, { tile: 5, wall: 1.5 }, { x: -1400, y: -1400, scale: 14 }),
+      [map]
+    );
+    // On a CPU four times slower (a mid-range phone), panning, frame by frame, alternating culled and not: each frame's work
+    // on the page's own thread (building what the GPU is sent, where culling
+    // saves), the GPU let finish between frames, outside the timing; each
+    // mode's median, so a stall of the browser's GPU doesn't count.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const times = await page.evaluate(() => {
+      const app = window.__app;
+      const gl = app.renderer.gl;
+      const root = app.stage.children[1].children[0];
+      const out = { all: [], culled: [] };
+      // In blocks of 20 frames, the first two of each left out (the frames
+      // after a switch rebuild what's drawn).
+      for (let i = 0; i < 160; i++) {
+        const culled = Math.floor(i / 20) % 2 === 1;
+        root.position.set(-1400 - i, -1400 - i / 2);
+        const t = performance.now();
+        if (culled) Loom.mapPaint.cull('finish-fast', 960, 640);
+        else Loom.mapPaint.view('finish-fast', null);
+        app.render();
+        if (i % 20 >= 2) (culled ? out.culled : out.all).push(performance.now() - t);
+        gl.finish();
+      }
+      return out;
+    });
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    const median = (list) => list.slice().sort((x, y) => x - y)[Math.floor(list.length / 2)];
+    console.log(`frame, unculled ${median(times.all)} ms, culled ${median(times.culled)} ms`);
+    expect(median(times.culled)).toBeLessThan(median(times.all) * 0.9);
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
 });
