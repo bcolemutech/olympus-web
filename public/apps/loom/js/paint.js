@@ -7,10 +7,16 @@
   // of its materials and objects (materials.js; the files under
   // /apps/loom/art/), in this order:
   //
-  //   ground    each floor as its material's tile, repeating
+  //   ground    each floor as its material's tile, repeating, or one of its
+  //             variants picked by the floor's id (AR4); where it lies over
+  //             a floor drawn before it, fading over that one along its edge,
+  //             a foot or so (EN3; L-943 / #797)
   //   shading   by height: higher ground lighter, lower darker, a shadow
   //             along every ledge's edge (DA2)
   //   lines     rivers, roads and streets as strips of their material
+  //   shadows   contact shadows (EN4; L-943): a soft band along the foot of
+  //             each wall, window and shut door, and a soft ellipse under
+  //             each object standing (the drawer's tokens have their own)
   //   objects   lying flat, with their art seen from above: their own, their
   //             world's for their kind, the catalog's, else the box with a
   //             question mark (OB1)
@@ -66,6 +72,17 @@
   //                                                         (map units), or null
   //   Loom.mapPaint.riseOf(geometry, options)               how far up the screen its
   //                                                         tallest wall reaches
+  //   Loom.mapPaint.cull(key, width, height)                draw only what a screen
+  //                                                         that size shows of it, from
+  //                                                         where the drawer placed it
+  //                                                         (EN5; L-943), the rest kept
+  //                                                         built; the drawer calls it
+  //                                                         as its camera moves
+  //   Loom.mapPaint.view(key, rect)                         the same for a rect in the
+  //                                                         map's units (null: all), for
+  //                                                         tests; describe() marks
+  //                                                         what's culled
+  //   Loom.mapPaint.shadowTexture()                         a contact shadow, for tokens
   //
   // options: { tile (map units a tile of ground covers; 5 on a grid),
   //            wall (a wall's thickness in map units; 1 on a grid),
@@ -104,6 +121,13 @@
   var FACE_SHADE = 0x9a9a9a; // a face drawn from its top's picture
   var FACE_LIT = 0xe4e4e4; // a face drawn from its own
   var LEAF = 0.4; // an open door's leaf, as part of the wall's thickness
+  // The finish (planning/game-art.md §4.2, EN3–EN5, AR4; L-943 / #797).
+  var FADE_FT = 1; // a floor fades over the one under it this far past its edge
+  var FADE_STEPS = 5; // strokes the fade is built of
+  var FADE_ALPHA = 0.32; // each stroke's
+  var SHADOW_ALPHA = 0.6; // a contact shadow's, at its darkest
+  var BAND_FT = 1.5; // a wall's shadow, out from its foot
+  var CULL_MARGIN = 0.15; // of the view's long side, drawn beyond it (at least two tiles)
   var LIGHT_RGB = '255,214,150';
   var COLOURS = { door: 0xffb74d, doorLocked: 0xe57373, dark: 0x05070d, ledge: 0x05070d };
 
@@ -255,11 +279,70 @@
     return glow;
   }
 
+  // A contact shadow (EN4, L-943): a soft dark disc, stretched to an
+  // ellipse under what stands; and a band, darkest at its top, laid along a
+  // wall's foot.
+  var shadowTex = null;
+  var bandTex = null;
+  function shadowTexture() {
+    if (shadowTex) return shadowTex;
+    var size = 64;
+    var canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    var g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, 'rgba(0,0,0,' + SHADOW_ALPHA + ')');
+    g.addColorStop(0.55, 'rgba(0,0,0,' + SHADOW_ALPHA * 0.6 + ')');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+    shadowTex = window.PIXI.Texture.from(canvas);
+    return shadowTex;
+  }
+
+  function bandTexture() {
+    if (bandTex) return bandTex;
+    var canvas = document.createElement('canvas');
+    canvas.width = 4;
+    canvas.height = 32;
+    var ctx = canvas.getContext('2d');
+    var g = ctx.createLinearGradient(0, 0, 0, 32);
+    g.addColorStop(0, 'rgba(0,0,0,' + SHADOW_ALPHA * 0.9 + ')');
+    g.addColorStop(0.4, 'rgba(0,0,0,' + SHADOW_ALPHA * 0.35 + ')');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 4, 32);
+    bandTex = window.PIXI.Texture.from(canvas);
+    return bandTex;
+  }
+
   // A material's art in the map's set (L-944; materials.js materialArt):
-  // { key, span, face (a key or null) }.
+  // { key, span, face (a key or null), variants (keys) }.
   function materialOf(kind, id, set) {
     var art = mat.materialArt(kind, id, set);
-    return { key: keyOf(art.picture), span: art.span, face: keyOf(art.face) };
+    return {
+      key: keyOf(art.picture),
+      span: art.span,
+      face: keyOf(art.face),
+      variants: (art.variants || []).map(keyOf).filter(Boolean),
+    };
+  }
+
+  // A floor's picture for one area (AR4, L-943): its own or one of its
+  // variants, picked by the area's id, so the same area always shows the same
+  // one and areas side by side seldom match.
+  function hashOf(text) {
+    var h = 2166136261;
+    for (var i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function variantOf(id, count) {
+    return count > 1 ? hashOf(String(id)) % count : 0;
   }
 
   // The url an object's art is drawn from lying flat (OB1): its own, else its
@@ -335,6 +418,95 @@
     var sy = thick / h;
     s.tileScale.set(fit ? (len + 2 * ext) / w : sy, sy);
     return s;
+  }
+
+  // A box ({ x0, y0, x1, y1 }) round points, grown by `pad`.
+  function boxOf(points, pad) {
+    var b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    points.forEach(function (p) {
+      var q = pt(p);
+      if (!q) return;
+      b.x0 = Math.min(b.x0, q.x);
+      b.y0 = Math.min(b.y0, q.y);
+      b.x1 = Math.max(b.x1, q.x);
+      b.y1 = Math.max(b.y1, q.y);
+    });
+    if (!isFinite(b.x0)) return null;
+    var d = pad || 0;
+    return { x0: b.x0 - d, y0: b.y0 - d, x1: b.x1 + d, y1: b.y1 + d };
+  }
+
+  function overlaps(a, b) {
+    return Boolean(a && b) && a.x0 <= b.x1 && a.x1 >= b.x0 && a.y0 <= b.y1 && a.y1 >= b.y0;
+  }
+
+  // Whether a point is inside rings (even-odd, so holes are out).
+  function inside(rings, x, y) {
+    var on = false;
+    rings.forEach(function (ring) {
+      for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        var a = ring[i];
+        var b = ring[j];
+        if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) {
+          on = !on;
+        }
+      }
+    });
+    return on;
+  }
+
+  // Where a floor lies over another (EN3, L-943): the runs of its edges
+  // whose outside, just past them, is a floor drawn before it, each a list of
+  // points ([x, y]) and whether it goes all the way round (`closed`).
+  function edgesOver(rings, below) {
+    var out = [];
+    if (!below.length) return out;
+    var step = 0.05 + FADE_FT * 0.25;
+    var under = function (x, y) {
+      return below.some(function (g) {
+        return overlaps(g.box, { x0: x, y0: y, x1: x, y1: y }) && inside(g.rings, x, y);
+      });
+    };
+    rings.forEach(function (ring) {
+      var n = ring.length;
+      var soft = [];
+      for (var i = 0; i < n; i++) {
+        var a = ring[i];
+        var b = ring[(i + 1) % n];
+        var len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (!len) {
+          soft.push(null);
+          continue;
+        }
+        var mx = (a[0] + b[0]) / 2;
+        var my = (a[1] + b[1]) / 2;
+        var nx = (-(b[1] - a[1]) / len) * step;
+        var ny = ((b[0] - a[0]) / len) * step;
+        var o = inside(rings, mx + nx, my + ny) ? [mx - nx, my - ny] : [mx + nx, my + ny];
+        soft.push(under(o[0], o[1]));
+      }
+      if (soft.every(Boolean)) {
+        out.push({ points: ring.slice(), closed: true });
+        return;
+      }
+      // Runs of soft edges, starting after a hard one so none is split.
+      var start = soft.findIndex(function (v) {
+        return !v;
+      });
+      var run = null;
+      for (var k = 1; k <= n; k++) {
+        var j = (start + k) % n;
+        if (soft[j]) {
+          if (!run) run = [ring[j]];
+          run.push(ring[(j + 1) % n]);
+        } else if (run) {
+          out.push({ points: run, closed: false });
+          run = null;
+        }
+      }
+      if (run) out.push({ points: run, closed: false });
+    });
+    return out;
   }
 
   function segmentsOf(points) {
@@ -470,6 +642,65 @@
     return riseFor(tallest, o);
   }
 
+  // ── The finish's shadows (L-943) ──────────────────────────────────────
+
+  // A wall's contact shadow (EN4): a soft band on the floor along its foot,
+  // the side its face shows (south); one running more down the screen than
+  // across, whose face can't be seen, a fainter one on its other side too.
+  // `segs`: [[a, b]] the wall's pieces; null with none.
+  function bands(segs, thick, o) {
+    var PIXI = window.PIXI;
+    var c = new PIXI.Container();
+    var deep = BAND_FT * o.feet;
+    var put = function (a, b, n, depth, alpha) {
+      // The band's top along the wall's edge on the side `n`, its fade outwards.
+      var dx = b.x - a.x;
+      var dy = b.y - a.y;
+      var len = Math.hypot(dx, dy);
+      var down = { x: -dy / len, y: dx / len }; // a sprite's own down, turned with it
+      if (down.x * n.x + down.y * n.y < 0) {
+        var t = a;
+        a = b;
+        b = t;
+        dx = -dx;
+        dy = -dy;
+      }
+      var sp = new PIXI.Sprite(bandTexture());
+      sp.position.set(a.x + (n.x * thick) / 2, a.y + (n.y * thick) / 2);
+      sp.rotation = Math.atan2(dy, dx);
+      sp.width = len;
+      sp.height = depth;
+      sp.alpha = alpha;
+      c.addChild(sp);
+    };
+    segs.forEach(function (seg) {
+      var a = pt(seg[0]);
+      var b = pt(seg[1]);
+      if (!a || !b) return;
+      var dx = b.x - a.x;
+      var dy = b.y - a.y;
+      var len = Math.hypot(dx, dy);
+      if (!len) return;
+      var n = { x: -dy / len, y: dx / len };
+      if (n.y < 0 || (n.y === 0 && n.x < 0)) n = { x: -n.x, y: -n.y };
+      put(a, b, n, deep, 1);
+      if (Math.abs(dy) > Math.abs(dx)) put(a, b, { x: -n.x, y: -n.y }, deep * 0.6, 0.6);
+    });
+    return c;
+  }
+
+  // A standing thing's contact shadow (EN4): a soft ellipse on the floor
+  // under its footprint, `w` across and `d` deep around `at`, drawn toward
+  // its foot (the footprint's south edge), so it shows below its picture.
+  function ellipse(at, w, d) {
+    var sp = new window.PIXI.Sprite(shadowTexture());
+    sp.anchor.set(0.5);
+    sp.position.set(at.x, at.y + d * 0.3);
+    sp.width = w * 1.4;
+    sp.height = Math.max(d * 1.1, w * 0.5);
+    return sp;
+  }
+
   // ── What to draw ──────────────────────────────────────────────────────
 
   // The items of a map to draw, in order, each { key, layer, order, urls,
@@ -481,12 +712,15 @@
       return Array.isArray(g[k]) ? g[k] : [];
     };
     var out = [];
-    var add = function (layer, kind, item, i, urls, build, extra) {
+    // `bounds`: what it covers lying flat, in map units, for culling (EN5);
+    // null is never culled. A standing part's is its own `box`.
+    var add = function (layer, kind, item, i, urls, build, extra, bounds) {
       out.push({
         key: [kind, item.id || i, JSON.stringify(item), o.set || '', extra || ''].join('|'),
         layer: layer,
         order: i,
         urls: urls.filter(Boolean),
+        bounds: bounds || null,
         // What it is, for describe(): its kind, id, state and the art used.
         about: function () {
           var used = urls.filter(function (u) {
@@ -511,32 +745,67 @@
     });
 
     if (!o.art) {
+      // Each floor (AR4, EN3; L-943): its picture, or one of its variants
+      // picked by its id; where it lies over a floor drawn before it, it
+      // fades over that one along its edge, a foot or so, in strokes of its
+      // own picture growing narrower and fainter outwards.
+      var fade = FADE_FT * o.feet;
+      var floors = [];
       list('ground').forEach(function (item, i) {
         var read = geo.ringsOf(item.shape);
         if (!read.rings) return;
         var art = materialOf('ground', item.material, o.set);
-        var url = art.key;
+        var choices = [art.key].concat(art.variants);
+        var url = choices[variantOf(item.id || i, choices.length)];
         var span = art.span;
-        add('ground', 'ground', item, i, [url], function () {
-          var gfx = new PIXI.Graphics();
-          var texture = loadedTiled(url);
-          var fill = texture
-            ? (function () {
-                var pattern = new PIXI.FillPattern(texture, 'repeat');
-                var m = new PIXI.Matrix();
-                // A picture spans `span` tiles, whatever its pixel size.
-                var px = (texture.width || TILE_PX) / span;
-                m.scale(tile / px, tile / px);
-                pattern.setTransform(m);
-                return { fill: pattern };
-              })()
-            : { color: 0x6b6f78 };
-          read.rings.forEach(function (ring) {
-            gfx.poly(flat(ring));
+        var box = boxOf([].concat.apply([], read.rings), 0);
+        var below = floors.filter(function (f) {
+          return overlaps(f.box, {
+            x0: box.x0 - fade,
+            y0: box.y0 - fade,
+            x1: box.x1 + fade,
+            y1: box.y1 + fade,
           });
-          gfx.fill(fill);
-          return gfx;
         });
+        floors.push({ rings: read.rings, box: box });
+        var soft = edgesOver(read.rings, below);
+        add(
+          'ground',
+          'ground',
+          item,
+          i,
+          [url],
+          function () {
+            var gfx = new PIXI.Graphics();
+            var texture = loadedTiled(url);
+            var fill = texture
+              ? (function () {
+                  var pattern = new PIXI.FillPattern(texture, 'repeat');
+                  var m = new PIXI.Matrix();
+                  // A picture spans `span` tiles, whatever its pixel size.
+                  var px = (texture.width || TILE_PX) / span;
+                  m.scale(tile / px, tile / px);
+                  pattern.setTransform(m);
+                  return { fill: pattern };
+                })()
+              : { color: 0x6b6f78 };
+            read.rings.forEach(function (ring) {
+              gfx.poly(flat(ring));
+            });
+            gfx.fill(fill);
+            for (var k = 0; k < FADE_STEPS && soft.length; k++) {
+              soft.forEach(function (run) {
+                if (run.closed) gfx.poly(flat(run.points), true);
+                else gfx.poly(flat(run.points), false);
+              });
+              var width = (2 * fade * (FADE_STEPS - k)) / FADE_STEPS;
+              gfx.stroke({ ...fill, width: width, cap: 'butt', join: 'round', alpha: FADE_ALPHA });
+            }
+            return gfx;
+          },
+          JSON.stringify(soft) + '|' + url,
+          { x0: box.x0 - fade, y0: box.y0 - fade, x1: box.x1 + fade, y1: box.y1 + fade }
+        );
       });
       // Shading by height (DA2): the floors off the ground, then the ledges.
       var heights = list('ground').filter(function (item) {
@@ -552,17 +821,26 @@
         if (!read.lines) return;
         var url = materialOf('line', item.material, o.set).key;
         var width = typeof item.width === 'number' && item.width > 0 ? item.width : thick * 3;
-        add('lines', 'line', item, i, [url], function () {
-          var c = new PIXI.Container();
-          var texture = loadedTiled(url);
-          read.lines.forEach(function (line) {
-            segmentsOf(line).forEach(function (seg) {
-              var s = texture ? strip(texture, seg[0], seg[1], width, false, true) : null;
-              if (s) c.addChild(s);
+        add(
+          'lines',
+          'line',
+          item,
+          i,
+          [url],
+          function () {
+            var c = new PIXI.Container();
+            var texture = loadedTiled(url);
+            read.lines.forEach(function (line) {
+              segmentsOf(line).forEach(function (seg) {
+                var s = texture ? strip(texture, seg[0], seg[1], width, false, true) : null;
+                if (s) c.addChild(s);
+              });
             });
-          });
-          return c;
-        });
+            return c;
+          },
+          '',
+          boxOf([].concat.apply([], read.lines), width / 2)
+        );
       });
       // The walls, less where doors and windows stand (map-geometry.js),
       // standing (L-941).
@@ -610,6 +888,24 @@
           },
           cut + '|' + top
         );
+        if (edges.length) {
+          var segs = edges.map(function (e) {
+            return [e.a, e.b];
+          });
+          var reach = thick / 2 + BAND_FT * o.feet;
+          add(
+            'shadows',
+            'shadow',
+            item,
+            i,
+            [],
+            function () {
+              return bands(segs, thick, o);
+            },
+            'wall|' + cut,
+            boxOf([].concat.apply([], segs), reach)
+          );
+        }
       });
       // A window: an upright pane between the wall below its sill and above
       // its top, the wall's top strip over it.
@@ -672,6 +968,18 @@
           },
           wallKey
         );
+        add(
+          'shadows',
+          'shadow',
+          item,
+          i + 2000,
+          [],
+          function () {
+            return bands([[item.from, item.to]], thick, o);
+          },
+          'window',
+          boxOf([item.from, item.to], thick / 2 + BAND_FT * o.feet)
+        );
       });
     }
 
@@ -680,12 +988,21 @@
     // leaf swung on its hinge (`from`), the wall going on above either.
     list('doors').forEach(function (item, i) {
       if (o.art) {
-        add('openings', 'door', item, i + 1000, [], function () {
-          var a = pt(item.from);
-          var b = pt(item.to);
-          if (!a || !b) return new PIXI.Container();
-          return doorLine(a, b, item.state || 'closed', thick);
-        });
+        add(
+          'openings',
+          'door',
+          item,
+          i + 1000,
+          [],
+          function () {
+            var a = pt(item.from);
+            var b = pt(item.to);
+            if (!a || !b) return new PIXI.Container();
+            return doorLine(a, b, item.state || 'closed', thick);
+          },
+          '',
+          boxOf([item.from, item.to], thick)
+        );
         return;
       }
       var url = materialOf('door', item.material, o.set).key;
@@ -775,6 +1092,20 @@
         },
         (wall ? wall.material + '|' + height : '') + '|' + o.feet
       );
+      if ((item.state || 'closed') !== 'open') {
+        add(
+          'shadows',
+          'shadow',
+          item,
+          i + 1000,
+          [],
+          function () {
+            return bands([[item.from, item.to]], thick, o);
+          },
+          'door',
+          boxOf([item.from, item.to], thick / 2 + BAND_FT * o.feet)
+        );
+      }
     });
 
     list('objects').forEach(function (item, i) {
@@ -819,21 +1150,49 @@
             },
           ];
         });
+        // Its contact shadow, on the floor under its footprint (EN4), turned
+        // as it is.
+        var turned = ((Number(item.turn) || 0) * Math.PI) / 180;
+        var sw = size[0] * Math.abs(Math.cos(turned)) + size[1] * Math.abs(Math.sin(turned));
+        var sd = size[0] * Math.abs(Math.sin(turned)) + size[1] * Math.abs(Math.cos(turned));
+        var foot = Math.max(sw, sd);
+        add(
+          'shadows',
+          'shadow',
+          item,
+          i + 3000,
+          [],
+          function () {
+            var at = pt(item.at);
+            return at ? ellipse(at, sw, sd) : new PIXI.Container();
+          },
+          'object',
+          boxOf([item.at], foot)
+        );
         return;
       }
       var url = objectUrl(item, o.worldKinds, o.set);
-      add('objects', 'object', item, i, [url, mat.artUrl(mat.FALLBACK_ART)], function () {
-        var at = pt(item.at);
-        var texture = loaded(url) || loaded(mat.artUrl(mat.FALLBACK_ART));
-        if (!at || !texture) return new PIXI.Container();
-        var s = new PIXI.Sprite(texture);
-        s.anchor.set(0.5);
-        s.position.set(at.x, at.y);
-        s.width = size[0];
-        s.height = size[1];
-        s.rotation = ((Number(item.turn) || 0) * Math.PI) / 180;
-        return s;
-      });
+      add(
+        'objects',
+        'object',
+        item,
+        i,
+        [url, mat.artUrl(mat.FALLBACK_ART)],
+        function () {
+          var at = pt(item.at);
+          var texture = loaded(url) || loaded(mat.artUrl(mat.FALLBACK_ART));
+          if (!at || !texture) return new PIXI.Container();
+          var s = new PIXI.Sprite(texture);
+          s.anchor.set(0.5);
+          s.position.set(at.x, at.y);
+          s.width = size[0];
+          s.height = size[1];
+          s.rotation = ((Number(item.turn) || 0) * Math.PI) / 180;
+          return s;
+        },
+        '',
+        boxOf([item.at], Math.hypot(size[0], size[1]) / 2)
+      );
     });
 
     var lights = list('lights');
@@ -953,7 +1312,8 @@
 
   // `walls` stays for the order of before; since L-941 walls stand, and only
   // a map with its own art lays anything (its doors' lines) in `openings`.
-  var LAYERS = ['ground', 'shading', 'lines', 'walls', 'openings', 'objects', 'light'];
+  // `shadows` (L-943): the contact shadows of what stands, on the floor.
+  var LAYERS = ['ground', 'shading', 'lines', 'shadows', 'walls', 'openings', 'objects', 'light'];
 
   function stateOf(key) {
     var s = maps.get(key);
@@ -983,6 +1343,7 @@
       standAt: { x: 0, y: 0, scale: 1 },
       items: new Map(),
       job: 0,
+      view: null, // what's in view, in map units, for culling (EN5); null: all of it
     };
     maps.set(key, s);
     while (maps.size > KEEP) {
@@ -1039,6 +1400,93 @@
     }
   }
 
+  // ── Culling (EN5, L-943) ──────────────────────────────────────────────
+
+  // Whether a node is out of the view (plus its margin): it isn't drawn,
+  // but stays built, and shows again once the view comes back to it.
+  function culls(s, node) {
+    var v = s.view;
+    var b = node.__loomBounds;
+    var out = Boolean(v && b) && !overlaps(b, v);
+    node.__loomCulled = out;
+    node.visible = !out;
+  }
+
+  function cullAll(s) {
+    s.items.forEach(function (nodes) {
+      nodes.forEach(function (node) {
+        culls(s, node);
+      });
+    });
+  }
+
+  /**
+   * Culls a map's drawing to a view: `rect` { x0, y0, x1, y1 } in the map's
+   * units (what the screen shows of it), grown by a margin; null draws all
+   * of it. Returns how many of its pieces are culled.
+   */
+  function view(key, rect) {
+    var s = maps.get(key);
+    if (!s) return 0;
+    var v = null;
+    if (rect && isFinite(rect.x0) && isFinite(rect.x1) && isFinite(rect.y0) && isFinite(rect.y1)) {
+      var m = Math.max(
+        (s.tile || 5) * 2,
+        CULL_MARGIN * Math.max(rect.x1 - rect.x0, rect.y1 - rect.y0)
+      );
+      v = { x0: rect.x0 - m, y0: rect.y0 - m, x1: rect.x1 + m, y1: rect.y1 + m };
+    }
+    var same =
+      (v === null && s.view === null) ||
+      (v &&
+        s.view &&
+        ['x0', 'y0', 'x1', 'y1'].every(function (k) {
+          return Math.abs(v[k] - s.view[k]) < 1e-6;
+        }));
+    if (!same) {
+      s.view = v;
+      cullAll(s);
+    }
+    return culledOf(s);
+  }
+
+  function culledOf(s) {
+    var n = 0;
+    s.items.forEach(function (nodes) {
+      nodes.forEach(function (node) {
+        if (node.__loomCulled) n += 1;
+      });
+    });
+    return n;
+  }
+
+  /**
+   * Culls a map's drawing to what a screen `width` × `height` px shows of it,
+   * from where its drawer has placed it (its root's position and scale, and
+   * its parents'), for a drawer to call as its camera moves.
+   */
+  function cull(key, width, height) {
+    var s = maps.get(key);
+    if (!s || !(width > 0) || !(height > 0)) return 0;
+    var sx = 1;
+    var sy = 1;
+    var ox = 0;
+    var oy = 0;
+    for (var node = s.root; node; node = node.parent) {
+      ox = ox * node.scale.x + node.position.x;
+      oy = oy * node.scale.y + node.position.y;
+      sx *= node.scale.x;
+      sy *= node.scale.y;
+    }
+    if (!sx || !sy) return 0;
+    return view(key, {
+      x0: (0 - ox) / sx,
+      y0: (0 - oy) / sy,
+      x1: (width - ox) / sx,
+      y1: (height - oy) / sy,
+    });
+  }
+
   // An item's display objects: one in its layer, or its standing parts.
   function nodesOf(s, w) {
     var PIXI = window.PIXI;
@@ -1046,6 +1494,8 @@
       var node = w.build();
       node.zIndex = w.order;
       node.__loomPainted = w.about();
+      node.__loomBounds = w.bounds;
+      culls(s, node);
       s.layers[w.layer].addChild(node);
       return [node];
     }
@@ -1064,6 +1514,8 @@
       info.depth = Math.round(part.depth * 100) / 100;
       if (k) info.part = k;
       wrap.__loomPainted = info;
+      wrap.__loomBounds = part.box || null;
+      culls(s, wrap);
       placePart(s, wrap);
       s.stand.addChild(wrap);
       return wrap;
@@ -1092,6 +1544,7 @@
       return waiting.root;
     }
     var s = stateOf(key);
+    s.tile = o.tile;
     // Only this map in the host.
     host.children.slice().forEach(function (child) {
       if (child !== s.root && child.__loomPaint) host.removeChild(child);
@@ -1186,6 +1639,11 @@
       texturesMs: counts.texturesMs || 0,
       drawMs: counts.drawMs || 0,
       maps: Array.from(maps.keys()),
+      // Pieces culled, by map (L-943).
+      culled: Array.from(maps.keys()).reduce(function (acc, k) {
+        acc[k] = culledOf(maps.get(k));
+        return acc;
+      }, {}),
     };
   }
 
@@ -1214,17 +1672,22 @@
     var s = maps.get(key);
     if (!s) return null;
     var out = [];
+    // A culled piece (L-943) says so.
+    var push = function (node) {
+      if (!node.__loomPainted) return;
+      out.push(
+        node.__loomCulled
+          ? Object.assign({}, node.__loomPainted, { culled: true })
+          : node.__loomPainted
+      );
+    };
     var standing = function () {
-      standingOrder(s).forEach(function (node) {
-        if (node.__loomPainted) out.push(node.__loomPainted);
-      });
+      standingOrder(s).forEach(push);
     };
     var inRoot = s.stand.parent === s.root;
     LAYERS.forEach(function (name) {
       if (name === 'light' && inRoot) standing();
-      s.layers[name].children.forEach(function (node) {
-        if (node.__loomPainted) out.push(node.__loomPainted);
-      });
+      s.layers[name].children.forEach(push);
     });
     if (!inRoot) standing();
     return out;
@@ -1264,6 +1727,10 @@
     standOf: standOf,
     standingAt: standingAt,
     riseOf: riseOf,
+    view: view,
+    cull: cull,
+    shadowTexture: shadowTexture,
+    variantOf: variantOf,
     RISE: RISE,
     LAYERS: LAYERS,
   };

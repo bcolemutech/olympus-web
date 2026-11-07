@@ -28,7 +28,13 @@
  *   - art sets (planning/game-art.md §4.3; L-944 / #798): a map drawn from
  *     an atlas matches the same map drawn from single files, the atlas loaded
  *     once; a set not yet loaded is fetched by its name, and one that isn't
- *     there leaves the built-in art.
+ *     there leaves the built-in art;
+ *   - the painter's finish (planning/game-art.md §4.2; L-943 / #797):
+ *     contact shadows under props standing and along walls' feet; a soft
+ *     edge where one floor lies over another, and none over nothing; two
+ *     rooms of one floor drawing different variants, by their ids; culling,
+ *     describe() saying what's culled at a view and panning bringing it
+ *     back; the large dungeon zoomed in drawing faster culled than not.
  *
  * It needs Playwright and its Chromium (in the tests' dependencies; CI
  * installs the browser): where the browser is missing the suite is skipped,
@@ -240,12 +246,13 @@ describe('the painter', () => {
     const again = await draw(page, 'dungeon', geo.normalize(dungeon()));
     expect(again.built).toBe(elsewhere.built);
     expect(again.kept).toBeGreaterThan(elsewhere.kept);
-    // A door opened: only that door is drawn again.
+    // A door opened: only that door is drawn again, and the shadow at its
+    // foot goes, since it no longer stands across the doorway (L-943).
     const opened = geo.normalize(dungeon());
     opened.doors = opened.doors.map((d) => (d.id === 'shut' ? { ...d, state: 'open' } : d));
     const changed = await draw(page, 'dungeon', opened);
     expect(changed.built).toBe(again.built + 1);
-    expect(changed.removed).toBe(again.removed + 1);
+    expect(changed.removed).toBe(again.removed + 2);
     await page.close();
   });
 
@@ -379,7 +386,7 @@ describe('the three-quarter view (L-941)', () => {
       place
     );
     const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-angled'));
-    const pieces = drawn.filter((d) => d.id === 'slant');
+    const pieces = drawn.filter((d) => d.id === 'slant' && d.kind === 'wall');
     expect(pieces.length).toBe(4); // 20 ft down the screen, a piece each 5 ft
     expect(inDepthOrder(pieces)).toBe(true);
     const shot = PNG.sync.read(await page.screenshot());
@@ -565,9 +572,10 @@ describe('art sets (L-944)', () => {
       // The wall's top is the built-in one (the set paints only its face).
       expect(art(fromAtlas, 'wall', 'w')).toBe('/apps/loom/art/materials/wall-stone.svg');
       expect(art(fromAtlas, 'object', 'barrel')).toBe('/apps/loom/art/objects/barrel.svg');
-      expect(fromAtlas.find((d) => d.id === 'barrel').layer).toBe('objects');
+      const objectOf = (id) => fromAtlas.find((d) => d.id === id && d.kind === 'object');
+      expect(objectOf('barrel').layer).toBe('objects');
       // The pillar stands on its foot, 0.95 down its picture.
-      expect(fromAtlas.find((d) => d.id === 'pillar').layer).toBe('standing');
+      expect(objectOf('pillar').layer).toBe('standing');
       // The same drawing either way.
       const diff = pixelmatch(files.data, atlas.data, null, files.width, files.height, {
         threshold: 0.1,
@@ -598,6 +606,216 @@ describe('art sets (L-944)', () => {
     expect(none.find((d) => d.id === 'f').art).toBe(
       '/apps/loom/art/materials/ground-flagstone.svg'
     );
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+});
+
+describe("the painter's finish (L-943)", () => {
+  const brightnessIn = (png, place, x, y) => brightness(patchIn(png, place, x, y));
+
+  withBrowser('contact shadows: under the props standing and along the foot of walls', async () => {
+    const page = await painterPage();
+    await standing(page);
+    const place = { y: 120, scale: 12 };
+    const room = geo.normalize({
+      ground: [{ id: 'f', material: 'flagstone', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } }],
+      walls: [
+        {
+          id: 'w',
+          material: 'stone',
+          points: [
+            [5, 10],
+            [55, 10],
+          ],
+        },
+        {
+          id: 'ns',
+          material: 'stone',
+          points: [
+            [50, 12],
+            [50, 38],
+          ],
+        },
+      ],
+      objects: [
+        { id: 'chest', kind: 'chest', at: [15, 25], size: [6, 4] },
+        { id: 'pillar', kind: 'pillar', at: [32, 28], size: [3, 3] },
+        { id: 'table', kind: 'table', at: [40, 20], size: [5, 3] },
+      ],
+    });
+    await drawAt(page, 'finish-shadows', room, place, STANDING);
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('finish-shadows'));
+    // A shadow for each wall and each prop standing, on the floor under the
+    // standing layer; none for the table, which lies flat.
+    const shadows = drawn.filter((d) => d.kind === 'shadow');
+    expect(shadows.map((d) => d.id).sort()).toEqual(['chest', 'ns', 'pillar', 'w']);
+    expect(shadows.every((d) => d.layer === 'shadows')).toBe(true);
+    const firstStanding = drawn.findIndex((d) => d.layer === 'standing');
+    expect(drawn.findIndex((d) => d.kind === 'shadow')).toBeLessThan(firstStanding);
+    const shot = PNG.sync.read(await page.screenshot());
+    // The floor just past the wall's foot is darker than a few feet on.
+    expect(brightnessIn(shot, place, 25, 11.6)).toBeLessThan(brightnessIn(shot, place, 25, 15) - 8);
+    // Beside the chest's foot, darker than the open floor.
+    expect(brightnessIn(shot, place, 15, 28)).toBeLessThan(brightnessIn(shot, place, 15, 34) - 8);
+    // A wall running down the screen has a fainter one on both sides.
+    expect(brightnessIn(shot, place, 51.2, 30)).toBeLessThan(brightnessIn(shot, place, 54, 30) - 4);
+    expect(brightnessIn(shot, place, 48.8, 30)).toBeLessThan(brightnessIn(shot, place, 46, 30) - 4);
+    matchesBaseline(shot, 'finish-shadows.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  // Flagstone with a different floor laid over it: fixtures/paint/floor-*.svg.
+  const variants = (page) =>
+    page.evaluate(() =>
+      Loom.materials.registerSet(
+        {
+          name: 'test-variants',
+          materials: {
+            'ground/flagstone': {
+              file: 'floor-base.svg',
+              variants: [{ file: 'floor-a.svg' }, { file: 'floor-b.svg' }],
+            },
+          },
+        },
+        '/fixtures/paint/'
+      )
+    );
+
+  withBrowser('a soft edge where one floor lies over another, and none over nothing', async () => {
+    const page = await painterPage();
+    const place = { y: 40, scale: 12 };
+    const map = geo.normalize({
+      ground: [
+        { id: 'stone', material: 'stone', shape: { rect: { x: 0, y: 0, w: 40, h: 40 } } },
+        // Dirt over the stone, its east edge at x 30; and running off it, its
+        // south edge over nothing at y 40.
+        { id: 'dirt', material: 'dirt', shape: { rect: { x: 10, y: 10, w: 20, h: 30 } } },
+        { id: 'grass', material: 'grass', shape: { rect: { x: 45, y: 10, w: 15, h: 15 } } },
+      ],
+    });
+    await drawAt(page, 'finish-edges', map, place, GRID);
+    const shot = PNG.sync.read(await page.screenshot());
+    // A column's brightness at x, over a foot down from y 19.5: a fade is
+    // across x, the textures' grain along it averages out.
+    const column = (x) => {
+      let sum = 0;
+      for (let y = 19.5; y <= 20.5; y += 1 / place.scale)
+        sum += brightness(colourIn(shot, place, x, y));
+      return sum / (place.scale + 1);
+    };
+    const dirt = column(28);
+    const stone = column(33);
+    expect(stone - dirt).toBeGreaterThan(20);
+    // Half a foot past the dirt's edge: neither the dirt nor the stone, the
+    // dirt fading over the stone; two feet out, the stone again.
+    const edge = column(30.5);
+    expect(edge).toBeGreaterThan(dirt + 4);
+    expect(edge).toBeLessThan(stone - 4);
+    expect(Math.abs(column(32.2) - stone)).toBeLessThan(12);
+    // Past the dirt's south edge there's no floor under it: nothing spills.
+    const below = colourIn(shot, place, 20, 40.4);
+    expect(brightness(below)).toBeLessThan(40);
+    // The grass lies on nothing at all: no soft edge.
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('finish-edges'));
+    expect(drawn.filter((d) => d.layer === 'ground').map((d) => d.id)).toEqual([
+      'stone',
+      'dirt',
+      'grass',
+    ]);
+    const past = colourIn(shot, place, 60.4, 15);
+    expect(brightness(past)).toBeLessThan(40);
+    matchesBaseline(shot, 'finish-edges.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('two rooms of one floor draw different variants, picked by their ids', async () => {
+    const page = await painterPage();
+    await variants(page);
+    // Two ids whose pick differs (the pick is the painter's, by the id).
+    const picks = await page.evaluate(() =>
+      ['hall', 'vault', 'cellar', 'crypt', 'study', 'library'].map((id) => [
+        id,
+        Loom.mapPaint.variantOf(id, 3),
+      ])
+    );
+    const [a, b] = picks.filter((p, i) => picks.findIndex((q) => q[1] === p[1]) === i);
+    expect(a && b).toBeTruthy();
+    const room = (id, x) => ({
+      id,
+      material: 'flagstone',
+      shape: { rect: { x, y: 0, w: 25, h: 25 } },
+    });
+    const map = geo.normalize({ ground: [room(a[0], 0), room(b[0], 30)] });
+    const place = { y: 40, scale: 12 };
+    const opts = { ...GRID, set: 'test-variants' };
+    await drawAt(page, 'finish-variants', map, place, opts);
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('finish-variants'));
+    const files = ['floor-base.svg', 'floor-a.svg', 'floor-b.svg'];
+    const artOf = (id) => drawn.find((d) => d.id === id).art;
+    expect(artOf(a[0])).toBe('/fixtures/paint/' + files[a[1]]);
+    expect(artOf(b[0])).toBe('/fixtures/paint/' + files[b[1]]);
+    const shot = PNG.sync.read(await page.screenshot());
+    const left = patchIn(shot, place, 12, 12);
+    const right = patchIn(shot, place, 42, 12);
+    expect(
+      Math.abs(left.r - right.r) + Math.abs(left.g - right.g) + Math.abs(left.b - right.b)
+    ).toBeGreaterThan(30);
+    // The same rooms drawn again pick the same.
+    await page.evaluate(() => Loom.mapPaint.forget('finish-variants'));
+    await drawAt(page, 'finish-variants', map, place, opts);
+    const again = await page.evaluate(() => Loom.mapPaint.describe('finish-variants'));
+    expect(again.find((d) => d.id === a[0]).art).toBe(artOf(a[0]));
+    matchesBaseline(shot, 'finish-variants.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser("describe() says what's culled at a view; panning brings it back", async () => {
+    const page = await painterPage();
+    const map = geo.normalize(large());
+    // 14 px a foot, the screen over the dungeon's north-west rooms.
+    await page.evaluate(
+      ([g]) => window.__draw('finish-cull', g, { tile: 5, wall: 1.5 }, { x: 0, y: 0, scale: 14 }),
+      [map]
+    );
+    const at = (rect) =>
+      page.evaluate(
+        ([r]) => {
+          const culled = Loom.mapPaint.view('finish-cull', r);
+          const drawn = Loom.mapPaint.describe('finish-cull');
+          const shown = (kind, id) =>
+            drawn.filter((d) => d.kind === kind && d.id === id).some((d) => !d.culled);
+          return { culled, total: drawn.length, drawn, shown };
+        },
+        [rect]
+      );
+    // All of it, with no view.
+    const all = await at(null);
+    expect(all.culled).toBe(0);
+    expect(all.drawn.some((d) => d.culled)).toBe(false);
+    // The screen's view of it: 960 × 640 px at 14 px a foot.
+    const culled = await page.evaluate(() => Loom.mapPaint.cull('finish-cull', 960, 640));
+    expect(culled).toBeGreaterThan(all.total * 0.6);
+    const near = await at({ x0: 0, y0: 0, x1: 960 / 14, y1: 640 / 14 });
+    const isCulled = (drawn, kind, id) =>
+      drawn.filter((d) => d.kind === kind && d.id === id).every((d) => d.culled);
+    expect(near.culled).toBe(culled);
+    // A room in view is drawn; one across the dungeon isn't, but is still built.
+    expect(isCulled(near.drawn, 'wall', 'east-r0-0')).toBe(false);
+    expect(isCulled(near.drawn, 'wall', 'east-r5-5')).toBe(true);
+    expect(isCulled(near.drawn, 'ground', 'floor-r5-5')).toBe(true);
+    // The floor under it all stays: it reaches the view.
+    expect(isCulled(near.drawn, 'ground', 'floor')).toBe(false);
+    // Panned to the far corner: those come back, built before, nothing new.
+    const before = await page.evaluate(() => Loom.mapPaint.stats().built);
+    const far = await at({ x0: 230, y0: 250, x1: 300, y1: 300 });
+    expect(isCulled(far.drawn, 'wall', 'east-r5-5')).toBe(false);
+    expect(isCulled(far.drawn, 'ground', 'floor-r5-5')).toBe(false);
+    expect(isCulled(far.drawn, 'wall', 'east-r0-0')).toBe(true);
+    expect(await page.evaluate(() => Loom.mapPaint.stats().built)).toBe(before);
     expect(page.errors).toEqual([]);
     await page.close();
   });
@@ -768,7 +986,8 @@ describe('the grid view', () => {
       };
       await page.evaluate(([d]) => window.__show(d, null, 'town'), [town]);
       const inTown = await page.evaluate(() => Loom.mapPaint.describe('area:pl_station'));
-      expect(inTown.map((d) => d.kind).sort()).toEqual(['ground', 'line', 'wall']);
+      // Its wall with its shadow at its foot (L-943).
+      expect(inTown.map((d) => d.kind).sort()).toEqual(['ground', 'line', 'shadow', 'wall']);
       const region = {
         mapId: 'vega',
         here: null,
@@ -861,4 +1080,48 @@ describe('the grid view', () => {
       await page.close();
     }
   );
+});
+
+// Last, so a stall of the browser's GPU it may cause touches no other test.
+describe("the painter's finish (L-943): speed", () => {
+  withBrowser('the large dungeon zoomed in draws faster culled than not', async () => {
+    const page = await painterPage();
+    const map = geo.normalize(large());
+    await page.evaluate(
+      ([g]) =>
+        window.__draw('finish-fast', g, { tile: 5, wall: 1.5 }, { x: -1400, y: -1400, scale: 14 }),
+      [map]
+    );
+    // On a CPU four times slower (a mid-range phone), panning, frame by frame, alternating culled and not: each frame's work
+    // on the page's own thread (building what the GPU is sent, where culling
+    // saves), the GPU let finish between frames, outside the timing; each
+    // mode's median, so a stall of the browser's GPU doesn't count.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const times = await page.evaluate(() => {
+      const app = window.__app;
+      const gl = app.renderer.gl;
+      const root = app.stage.children[1].children[0];
+      const out = { all: [], culled: [] };
+      // In blocks of 20 frames, the first two of each left out (the frames
+      // after a switch rebuild what's drawn).
+      for (let i = 0; i < 160; i++) {
+        const culled = Math.floor(i / 20) % 2 === 1;
+        root.position.set(-1400 - i, -1400 - i / 2);
+        const t = performance.now();
+        if (culled) Loom.mapPaint.cull('finish-fast', 960, 640);
+        else Loom.mapPaint.view('finish-fast', null);
+        app.render();
+        if (i % 20 >= 2) (culled ? out.culled : out.all).push(performance.now() - t);
+        gl.finish();
+      }
+      return out;
+    });
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    const median = (list) => list.slice().sort((x, y) => x - y)[Math.floor(list.length / 2)];
+    console.log(`frame, unculled ${median(times.all)} ms, culled ${median(times.culled)} ms`);
+    expect(median(times.culled)).toBeLessThan(median(times.all) * 0.9);
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
 });

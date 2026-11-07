@@ -712,6 +712,9 @@
       var at = M.toScreen(view, PAD, PAD);
       town.paintRoot.position.set(at.x, at.y);
       town.paintRoot.scale.set((view.scale * SPAN) / space.width);
+      // Only what's on the screen is drawn (L-943; EN5).
+      var shown = engine.size();
+      Loom.mapPaint.cull('area:' + data.locationId, shown.width, shown.height);
     }
   }
 

@@ -214,6 +214,9 @@
     if (world.paintRoot) {
       world.paintRoot.position.set(view.x, view.y);
       world.paintRoot.scale.set((view.scale * data.map.width) / space.width);
+      // Only what's on the screen is drawn (L-943; EN5).
+      var shown = engine.size();
+      Loom.mapPaint.cull('region:' + (data.mapId || 'top'), shown.width, shown.height);
     }
   }
 
