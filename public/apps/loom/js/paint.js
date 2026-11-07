@@ -11,18 +11,37 @@
   //   shading   by height: higher ground lighter, lower darker, a shadow
   //             along every ledge's edge (DA2)
   //   lines     rivers, roads and streets as strips of their material
-  //   walls     strips of their material along their lines, as seen from
-  //             above
-  //   openings  doors and windows by their state: a closed door across its
-  //             gap, an open one swung on its hinge, a locked one tinted red
-  //   objects   with their art: their own, their world's for their kind, the
-  //             catalog's, else the box with a question mark (OB1)
+  //   objects   lying flat, with their art seen from above: their own, their
+  //             world's for their kind, the catalog's, else the box with a
+  //             question mark (OB1)
+  //   standing  the three-quarter view (planning/game-art.md §4.1, TV2–TV5,
+  //             SC1; L-941 / #795), one layer ordered by how far down the
+  //             screen each thing's foot stands:
+  //               walls      a face rising up the screen from the wall's foot,
+  //                          RISE of a foot for each foot of its height (8 ft
+  //                          unless it has its own), its top strip on it;
+  //                          angled walls slanted, north-south walls showing
+  //                          their top and their south end; a face from its
+  //                          material's face picture, else its top's darkened
+  //               doors      closed, an upright panel in the wall (a locked one
+  //                          tinted red), the wall going on above it; open, a
+  //                          thin upright leaf swung into the room on its hinge
+  //               windows    an upright pane between the wall below its sill
+  //                          and above its top
+  //               objects    with a standing picture (materials.js standFor),
+  //                          on the south edge of their footprint, as wide as
+  //                          their size in feet and as tall as their picture's
+  //                          proportions (never the picture's own size); one
+  //                          with none lies flat, as before (TV5)
+  //             and whatever the drawer adds to it (its tokens, standOf)
   //   light     dark areas shaded, lights glowing through them (drawing
   //             only, decided 2026-11-04)
   //
   // The fog is the drawer's, over all of it. A map with its own art (EX2)
   // has that art drawn in place of its ground, lines and walls: the painter
-  // then draws only its doors, as thin lines by their state, and its objects.
+  // then draws only its doors, as thin lines by their state, and its objects,
+  // standing on it. The rules (moving, sight, fog, clicks, paths) stay on the
+  // flat map: only the drawing stands up.
   // The world's accent may tint the ground and the walls (RD4).
   //
   // Everything is built in the map's own units in one container per map
@@ -37,14 +56,28 @@
   //   Loom.mapPaint.paint(host, key, geometry, options)  draw it into `host`
   //   Loom.mapPaint.stats()                                 built and kept, for tests
   //   Loom.mapPaint.describe(key)                           what's drawn, for tests
+  //                                                         (the standing layer in
+  //                                                         its depth order)
   //   Loom.mapPaint.forget(key)                             drop a map's drawing
+  //   Loom.mapPaint.standOf(key)                            the standing layer, for
+  //                                                         the drawer's tokens
+  //   Loom.mapPaint.standingAt(key, x, y)                   the standing object whose
+  //                                                         picture is at a point
+  //                                                         (map units), or null
+  //   Loom.mapPaint.riseOf(geometry, options)               how far up the screen its
+  //                                                         tallest wall reaches
   //
   // options: { tile (map units a tile of ground covers; 5 on a grid),
   //            wall (a wall's thickness in map units; 1 on a grid),
   //            art (true: the map has its own art), tint (the world's accent,
   //            0xRRGGBB, or null), worldKinds (the world's object kinds),
   //            onProgress (fraction 0–1, then null when done), onChange
-  //            (something new to show: draw the stage again) }
+  //            (something new to show: draw the stage again), feet (map
+  //            units a foot of height is; 1 on a grid), stand (a container
+  //            to put the standing layer in, so the drawer can lay it over
+  //            its fog; else it goes in the map's own, under the light),
+  //            standAt ({ x, y, scale }: where the map's units are in
+  //            `stand`'s) }
 
   var Loom = window.Loom;
   var mat = Loom.materials;
@@ -58,6 +91,18 @@
   var STEP_UP = 2.5; // a ledge: more than this between two floors (DA2)
   var OPEN_SWING = (75 * Math.PI) / 180; // an open door's swing
   var LOCKED = 0xff9e9e;
+  // The three-quarter view (TV2): a foot of height rises this far up the
+  // screen, one angle for the game; a wall with no height of its own is
+  // WALL_FT tall, a door DOOR_FT (or its wall's, if lower), a window from its
+  // sill to its top.
+  var RISE = 0.6;
+  var WALL_FT = 8;
+  var DOOR_FT = 7;
+  var SILL_FT = 3;
+  var WINDOW_FT = 6.5;
+  var FACE_SHADE = 0x9a9a9a; // a face drawn from its top's picture
+  var FACE_LIT = 0xe4e4e4; // a face drawn from its own
+  var LEAF = 0.4; // an open door's leaf, as part of the wall's thickness
   var LIGHT_RGB = '255,214,150';
   var COLOURS = { door: 0xffb74d, doorLocked: 0xe57373, dark: 0x05070d, ledge: 0x05070d };
 
@@ -120,6 +165,12 @@
   function spanOfMaterial(kind, id) {
     var m = mat.materialOf(kind, id);
     return (m && m.span) || 1;
+  }
+
+  // A wall material's face picture (L-941), or null: its top's stands in.
+  function faceUrl(id) {
+    var m = mat.materialOf('wall', id);
+    return m && m.face ? mat.artUrl(m.face) : null;
   }
 
   function materialUrl(kind, id) {
@@ -201,6 +252,133 @@
     return out;
   }
 
+  // ── The three-quarter view (L-941) ────────────────────────────────────
+
+  function lifted(p, h) {
+    return { x: p.x, y: p.y - h };
+  }
+
+  // A picture tiled over a face: `fit` stretches it once along the face
+  // (a door), else it repeats at the face's height (a wall's face picture)
+  // or, for a top's strip standing in for a face, at its own scale.
+  function faceScale(s, texture, len, h, thick, how) {
+    var th = texture.height || STRIP_PX.h;
+    var tw = texture.width || STRIP_PX.w;
+    if (how === 'fit') s.tileScale.set(len / tw, len / tw);
+    else if (how === 'face') s.tileScale.set(h / th, h / th);
+    else s.tileScale.set(thick / th, thick / th);
+  }
+
+  // A face standing on a segment's foot (the south edge of its thickness),
+  // from `base` up to `base + h` (map units up the screen): a parallelogram,
+  // slanted with the segment. `along` keeps a tiled picture continuous
+  // across a wall cut into pieces. Null for a north-south segment, which
+  // shows no face.
+  function face(texture, a, b, base, h, thick, how, along) {
+    var PIXI = window.PIXI;
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len || h <= 0 || Math.abs(dx) < 1e-6) return null;
+    var p = dx > 0 ? a : b; // drawn west to east
+    var ux = Math.abs(dx) / len;
+    var uy = (dx > 0 ? dy : -dy) / len;
+    var s = new PIXI.TilingSprite({ texture: texture, width: len, height: h });
+    s.setFromMatrix(new PIXI.Matrix(ux, uy, 0, 1, p.x, p.y + thick / 2 - base - h));
+    faceScale(s, texture, len, h, thick, how);
+    if (along) s.tilePosition.x = -along;
+    return s;
+  }
+
+  // The south end of a north-south piece: as wide as the wall, `h` tall.
+  function endFace(texture, end, base, h, thick, how) {
+    var PIXI = window.PIXI;
+    if (h <= 0) return null;
+    var s = new PIXI.TilingSprite({ texture: texture, width: thick, height: h });
+    s.position.set(end.x - thick / 2, end.y + thick / 2 - base - h);
+    faceScale(s, texture, thick, h, thick, how === 'fit' ? 'top' : how);
+    return s;
+  }
+
+  // A segment standing up: its faces from `base` to `top` (map units up the
+  // screen) and, with `cap`, its top strip at `top`. Cut into pieces no
+  // longer than `piece` down the screen, so each stands in its own place in
+  // the depth order: [{ node, depth, box }], `depth` its foot's y, `box`
+  // what it covers on the screen in map units.
+  function slab(a, b, o) {
+    var PIXI = window.PIXI;
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len) return [];
+    var n = Math.max(1, Math.ceil(Math.abs(dy) / o.piece - 1e-9));
+    var parts = [];
+    var thick = o.thick;
+    var southern = dy >= 0 ? n - 1 : 0;
+    for (var k = 0; k < n; k++) {
+      var p = { x: a.x + (dx * k) / n, y: a.y + (dy * k) / n };
+      var q = { x: a.x + (dx * (k + 1)) / n, y: a.y + (dy * (k + 1)) / n };
+      var along = (len * k) / n;
+      var c = new PIXI.Container();
+      var h = o.top - o.base;
+      if (o.front && h > 0) {
+        var f = face(o.front, p, q, o.base, h, thick, o.how, along);
+        if (f) {
+          f.tint = o.tint;
+          c.addChild(f);
+        }
+        if (k === southern && Math.abs(dx) < Math.abs(dy)) {
+          var end = endFace(o.front, dy >= 0 ? q : p, o.base, h, thick, o.how);
+          if (end) {
+            end.tint = o.tint;
+            c.addChild(end);
+          }
+        }
+      }
+      if (o.cap) {
+        var t = strip(o.cap, lifted(p, o.top), lifted(q, o.top), thick, false, true);
+        if (t) {
+          if (along) t.tilePosition.x = -along;
+          if (o.capTint !== undefined) t.tint = o.capTint;
+          c.addChild(t);
+        }
+      }
+      if (!c.children.length) continue;
+      var foot = Math.max(p.y, q.y) + thick / 2;
+      parts.push({
+        node: c,
+        depth: foot,
+        box: {
+          x0: Math.min(p.x, q.x) - thick / 2,
+          x1: Math.max(p.x, q.x) + thick / 2,
+          y0: Math.min(p.y, q.y) - thick / 2 - o.top,
+          y1: foot - o.base,
+        },
+      });
+    }
+    return parts;
+  }
+
+  // How far up the screen a height in feet stands, in map units.
+  function riseFor(feet, o) {
+    return feet * RISE * (o.feet > 0 ? o.feet : 1);
+  }
+
+  function heightOf(item, fallback) {
+    return item && typeof item.height === 'number' && item.height > 0 ? item.height : fallback;
+  }
+
+  /** How far up the screen the tallest wall of a map reaches (map units). */
+  function riseOf(geometry, options) {
+    var o = options || {};
+    var walls = (geometry && Array.isArray(geometry.walls) && geometry.walls) || [];
+    var tallest = walls.length ? WALL_FT : 0;
+    walls.forEach(function (w) {
+      tallest = Math.max(tallest, heightOf(w, WALL_FT));
+    });
+    return riseFor(tallest, o);
+  }
+
   // ── What to draw ──────────────────────────────────────────────────────
 
   // The items of a map to draw, in order, each { key, layer, order, urls,
@@ -212,9 +390,9 @@
       return Array.isArray(g[k]) ? g[k] : [];
     };
     var out = [];
-    var add = function (layer, kind, item, i, urls, build) {
+    var add = function (layer, kind, item, i, urls, build, extra) {
       out.push({
-        key: kind + '|' + (item.id || i) + '|' + JSON.stringify(item),
+        key: kind + '|' + (item.id || i) + '|' + JSON.stringify(item) + (extra ? '|' + extra : ''),
         layer: layer,
         order: i,
         urls: urls.filter(Boolean),
@@ -236,6 +414,10 @@
     };
     var tile = o.tile;
     var thick = o.wall;
+    var wallsById = {};
+    list('walls').forEach(function (w) {
+      if (w && w.id) wallsById[w.id] = w;
+    });
 
     if (!o.art) {
       list('ground').forEach(function (item, i) {
@@ -290,7 +472,8 @@
           return c;
         });
       });
-      // The walls, less where doors and windows stand (map-geometry.js).
+      // The walls, less where doors and windows stand (map-geometry.js),
+      // standing (L-941).
       var compiled = geo.compile(g);
       var byWall = {};
       compiled.edges.forEach(function (e) {
@@ -298,64 +481,251 @@
       });
       list('walls').forEach(function (item, i) {
         var url = materialUrl('wall', item.material);
+        var fUrl = faceUrl(item.material);
         var edges = byWall[item.id] || [];
-        add('walls', 'wall', item, i, [url], function () {
-          var c = new PIXI.Container();
-          var texture = loaded(url);
-          edges.forEach(function (e) {
-            var s = texture ? strip(texture, pt(e.a), pt(e.b), thick, false, true) : null;
-            if (s) c.addChild(s);
-          });
-          return c;
-        });
+        var top = riseFor(heightOf(item, WALL_FT), o);
+        var cut = JSON.stringify(
+          edges.map(function (e) {
+            return [e.a, e.b];
+          })
+        );
+        add(
+          'standing',
+          'wall',
+          item,
+          i,
+          [url, fUrl],
+          function () {
+            var cap = loaded(url);
+            var own = loaded(fUrl);
+            var parts = [];
+            edges.forEach(function (e) {
+              parts = parts.concat(
+                slab(pt(e.a), pt(e.b), {
+                  piece: tile,
+                  thick: thick,
+                  base: 0,
+                  top: top,
+                  front: own || cap,
+                  how: own ? 'face' : 'top',
+                  tint: own ? FACE_LIT : FACE_SHADE,
+                  cap: cap,
+                })
+              );
+            });
+            return parts;
+          },
+          cut + '|' + top
+        );
       });
+      // A window: an upright pane between the wall below its sill and above
+      // its top, the wall's top strip over it.
       list('windows').forEach(function (item, i) {
         var url = materialUrl('window', item.material);
-        add('openings', 'window', item, i, [url], function () {
-          var a = pt(item.from);
-          var b = pt(item.to);
-          var texture = loaded(url);
-          var s = texture && a && b ? strip(texture, a, b, thick * 0.8, true, false) : null;
-          if (s && item.state === 'open') s.alpha = 0.55;
-          return s || new PIXI.Container();
-        });
+        var wall = wallsById[item.wall] || null;
+        var wUrl = wall ? materialUrl('wall', wall.material) : null;
+        var fUrl = wall ? faceUrl(wall.material) : null;
+        var height = heightOf(wall, WALL_FT);
+        var sill = Math.min(SILL_FT, height);
+        var head = Math.min(heightOf(item, WINDOW_FT), height);
+        var wallKey = wall ? wall.material + '|' + height + '|' + o.feet : '';
+        add(
+          'standing',
+          'window',
+          item,
+          i,
+          [url, wUrl, fUrl],
+          function () {
+            var a = pt(item.from);
+            var b = pt(item.to);
+            if (!a || !b) return [];
+            var pane = loaded(url);
+            var cap = loaded(wUrl);
+            var own = loaded(fUrl);
+            var wallFace = own || cap;
+            var common = { piece: tile, thick: thick, how: own ? 'face' : 'top' };
+            var shade = own ? FACE_LIT : FACE_SHADE;
+            var parts = slab(a, b, {
+              ...common,
+              base: 0,
+              top: riseFor(sill, o),
+              front: wallFace,
+              tint: shade,
+            });
+            slab(a, b, {
+              piece: tile,
+              thick: thick * 0.8,
+              base: riseFor(sill, o),
+              top: riseFor(head, o),
+              front: pane,
+              how: 'fit',
+              tint: 0xffffff,
+            }).forEach(function (part) {
+              part.node.alpha = item.state === 'open' ? 0.55 : 0.85;
+              parts.push(part);
+            });
+            parts = parts.concat(
+              slab(a, b, {
+                ...common,
+                base: riseFor(head, o),
+                top: riseFor(height, o),
+                front: wallFace,
+                tint: shade,
+                cap: cap || pane,
+              })
+            );
+            return parts;
+          },
+          wallKey
+        );
       });
     }
 
+    // Doors: over a map's own art, flat lines by their state; else standing
+    // (L-941): a closed one an upright panel in its wall, an open one a thin
+    // leaf swung on its hinge (`from`), the wall going on above either.
     list('doors').forEach(function (item, i) {
-      var url = o.art ? null : materialUrl('door', item.material);
-      add('openings', 'door', item, i + 1000, [url], function () {
-        var a = pt(item.from);
-        var b = pt(item.to);
-        if (!a || !b) return new PIXI.Container();
-        var state = item.state || 'closed';
-        if (o.art) return doorLine(a, b, state, thick);
-        var texture = loaded(url);
-        if (!texture) return doorLine(a, b, state, thick);
-        if (state === 'open') {
-          // Swung on its hinge, `from`.
-          var len = Math.hypot(b.x - a.x, b.y - a.y);
-          var angle = Math.atan2(b.y - a.y, b.x - a.x) + OPEN_SWING;
-          var swung = { x: a.x + Math.cos(angle) * len, y: a.y + Math.sin(angle) * len };
-          var leaf = strip(texture, a, swung, thick * 0.6, true, false);
-          leaf.alpha = 0.9;
-          return leaf;
-        }
-        var shut = strip(texture, a, b, thick, true, false);
-        if (state === 'locked') shut.tint = LOCKED;
-        return shut;
-      });
+      if (o.art) {
+        add('openings', 'door', item, i + 1000, [], function () {
+          var a = pt(item.from);
+          var b = pt(item.to);
+          if (!a || !b) return new PIXI.Container();
+          return doorLine(a, b, item.state || 'closed', thick);
+        });
+        return;
+      }
+      var url = materialUrl('door', item.material);
+      var wall = wallsById[item.wall] || null;
+      var wUrl = wall ? materialUrl('wall', wall.material) : null;
+      var fUrl = wall ? faceUrl(wall.material) : null;
+      var height = heightOf(wall, WALL_FT);
+      var tall = Math.min(heightOf(item, DOOR_FT), height);
+      var see = (mat.materialOf('door', item.material) || {}).seeThrough;
+      add(
+        'standing',
+        'door',
+        item,
+        i + 1000,
+        [url, wUrl, fUrl],
+        function () {
+          var a = pt(item.from);
+          var b = pt(item.to);
+          if (!a || !b) return [];
+          var state = item.state || 'closed';
+          var leafArt = loaded(url);
+          var cap = loaded(wUrl);
+          var own = loaded(fUrl);
+          var parts = [];
+          if (state === 'open') {
+            var len = Math.hypot(b.x - a.x, b.y - a.y);
+            var angle = Math.atan2(b.y - a.y, b.x - a.x) + OPEN_SWING;
+            var swung = { x: a.x + Math.cos(angle) * len, y: a.y + Math.sin(angle) * len };
+            slab(a, swung, {
+              piece: tile,
+              thick: thick * LEAF,
+              base: 0,
+              top: riseFor(tall, o),
+              front: leafArt,
+              how: 'fit',
+              tint: 0xffffff,
+              cap: leafArt,
+              capTint: FACE_SHADE,
+            }).forEach(function (part) {
+              if (see) part.node.alpha = 0.8;
+              parts.push(part);
+            });
+          } else {
+            slab(a, b, {
+              piece: tile,
+              thick: thick,
+              base: 0,
+              top: riseFor(tall, o),
+              front: leafArt,
+              how: 'fit',
+              tint: state === 'locked' ? LOCKED : 0xffffff,
+              cap: leafArt,
+              capTint: state === 'locked' ? LOCKED : FACE_SHADE,
+            }).forEach(function (part) {
+              if (see) part.node.alpha = 0.8;
+              parts.push(part);
+            });
+          }
+          // The wall over the doorway. In a wall running down the screen, whose
+          // face can't be seen, a shut door's own picture is its top strip, so
+          // the door still shows.
+          var across = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) || state === 'open';
+          parts = parts.concat(
+            slab(a, b, {
+              piece: tile,
+              thick: thick,
+              base: riseFor(tall, o),
+              top: riseFor(height, o),
+              front: own || cap,
+              how: own ? 'face' : 'top',
+              tint: own ? FACE_LIT : FACE_SHADE,
+              cap: across ? cap : leafArt || cap,
+              capTint: across || !leafArt ? undefined : state === 'locked' ? LOCKED : undefined,
+            })
+          );
+          if (!leafArt) {
+            // Its art missing: the line by its state, lying flat, as before.
+            var line = doorLine(a, b, state, thick);
+            parts.push({
+              node: line,
+              depth: Math.max(a.y, b.y) + thick / 2,
+              box: null,
+            });
+          }
+          return parts;
+        },
+        (wall ? wall.material + '|' + height : '') + '|' + o.feet
+      );
     });
 
     list('objects').forEach(function (item, i) {
+      var size = Array.isArray(item.size)
+        ? item.size
+        : typeof item.size === 'number'
+          ? [item.size, item.size]
+          : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
+      var stand = mat.standFor(item, o.worldKinds);
+      if (stand) {
+        // Standing on the south edge of its footprint (SC1): as wide as the
+        // footprint turned by its `turn`, as tall as its picture's shape.
+        add('standing', 'object', item, i, [stand.url], function () {
+          var at = pt(item.at);
+          var texture = loaded(stand.url);
+          if (!at || !texture) return [];
+          var turn = ((Number(item.turn) || 0) * Math.PI) / 180;
+          var c = Math.abs(Math.cos(turn));
+          var sn = Math.abs(Math.sin(turn));
+          var w = size[0] * c + size[1] * sn;
+          var d = size[0] * sn + size[1] * c;
+          var tall = (w * (texture.height || 1)) / (texture.width || 1);
+          var up = new PIXI.Sprite(texture);
+          up.anchor.set(0.5, 1);
+          up.position.set(at.x, at.y + d / 2);
+          up.width = w;
+          up.height = tall;
+          return [
+            {
+              node: up,
+              depth: at.y + d / 2,
+              box: {
+                x0: at.x - w / 2,
+                x1: at.x + w / 2,
+                y0: at.y + d / 2 - tall,
+                y1: at.y + d / 2,
+              },
+              hit: item.id || null,
+            },
+          ];
+        });
+        return;
+      }
       var url = objectUrl(item, o.worldKinds);
       add('objects', 'object', item, i, [url, mat.artUrl(mat.FALLBACK_ART)], function () {
         var at = pt(item.at);
-        var size = Array.isArray(item.size)
-          ? item.size
-          : typeof item.size === 'number'
-            ? [item.size, item.size]
-            : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
         var texture = loaded(url) || loaded(mat.artUrl(mat.FALLBACK_ART));
         if (!at || !texture) return new PIXI.Container();
         var s = new PIXI.Sprite(texture);
@@ -483,6 +853,8 @@
 
   // ── Painting ──────────────────────────────────────────────────────────
 
+  // `walls` stays for the order of before; since L-941 walls stand, and only
+  // a map with its own art lays anything (its doors' lines) in `openings`.
   var LAYERS = ['ground', 'shading', 'lines', 'walls', 'openings', 'objects', 'light'];
 
   function stateOf(key) {
@@ -501,7 +873,19 @@
       layers[name] = layer;
       root.addChild(layer);
     });
-    s = { key: key, root: root, layers: layers, items: new Map(), job: 0 };
+    // The standing layer (L-941): one container, sorted by each thing's foot.
+    var stand = new PIXI.Container();
+    stand.sortableChildren = true;
+    stand.__loomStand = key;
+    s = {
+      key: key,
+      root: root,
+      layers: layers,
+      stand: stand,
+      standAt: { x: 0, y: 0, scale: 1 },
+      items: new Map(),
+      job: 0,
+    };
     maps.set(key, s);
     while (maps.size > KEEP) {
       var oldest = maps.keys().next().value;
@@ -510,13 +894,82 @@
     return s;
   }
 
-  /** Drops a map's drawing. */
+  /** Drops a map's drawing (what the drawer put in its standing layer is left to it). */
   function forget(key) {
     var s = maps.get(key);
     if (!s) return;
     maps.delete(key);
+    s.stand.children.slice().forEach(function (child) {
+      if (!child.__loomDepth && child.__loomDepth !== 0) s.stand.removeChild(child);
+    });
+    if (s.stand.parent) s.stand.parent.removeChild(s.stand);
+    s.stand.destroy({ children: true });
     if (s.root.parent) s.root.parent.removeChild(s.root);
     s.root.destroy({ children: true });
+  }
+
+  // Where a standing part goes: wrapped in the map's units where the standing
+  // layer is the drawer's own, its place in the order its foot's y there.
+  function placePart(s, wrap) {
+    var at = s.standAt;
+    wrap.position.set(at.x, at.y);
+    wrap.scale.set(at.scale);
+    wrap.zIndex = at.y + wrap.__loomDepth * at.scale;
+  }
+
+  // The standing layer in the drawer's container, or in the map's own,
+  // under the light.
+  function hostStand(s, o) {
+    var host = o.stand || s.root;
+    if (o.stand) {
+      o.stand.children.slice().forEach(function (child) {
+        if (child !== s.stand && child.__loomStand) o.stand.removeChild(child);
+      });
+    }
+    var at = o.stand && o.standAt ? o.standAt : { x: 0, y: 0, scale: 1 };
+    var moved = at.x !== s.standAt.x || at.y !== s.standAt.y || at.scale !== s.standAt.scale;
+    s.standAt = { x: at.x || 0, y: at.y || 0, scale: at.scale > 0 ? at.scale : 1 };
+    if (s.stand.parent !== host) {
+      if (s.stand.parent) s.stand.parent.removeChild(s.stand);
+      if (host === s.root) host.addChildAt(s.stand, host.getChildIndex(s.layers.light));
+      else host.addChild(s.stand);
+    }
+    if (moved) {
+      s.stand.children.forEach(function (child) {
+        if (child.__loomDepth !== undefined) placePart(s, child);
+      });
+    }
+  }
+
+  // An item's display objects: one in its layer, or its standing parts.
+  function nodesOf(s, w) {
+    var PIXI = window.PIXI;
+    if (w.layer !== 'standing') {
+      var node = w.build();
+      node.zIndex = w.order;
+      node.__loomPainted = w.about();
+      s.layers[w.layer].addChild(node);
+      return [node];
+    }
+    var about = w.about();
+    return (w.build() || []).map(function (part, k) {
+      var wrap = new PIXI.Container();
+      wrap.addChild(part.node);
+      wrap.__loomDepth = part.depth;
+      wrap.__loomBox = part.box || null;
+      wrap.__loomHit = part.hit || null;
+      var info = {};
+      Object.keys(about).forEach(function (name) {
+        info[name] = about[name];
+      });
+      info.layer = 'standing';
+      info.depth = Math.round(part.depth * 100) / 100;
+      if (k) info.part = k;
+      wrap.__loomPainted = info;
+      placePart(s, wrap);
+      s.stand.addChild(wrap);
+      return wrap;
+    });
   }
 
   /**
@@ -529,6 +982,7 @@
     var o = options || {};
     o.tile = o.tile > 0 ? o.tile : 5;
     o.wall = o.wall > 0 ? o.wall : 1;
+    o.feet = o.feet > 0 ? o.feet : 1;
     var s = stateOf(key);
     // Only this map in the host.
     host.children.slice().forEach(function (child) {
@@ -536,6 +990,7 @@
     });
     s.root.__loomPaint = true;
     if (s.root.parent !== host) host.addChildAt(s.root, 0);
+    hostStand(s, o);
     var tint = tintOf(o.tint);
     ['ground', 'lines', 'walls'].forEach(function (name) {
       s.layers[name].tint = tint;
@@ -547,10 +1002,12 @@
         return w.key;
       })
     );
-    s.items.forEach(function (node, k) {
+    s.items.forEach(function (nodes, k) {
       if (keys.has(k)) return;
-      if (node.parent) node.parent.removeChild(node);
-      node.destroy({ children: true });
+      nodes.forEach(function (node) {
+        if (node.parent) node.parent.removeChild(node);
+        node.destroy({ children: true });
+      });
       s.items.delete(k);
       counts.removed += 1;
     });
@@ -595,11 +1052,7 @@
         var t0 = now();
         while (i < todo.length && now() - t0 < BUDGET_MS) {
           var w = todo[i++];
-          var node = w.build();
-          node.zIndex = w.order;
-          node.__loomPainted = w.about();
-          s.layers[w.layer].addChild(node);
-          s.items.set(w.key, node);
+          s.items.set(w.key, nodesOf(s, w));
           counts.built += 1;
         }
         report(0.4 + (0.6 * i) / todo.length);
@@ -628,17 +1081,69 @@
     };
   }
 
-  /** What's drawn of a map, layer by layer: [{ layer, kind, id, state?, art? }], for tests. */
+  // The standing layer's children in the order they're drawn.
+  function standingOrder(s) {
+    return s.stand.children
+      .map(function (node, i) {
+        return { node: node, i: i };
+      })
+      .sort(function (a, b) {
+        return a.node.zIndex - b.node.zIndex || a.i - b.i;
+      })
+      .map(function (e) {
+        return e.node;
+      });
+  }
+
+  /**
+   * What's drawn of a map, layer by layer: [{ layer, kind, id, state?, art?,
+   * depth?, part? }], for tests. The standing layer (L-941) comes in the
+   * order it's drawn, back to front, with each part's `depth` (its foot's y
+   * in map units) and what the drawer stood in it (its tokens, with what it
+   * marked them with).
+   */
   function describe(key) {
     var s = maps.get(key);
     if (!s) return null;
     var out = [];
+    var standing = function () {
+      standingOrder(s).forEach(function (node) {
+        if (node.__loomPainted) out.push(node.__loomPainted);
+      });
+    };
+    var inRoot = s.stand.parent === s.root;
     LAYERS.forEach(function (name) {
+      if (name === 'light' && inRoot) standing();
       s.layers[name].children.forEach(function (node) {
         if (node.__loomPainted) out.push(node.__loomPainted);
       });
     });
+    if (!inRoot) standing();
     return out;
+  }
+
+  /** A map's standing layer, for the drawer to stand its tokens in (by zIndex: their foot's y). */
+  function standOf(key) {
+    var s = maps.get(key);
+    return s ? s.stand : null;
+  }
+
+  /**
+   * The standing object whose picture is at a point (the map's units), the
+   * front-most where pictures overlap, or null (L-941: a click on a standing
+   * object's picture selects that object).
+   */
+  function standingAt(key, x, y) {
+    var s = maps.get(key);
+    if (!s) return null;
+    var order = standingOrder(s);
+    for (var i = order.length - 1; i >= 0; i--) {
+      var node = order[i];
+      var b = node.__loomBox;
+      if (!node.__loomHit || !b || !node.visible) continue;
+      if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) return node.__loomHit;
+    }
+    return null;
   }
 
   Loom.mapPaint = {
@@ -648,6 +1153,10 @@
     describe: describe,
     objectUrl: objectUrl,
     cardUrl: cardUrl,
+    standOf: standOf,
+    standingAt: standingAt,
+    riseOf: riseOf,
+    RISE: RISE,
     LAYERS: LAYERS,
   };
 })();

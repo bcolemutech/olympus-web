@@ -199,6 +199,9 @@
       world.paintRoot = Loom.mapPaint.paint(n.painted, 'region:' + (data.mapId || 'top'), g, {
         tile: space.width / 32,
         wall: space.width / 400,
+        // A foot of height, for walls standing (L-941): on a region map a
+        // wall stands as a wall a foot and a half thick would on a grid.
+        feet: space.width / 400 / 1.5,
         art: Boolean(data.map.image),
         tint: accent(),
         onProgress: engine.progress,

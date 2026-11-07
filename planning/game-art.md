@@ -1,6 +1,6 @@
 # The Loom — Game Art in Three-Quarter View — Design Document v0.1
 
-**Status:** Decided (2026-11-07). The gap sheet (§3) is answered. Sub-issues filed 2026-11-07 (#795–#801, §6).
+**Status:** Decided (2026-11-07). The gap sheet (§3) is answered. Sub-issues filed 2026-11-07 (#795–#801, §6). **In progress:** L-941 the three-quarter view built 2026-11-07 (§4.1, Decisions).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-940 (#794), Phase 10 — Levels and Vehicles (milestone #26). Built next, before L-930 tokens and L-710 worlds without Azgaar.
 **Depends on:** L-920 (maps drawn from their data), L-700 (the image studio), the game art spike (`scripts/art/`, the painter's PNG art).
@@ -157,6 +157,16 @@ In `grading.js`, with `the-loom-grading.md` updated:
 - **Large maps (GR2):** a map over 60 squares a side drawn from data can reach the top grade on its data alone.
 
 ---
+
+### 4.9 Decisions while building
+
+- **L-941, 2026-11-07:**
+  - **Standing pictures are named in `materials.js`** (`STAND_ART`: a wall material's `face`, an object kind's `stand`), empty until L-946 paints them; L-944's art sets replace the table. An object with art of its own or its world's (a library image) lies flat until sets say which pictures stand (TV5). So until then only walls, doors and windows stand.
+  - **Walls are cut into pieces 5 ft down the screen** (a grid's square; a tile elsewhere), so an angled or north-south wall takes its place in the depth order along its length; one running across the screen is one piece. A north-south wall shows its top and its south end.
+  - **Doors and windows:** a door 7 ft high (or its own `height`, or its wall's if lower), the wall going on over it; a window from a 3 ft sill to 6.5 ft (or its `height`). In a wall running down the screen a shut door's picture is the top strip over its gap, so it still shows. An open door's leaf is a thin slab swung 75° on its hinge, as before.
+  - **The grid view's order:** ground, art and the flat map; its overlays (reach, grid, areas, hazards); the dark fog and mist; the standing layer, with the tokens (yours too), cut to the columns over the squares seen so a face rises over squares unseen and nothing beyond shows; then the dimming of squares out of sight, over everything standing too; names, the way and cards. The town and world views keep their tokens on top: their maps have few walls, and standing tokens come with L-930.
+  - **A foot of height** is a map unit on a grid, a foot in metres on an area map, and on a region map what a wall a foot and a half thick would rise on a grid.
+  - **Room above:** the grid view's top margin is its tallest wall's rise and a little (at least the 60 px of before), and the map is framed with it in view.
 
 ## 5. Exit criterion
 

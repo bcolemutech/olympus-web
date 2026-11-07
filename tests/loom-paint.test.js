@@ -18,7 +18,13 @@
  *     mid-range phone), once its textures have loaded;
  *   - the grid view draws its map with the painter, and its fog to the sight
  *     lines;
- *   - the town and world views draw their area and region maps' geometry.
+ *   - the town and world views draw their area and region maps' geometry;
+ *   - the three-quarter view (planning/game-art.md §4.1; L-941 / #795): the
+ *     dungeon and a generated interior with walls standing, an angled wall's
+ *     slanted face, a door closed, open and locked, and a prop in front of a
+ *     wall drawn over it and one behind drawn under it, each against its
+ *     screenshot; describe() in the depth order; tokens stand in the order
+ *     with the walls; the grid view's top margin.
  *
  * It needs Playwright and its Chromium (in the tests' dependencies; CI
  * installs the browser): where the browser is missing the suite is skipped,
@@ -47,7 +53,9 @@ try {
 }
 
 const BASELINE = path.join(__dirname, 'fixtures/paint/dungeon.png');
-const PLACE = { x: 0, y: 0, scale: 8, width: 120, height: 80 }; // 120 × 80 ft at 8 px a foot
+const generators = require('../functions/loom-canon/map-generators');
+// 120 × 80 ft at 7 px a foot, with room above for walls standing on its top edge.
+const PLACE = { x: 0, y: 48, scale: 7, width: 120, height: 80 };
 const GRID = { tile: 5, wall: 1.5, tint: null };
 
 jest.setTimeout(120000);
@@ -99,10 +107,32 @@ const draw = (page, key, geometry, options, image) =>
     [key, geometry, options || GRID, PLACE, image || null]
   );
 
+// A screenshot against the one kept as `name` (made again with UPDATE_PAINT=1).
+function matchesBaseline(shot, name) {
+  const file = path.join(__dirname, 'fixtures/paint', name);
+  if (process.env.UPDATE_PAINT || !fs.existsSync(file)) {
+    fs.writeFileSync(file, PNG.sync.write(shot));
+  }
+  const kept = PNG.sync.read(fs.readFileSync(file));
+  expect([kept.width, kept.height]).toEqual([shot.width, shot.height]);
+  const diff = pixelmatch(kept.data, shot.data, null, shot.width, shot.height, {
+    threshold: 0.15,
+  });
+  expect(diff / (shot.width * shot.height)).toBeLessThan(0.01);
+}
+
+// Standing pictures for the chest and the pillar (L-941): the catalog has
+// none yet (L-946 paints them), so the tests give it their own.
+const standing = (page) =>
+  page.evaluate(() => {
+    Loom.materials.objectKind('chest').stand = '../../../fixtures/paint/chest-stand.svg';
+    Loom.materials.objectKind('pillar').stand = '../../../fixtures/paint/pillar-stand.svg';
+  });
+
 // The colour at a point in feet of a screenshot.
 function colourAt(png, xFt, yFt) {
-  const x = Math.round(xFt * PLACE.scale);
-  const y = Math.round(yFt * PLACE.scale);
+  const x = Math.round(PLACE.x + xFt * PLACE.scale);
+  const y = Math.round(PLACE.y + yFt * PLACE.scale);
   const i = (y * png.width + x) * 4;
   return { r: png.data[i], g: png.data[i + 1], b: png.data[i + 2] };
 }
@@ -147,15 +177,7 @@ describe('the painter', () => {
       const pool = colourAt(shot, 25, 60);
       expect(pool.b).toBeGreaterThan(pool.r + 40); // water
       // The screenshot, against the one kept.
-      if (process.env.UPDATE_PAINT || !fs.existsSync(BASELINE)) {
-        fs.writeFileSync(BASELINE, PNG.sync.write(shot));
-      }
-      const kept = PNG.sync.read(fs.readFileSync(BASELINE));
-      expect([kept.width, kept.height]).toEqual([shot.width, shot.height]);
-      const diff = pixelmatch(kept.data, shot.data, null, shot.width, shot.height, {
-        threshold: 0.15,
-      });
-      expect(diff / (shot.width * shot.height)).toBeLessThan(0.01);
+      matchesBaseline(shot, path.basename(BASELINE));
       expect(page.errors).toEqual([]);
       await page.close();
     }
@@ -236,6 +258,221 @@ describe('the painter', () => {
   });
 });
 
+// Draws a map in the painter's page at `scale` px a foot, `top` px down.
+const drawAt = (page, key, geometry, place) =>
+  page.evaluate(
+    ([k, g, o, p]) => window.__draw(k, g, o, p, null),
+    [key, geometry, GRID, { x: 0, ...place }]
+  );
+
+// The colour at a point in feet, for a map drawn at `place`.
+function colourIn(png, place, xFt, yFt) {
+  const x = Math.round((place.x || 0) + xFt * place.scale);
+  const y = Math.round(place.y + yFt * place.scale);
+  const i = (y * png.width + x) * 4;
+  return { r: png.data[i], g: png.data[i + 1], b: png.data[i + 2] };
+}
+const brightness = (c) => (c.r + c.g + c.b) / 3;
+
+// The mean colour over a patch a foot across, so a tile's grout doesn't decide.
+function patchIn(png, place, xFt, yFt) {
+  const sum = { r: 0, g: 0, b: 0 };
+  let n = 0;
+  for (let dx = -0.4; dx <= 0.41; dx += 0.2) {
+    for (let dy = -0.4; dy <= 0.41; dy += 0.2) {
+      const c = colourIn(png, place, xFt + dx, yFt + dy);
+      sum.r += c.r;
+      sum.g += c.g;
+      sum.b += c.b;
+      n += 1;
+    }
+  }
+  return { r: sum.r / n, g: sum.g / n, b: sum.b / n };
+}
+
+// What's standing, in the order drawn.
+const standingOf = (drawn) => drawn.filter((d) => d.layer === 'standing');
+const inDepthOrder = (list) =>
+  list.every((d, i) => i === 0 || list[i - 1].depth <= d.depth + 1e-9);
+
+describe('the three-quarter view (L-941)', () => {
+  withBrowser('the dungeon stands: walls, doors and windows standing, props on their feet', async () => {
+    const page = await painterPage();
+    await standing(page);
+    await draw(page, 'tq-dungeon', geo.normalize(dungeon()));
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-dungeon'));
+    const up = standingOf(drawn);
+    // Walls, doors, windows and the props with standing pictures stand; the
+    // rest lie flat, as before (TV5).
+    for (const kind of ['wall', 'door', 'window']) {
+      expect(drawn.filter((d) => d.kind === kind).every((d) => d.layer === 'standing')).toBe(true);
+    }
+    expect(up.find((d) => d.id === 'chest').art).toMatch(/chest-stand\.svg$/);
+    expect(up.find((d) => d.id === 'pillar').art).toMatch(/pillar-stand\.svg$/);
+    expect(drawn.find((d) => d.id === 'table')).toMatchObject({ layer: 'objects' });
+    // describe() lists the standing layer in its depth order, by each foot.
+    expect(inDepthOrder(up)).toBe(true);
+    expect(up.find((d) => d.id === 'chest').depth).toBe(13); // its footprint's south edge
+    // Under the light, as before.
+    expect(drawn[drawn.length - 1]).toMatchObject({ layer: 'light' });
+    const shot = PNG.sync.read(await page.screenshot());
+    // The north wall's face rises above the map, into the margin.
+    const face = colourAt(shot, 30, -2);
+    expect(brightness(face)).toBeGreaterThan(30);
+    matchesBaseline(shot, 'dungeon-standing.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('a generated interior stands', async () => {
+    const page = await painterPage();
+    await standing(page);
+    const map = generators.generate('interior', { seed: 'three-quarter' });
+    const scale = Math.min(900 / (map.width * 5), 560 / (map.height * 5));
+    await drawAt(page, 'tq-interior', map.geometry, { y: 60, scale });
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-interior'));
+    const up = standingOf(drawn);
+    expect(up.filter((d) => d.kind === 'wall').length).toBeGreaterThan(4);
+    expect(up.some((d) => d.kind === 'door')).toBe(true);
+    expect(inDepthOrder(up)).toBe(true);
+    matchesBaseline(PNG.sync.read(await page.screenshot()), 'interior-standing.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('an angled wall stands with a slanted face, in pieces down the screen', async () => {
+    const page = await painterPage();
+    const place = { y: 80, scale: 12 };
+    await drawAt(
+      page,
+      'tq-angled',
+      geo.normalize({
+        ground: [{ id: 'f', material: 'flagstone', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } }],
+        walls: [
+          {
+            id: 'slant',
+            material: 'rock',
+            points: [
+              [10, 30],
+              [50, 10],
+            ],
+          },
+        ],
+      }),
+      place
+    );
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-angled'));
+    const pieces = drawn.filter((d) => d.id === 'slant');
+    expect(pieces.length).toBe(4); // 20 ft down the screen, a piece each 5 ft
+    expect(inDepthOrder(pieces)).toBe(true);
+    const shot = PNG.sync.read(await page.screenshot());
+    // Over the wall's middle, its face (darker than the floor beside it);
+    // the face slants: over a point further east, it stands higher.
+    const floor = brightness(patchIn(shot, place, 30, 32));
+    expect(brightness(patchIn(shot, place, 30, 18.5))).toBeLessThan(floor - 25);
+    expect(brightness(patchIn(shot, place, 45, 10.5))).toBeLessThan(floor - 25);
+    expect(brightness(patchIn(shot, place, 15, 18.5))).toBeGreaterThan(floor - 25);
+    matchesBaseline(shot, 'angled-standing.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('a door closed, open and locked', async () => {
+    const page = await painterPage();
+    const place = { y: 80, scale: 12 };
+    await drawAt(
+      page,
+      'tq-doors',
+      geo.normalize({
+        ground: [{ id: 'f', material: 'flagstone', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } }],
+        walls: [
+          {
+            id: 'w',
+            material: 'stone',
+            points: [
+              [0, 20],
+              [60, 20],
+            ],
+          },
+        ],
+        doors: [
+          { id: 'shut', material: 'wood', from: [10, 20], to: [15, 20], wall: 'w', state: 'closed' },
+          { id: 'ajar', material: 'wood', from: [25, 20], to: [30, 20], wall: 'w', state: 'open' },
+          { id: 'vault', material: 'iron', from: [45, 20], to: [50, 20], wall: 'w', state: 'locked' },
+        ],
+      }),
+      place
+    );
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-doors'));
+    const state = (id) => drawn.find((d) => d.id === id).state;
+    expect([state('shut'), state('ajar'), state('vault')]).toEqual(['closed', 'open', 'locked']);
+    const shot = PNG.sync.read(await page.screenshot());
+    const wall = brightness(patchIn(shot, place, 20, 18.5));
+    // Closed: a wooden panel standing in the wall.
+    const shut = colourIn(shot, place, 12.5, 18.5);
+    expect(shut.r).toBeGreaterThan(shut.b + 30);
+    // Locked: tinted red.
+    const vault = colourIn(shot, place, 47.5, 18.5);
+    expect(vault.r).toBeGreaterThan(vault.g + 15);
+    // Open: the doorway shows the floor beyond, lighter than the wall's face,
+    // the leaf swung into the room standing on its hinge.
+    expect(brightness(patchIn(shot, place, 28.5, 18.5))).toBeGreaterThan(wall + 25);
+    expect(drawn.filter((d) => d.id === 'ajar').length).toBeGreaterThan(1); // the leaf and the wall over the doorway
+    matchesBaseline(shot, 'doors-standing.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('a prop in front of a wall is drawn over it, one behind under it', async () => {
+    const page = await painterPage();
+    await standing(page);
+    const place = { y: 80, scale: 12 };
+    await drawAt(
+      page,
+      'tq-props',
+      geo.normalize({
+        ground: [{ id: 'f', material: 'flagstone', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } }],
+        walls: [
+          {
+            id: 'w',
+            material: 'stone',
+            points: [
+              [10, 20],
+              [50, 20],
+            ],
+          },
+        ],
+        objects: [
+          { id: 'front', kind: 'chest', at: [20, 23], size: [6, 2] },
+          { id: 'behind', kind: 'chest', at: [40, 18], size: [8, 2] },
+        ],
+      }),
+      place
+    );
+    const drawn = standingOf(await page.evaluate(() => Loom.mapPaint.describe('tq-props')));
+    expect(drawn.map((d) => d.id)).toEqual(['behind', 'w', 'front']);
+    const shot = PNG.sync.read(await page.screenshot());
+    // In front: the chest over the wall's face. Behind: the face over the
+    // chest, whose lid still shows above the wall.
+    const front = colourIn(shot, place, 20, 19.8);
+    expect(front.r).toBeGreaterThan(front.b + 40);
+    const hidden = colourIn(shot, place, 40, 17.5);
+    expect(Math.abs(hidden.r - hidden.b)).toBeLessThan(30);
+    const lid = colourIn(shot, place, 40, 13.5);
+    expect(lid.r).toBeGreaterThan(lid.b + 40);
+    // A click on a standing picture finds its object; elsewhere nothing.
+    const at = await page.evaluate(() => [
+      Loom.mapPaint.standingAt('tq-props', 20, 20),
+      Loom.mapPaint.standingAt('tq-props', 40, 13.5),
+      Loom.mapPaint.standingAt('tq-props', 5, 5),
+    ]);
+    expect(at).toEqual(['front', 'behind', null]);
+    matchesBaseline(shot, 'props-standing.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+});
+
 // A battle map as loomGetMap sends it: the dungeon, seen from the wooden hall.
 function battleData() {
   const g = geo.normalize(dungeon());
@@ -307,6 +544,48 @@ describe('the grid view', () => {
     );
     const progress = await page.evaluate(() => window.__progress);
     expect(progress[progress.length - 1]).toBeNull();
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('tokens stand with the walls (L-941), and the map has room above it', async () => {
+    const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(origin + '/fixtures/paint/drawers.html');
+    const data = battleData();
+    // Someone in the hall, north of its south wall; you stand further north.
+    data.people = [
+      { id: 'gob', name: 'Goblin', x: 20, y: 7, point: { x: 102.5, y: 37.5 }, side: 'hostile' },
+    ];
+    // Its outer wall 20 ft high: 12 ft up the screen, 96 px at 8 px a foot.
+    data.geometry.walls = data.geometry.walls.map((w) =>
+      w.id === 'outer' ? { ...w, height: 20 } : w
+    );
+    await page.evaluate(([d, t]) => window.__show(d, t), [data, TURN]);
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('battle:dungeon'));
+    const up = drawn.filter((d) => d.layer === 'standing');
+    expect(inDepthOrder(up)).toBe(true);
+    const order = up.map((d) => d.kind + ':' + d.id);
+    const index = (k) => order.indexOf(k);
+    // You (feet at 22.5 ft and your token's radius), then the goblin
+    // (37.5 ft), then the hall's south wall's doors (45 ft) in front of both.
+    expect(index('token:you')).toBeGreaterThan(-1);
+    expect(index('token:you')).toBeLessThan(index('token:gob'));
+    expect(index('token:gob')).toBeLessThan(index('door:vault'));
+    // Room above the grid for the walls on its top edge to rise into (TV4).
+    const room = await page.evaluate(() => ({
+      bounds: Loom.battle.bounds(),
+      top: Loom.battle.mapPoint({ x: 0, y: 0 }).y,
+    }));
+    expect(room.top).toBe(96 + 24);
+    expect(room.bounds.height).toBe(16 * 40 + room.top + 60);
+    // Framed with the wall's top in view.
+    const framed = await page.evaluate(() => {
+      const view = Loom.engine.camera.view;
+      return Loom.mapMath.toScreen(view, 0, Loom.battle.framePoints()[0].y).y;
+    });
+    expect(framed).toBeGreaterThanOrEqual(0);
     expect(errors).toEqual([]);
     await page.close();
   });
