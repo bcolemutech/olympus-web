@@ -804,6 +804,7 @@
       tile: MP.FEET,
       wall: 1.5,
       feet: 1,
+      fades: true, // walls over a token fade (L-942), so they're cut along their length
       stand: n.standing,
       standAt: { x: PAD, y: TOP, scale: CELL / MP.FEET },
       art: Boolean(d.image),

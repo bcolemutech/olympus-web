@@ -100,7 +100,8 @@
   //            to put the standing layer in, so the drawer can lay it over
   //            its fog; else it goes in the map's own, under the light),
   //            standAt ({ x, y, scale }: where the map's units are in
-  //            `stand`'s), set (the world's art set, L-944: its pictures
+  //            `stand`'s), fades (true: the drawer fades what stands over its
+  //            tokens, L-942, so long walls are cut along their length), set (the world's art set, L-944: its pictures
   //            over the built-in art; its manifest fetched the first time) }
 
   var Loom = window.Loom;
@@ -577,8 +578,8 @@
   // A segment standing up: its faces from `base` to `top` (map units up the
   // screen) and, with `cap`, its top strip at `top`. Cut into pieces no
   // longer than `piece` down the screen, so each stands in its own place in
-  // the depth order, and none longer than `span` along it (two pieces), so
-  // one can fade alone (L-942): [{ node, depth, box }], `depth` its foot's y,
+  // the depth order, and, with `span`, none longer than that along it, so one
+  // can fade alone (L-942): [{ node, depth, box }], `depth` its foot's y,
   // `box` what it covers on the screen in map units.
   function slab(a, b, o) {
     var PIXI = window.PIXI;
@@ -589,7 +590,7 @@
     // Down the screen, a piece each `piece` (the depth order); along its length,
     // none longer than `span` (two pieces), so what fades over a token (L-942)
     // is the stretch of wall over it, not all of one running across the screen.
-    var span = o.span > 0 ? o.span : o.piece * 2;
+    var span = o.span > 0 ? o.span : Infinity;
     var n = Math.max(1, Math.ceil(Math.abs(dy) / o.piece - 1e-9), Math.ceil(len / span - 1e-9));
     var parts = [];
     var thick = o.thick;
@@ -754,6 +755,12 @@
       });
     };
     var tile = o.tile;
+    // Where the drawer fades what stands over its tokens (L-942), a long wall is
+    // cut along its length too, in pieces of two tiles at most, so the stretch
+    // over a token fades alone; elsewhere it's whole, as before.
+    var standSlab = function (a, b, so) {
+      return slab(a, b, Object.assign({ span: o.fades ? tile * 2 : 0 }, so));
+    };
     var thick = o.wall;
     var wallsById = {};
     list('walls').forEach(function (w) {
@@ -888,7 +895,7 @@
             var parts = [];
             edges.forEach(function (e) {
               parts = parts.concat(
-                slab(pt(e.a), pt(e.b), {
+                standSlab(pt(e.a), pt(e.b), {
                   piece: tile,
                   thick: thick,
                   base: 0,
@@ -951,14 +958,14 @@
             var wallFace = own || cap;
             var common = { piece: tile, thick: thick, how: own ? 'face' : 'top' };
             var shade = own ? FACE_LIT : FACE_SHADE;
-            var parts = slab(a, b, {
+            var parts = standSlab(a, b, {
               ...common,
               base: 0,
               top: riseFor(sill, o),
               front: wallFace,
               tint: shade,
             });
-            slab(a, b, {
+            standSlab(a, b, {
               piece: tile,
               thick: thick * 0.8,
               base: riseFor(sill, o),
@@ -971,7 +978,7 @@
               parts.push(part);
             });
             parts = parts.concat(
-              slab(a, b, {
+              standSlab(a, b, {
                 ...common,
                 base: riseFor(head, o),
                 top: riseFor(height, o),
@@ -1048,7 +1055,7 @@
             var len = Math.hypot(b.x - a.x, b.y - a.y);
             var angle = Math.atan2(b.y - a.y, b.x - a.x) + OPEN_SWING;
             var swung = { x: a.x + Math.cos(angle) * len, y: a.y + Math.sin(angle) * len };
-            slab(a, swung, {
+            standSlab(a, swung, {
               piece: tile,
               thick: thick * LEAF,
               base: 0,
@@ -1063,7 +1070,7 @@
               parts.push(part);
             });
           } else {
-            slab(a, b, {
+            standSlab(a, b, {
               piece: tile,
               thick: thick,
               base: 0,
@@ -1083,7 +1090,7 @@
           // the door still shows.
           var across = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) || state === 'open';
           parts = parts.concat(
-            slab(a, b, {
+            standSlab(a, b, {
               piece: tile,
               thick: thick,
               base: riseFor(tall, o),

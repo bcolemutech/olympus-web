@@ -395,8 +395,7 @@ describe('the three-quarter view (L-941)', () => {
     );
     const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-angled'));
     const pieces = drawn.filter((d) => d.id === 'slant' && d.kind === 'wall');
-    // 20 ft down the screen, a piece each 5 ft, and 45 ft long, none over 10 ft (L-942).
-    expect(pieces.length).toBe(5);
+    expect(pieces.length).toBe(4); // 20 ft down the screen, a piece each 5 ft
     expect(inDepthOrder(pieces)).toBe(true);
     const shot = PNG.sync.read(await page.screenshot());
     // Over the wall's middle, its face (darker than the floor beside it);
@@ -873,6 +872,8 @@ const TURN = {
 };
 
 describe('seeing behind walls (L-942)', () => {
+  // As the grid view draws: long walls cut along their length, so one fades alone.
+  const FADING = { ...STANDING, fades: true };
   const place = { y: 120, scale: 12 };
   const room = () =>
     geo.normalize({
@@ -900,7 +901,7 @@ describe('seeing behind walls (L-942)', () => {
   const point = (x, y) => ({ box: { x0: x, y0: y, x1: x, y1: y }, depth: y });
   const drawnRoom = async (page, key = 'see') => {
     await standing(page);
-    await drawAt(page, key, room(), place, STANDING);
+    await drawAt(page, key, room(), place, FADING);
   };
   const fadeTo = (page, targets, key = 'see') =>
     page.evaluate(([k, t]) => Loom.mapPaint.fade(k, t), [key, targets]);
@@ -1042,7 +1043,7 @@ describe('seeing behind walls (L-942)', () => {
     // The wall drawn again with a door opened in it: its pieces are new.
     const changed = room();
     changed.doors = [{ id: 'd', material: 'wood', from: [30, 15], to: [35, 15], wall: 'w' }];
-    await drawAt(page, 'see', changed, place, STANDING);
+    await drawAt(page, 'see', changed, place, FADING);
     const faded = await fadedOf(page);
     expect(faded.length).toBeGreaterThan(0);
     expect(await page.evaluate(() => Loom.mapPaint.fading('see'))).toBe(0);
@@ -1052,7 +1053,8 @@ describe('seeing behind walls (L-942)', () => {
   withBrowser('on the large dungeon, checking what fades costs next to nothing', async () => {
     const page = await painterPage();
     await page.evaluate(
-      ([g]) => window.__draw('big', g, { tile: 5, wall: 1.5 }, { x: 0, y: 0, scale: 2 }),
+      ([g]) =>
+        window.__draw('big', g, { tile: 5, wall: 1.5, fades: true }, { x: 0, y: 0, scale: 2 }),
       [geo.normalize(large())]
     );
     const cdp = await page.context().newCDPSession(page);
