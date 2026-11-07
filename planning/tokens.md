@@ -1,6 +1,6 @@
 # The Loom — Tokens — Design Document v0.1
 
-**Status:** Decided (2026-11-06). Sub-issues filed 2026-11-06 (#789–#792, §6).
+**Status:** Decided (2026-11-06). Revised 2026-11-07: tokens stand (TK5), built after L-940's view. Sub-issues filed 2026-11-06 (#789–#792, §6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-930 (#788), Phase 10 — Levels and Vehicles (milestone #26).
 **Depends on:** L-393 (named stat blocks), L-922 (size classes), L-700 (the image studio).
@@ -31,12 +31,13 @@ Animation is not wanted (the user, 2026-11-06).
 
 ## 3. Decisions (the user, 2026-11-06)
 
-| ID      | Question                   | Decision                                                                                                                                                 |
-| ------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **TK1** | Where a picture comes from | **The figure's own, else its character's, else its stat block's, else today's disc with initials.** A template instance's figures use their stat block's |
-| **TK2** | The player's own token     | **Both:** pick from portraits the world's builder offers to players, or upload their own                                                                 |
-| **TK3** | The frame                  | **One built-in frame,** a ring coloured by side (party, hostile, neutral, wary) as today's discs are, the token sized by the creature's size class       |
-| **TK4** | Where it goes              | **Its own small epic now,** apart from the art spike                                                                                                     |
+| ID      | Question                          | Decision                                                                                                                                                                                                                                                                                        |
+| ------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **TK1** | Where a picture comes from        | **The figure's own, else its character's, else its stat block's, else today's disc with initials.** A template instance's figures use their stat block's                                                                                                                                        |
+| **TK2** | The player's own token            | **Both:** pick from portraits the world's builder offers to players, or upload their own                                                                                                                                                                                                        |
+| **TK3** | The frame                         | **One built-in frame,** a ring coloured by side (party, hostile, neutral, wary) as today's discs are, the token sized by the creature's size class                                                                                                                                              |
+| **TK5** | Standing (2026-11-07, with L-940) | **Tokens stand:** the round framed portrait stands upright on a small base in the three-quarter view's depth order, with a contact shadow, fading with walls; down, it lies flat. Built after L-941 and L-942 ([`game-art.md`](./game-art.md) TK1, TK2). Full standing figures are a later epic |
+| **TK4** | Where it goes                     | **Its own small epic now,** apart from the art spike                                                                                                                                                                                                                                            |
 
 ---
 
