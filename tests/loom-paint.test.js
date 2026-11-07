@@ -34,7 +34,14 @@
  *     edge where one floor lies over another, and none over nothing; two
  *     rooms of one floor drawing different variants, by their ids; culling,
  *     describe() saying what's culled at a view and panning bringing it
- *     back; the large dungeon zoomed in drawing faster culled than not.
+ *     back; the large dungeon zoomed in drawing faster culled than not;
+ *   - seeing behind walls (planning/game-art.md §4.1, TV1; L-942 / #796): a
+ *     token behind a wall fades the pieces over it and stepping out brings
+ *     them back; it takes about 150 ms; the cursor behind a tall bookshelf
+ *     fades it, behind a chest nothing; a path preview fades the pieces it
+ *     passes behind; describe() reports what's faded; checking costs next to
+ *     nothing on the large dungeon; and in the grid view the same from its
+ *     tokens, the pointer and the preview.
  *
  * It needs Playwright and its Chromium (in the tests' dependencies; CI
  * installs the browser): where the browser is missing the suite is skipped,
@@ -142,6 +149,7 @@ const standing = (page) =>
         objects: {
           chest: { stand: { file: 'chest-stand.svg' } },
           pillar: { stand: { file: 'pillar-stand.svg' } },
+          bookshelf: { stand: { file: 'bookshelf-stand.svg' } },
         },
       },
       '/fixtures/paint/'
@@ -387,7 +395,8 @@ describe('the three-quarter view (L-941)', () => {
     );
     const drawn = await page.evaluate(() => Loom.mapPaint.describe('tq-angled'));
     const pieces = drawn.filter((d) => d.id === 'slant' && d.kind === 'wall');
-    expect(pieces.length).toBe(4); // 20 ft down the screen, a piece each 5 ft
+    // 20 ft down the screen, a piece each 5 ft, and 45 ft long, none over 10 ft (L-942).
+    expect(pieces.length).toBe(5);
     expect(inDepthOrder(pieces)).toBe(true);
     const shot = PNG.sync.read(await page.screenshot());
     // Over the wall's middle, its face (darker than the floor beside it);
@@ -862,6 +871,320 @@ const TURN = {
   prices: { move: 1, difficult: 2, door: 2, doors: {}, actions: {}, features: {} },
   plan: null,
 };
+
+describe('seeing behind walls (L-942)', () => {
+  const place = { y: 120, scale: 12 };
+  const room = () =>
+    geo.normalize({
+      ground: [{ id: 'f', material: 'flagstone', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } }],
+      walls: [
+        {
+          id: 'w',
+          material: 'stone',
+          points: [
+            [5, 15],
+            [55, 15],
+          ],
+        },
+      ],
+      objects: [
+        { id: 'chest', kind: 'chest', at: [15, 32], size: [6, 4] },
+        { id: 'shelf', kind: 'bookshelf', at: [40, 32], size: [5, 2] },
+      ],
+    });
+  // What's to be seen: a token's disc (its foot's y the depth), or a floor point.
+  const disc = (x, y, r = 1.2) => ({
+    box: { x0: x - r, y0: y - r, x1: x + r, y1: y + r },
+    depth: y + r,
+  });
+  const point = (x, y) => ({ box: { x0: x, y0: y, x1: x, y1: y }, depth: y });
+  const drawnRoom = async (page, key = 'see') => {
+    await standing(page);
+    await drawAt(page, key, room(), place, STANDING);
+  };
+  const fadeTo = (page, targets, key = 'see') =>
+    page.evaluate(([k, t]) => Loom.mapPaint.fade(k, t), [key, targets]);
+  const settle = (page, key = 'see') =>
+    page.waitForFunction((k) => Loom.mapPaint.fading(k) === 0, key);
+  const fadedOf = async (page, key = 'see') =>
+    (await page.evaluate((k) => Loom.mapPaint.describe(k), key)).filter((d) => d.faded);
+
+  withBrowser(
+    'a token behind a wall fades the pieces over it, and stepping out brings them back',
+    async () => {
+      const page = await painterPage();
+      await drawnRoom(page);
+      const before = PNG.sync.read(await page.screenshot());
+      const pieces = (await page.evaluate(() => Loom.mapPaint.describe('see'))).filter(
+        (d) => d.kind === 'wall'
+      );
+      expect(pieces).toHaveLength(5); // 50 ft, none over 10 ft
+      expect(pieces.some((d) => d.faded)).toBe(false);
+      // A token north of the wall, in the middle of it: only the piece over it.
+      await fadeTo(page, [disc(30, 11)]);
+      await settle(page);
+      const faded = await fadedOf(page);
+      expect(faded.map((d) => d.kind + ':' + d.id)).toEqual(['wall:w']);
+      const shot = PNG.sync.read(await page.screenshot());
+      // The face over the token shows the floor through it now, lighter ...
+      expect(brightness(patchIn(shot, place, 30, 13))).toBeGreaterThan(
+        brightness(patchIn(before, place, 30, 13)) + 15
+      );
+      // ... and the rest of the wall is as it was.
+      expect(brightness(patchIn(shot, place, 10, 13))).toBeCloseTo(
+        brightness(patchIn(before, place, 10, 13)),
+        0
+      );
+      // In front of the wall (south of it) it's not covered: nothing fades.
+      await fadeTo(page, [disc(30, 19)]);
+      await settle(page);
+      expect(await fadedOf(page)).toEqual([]);
+      const after = PNG.sync.read(await page.screenshot());
+      expect(brightness(patchIn(after, place, 30, 13))).toBeCloseTo(
+        brightness(patchIn(before, place, 30, 13)),
+        0
+      );
+      expect(page.errors).toEqual([]);
+      await page.close();
+    }
+  );
+
+  withBrowser('the fade takes about 150 ms, there and back', async () => {
+    const page = await painterPage();
+    await drawnRoom(page);
+    const took = (targets) =>
+      page.evaluate(
+        ([t]) =>
+          new Promise((resolve) => {
+            const t0 = performance.now();
+            Loom.mapPaint.fade('see', t);
+            const tick = () =>
+              Loom.mapPaint.fading('see') === 0
+                ? resolve(performance.now() - t0)
+                : requestAnimationFrame(tick);
+            requestAnimationFrame(tick);
+          }),
+        [targets]
+      );
+    const out = await took([disc(30, 11)]);
+    const back = await took([]);
+    for (const ms of [out, back]) {
+      expect(ms).toBeGreaterThan(100);
+      expect(ms).toBeLessThan(400);
+    }
+    // Part way it's neither: a frame in, the piece is still on its way.
+    const mid = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          Loom.mapPaint.fade('see', [
+            { box: { x0: 28.8, y0: 9.8, x1: 31.2, y1: 12.2 }, depth: 12.2 },
+          ]);
+          setTimeout(() => resolve(Loom.mapPaint.fading('see')), 40);
+        })
+    );
+    expect(mid).toBeGreaterThan(0);
+    await page.close();
+  });
+
+  withBrowser('the cursor behind a tall bookshelf fades it, and a chest it does not', async () => {
+    const page = await painterPage();
+    await drawnRoom(page);
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('see'));
+    expect(drawn.find((d) => d.id === 'shelf' && d.kind === 'object').layer).toBe('standing');
+    // The bookshelf's foot is at y 33 and it's 5 ft wide and 8 ft tall; a point
+    // north of it, in its picture's reach.
+    await fadeTo(page, [point(40, 28)]);
+    await settle(page);
+    expect((await fadedOf(page)).map((d) => d.id)).toEqual(['shelf']);
+    // In front of it, or off to the side, nothing fades.
+    await fadeTo(page, [point(40, 36)]);
+    await settle(page);
+    expect(await fadedOf(page)).toEqual([]);
+    await fadeTo(page, [point(48, 28)]);
+    await settle(page);
+    expect(await fadedOf(page)).toEqual([]);
+    // The chest is low: behind it nothing fades.
+    await fadeTo(page, [point(15, 29)]);
+    await settle(page);
+    expect(await fadedOf(page)).toEqual([]);
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('a path preview behind a wall fades the pieces it passes behind', async () => {
+    const page = await painterPage();
+    await drawnRoom(page);
+    // A path along the wall's north side, from x 8 to x 33: its points every 2.5 ft.
+    const points = [];
+    for (let x = 8; x <= 33; x += 2.5) points.push(point(x, 12));
+    await fadeTo(page, points);
+    await settle(page);
+    const faded = await page.evaluate(() =>
+      Loom.mapPaint
+        .describe('see')
+        .filter((d) => d.kind === 'wall')
+        .map((d) => Boolean(d.faded))
+    );
+    // Pieces of 10 ft from x 5: those over x 8 to 33, the first three; not the others.
+    expect(faded).toEqual([true, true, true, false, false]);
+    // The path gone, they come back.
+    await fadeTo(page, []);
+    await settle(page);
+    expect(await fadedOf(page)).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('a piece built while something is behind it is faded at once', async () => {
+    const page = await painterPage();
+    await drawnRoom(page);
+    await fadeTo(page, [disc(30, 11)]);
+    await settle(page);
+    // The wall drawn again with a door opened in it: its pieces are new.
+    const changed = room();
+    changed.doors = [{ id: 'd', material: 'wood', from: [30, 15], to: [35, 15], wall: 'w' }];
+    await drawAt(page, 'see', changed, place, STANDING);
+    const faded = await fadedOf(page);
+    expect(faded.length).toBeGreaterThan(0);
+    expect(await page.evaluate(() => Loom.mapPaint.fading('see'))).toBe(0);
+    await page.close();
+  });
+
+  withBrowser('on the large dungeon, checking what fades costs next to nothing', async () => {
+    const page = await painterPage();
+    await page.evaluate(
+      ([g]) => window.__draw('big', g, { tile: 5, wall: 1.5 }, { x: 0, y: 0, scale: 2 }),
+      [geo.normalize(large())]
+    );
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    // 30 tokens, the cursor and a 300 ft path of 120 points, changed each time.
+    const ms = await page.evaluate(() => {
+      const times = [];
+      for (let round = 0; round < 20; round++) {
+        const targets = [];
+        for (let i = 0; i < 31; i++) {
+          const x = 20 + ((i * 37 + round) % 260);
+          const y = 20 + ((i * 53 + round * 2) % 260);
+          targets.push({ box: { x0: x - 1, y0: y - 1, x1: x + 1, y1: y + 1 }, depth: y + 1 });
+        }
+        for (let i = 0; i < 120; i++) {
+          const y = 10 + i * 2.4 + round;
+          targets.push({ box: { x0: 100, y0: y, x1: 100, y1: y }, depth: y });
+        }
+        const t0 = performance.now();
+        Loom.mapPaint.fade('big', targets);
+        times.push(performance.now() - t0);
+      }
+      return times;
+    });
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    const worst = Math.max(...ms);
+    console.log(`fade() on the large dungeon, 4× slower CPU: worst ${worst.toFixed(1)} ms`);
+    expect(worst).toBeLessThan(25);
+    // The same targets again do nothing at all.
+    const again = await page.evaluate(() => {
+      const t = [{ box: { x0: 5, y0: 5, x1: 6, y1: 6 }, depth: 6 }];
+      Loom.mapPaint.fade('big', t);
+      const t0 = performance.now();
+      for (let i = 0; i < 200; i++) Loom.mapPaint.fade('big', t);
+      return performance.now() - t0;
+    });
+    expect(again).toBeLessThan(5);
+    await page.close();
+  });
+
+  withBrowser(
+    'in the grid view: tokens, the pointer and the path preview fade the wall over them',
+    async () => {
+      const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(origin + '/fixtures/paint/drawers.html');
+      const data = battleData();
+      const shown = (d) => page.evaluate(([x, t]) => window.__show(x, t), [d, TURN]);
+      const settled = () =>
+        page.waitForFunction(() => Loom.mapPaint.fading('battle:dungeon') === 0);
+      // The hall's south wall (y 45 ft, x 60 to 120), a piece each 10 ft along it.
+      const southFaded = () =>
+        page.evaluate(
+          () =>
+            Loom.mapPaint
+              .describe('battle:dungeon')
+              .filter((d) => d.faded && d.id === 'south' && d.kind === 'wall').length
+        );
+      const anyFaded = () =>
+        page.evaluate(() => Loom.mapPaint.describe('battle:dungeon').filter((d) => d.faded).length);
+      await shown(data);
+      await settled();
+      expect(await anyFaded()).toBe(0);
+      // A goblin standing behind the south wall's face, at x 85 (the piece from 80 to 90).
+      const withGoblin = {
+        ...data,
+        people: [
+          { id: 'gob', name: 'Goblin', x: 18, y: 8, point: { x: 85, y: 42 }, side: 'hostile' },
+        ],
+      };
+      await shown(withGoblin);
+      await settled();
+      expect(await southFaded()).toBe(1);
+      // It steps out in front of the wall: the wall is back.
+      await shown({
+        ...data,
+        people: [
+          { id: 'gob', name: 'Goblin', x: 18, y: 9, point: { x: 85, y: 47 }, side: 'hostile' },
+        ],
+      });
+      await settled();
+      expect(await anyFaded()).toBe(0);
+      // The pointer behind the wall, at x 115 (the piece from 110 to 120).
+      const screenAt = (xFt, yFt) =>
+        page.evaluate(
+          ([x, y]) => {
+            const m = Loom.battle.mapPoint({ x, y });
+            return Loom.mapMath.toScreen(Loom.engine.camera.view, m.x, m.y);
+          },
+          [xFt, yFt]
+        );
+      const over = await screenAt(115, 42);
+      await page.evaluate(([p]) => Loom.battle.hover(p, Loom.engine.camera.view), [over]);
+      await page.waitForFunction(
+        () => Loom.mapPaint.describe('battle:dungeon').some((d) => d.faded),
+        null,
+        { timeout: 3000 }
+      );
+      await settled();
+      expect(await southFaded()).toBe(1);
+      // It leaves the map: back.
+      await page.evaluate(() => Loom.battle.hover(null, Loom.engine.camera.view));
+      await page.waitForFunction(
+        () => !Loom.mapPaint.describe('battle:dungeon').some((d) => d.faded),
+        null,
+        { timeout: 3000 }
+      );
+      // The path preview: a square just north of the south wall, a walk of 20
+      // ft along which the last of it is behind the wall's face.
+      const target = await screenAt(72.5, 42.5);
+      await page.evaluate(([p]) => Loom.battle.tap(p, Loom.engine.camera.view), [target]);
+      await page.waitForFunction(
+        () => Loom.mapPaint.describe('battle:dungeon').some((d) => d.faded),
+        null,
+        { timeout: 3000 }
+      );
+      await settled();
+      expect(await southFaded()).toBe(1);
+      // Selecting a square away from every wall: nothing is covered.
+      const clear = await screenAt(72.5, 27.5);
+      await page.evaluate(([p]) => Loom.battle.tap(p, Loom.engine.camera.view), [clear]);
+      await page.waitForFunction(
+        () => !Loom.mapPaint.describe('battle:dungeon').some((d) => d.faded),
+        null,
+        { timeout: 3000 }
+      );
+      expect(errors).toEqual([]);
+      await page.close();
+    }
+  );
+});
 
 describe('the grid view', () => {
   withBrowser('draws its map with the painter, and shows its progress while loading', async () => {

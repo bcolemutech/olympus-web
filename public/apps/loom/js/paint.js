@@ -82,6 +82,12 @@
   //                                                         map's units (null: all), for
   //                                                         tests; describe() marks
   //                                                         what's culled
+  //   Loom.mapPaint.fade(key, targets)                      fade the walls, doors and tall
+  //                                                         objects standing over a
+  //                                                         token, the cursor or the path
+  //                                                         preview (TV1; L-942); the
+  //                                                         drawer calls it as they move
+  //   Loom.mapPaint.fading(key)                             pieces still easing, for tests
   //   Loom.mapPaint.shadowTexture()                         a contact shadow, for tokens
   //
   // options: { tile (map units a tile of ground covers; 5 on a grid),
@@ -128,6 +134,11 @@
   var SHADOW_ALPHA = 0.6; // a contact shadow's, at its darkest
   var BAND_FT = 1.5; // a wall's shadow, out from its foot
   var CULL_MARGIN = 0.15; // of the view's long side, drawn beyond it (at least two tiles)
+  // Seeing behind walls (planning/game-art.md §4.1, TV1; L-942 / #796): a
+  // piece standing over a token, the cursor or the path preview fades to this
+  // much, taking this long to, and to come back.
+  var FADE_TO = 0.3;
+  var FADE_MS = 150;
   var LIGHT_RGB = '255,214,150';
   var COLOURS = { door: 0xffb74d, doorLocked: 0xe57373, dark: 0x05070d, ledge: 0x05070d };
 
@@ -566,15 +577,20 @@
   // A segment standing up: its faces from `base` to `top` (map units up the
   // screen) and, with `cap`, its top strip at `top`. Cut into pieces no
   // longer than `piece` down the screen, so each stands in its own place in
-  // the depth order: [{ node, depth, box }], `depth` its foot's y, `box`
-  // what it covers on the screen in map units.
+  // the depth order, and none longer than `span` along it (two pieces), so
+  // one can fade alone (L-942): [{ node, depth, box }], `depth` its foot's y,
+  // `box` what it covers on the screen in map units.
   function slab(a, b, o) {
     var PIXI = window.PIXI;
     var dx = b.x - a.x;
     var dy = b.y - a.y;
     var len = Math.sqrt(dx * dx + dy * dy);
     if (!len) return [];
-    var n = Math.max(1, Math.ceil(Math.abs(dy) / o.piece - 1e-9));
+    // Down the screen, a piece each `piece` (the depth order); along its length,
+    // none longer than `span` (two pieces), so what fades over a token (L-942)
+    // is the stretch of wall over it, not all of one running across the screen.
+    var span = o.span > 0 ? o.span : o.piece * 2;
+    var n = Math.max(1, Math.ceil(Math.abs(dy) / o.piece - 1e-9), Math.ceil(len / span - 1e-9));
     var parts = [];
     var thick = o.thick;
     var southern = dy >= 0 ? n - 1 : 0;
@@ -1147,6 +1163,12 @@
                 y1: at.y + d / 2 + tall * (1 - stand.foot[1]),
               },
               hit: item.id || null,
+              // A tall one (the sight rule's: its own `blocksSight`, else its
+              // kind's) fades over what's behind it (L-942).
+              fades:
+                typeof item.blocksSight === 'boolean'
+                  ? item.blocksSight
+                  : Boolean((mat.objectKind(item.kind) || {}).blocksSight),
             },
           ];
         });
@@ -1344,6 +1366,10 @@
       items: new Map(),
       job: 0,
       view: null, // what's in view, in map units, for culling (EN5); null: all of it
+      onChange: null, // the drawer's, to draw the stage again
+      fadeTargets: null, // what's to be seen behind walls (L-942)
+      fadeSig: '',
+      easing: false,
     };
     maps.set(key, s);
     while (maps.size > KEEP) {
@@ -1487,6 +1513,105 @@
     });
   }
 
+  // ── Seeing behind walls (TV1, L-942) ──────────────────────────────────
+
+  // Whether a standing piece covers any of the targets: its picture overlaps
+  // them and it stands in front of them (its foot further down the screen).
+  function covers(wrap, targets) {
+    var box = wrap.__loomBox;
+    if (!box) return false;
+    for (var i = 0; i < targets.length; i++) {
+      var t = targets[i];
+      if (t.depth < wrap.__loomDepth && overlaps(box, t.box)) return true;
+    }
+    return false;
+  }
+
+  function reducedMotion() {
+    return Boolean(
+      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+  }
+
+  // Eases the pieces that are changing toward their alpha, a frame at a time,
+  // asking the drawer to draw each.
+  function easeFades(s) {
+    if (s.easing) return;
+    s.easing = true;
+    var last = now();
+    var step = function () {
+      if (maps.get(s.key) !== s || s.root.destroyed) {
+        s.easing = false;
+        return;
+      }
+      var t = now();
+      var move = ((t - last) * (1 - FADE_TO)) / FADE_MS;
+      last = t;
+      var moving = false;
+      s.stand.children.forEach(function (wrap) {
+        var want = wrap.__loomWant === undefined ? 1 : wrap.__loomWant;
+        if (!wrap.__loomFades || wrap.alpha === want) return;
+        wrap.alpha =
+          wrap.alpha < want ? Math.min(want, wrap.alpha + move) : Math.max(want, wrap.alpha - move);
+        if (wrap.alpha !== want) moving = true;
+      });
+      if (s.onChange) s.onChange();
+      if (moving) window.requestAnimationFrame(step);
+      else s.easing = false;
+    };
+    window.requestAnimationFrame(step);
+  }
+
+  /**
+   * Fades what stands over what's behind it (L-942; TV1). `targets`: what's
+   * to be seen, each { box: { x0, y0, x1, y1 }, depth } in the map's units, a
+   * token's disc (its foot's y the depth), the cursor's or the path preview's
+   * points (a floor point, its y the depth). A wall piece, window, door or
+   * tall object whose picture overlaps one and whose foot is further down
+   * the screen fades to 30% over 150 ms; the rest return, the same way. Only
+   * the pieces covering fade, not whole walls. Call it as they change: one
+   * with the same targets as the last does nothing.
+   */
+  function fade(key, targets) {
+    var s = maps.get(key);
+    if (!s) return;
+    var list = (targets || []).filter(function (t) {
+      return t && t.box && isFinite(t.depth);
+    });
+    var sig = list
+      .map(function (t) {
+        return [t.box.x0, t.box.y0, t.box.x1, t.box.y1, t.depth]
+          .map(function (n) {
+            return Math.round(n * 10);
+          })
+          .join(',');
+      })
+      .join(';');
+    if (sig === s.fadeSig) return;
+    s.fadeSig = sig;
+    s.fadeTargets = list;
+    var instant = reducedMotion();
+    var easing = false;
+    s.stand.children.forEach(function (wrap) {
+      if (!wrap.__loomFades) return;
+      var want = list.length && covers(wrap, list) ? FADE_TO : 1;
+      wrap.__loomWant = want;
+      if (instant) wrap.alpha = want;
+      else if (wrap.alpha !== want) easing = true;
+    });
+    if (instant && s.onChange) s.onChange();
+    else if (easing) easeFades(s);
+  }
+
+  /** How many pieces of a map are still easing toward their alpha, for tests. */
+  function fading(key) {
+    var s = maps.get(key);
+    if (!s) return 0;
+    return s.stand.children.filter(function (wrap) {
+      return wrap.__loomFades && wrap.__loomWant !== undefined && wrap.alpha !== wrap.__loomWant;
+    }).length;
+  }
+
   // An item's display objects: one in its layer, or its standing parts.
   function nodesOf(s, w) {
     var PIXI = window.PIXI;
@@ -1506,6 +1631,12 @@
       wrap.__loomDepth = part.depth;
       wrap.__loomBox = part.box || null;
       wrap.__loomHit = part.hit || null;
+      // What fades over what's behind it (L-942): walls, windows and doors
+      // (an open door's leaf and the wall over its doorway too), and tall objects.
+      wrap.__loomFades =
+        about.kind === 'object'
+          ? Boolean(part.fades)
+          : about.kind === 'wall' || about.kind === 'window' || about.kind === 'door';
       var info = {};
       Object.keys(about).forEach(function (name) {
         info[name] = about[name];
@@ -1516,6 +1647,11 @@
       wrap.__loomPainted = info;
       wrap.__loomBounds = part.box || null;
       culls(s, wrap);
+      // Built while something is behind it: faded at once.
+      if (s.fadeTargets && wrap.__loomFades && covers(wrap, s.fadeTargets)) {
+        wrap.__loomWant = FADE_TO;
+        wrap.alpha = FADE_TO;
+      }
       placePart(s, wrap);
       s.stand.addChild(wrap);
       return wrap;
@@ -1545,6 +1681,7 @@
     }
     var s = stateOf(key);
     s.tile = o.tile;
+    s.onChange = o.onChange || null;
     // Only this map in the host.
     host.children.slice().forEach(function (child) {
       if (child !== s.root && child.__loomPaint) host.removeChild(child);
@@ -1672,14 +1809,18 @@
     var s = maps.get(key);
     if (!s) return null;
     var out = [];
-    // A culled piece (L-943) says so.
     var push = function (node) {
       if (!node.__loomPainted) return;
-      out.push(
-        node.__loomCulled
-          ? Object.assign({}, node.__loomPainted, { culled: true })
-          : node.__loomPainted
-      );
+      var faded = node.__loomWant !== undefined && node.__loomWant < 1;
+      if (!node.__loomCulled && !faded) {
+        out.push(node.__loomPainted);
+        return;
+      }
+      // A culled piece (L-943) and a faded one (L-942) say so.
+      var info = Object.assign({}, node.__loomPainted);
+      if (node.__loomCulled) info.culled = true;
+      if (faded) info.faded = true;
+      out.push(info);
     };
     var standing = function () {
       standingOrder(s).forEach(push);
@@ -1729,6 +1870,8 @@
     riseOf: riseOf,
     view: view,
     cull: cull,
+    fade: fade,
+    fading: fading,
     shadowTexture: shadowTexture,
     variantOf: variantOf,
     RISE: RISE,

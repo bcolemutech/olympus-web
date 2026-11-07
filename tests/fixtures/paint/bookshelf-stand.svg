@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="96" viewBox="0 0 60 96">
+  <!-- A bookshelf standing, seen square-on, for the headless tests of seeing
+       behind walls (tests/loom-paint.test.js; L-942): tall, its foot the
+       picture's bottom edge. -->
+  <rect x="1" y="1" width="58" height="94" fill="#5a3b22" stroke="#2c1b0e" stroke-width="2"/>
+  <rect x="5" y="6" width="50" height="20" fill="#7d5532"/>
+  <rect x="5" y="30" width="50" height="20" fill="#7d5532"/>
+  <rect x="5" y="54" width="50" height="20" fill="#7d5532"/>
+  <rect x="5" y="78" width="50" height="12" fill="#7d5532"/>
+</svg>
