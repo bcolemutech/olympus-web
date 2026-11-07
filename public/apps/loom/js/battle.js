@@ -1233,11 +1233,6 @@
   var FADE_STEP_FT = 2.5; // the path's points checked this far apart
   var FADE_EVERY_MS = 80; // the pointer's check, at most this often
 
-  // Where a point of the scene is, in feet.
-  function feetOf(x, y) {
-    return { x: ((x - PAD) / CELL) * MP.FEET, y: ((y - TOP) / CELL) * MP.FEET };
-  }
-
   // What is to be seen behind walls, for the painter's `fade`: the tokens'
   // discs (their foot's y the depth), the pointer's point and the points of
   // the path preview, each a floor point (its y the depth).
@@ -1251,7 +1246,7 @@
     if (stand) {
       stand.children.forEach(function (child) {
         if (child.__loomFoot === undefined || !child.visible) return;
-        var c = feetOf(child.position.x, child.position.y);
+        var c = feetOf(child.position);
         var r = (child.__loomFoot / CELL) * MP.FEET;
         out.push({
           box: { x0: c.x - r, y0: c.y - r, x1: c.x + r, y1: c.y + r },
@@ -2001,7 +1996,7 @@
       return;
     }
     var m = M.toMap(view, point.x, point.y);
-    battle.cursor = feetOf(m.x, m.y);
+    battle.cursor = feetOf(m);
     fadeSoon();
     var d = battle.data;
     var gx = (m.x - PAD) / CELL;
