@@ -1,0 +1,14 @@
+{
+  "name": "fixture-files",
+  "title": "Fixture, as files",
+  "description": "A set for the tests (L-944): a floor, a wall's face, and a chest and a pillar standing, each a file of its own.",
+  "atlases": {},
+  "materials": {
+    "ground/flagstone": { "file": "ground/flagstone.webp", "span": 1 },
+    "wall/stone": { "face": { "file": "walls/stone-face.webp" } }
+  },
+  "objects": {
+    "chest": { "stand": { "file": "objects/chest.webp", "foot": [0.5, 1] } },
+    "pillar": { "stand": { "file": "objects/pillar.webp", "foot": [0.5, 0.95] } }
+  }
+}

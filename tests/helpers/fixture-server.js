@@ -24,6 +24,8 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.css': 'text/css',
   '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.json': 'application/json',
 };
 const LIBRARIES = {
   '/pixi.min.js': 'node_modules/pixi.js/dist/pixi.min.js',

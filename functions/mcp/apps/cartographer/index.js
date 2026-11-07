@@ -1,6 +1,7 @@
 'use strict';
 
 const { z } = require('zod');
+const artSets = require('../../../loom-canon/art-sets');
 const { ToolError } = require('../../registry');
 const { createFirestoreWorldReader } = require('./reader');
 const { createFirestoreWorldWriter } = require('./writer');
@@ -140,14 +141,21 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'it is ready to publish, its score and band, how built it is (places, places in town, ' +
           'realms, regions, characters and battle maps counted by band, and the world’s own ' +
           'checklist), counts, ' +
-          'its realms (factions) with their regions, and its characters and lore. Start here ' +
+          'its realms (factions) with their regions, its characters and lore, and the art set ' +
+          'its maps are drawn with (list_art_sets). Start here ' +
           'before exploring a world. ' +
           GRADE_HELP,
         inputSchema: { worldId },
         annotations: readOnly,
         handler: async (ctx, args) => {
           const { meta, world } = await worldFor(args.worldId);
-          return views.worldOverview(meta, world);
+          // The art set its maps are drawn with (L-944), and a warning when it
+          // names one there isn't.
+          const art = artSets.setFor(meta);
+          return {
+            ...views.worldOverview(meta, world),
+            art: { set: art.name, ...(art.warning ? { warning: art.warning } : {}) },
+          };
         },
       },
       {

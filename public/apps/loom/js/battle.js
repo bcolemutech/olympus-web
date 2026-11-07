@@ -805,6 +805,7 @@
       art: Boolean(d.image),
       tint: accent(),
       worldKinds: d.objectKinds || null,
+      set: d.artSet || null, // the world's art set (L-944)
       onProgress: engine.progress,
       onChange: function () {
         engine.draw();
@@ -1340,7 +1341,7 @@
     }
     if (o.contents) lines.push('It holds ' + o.contents + '.');
     return {
-      art: Loom.mapPaint.cardUrl(item, battle.data.objectKinds || null),
+      art: Loom.mapPaint.cardUrl(item, battle.data.objectKinds || null, battle.data.artSet || null),
       text: o.description || '',
       lines: lines,
     };

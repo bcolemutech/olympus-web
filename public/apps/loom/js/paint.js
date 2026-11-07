@@ -77,7 +77,8 @@
   //            to put the standing layer in, so the drawer can lay it over
   //            its fog; else it goes in the map's own, under the light),
   //            standAt ({ x, y, scale }: where the map's units are in
-  //            `stand`'s) }
+  //            `stand`'s), set (the world's art set, L-944: its pictures
+  //            over the built-in art; its manifest fetched the first time) }
 
   var Loom = window.Loom;
   var mat = Loom.materials;
@@ -116,10 +117,35 @@
   // ── Textures ──────────────────────────────────────────────────────────
 
   var textures = {}; // url → { promise, texture, failed }
+  var frames = {}; // an atlas frame's key → its texture, for sprites
+  var tiles = {}; // a frame's key → a copy of it that repeats, for tiles and strips
   var glow = null;
 
-  // A texture loaded once, set to repeat (tiles and strips).
-  function load(url) {
+  // A picture's key (L-944): a file's url, or an atlas frame as
+  // `<atlas url>#x,y,w,h` (materials.js picture).
+  function keyOf(picture) {
+    if (!picture) return null;
+    if (picture.url) return picture.url;
+    return picture.atlas + '#' + picture.frame.join(',');
+  }
+
+  function split(key) {
+    var at = key.lastIndexOf('#');
+    if (at < 0) return null;
+    var frame = key
+      .slice(at + 1)
+      .split(',')
+      .map(Number);
+    return frame.length === 4 && frame.every(isFinite)
+      ? { atlas: key.slice(0, at), frame: frame }
+      : null;
+  }
+
+  // A texture loaded once, set to repeat (tiles and strips). A frame's key
+  // loads its atlas, once for all its frames.
+  function load(key) {
+    var part = split(key);
+    var url = part ? part.atlas : key;
     if (textures[url]) return textures[url].promise;
     var entry = { texture: null, failed: false, promise: null };
     textures[url] = entry;
@@ -139,9 +165,76 @@
     return entry.promise;
   }
 
-  function loaded(url) {
-    var entry = url && textures[url];
-    return entry && entry.texture ? entry.texture : null;
+  function isLoaded(key) {
+    if (!key) return false;
+    var part = split(key);
+    var entry = textures[part ? part.atlas : key];
+    return Boolean(entry && entry.texture);
+  }
+
+  // A picture's texture once loaded, or null: a file's own, or a frame of its
+  // atlas (sharing the atlas's pixels; for a sprite).
+  function loaded(key) {
+    if (!isLoaded(key)) return null;
+    var part = split(key);
+    if (!part) return textures[key].texture;
+    if (frames[key]) return frames[key];
+    var PIXI = window.PIXI;
+    var base = textures[part.atlas].texture;
+    var f = part.frame;
+    frames[key] = new PIXI.Texture({
+      source: base.source,
+      frame: new PIXI.Rectangle(f[0], f[1], f[2], f[3]),
+    });
+    return frames[key];
+  }
+
+  // A picture's texture to repeat across a shape (a floor, a strip, a face):
+  // a file's own, or an atlas frame copied out once, since a frame can't
+  // repeat within its atlas.
+  function loadedTiled(key) {
+    var part = key && split(key);
+    if (!part) return loaded(key);
+    if (tiles[key]) return tiles[key];
+    if (!isLoaded(key)) return null;
+    var source = textures[part.atlas].texture.source;
+    var image = source && source.resource;
+    var f = part.frame;
+    if (!image) return loaded(key);
+    var canvas = document.createElement('canvas');
+    canvas.width = f[2];
+    canvas.height = f[3];
+    canvas.getContext('2d').drawImage(image, f[0], f[1], f[2], f[3], 0, 0, f[2], f[3]);
+    var texture = window.PIXI.Texture.from(canvas);
+    texture.source.style.addressMode = 'repeat';
+    if (texture.source.style.update) texture.source.style.update();
+    tiles[key] = texture;
+    return texture;
+  }
+
+  // ── Art sets (L-944) ──────────────────────────────────────────────────
+
+  var sets = {}; // name → { promise, done }
+
+  // A set's manifest, fetched once and registered (materials.js); one that
+  // won't load or isn't right leaves the built-in art.
+  function loadSet(name) {
+    if (sets[name]) return sets[name].promise;
+    var entry = { done: false, promise: null };
+    sets[name] = entry;
+    entry.promise = window
+      .fetch(mat.ART_BASE + 'sets/' + encodeURIComponent(name) + '/manifest.json')
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (manifest) {
+        if (manifest && manifest.name === name) mat.registerSet(manifest);
+      })
+      .catch(function () {})
+      .then(function () {
+        entry.done = true;
+      });
+    return entry.promise;
   }
 
   // A light's glow: a soft disc, warm in the middle.
@@ -162,38 +255,36 @@
     return glow;
   }
 
-  function spanOfMaterial(kind, id) {
-    var m = mat.materialOf(kind, id);
-    return (m && m.span) || 1;
+  // A material's art in the map's set (L-944; materials.js materialArt):
+  // { key, span, face (a key or null) }.
+  function materialOf(kind, id, set) {
+    var art = mat.materialArt(kind, id, set);
+    return { key: keyOf(art.picture), span: art.span, face: keyOf(art.face) };
   }
 
-  // A wall material's face picture (L-941), or null: its top's stands in.
-  function faceUrl(id) {
-    var m = mat.materialOf('wall', id);
-    return m && m.face ? mat.artUrl(m.face) : null;
-  }
-
-  function materialUrl(kind, id) {
-    var m = mat.materialOf(kind, id);
-    return m ? mat.artUrl(m.art) : null;
-  }
-
-  // The url an object's art is drawn from (OB1): its own, else its world's
-  // for its kind (each a library image, which the page is sent as its link
-  // alone, A5), else the catalog's file, else the box with a question mark.
-  function objectUrl(item, worldKinds) {
+  // The url an object's art is drawn from lying flat (OB1): its own, else its
+  // world's for its kind (each a library image, which the page is sent as its
+  // link alone, A5), else its set's (a key, L-944), else the catalog's file,
+  // else the box with a question mark.
+  function objectUrl(item, worldKinds, set) {
     if (item.art && item.art.link) return item.art.link;
     var own = worldKinds && worldKinds[item.kind];
     if (own && own.art && own.art.link) return own.art.link;
-    var art = mat.artFor(item, worldKinds);
+    var art = mat.artFor(item, worldKinds, set);
+    if (art.picture) return keyOf(art.picture);
     return art.ref ? art.ref.link || null : art.url;
   }
 
-  // The url an object's card shows (L-926): its own card art, else what it
-  // is drawn with.
-  function cardUrl(item, worldKinds) {
+  // The url an object's card shows (L-926): its own card art, else its
+  // picture: its set's standing one if it's a file of its own (a frame of an
+  // atlas can't be put on a card), else what it is drawn with flat, else the
+  // catalog's.
+  function cardUrl(item, worldKinds, set) {
     if (item.cardArt && item.cardArt.link) return item.cardArt.link;
-    return objectUrl(item, worldKinds);
+    var up = mat.standFor(item, worldKinds, set);
+    if (up && up.picture.url) return up.picture.url;
+    var url = objectUrl(item, worldKinds, set);
+    return url && split(url) ? objectUrl(item, worldKinds, null) : url;
   }
 
   // ── Small helpers ─────────────────────────────────────────────────────
@@ -392,14 +483,14 @@
     var out = [];
     var add = function (layer, kind, item, i, urls, build, extra) {
       out.push({
-        key: kind + '|' + (item.id || i) + '|' + JSON.stringify(item) + (extra ? '|' + extra : ''),
+        key: [kind, item.id || i, JSON.stringify(item), o.set || '', extra || ''].join('|'),
         layer: layer,
         order: i,
         urls: urls.filter(Boolean),
         // What it is, for describe(): its kind, id, state and the art used.
         about: function () {
           var used = urls.filter(function (u) {
-            return u && loaded(u);
+            return isLoaded(u);
           })[0];
           return {
             layer: layer,
@@ -423,11 +514,12 @@
       list('ground').forEach(function (item, i) {
         var read = geo.ringsOf(item.shape);
         if (!read.rings) return;
-        var url = materialUrl('ground', item.material);
-        var span = spanOfMaterial('ground', item.material);
+        var art = materialOf('ground', item.material, o.set);
+        var url = art.key;
+        var span = art.span;
         add('ground', 'ground', item, i, [url], function () {
           var gfx = new PIXI.Graphics();
-          var texture = loaded(url);
+          var texture = loadedTiled(url);
           var fill = texture
             ? (function () {
                 var pattern = new PIXI.FillPattern(texture, 'repeat');
@@ -458,11 +550,11 @@
       list('lines').forEach(function (item, i) {
         var read = geo.linesOf(item.points);
         if (!read.lines) return;
-        var url = materialUrl('line', item.material);
+        var url = materialOf('line', item.material, o.set).key;
         var width = typeof item.width === 'number' && item.width > 0 ? item.width : thick * 3;
         add('lines', 'line', item, i, [url], function () {
           var c = new PIXI.Container();
-          var texture = loaded(url);
+          var texture = loadedTiled(url);
           read.lines.forEach(function (line) {
             segmentsOf(line).forEach(function (seg) {
               var s = texture ? strip(texture, seg[0], seg[1], width, false, true) : null;
@@ -480,8 +572,9 @@
         (byWall[e.id] = byWall[e.id] || []).push(e);
       });
       list('walls').forEach(function (item, i) {
-        var url = materialUrl('wall', item.material);
-        var fUrl = faceUrl(item.material);
+        var wallArt = materialOf('wall', item.material, o.set);
+        var url = wallArt.key;
+        var fUrl = wallArt.face;
         var edges = byWall[item.id] || [];
         var top = riseFor(heightOf(item, WALL_FT), o);
         var cut = JSON.stringify(
@@ -496,8 +589,8 @@
           i,
           [url, fUrl],
           function () {
-            var cap = loaded(url);
-            var own = loaded(fUrl);
+            var cap = loadedTiled(url);
+            var own = loadedTiled(fUrl);
             var parts = [];
             edges.forEach(function (e) {
               parts = parts.concat(
@@ -521,10 +614,11 @@
       // A window: an upright pane between the wall below its sill and above
       // its top, the wall's top strip over it.
       list('windows').forEach(function (item, i) {
-        var url = materialUrl('window', item.material);
+        var url = materialOf('window', item.material, o.set).key;
         var wall = wallsById[item.wall] || null;
-        var wUrl = wall ? materialUrl('wall', wall.material) : null;
-        var fUrl = wall ? faceUrl(wall.material) : null;
+        var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
+        var wUrl = wallArt.key || null;
+        var fUrl = wallArt.face || null;
         var height = heightOf(wall, WALL_FT);
         var sill = Math.min(SILL_FT, height);
         var head = Math.min(heightOf(item, WINDOW_FT), height);
@@ -539,9 +633,9 @@
             var a = pt(item.from);
             var b = pt(item.to);
             if (!a || !b) return [];
-            var pane = loaded(url);
-            var cap = loaded(wUrl);
-            var own = loaded(fUrl);
+            var pane = loadedTiled(url);
+            var cap = loadedTiled(wUrl);
+            var own = loadedTiled(fUrl);
             var wallFace = own || cap;
             var common = { piece: tile, thick: thick, how: own ? 'face' : 'top' };
             var shade = own ? FACE_LIT : FACE_SHADE;
@@ -594,10 +688,11 @@
         });
         return;
       }
-      var url = materialUrl('door', item.material);
+      var url = materialOf('door', item.material, o.set).key;
       var wall = wallsById[item.wall] || null;
-      var wUrl = wall ? materialUrl('wall', wall.material) : null;
-      var fUrl = wall ? faceUrl(wall.material) : null;
+      var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
+      var wUrl = wallArt.key || null;
+      var fUrl = wallArt.face || null;
       var height = heightOf(wall, WALL_FT);
       var tall = Math.min(heightOf(item, DOOR_FT), height);
       var see = (mat.materialOf('door', item.material) || {}).seeThrough;
@@ -612,9 +707,9 @@
           var b = pt(item.to);
           if (!a || !b) return [];
           var state = item.state || 'closed';
-          var leafArt = loaded(url);
-          var cap = loaded(wUrl);
-          var own = loaded(fUrl);
+          var leafArt = loadedTiled(url);
+          var cap = loadedTiled(wUrl);
+          var own = loadedTiled(fUrl);
           var parts = [];
           if (state === 'open') {
             var len = Math.hypot(b.x - a.x, b.y - a.y);
@@ -688,13 +783,14 @@
         : typeof item.size === 'number'
           ? [item.size, item.size]
           : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
-      var stand = mat.standFor(item, o.worldKinds);
+      var stand = mat.standFor(item, o.worldKinds, o.set);
+      var standKey = stand ? keyOf(stand.picture) : null;
       if (stand) {
         // Standing on the south edge of its footprint (SC1): as wide as the
         // footprint turned by its `turn`, as tall as its picture's shape.
-        add('standing', 'object', item, i, [stand.url], function () {
+        add('standing', 'object', item, i, [standKey], function () {
           var at = pt(item.at);
-          var texture = loaded(stand.url);
+          var texture = loaded(standKey);
           if (!at || !texture) return [];
           var turn = ((Number(item.turn) || 0) * Math.PI) / 180;
           var c = Math.abs(Math.cos(turn));
@@ -703,7 +799,9 @@
           var d = size[0] * sn + size[1] * c;
           var tall = (w * (texture.height || 1)) / (texture.width || 1);
           var up = new PIXI.Sprite(texture);
-          up.anchor.set(0.5, 1);
+          // Its foot (L-944: the point of the picture its manifest names) on the
+          // middle of its footprint's south edge.
+          up.anchor.set(stand.foot[0], stand.foot[1]);
           up.position.set(at.x, at.y + d / 2);
           up.width = w;
           up.height = tall;
@@ -712,10 +810,10 @@
               node: up,
               depth: at.y + d / 2,
               box: {
-                x0: at.x - w / 2,
-                x1: at.x + w / 2,
-                y0: at.y + d / 2 - tall,
-                y1: at.y + d / 2,
+                x0: at.x - w * stand.foot[0],
+                x1: at.x + w * (1 - stand.foot[0]),
+                y0: at.y + d / 2 - tall * stand.foot[1],
+                y1: at.y + d / 2 + tall * (1 - stand.foot[1]),
               },
               hit: item.id || null,
             },
@@ -723,7 +821,7 @@
         });
         return;
       }
-      var url = objectUrl(item, o.worldKinds);
+      var url = objectUrl(item, o.worldKinds, o.set);
       add('objects', 'object', item, i, [url, mat.artUrl(mat.FALLBACK_ART)], function () {
         var at = pt(item.at);
         var texture = loaded(url) || loaded(mat.artUrl(mat.FALLBACK_ART));
@@ -983,6 +1081,16 @@
     o.tile = o.tile > 0 ? o.tile : 5;
     o.wall = o.wall > 0 ? o.wall : 1;
     o.feet = o.feet > 0 ? o.feet : 1;
+    // The map's art set (L-944), its manifest fetched the first time: the
+    // map is painted once it has come (or failed, leaving the built-in art).
+    if (o.set && !mat.setOf(o.set) && !(sets[o.set] && sets[o.set].done)) {
+      var waiting = stateOf(key);
+      if (o.onProgress) o.onProgress(0);
+      loadSet(o.set).then(function () {
+        if (!waiting.root.destroyed) paint(host, key, geometry, o);
+      });
+      return waiting.root;
+    }
     var s = stateOf(key);
     // Only this map in the host.
     host.children.slice().forEach(function (child) {
@@ -1027,7 +1135,7 @@
     var urls = [];
     todo.forEach(function (w) {
       w.urls.forEach(function (u) {
-        if (urls.indexOf(u) < 0 && !loaded(u)) urls.push(u);
+        if (urls.indexOf(u) < 0 && !isLoaded(u)) urls.push(u);
       });
     });
     var ready = 0;

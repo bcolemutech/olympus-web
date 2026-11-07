@@ -1,0 +1,40 @@
+{
+  "name": "fixture-atlas",
+  "title": "Fixture, in an atlas",
+  "description": "A set for the tests (L-944): a floor, a wall's face, and a chest and a pillar standing, the face and props in one atlas (made from fixture-files by the pipeline’s atlas step).",
+  "atlases": {
+    "sheet-0": {
+      "file": "atlas/sheet-0.webp",
+      "width": 400,
+      "height": 260
+    }
+  },
+  "materials": {
+    "ground/flagstone": {
+      "file": "ground/flagstone.webp",
+      "span": 1
+    },
+    "wall/stone": {
+      "face": {
+        "atlas": "sheet-0",
+        "frame": [2, 2, 256, 256]
+      }
+    }
+  },
+  "objects": {
+    "chest": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-0",
+        "frame": [302, 2, 96, 80]
+      }
+    },
+    "pillar": {
+      "stand": {
+        "foot": [0.5, 0.95],
+        "atlas": "sheet-0",
+        "frame": [260, 2, 40, 160]
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # The Loom — Game Art in Three-Quarter View — Design Document v0.1
 
-**Status:** Decided (2026-11-07). The gap sheet (§3) is answered. Sub-issues filed 2026-11-07 (#795–#801, §6). **In progress:** L-941 the three-quarter view built 2026-11-07 (§4.1, Decisions).
+**Status:** Decided (2026-11-07). The gap sheet (§3) is answered. Sub-issues filed 2026-11-07 (#795–#801, §6). **In progress:** L-941 the three-quarter view shipped 2026-11-07 (#803); L-944 art sets and delivery built 2026-11-07 (§4.3, Decisions).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-940 (#794), Phase 10 — Levels and Vehicles (milestone #26). Built next, before L-930 tokens and L-710 worlds without Azgaar.
 **Depends on:** L-920 (maps drawn from their data), L-700 (the image studio), the game art spike (`scripts/art/`, the painter's PNG art).
@@ -167,6 +167,14 @@ In `grading.js`, with `the-loom-grading.md` updated:
   - **The grid view's order:** ground, art and the flat map; its overlays (reach, grid, areas, hazards); the dark fog and mist; the standing layer, with the tokens (yours too), cut to the columns over the squares seen so a face rises over squares unseen and nothing beyond shows; then the dimming of squares out of sight, over everything standing too; names, the way and cards. The town and world views keep their tokens on top: their maps have few walls, and standing tokens come with L-930.
   - **A foot of height** is a map unit on a grid, a foot in metres on an area map, and on a region map what a wall a foot and a half thick would rise on a grid.
   - **Room above:** the grid view's top margin is its tallest wall's rise and a little (at least the 60 px of before), and the map is framed with it in view.
+
+- **L-944, 2026-11-07:**
+  - **A picture** in a manifest is `{ file }` (under the set's folder) or `{ atlas, frame: [x, y, w, h] }`; materials are keyed `<kind>/<id>`, objects by kind. An entry is its picture seen from above, with `span` and `variants` (a ground's), `face` (a wall's) and `stand` with its `foot` (an object's: the point of the picture, 0–1 across and down, on its footprint's south edge; `[0.5, 1]` unless it says). A manifest naming a material or object the catalog hasn't, an atlas it hasn't, or a frame outside its atlas, isn't registered.
+  - **`materials.js` keeps a registry of sets** (`registerSet`), filled on the page by the painter fetching a set's manifest the first time a map names it, and on the server by `art-sets.js` from its copies (`functions/loom-canon/art-sets/<set>.json`, the same bytes as the public manifests, a test checking). `STAND_ART` and `PNG_ART` are gone: `classic`'s manifest replaces them, empty until L-946.
+  - **A world's set** is `art.set`, written by `update_world` (`art: { set }`), which refuses a set there isn't; a world naming one there isn't (a set later removed) is drawn with `classic` and `get_world` warns. `loomGetMap` sends `artSet` on the map, the town and the battle map.
+  - **Atlases hold props, decor and wall faces** (EN2): the pipeline's `atlas` step packs a set's object pictures and faces that are files into sheets of at most 2048 px (shelves, 2 px apart, lossless WebP), turns their entries into frames and removes the files; floors, strips and lines stay files, since they repeat. The painter loads an atlas once and cuts each frame from it; a frame drawn repeating (a face) is copied out of the atlas once, as a frame can't repeat inside its atlas.
+  - **The budget** (`scripts/art/budget.cjs`): every set picture WebP; a floor at most 1024 px for five squares of its span, 400 KB; a strip 1024 × 256 px, 200 KB; a face 1024 × 512 px (64 px a foot of an 8 ft wall), 300 KB; an object 64 px a foot of its width and 1024 px high, 200 KB; an atlas 2048 px a side, 1.5 MB; a set 16 MB. The `webp` step fits a picture to its role's limits; the `budget` step and a test check every set the Loom serves.
+  - **A card's picture** (L-926) is the object's set's standing picture when it's a file; a frame of an atlas can't be put on a card, so then the catalog's.
 
 ## 5. Exit criterion
 
