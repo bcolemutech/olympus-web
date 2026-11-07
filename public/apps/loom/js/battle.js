@@ -1032,6 +1032,7 @@
               : person.side === 'wary'
                 ? COLOURS.wary
                 : COLOURS.person,
+        shadow: true, // standing, with its contact shadow (L-943)
       });
     });
     Object.keys(battle.tokens).forEach(function (id) {
@@ -1199,6 +1200,9 @@
     }
     n.scene.position.set(view.x, view.y);
     n.scene.scale.set(view.scale);
+    // Only what's on the screen is drawn (L-943; EN5): the rest stays built.
+    var shown = engine.size();
+    Loom.mapPaint.cull('battle:' + battle.data.id, shown.width, shown.height);
     if (battle.playback) drawPlayback(view);
 
     // You: along your walk, or where you stand.
@@ -1214,6 +1218,7 @@
       name: save && save.characterName,
       fill: COLOURS.you,
       ring: COLOURS.ring,
+      shadow: true, // standing, with its contact shadow (L-943)
     });
   }
 

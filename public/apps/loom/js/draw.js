@@ -99,14 +99,31 @@
     });
     text.anchor.set(0.5, 0.5);
     container.addChild(disc, text);
+    var shadow = null;
     var last = null;
     return {
       container: container,
       update: function (o) {
         container.position.set(o.x, o.y);
-        var key = [o.radius, o.name, o.fill, o.edge, o.ink, o.ring].join('|');
+        var key = [o.radius, o.name, o.fill, o.edge, o.ink, o.ring, o.shadow].join('|');
         if (key === last) return;
         last = key;
+        // A token standing (the grid view, L-943; EN4) has a soft contact
+        // shadow on the floor under it, from the painter.
+        var paint = Loom.mapPaint;
+        if (o.shadow && paint && paint.shadowTexture) {
+          if (!shadow) {
+            shadow = new PIXI.Sprite(paint.shadowTexture());
+            shadow.anchor.set(0.5);
+            container.addChildAt(shadow, 0);
+          }
+          shadow.position.set(0, o.radius * 0.55);
+          shadow.width = o.radius * 2.5;
+          shadow.height = o.radius * 1.1;
+          shadow.visible = true;
+        } else if (shadow) {
+          shadow.visible = false;
+        }
         disc.clear();
         if (o.ring) disc.circle(0, 0, o.radius + 4).stroke({ width: 2, color: o.ring });
         disc
