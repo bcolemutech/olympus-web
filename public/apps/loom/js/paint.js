@@ -1169,7 +1169,8 @@
                 y0: at.y + d / 2 - tall * stand.foot[1],
                 y1: at.y + d / 2 + tall * (1 - stand.foot[1]),
               },
-              hit: item.id || null,
+              // Decor has no click menu (L-945): a click goes through it.
+              hit: mat.isDecor(item) ? null : item.id || null,
               // A tall one (the sight rule's: its own `blocksSight`, else its
               // kind's) fades over what's behind it (L-942).
               fades:

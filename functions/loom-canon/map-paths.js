@@ -329,7 +329,7 @@
     });
     var solids = [];
     c.objects.forEach(function (ob) {
-      if (ob.item.blocksMove !== false) solids.push(ob.rings);
+      if (geo.objectBlocksMove(ob.item)) solids.push(ob.rings);
     });
     c.ground.forEach(function (g) {
       if (g.item.cost === 'never') solids.push(g.rings);

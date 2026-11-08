@@ -23,7 +23,7 @@
  * A save keeps each such object's state (`save.objects[mapId][id]`: 'closed',
  * 'open' or 'locked'), as it keeps its doors'.
  *
- *   usableOf(map)            the objects there is something to do with
+ *   usableOf(map)            the objects there is something to do with (never decor, L-945)
  *   objectOf(map, id)        one by id, or null
  *   stateOf(object, states)  the save's state, else its own, else null
  *   intent(object, action)   what a proposed action is: { act, action? }
@@ -58,10 +58,15 @@ function allOf(map) {
   return (g.objects || []).filter((o) => isObject(o) && o.id && !hidden.has(o.id));
 }
 
-/** Whether there is anything to do with an object: it opens, or has actions. */
+/**
+ * Whether there is anything to do with an object: it opens, or has actions.
+ * Decor (L-945) only dresses a room: it has no click menu and nothing to do,
+ * whatever else it says.
+ */
 function isUsable(object) {
   return Boolean(
     object &&
+    !materials.isDecor(object) &&
     (object.container || object.locked || (Array.isArray(object.actions) && object.actions.length))
   );
 }

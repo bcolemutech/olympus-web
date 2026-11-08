@@ -5,6 +5,10 @@ const { z } = require('zod');
 const { ToolError } = require('../../registry');
 const geo = require('../../../loom-canon/map-geometry');
 const generators = require('../../../loom-canon/map-generators');
+const dress = require('../../../loom-canon/dress');
+const scale = require('../../../loom-canon/scale');
+const patcher = require('../../../loom-canon/geometry-patch');
+const materials = require('../../../loom-canon/materials');
 const hazards = require('../../../loom-canon/hazards');
 const { systemOf } = require('../../../loom-canon/checks');
 const { worldId, entityId } = require('./schemas');
@@ -152,7 +156,10 @@ function generatorTools({ writer }) {
               'it at another map (set_exits); assign it to a place (assign_battle_map).',
           };
           if (!before) result.created = true;
-          const warnings = [...mapTools.standingWarnings(world, doc)];
+          const warnings = [
+            ...mapTools.standingWarnings(world, doc),
+            ...scale.warnings(def.geometry, { worldKinds: world.objectKinds }),
+          ];
           if (misfit.length) {
             warnings.push(
               `Its hazards no longer fit it: ${misfit.join(' ')} Fix them with set_hazards.`
@@ -170,6 +177,108 @@ function generatorTools({ writer }) {
           }
           if (warnings.length) result.warnings = warnings;
           return result;
+        });
+      },
+    },
+    {
+      name: 'dress_room',
+      title: 'Dress a room with decor',
+      description:
+        'Fill a zone of a battle map with decor (rubble, bones, candles, cobwebs, sacks, a pile ' +
+        'of crates, a tapestry, a banner, a plant, books, bottles, straw, a puddle, chains), ' +
+        'seeded, so a room built from data isn’t empty. Decor only dresses: no click menu, ' +
+        'never noticed or searched, and it blocks the way only when it’s over 2.5 ft both ways ' +
+        '(a pile of crates does). `zone` is a zone of the map (set_zones; generate_map’s rooms ' +
+        'are room-1…). Themes: ' +
+        dress.themeNames().join(', ') +
+        '. Density: sparse, lived-in or cluttered, for the room’s size. The same seed makes the ' +
+        'same dressing; leave out the seed for a new one (the answer says the seed used). It ' +
+        'keeps clear of doors, windows, entries, exits, features, walls and the objects already ' +
+        'there, hangs tapestries, banners and chains on walls, and never closes the room: a ' +
+        'piece that blocks is put down only if a medium character still crosses from the ' +
+        'room’s middle to every way in and out. Dressing the zone again replaces what an ' +
+        'earlier dressing put there (ids "<zone>-decor-1…"); everything it made is ordinary ' +
+        'objects, to edit with set_objects (remove what you don’t want, move or add). Works on ' +
+        'drafts and published worlds; a change to a published world reaches games on their ' +
+        'next turn, and never makes players forget what they have seen.',
+      inputSchema: {
+        worldId,
+        mapId: entityId('battle map', 'list_battle_maps'),
+        zone: z
+          .string()
+          .regex(/^[a-z0-9][a-z0-9-]{0,39}$/, 'a zone’s id: "room-1", "cellar"')
+          .describe('The zone to dress (set_zones, get_geometry).'),
+        theme: z.enum(dress.themeNames()),
+        density: z.enum(Object.keys(dress.DENSITIES)),
+        seed: z
+          .union([z.number().int().min(0).max(2147483647), z.string().trim().min(1).max(60)])
+          .optional()
+          .describe('A number or a word: the same seed, the same dressing.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      handler: (ctx, args) => {
+        const seed = args.seed === undefined ? crypto.randomInt(1, 1000000) : args.seed;
+        return writer.edit(args.worldId, ctx.uid, (e) => {
+          const { world } = e;
+          const before = live(world, 'battleMap', args.mapId);
+          let made;
+          try {
+            made = dress.dress(before, {
+              zone: args.zone,
+              theme: args.theme,
+              density: args.density,
+              seed,
+              worldKinds: world.objectKinds,
+            });
+          } catch (err) {
+            throw new ToolError(err.message);
+          }
+          const bounds = { width: before.width * 5, height: before.height * 5 };
+          const stored = before.geometry || {};
+          // What an earlier dressing of the zone put there goes first.
+          const old = (stored.objects || [])
+            .filter(
+              (o) =>
+                typeof o.id === 'string' && o.id.indexOf(made.prefix) === 0 && materials.isDecor(o)
+            )
+            .map((o) => o.id);
+          let geometry = stored;
+          if (old.length) {
+            const cleared = patcher.patch(geometry, 'objects', { remove: old }, bounds);
+            if (cleared.problems) throw new ToolError(cleared.problems.slice(0, 10).join(' '));
+            geometry = cleared.geometry;
+          }
+          if (made.objects.length) {
+            const done = patcher.patch(geometry, 'objects', { set: made.objects }, bounds);
+            if (done.problems) throw new ToolError(done.problems.slice(0, 10).join(' '));
+            geometry = done.geometry;
+          }
+          e.update(e.ref('battleMaps', before.id), { geometry });
+          const after = { ...before, geometry };
+          const warnings = [...mapTools.standingWarnings(world, after)];
+          if (made.skipped) {
+            warnings.push(
+              `${made.skipped} of ${made.wanted} pieces had no room that kept clear of the doors, ` +
+                'walls and what is there: a bigger zone or a lower density fits more.'
+            );
+          }
+          return {
+            map: { mapId: before.id, name: before.name, kind: 'grid' },
+            zone: made.zone,
+            theme: made.theme,
+            density: made.density,
+            seed: made.seed,
+            wanted: made.wanted,
+            placed: made.objects.length,
+            skipped: made.skipped,
+            byKind: made.byKind,
+            replaced: old.length,
+            objects: made.objects.map((o) => o.id),
+            ...(warnings.length ? { warnings } : {}),
+            next:
+              'view_image the map (sizes: true shows each footprint); edit with set_objects ' +
+              '(remove what you don’t want); dress another zone.',
+          };
         });
       },
     },

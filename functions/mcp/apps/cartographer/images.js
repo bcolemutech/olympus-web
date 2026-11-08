@@ -190,6 +190,9 @@ const DIGITS = {
   7: ['111', '001', '010', '010', '010'],
   8: ['111', '101', '111', '101', '111'],
   9: ['111', '101', '111', '001', '111'],
+  // A point and a cross, for sizes in feet ("2.5x3").
+  '.': ['000', '000', '000', '000', '010'],
+  x: ['000', '101', '010', '101', '000'],
 };
 
 /** Draws a number on a dark box, its top-left at (x, y); returns its width. */
@@ -371,7 +374,7 @@ function renderBattleMap(
   map,
   art,
   people = [],
-  { sight = null, heights = true, hidden = true } = {}
+  { sight = null, heights = true, hidden = true, sizes = false } = {}
 ) {
   // Its walls, doors and obstacles in squares and corners, read back from
   // its geometry (L-928), as the grid tools take them.
@@ -411,6 +414,7 @@ function renderBattleMap(
     scale,
     {
       hidden,
+      sizes,
       skipDoors: (map.doors || []).map((d) => d.id),
       // The obstacles the grid tools number (made into objects, `layer-` before the id).
       skipObjects: (map.obstacles || []).flatMap((o) => [o.id, 'layer-' + o.id]),
@@ -542,7 +546,14 @@ function renderBattleMap(
       walls: (map.walls || []).length,
       geometry: countsOf(geometry),
       ...(under.heights.length ? { heights: under.heights } : {}),
-      options: { heights, hidden },
+      options: { heights, hidden, sizes },
+      ...(sizes
+        ? {
+            sizes:
+              'Each object’s footprint is outlined in white, with its size in feet, width x ' +
+              'depth, as saved (turn rotates the footprint, not the numbers).',
+          }
+        : {}),
       sides: { hostile: 'red', party: 'green', wary: 'yellow', neutral: 'teal' },
       ...(sight
         ? {

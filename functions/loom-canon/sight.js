@@ -299,7 +299,7 @@ function blockersOf(map, c, states, level) {
     barriers.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
   });
   c.objects.forEach((o) => {
-    if (o.item.blocksMove === false) return;
+    if (!geo.objectBlocksMove(o.item)) return;
     if (objects.some((h) => h.item === o.item)) return;
     o.rings.forEach((r) => {
       for (let i = 0; i < r.length; i++) {
