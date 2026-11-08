@@ -471,6 +471,126 @@ export async function atlas(dir, { max = budget.LIMITS.atlasPx, pad = 2, keep = 
   return written;
 }
 
+/**
+ * A set built from approved pictures (planning/game-art.md §4.4; L-946 /
+ * #800): `work` holds them by role, as PNG (a prop already keyed), and each
+ * is fitted to its role's size, written as WebP under `setDir` and named in
+ * its manifest (merged over what it has; run `atlas` after).
+ *
+ *   ground/<id>.png [<id>.2.png, <id>.3.png]   a floor and its variants
+ *   line/<id>.png                              a line's strip
+ *   wall/<id>.top.png, wall/<id>.face.png      a wall's top strip, its face
+ *   door/<id>.png                              a door's front, 5 ft × 7 ft
+ *   window/<id>.png                            a window's pane, 5 ft × 3.5 ft
+ *   object/<id>.png                            an object standing, its foot at
+ *                                              the middle of its picture's bottom
+ *
+ * Returns what it wrote, by role.
+ */
+export async function buildSet(work, setDir, { quality = 78, span = 5 } = {}) {
+  const catalog = require(path.join(ROOT, 'functions', 'loom-canon', 'materials.js'));
+  const manifestFile = path.join(setDir, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  manifest.materials = manifest.materials || {};
+  manifest.objects = manifest.objects || {};
+  const list = (dir) =>
+    fs.existsSync(path.join(work, dir))
+      ? fs
+          .readdirSync(path.join(work, dir))
+          .filter((f) => f.endsWith('.png'))
+          .sort()
+      : [];
+  const wrote = { ground: 0, line: 0, wall: 0, door: 0, window: 0, object: 0 };
+  const exact = async (file, out, w, h, fit) => {
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    await sharp(file)
+      .resize(w, h, { fit, position: 'centre', withoutEnlargement: false })
+      .webp({ quality, alphaQuality: 90, effort: 6 })
+      .toFile(out);
+  };
+  const rel = (...parts) =>
+    path
+      .join(...parts)
+      .split(path.sep)
+      .join('/');
+
+  // Floors and their variants.
+  const grounds = {};
+  for (const f of list('ground')) {
+    const m = /^(.+?)(?:\.(\d))?\.png$/.exec(f);
+    (grounds[m[1]] = grounds[m[1]] || []).push({ file: f, n: m[2] ? Number(m[2]) : 1 });
+  }
+  for (const [id, files] of Object.entries(grounds)) {
+    files.sort((a, b) => a.n - b.n);
+    const made = [];
+    for (const { file, n } of files) {
+      const name = n === 1 ? `${id}.webp` : `${id}-${n}.webp`;
+      await webp(path.join(work, 'ground', file), path.join(setDir, 'ground', name), 'ground', {
+        span,
+        quality,
+      });
+      made.push({ file: rel('ground', name) });
+      wrote.ground += 1;
+    }
+    const [first, ...variants] = made;
+    manifest.materials[`ground/${id}`] = {
+      ...first,
+      span,
+      ...(variants.length ? { variants } : {}),
+    };
+  }
+  // Lines: a strip.
+  for (const f of list('line')) {
+    const id = f.replace(/\.png$/, '');
+    await webp(path.join(work, 'line', f), path.join(setDir, 'lines', `${id}.webp`), 'strip', {
+      quality,
+    });
+    manifest.materials[`line/${id}`] = { file: rel('lines', `${id}.webp`) };
+    wrote.line += 1;
+  }
+  // Walls: a top strip and a face.
+  for (const f of list('wall').filter((n) => n.endsWith('.top.png'))) {
+    const id = f.replace(/\.top\.png$/, '');
+    await webp(path.join(work, 'wall', f), path.join(setDir, 'walls', `${id}-top.webp`), 'strip', {
+      quality,
+    });
+    const faceFile = path.join(work, 'wall', `${id}.face.png`);
+    const entry = { file: rel('walls', `${id}-top.webp`) };
+    if (fs.existsSync(faceFile)) {
+      await webp(faceFile, path.join(setDir, 'walls', `${id}-face.webp`), 'face', { quality });
+      entry.face = { file: rel('walls', `${id}-face.webp`) };
+    }
+    manifest.materials[`wall/${id}`] = entry;
+    wrote.wall += 1;
+  }
+  // Doors and windows: a painted front.
+  for (const [role, dir, w, h] of [
+    ['door', 'doors', 320, 448],
+    ['window', 'windows', 320, 224],
+  ]) {
+    for (const f of list(role)) {
+      const id = f.replace(/\.png$/, '');
+      await exact(path.join(work, role, f), path.join(setDir, dir, `${id}.webp`), w, h, 'cover');
+      manifest.materials[`${role}/${id}`] = { face: { file: rel(dir, `${id}.webp`) } };
+      wrote[role] += 1;
+    }
+  }
+  // Objects standing, at their size: 64 px a foot of their width.
+  for (const f of list('object')) {
+    const id = f.replace(/\.png$/, '');
+    const kind = catalog.objectKind(id);
+    if (!kind) throw new Error(`No catalog object "${id}" for ${f}.`);
+    await webp(path.join(work, 'object', f), path.join(setDir, 'objects', `${id}.webp`), 'object', {
+      size: kind.size,
+      quality,
+    });
+    manifest.objects[id] = { stand: { file: rel('objects', `${id}.webp`), foot: [0.5, 1] } };
+    wrote.object += 1;
+  }
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+  return wrote;
+}
+
 /** A set's folder checked against the size budget (./budget.cjs checkSet). */
 export async function checkBudget(dir) {
   return budget.checkSet(dir);

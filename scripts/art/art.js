@@ -15,6 +15,7 @@
  * public/apps/loom/art/sets/<set>/:
  *
  *   node scripts/art/art.js webp <in.png> <out.webp> ground|strip|face|object [span | wFeet,dFeet]
+ *   node scripts/art/art.js set <workDir> <setDir> [quality]   (L-946: a set's pictures by role, written as WebP into its manifest)
  *   node scripts/art/art.js atlas <setDir> [--keep]
  *   node scripts/art/art.js budget <setDir>
  *
@@ -36,6 +37,7 @@ import {
   atlas,
   checkBudget,
   board,
+  buildSet,
 } from './steps.js';
 
 const [cmd, ...args] = process.argv.slice(2);
@@ -88,6 +90,7 @@ const commands = {
       }
     );
   },
+  set: ([work, dir, quality]) => buildSet(work, dir, quality ? { quality: Number(quality) } : {}),
   budget: ([dir]) =>
     checkBudget(dir).then((result) => {
       if (result.problems.length) process.exitCode = 1;

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="448" viewBox="0 0 320 448">
+  <!-- A door's painted front, 5 ft × 7 ft at 64 px a foot, for the headless
+       tests of painted fronts (tests/loom-paint.test.js; L-946): solid teal. -->
+  <rect width="320" height="448" fill="#10a39a"/>
+  <rect x="20" y="20" width="280" height="408" fill="none" stroke="#0a6f69" stroke-width="8"/>
+</svg>

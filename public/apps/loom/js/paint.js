@@ -933,7 +933,10 @@
       // A window: an upright pane between the wall below its sill and above
       // its top, the wall's top strip over it.
       list('windows').forEach(function (item, i) {
-        var url = materialOf('window', item.material, o.set).key;
+        var paneArt = materialOf('window', item.material, o.set);
+        var url = paneArt.key;
+        // A set's painted pane (its `face`, L-946), stretched over the opening.
+        var pFace = paneArt.face;
         var wall = wallsById[item.wall] || null;
         var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
         var wUrl = wallArt.key || null;
@@ -947,12 +950,12 @@
           'window',
           item,
           i,
-          [url, wUrl, fUrl],
+          [pFace, url, wUrl, fUrl],
           function () {
             var a = pt(item.from);
             var b = pt(item.to);
             if (!a || !b) return [];
-            var pane = loadedTiled(url);
+            var pane = loadedTiled(pFace) || loadedTiled(url);
             var cap = loadedTiled(wUrl);
             var own = loadedTiled(fUrl);
             var wallFace = own || cap;
@@ -1028,7 +1031,10 @@
         );
         return;
       }
-      var url = materialOf('door', item.material, o.set).key;
+      var doorArt = materialOf('door', item.material, o.set);
+      var url = doorArt.key;
+      // A set's painted front (its `face`, L-946), a portrait over the leaf.
+      var dFace = doorArt.face;
       var wall = wallsById[item.wall] || null;
       var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
       var wUrl = wallArt.key || null;
@@ -1041,13 +1047,14 @@
         'door',
         item,
         i + 1000,
-        [url, wUrl, fUrl],
+        [dFace, url, wUrl, fUrl],
         function () {
           var a = pt(item.from);
           var b = pt(item.to);
           if (!a || !b) return [];
           var state = item.state || 'closed';
           var leafArt = loadedTiled(url);
+          var leafFront = loadedTiled(dFace) || leafArt;
           var cap = loadedTiled(wUrl);
           var own = loadedTiled(fUrl);
           var parts = [];
@@ -1060,7 +1067,7 @@
               thick: thick * LEAF,
               base: 0,
               top: riseFor(tall, o),
-              front: leafArt,
+              front: leafFront,
               how: 'fit',
               tint: 0xffffff,
               cap: leafArt,
@@ -1075,7 +1082,7 @@
               thick: thick,
               base: 0,
               top: riseFor(tall, o),
-              front: leafArt,
+              front: leafFront,
               how: 'fit',
               tint: state === 'locked' ? LOCKED : 0xffffff,
               cap: leafArt,

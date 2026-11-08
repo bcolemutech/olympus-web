@@ -829,6 +829,60 @@ describe("the painter's finish (L-943)", () => {
   });
 });
 
+describe('painted fronts (L-946)', () => {
+  const place = { y: 120, scale: 12 };
+  const room = () =>
+    geo.normalize({
+      ground: [{ id: 'f', material: 'flagstone', shape: { rect: { x: 0, y: 0, w: 60, h: 40 } } }],
+      walls: [
+        {
+          id: 'w',
+          material: 'stone',
+          points: [
+            [5, 15],
+            [55, 15],
+          ],
+        },
+      ],
+      doors: [{ id: 'd', material: 'wood', from: [30, 15], to: [35, 15], wall: 'w' }],
+      windows: [{ id: 'win', material: 'glass', from: [40, 15], to: [45, 15], wall: 'w' }],
+    });
+
+  withBrowser(
+    'a door and a window with a painted front are drawn from it, over the wall',
+    async () => {
+      const page = await painterPage();
+      await page.evaluate(() =>
+        Loom.materials.registerSet(
+          {
+            name: 'test-fronts',
+            materials: {
+              'door/wood': { face: { file: 'door-front.svg' } },
+              'window/glass': { face: { file: 'window-pane.svg' } },
+            },
+          },
+          '/fixtures/paint/'
+        )
+      );
+      await drawAt(page, 'fronts', room(), place, { ...GRID, set: 'test-fronts' });
+      const drawn = await page.evaluate(() => Loom.mapPaint.describe('fronts'));
+      const doorArt = drawn.filter((d) => d.id === 'd' && d.kind === 'door').map((d) => d.art);
+      expect(doorArt.some((a) => /door-front\.svg$/.test(a))).toBe(true);
+      const paneArt = drawn.filter((d) => d.id === 'win' && d.kind === 'window').map((d) => d.art);
+      expect(paneArt.some((a) => /window-pane\.svg$/.test(a))).toBe(true);
+      const shot = PNG.sync.read(await page.screenshot());
+      // The door's face fills its doorway, a teal; the window's pane, a yellow.
+      const door = patchIn(shot, place, 32.5, 12.5);
+      expect(door.g).toBeGreaterThan(door.r + 40);
+      expect(door.b).toBeGreaterThan(door.r + 30);
+      const pane = patchIn(shot, place, 42.5, 12.3);
+      expect(pane.r).toBeGreaterThan(pane.b + 80);
+      expect(page.errors).toEqual([]);
+      await page.close();
+    }
+  );
+});
+
 // A battle map as loomGetMap sends it: the dungeon, seen from the wooden hall.
 function battleData() {
   const g = geo.normalize(dungeon());
