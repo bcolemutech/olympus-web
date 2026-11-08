@@ -53,6 +53,86 @@ async function rgb(file) {
 
 const dist = (data, i, c) => Math.hypot(data[i] - c[0], data[i + 1] - c[1], data[i + 2] - c[2]);
 
+/**
+ * A board of a batch for the user to approve (planning/game-art.md §4.4,
+ * AR6; L-946): each picture in a cell with its name under it, on a dark
+ * background, the batch in rows. `items` are [{ name, file }]; `tile` draws a
+ * picture 2 × 2 (a floor's seams show), `title` is written along the top.
+ * Writes `out` (PNG, or JPEG by its extension) and returns { out, count,
+ * width, height }. Costs nothing.
+ */
+export async function board(items, out, { tile = false, columns = 6, title = '' } = {}) {
+  const CELL = 256;
+  const LABEL = 34;
+  const GAP = 14;
+  const HEAD = title ? 44 : 0;
+  const cols = Math.max(1, Math.min(columns, items.length));
+  const rows = Math.ceil(items.length / cols);
+  const width = GAP + cols * (CELL + GAP);
+  const height = HEAD + GAP + rows * (CELL + LABEL + GAP);
+  const esc = (t) =>
+    String(t).replace(
+      /[<>&"]/g,
+      (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]
+    );
+  const layers = [];
+  const text = (x, y, size, fill, value) =>
+    `<text x="${x}" y="${y}" font-family="DejaVu Sans, Arial, sans-serif" font-size="${size}" fill="${fill}">${esc(value)}</text>`;
+  let marks = title ? text(GAP, 30, 22, '#e8e2d0', title) : '';
+  for (let i = 0; i < items.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = GAP + col * (CELL + GAP);
+    const y = HEAD + GAP + row * (CELL + LABEL + GAP);
+    // The cell's own backing, a little lighter than the board, so a keyed
+    // picture's edges show.
+    layers.push({
+      input: {
+        create: { width: CELL, height: CELL, channels: 3, background: '#3a3e46' },
+      },
+      left: x,
+      top: y,
+    });
+    let picture;
+    if (tile) {
+      const half = CELL / 2;
+      const one = await sharp(items[i].file).resize(half, half, { fit: 'fill' }).png().toBuffer();
+      picture = await sharp({
+        create: { width: CELL, height: CELL, channels: 4, background: '#00000000' },
+      })
+        .composite([
+          { input: one, left: 0, top: 0 },
+          { input: one, left: half, top: 0 },
+          { input: one, left: 0, top: half },
+          { input: one, left: half, top: half },
+        ])
+        .png()
+        .toBuffer();
+    } else {
+      picture = await sharp(items[i].file)
+        .resize(CELL, CELL, { fit: 'contain', background: '#00000000' })
+        .png()
+        .toBuffer();
+    }
+    layers.push({ input: picture, left: x, top: y });
+    marks += text(x + 2, y + CELL + 22, 15, '#d7d2c2', items[i].name);
+  }
+  layers.push({
+    input: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${marks}</svg>`
+    ),
+    left: 0,
+    top: 0,
+  });
+  const base = sharp({
+    create: { width, height, channels: 3, background: '#1b1d22' },
+  }).composite(layers);
+  const jpeg = /\.jpe?g$/i.test(out);
+  fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
+  await (jpeg ? base.jpeg({ quality: 88 }) : base.png()).toFile(out);
+  return { out, count: items.length, width, height };
+}
+
 /** The key colour: the average of the four corners, which a sheet or a single object leaves empty. */
 function keyColour({ data, width, height }) {
   const corners = [0, width - 1, (height - 1) * width, height * width - 1];

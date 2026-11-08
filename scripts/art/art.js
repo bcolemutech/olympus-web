@@ -9,6 +9,7 @@
  *   node scripts/art/art.js seamless <in.png> <out.png>
  *   node scripts/art/art.js fit <in.png> <out.png> tile|strip|object [wFeet,dFeet | span]
  *   node scripts/art/art.js check <file.png> tile|strip|object
+ *   node scripts/art/art.js board <out.png> <dir | a.png,b.png,…> [--tile] [--cols n] [--title text]
  *
  * For an art set (planning/game-art.md §4.3; L-944), under
  * public/apps/loom/art/sets/<set>/:
@@ -21,6 +22,8 @@
  * takes an image's link. Nothing here spends money.
  */
 
+import fs from 'fs';
+import path from 'path';
 import {
   fetchImage,
   slice,
@@ -32,6 +35,7 @@ import {
   webp,
   atlas,
   checkBudget,
+  board,
 } from './steps.js';
 
 const [cmd, ...args] = process.argv.slice(2);
@@ -61,6 +65,29 @@ const commands = {
         : { span: extra ? Number(extra) : 1 }
     ),
   atlas: ([dir, flag]) => atlas(dir, { keep: flag === '--keep' }),
+  // board <out.png> <dir | file,file…> [--tile] [--cols n] [--title text]
+  board: (a) => {
+    const flag = (name) => a.indexOf(name);
+    const value = (name) => (flag(name) >= 0 ? a[flag(name) + 1] : undefined);
+    const [out, from] = a;
+    const entries =
+      fs.existsSync(from) && fs.statSync(from).isDirectory()
+        ? fs
+            .readdirSync(from)
+            .filter((f) => /\.(png|webp|jpe?g|svg)$/i.test(f))
+            .sort()
+            .map((f) => path.join(from, f))
+        : from.split(',');
+    return board(
+      entries.map((file) => ({ name: path.basename(file).replace(/\.[a-z]+$/i, ''), file })),
+      out,
+      {
+        tile: flag('--tile') >= 0,
+        columns: Number(value('--cols')) || 6,
+        title: value('--title') || '',
+      }
+    );
+  },
   budget: ([dir]) =>
     checkBudget(dir).then((result) => {
       if (result.problems.length) process.exitCode = 1;
