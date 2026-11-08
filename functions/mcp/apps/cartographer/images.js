@@ -546,7 +546,7 @@ function renderBattleMap(
       walls: (map.walls || []).length,
       geometry: countsOf(geometry),
       ...(under.heights.length ? { heights: under.heights } : {}),
-      options: { heights, hidden, sizes },
+      options: { heights, hidden, ...(sizes ? { sizes: true } : {}) },
       ...(sizes
         ? {
             sizes:

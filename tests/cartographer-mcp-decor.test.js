@@ -251,7 +251,7 @@ describe('view_image with sizes', () => {
     expect(sized.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
     expect(sized.structuredContent.options).toMatchObject({ sizes: true });
     expect(sized.structuredContent.sizes).toMatch(/footprint is outlined in white/);
-    expect(plain.structuredContent.options).toMatchObject({ sizes: false });
+    expect(plain.structuredContent.options).toEqual({ heights: true, hidden: true });
     expect(plain.structuredContent.sizes).toBeUndefined();
     // A different picture: the footprints and the numbers are on it.
     expect(sized.content[0].data).not.toBe(plain.content[0].data);
