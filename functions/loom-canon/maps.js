@@ -219,7 +219,7 @@ function blockerAt(map, cell) {
   const shown = (item) => !c.hidden[item.id];
   for (let i = c.objects.length - 1; i >= 0; i--) {
     const { item, rings } = c.objects[i];
-    if (!shown(item) || item.blocksMove === false) continue;
+    if (!shown(item) || !geo.objectBlocksMove(item)) continue;
     if (!rings.some((ring) => geo.pointInShape(middle, ring))) continue;
     const kind = materials.objectKind(item.kind);
     const hides =

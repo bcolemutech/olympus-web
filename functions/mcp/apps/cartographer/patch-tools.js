@@ -6,6 +6,7 @@ const { ToolError } = require('../../registry');
 const geo = require('../../../loom-canon/map-geometry');
 const patcher = require('../../../loom-canon/geometry-patch');
 const mapPaths = require('../../../loom-canon/map-paths');
+const scale = require('../../../loom-canon/scale');
 const { worldId, entityId } = require('./schemas');
 const mapTools = require('./map-tools');
 
@@ -117,7 +118,11 @@ const SHAPES = [
       'can use has settings: description?, container? ({ contents?: what it holds, ' +
       'search?: opening it is searching it }), locked?, unlocks? ({ key?, action? }), ' +
       'difficulty?, ap?, long? ({ ap }), actions? ([{ id, name?, ap?, long?, text? }], its ' +
-      'own: a lever’s Pull). An object with none of these is scenery.',
+      'own: a lever’s Pull). An object with none of these is scenery. `decor: true` (the ' +
+      'catalog’s decor kinds are decor already; dress_room fills a room with them) only ' +
+      'dresses a room: no click menu, never noticed or searched, and it blocks movement only ' +
+      'when over 2.5 ft both ways. An object under half or over twice its kind’s usual size, ' +
+      'or going into a wall, is said in the answer’s warnings, and kept.',
   },
   {
     tool: 'set_zones',
@@ -253,6 +258,13 @@ function patchTools({ writer, worldFor }) {
             ? [
                 ...mapTools.layerWarnings({ ...home.doc, geometry: done.geometry }),
                 ...mapTools.standingWarnings(world, { ...home.doc, geometry: done.geometry }),
+                // What's out of scale in what was just set (L-945).
+                ...(key === 'objects'
+                  ? scale.warnings(done.geometry, {
+                      worldKinds: world.objectKinds,
+                      only: [...done.added, ...done.changed],
+                    })
+                  : []),
               ]
             : [];
         return {

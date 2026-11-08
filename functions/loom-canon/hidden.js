@@ -36,6 +36,7 @@ const geo = require('./map-geometry');
 const mapPaths = require('./map-paths');
 const checks = require('./checks');
 const objects = require('./objects');
+const materials = require('./materials');
 const doors = require('./doors');
 const hazards = require('./hazards');
 const secrets = require('./secrets');
@@ -129,6 +130,8 @@ function thingsOf(map, states = {}) {
     Object.keys(c.hidden).forEach((id) => {
       const found = c.byId[id];
       if (!found || !NOTICEABLE.includes(found.list)) return;
+      // Decor is never noticed or searched (L-945).
+      if (found.list === 'objects' && materials.isDecor(found.item)) return;
       const kind = found.list === 'objects' ? objects.nameOf(found.item) : null;
       things.push({
         key: secrets.keyOf(id),

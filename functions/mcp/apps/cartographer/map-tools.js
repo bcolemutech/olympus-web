@@ -17,6 +17,7 @@ const { worldId, entityId, challenge, triggers } = require('./schemas');
 const { helpers } = require('./write-tools');
 const views = require('./views');
 const figures = require('../../../loom-modules/combat/figures');
+const scale = require('../../../loom-canon/scale');
 
 // The Cartographer's MCP battle-map tools (planning/the-loom-layered-worlds.md
 // §9; L-352 / #401): Claude draws the grids that points of interest and places
@@ -834,11 +835,21 @@ function mapTools({ writer }) {
           e.update(e.ref('battleMaps', map.id), { figures: list });
           const next = { ...map, figures: list };
           const result = { figures: views.figureRows(world, next) };
+          const warnings = [];
           if (map.generic) {
-            result.warnings = [
-              `${map.name} is a generic map: its figures stand at every place that uses it.`,
-            ];
+            warnings.push(
+              `${map.name} is a generic map: its figures stand at every place that uses it.`
+            );
           }
+          // A figure whose size class doesn't fit where it stands (L-945).
+          const system = systemOf(world);
+          warnings.push(
+            ...scale.figureWarnings(
+              next,
+              list.flatMap((g) => figures.instancesOf(system, g, world))
+            )
+          );
+          if (warnings.length) result.warnings = warnings;
           return result;
         }),
     },

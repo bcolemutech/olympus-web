@@ -23,14 +23,17 @@
   //            segment in a wall; never walked through; seen through by its
   //            material, or open
   //   objects  [{ id, kind, at, size, turn?, height?, name?, blocksMove?,
-  //            blocksSight?, description?, cardArt?, container?, locked?,
-  //            unlocks?, difficulty?, ap?, long?, actions? }] — at its
+  //            blocksSight?, decor?, description?, cardArt?, container?,
+  //            locked?, unlocks?, difficulty?, ap?, long?, actions? }] — at its
   //            centre, `size` [w, h] (or one number), turned `turn` degrees;
   //            usable (L-926): `container` { contents?, search? } holds what
   //            it describes; `locked`, opened by `unlocks` { key?, action? }
   //            (an item, or an object's id, or "id.action": its use
   //            unlocks it) or picked at `difficulty`; `actions` [{ id,
-  //            name?, ap?, long?, text? }] its own (a lever's Pull)
+  //            name?, ap?, long?, text? }] its own (a lever's Pull); `decor`
+  //            (L-945) only dresses the room: no menu, never noticed or
+  //            searched, and blocking movement only when it's over 2.5 ft
+  //            both ways (objectBlocksMove), unless `blocksMove` says
   //   zones    [{ id, name?, shape }] — named or not (DA1b)
   //   spawns   [{ id, name?, at | shape, what?, count? }] (DA4)
   //   lights   [{ id, at, radius, dim? }] a source, or [{ id, shape, dark:
@@ -56,6 +59,7 @@
   //   compile(geometry)         shapes read as polygons and edges (cached)
   //   edges(compiled, states)   walls, doors and windows as blocking edges
   //   hits(compiled, a, b, o)   the edges a segment crosses
+  //   objectBlocksMove(item)   whether an object blocks movement (L-945)
   //   clearance(compiled, p, o) how far p is from anything blocking movement
   //   fits(compiled, p, width)  whether something that wide stands at p
   //   pointInShape, groundAt, zonesAt, boundsOf, ringsOf, linesOf
@@ -575,6 +579,25 @@
     });
   }
 
+  // Decor blocks movement only over this many feet both ways (L-945, DR1).
+  var DECOR_BLOCKS_OVER = 2.5;
+
+  /**
+   * Whether an object blocks movement (L-945): its own `blocksMove` says so
+   * if it does; else a decor object blocks only when it's over 2.5 ft both
+   * ways (a pile of crates does, candles and bones don't) and its kind
+   * doesn't lie flat (rubble, straw, a puddle never block); else it blocks.
+   */
+  function objectBlocksMove(item) {
+    if (!isObject(item)) return false;
+    if (typeof item.blocksMove === 'boolean') return item.blocksMove;
+    if (!catalog.isDecor(item)) return true;
+    var kind = catalog.objectKind(item.kind);
+    if (kind && kind.blocksMove === false) return false;
+    var size = sizeOf(item.size);
+    return Boolean(size) && size[0] > DECOR_BLOCKS_OVER && size[1] > DECOR_BLOCKS_OVER;
+  }
+
   function sizeOf(size) {
     if (num(size) && size > 0) return [size, size];
     var p = pointOf(size);
@@ -820,7 +843,7 @@
       if (e.blocksMove) best = Math.min(best, distanceToSegment(p, e.a, e.b));
     });
     c.objects.forEach(function (o) {
-      if (o.item.blocksMove !== false) best = Math.min(best, ringDistance(p, o.rings));
+      if (objectBlocksMove(o.item)) best = Math.min(best, ringDistance(p, o.rings));
     });
     c.ground.forEach(function (g) {
       if (g.item.cost === 'never') best = Math.min(best, ringDistance(p, g.rings));
@@ -895,6 +918,7 @@
     if (!isObject(geometry)) return ['The geometry must be an object of lists.'];
     var eps = toleranceFor(bounds);
     var ids = {};
+    var decorIds = {}; // objects that are decor (L-945), which are never hidden
     var total = 0;
     Object.keys(geometry).forEach(function (key) {
       if (LISTS.indexOf(key) === -1) {
@@ -1037,6 +1061,9 @@
           }
         }
       }
+      if (raw.decor !== undefined && typeof raw.decor !== 'boolean') {
+        problems.push(name + '.decor must be true or false.');
+      }
       if (raw.locked !== undefined && typeof raw.locked !== 'boolean') {
         problems.push(name + '.locked must be true or false.');
       }
@@ -1170,6 +1197,7 @@
             inBounds(name, ring);
           }
           objectSettings(name, raw);
+          if (typeof raw.id === 'string' && catalog.isDecor(raw)) decorIds[raw.id] = true;
         } else if (key === 'zones') {
           if (raw.name !== undefined && typeof raw.name !== 'string')
             problems.push(name + ' has a name that isn’t text.');
@@ -1286,6 +1314,8 @@
       }
       if (!has(ids, entry.id))
         problems.push('hidden names "' + entry.id + '", which isn’t in the geometry.');
+      else if (has(decorIds, entry.id))
+        problems.push('hidden names "' + entry.id + '", which is decor: decor is never hidden.');
       else if (has(seen, entry.id)) problems.push('hidden names "' + entry.id + '" twice.');
       seen[entry.id] = true;
       var dcOk =
@@ -1506,6 +1536,7 @@
     compile: compile,
     edges: edges,
     hits: hits,
+    objectBlocksMove: objectBlocksMove,
     clearance: clearance,
     fits: fits,
     groundAt: groundAt,

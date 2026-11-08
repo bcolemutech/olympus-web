@@ -28,6 +28,7 @@ const hazards = require('../loom-canon/hazards');
 const mapAreas = require('../loom-canon/map-areas');
 const combat = require('../loom-modules/combat');
 const mapPaths = require('../loom-canon/map-paths');
+const materials = require('../loom-canon/materials');
 const { doorStatesOf, objectStatesOf, doorSides } = require('./steps');
 
 const key = (c) => c.x + ',' + c.y;
@@ -116,7 +117,11 @@ function lookAt(canonWorld, save, target, { known, inSight } = {}) {
   const objectsHere = mapObjects
     .allOf(map)
     .filter((o) => mapObjects.squaresOf(map, o).some((s) => s.x === cell.x && s.y === cell.y));
-  objectsHere.forEach((o) => facts.push(...objectFacts(map, o, save)));
+  // Decor only dresses the room (L-945): said when it's all there is.
+  const decorHere = objectsHere.filter((o) => materials.isDecor(o));
+  objectsHere
+    .filter((o) => !materials.isDecor(o))
+    .forEach((o) => facts.push(...objectFacts(map, o, save)));
   const obstacle = obstacleAt(map, cell);
   if (obstacle && !objectsHere.some((o) => o.id === obstacle.id)) {
     facts.push(
@@ -163,6 +168,10 @@ function lookAt(canonWorld, save, target, { known, inSight } = {}) {
             '.'
         );
       });
+  }
+  if (!facts.length && decorHere.length) {
+    const named = decorHere.map((o) => mapObjects.nameOf(o));
+    facts.push('Dressing: ' + named.join(', ') + '.');
   }
   const empty = !facts.length;
   const area = mapAreas.areaAt(map, cell);

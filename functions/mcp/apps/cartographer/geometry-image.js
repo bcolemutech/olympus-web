@@ -235,7 +235,7 @@ function makePainter(h) {
    */
   function paintOver(c, geometry, scale, options = {}, mark = () => 0) {
     const K = typeof scale === 'number' ? { x: scale, y: scale } : scale;
-    const { hidden = true, doors = {}, skipDoors = [], skipObjects = [] } = options;
+    const { hidden = true, sizes = false, doors = {}, skipDoors = [], skipObjects = [] } = options;
     const g = geo.compile(geometry || {});
     const shown = (item) => hidden || !g.hidden[item.id];
     const ls = labelScale(c);
@@ -265,6 +265,18 @@ function makePainter(h) {
       fillRings(c, [px], withAlpha(fill, 235));
       outlineRing(c, px, withAlpha(OTHER.outline, 255), 2);
       count('objects');
+      if (sizes) {
+        // Its footprint and size in feet over it, to check its scale (L-945).
+        outlineRing(c, px, withAlpha([255, 255, 255], 255), 1);
+        const size = item.size;
+        const wh = Array.isArray(size) ? size : [size, size];
+        if (wh.every((n) => typeof n === 'number')) {
+          const text = wh.map((n) => String(Math.round(n * 10) / 10)).join('x');
+          const m = middle(px);
+          const width = text.length * 4 * ls + ls;
+          number(c, text, m[0] - width / 2, m[1] - (7 * ls) / 2, ls);
+        }
+      }
       const usable = item.container || item.locked || (item.actions || []).length;
       if ((item.name || usable) && !skipObjects.includes(item.id)) {
         const m = middle(px);

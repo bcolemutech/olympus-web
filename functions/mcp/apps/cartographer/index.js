@@ -536,6 +536,14 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
             .boolean()
             .optional()
             .describe('Shade floors by height: higher brighter, lower darker (default true).'),
+          sizes: z
+            .boolean()
+            .optional()
+            .describe(
+              'A grid: draw each object’s footprint in white with its size in feet ' +
+                '("6x4", width x depth), to check the scale of what you placed (L-945; ' +
+                'default false).'
+            ),
           hidden: z
             .boolean()
             .optional()
@@ -597,7 +605,11 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
               // geometry, in its own units (L-929).
               const grid = (world.battleMaps || {})[args.id];
               const stored = !grid && args.of === 'map' ? (world.maps || {})[args.id] : null;
-              const options = { heights: args.heights !== false, hidden: args.hidden !== false };
+              const options = {
+                heights: args.heights !== false,
+                hidden: args.hidden !== false,
+                sizes: args.sizes === true,
+              };
               if (stored && !stored.retired && ['region', 'area'].includes(stored.kind)) {
                 const model = modelOf(world);
                 const places = levels

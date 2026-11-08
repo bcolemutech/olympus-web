@@ -20,8 +20,14 @@
   //                    kind: ground | line | wall | door | window; a
   //                    see-through wall, door or window lets sight through
   //                    by default (GE3); water takes a depth
-  //   OBJECT_KINDS   [{ id, name, group, size, art, blocksMove?, blocksSight? }]
-  //                    movement is blocked and sight isn't unless it says
+  //   OBJECT_KINDS   [{ id, name, group, size, art, blocksMove?, blocksSight?,
+  //                    decor?, onWall? }]
+  //                    movement is blocked and sight isn't unless it says;
+  //                    decor (L-945 / #799) only dresses a room: no click
+  //                    menu, never noticed or searched, said in "What's here?"
+  //                    only when it's alone, and blocking movement only when
+  //                    it's over 2.5 ft both ways (and not `blocksMove:
+  //                    false`, a flat one's); onWall hangs on a wall
   //   FALLBACK_ART   the box with a question mark
   //
   // Art sets (planning/game-art.md §4.3, AR3, AR7, EN1, EN2; L-944 / #798):
@@ -156,6 +162,12 @@
   }
   var WALK = { blocksMove: false };
   var TALL = { blocksSight: true };
+  // Decor (planning/game-art.md §4.5, DR1; L-945): it dresses a room. A flat
+  // kind (rubble, straw, a puddle, a cobweb) never blocks, whatever its size;
+  // the others block only over 2.5 ft both ways (a pile of crates does).
+  var DECOR = { decor: true };
+  var FLAT = { decor: true, blocksMove: false };
+  var HUNG = { decor: true, blocksMove: false, onWall: true };
 
   var OBJECT_KINDS = [
     o('chest', 'Chest', 'furniture', [3, 2]),
@@ -187,6 +199,20 @@
     o('tent', 'Tent', 'outdoors', [8, 8], TALL),
     o('stairs', 'Stairs', 'ways', [5, 10], WALK),
     o('trapdoor', 'Trapdoor', 'ways', [3, 3], WALK),
+    o('rubble', 'Rubble', 'decor', [4, 4], FLAT),
+    o('bones', 'Bones', 'decor', [2, 2], DECOR),
+    o('candles', 'Candles', 'decor', [1, 1], DECOR),
+    o('cobwebs', 'Cobwebs', 'decor', [3, 3], FLAT),
+    o('sacks', 'Sacks', 'decor', [2, 2], DECOR),
+    o('crate-pile', 'Pile of crates', 'decor', [4, 3], DECOR),
+    o('tapestry', 'Tapestry', 'decor', [4, 1], HUNG),
+    o('banner', 'Banner', 'decor', [2, 1], HUNG),
+    o('plant', 'Plant', 'decor', [2, 2], DECOR),
+    o('books', 'Books', 'decor', [1.5, 1], DECOR),
+    o('bottles', 'Bottles', 'decor', [1, 1], DECOR),
+    o('straw', 'Straw', 'decor', [4, 4], FLAT),
+    o('puddle', 'Puddle', 'decor', [3, 3], FLAT),
+    o('chains', 'Chains', 'decor', [2, 1], HUNG),
   ];
 
   function by(list, key) {
@@ -457,6 +483,18 @@
     return kind ? kind.size.slice() : null;
   }
 
+  /**
+   * Whether an object is decor (L-945): its own `decor` says so, else its
+   * kind's. Decor has no click menu, is never noticed or searched, and is said
+   * in "What's here?" only when it's alone.
+   */
+  function isDecor(item) {
+    if (!item) return false;
+    if (typeof item.decor === 'boolean') return item.decor;
+    var kind = objectKind(item.kind);
+    return Boolean(kind && kind.decor);
+  }
+
   var api = {
     ART_BASE: ART_BASE,
     DEFAULT_SET: DEFAULT_SET,
@@ -467,6 +505,7 @@
     materialsOf: materialsOf,
     materialOf: materialOf,
     objectKind: objectKind,
+    isDecor: isDecor,
     artUrl: artUrl,
     artFiles: artFiles,
     artFor: artFor,

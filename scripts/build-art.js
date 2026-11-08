@@ -1168,6 +1168,147 @@ const OBJECT = {
     circle(W / 2, H / 2 - 6, 1.8, '#4a4f55') +
     rect(5, 5, 6, 3, '#4a4f55') +
     rect(W - 11, 5, 6, 3, '#4a4f55'),
+  // Decor (planning/game-art.md §4.5; L-945 / #799): small things that dress a
+  // room, in the same plain style; L-946 paints them properly.
+  rubble: (W, H, r) =>
+    Array.from({ length: 16 }, () => {
+      const cx = between(r, 8, W - 8);
+      const cy = between(r, 8, H - 8);
+      const s = between(r, 4, 11);
+      const tone = pick(r, ['#8d8c92', '#a1a0a4', '#76757a', '#9a8f84']);
+      const pts = Array.from({ length: 5 }, (_, i) => {
+        const a = (i / 5) * Math.PI * 2 + between(r, -0.3, 0.3);
+        return [
+          cx + Math.cos(a) * s * between(r, 0.6, 1),
+          cy + Math.sin(a) * s * between(r, 0.6, 1),
+        ];
+      });
+      return poly(pts, tone, { stroke: STONE_DARK, 'stroke-width': 1 });
+    }).join(''),
+  bones: (W, H) =>
+    line(5, H - 7, W - 5, 7, '#e8e0cc', 3.4) +
+    line(5, 7, W - 5, H - 7, '#e8e0cc', 3.4) +
+    circle(5, H - 7, 2.6, '#e8e0cc') +
+    circle(W - 5, 7, 2.6, '#e8e0cc') +
+    circle(W / 2, H / 2, 6, '#f0eadb', { stroke: '#b9b09a', 'stroke-width': 1 }) +
+    circle(W / 2 - 2.2, H / 2 - 1, 1.3, '#3a3328') +
+    circle(W / 2 + 2.2, H / 2 - 1, 1.3, '#3a3328'),
+  candles: (W, H) =>
+    circle(W / 2, H / 2 + 1, 4.4, '#f1e6c8', { stroke: '#b8a77a', 'stroke-width': 1 }) +
+    circle(W / 2, H / 2 - 1, 2.2, '#ffb74d') +
+    circle(W / 2, H / 2 - 1.4, 1, '#fff2c0'),
+  cobwebs: (W, H) =>
+    [0, 1, 2, 3, 4]
+      .map((i) => {
+        const a = (i / 4) * (Math.PI / 2);
+        return line(1, 1, 1 + Math.cos(a) * (W - 2), 1 + Math.sin(a) * (H - 2), '#e8eaf0', 1, {
+          opacity: 0.8,
+        });
+      })
+      .join('') +
+    [0.3, 0.55, 0.8]
+      .map((k) =>
+        path_(
+          `M${f(1 + (W - 2) * k)} 1 Q${f(1 + (W - 2) * k * 0.6)} ${f(1 + (H - 2) * k * 0.6)} 1 ${f(1 + (H - 2) * k)}`,
+          { stroke: '#e8eaf0', 'stroke-width': 0.9, opacity: 0.8 }
+        )
+      )
+      .join(''),
+  sacks: (W, H) =>
+    ellipse(W * 0.36, H * 0.6, W * 0.26, H * 0.3, '#b9a173', {
+      stroke: '#6e5a34',
+      'stroke-width': 1.6,
+    }) +
+    ellipse(W * 0.66, H * 0.4, W * 0.24, H * 0.28, '#c9b385', {
+      stroke: '#6e5a34',
+      'stroke-width': 1.6,
+    }) +
+    line(W * 0.36 - 3, H * 0.34, W * 0.36 + 3, H * 0.34, '#6e5a34', 1.6) +
+    line(W * 0.66 - 3, H * 0.14, W * 0.66 + 3, H * 0.14, '#6e5a34', 1.6),
+  'crate-pile': (W, H) =>
+    rect(2, H * 0.3, W * 0.48, H * 0.66, '#b08850', { stroke: WOOD_DARK, 'stroke-width': 2 }) +
+    rect(W * 0.5, H * 0.34, W * 0.46, H * 0.62, '#a67f48', {
+      stroke: WOOD_DARK,
+      'stroke-width': 2,
+    }) +
+    rect(W * 0.2, 2, W * 0.48, H * 0.5, '#bf9a5c', { stroke: WOOD_DARK, 'stroke-width': 2 }) +
+    line(W * 0.2, 2, W * 0.68, H * 0.52, '#7d5c2e', 1.6) +
+    line(W * 0.68, 2, W * 0.2, H * 0.52, '#7d5c2e', 1.6),
+  tapestry: (W, H) =>
+    rect(1, 1, W - 2, H - 2, '#8e2f3a', { stroke: '#4a1219', 'stroke-width': 1.5 }) +
+    rect(5, 4, W - 10, H - 8, 'none', { stroke: '#d4b45a', 'stroke-width': 1.2 }) +
+    [0.25, 0.5, 0.75].map((k) => circle(W * k, H / 2, 2.4, '#d4b45a')).join('') +
+    Array.from({ length: Math.floor(W / 4) }, (_, i) =>
+      line(3 + i * 4, H - 2, 3 + i * 4, H, '#d4b45a', 1)
+    ).join(''),
+  banner: (W, H) =>
+    poly(
+      [
+        [1, 1],
+        [W - 1, 1],
+        [W - 6, H / 2],
+        [W - 1, H - 1],
+        [1, H - 1],
+      ],
+      '#2f4f8e',
+      { stroke: '#142849', 'stroke-width': 1.5 }
+    ) + circle(W * 0.4, H / 2, 3.6, '#e0c458'),
+  plant: (W) =>
+    circle(W / 2, W / 2, W * 0.42, '#3e7a3a', { stroke: '#254a22', 'stroke-width': 1.4 }) +
+    [0, 1, 2, 3, 4, 5]
+      .map((i) => {
+        const a = (i / 6) * Math.PI * 2;
+        return ellipse(
+          W / 2 + Math.cos(a) * W * 0.22,
+          W / 2 + Math.sin(a) * W * 0.22,
+          5,
+          3,
+          '#56a04c',
+          {
+            transform: `rotate(${f((a * 180) / Math.PI)} ${f(W / 2 + Math.cos(a) * W * 0.22)} ${f(W / 2 + Math.sin(a) * W * 0.22)})`,
+          }
+        );
+      })
+      .join('') +
+    circle(W / 2, W / 2, 4, '#8a5a2b', { stroke: WOOD_DARK, 'stroke-width': 1 }),
+  books: (W, H) =>
+    rect(1, 1, W * 0.5, H - 2, '#7a2f2f', { stroke: '#3a1414', 'stroke-width': 1.2 }) +
+    rect(W * 0.36, 3, W * 0.42, H - 4, '#2f5a7a', { stroke: '#122a3a', 'stroke-width': 1.2 }) +
+    rect(W * 0.64, 1, W * 0.34, H - 2, '#5a7a2f', { stroke: '#2a3a12', 'stroke-width': 1.2 }),
+  bottles: (W, H) =>
+    circle(W * 0.3, H * 0.4, 3.4, '#5aa07a', { stroke: '#2f5a43', 'stroke-width': 1 }) +
+    circle(W * 0.7, H * 0.4, 3.4, '#a07a5a', { stroke: '#5a432f', 'stroke-width': 1 }) +
+    circle(W * 0.5, H * 0.72, 3.4, '#7a8fa0', { stroke: '#43505a', 'stroke-width': 1 }),
+  straw: (W, H, r) =>
+    Array.from({ length: 70 }, () => {
+      const x = between(r, 4, W - 4);
+      const y = between(r, 4, H - 4);
+      const a = between(r, 0, Math.PI);
+      const len = between(r, 5, 11);
+      return line(
+        x,
+        y,
+        x + Math.cos(a) * len,
+        y + Math.sin(a) * len,
+        pick(r, ['#d9bf6c', '#c9a94e', '#e6d08a']),
+        1.4
+      );
+    }).join(''),
+  puddle: (W, H) =>
+    ellipse(W * 0.5, H * 0.52, W * 0.42, H * 0.34, '#4f7fa0', { opacity: 0.75 }) +
+    ellipse(W * 0.4, H * 0.45, W * 0.2, H * 0.14, '#7fb0d0', { opacity: 0.6 }) +
+    ellipse(W * 0.5, H * 0.52, W * 0.42, H * 0.34, 'none', {
+      stroke: '#2f5570',
+      'stroke-width': 1.2,
+      opacity: 0.8,
+    }),
+  chains: (W, H) =>
+    Array.from({ length: Math.floor(W / 6) }, (_, i) =>
+      ellipse(4 + i * 6, H / 2 + (i % 2 ? 1.5 : -1.5), 3.4, 2, 'none', {
+        stroke: '#6d6f75',
+        'stroke-width': 1.6,
+      })
+    ).join(''),
 };
 
 // The box with a question mark: an object with no art at all (OB1).

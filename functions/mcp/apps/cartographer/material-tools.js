@@ -76,7 +76,12 @@ function materialTools({ studio, writer, worldFor }) {
         'default size in feet. With worldId, the world’s own kinds too (made by set_object_art ' +
         'with a kind of your own), and for each kind where its art comes from in that world: ' +
         '"world" (art given with set_object_art), "catalog" or "unknown" (a box with a ' +
-        'question mark). An object’s own art, if it has any, comes before its kind’s.',
+        'question mark). An object’s own art, if it has any, comes before its kind’s. The ' +
+        'decor group (rubble, bones, candles, cobwebs, sacks, a pile of crates, a tapestry, a ' +
+        'banner, a plant, books, bottles, straw, a puddle, chains; L-945) only dresses a room: ' +
+        'no click menu, never noticed or searched, and blocking movement only when over 2.5 ft ' +
+        'both ways (blocksMove false: never, a flat one like straw); onWall ones hang on a ' +
+        'wall. dress_room fills a zone with them.',
       inputSchema: {
         worldId: worldId.optional(),
         group: z.string().max(40).optional().describe('Only this group, like "furniture".'),
@@ -99,6 +104,9 @@ function materialTools({ studio, writer, worldFor }) {
             size: catalog.sizeFor(id, own),
             blocksMove: known ? known.blocksMove !== false : undefined,
             blocksSight: known ? known.blocksSight === true : undefined,
+            // Decor only dresses a room (L-945): its blocksMove is for big pieces only.
+            decor: known && known.decor ? true : undefined,
+            onWall: known && known.onWall ? true : undefined,
             ...(args.worldId ? { art: catalog.artFor({ kind: id }, own).from } : {}),
             ownKind: args.worldId && !known ? true : undefined,
           });
