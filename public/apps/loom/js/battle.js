@@ -95,6 +95,9 @@
     reach: null, // this turn's reach: { runs: [{ y, x0, x1 }] }
     fog: null, // the fog (L-634): { dark: runs, dim: runs }, as reach's runs
     known: null, // whether a square (by y × width + x) has been seen (L-635)
+    cursor: null, // where the pointer is over the map, in feet (L-942), for seeing behind walls
+    fadeAt: 0, // when the walls last faded for what is behind them
+    fadeTimer: 0, // the throttled check waiting, for the pointer
     preview: null, // the move to the selected cell: { path, walked, rest, stop, end, short, cost, feet, turns } or { none }
     pending: null, // a move sent: { mapId, points } in feet, for the walk when it lands
     anim: null, // the token's walk: { cells, t0 }
@@ -324,6 +327,7 @@
     if (moved) {
       battle.selected = null;
       battle.anim = null;
+      battle.cursor = null;
     }
     walkIfMoved();
     if (battle.selectedDoor && (!battle.data || !doorById(battle.selectedDoor))) {
@@ -800,6 +804,7 @@
       tile: MP.FEET,
       wall: 1.5,
       feet: 1,
+      fades: true, // walls over a token fade (L-942), so they're cut along their length
       stand: n.standing,
       standAt: { x: PAD, y: TOP, scale: CELL / MP.FEET },
       art: Boolean(d.image),
@@ -1220,6 +1225,73 @@
       ring: COLOURS.ring,
       shadow: true, // standing, with its contact shadow (L-943)
     });
+    fadeBehind();
+  }
+
+  // ── Seeing behind walls (TV1; L-942) ──────────────
+
+  var FADE_STEP_FT = 2.5; // the path's points checked this far apart
+  var FADE_EVERY_MS = 80; // the pointer's check, at most this often
+
+  // What is to be seen behind walls, for the painter's `fade`: the tokens'
+  // discs (their foot's y the depth), the pointer's point and the points of
+  // the path preview, each a floor point (its y the depth).
+  function fadeTargets() {
+    var key = 'battle:' + battle.data.id;
+    var stand = Loom.mapPaint.standOf(key);
+    var out = [];
+    var spot1 = function (p) {
+      out.push({ box: { x0: p.x, y0: p.y, x1: p.x, y1: p.y }, depth: p.y });
+    };
+    if (stand) {
+      stand.children.forEach(function (child) {
+        if (child.__loomFoot === undefined || !child.visible) return;
+        var c = feetOf(child.position);
+        var r = (child.__loomFoot / CELL) * MP.FEET;
+        out.push({
+          box: { x0: c.x - r, y0: c.y - r, x1: c.x + r, y1: c.y + r },
+          depth: c.y + r,
+        });
+      });
+    }
+    if (battle.cursor) spot1(battle.cursor);
+    var preview = battle.preview;
+    if (!battle.anim && preview && preview.path) {
+      [preview.walked, preview.rest].forEach(function (line) {
+        (line || []).forEach(function (p, i) {
+          spot1(p);
+          var q = line[i + 1];
+          if (!q) return;
+          var n = Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / FADE_STEP_FT);
+          for (var k = 1; k < n; k++) {
+            spot1({ x: p.x + ((q.x - p.x) * k) / n, y: p.y + ((q.y - p.y) * k) / n });
+          }
+        });
+      });
+    }
+    return out;
+  }
+
+  // The walls, doors and tall objects over any of them fade (the painter
+  // keeps the same targets as nothing to do); called as they move: every
+  // draw, and the pointer's, throttled.
+  function fadeBehind() {
+    if (!battle.data || !battle.nodes) return;
+    battle.fadeAt = now();
+    Loom.mapPaint.fade('battle:' + battle.data.id, fadeTargets());
+  }
+
+  function fadeSoon() {
+    var wait = FADE_EVERY_MS - (now() - battle.fadeAt);
+    if (wait <= 0) {
+      fadeBehind();
+      return;
+    }
+    if (battle.fadeTimer) return;
+    battle.fadeTimer = window.setTimeout(function () {
+      battle.fadeTimer = 0;
+      fadeBehind();
+    }, wait);
   }
 
   // ── Clicks: the menu (I2) ─────────────────────────
@@ -1917,9 +1989,15 @@
   function hover(point, view) {
     if (!point || !battle.data) {
       engine.panelCursor('');
+      if (battle.cursor) {
+        battle.cursor = null;
+        fadeSoon();
+      }
       return;
     }
     var m = M.toMap(view, point.x, point.y);
+    battle.cursor = feetOf(m);
+    fadeSoon();
     var d = battle.data;
     var gx = (m.x - PAD) / CELL;
     var gy = (m.y - TOP) / CELL;
