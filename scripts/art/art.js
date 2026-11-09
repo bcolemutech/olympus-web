@@ -6,7 +6,7 @@
  *   node scripts/art/art.js fetch <link> <out.png>
  *   node scripts/art/art.js slice <sheet.png> <outDir> [name,name,…]
  *   node scripts/art/art.js key <in.png> <out.png>
- *   node scripts/art/art.js seamless <in.png> <out.png>
+ *   node scripts/art/art.js seamless <in.png> <out.png> [--across]   (--across: left to right only, a strip or face)
  *   node scripts/art/art.js fit <in.png> <out.png> tile|strip|object [wFeet,dFeet | span]
  *   node scripts/art/art.js check <file.png> tile|strip|object
  *   node scripts/art/art.js board <out.png> <dir | a.png,b.png,…> [--tile] [--cols n] [--title text]
@@ -46,7 +46,7 @@ const commands = {
   fetch: ([url, out]) => fetchImage(url, out),
   slice: ([file, outDir, names]) => slice(file, outDir, names ? names.split(',') : []),
   key: ([file, out]) => key(file, out),
-  seamless: ([file, out]) => seamless(file, out),
+  seamless: ([file, out, flag]) => seamless(file, out, 0.12, { across: flag === '--across' }),
   fit: ([file, out, kind, extra]) =>
     fit(
       file,

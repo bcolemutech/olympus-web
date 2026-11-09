@@ -239,7 +239,9 @@ export async function key(file, out) {
   return out;
 }
 
-export async function seamless(file, out, band = 0.12) {
+export async function seamless(file, out, band = 0.12, { across = false } = {}) {
+  // `across`: a strip or a face, which repeats only left to right, is
+  // blended across its width only (its height is never wrapped).
   const { data, width: w, height: h } = await rgb(file);
   const res = Buffer.alloc(w * h * 3);
   const bx = Math.round(w * band);
@@ -249,9 +251,9 @@ export async function seamless(file, out, band = 0.12) {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const sx = (x + w / 2) % w;
-      const sy = (y + h / 2) % h;
+      const sy = across ? y : (y + h / 2) % h;
       const fx = Math.max(0, 1 - Math.abs(x - w / 2) / bx);
-      const fy = Math.max(0, 1 - Math.abs(y - h / 2) / by);
+      const fy = across ? 0 : Math.max(0, 1 - Math.abs(y - h / 2) / by);
       const t = Math.min(1, Math.max(fx, fy));
       const o = (y * w + x) * 3;
       const s = (Math.floor(sy) * w + Math.floor(sx)) * 3;
@@ -301,7 +303,8 @@ export async function check(file, kind) {
     height: meta.height,
     bytes: fs.statSync(file).size,
   };
-  if (kind === 'tile') {
+  if (kind === 'tile' || kind === 'strip') {
+    // A strip (or a face) repeats left to right only: its side edges count.
     const { data, width: w, height: h } = await rgb(file);
     const col = (a, b) => {
       let s = 0;
@@ -323,7 +326,8 @@ export async function check(file, kind) {
       inside += col(x, x + 1);
     }
     inside /= 20;
-    out.seam = +((col(w - 1, 0) + row(h - 1, 0)) / 2 / inside).toFixed(2);
+    const edge = kind === 'strip' ? col(w - 1, 0) : (col(w - 1, 0) + row(h - 1, 0)) / 2;
+    out.seam = +(edge / inside).toFixed(2);
   } else if (meta.hasAlpha) {
     const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
     let pink = 0;
