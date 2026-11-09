@@ -436,9 +436,14 @@ export function pack(sizes, max = 2048, pad = 2) {
  * file of its own goes onto sheets `atlas/sheet-N.webp`, its manifest entry
  * becoming that sheet's frame, the files it came from removed (unless
  * `keep`). Floors, strips and lines stay files of their own, since they
- * repeat. The manifest is written back. Returns the sheets.
+ * repeat. Each sheet is lossy WebP at `quality`, its alpha kept sharper, as
+ * the files were (a lossless sheet of painted pictures is twice their size).
+ * The manifest is written back. Returns the sheets.
  */
-export async function atlas(dir, { max = budget.LIMITS.atlasPx, pad = 2, keep = false } = {}) {
+export async function atlas(
+  dir,
+  { max = budget.LIMITS.atlasPx, pad = 2, keep = false, quality = 82 } = {}
+) {
   const file = path.join(dir, 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
   const todo = [];
@@ -478,7 +483,7 @@ export async function atlas(dir, { max = budget.LIMITS.atlasPx, pad = 2, keep = 
       },
     })
       .composite(parts)
-      .webp({ lossless: true, effort: 6 })
+      .webp({ quality, alphaQuality: 90, effort: 6 })
       .toFile(path.join(dir, out));
     manifest.atlases[ids[n]] = { file: out, width: s.width, height: s.height };
     written.push({ id: ids[n], file: out, width: s.width, height: s.height, frames: parts.length });
