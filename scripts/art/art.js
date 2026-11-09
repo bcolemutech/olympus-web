@@ -9,7 +9,7 @@
  *   node scripts/art/art.js seamless <in.png> <out.png> [--across]   (--across: left to right only, a strip or face)
  *   node scripts/art/art.js fit <in.png> <out.png> tile|strip|object [wFeet,dFeet | span]
  *   node scripts/art/art.js check <file.png> tile|strip|object
- *   node scripts/art/art.js board <out.png> <dir | a.png,b.png,…> [--tile] [--cols n] [--title text]
+ *   node scripts/art/art.js board <out.png> <dir | a.png,b.png,…> [--tile | --across] [--cols n] [--title text]
  *
  * For an art set (planning/game-art.md §4.3; L-944), under
  * public/apps/loom/art/sets/<set>/:
@@ -67,7 +67,7 @@ const commands = {
         : { span: extra ? Number(extra) : 1 }
     ),
   atlas: ([dir, flag]) => atlas(dir, { keep: flag === '--keep' }),
-  // board <out.png> <dir | file,file…> [--tile] [--cols n] [--title text]
+  // board <out.png> <dir | file,file…> [--tile | --across] [--cols n] [--title text]
   board: (a) => {
     const flag = (name) => a.indexOf(name);
     const value = (name) => (flag(name) >= 0 ? a[flag(name) + 1] : undefined);
@@ -85,6 +85,7 @@ const commands = {
       out,
       {
         tile: flag('--tile') >= 0,
+        across: flag('--across') >= 0,
         columns: Number(value('--cols')) || 6,
         title: value('--title') || '',
       }

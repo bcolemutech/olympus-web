@@ -57,19 +57,34 @@ const dist = (data, i, c) => Math.hypot(data[i] - c[0], data[i + 1] - c[1], data
  * A board of a batch for the user to approve (planning/game-art.md §4.4,
  * AR6; L-946): each picture in a cell with its name under it, on a dark
  * background, the batch in rows. `items` are [{ name, file }]; `tile` draws a
- * picture 2 × 2 (a floor's seams show), `title` is written along the top.
+ * picture 2 × 2 (a floor's seams show), `across` twice side by side (a
+ * strip's or a face's seam shows), `title` is written along the top.
  * Writes `out` (PNG, or JPEG by its extension) and returns { out, count,
  * width, height }. Costs nothing.
  */
-export async function board(items, out, { tile = false, columns = 6, title = '' } = {}) {
+export async function board(
+  items,
+  out,
+  { tile = false, across = false, columns = 6, title = '' } = {}
+) {
   const CELL = 256;
+  // Across: a cell twice as wide, as tall as the tallest picture at half that.
+  let tall = 0;
+  if (across) {
+    for (const it of items) {
+      const m = await sharp(it.file).metadata();
+      tall = Math.max(tall, Math.round((CELL * m.height) / m.width));
+    }
+  }
+  const CW = across ? CELL * 2 : CELL;
+  const CH = across ? tall : CELL;
   const LABEL = 34;
   const GAP = 14;
   const HEAD = title ? 44 : 0;
   const cols = Math.max(1, Math.min(columns, items.length));
   const rows = Math.ceil(items.length / cols);
-  const width = GAP + cols * (CELL + GAP);
-  const height = HEAD + GAP + rows * (CELL + LABEL + GAP);
+  const width = GAP + cols * (CW + GAP);
+  const height = HEAD + GAP + rows * (CH + LABEL + GAP);
   const esc = (t) =>
     String(t).replace(
       /[<>&"]/g,
@@ -82,19 +97,31 @@ export async function board(items, out, { tile = false, columns = 6, title = '' 
   for (let i = 0; i < items.length; i++) {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const x = GAP + col * (CELL + GAP);
-    const y = HEAD + GAP + row * (CELL + LABEL + GAP);
+    const x = GAP + col * (CW + GAP);
+    const y = HEAD + GAP + row * (CH + LABEL + GAP);
     // The cell's own backing, a little lighter than the board, so a keyed
     // picture's edges show.
     layers.push({
       input: {
-        create: { width: CELL, height: CELL, channels: 3, background: '#3a3e46' },
+        create: { width: CW, height: CH, channels: 3, background: '#3a3e46' },
       },
       left: x,
       top: y,
     });
     let picture;
-    if (tile) {
+    if (across) {
+      const one = await sharp(items[i].file).resize({ width: CELL }).png().toBuffer();
+      const h = (await sharp(one).metadata()).height;
+      picture = await sharp({
+        create: { width: CW, height: CH, channels: 4, background: '#00000000' },
+      })
+        .composite([
+          { input: one, left: 0, top: Math.floor((CH - h) / 2) },
+          { input: one, left: CELL, top: Math.floor((CH - h) / 2) },
+        ])
+        .png()
+        .toBuffer();
+    } else if (tile) {
       const half = CELL / 2;
       const one = await sharp(items[i].file).resize(half, half, { fit: 'fill' }).png().toBuffer();
       picture = await sharp({
@@ -115,7 +142,7 @@ export async function board(items, out, { tile = false, columns = 6, title = '' 
         .toBuffer();
     }
     layers.push({ input: picture, left: x, top: y });
-    marks += text(x + 2, y + CELL + 22, 15, '#d7d2c2', items[i].name);
+    marks += text(x + 2, y + CH + 22, 15, '#d7d2c2', items[i].name);
   }
   layers.push({
     input: Buffer.from(
