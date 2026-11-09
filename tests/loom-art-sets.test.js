@@ -13,6 +13,9 @@
  *   - a manifest that's wrong is refused, saying why;
  *   - a world's set: its own, else classic; one there isn't falls back to
  *     classic with a warning; and loomGetMap's view sends it;
+ *   - classic, the first set (L-946 / #800): every material, catalog object
+ *     and decor kind has its own picture there, so nothing falls back to
+ *     the built-in SVG;
  *   - the size budget: every set the Loom serves is within it, the tests'
  *     fixtures too, and an oversized picture fails it; WebP and PNG sizes
  *     are read from their headers.
@@ -61,6 +64,41 @@ describe('the sets the Loom serves', () => {
     });
     expect(Object.keys(artSets.SETS).sort()).toEqual(published.slice().sort());
   });
+});
+
+describe('classic, the first set (L-946)', () => {
+  const cases = [];
+  catalog.KINDS.forEach((kind) =>
+    catalog.materialsOf(kind).forEach((m) => cases.push([kind, m.id]))
+  );
+
+  test('there are materials of every kind to check', () => {
+    expect(cases.length).toBeGreaterThan(60);
+  });
+
+  test.each(cases)('%s %s has its own picture in classic', (kind, id) => {
+    const art = catalog.materialArt(kind, id, 'classic');
+    if (kind === 'door' || kind === 'window') {
+      // A painted front over the leaf or the opening.
+      expect(art.face).toBeTruthy();
+    } else {
+      expect(art.from).toBe('set');
+      // A wall's face rising from its foot, as well as its top.
+      if (kind === 'wall') expect(art.face).toBeTruthy();
+    }
+  });
+
+  test.each(catalog.OBJECT_KINDS.map((k) => [k.id, k.decor ? 'decor' : 'object']))(
+    '%s (%s) stands in classic, on its foot',
+    (id) => {
+      const stand = catalog.standFor({ kind: id }, null, 'classic');
+      expect(stand).not.toBeNull();
+      expect(stand.foot).toEqual([0.5, 1]);
+      expect(stand.picture.atlas || stand.picture.url).toMatch(
+        /\/apps\/loom\/art\/sets\/classic\//
+      );
+    }
+  );
 });
 
 describe('a manifest, read', () => {
@@ -113,8 +151,9 @@ describe('a manifest, read', () => {
       foot: [0.5, 1],
     });
     expect(catalog.standFor({ kind: 'barrel' }, null, 'fixture-files')).toBeNull();
-    expect(catalog.standFor({ kind: 'chest' }, null, 'classic')).toBeNull();
-    expect(catalog.standFor({ kind: 'chest' })).toBeNull();
+    // A kind the set has no picture for lies flat (classic has them all, L-946).
+    expect(catalog.standFor({ kind: 'nothing-there' }, null, 'classic')).toBeNull();
+    expect(catalog.standFor({ kind: 'nothing-there' })).toBeNull();
   });
 
   test('an object’s own art, and its world’s, still come first', () => {

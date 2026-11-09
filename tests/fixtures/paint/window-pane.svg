@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="224" viewBox="0 0 320 224">
+  <!-- A window's painted pane, 5 ft × 3.5 ft at 64 px a foot, for the headless
+       tests of painted fronts (tests/loom-paint.test.js; L-946): solid yellow. -->
+  <rect width="320" height="224" fill="#f2d21b"/>
+  <rect x="10" y="10" width="300" height="204" fill="none" stroke="#b39a0e" stroke-width="6"/>
+</svg>

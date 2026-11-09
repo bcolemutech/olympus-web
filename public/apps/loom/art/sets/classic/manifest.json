@@ -1,8 +1,647 @@
 {
   "name": "classic",
   "title": "Classic",
-  "description": "The built-in set, sword and sorcery: every material and catalog object painted in three-quarter view (L-946). Until its pictures come, everything is drawn with the built-in SVG art.",
-  "atlases": {},
-  "materials": {},
-  "objects": {}
+  "description": "The built-in set, sword and sorcery: every material and catalog object painted in three-quarter view (L-946).",
+  "atlases": {
+    "sheet-0": {
+      "file": "atlas/sheet-0.webp",
+      "width": 1028,
+      "height": 1544
+    },
+    "sheet-1": {
+      "file": "atlas/sheet-1.webp",
+      "width": 1028,
+      "height": 1544
+    },
+    "sheet-2": {
+      "file": "atlas/sheet-2.webp",
+      "width": 1028,
+      "height": 1544
+    },
+    "sheet-3": {
+      "file": "atlas/sheet-3.webp",
+      "width": 1994,
+      "height": 1801
+    },
+    "sheet-4": {
+      "file": "atlas/sheet-4.webp",
+      "width": 2035,
+      "height": 961
+    }
+  },
+  "materials": {
+    "ground/carpet": {
+      "file": "ground/carpet.webp",
+      "span": 5
+    },
+    "ground/cobble": {
+      "file": "ground/cobble.webp",
+      "span": 5
+    },
+    "ground/deep-water": {
+      "file": "ground/deep-water.webp",
+      "span": 5
+    },
+    "ground/desert": {
+      "file": "ground/desert.webp",
+      "span": 5
+    },
+    "ground/dirt": {
+      "file": "ground/dirt.webp",
+      "span": 5
+    },
+    "ground/farmland": {
+      "file": "ground/farmland.webp",
+      "span": 5
+    },
+    "ground/flagstone": {
+      "file": "ground/flagstone.webp",
+      "span": 5
+    },
+    "ground/forest": {
+      "file": "ground/forest.webp",
+      "span": 5
+    },
+    "ground/glacier": {
+      "file": "ground/glacier.webp",
+      "span": 5
+    },
+    "ground/grass": {
+      "file": "ground/grass.webp",
+      "span": 5
+    },
+    "ground/grassland": {
+      "file": "ground/grassland.webp",
+      "span": 5
+    },
+    "ground/gravel": {
+      "file": "ground/gravel.webp",
+      "span": 5
+    },
+    "ground/hills": {
+      "file": "ground/hills.webp",
+      "span": 5
+    },
+    "ground/ice": {
+      "file": "ground/ice.webp",
+      "span": 5
+    },
+    "ground/jungle": {
+      "file": "ground/jungle.webp",
+      "span": 5
+    },
+    "ground/lake": {
+      "file": "ground/lake.webp",
+      "span": 5
+    },
+    "ground/lava": {
+      "file": "ground/lava.webp",
+      "span": 5
+    },
+    "ground/marble": {
+      "file": "ground/marble.webp",
+      "span": 5
+    },
+    "ground/marsh": {
+      "file": "ground/marsh.webp",
+      "span": 5
+    },
+    "ground/metal": {
+      "file": "ground/metal.webp",
+      "span": 5
+    },
+    "ground/mountains": {
+      "file": "ground/mountains.webp",
+      "span": 5
+    },
+    "ground/mud": {
+      "file": "ground/mud.webp",
+      "span": 5
+    },
+    "ground/ocean": {
+      "file": "ground/ocean.webp",
+      "span": 5
+    },
+    "ground/rock": {
+      "file": "ground/rock.webp",
+      "span": 5
+    },
+    "ground/roof": {
+      "file": "ground/roof.webp",
+      "span": 5
+    },
+    "ground/sand": {
+      "file": "ground/sand.webp",
+      "span": 5
+    },
+    "ground/savanna": {
+      "file": "ground/savanna.webp",
+      "span": 5
+    },
+    "ground/snow": {
+      "file": "ground/snow.webp",
+      "span": 5
+    },
+    "ground/stone": {
+      "file": "ground/stone.webp",
+      "span": 5
+    },
+    "ground/swamp": {
+      "file": "ground/swamp.webp",
+      "span": 5
+    },
+    "ground/taiga": {
+      "file": "ground/taiga.webp",
+      "span": 5
+    },
+    "ground/tile": {
+      "file": "ground/tile.webp",
+      "span": 5
+    },
+    "ground/tundra": {
+      "file": "ground/tundra.webp",
+      "span": 5
+    },
+    "ground/water": {
+      "file": "ground/water.webp",
+      "span": 5
+    },
+    "ground/wood": {
+      "file": "ground/wood.webp",
+      "span": 5
+    },
+    "line/canal": {
+      "file": "lines/canal.webp"
+    },
+    "line/path": {
+      "file": "lines/path.webp"
+    },
+    "line/river": {
+      "file": "lines/river.webp"
+    },
+    "line/road": {
+      "file": "lines/road.webp"
+    },
+    "line/stream": {
+      "file": "lines/stream.webp"
+    },
+    "line/street": {
+      "file": "lines/street.webp"
+    },
+    "line/track": {
+      "file": "lines/track.webp"
+    },
+    "wall/bars": {
+      "file": "walls/bars-top.webp",
+      "face": {
+        "atlas": "sheet-0",
+        "frame": [2, 2, 1024, 512]
+      }
+    },
+    "wall/brick": {
+      "file": "walls/brick-top.webp",
+      "face": {
+        "atlas": "sheet-0",
+        "frame": [2, 516, 1024, 512]
+      }
+    },
+    "wall/fence": {
+      "file": "walls/fence-top.webp",
+      "face": {
+        "atlas": "sheet-0",
+        "frame": [2, 1030, 1024, 512]
+      }
+    },
+    "wall/glass": {
+      "file": "walls/glass-top.webp",
+      "face": {
+        "atlas": "sheet-1",
+        "frame": [2, 2, 1024, 512]
+      }
+    },
+    "wall/hedge": {
+      "file": "walls/hedge-top.webp",
+      "face": {
+        "atlas": "sheet-1",
+        "frame": [2, 516, 1024, 512]
+      }
+    },
+    "wall/ice": {
+      "file": "walls/ice-top.webp",
+      "face": {
+        "atlas": "sheet-1",
+        "frame": [2, 1030, 1024, 512]
+      }
+    },
+    "wall/metal": {
+      "file": "walls/metal-top.webp",
+      "face": {
+        "atlas": "sheet-2",
+        "frame": [2, 2, 1024, 512]
+      }
+    },
+    "wall/palisade": {
+      "file": "walls/palisade-top.webp",
+      "face": {
+        "atlas": "sheet-2",
+        "frame": [2, 516, 1024, 512]
+      }
+    },
+    "wall/rock": {
+      "file": "walls/rock-top.webp",
+      "face": {
+        "atlas": "sheet-2",
+        "frame": [2, 1030, 1024, 512]
+      }
+    },
+    "wall/stone": {
+      "file": "walls/stone-top.webp",
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [2, 2, 1024, 512]
+      }
+    },
+    "wall/wood": {
+      "file": "walls/wood-top.webp",
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [2, 516, 1024, 512]
+      }
+    },
+    "door/bars": {
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [1028, 516, 320, 448]
+      }
+    },
+    "door/curtain": {
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [1350, 516, 320, 448]
+      }
+    },
+    "door/gate": {
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [1672, 516, 320, 448]
+      }
+    },
+    "door/glass": {
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [2, 1030, 320, 448]
+      }
+    },
+    "door/iron": {
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [324, 1030, 320, 448]
+      }
+    },
+    "door/metal": {
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [646, 1030, 320, 448]
+      }
+    },
+    "door/stone": {
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [968, 1030, 320, 448]
+      }
+    },
+    "door/wood": {
+      "face": {
+        "atlas": "sheet-3",
+        "frame": [1290, 1030, 320, 448]
+      }
+    },
+    "window/bars": {
+      "face": {
+        "atlas": "sheet-4",
+        "frame": [1655, 2, 320, 224]
+      }
+    },
+    "window/glass": {
+      "face": {
+        "atlas": "sheet-4",
+        "frame": [2, 303, 320, 224]
+      }
+    },
+    "window/opening": {
+      "face": {
+        "atlas": "sheet-4",
+        "frame": [324, 303, 320, 224]
+      }
+    },
+    "window/shutters": {
+      "face": {
+        "atlas": "sheet-4",
+        "frame": [646, 303, 320, 224]
+      }
+    }
+  },
+  "objects": {
+    "altar": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1614, 303, 284, 203]
+      }
+    },
+    "anvil": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1547, 733, 128, 109]
+      }
+    },
+    "banner": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [1221, 1480, 113, 305]
+      }
+    },
+    "barrel": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [820, 529, 160, 195]
+      }
+    },
+    "bed": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [968, 303, 192, 216]
+      }
+    },
+    "bench": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [908, 733, 315, 116]
+      }
+    },
+    "bones": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [2, 881, 128, 78]
+      }
+    },
+    "books": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1743, 733, 96, 83]
+      }
+    },
+    "bookshelf": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [1612, 1030, 257, 327]
+      }
+    },
+    "bottles": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [198, 881, 64, 62]
+      }
+    },
+    "boulder": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [645, 1480, 319, 313]
+      }
+    },
+    "brazier": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [196, 733, 128, 143]
+      }
+    },
+    "campfire": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1370, 529, 192, 163]
+      }
+    },
+    "candles": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [132, 881, 64, 76]
+      }
+    },
+    "cart": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1225, 733, 320, 115]
+      }
+    },
+    "cauldron": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [2, 529, 192, 202]
+      }
+    },
+    "chains": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [330, 2, 114, 297]
+      }
+    },
+    "chair": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1525, 2, 128, 225]
+      }
+    },
+    "chest": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [2, 733, 192, 146]
+      }
+    },
+    "cobwebs": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [982, 529, 192, 193]
+      }
+    },
+    "console": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [446, 2, 251, 268]
+      }
+    },
+    "crate-pile": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1356, 303, 256, 210]
+      }
+    },
+    "crate": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1162, 303, 192, 214]
+      }
+    },
+    "desk": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [506, 529, 312, 198]
+      }
+    },
+    "fountain": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1220, 2, 303, 228]
+      }
+    },
+    "lever": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1677, 733, 64, 108]
+      }
+    },
+    "pillar": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [1091, 1480, 128, 306]
+      }
+    },
+    "plant": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1564, 529, 128, 163]
+      }
+    },
+    "puddle": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1841, 733, 192, 83]
+      }
+    },
+    "rubble": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1694, 529, 256, 154]
+      }
+    },
+    "rug": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [699, 2, 325, 268]
+      }
+    },
+    "sacks": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [778, 733, 128, 125]
+      }
+    },
+    "sarcophagus": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [584, 733, 192, 134]
+      }
+    },
+    "stairs": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [323, 1480, 320, 314]
+      }
+    },
+    "statue": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [966, 1480, 123, 310]
+      }
+    },
+    "straw": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [326, 733, 256, 143]
+      }
+    },
+    "table": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [196, 529, 308, 200]
+      }
+    },
+    "tapestry": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [1336, 1480, 187, 303]
+      }
+    },
+    "tent": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [2, 2, 326, 299]
+      }
+    },
+    "trapdoor": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1176, 529, 192, 170]
+      }
+    },
+    "tree": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [2, 1480, 319, 319]
+      }
+    },
+    "wardrobe": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-4",
+        "frame": [1026, 2, 192, 248]
+      }
+    },
+    "well": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-3",
+        "frame": [1525, 1480, 256, 303]
+      }
+    }
+  }
 }

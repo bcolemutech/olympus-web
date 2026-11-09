@@ -53,6 +53,113 @@ async function rgb(file) {
 
 const dist = (data, i, c) => Math.hypot(data[i] - c[0], data[i + 1] - c[1], data[i + 2] - c[2]);
 
+/**
+ * A board of a batch for the user to approve (planning/game-art.md §4.4,
+ * AR6; L-946): each picture in a cell with its name under it, on a dark
+ * background, the batch in rows. `items` are [{ name, file }]; `tile` draws a
+ * picture 2 × 2 (a floor's seams show), `across` twice side by side (a
+ * strip's or a face's seam shows), `title` is written along the top.
+ * Writes `out` (PNG, or JPEG by its extension) and returns { out, count,
+ * width, height }. Costs nothing.
+ */
+export async function board(
+  items,
+  out,
+  { tile = false, across = false, columns = 6, title = '' } = {}
+) {
+  const CELL = 256;
+  // Across: a cell twice as wide, as tall as the tallest picture at half that.
+  let tall = 0;
+  if (across) {
+    for (const it of items) {
+      const m = await sharp(it.file).metadata();
+      tall = Math.max(tall, Math.round((CELL * m.height) / m.width));
+    }
+  }
+  const CW = across ? CELL * 2 : CELL;
+  const CH = across ? tall : CELL;
+  const LABEL = 34;
+  const GAP = 14;
+  const HEAD = title ? 44 : 0;
+  const cols = Math.max(1, Math.min(columns, items.length));
+  const rows = Math.ceil(items.length / cols);
+  const width = GAP + cols * (CW + GAP);
+  const height = HEAD + GAP + rows * (CH + LABEL + GAP);
+  const esc = (t) =>
+    String(t).replace(
+      /[<>&"]/g,
+      (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]
+    );
+  const layers = [];
+  const text = (x, y, size, fill, value) =>
+    `<text x="${x}" y="${y}" font-family="DejaVu Sans, Arial, sans-serif" font-size="${size}" fill="${fill}">${esc(value)}</text>`;
+  let marks = title ? text(GAP, 30, 22, '#e8e2d0', title) : '';
+  for (let i = 0; i < items.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = GAP + col * (CW + GAP);
+    const y = HEAD + GAP + row * (CH + LABEL + GAP);
+    // The cell's own backing, a little lighter than the board, so a keyed
+    // picture's edges show.
+    layers.push({
+      input: {
+        create: { width: CW, height: CH, channels: 3, background: '#3a3e46' },
+      },
+      left: x,
+      top: y,
+    });
+    let picture;
+    if (across) {
+      const one = await sharp(items[i].file).resize({ width: CELL }).png().toBuffer();
+      const h = (await sharp(one).metadata()).height;
+      picture = await sharp({
+        create: { width: CW, height: CH, channels: 4, background: '#00000000' },
+      })
+        .composite([
+          { input: one, left: 0, top: Math.floor((CH - h) / 2) },
+          { input: one, left: CELL, top: Math.floor((CH - h) / 2) },
+        ])
+        .png()
+        .toBuffer();
+    } else if (tile) {
+      const half = CELL / 2;
+      const one = await sharp(items[i].file).resize(half, half, { fit: 'fill' }).png().toBuffer();
+      picture = await sharp({
+        create: { width: CELL, height: CELL, channels: 4, background: '#00000000' },
+      })
+        .composite([
+          { input: one, left: 0, top: 0 },
+          { input: one, left: half, top: 0 },
+          { input: one, left: 0, top: half },
+          { input: one, left: half, top: half },
+        ])
+        .png()
+        .toBuffer();
+    } else {
+      picture = await sharp(items[i].file)
+        .resize(CELL, CELL, { fit: 'contain', background: '#00000000' })
+        .png()
+        .toBuffer();
+    }
+    layers.push({ input: picture, left: x, top: y });
+    marks += text(x + 2, y + CH + 22, 15, '#d7d2c2', items[i].name);
+  }
+  layers.push({
+    input: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${marks}</svg>`
+    ),
+    left: 0,
+    top: 0,
+  });
+  const base = sharp({
+    create: { width, height, channels: 3, background: '#1b1d22' },
+  }).composite(layers);
+  const jpeg = /\.jpe?g$/i.test(out);
+  fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
+  await (jpeg ? base.jpeg({ quality: 88 }) : base.png()).toFile(out);
+  return { out, count: items.length, width, height };
+}
+
 /** The key colour: the average of the four corners, which a sheet or a single object leaves empty. */
 function keyColour({ data, width, height }) {
   const corners = [0, width - 1, (height - 1) * width, height * width - 1];
@@ -159,7 +266,9 @@ export async function key(file, out) {
   return out;
 }
 
-export async function seamless(file, out, band = 0.12) {
+export async function seamless(file, out, band = 0.12, { across = false } = {}) {
+  // `across`: a strip or a face, which repeats only left to right, is
+  // blended across its width only (its height is never wrapped).
   const { data, width: w, height: h } = await rgb(file);
   const res = Buffer.alloc(w * h * 3);
   const bx = Math.round(w * band);
@@ -169,9 +278,9 @@ export async function seamless(file, out, band = 0.12) {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const sx = (x + w / 2) % w;
-      const sy = (y + h / 2) % h;
+      const sy = across ? y : (y + h / 2) % h;
       const fx = Math.max(0, 1 - Math.abs(x - w / 2) / bx);
-      const fy = Math.max(0, 1 - Math.abs(y - h / 2) / by);
+      const fy = across ? 0 : Math.max(0, 1 - Math.abs(y - h / 2) / by);
       const t = Math.min(1, Math.max(fx, fy));
       const o = (y * w + x) * 3;
       const s = (Math.floor(sy) * w + Math.floor(sx)) * 3;
@@ -221,7 +330,8 @@ export async function check(file, kind) {
     height: meta.height,
     bytes: fs.statSync(file).size,
   };
-  if (kind === 'tile') {
+  if (kind === 'tile' || kind === 'strip') {
+    // A strip (or a face) repeats left to right only: its side edges count.
     const { data, width: w, height: h } = await rgb(file);
     const col = (a, b) => {
       let s = 0;
@@ -243,7 +353,8 @@ export async function check(file, kind) {
       inside += col(x, x + 1);
     }
     inside /= 20;
-    out.seam = +((col(w - 1, 0) + row(h - 1, 0)) / 2 / inside).toFixed(2);
+    const edge = kind === 'strip' ? col(w - 1, 0) : (col(w - 1, 0) + row(h - 1, 0)) / 2;
+    out.seam = +(edge / inside).toFixed(2);
   } else if (meta.hasAlpha) {
     const { data, info } = await sharp(file).raw().toBuffer({ resolveWithObject: true });
     let pink = 0;
@@ -325,9 +436,14 @@ export function pack(sizes, max = 2048, pad = 2) {
  * file of its own goes onto sheets `atlas/sheet-N.webp`, its manifest entry
  * becoming that sheet's frame, the files it came from removed (unless
  * `keep`). Floors, strips and lines stay files of their own, since they
- * repeat. The manifest is written back. Returns the sheets.
+ * repeat. Each sheet is lossy WebP at `quality`, its alpha kept sharper, as
+ * the files were (a lossless sheet of painted pictures is twice their size).
+ * The manifest is written back. Returns the sheets.
  */
-export async function atlas(dir, { max = budget.LIMITS.atlasPx, pad = 2, keep = false } = {}) {
+export async function atlas(
+  dir,
+  { max = budget.LIMITS.atlasPx, pad = 2, keep = false, quality = 82 } = {}
+) {
   const file = path.join(dir, 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
   const todo = [];
@@ -367,7 +483,7 @@ export async function atlas(dir, { max = budget.LIMITS.atlasPx, pad = 2, keep = 
       },
     })
       .composite(parts)
-      .webp({ lossless: true, effort: 6 })
+      .webp({ quality, alphaQuality: 90, effort: 6 })
       .toFile(path.join(dir, out));
     manifest.atlases[ids[n]] = { file: out, width: s.width, height: s.height };
     written.push({ id: ids[n], file: out, width: s.width, height: s.height, frames: parts.length });
@@ -389,6 +505,128 @@ export async function atlas(dir, { max = budget.LIMITS.atlasPx, pad = 2, keep = 
   }
   fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
   return written;
+}
+
+/**
+ * A set built from approved pictures (planning/game-art.md §4.4; L-946 /
+ * #800): `work` holds them by role, as PNG (a prop already keyed), and each
+ * is fitted to its role's size, written as WebP under `setDir` and named in
+ * its manifest (merged over what it has; run `atlas` after).
+ *
+ *   ground/<id>.png [<id>.2.png, <id>.3.png]   a floor and its variants
+ *   line/<id>.png                              a line's strip
+ *   wall/<id>.top.png, wall/<id>.face.png      a wall's top strip, its face
+ *   door/<id>.png                              a door's front, 5 ft × 7 ft
+ *   window/<id>.png                            a window's pane, 5 ft × 3.5 ft
+ *   object/<id>.png                            an object standing, its foot at
+ *                                              the middle of its picture's bottom
+ *
+ * Returns what it wrote, by role.
+ */
+export async function buildSet(work, setDir, { quality = 78, span = 5 } = {}) {
+  const catalog = require(path.join(ROOT, 'functions', 'loom-canon', 'materials.js'));
+  const manifestFile = path.join(setDir, 'manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  manifest.materials = manifest.materials || {};
+  manifest.objects = manifest.objects || {};
+  const list = (dir) =>
+    fs.existsSync(path.join(work, dir))
+      ? fs
+          .readdirSync(path.join(work, dir))
+          .filter((f) => f.endsWith('.png'))
+          .sort()
+      : [];
+  const wrote = { ground: 0, line: 0, wall: 0, door: 0, window: 0, object: 0 };
+  const exact = async (file, out, w, h, fit) => {
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    await sharp(file)
+      .resize(w, h, { fit, position: 'centre', withoutEnlargement: false })
+      .webp({ quality, alphaQuality: 90, effort: 6 })
+      .toFile(out);
+  };
+  const rel = (...parts) =>
+    path
+      .join(...parts)
+      .split(path.sep)
+      .join('/');
+
+  // Floors and their variants.
+  const grounds = {};
+  for (const f of list('ground')) {
+    const m = /^(.+?)(?:\.(\d))?\.png$/.exec(f);
+    (grounds[m[1]] = grounds[m[1]] || []).push({ file: f, n: m[2] ? Number(m[2]) : 1 });
+  }
+  for (const [id, files] of Object.entries(grounds)) {
+    files.sort((a, b) => a.n - b.n);
+    const made = [];
+    for (const { file, n } of files) {
+      const name = n === 1 ? `${id}.webp` : `${id}-${n}.webp`;
+      await webp(path.join(work, 'ground', file), path.join(setDir, 'ground', name), 'ground', {
+        span,
+        quality,
+      });
+      made.push({ file: rel('ground', name) });
+      wrote.ground += 1;
+    }
+    const [first, ...variants] = made;
+    manifest.materials[`ground/${id}`] = {
+      ...first,
+      span,
+      ...(variants.length ? { variants } : {}),
+    };
+  }
+  // Lines: a strip.
+  for (const f of list('line')) {
+    const id = f.replace(/\.png$/, '');
+    await webp(path.join(work, 'line', f), path.join(setDir, 'lines', `${id}.webp`), 'strip', {
+      quality,
+    });
+    manifest.materials[`line/${id}`] = { file: rel('lines', `${id}.webp`) };
+    wrote.line += 1;
+  }
+  // Walls: a top strip and a face.
+  for (const f of list('wall').filter((n) => n.endsWith('.top.png'))) {
+    const id = f.replace(/\.top\.png$/, '');
+    await webp(path.join(work, 'wall', f), path.join(setDir, 'walls', `${id}-top.webp`), 'strip', {
+      quality,
+    });
+    const faceFile = path.join(work, 'wall', `${id}.face.png`);
+    const entry = { file: rel('walls', `${id}-top.webp`) };
+    if (fs.existsSync(faceFile)) {
+      await webp(faceFile, path.join(setDir, 'walls', `${id}-face.webp`), 'face', { quality });
+      entry.face = { file: rel('walls', `${id}-face.webp`) };
+    }
+    manifest.materials[`wall/${id}`] = entry;
+    wrote.wall += 1;
+  }
+  // Doors and windows: a painted front, stretched to its size whole (never
+  // cropped: a frame's edges are its picture, and the painter stretches it
+  // over the leaf or the opening anyway).
+  for (const [role, dir, w, h] of [
+    ['door', 'doors', 320, 448],
+    ['window', 'windows', 320, 224],
+  ]) {
+    for (const f of list(role)) {
+      const id = f.replace(/\.png$/, '');
+      await exact(path.join(work, role, f), path.join(setDir, dir, `${id}.webp`), w, h, 'fill');
+      manifest.materials[`${role}/${id}`] = { face: { file: rel(dir, `${id}.webp`) } };
+      wrote[role] += 1;
+    }
+  }
+  // Objects standing, at their size: 64 px a foot of their width.
+  for (const f of list('object')) {
+    const id = f.replace(/\.png$/, '');
+    const kind = catalog.objectKind(id);
+    if (!kind) throw new Error(`No catalog object "${id}" for ${f}.`);
+    await webp(path.join(work, 'object', f), path.join(setDir, 'objects', `${id}.webp`), 'object', {
+      size: kind.size,
+      quality,
+    });
+    manifest.objects[id] = { stand: { file: rel('objects', `${id}.webp`), foot: [0.5, 1] } };
+    wrote.object += 1;
+  }
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+  return wrote;
 }
 
 /** A set's folder checked against the size budget (./budget.cjs checkSet). */

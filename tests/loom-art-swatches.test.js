@@ -5,7 +5,9 @@
  * headless Chrome: every material and every catalog object loads from the art
  * in the repo, each at the size it is drawn, and an object with no art is the
  * box with a question mark; and a file that goes missing is reported, not
- * silently drawn blank.
+ * silently drawn blank. With ?set=classic (L-946 / #800), the whole first set:
+ * every material, wall face, door and window front, catalog object and decor
+ * kind from the set's own pictures, none built-in.
  *
  * It needs Playwright (in the tests' dependencies) and its Chromium, which CI
  * installs (L-924): where the browser is missing the suite is skipped, with
@@ -27,7 +29,13 @@ try {
 }
 
 const PUBLIC = path.join(__dirname, '../public');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
+const TYPES = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.json': 'application/json',
+};
 const PAGE = '/apps/loom/art/swatches.html';
 const TOTAL = catalog.MATERIALS.length + catalog.OBJECT_KINDS.length + 1;
 
@@ -67,11 +75,11 @@ afterAll(async () => {
 });
 
 // A page of the swatches, once it has finished loading everything.
-async function swatches() {
+async function swatches(query = '') {
   const page = await browser.newPage({ viewport: { width: 1180, height: 900 } });
   const errors = [];
   page.on('pageerror', (err) => errors.push(err.message));
-  await page.goto(origin + PAGE);
+  await page.goto(origin + PAGE + query);
   await page.waitForSelector('html[data-ready="true"]');
   return { page, errors };
 }
@@ -189,5 +197,36 @@ describe('art that goes missing', () => {
     } finally {
       hidden.clear();
     }
+  });
+});
+
+describe('the classic set (L-946)', () => {
+  const WALLS = catalog.materialsOf('wall').length;
+
+  run('every swatch is the set’s own picture, and all of them load', async () => {
+    const { page, errors } = await swatches('?set=classic');
+    const result = await page.evaluate(() => window.__swatches);
+    // Each material and object, each wall's face too, and the "?" box.
+    const total = TOTAL + WALLS;
+    expect(result).toMatchObject({ set: 'classic', total, loaded: total, failed: [] });
+    expect(result.builtIn).toEqual([]);
+    expect(result.fromSet).toBe(total - 1);
+    expect(errors).toEqual([]);
+    const froms = await page.$$eval('figure[data-id]', (figs) =>
+      Object.fromEntries(figs.map((f) => [f.dataset.id, f.dataset.from]))
+    );
+    for (const k of catalog.OBJECT_KINDS) expect(froms[`object:${k.id}`]).toBe('set');
+    expect(froms['door:bars']).toBe('set');
+    expect(froms['wall-face:stone']).toBe('set');
+    expect(await page.textContent('#summary')).toContain(`${total - 1} from the set, 0 built-in.`);
+    await page.close();
+  });
+
+  run('a set there isn’t shows the built-in art, and says so', async () => {
+    const { page } = await swatches('?set=no-such-set');
+    const result = await page.evaluate(() => window.__swatches);
+    expect(result).toMatchObject({ total: TOTAL, loaded: TOTAL, fromSet: 0 });
+    expect(result.builtIn).toHaveLength(TOTAL - 1);
+    await page.close();
   });
 });
