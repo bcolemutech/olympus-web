@@ -200,6 +200,17 @@ In `grading.js`, with `the-loom-grading.md` updated:
   - **`view_image` `sizes: true`** outlines each object's footprint in white with its size in feet, width x depth ("3x2"), on a grid.
   - **Left to L-946:** the painted pictures of decor (the built-in ones are plain), and decor kinds' standing pictures; until then a decor object lies flat, as an object with no standing picture does.
 
+- **L-946, 2026-11-09:**
+  - **`classic` is painted:** 35 floors, 7 lines, a top strip and a face for each of the 11 wall materials, a painted front for each of the 8 doors and 4 windows, and a standing picture for each of the 29 catalog objects and 14 decor kinds: 119 pictures, 5.2 MB of the 16 MB budget, in five batches each approved on a board (floors and furniture; the rest of the floors; lines and walls; doors and windows; the rest of the props and decor). No variants yet: the floors seam well enough alone, and variants can come later within the budget. About $10.50 of generation.
+  - **The model:** floors, strips and faces on `gemini-3-pro-image` at 1K (about $0.14 each), since the draft model was held up by its quota most of the day (a burst of 24 jobs lost most of them). At most four jobs at once; more fail on 429s after five tries.
+  - **Flat textures** (floors, wall tops, lines) with no style and no references, as decided; faces, doors, windows, props and decor in "Loom painted three-quarter". That style's references are on magenta, so a face sometimes came back with a magenta border: the strip step trims any border mostly of the key colour before cropping.
+  - **Strips and faces** are made 21:9 (strips) or 16:9 (faces), a centred band cut to 4:1 (1024 × 256) or 2:1 (1024 × 512), and blended left to right only when their side seam scores over 3 (`seamless --across`; `check <file> strip` scores the side edges alone). `board --across` shows each twice side by side so its seam shows.
+  - **See-through things are cut out:** bars and fence faces and tops, the barred door, the gate, the curtain, the barred window and the empty opening are made on magenta and keyed, so the floor or what's beyond shows through; glass is painted opaque, as a pane with what's behind it faintly seen.
+  - **Door and window fronts are stretched whole** to 320 × 448 and 320 × 224 (`fill`), never cropped, since a frame's edges are its picture and the painter stretches a front over the leaf anyway.
+  - **Atlas sheets are lossy** WebP at the files' quality (82, alpha 90): lossless sheets of painted pictures doubled the set to 10 MB, over the 1.5 MB a sheet.
+  - **Rejected and remade** for not being square-on: the fence face, the barred door, the cart and the lever (a diagonal prop is refused, AR4); the bars and fence tops for a grey band behind them.
+  - **A test** (`loom-art-sets`) checks every material, catalog object and decor kind has its picture in `classic`, so nothing falls back to the built-in SVG; the built-in SVG stays for a set that lacks a picture.
+
 ## 5. Exit criterion
 
 - The test dungeon and a generated interior are drawn in the three-quarter view entirely in painted art:
