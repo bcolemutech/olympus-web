@@ -1,6 +1,6 @@
 # The Loom — Game Art in Three-Quarter View — Design Document v0.1
 
-**Status:** Decided (2026-11-07). The gap sheet (§3) is answered. Sub-issues filed 2026-11-07 (#795–#801, §6). **In progress:** L-941 the three-quarter view shipped 2026-11-07 (#803); L-944 art sets and delivery shipped 2026-11-07 (#804); L-943 the painter's finish shipped 2026-11-07 (#805); L-942 seeing behind walls shipped 2026-11-07 (#806); L-945 decor and scale built 2026-11-08 (§4.5, §4.6, Decisions).
+**Status:** Decided (2026-11-07). The gap sheet (§3) is answered. Sub-issues filed 2026-11-07 (#795–#801, §6). **In progress:** L-941 the three-quarter view shipped 2026-11-07 (#803); L-944 art sets and delivery shipped 2026-11-07 (#804); L-943 the painter's finish shipped 2026-11-07 (#805); L-942 seeing behind walls shipped 2026-11-07 (#806); L-945 decor and scale shipped 2026-11-08 (#807); L-946 the first set built 2026-11-09 (§4.4, Decisions).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-940 (#794), Phase 10 — Levels and Vehicles (milestone #26). Built next, before L-930 tokens and L-710 worlds without Azgaar.
 **Depends on:** L-920 (maps drawn from their data), L-700 (the image studio), the game art spike (`scripts/art/`, the painter's PNG art).
