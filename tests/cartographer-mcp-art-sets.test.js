@@ -178,8 +178,17 @@ describe('art sets', () => {
       name: 'classic',
       title: 'Classic',
       default: true,
-      counts: { materials: 0, standing: 0, atlases: 0 },
+      // Painted (L-946): a picture for each floor, line and wall, a standing
+      // picture for each catalog object and decor kind, on its atlases.
+      counts: {
+        materials: ['ground', 'line', 'wall'].reduce(
+          (n, kind) => n + catalog.materialsOf(kind).length,
+          0
+        ),
+        standing: catalog.OBJECT_KINDS.length,
+      },
     });
+    expect(sets.find((s) => s.name === 'classic').counts.atlases).toBeGreaterThan(0);
     expect(sets.find((s) => s.name === 'fixture-files')).toMatchObject({
       default: false,
       counts: { materials: 1, faces: 1, standing: 2, fromAbove: 0 },
