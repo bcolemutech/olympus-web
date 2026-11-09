@@ -1,6 +1,6 @@
 # The Loom — Game Art in Three-Quarter View — Design Document v0.1
 
-**Status:** Decided (2026-11-07). The gap sheet (§3) is answered. Sub-issues filed 2026-11-07 (#795–#801, §6). **In progress:** L-941 the three-quarter view shipped 2026-11-07 (#803); L-944 art sets and delivery shipped 2026-11-07 (#804); L-943 the painter's finish shipped 2026-11-07 (#805); L-942 seeing behind walls shipped 2026-11-07 (#806); L-945 decor and scale shipped 2026-11-08 (#807); L-946 the first set built 2026-11-09 (§4.4, Decisions).
+**Status:** Decided (2026-11-07). The gap sheet (§3) is answered. Sub-issues filed 2026-11-07 (#795–#801, §6). **In progress:** L-941 the three-quarter view shipped 2026-11-07 (#803); L-944 art sets and delivery shipped 2026-11-07 (#804); L-943 the painter's finish shipped 2026-11-07 (#805); L-942 seeing behind walls shipped 2026-11-07 (#806); L-945 decor and scale shipped 2026-11-08 (#807); L-946 the first set built 2026-11-09 (§4.4, Decisions); L-947 grading the look 2026-11-09 (Decisions).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-940 (#794), Phase 10 — Levels and Vehicles (milestone #26). Built next, before L-930 tokens and L-710 worlds without Azgaar.
 **Depends on:** L-920 (maps drawn from their data), L-700 (the image studio), the game art spike (`scripts/art/`, the painter's PNG art).
@@ -210,6 +210,12 @@ In `grading.js`, with `the-loom-grading.md` updated:
   - **Atlas sheets are lossy** WebP at the files' quality (82, alpha 90): lossless sheets of painted pictures doubled the set to 10 MB, over the 1.5 MB a sheet.
   - **Rejected and remade** for not being square-on: the fence face, the barred door, the cart and the lever (a diagonal prop is refused, AR4); the bars and fence tops for a grey band behind them.
   - **A test** (`loom-art-sets`) checks every material, catalog object and decor kind has its picture in `classic`, so nothing falls back to the built-in SVG; the built-in SVG stays for a set that lacks a picture.
+
+- **L-947, 2026-11-09:**
+  - **Art became a bonus, not a criterion.** A battle map's `art` (30) was most of what kept a map drawn from data from the top band; it is now `bonus: true` (5 points over the 100 the rest earn, capped at 100), as a place's `mapArt` is. Its 30 went to the new `look`. Size is not mentioned in the rubric: with no art in the total, a 64 × 64 map drawn from data reaches Legendary like any other.
+  - **Painted** means the world's set draws it (standing, or from above), or it has art of its own (the object's, or its kind's in the world); a material counts when the set has a picture for it. A map with its own art is checked for doors, windows and objects only. Rubric version 12.
+  - **The work list** names them (`lacking` on the criterion's entry, need `look`, tool `set_object_art`).
+  - **Left alone:** the world's `mapArt` (20) and a settlement's `townArt`, which grade the region and town art, not a grid's look.
 
 ## 5. Exit criterion
 

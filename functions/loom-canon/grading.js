@@ -46,7 +46,9 @@
 // world's cover image (L-704); 6: a world's game system (L-801); 7: a named
 // character's sheet (L-813); 8: a fighter's attacks (L-822); 9: foes at a
 // dangerous place (L-824); 10: templates on a large map's places (L-906).
-const RUBRIC_VERSION = 11;
+// 11: a map's data is enough to draw it (L-929); 12: a map's look, and its art
+// a bonus (L-947).
+const RUBRIC_VERSION = 12;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -68,9 +70,10 @@ const IMPORT = 'import';
  */
 const WEIGHTS = Object.freeze({
   settlement: { residents: 15, lore: 10, townArt: 15, description: 20, loreLinks: 5, ground: 10 },
-  place: { ownMap: 15, mapArt: 10, someone: 15, lore: 30, description: 10, foes: 10 },
+  place: { ownMap: 15, mapArt: 5, someone: 15, lore: 30, description: 10, foes: 10 },
   character: { description: 25, lore: 15, faction: 10, sheet: 20, attacks: 15 },
-  battleMap: { drawn: 30, art: 30, features: 20, exits: 20 },
+  // art is a bonus: points over the 100 the rest make, capped at 100 (L-947).
+  battleMap: { drawn: 30, look: 30, art: 5, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
   world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15, templates: 10 },
 });
@@ -299,6 +302,26 @@ function undrawn(map) {
   };
 }
 
+// A map's look (GR1; L-947): the share of its materials and object kinds with
+// painted art, and what lacks it.
+function lookCheck(world, map) {
+  const look = require('./look').unpainted(world, map, { ownArt: hasArt(map) });
+  const lacking = look.materials.concat(look.objects);
+  // Nothing drawn, nothing to paint: it earns the look once it is drawn.
+  if (!look.total && !hasArt(map)) {
+    return { progress: 0, ...undrawn(map) };
+  }
+  if (!lacking.length) return met();
+  const shown = lacking.slice(0, 6).join(', ') + (lacking.length > 6 ? ', …' : '');
+  return {
+    progress: share(look.painted, look.total),
+    have: look.painted,
+    want: look.total,
+    lacking,
+    message: `${lacking.length} of the ${look.total} materials and objects on its battle map have no painted art: ${shown}. Give them art (set_object_art, or an art set that paints them).`,
+  };
+}
+
 /**
  * The criteria registry (planning/the-loom-grading.md §4.1). Each is
  * { id, kinds, weight, feature, label, need, tool, check }: `check(world,
@@ -432,6 +455,7 @@ const CRITERIA = Object.freeze([
   {
     id: 'place.mapArt',
     kinds: ['poi', 'place'],
+    bonus: true,
     weight: WEIGHTS.place.mapArt,
     feature: 'L-351',
     label: 'Art on its battle map',
@@ -652,11 +676,27 @@ const CRITERIA = Object.freeze([
     },
   },
   {
+    // Everything on it has painted art (GR1; L-947): in its world's set, or
+    // its own. A map with artwork of its own is drawn from that.
+    id: 'battleMap.look',
+    kinds: ['battleMap'],
+    weight: WEIGHTS.battleMap.look,
+    feature: 'L-947',
+    label: 'Its look: everything on it painted',
+    need: 'look',
+    tool: 'set_object_art',
+    check: (world, map) => lookCheck(world, map),
+  },
+  {
+    // A small bonus for a map with its own artwork (GR2; L-947): "art-based
+    // maps still look best". Not part of the 100 a map's data can earn, so a
+    // map drawn from data, large or small, loses nothing for having none.
     id: 'battleMap.art',
     kinds: ['battleMap'],
+    bonus: true,
     weight: WEIGHTS.battleMap.art,
     feature: 'L-351',
-    label: 'Art',
+    label: 'Art (a bonus)',
     need: 'mapArt',
     tool: 'studio_assign',
     check: (world, map) => (hasArt(map) ? met() : { progress: 0, message: 'It has no art.' }),
@@ -908,6 +948,8 @@ function ownScore(world, kind, entity, layers) {
   const context = { kind, layers };
   let total = 0;
   let earned = 0;
+  // Bonus criteria (L-947) add points over the rest, up to 100.
+  let bonus = 0;
   const criteria = [];
   const unmet = [];
   for (const criterion of CRITERIA) {
@@ -916,8 +958,11 @@ function ownScore(world, kind, entity, layers) {
     if (criterion.applies && !criterion.applies(world, entity)) continue;
     const result = criterion.check(world, entity, context);
     const progress = Math.max(0, Math.min(1, result.progress));
-    total += criterion.weight;
-    earned += criterion.weight * progress;
+    if (criterion.bonus) bonus += criterion.weight * progress;
+    else {
+      total += criterion.weight;
+      earned += criterion.weight * progress;
+    }
     const need = result.need || criterion.need;
     const tool = result.tool || criterion.tool;
     // The whole checklist, met or not, with each criterion's weight and
@@ -926,10 +971,12 @@ function ownScore(world, kind, entity, layers) {
       id: criterion.id,
       label: criterion.label,
       weight: criterion.weight,
+      ...(criterion.bonus ? { bonus: true } : {}),
       met: progress >= 1,
       progress: round1(progress * 100) / 100,
       ...(result.have !== undefined ? { have: result.have, want: result.want } : {}),
       ...(progress < 1 ? { need, tool, message: result.message } : {}),
+      ...(progress < 1 && result.lacking ? { lacking: result.lacking } : {}),
     });
     if (progress < 1) {
       unmet.push({
@@ -941,10 +988,15 @@ function ownScore(world, kind, entity, layers) {
         tool,
         message: result.message,
         ...(result.have !== undefined ? { have: result.have, want: result.want } : {}),
+        ...(result.lacking ? { lacking: result.lacking } : {}),
       });
     }
   }
-  return { score: total ? round1((earned / total) * 100) : 0, criteria, unmet };
+  return {
+    score: total ? round1(Math.min(100, (earned / total) * 100 + bonus)) : 0,
+    criteria,
+    unmet,
+  };
 }
 
 const mean = (scores) => (scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0);
