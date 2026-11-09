@@ -594,14 +594,16 @@ export async function buildSet(work, setDir, { quality = 78, span = 5 } = {}) {
     manifest.materials[`wall/${id}`] = entry;
     wrote.wall += 1;
   }
-  // Doors and windows: a painted front.
+  // Doors and windows: a painted front, stretched to its size whole (never
+  // cropped: a frame's edges are its picture, and the painter stretches it
+  // over the leaf or the opening anyway).
   for (const [role, dir, w, h] of [
     ['door', 'doors', 320, 448],
     ['window', 'windows', 320, 224],
   ]) {
     for (const f of list(role)) {
       const id = f.replace(/\.png$/, '');
-      await exact(path.join(work, role, f), path.join(setDir, dir, `${id}.webp`), w, h, 'cover');
+      await exact(path.join(work, role, f), path.join(setDir, dir, `${id}.webp`), w, h, 'fill');
       manifest.materials[`${role}/${id}`] = { face: { file: rel(dir, `${id}.webp`) } };
       wrote[role] += 1;
     }
