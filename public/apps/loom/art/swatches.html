@@ -8,7 +8,11 @@
     <!--
       Every material and catalog object, drawn from the art in this folder
       (planning/maps-from-data.md; L-925 / #729), and the box with a question
-      mark an object with no art gets. It holds no data and needs no sign-in.
+      mark an object with no art gets. With ?set=<name>, an art set's own
+      pictures (planning/game-art.md; L-946 / #800): each material's, a
+      wall's face, a door's or window's painted front and each object's
+      standing picture, from a file or an atlas frame, the built-in art
+      where the set lacks one, each said. It holds no data and needs no sign-in.
       Headless Chrome loads it in tests/loom-art-swatches.test.js, which reads
       window.__swatches once <html data-ready="true">.
     -->
@@ -115,6 +119,15 @@
       .floor img {
         display: block;
         max-width: 100%;
+        max-height: 140px;
+      }
+      .face {
+        width: 160px;
+        height: 64px;
+        background-size: 128px 64px;
+        background-repeat: repeat-x;
+        background-color: #4a5160;
+        border-radius: 4px;
       }
     </style>
   </head>
@@ -132,6 +145,11 @@
         var sections = document.getElementById('sections');
         var checks = [];
         var failed = [];
+        // ?set=<name> shows an art set's own pictures (L-946), each the set's
+        // or, where the set lacks one, the built-in art, said under it.
+        var setName = new URLSearchParams(window.location.search).get('set');
+        var counts = { set: 0, builtIn: 0 };
+        var builtIn = [];
 
         function section(title, note) {
           var h = document.createElement('h2');
@@ -149,138 +167,224 @@
           return grid;
         }
 
-        function figure(grid, id, label, detail, art, face) {
+        // A picture's url: a file's own, or an atlas frame cut out (the atlas
+        // loaded once).
+        var atlases = {};
+        function urlOf(picture) {
+          if (picture.url) return Promise.resolve(picture.url);
+          if (!atlases[picture.atlas]) {
+            atlases[picture.atlas] = new Promise(function (resolve, reject) {
+              var img = new Image();
+              img.onload = function () {
+                resolve(img);
+              };
+              img.onerror = reject;
+              img.src = picture.atlas;
+            });
+          }
+          return atlases[picture.atlas].then(function (img) {
+            var f = picture.frame;
+            var c = document.createElement('canvas');
+            c.width = f[2];
+            c.height = f[3];
+            c.getContext('2d').drawImage(img, f[0], f[1], f[2], f[3], 0, 0, f[2], f[3]);
+            return c.toDataURL('image/png');
+          });
+        }
+
+        // `picture` is { url } or { atlas, frame }; `from` 'set' or the built-in.
+        function figure(grid, id, label, detail, picture, from, makeFace) {
           var fig = document.createElement('figure');
           fig.dataset.id = id;
           fig.dataset.state = 'loading';
-          fig.appendChild(face);
+          fig.dataset.from = from;
+          if (setName) {
+            if (from === 'set') counts.set += 1;
+            else {
+              counts.builtIn += 1;
+              builtIn.push(id);
+            }
+          }
           var cap = document.createElement('figcaption');
           var b = document.createElement('b');
           b.textContent = label;
           cap.appendChild(b);
-          cap.appendChild(document.createTextNode(' ' + detail));
-          fig.appendChild(cap);
+          var more = detail || '';
+          if (setName) more += (more ? ' · ' : '') + (from === 'set' ? setName : 'built-in');
+          cap.appendChild(document.createTextNode(' ' + more));
           grid.appendChild(fig);
           // Whether the art loads, as the engine will draw it.
           checks.push(
-            new Promise(function (resolve) {
-              var probe = new Image();
-              probe.onload = function () {
+            urlOf(picture)
+              .then(function (url) {
+                fig.insertBefore(makeFace(url), fig.firstChild);
+                return new Promise(function (resolve, reject) {
+                  var probe = new Image();
+                  probe.onload = function () {
+                    fig.dataset.width = probe.naturalWidth;
+                    fig.dataset.height = probe.naturalHeight;
+                    resolve();
+                  };
+                  probe.onerror = reject;
+                  probe.src = url;
+                });
+              })
+              .then(function () {
                 fig.dataset.state = 'ready';
-                fig.dataset.width = probe.naturalWidth;
-                fig.dataset.height = probe.naturalHeight;
-                resolve();
-              };
-              probe.onerror = function () {
+              })
+              .catch(function () {
                 fig.dataset.state = 'missing';
                 failed.push(id);
-                resolve();
-              };
-              probe.src = art;
-            })
+              })
           );
+          fig.appendChild(cap);
         }
 
-        var FACES = {
-          ground: function (url) {
+        function backed(className) {
+          return function (url) {
             var d = document.createElement('div');
-            d.className = 'tile';
+            d.className = className;
             d.style.backgroundImage = 'url(' + url + ')';
             return d;
-          },
-          strip: function (url) {
-            var d = document.createElement('div');
-            d.className = 'strip';
-            d.style.backgroundImage = 'url(' + url + ')';
-            return d;
-          },
-        };
+          };
+        }
+        function onFloor(alt) {
+          return function (url) {
+            var floor = document.createElement('div');
+            floor.className = 'floor';
+            var img = document.createElement('img');
+            img.alt = alt;
+            img.src = url;
+            floor.appendChild(img);
+            return floor;
+          };
+        }
+
         var TITLES = {
-          ground: ['Floors and terrain', 'Tiles of 64 × 64 that repeat, shown 2 × 1.5.'],
+          ground: ['Floors and terrain', 'Tiles that repeat, shown 2 × 1.5.'],
           line: ['Rivers and roads', 'Drawn along their length.'],
           wall: ['Walls', 'Drawn along their length; glass, bars and fence are see-through.'],
           door: ['Doors', 'In a wall, in its place; glass, bars and gates are see-through.'],
           window: ['Windows', 'In a wall; never walked through.'],
         };
 
-        catalog.KINDS.forEach(function (kind) {
-          var grid = section(TITLES[kind][0], TITLES[kind][1]);
-          catalog.materialsOf(kind).forEach(function (item) {
-            var url = catalog.artUrl(item.art);
-            var flags = [];
-            if (item.water) flags.push('water');
-            if (item.seeThrough) flags.push('see-through');
-            figure(
-              grid,
-              kind + ':' + item.id,
-              item.name,
-              flags.length ? '(' + flags.join(', ') + ')' : '',
-              url,
-              FACES[kind === 'ground' ? 'ground' : 'strip'](url)
-            );
+        function build() {
+          catalog.KINDS.forEach(function (kind) {
+            var grid = section(TITLES[kind][0], TITLES[kind][1]);
+            catalog.materialsOf(kind).forEach(function (item) {
+              var art = catalog.materialArt(kind, item.id, setName);
+              var flags = [];
+              if (item.water) flags.push('water');
+              if (item.seeThrough) flags.push('see-through');
+              var detail = flags.length ? '(' + flags.join(', ') + ')' : '';
+              var fronted = kind === 'door' || kind === 'window';
+              // A door's or window's own painted front, where a set has one.
+              var front = fronted && art.face;
+              figure(
+                grid,
+                kind + ':' + item.id,
+                item.name,
+                detail,
+                front || art.picture,
+                front || art.from === 'set' ? 'set' : 'catalog',
+                front ? onFloor(item.name) : backed(kind === 'ground' ? 'tile' : 'strip')
+              );
+              // A wall's face, as it rises from its foot.
+              if (kind === 'wall' && art.face) {
+                figure(
+                  grid,
+                  'wall-face:' + item.id,
+                  item.name,
+                  'face',
+                  art.face,
+                  'set',
+                  backed('face')
+                );
+              }
+            });
           });
-        });
 
-        var groups = [];
-        catalog.OBJECT_KINDS.forEach(function (item) {
-          if (groups.indexOf(item.group) === -1) groups.push(item.group);
-        });
-        var objects = section(
-          'Objects',
-          'Seen from above, at 16 units to the foot; each shows its default size.'
-        );
-        groups.forEach(function (group) {
-          catalog.OBJECT_KINDS.filter(function (item) {
-            return item.group === group;
-          }).forEach(function (item) {
-            var url = catalog.artUrl(item.art);
-            var floor = document.createElement('div');
-            floor.className = 'floor';
-            var img = document.createElement('img');
-            img.alt = item.name;
-            img.src = url;
-            floor.appendChild(img);
-            figure(
-              objects,
-              'object:' + item.id,
-              item.name,
-              item.size[0] + ' × ' + item.size[1] + ' ft',
-              url,
-              floor
-            );
+          var groups = [];
+          catalog.OBJECT_KINDS.forEach(function (item) {
+            if (groups.indexOf(item.group) === -1) groups.push(item.group);
           });
-        });
+          var objects = section(
+            'Objects',
+            setName
+              ? 'Standing, as the set paints them; each shows its default size.'
+              : 'Seen from above, at 16 units to the foot; each shows its default size.'
+          );
+          groups.forEach(function (group) {
+            catalog.OBJECT_KINDS.filter(function (item) {
+              return item.group === group;
+            }).forEach(function (item) {
+              var stand = setName ? catalog.standFor({ kind: item.id }, null, setName) : null;
+              figure(
+                objects,
+                'object:' + item.id,
+                item.name,
+                item.size[0] + ' × ' + item.size[1] + ' ft' + (item.decor ? ', decor' : ''),
+                stand ? stand.picture : { url: catalog.artUrl(item.art) },
+                stand ? 'set' : 'catalog',
+                onFloor(item.name)
+              );
+            });
+          });
 
-        var none = section(
-          'An object with no art',
-          'No art of its own, none for its kind in its world, none in the catalog: a box with a question mark.'
-        );
-        var unknown = catalog.artFor({ kind: 'no-such-kind' }, {});
-        var floor = document.createElement('div');
-        floor.className = 'floor';
-        var box = document.createElement('img');
-        box.alt = 'A box with a question mark';
-        box.src = unknown.url;
-        floor.appendChild(box);
-        figure(none, 'object:unknown', 'Unknown', '(' + unknown.from + ')', unknown.url, floor);
+          var none = section(
+            'An object with no art',
+            'No art of its own, none for its kind in its world, none in the catalog: a box with a question mark.'
+          );
+          var unknown = catalog.artFor({ kind: 'no-such-kind' }, {});
+          figure(
+            none,
+            'object:unknown',
+            'Unknown',
+            '(' + unknown.from + ')',
+            { url: unknown.url },
+            'unknown',
+            onFloor('A box with a question mark')
+          );
+          if (setName) counts.builtIn -= 1; // the box is always the built-in one
 
-        Promise.all(checks).then(function () {
-          var total = checks.length;
-          window.__swatches = {
-            total: total,
-            loaded: total - failed.length,
-            failed: failed,
-            unknownFrom: unknown.from,
-          };
-          document.getElementById('summary').textContent =
-            total -
-            failed.length +
-            ' of ' +
-            total +
-            ' swatches loaded' +
-            (failed.length ? '; missing: ' + failed.join(', ') : '.');
-          document.documentElement.dataset.ready = 'true';
-        });
+          Promise.all(checks).then(function () {
+            var total = checks.length;
+            window.__swatches = {
+              total: total,
+              loaded: total - failed.length,
+              failed: failed,
+              unknownFrom: unknown.from,
+              set: setName,
+              fromSet: counts.set,
+              builtIn: builtIn.filter(function (id) {
+                return id !== 'object:unknown';
+              }),
+            };
+            document.getElementById('summary').textContent =
+              (setName ? 'The ' + setName + ' set: ' : '') +
+              (total - failed.length) +
+              ' of ' +
+              total +
+              ' swatches loaded' +
+              (failed.length ? '; missing: ' + failed.join(', ') : '.') +
+              (setName ? ' ' + counts.set + ' from the set, ' + counts.builtIn + ' built-in.' : '');
+            document.documentElement.dataset.ready = 'true';
+          });
+        }
+
+        if (!setName) {
+          build();
+          return;
+        }
+        fetch(catalog.ART_BASE + 'sets/' + encodeURIComponent(setName) + '/manifest.json')
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (manifest) {
+            if (manifest && manifest.name === setName) catalog.registerSet(manifest);
+          })
+          .catch(function () {})
+          .then(build);
       })();
     </script>
   </body>

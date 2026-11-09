@@ -605,9 +605,14 @@ describe('art sets (L-944)', () => {
     expect(await page.evaluate(() => Loom.materials.setOf('classic'))).toBeNull();
     await drawAt(page, 'set-classic', room(), place, { ...GRID, set: 'classic' });
     expect(await page.evaluate(() => Loom.materials.setOf('classic').name)).toBe('classic');
-    // The classic set paints nothing yet (L-946): the built-in art.
+    // The classic set paints everything (L-946): its floor a file, the chest
+    // standing, a frame of one of its atlases.
     const drawn = await page.evaluate(() => Loom.mapPaint.describe('set-classic'));
-    expect(drawn.find((d) => d.id === 'chest').art).toBe('/apps/loom/art/objects/chest.svg');
+    const art = (kind, id) => drawn.find((d) => d.kind === kind && d.id === id).art;
+    expect(art('ground', 'f')).toBe('/apps/loom/art/sets/classic/ground/flagstone.webp');
+    expect(art('object', 'chest')).toMatch(
+      /^\/apps\/loom\/art\/sets\/classic\/atlas\/sheet-\d+\.webp#\d+,\d+,\d+,\d+$/
+    );
     // A set that isn't there leaves the built-in art too.
     await drawAt(page, 'set-none', room(), place, { ...GRID, set: 'no-such-set' });
     const none = await page.evaluate(() => Loom.mapPaint.describe('set-none'));
@@ -1500,6 +1505,88 @@ describe("the painter's finish (L-943): speed", () => {
     const median = (list) => list.slice().sort((x, y) => x - y)[Math.floor(list.length / 2)];
     console.log(`frame, unculled ${median(times.all)} ms, culled ${median(times.culled)} ms`);
     expect(median(times.culled)).toBeLessThan(median(times.all) * 0.9);
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+});
+
+describe('the classic set, painted (L-946)', () => {
+  const CLASSIC = { ...GRID, set: 'classic' };
+  // Built-in SVG art, which a set's picture replaces; the "?" box stays for a
+  // kind no catalog knows.
+  const builtIn = (drawn) =>
+    drawn.filter(
+      (d) =>
+        typeof d.art === 'string' &&
+        /\/apps\/loom\/art\/(materials|objects)\//.test(d.art) &&
+        !/objects\/unknown\.svg$/.test(d.art)
+    );
+  const fromClassic = (drawn) =>
+    drawn.filter((d) => typeof d.art === 'string' && d.art.includes('/art/sets/classic/'));
+  const loaded = (page) =>
+    page.waitForFunction(() => window.Loom.materials.setOf('classic'), null, { timeout: 15000 });
+
+  withBrowser('the test dungeon, with nothing falling back to the built-in art', async () => {
+    const page = await painterPage();
+    await draw(page, 'classic-dungeon', geo.normalize(dungeon()), CLASSIC);
+    await loaded(page);
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('classic-dungeon'));
+    expect(builtIn(drawn)).toEqual([]);
+    expect(fromClassic(drawn).length).toBeGreaterThan(20);
+    // Props stand on their feet, the chest and the barrels among them.
+    const up = standingOf(drawn);
+    ['chest', 'barrel-1', 'pillar', 'statue', 'table'].forEach((id) =>
+      expect(up.some((d) => d.kind === 'object' && d.id === id)).toBe(true)
+    );
+    matchesBaseline(PNG.sync.read(await page.screenshot()), 'classic-dungeon.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('a generated interior, the same', async () => {
+    const page = await painterPage();
+    const map = generators.generate('interior', { seed: 'three-quarter' });
+    const scale = Math.min(900 / (map.width * 5), 560 / (map.height * 5));
+    await drawAt(page, 'classic-interior', map.geometry, { y: 60, scale }, CLASSIC);
+    await loaded(page);
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('classic-interior'));
+    expect(builtIn(drawn)).toEqual([]);
+    expect(fromClassic(drawn).some((d) => d.kind === 'wall')).toBe(true);
+    matchesBaseline(PNG.sync.read(await page.screenshot()), 'classic-interior.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  withBrowser('a dressed room: every decor piece standing in its picture', async () => {
+    const page = await painterPage();
+    const dress = require('../functions/loom-canon/dress');
+    const made = generators.generate('rooms', { seed: 'dressed' });
+    const map = {
+      width: made.width,
+      height: made.height,
+      entries: made.entries,
+      exits: made.exits,
+      features: [],
+      geometry: geo.normalize(made.geometry),
+    };
+    const zone = map.geometry.zones[0].id;
+    const dressed = dress.dress(map, { zone, theme: 'crypt', density: 'cluttered', seed: 3 });
+    expect(dressed.objects.length).toBeGreaterThan(3);
+    const geometry = geo.normalize({
+      ...map.geometry,
+      objects: [...(map.geometry.objects || []), ...dressed.objects],
+    });
+    const scale = Math.min(900 / (map.width * 5), 560 / (map.height * 5));
+    await drawAt(page, 'classic-dressed', geometry, { y: 60, scale }, CLASSIC);
+    await loaded(page);
+    const drawn = await page.evaluate(() => Loom.mapPaint.describe('classic-dressed'));
+    expect(builtIn(drawn)).toEqual([]);
+    const pieces = drawn.filter(
+      (d) => d.kind === 'object' && dressed.objects.some((o) => o.id === d.id)
+    );
+    expect(pieces.length).toBe(dressed.objects.length);
+    pieces.forEach((d) => expect(d.art).toContain('/art/sets/classic/'));
+    matchesBaseline(PNG.sync.read(await page.screenshot()), 'classic-dressed.png');
     expect(page.errors).toEqual([]);
     await page.close();
   });
