@@ -87,13 +87,20 @@ const HOW_TO = {
     'Draw its battle map from data: floors with set_ground and walls with set_walls (doors, ' +
     'windows and objects go in them: set_doors, set_windows, set_objects), or give it art. ' +
     'It is drawn when it has art, or both floors and walls. Check it with view_image.',
+  look:
+    'Paint what its battle map shows: `lacking` names the materials (wall/stone) and object ' +
+    'kinds that have no painted art in the world’s art set. Give an object kind art with ' +
+    'set_object_art (a studio image), or choose an art set that paints them (list_art_sets, ' +
+    'update_world art.set); a map with its own art is only checked for its doors, windows ' +
+    'and objects.',
   townArt:
     'Give the town art: a town image from the studio’s library, with studio_assign (target ' +
     'town), or upload it on the Cartographer page. Check it with view_image.',
   mapArt:
     'Give it art: an image from the studio’s library with studio_assign (target battleMap, or ' +
     'map for the world map), or upload it on the Cartographer page. Line the grid up with ' +
-    'view_image.',
+    'view_image. For a battle map it is a small bonus: a map drawn from data can reach the ' +
+    'top band without it.',
   features: 'Name the features on its battle map (the bar, the altar): set_battle_map.',
   exits: 'Place its battle map’s exits: set_battle_map.',
   faction: 'Give them a realm: update_character with factionId.',
@@ -349,6 +356,7 @@ function scoreGroups(
         points: round1(missingWeight * nearness),
         message: criterion.message,
         ...(criterion.have !== undefined ? { have: criterion.have, want: criterion.want } : {}),
+        ...(criterion.lacking ? { lacking: criterion.lacking } : {}),
       });
     }
   }

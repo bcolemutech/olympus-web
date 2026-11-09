@@ -78,6 +78,7 @@ const NEEDS = [
   'battleMap',
   'ground',
   'drawn',
+  'look',
   'townArt',
   'mapArt',
   'features',

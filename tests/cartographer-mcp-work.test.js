@@ -487,7 +487,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   expect(overview).toMatchObject({ score: overview.completion.score, band: 'playable' });
   expect(overview.completion).toMatchObject({
     graded: true,
-    rubricVersion: 11,
+    rubricVersion: 12,
     band: 'playable',
     places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
@@ -525,7 +525,9 @@ test('get_character and get_battle_map show their score, band and weighted check
   expect(map).toMatchObject({ grade: 'playable', score: expect.any(Number) });
   expect(map.checklist.map((c) => [c.id, c.weight])).toEqual([
     ['battleMap.drawn', 30],
-    ['battleMap.art', 30],
+    ['battleMap.look', 30],
+    // Art is a bonus (L-947).
+    ['battleMap.art', 5],
     ['battleMap.features', 20],
     ['battleMap.exits', 20],
   ]);

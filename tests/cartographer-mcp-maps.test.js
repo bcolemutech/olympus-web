@@ -513,7 +513,9 @@ describe('assigning maps', () => {
     expect(entitiesOf(work, 'drawn')).toContain('plc_1_the-gull-anchor');
     // And maps without walls of their own (battle maps are scored too).
     expect(
-      scored(work).every((g) => ['place.ownMap', 'battleMap.drawn'].includes(g.criterion))
+      scored(work).every((g) =>
+        ['place.ownMap', 'battleMap.drawn', 'battleMap.look'].includes(g.criterion)
+      )
     ).toBe(true);
     expect(
       work.items

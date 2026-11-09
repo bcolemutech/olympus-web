@@ -191,7 +191,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(11);
+    expect(RUBRIC_VERSION).toBe(12);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -451,11 +451,153 @@ describe('character, battle map, realm and world criteria', () => {
     const bare = { ...MAP, geometry: {}, image: null, features: [MAP.features[0]], exits: [] };
     expect(check('battleMap.drawn', w, bare).progress).toBe(0);
     expect(check('battleMap.art', w, bare).progress).toBe(0);
+    expect(check('battleMap.look', w, bare)).toMatchObject({ progress: 0, need: 'drawn' });
     expect(check('battleMap.features', w, bare)).toMatchObject({ progress: 0.5, have: 1 });
     expect(check('battleMap.exits', w, bare).progress).toBe(0);
     expect(gradeBattleMap(w, bare).score).toBe(
       Math.round((WEIGHTS.battleMap.features / 2 / 100) * 1000) / 10
     );
+  });
+
+  describe('the look and the art bonus (GR1, GR2; L-947)', () => {
+    const geo = require('../functions/loom-canon/map-geometry');
+    const floor = (w, h) => ({
+      id: 'floor',
+      material: 'stone',
+      shape: { rect: { x: 0, y: 0, w, h } },
+    });
+    const walls = (w, h) => [
+      {
+        id: 'n',
+        material: 'stone',
+        points: [
+          [0, 0],
+          [w, 0],
+        ],
+      },
+      {
+        id: 's',
+        material: 'stone',
+        points: [
+          [0, h],
+          [w, h],
+        ],
+      },
+    ];
+    const drawn = (shapes, patch = {}) => ({
+      ...MAP,
+      image: null,
+      geometry: geo.normalize(shapes),
+      ...patch,
+    });
+    const chest = { id: 'c', kind: 'chest', at: [10, 10], size: [3, 2] };
+
+    test('a map with everything painted meets the look; a "?" box does not', () => {
+      const w = world();
+      const painted = drawn({ ground: [floor(60, 40)], walls: walls(60, 40), objects: [chest] });
+      expect(check('battleMap.look', w, painted)).toEqual({ progress: 1 });
+      const odd = { id: 'o', kind: 'moonstone-altar', at: [20, 20], size: [3, 3] };
+      const withBox = drawn({
+        ground: [floor(60, 40)],
+        walls: walls(60, 40),
+        objects: [chest, odd],
+      });
+      expect(check('battleMap.look', w, withBox)).toMatchObject({
+        progress: 0.75,
+        have: 3,
+        want: 4,
+        lacking: ['moonstone-altar'],
+      });
+      expect(criterion('battleMap.look')).toMatchObject({ need: 'look', tool: 'set_object_art' });
+      // Art of its own, on the object or its kind in the world, paints it.
+      const art = { imageId: 'img_1' };
+      const own = drawn({
+        ground: [floor(60, 40)],
+        walls: walls(60, 40),
+        objects: [chest, { ...odd, art }],
+      });
+      expect(check('battleMap.look', w, own)).toEqual({ progress: 1 });
+      const kinds = { ...w, objectKinds: { 'moonstone-altar': { art } } };
+      expect(check('battleMap.look', kinds, withBox)).toEqual({ progress: 1 });
+    });
+
+    test('a material the world’s set does not paint lacks art', () => {
+      const w = { ...world(), art: { set: 'no-such-set' } };
+      // A set there isn't is drawn as classic, which paints it all.
+      const m = drawn({ ground: [floor(60, 40)], walls: walls(60, 40) });
+      expect(check('battleMap.look', w, m)).toEqual({ progress: 1 });
+      const look = require('../functions/loom-canon/look');
+      const mats = require('../functions/loom-canon/materials');
+      const real = mats.materialArt;
+      mats.materialArt = (kind, id, set) =>
+        kind === 'wall' ? { ...real(kind, id, set), from: 'catalog' } : real(kind, id, set);
+      try {
+        expect(look.unpainted(w, m).materials).toEqual(['wall/stone']);
+        expect(check('battleMap.look', w, m).lacking).toEqual(['wall/stone']);
+      } finally {
+        mats.materialArt = real;
+      }
+    });
+
+    test('a map with its own art is looked at for its objects only', () => {
+      const w = world();
+      const odd = { id: 'o', kind: 'moonstone-altar', at: [20, 20], size: [3, 3] };
+      const m = drawn({ objects: [odd] }, { image: MAP.image });
+      expect(check('battleMap.look', w, m)).toMatchObject({ lacking: ['moonstone-altar'] });
+      const flat = drawn(
+        { ground: [{ ...floor(6, 6), material: 'nothing' }] },
+        { image: MAP.image }
+      );
+      expect(check('battleMap.look', w, flat)).toEqual({ progress: 1 });
+    });
+
+    test('art is a bonus: a map with its own art scores over the same one without', () => {
+      const w = world();
+      const data = drawn(
+        { ground: [floor(60, 40)], walls: walls(60, 40), objects: [chest] },
+        { features: MAP.features, exits: MAP.exits }
+      );
+      const base = gradeBattleMap(w, data);
+      expect(base.score).toBe(100);
+      expect(base.criteria.find((c) => c.id === 'battleMap.art')).toMatchObject({
+        bonus: true,
+        met: false,
+      });
+      // Short of the top, the art adds its bonus points.
+      const short = { ...data, exits: [] };
+      const withArt = { ...short, image: MAP.image };
+      expect(gradeBattleMap(w, withArt).score - gradeBattleMap(w, short).score).toBeCloseTo(
+        WEIGHTS.battleMap.art - WEIGHTS.battleMap.exits * 0 - 0,
+        5
+      );
+      expect(gradeBattleMap(w, { ...withArt }).score).toBeLessThanOrEqual(100);
+      expect(gradeBattleMap(w, { ...data, image: MAP.image }).score).toBe(100);
+    });
+
+    test('a 64 x 64 square map with no art reaches the top band on its data alone', () => {
+      const w = world();
+      const feet = 64 * 5;
+      const big = drawn(
+        { ground: [floor(feet, feet)], walls: walls(feet, feet), objects: [chest] },
+        { width: 64, height: 64, features: MAP.features, exits: MAP.exits }
+      );
+      const graded = gradeBattleMap(w, big);
+      expect(graded).toMatchObject({ score: 100, band: 'legendary' });
+      expect(graded.checklist.map((i) => i.criterion)).toEqual(['battleMap.art']);
+    });
+
+    test('the work list names what lacks art', () => {
+      const w = world();
+      const odd = { id: 'o', kind: 'moonstone-altar', at: [20, 20], size: [3, 3] };
+      const m = drawn({ ground: [floor(60, 40)], walls: walls(60, 40), objects: [odd] });
+      const graded = gradeBattleMap(w, m);
+      expect(graded.checklist).toContainEqual(
+        expect.objectContaining({ criterion: 'battleMap.look', lacking: ['moonstone-altar'] })
+      );
+      expect(graded.criteria.find((c) => c.id === 'battleMap.look').lacking).toEqual([
+        'moonstone-altar',
+      ]);
+    });
   });
 
   test('a realm and a region: a description, lore and people for their size', () => {
