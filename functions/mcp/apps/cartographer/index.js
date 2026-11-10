@@ -16,6 +16,7 @@ const { studioTools } = require('./studio-tools');
 const { materialTools } = require('./material-tools');
 const { systemTools } = require('./system-tools');
 const { statBlockTools } = require('./stat-block-tools');
+const { tokenTools } = require('./token-tools');
 const artOf = require('../../../loom-canon/art');
 const { currentPath } = require('../../../studio/library');
 const { GRADES, BANDS } = require('../../../loom-canon/grading');
@@ -871,6 +872,7 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
       ...generatorTools({ writer }),
       // Materials and the object catalog (L-925): list them, give a world's own art.
       ...materialTools({ studio, writer, worldFor }),
+      ...tokenTools({ studio, worldFor }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
       // Game systems (L-801): list, get, set and copy them.
       ...(systems ? systemTools({ systems, reader }) : []),

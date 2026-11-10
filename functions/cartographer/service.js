@@ -461,8 +461,9 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     );
 
   // Using a library image for a world's map, cover, town or battle map, or
-  // taking it away (imageId null): studio_assign and studio_unassign (L-704).
-  async function assignImage(uid, { worldId, target, id, imageId, fit } = {}) {
+  // as a token (L-931), or taking it away (imageId null): studio_assign,
+  // studio_unassign and set_token (L-704).
+  async function assignImage(uid, { worldId, target, id, imageId, fit, crop } = {}) {
     if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
       throw new HttpsError('invalid-argument', 'worldId is required.');
     }
@@ -473,6 +474,8 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
         id,
         imageId: imageId || null,
         ...(fit ? { fit } : {}),
+        // A token's crop (L-931); null resets it.
+        ...(crop !== undefined ? { crop } : {}),
       });
     } catch (err) {
       throw asHttps(err);

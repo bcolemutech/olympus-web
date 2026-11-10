@@ -12,6 +12,12 @@
  *   objectKind a kind's art in a world world.objectKinds[id].art   kind object
  *   object     one object's art         its entry in the map's geometry (L-925);
  *                                       id is "<mapId>/<objectId>"  kind object
+ *   character  a character's token     character.token      kind token or portrait
+ *   statBlock  a stat block's token    statBlock.token      kind token or portrait
+ *   figure     a group of figures'     its group in the battle map's figures;
+ *              token                   id is "<mapId>/<groupId>" (L-931)
+ *
+ * A token keeps its crop beside the reference (../loom-canon/tokens.js).
  */
 
 const TARGETS = Object.freeze({
@@ -21,6 +27,9 @@ const TARGETS = Object.freeze({
   battleMap: { kind: 'battleMap', label: 'battle-map art' },
   objectKind: { kind: 'object', label: 'object art' },
   object: { kind: 'object', label: 'object art' },
+  character: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },
+  statBlock: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },
+  figure: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },
 });
 
 /** What a world holds for a library image: its link, and its current size. */

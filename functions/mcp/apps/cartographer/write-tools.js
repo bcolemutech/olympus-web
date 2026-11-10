@@ -18,6 +18,7 @@ const { whyClosed } = require('../../../cartographer/service');
 const { validateSheet } = require('../../../loom-canon/sheets');
 const { systemOf } = require('../../../loom-canon/checks');
 const spawns = require('../../../loom-modules/combat/spawns');
+const { tokenInput, writeToken } = require('./token-tools');
 
 // The Cartographer's MCP write tools (design planning/the-cartographer-
 // design.md §4.1, §4.2; C-7 / #374): Claude adds to, fixes and changes worlds,
@@ -1421,13 +1422,14 @@ function writeTools({ writer, systems, studio }) {
           .optional()
           .describe('A named stat block’s id (L-393; list_stat_blocks): their sheet.'),
         overrides: overrides.optional(),
+        token: tokenInput.optional(),
         cell: square.optional(),
         townPoint: townPoint.optional(),
         worldPoint: worldPoint.optional(),
       },
       annotations: additive,
       handler: (ctx, args) =>
-        edit(ctx, args, (e) => {
+        edit(ctx, args, async (e) => {
           const { world } = e;
           checkName(world, args.name);
           const home = args.locationId ? live(world, 'location', args.locationId) : null;
@@ -1453,8 +1455,17 @@ function writeTools({ writer, systems, studio }) {
                   throw new ToolError('overrides go with statBlock.');
                 })()
               : {};
+          // Their token picture (L-931), with the image's "in use".
+          const token = args.token
+            ? await writeToken(e, args.token, null, {
+                worldId: args.worldId,
+                target: 'character',
+                id,
+              })
+            : null;
           e.create(e.ref('characters', id), {
             ...named,
+            ...(token ? { token } : {}),
             ...at,
             description: args.description,
             sources: { description: SOURCES.MCP },
@@ -1521,6 +1532,7 @@ function writeTools({ writer, systems, studio }) {
               '(set_sheet gives a sheet of their own).'
           ),
         overrides: overrides.nullable().optional().describe('What differs; null clears them.'),
+        token: tokenInput.optional(),
         cell: square.nullable().optional(),
         townPoint: townPoint.nullable().optional(),
         worldPoint: worldPoint.nullable().optional(),
@@ -1538,9 +1550,10 @@ function writeTools({ writer, systems, studio }) {
           'triggers',
           'statBlock',
           'overrides',
+          'token',
           ...POSITIONS,
         ]);
-        return edit(ctx, args, (e) => {
+        return edit(ctx, args, async (e) => {
           const { world } = e;
           const character = existing(world, 'character', args.characterId);
           const id = character.id;
@@ -1645,6 +1658,16 @@ function writeTools({ writer, systems, studio }) {
               overrides: over,
             }).fields;
             Object.assign(fields, named);
+          }
+          // Their token picture (L-931), with the image's "in use".
+          if (args.token !== undefined) {
+            const token = await writeToken(e, args.token, character.token || null, {
+              worldId: args.worldId,
+              target: 'character',
+              id,
+            });
+            if (token) fields.token = token;
+            else if (character.token) fields.token = FieldValue.delete();
           }
           if (Object.keys(fields).length) e.update(e.ref('characters', id), fields);
           const result = {

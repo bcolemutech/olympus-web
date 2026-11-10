@@ -20,6 +20,8 @@
  *     role?      brute, skirmisher, archer, guard, caster or leader
  *     posture?   cowardly, cautious, steady, bold or reckless
  *     leader?    whether their fall shakes the rest (EN4)
+ *     token?     their picture (L-931; ../../loom-canon/tokens.js), over
+ *                their stat block's
  *     cells      the squares they stand on, one each
  *
  * A named character's role, posture and leader are on their canon record
@@ -37,6 +39,7 @@ const sheets = require('../../loom-canon/sheets');
 const { attacksOf } = require('./attacks');
 const wary = require('./wary');
 const statBlocks = require('../../loom-canon/stat-blocks');
+const tokens = require('../../loom-canon/tokens');
 
 const ROLES = ['brute', 'skirmisher', 'archer', 'guard', 'caster', 'leader'];
 const POSTURES = ['cowardly', 'cautious', 'steady', 'bold', 'reckless'];
@@ -61,6 +64,8 @@ function figureId(group, n) {
 function instancesOf(system, group, world = null) {
   const cells = Array.isArray(group.cells) ? group.cells : [];
   const sheet = sheets.sheetFromStatBlock(system, statBlocks.blockOf(world, group) || {});
+  // Their picture (L-931): the group's own, else its stat block's.
+  const token = tokens.tokenOf(group, world);
   return cells.map((cell, i) => ({
     id: figureId(group, i + 1),
     name: cells.length > 1 ? `${group.name} ${i + 1}` : group.name,
@@ -72,6 +77,7 @@ function instancesOf(system, group, world = null) {
     ...(group.leader ? { leader: true } : {}),
     ...(group.challenge ? { challenge: copyOf(group.challenge) } : {}),
     ...(group.triggers ? { triggers: copyOf(group.triggers) } : {}),
+    ...(token ? { token } : {}),
     sheet: copyOf(sheet),
   }));
 }

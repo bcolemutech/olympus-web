@@ -10,6 +10,7 @@ const { discoveredBy } = require('./discovery');
 const { apOf, turnStateOf } = require('../loom-models');
 const { planOn, doorStatesOf, objectStatesOf, hasKey, pricesFor, viewPrices } = require('./steps');
 const { knownMap, artLink, drawnGeometry } = require('./known-map');
+const tokens = require('../loom-canon/tokens');
 const sight = require('../loom-canon/sight');
 const levels = require('../loom-canon/levels');
 const { walksTown, townPlanOf, streetOf } = require('./town-steps');
@@ -408,8 +409,9 @@ function fogOf(canonWorld, save, settlement, record, walks) {
  *   - the people found at the place: those standing on a square (`cell`,
  *     §6) only while it's in sight, with their square (`x`, `y`) for their
  *     token (L-642), where in it they stand in feet if they've moved
- *     (`point`) and how wide they are (`width`, L-922); the rest, who have
- *     no square yet, listed;
+ *     (`point`) and how wide they are (`width`, L-922), and their token
+ *     picture (`token: { link, crop }`, L-931); the rest, who have no
+ *     square yet, listed;
  *   - `fog: { seen, inSight }`, the squares seen (ever, this one included)
  *     and in sight now, packed as ./seen.js packs them (one bit a square,
  *     y × width + x, lowest bit first, in base64), for the grid view's fog.
@@ -514,6 +516,8 @@ function battleView(canonWorld, save, record) {
           // Where in their square they stand, in feet, and how wide they
           // are (L-922), for their token and the menu's reach.
           const spot = c.cell ? combat.play.spotOf(canonWorld, save, c) : null;
+          // Their token picture (L-931): its link and crop only (A5).
+          const token = tokens.forPlayer(tokens.tokenOf(c, canonWorld));
           return {
             id: c.id,
             name: c.name,
@@ -525,6 +529,7 @@ function battleView(canonWorld, save, record) {
             // stat block says so.
             ...(['hostile', 'party', 'wary'].includes(c.side) ? { side: c.side } : {}),
             ...(c.figure ? { figure: true } : {}),
+            ...(token ? { token } : {}),
             // The cover they have from where the player stands (L-828;
             // combat PS2), for Attack's note and the grid.
             ...(spot && combat.position.coverOf(map, doors, viewer, spot)
