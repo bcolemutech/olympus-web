@@ -415,7 +415,7 @@ test('what is not a PNG, or too large to decode, is refused', () => {
   expect(() => images.renderBattleMap(TAVERN, huge)).toThrow(/too large to view \(9000 × 9000\)/);
 });
 
-describe('people (L-684): teal diamonds, numbered in the legend', () => {
+describe('people (L-684; round tokens since L-932), numbered in the legend', () => {
   const TEAL = [77, 182, 172];
 
   test('on a battle map: at the centre of their square, with the place they stand at', () => {
@@ -433,9 +433,10 @@ describe('people (L-684): teal diamonds, numbered in the legend', () => {
     });
     const cell = legend.cellSize.width;
     expect(near(pixel(img, 7.5 * cell, 5.5 * cell), TEAL)).toBe(true);
-    // A diamond: its corners are bare ground.
+    // A round token (L-932), as wide as they are: its corners are bare ground.
     expect(near(pixel(img, 7.5 * cell + cell / 3, 5.5 * cell + cell / 3), TEAL)).toBe(false);
-    expect(legend.reading).toMatch(/teal diamonds people/);
+    expect(legend.reading).toMatch(/people round tokens/);
+    expect(legend.reading).toMatch(/ringed by side/);
   });
 
   test('in a town: at their town points, after the places', () => {
