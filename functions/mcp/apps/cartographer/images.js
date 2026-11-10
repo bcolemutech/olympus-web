@@ -232,10 +232,46 @@ function fillDiamond(c, cx, cy, r, colour) {
   }
 }
 
-// A numbered marker: a shape at (x, y), its number beside it.
-function marker(c, x, y, n, shape, colour, size) {
+// A person's token (L-932; planning/tokens.md §4.2), as the Loom draws it
+// from above: a disc as wide as they are, ringed in their side's colour, with
+// their picture inside at its crop (`token`: { image: { width, height, data
+// }, crop }), else plain.
+function drawToken(c, cx, cy, r, colour, token) {
+  fillCircle(c, cx, cy, r + 1, COLOURS.outline);
+  fillCircle(c, cx, cy, r, colour);
+  const image = token && token.image;
+  if (!image) return;
+  const inner = Math.max(1, r * 0.8);
+  const crop = token.crop || {};
+  const zoom = typeof crop.zoom === 'number' && crop.zoom >= 1 ? crop.zoom : 1;
+  const k = Math.min(image.width, image.height) / zoom / (2 * inner); // image px a canvas px
+  const ox = (typeof crop.x === 'number' ? crop.x : 0.5) * image.width;
+  const oy = (typeof crop.y === 'number' ? crop.y : 0.5) * image.height;
+  fillCircle(c, cx, cy, inner + 1, COLOURS.outline);
+  for (let dy = -Math.ceil(inner); dy <= Math.ceil(inner); dy++) {
+    for (let dx = -Math.ceil(inner); dx <= Math.ceil(inner); dx++) {
+      if (dx * dx + dy * dy > inner * inner) continue;
+      const sx = Math.floor(ox + dx * k);
+      const sy = Math.floor(oy + dy * k);
+      if (sx < 0 || sy < 0 || sx >= image.width || sy >= image.height) continue;
+      const i = (sy * image.width + sx) * 4;
+      blend(c, cx + dx, cy + dy, [
+        image.data[i],
+        image.data[i + 1],
+        image.data[i + 2],
+        image.data[i + 3],
+      ]);
+    }
+  }
+}
+
+// A numbered marker: a shape at (x, y), its number beside it; a token
+// (L-932) its radius in `size`.
+function marker(c, x, y, n, shape, colour, size, token) {
   const r = Math.max(4, size);
-  if (shape === 'diamond') {
+  if (shape === 'token') {
+    drawToken(c, x, y, r, colour, token);
+  } else if (shape === 'diamond') {
     fillDiamond(c, x, y, r + 2, COLOURS.outline);
     fillDiamond(c, x, y, r, colour);
   } else if (shape === 'square') {
@@ -446,7 +482,7 @@ function renderBattleMap(
   }
 
   const markers = [];
-  const add = (type, item, shape, colour) => {
+  const add = (type, item, shape, colour, token) => {
     const n = markers.length + 1;
     markers.push({
       n,
@@ -455,15 +491,20 @@ function renderBattleMap(
       ...(item.name ? { name: item.name } : {}),
       cell: { x: item.x, y: item.y },
     });
-    const size = Math.max(4, Math.min(cw, ch) / 3);
-    marker(base, (item.x + 0.5) * cw, (item.y + 0.5) * ch, n, shape, colour, size);
+    // A token as wide as they are (L-932), at least as today's discs.
+    const size =
+      shape === 'token'
+        ? Math.max(4, (Math.max(item.width || 0, 3.2) / FEET / 2) * Math.min(cw, ch))
+        : Math.max(4, Math.min(cw, ch) / 3);
+    marker(base, (item.x + 0.5) * cw, (item.y + 0.5) * ch, n, shape, colour, size, token);
   };
   (map.entries || []).forEach((e) => add('entry', e, 'circle', COLOURS.entry));
   (map.exits || []).forEach((e) => add('exit', e, 'square', COLOURS.exit));
   (map.features || []).forEach((f) => add('feature', f, 'circle', COLOURS.feature));
   people.forEach((p) => {
-    add(p.figure ? 'figure' : 'person', p, 'diamond', COLOURS[p.side] || COLOURS.person);
+    add(p.figure ? 'figure' : 'person', p, 'token', COLOURS[p.side] || COLOURS.person, p.token);
     const m = markers[markers.length - 1];
+    if (p.token && p.token.image) m.token = true;
     if (p.at) m.at = p.at;
     if (p.side) m.side = p.side;
     if (p.figure) m.group = p.figure;
@@ -525,11 +566,12 @@ function renderBattleMap(
       cellSize: { width: round(cw), height: round(ch) },
       reading:
         'Cells are { x, y } from the top-left, 0-based; every fifth grid line is brighter and ' +
-        'labelled. Green circles are entries, red squares exits, amber circles features, teal ' +
-        'diamonds people (at: the place they stand at); each marker is at the centre of its ' +
-        'cell, numbered as below. People and figures (type figure: placed with ' +
-        'place_figures, group their group) are coloured by side: red hostile, green party, ' +
-        'yellow wary, teal neutral. With sightFrom (an entry) or from (a point, in feet), ' +
+        'labelled. Green circles are entries, red squares exits, amber circles features, and ' +
+        'people round tokens (at: the place they stand at), as wide as they are, their ' +
+        'token picture inside at its crop (token: true), plain without one; each marker is ' +
+        'at the centre of its cell, numbered as below. People and figures (type figure: ' +
+        'placed with place_figures, group their group) are ringed by side: red hostile, ' +
+        'green party, yellow wary, teal neutral. With sightFrom (an entry) or from (a point, in feet), ' +
         'squares it can’t see are shaded dark, and each person says whether they are seen. ' +
         'Its geometry (a square is 5 ft; points are in feet): floors are filled by material, ' +
         'brighter the higher (a number is a height in feet) and darker the deeper, an ' +
@@ -838,8 +880,23 @@ function viewLibraryImage(bytes, format, size = {}) {
   return { data: Buffer.from(encode(scaleDown(img))), mimeType: 'image/jpeg' };
 }
 
+/**
+ * A token's picture (L-932) as pixels to draw from: PNG, JPEG, WebP or SVG
+ * bytes, at most 256 px on its long side, its transparency kept.
+ */
+async function tokenPixels(bytes) {
+  const sharp = require('sharp');
+  const { data, info } = await sharp(Buffer.from(bytes))
+    .resize(256, 256, { fit: 'inside', withoutEnlargement: true })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return { width: info.width, height: info.height, data };
+}
+
 module.exports = {
   MAX_SIDE,
+  tokenPixels,
   renderBattleMap,
   renderMap,
   renderTown,

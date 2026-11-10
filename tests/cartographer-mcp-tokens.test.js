@@ -49,6 +49,7 @@ const { getStorage } = require(
   require.resolve('firebase-admin/storage', { paths: [functionsDir] })
 );
 const { PNG } = require(require.resolve('pngjs', { paths: [functionsDir] }));
+const jpeg = require(require.resolve('jpeg-js', { paths: [functionsDir] }));
 
 const { BUILT_IN } = require('../functions/loom-canon/systems');
 const { createLibrary } = require('../functions/studio/library');
@@ -84,6 +85,8 @@ registry.registerApp(
     writer,
     systems: { get: async (id) => BUILT_IN[id] || null },
     studio: { assign: (uid, args) => service.assignImage(uid, args) },
+    // Read from Storage for view_image (its tokens' pictures, L-932).
+    art: { load: async (p) => (await bucket.file(p).download())[0] },
   })
 );
 const oauthStore = createInMemoryStore();
@@ -304,7 +307,37 @@ describe('token pictures', () => {
       crop: { x: 0.5, y: 0.3, zoom: 1 },
     });
     // Links only: never the library record.
-    for (const p of view.battleMap.people) expect(Object.keys(p.token).sort()).toEqual(['crop', 'link']);
+    for (const p of view.battleMap.people)
+      expect(Object.keys(p.token).sort()).toEqual(['crop', 'link']);
+  });
+
+  test('view_image draws the same tokens: pictures in their rings, plain without', async () => {
+    const shown = await call('view_image', { worldId: ids.world, of: 'battleMap', id: GATEWAY.id });
+    expect(shown.isError).toBeFalsy();
+    const legend = shown.structuredContent;
+    const figures = legend.markers.filter((m) => m.type === 'figure');
+    expect(figures.map((m) => m.id).sort()).toEqual([
+      'fig-bandits-1',
+      'fig-bandits-2',
+      'fig-chief',
+    ]);
+    expect(figures.every((m) => m.token)).toBe(true);
+    expect(legend.reading).toMatch(/round tokens/);
+    // The picture (grey 170 at alpha 170, so two-thirds over the dark inside
+    // of the frame) inside the chief's ring, in the middle of its square.
+    const image = shown.content.find((c) => c.type === 'image');
+    const pixels = jpeg.decode(Buffer.from(image.data, 'base64'), { useTArray: true });
+    const cw = legend.cellSize.width;
+    const at = (x, y) => {
+      const i = (Math.round(y) * pixels.width + Math.round(x)) * 4;
+      return [pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]];
+    };
+    const middle = at(0.5 * cw, 2.5 * cw);
+    const blended = [10, 14, 26].map((t) => (170 * 170 + t * (255 - 170)) / 255);
+    middle.forEach((v, i) => expect(Math.abs(v - blended[i])).toBeLessThan(20));
+    // Its ring is in the neutral side's teal, not the picture's grey.
+    const ring = at(0.5 * cw + (3.2 / 5 / 2) * cw - 1, 2.5 * cw);
+    expect(ring[2] - ring[0]).toBeGreaterThan(40);
   });
 
   test('a changed stat block picture reaches every figure naming it', async () => {
