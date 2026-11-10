@@ -73,6 +73,7 @@
     range: 0xef9a9a, // an attack's reach or range (L-828)
     cover: 0x90caf9, // a target's cover (L-828)
     card: 0xfff3e0, // a foe's card over its token while its turn plays out
+    turn: 0xfff59d, // the ring round the one whose turn is playing out (L-932)
     area: 0x9fa8da, // an area's tint, edge and name (#670)
   };
   var CARD_MS = 1100; // how long a foe's card shows over its token (L-828)
@@ -670,17 +671,50 @@
   }
 
   // A token in the standing layer (L-941), in its place in the order: its
-  // foot, `foot` below its middle (map coordinates).
-  function standToken(container, at, foot) {
+  // foot at `at`, where they stand (L-932: the disc stands upright on its
+  // base above it, `radius` its radius in map coordinates; someone down
+  // lies flat on it, `standing` false).
+  function standToken(container, at, radius, standing) {
     var stand = battle.data && Loom.mapPaint.standOf('battle:' + battle.data.id);
     if (!stand) return;
     if (container.parent !== stand) stand.addChild(container);
-    container.__loomFoot = foot;
-    container.zIndex = at.y + foot;
+    container.__loomFoot = radius;
+    container.__loomStanding = standing !== false;
+    container.zIndex = at.y;
     if (container.__loomPainted) {
-      container.__loomPainted.depth =
-        Math.round(((at.y + foot - TOP) / CELL) * MP.FEET * 100) / 100;
+      container.__loomPainted.depth = Math.round(((at.y - TOP) / CELL) * MP.FEET * 100) / 100;
     }
+  }
+
+  // A person's token as it is drawn (L-932): their picture, side, size and
+  // state; `turn` rings the one whose turn is playing out.
+  function personToken(person, c, radius, turn) {
+    return {
+      x: c.x,
+      y: c.y,
+      // As wide as they are (L-922), a medium one's as before.
+      radius: radius,
+      name: person.name,
+      fill:
+        person.side === 'hostile'
+          ? COLOURS.foe
+          : person.side === 'party'
+            ? COLOURS.friend
+            : person.side === 'wary'
+              ? COLOURS.wary
+              : COLOURS.person,
+      picture: person.token || null,
+      standing: true,
+      down: Boolean(person.down),
+      turn: turn ? COLOURS.turn : null,
+      shadow: true, // standing, with its contact shadow (L-943)
+      onLoad: pictureLoaded,
+    };
+  }
+
+  // A token's picture arrived (L-932): drawn on the next frame.
+  function pictureLoaded() {
+    if (battle.nodes) engine.draw();
   }
 
   // The standing layer cut to the columns over the squares seen (L-941): a
@@ -1019,26 +1053,14 @@
       token.container.visible = true;
       token.container.scale.set(px);
       // Their side shows in a fight's colours (L-828): foes red, friends
-      // green; someone down is faded.
-      token.container.alpha = person.down ? 0.45 : 1;
+      // green; their picture in the frame (L-932); someone down lies flat,
+      // greyed and crossed.
+      token.container.alpha = 1;
       var radius = Math.max(5, cellPx * Math.max(0.32, (person.width || 0) / MP.FEET / 2));
-      standToken(token.container, c, radius * px);
-      token.update({
-        x: c.x,
-        y: c.y,
-        // As wide as they are (L-922), a medium one's as before.
-        radius: radius,
-        name: person.name,
-        fill:
-          person.side === 'hostile'
-            ? COLOURS.foe
-            : person.side === 'party'
-              ? COLOURS.friend
-              : person.side === 'wary'
-                ? COLOURS.wary
-                : COLOURS.person,
-        shadow: true, // standing, with its contact shadow (L-943)
-      });
+      standToken(token.container, c, radius * px, !person.down);
+      token.person = person;
+      token.radius = radius;
+      token.update(personToken(person, c, radius, false));
     });
     Object.keys(battle.tokens).forEach(function (id) {
       if (!people[id]) battle.tokens[id].container.visible = false;
@@ -1223,7 +1245,10 @@
       name: save && save.characterName,
       fill: COLOURS.you,
       ring: COLOURS.ring,
+      picture: (battle.data && battle.data.you && battle.data.you.token) || null,
+      standing: true, // upright on its base (L-932)
       shadow: true, // standing, with its contact shadow (L-943)
+      onLoad: pictureLoaded,
     });
     fadeBehind();
   }
@@ -1248,10 +1273,15 @@
         if (child.__loomFoot === undefined || !child.visible) return;
         var c = feetOf(child.position);
         var r = (child.__loomFoot / CELL) * MP.FEET;
-        out.push({
-          box: { x0: c.x - r, y0: c.y - r, x1: c.x + r, y1: c.y + r },
-          depth: c.y + r,
-        });
+        // A standing disc (L-932) rises from its foot; one lying down covers its spot.
+        out.push(
+          child.__loomStanding
+            ? {
+                box: { x0: c.x - r, y0: c.y - r * Loom.draw.standHeight(), x1: c.x + r, y1: c.y },
+                depth: c.y,
+              }
+            : { box: { x0: c.x - r, y0: c.y - r, x1: c.x + r, y1: c.y + r }, depth: c.y }
+        );
       });
     }
     if (battle.cursor) spot1(battle.cursor);
@@ -1936,16 +1966,31 @@
         var node = Loom.draw.label(st.card, 12);
         node.style.fill = COLOURS.card;
         node.scale.set(1 / view.scale);
-        node.position.set(at[st.id].x, at[st.id].y - CELL * 0.75);
+        // Over its disc, standing on its base (L-932).
+        var held = battle.tokens[st.id];
+        var r = held && held.container.__loomFoot ? held.container.__loomFoot : CELL * 0.32;
+        node.position.set(at[st.id].x, at[st.id].y - r * Loom.draw.standHeight() - CELL * 0.3);
         n.cards.addChild(node);
       }
+    });
+    // The one whose turn is playing is ringed (L-932).
+    var playing = null;
+    pb.steps.forEach(function (st) {
+      if (t >= st.t0 && t < st.t0 + st.walk + (st.card ? CARD_MS : 0)) playing = st.id;
     });
     Object.keys(at).forEach(function (id) {
       var token = battle.tokens[id];
       if (!token) return;
       token.container.visible = true;
-      token.container.position.set(at[id].x, at[id].y);
-      standToken(token.container, at[id], token.container.__loomFoot || 0);
+      standToken(
+        token.container,
+        at[id],
+        token.container.__loomFoot || 0,
+        token.container.__loomStanding
+      );
+      if (token.person) {
+        token.update(personToken(token.person, at[id], token.radius, id === playing));
+      } else token.container.position.set(at[id].x, at[id].y);
     });
   }
 
@@ -2184,6 +2229,28 @@
     renderInfo: renderInfo,
     current: function () {
       return battle.data;
+    },
+    /**
+     * The tokens drawn (L-932), for tests: each person's id, whether their
+     * picture shows, whether they stand, their radius in map coordinates
+     * and where their foot is.
+     */
+    tokens: function () {
+      return Object.keys(battle.tokens)
+        .filter(function (id) {
+          return battle.tokens[id].container.visible;
+        })
+        .map(function (id) {
+          var t = battle.tokens[id];
+          return {
+            id: id,
+            pictured: t.pictured,
+            standing: Boolean(t.container.__loomStanding),
+            radius: t.container.__loomFoot,
+            x: t.container.position.x,
+            y: t.container.position.y,
+          };
+        });
     },
   };
 })();

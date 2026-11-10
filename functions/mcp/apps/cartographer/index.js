@@ -33,6 +33,8 @@ const levels = require('../../../loom-canon/levels');
 const { modelOf } = require('./level-tools');
 const figures = require('../../../loom-modules/combat/figures');
 const { systemOf } = require('../../../loom-canon/checks');
+const tokens = require('../../../loom-canon/tokens');
+const sheets = require('../../../loom-canon/sheets');
 
 // The live characters whose position is at `level` and passes `keep`, as
 // view_image draws them (L-684): [{ id, name, x, y, place? }].
@@ -645,6 +647,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
                     y: cell.y,
                     side: character.side || 'neutral',
                     at: { id: host.id, name: host.name },
+                    width: sheets.widthOf(character.sheet),
+                    token: tokens.tokenOf(character, world),
                   }))
                   .concat(
                     (map.figures || []).flatMap((g) =>
@@ -655,9 +659,31 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
                         y: f.cell.y,
                         side: f.side,
                         figure: g.id,
+                        width: sheets.widthOf(f.sheet),
+                        token: f.token || null,
                       }))
                     )
                   );
+                // Their token pictures (L-932), each image read once; one
+                // that can't be read is drawn plain.
+                const pictures = {};
+                for (const p of people) {
+                  const t = p.token;
+                  if (!t || pictures[t.imageId] !== undefined) continue;
+                  try {
+                    pictures[t.imageId] = await images.tokenPixels(
+                      await art.load(currentPath(t.imageId))
+                    );
+                  } catch {
+                    pictures[t.imageId] = null;
+                  }
+                }
+                people.forEach((p) => {
+                  p.token =
+                    p.token && pictures[p.token.imageId]
+                      ? { image: pictures[p.token.imageId], crop: tokens.cropOf(p.token) }
+                      : null;
+                });
                 // What can be seen from an entry (L-394), or from a point in feet.
                 let sight = null;
                 if (args.sightFrom && args.from) {

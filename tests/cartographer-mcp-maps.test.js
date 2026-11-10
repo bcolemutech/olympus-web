@@ -2070,7 +2070,7 @@ describe('seeing and placing (L-394)', () => {
       wary: 'yellow',
       neutral: 'teal',
     });
-    expect(legend.reading).toMatch(/coloured by side/);
+    expect(legend.reading).toMatch(/ringed by side/);
 
     const seen = await call('view_image', {
       worldId: W,
