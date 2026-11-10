@@ -18,6 +18,7 @@ const { helpers } = require('./write-tools');
 const views = require('./views');
 const figures = require('../../../loom-modules/combat/figures');
 const scale = require('../../../loom-canon/scale');
+const { tokenInput, writeToken } = require('./token-tools');
 
 // The Cartographer's MCP battle-map tools (planning/the-loom-layered-worlds.md
 // §9; L-352 / #401): Claude draws the grids that points of interest and places
@@ -307,6 +308,13 @@ const figureGroup = z.strictObject({
     .optional()
     .describe('How much risk they take (default steady).'),
   leader: z.boolean().optional().describe('Whether their fall shakes the rest.'),
+  token: tokenInput
+    .optional()
+    .describe(
+      'Their picture on the battle map (L-931): { image, crop? }, a library image of kind ' +
+        'token or portrait, over their stat block’s; null takes it away. Left out, a group ' +
+        'keeps the one it had under the same id.'
+    ),
   cells: z
     .array(z.union([z.strictObject({ x: coord, y: coord }), z.literal('auto')]))
     .min(1)
@@ -812,7 +820,9 @@ function mapTools({ writer }) {
         'take (posture: cowardly, cautious, steady, bold or reckless; it sets when they break ' +
         'and flee), whether one is a leader whose fall shakes the rest, and one square each. ' +
         'In play each is numbered ("Bandit 3"), with its own health in each save. The list ' +
-        'replaces the map’s figures; an empty list clears them. get_battle_map shows them. ' +
+        'replaces the map’s figures; an empty list clears them. Each shows its token picture ' +
+        '(token, or set_token), else its stat block’s, else its initials. get_battle_map ' +
+        'shows them. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -821,17 +831,40 @@ function mapTools({ writer }) {
       },
       annotations: replacing,
       handler: (ctx, args) =>
-        edit(ctx, args, (e) => {
+        edit(ctx, args, async (e) => {
           const { world } = e;
           const map = live(world, 'battleMap', args.mapId);
+          // Their tokens apart (L-931): checked once the list is.
+          const given = args.figures.map((g) => g.token);
           // Squares for "auto" first (L-394), then the whole list checked.
           const list = figures.placeAuto(
             world,
             map,
-            args.figures.map((g) => JSON.parse(JSON.stringify(g)))
+            args.figures.map((g) => {
+              const copy = JSON.parse(JSON.stringify(g));
+              delete copy.token;
+              return copy;
+            })
           );
           const errors = figures.validateFigures(world, systemOf(world), map, list);
           if (errors.length) throw new ToolError(errors.join(' '));
+          // Each group's token (L-931): the one given, else the one it had
+          // under the same id; a group gone lets its image go. Images' "in
+          // use" kept right.
+          const before = new Map((map.figures || []).map((g) => [g.id, g.token || null]));
+          const use = (id) => ({ worldId: args.worldId, target: 'figure', id: `${map.id}/${id}` });
+          for (let i = 0; i < list.length; i += 1) {
+            const was = before.get(list[i].id) || null;
+            const token =
+              given[i] === undefined
+                ? was
+                : await writeToken(e, given[i], was, use(list[i].id), `figures[${i}].token`);
+            if (token) list[i].token = token;
+          }
+          const kept = new Set(list.map((g) => g.id));
+          for (const [id, was] of before) {
+            if (!kept.has(id) && was) await writeToken(e, null, was, use(id));
+          }
           e.update(e.ref('battleMaps', map.id), { figures: list });
           const next = { ...map, figures: list };
           const result = { figures: views.figureRows(world, next) };

@@ -99,7 +99,8 @@
     return dd;
   }
 
-  // What a use is called: the world, and the town or battle map in it.
+  // What a use is called: the world, and the town, battle map, character or
+  // stat block in it.
   function useName(use, node) {
     var world = state.worlds[use.worldId] || use.worldId;
     var target = Studio.TARGETS[use.target] || use.target;
@@ -107,7 +108,18 @@
       node.textContent = world + ' · ' + target;
       return;
     }
-    var collection = use.target === 'town' ? 'locations' : 'battleMaps';
+    // The collection its name is read from; an object kind, an object and a
+    // group of figures ("<mapId>/<id>") show their id.
+    var collection = {
+      town: 'locations',
+      battleMap: 'battleMaps',
+      character: 'characters',
+      statBlock: 'statBlocks',
+    }[use.target];
+    if (!collection) {
+      node.textContent = world + ' · ' + target + ' · ' + use.id;
+      return;
+    }
     var key = use.worldId + '/' + collection + '/' + use.id;
     var draw = function () {
       node.textContent = world + ' · ' + target + ' · ' + (names[key] || use.id);

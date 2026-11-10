@@ -7,12 +7,15 @@ const loomCanon = require('../loom-canon');
 const { LibraryError } = require('./library');
 const { TARGETS, refOf } = require('./assign-targets');
 const { FITS, fits, fitFile } = require('./fit');
+const tokens = require('../loom-canon/tokens');
+const { tokenRefOf, keptCrop } = require('./token-use');
 
 /**
  * Assigning library images to worlds (planning/the-image-studio.md §4.4;
  * L-704 / #540). A world holds a reference to a library image (A1) for its
  * map, its cover, a town or a battle map, an object kind of its own or a
- * single object (./assign-targets.js; L-925).
+ * single object (./assign-targets.js; L-925), or as the token of a
+ * character, a stat block or a group of figures, with its crop (L-931).
  *
  * The kind must fit the target (L1). The world is changed through the
  * Cartographer's versioned writer, and the image's `usedIn` in the same
@@ -90,9 +93,55 @@ function objectHolderOf(world, target, id) {
   };
 }
 
+// A character, a stat block or a group of figures (L-931): what holds the
+// token, and the token it has.
+function tokenHolderOf(world, target, id) {
+  const held = (entity, name) => ({
+    name,
+    entity,
+    token: entity.token || null,
+    previous: art.fromRef(entity.token),
+  });
+  if (target === 'character') {
+    const c = (world.characters || {})[id];
+    if (!c || c.retired) throw new AssignError('not-found', `No character "${id}" in this world.`);
+    return held(c, c.name);
+  }
+  if (target === 'statBlock') {
+    const block = (world.statBlocks || {})[id];
+    if (!block) {
+      throw new AssignError('not-found', `No stat block "${id}" in this world (list_stat_blocks).`);
+    }
+    return held(block, block.name);
+  }
+  const [mapId, groupId, extra] = String(id).split('/');
+  if (!mapId || !groupId || extra !== undefined) {
+    throw new AssignError(
+      'invalid-argument',
+      'Name the figures as "<mapId>/<groupId>", the battle map and the group’s id there.'
+    );
+  }
+  const map = (world.battleMaps || {})[mapId];
+  if (!map || map.retired) {
+    throw new AssignError(
+      'not-found',
+      mapId.includes('__')
+        ? `"${mapId}" is a template's copy for one place: give the token to the figures on the template map.`
+        : `No battle map "${mapId}" in this world.`
+    );
+  }
+  const groups = map.figures || [];
+  const index = groups.findIndex((g) => g && g.id === groupId);
+  if (index < 0) {
+    throw new AssignError('not-found', `No figures "${groupId}" on ${map.name || mapId}.`);
+  }
+  return { ...held(groups[index], groups[index].name || groupId), map, index };
+}
+
 // The thing art is for, and the art it holds now.
 function holderOf(world, target, id) {
   if (target === 'objectKind' || target === 'object') return objectHolderOf(world, target, id);
+  if (TARGETS[target] && TARGETS[target].token) return tokenHolderOf(world, target, id);
   if (target === 'map') return { name: world.name, previous: art.worldMapArt(world) };
   if (target === 'cover') return { name: world.name, previous: art.coverArt(world) };
   if (target === 'town') {
@@ -150,6 +199,23 @@ function shapeWarnings(target, entity, size) {
     ];
   }
   return [];
+}
+
+// A token written to its holder (L-931): a character's or a stat block's
+// field, or a group's entry in its battle map's figures, which are written
+// whole (a list can't be changed in place).
+function writeToken(e, target, at, holder, ref) {
+  const value = ref || FieldValue.delete();
+  if (target === 'character') return e.update(e.ref('characters', at), { token: value });
+  if (target === 'statBlock') return e.update(e.ref('statBlocks', at), { token: value });
+  const groups = (holder.map.figures || []).map((g, i) => {
+    if (i !== holder.index) return g;
+    const next = { ...g };
+    if (ref) next.token = ref;
+    else delete next.token;
+    return next;
+  });
+  return e.update(e.ref('battleMaps', holder.map.id), { figures: groups });
 }
 
 function createAssigner({ db, bucket, writer, library }) {
@@ -224,7 +290,7 @@ function createAssigner({ db, bucket, writer, library }) {
     };
   }
 
-  async function assign(uid, { worldId, target, id, imageId, fit }) {
+  async function assign(uid, { worldId, target, id, imageId, fit, crop }) {
     if (fit !== undefined && fit !== null && !FITS.includes(fit)) {
       throw new AssignError('invalid-argument', `fit must be one of: ${FITS.join(', ')}.`);
     }
@@ -235,12 +301,23 @@ function createAssigner({ db, bucket, writer, library }) {
         `The target must be one of: ${Object.keys(TARGETS).join(', ')}.`
       );
     }
+    // A token's crop (L-931): only a token has one.
+    if (crop !== undefined && crop !== null) {
+      if (!spec.token) {
+        throw new AssignError('invalid-argument', 'Only a token has a crop.');
+      }
+      const problems = tokens.validateCrop(crop);
+      if (problems.length) throw new AssignError('invalid-argument', problems.join(' '));
+    }
     const at = target === 'map' || target === 'cover' ? worldId : id;
     if (typeof at !== 'string' || !at) {
       const which = {
         town: 'settlement',
         objectKind: 'object kind',
         object: 'object ("<mapId>/<objectId>")',
+        character: 'character',
+        statBlock: 'stat block',
+        figure: 'group of figures ("<mapId>/<groupId>")',
       };
       throw new AssignError('invalid-argument', `Say which ${which[target] || 'battle map'}.`);
     }
@@ -252,7 +329,13 @@ function createAssigner({ db, bucket, writer, library }) {
         if (err instanceof LibraryError) throw new AssignError(err.code, err.message);
         throw err;
       }
-      if (record.kind !== spec.kind) {
+      if (spec.kinds && !spec.kinds.includes(record.kind)) {
+        throw new AssignError(
+          'failed-precondition',
+          `"${record.title}" is a ${record.kind} image; a token takes a token or portrait image.`
+        );
+      }
+      if (!spec.kinds && record.kind !== spec.kind) {
         throw new AssignError(
           'failed-precondition',
           `"${record.title}" is a ${record.kind} image; ${spec.label} takes ${/^[aeiou]/i.test(spec.kind) ? 'an' : 'a'} ${spec.kind} image.`
@@ -266,13 +349,19 @@ function createAssigner({ db, bucket, writer, library }) {
       record = done.record;
       fitNote = done.note || null;
     }
-    const ref = record ? refOf(record) : null;
+    const plain = record ? refOf(record) : null;
     const use = { worldId, target, id: at };
 
     const result = await writer.edit(worldId, uid, (e) => {
       const holder = holderOf(e.world, target, at);
       const previous = holder.previous;
-      if (!ref && !previous) return { name: holder.name, previous: null, entity: holder.entity };
+      // A token keeps its crop: the one given, else the one it had for the
+      // same image (a new version made current re-assigns it; L-931).
+      const ref =
+        record && spec.token ? tokenRefOf(record, keptCrop(holder.token, record.id, crop)) : plain;
+      if (!ref && !previous) {
+        return { name: holder.name, previous: null, entity: holder.entity, ref: null };
+      }
       if (previous && ref && previous.imageId === ref.imageId) {
         // The same image again: refresh its size, nothing else.
       } else {
@@ -307,6 +396,8 @@ function createAssigner({ db, bucket, writer, library }) {
             ? { [`objectKinds.${at}.art`]: value }
             : { [`objectKinds.${at}`]: FieldValue.delete() }
         );
+      } else if (spec.token) {
+        writeToken(e, target, at, holder, ref);
       } else if (target === 'object') {
         // The object's entry in its map's geometry, which is written whole:
         // a list can't be changed in place. Its map's revision moves (a
@@ -325,8 +416,9 @@ function createAssigner({ db, bucket, writer, library }) {
       } else {
         e.update(e.ref('battleMaps', at), { image: ref || null });
       }
-      return { name: holder.name, previous, entity: holder.entity };
+      return { name: holder.name, previous, entity: holder.entity, ref };
     });
+    const ref = result.ref || null;
 
     // Older art's file goes when it is replaced, as it always has.
     if (result.previous && result.previous.path) {
@@ -341,7 +433,13 @@ function createAssigner({ db, bucket, writer, library }) {
       id: at,
       name: result.name,
       image: ref
-        ? { imageId: ref.imageId, width: ref.width, height: ref.height, format: ref.format }
+        ? {
+            imageId: ref.imageId,
+            width: ref.width,
+            height: ref.height,
+            format: ref.format,
+            ...(spec.token ? { crop: tokens.cropOf(ref) } : {}),
+          }
         : null,
       previous: result.previous
         ? result.previous.imageId

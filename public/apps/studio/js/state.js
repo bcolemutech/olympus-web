@@ -46,6 +46,11 @@
     cover: 'Cover',
     town: 'Town art',
     battleMap: 'Battle-map art',
+    objectKind: 'Object art',
+    object: 'Object art',
+    character: 'Token',
+    statBlock: 'Token',
+    figure: 'Token',
   };
 
   // Upload limits, mirrored from storage.rules (the server checks them too).

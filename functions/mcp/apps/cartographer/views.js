@@ -24,6 +24,14 @@ const artOf = require('../../../loom-canon/art');
 const routes = require('../../../loom-canon/routes');
 const { validateSheet, apFor, sheetFromStatBlock } = require('../../../loom-canon/sheets');
 const statBlocks = require('../../../loom-canon/stat-blocks');
+const tokens = require('../../../loom-canon/tokens');
+
+// A token picture as the tools show it (L-931): its image, link and crop.
+function tokenView(token) {
+  return tokens.isToken(token)
+    ? { imageId: token.imageId, link: token.link, crop: tokens.cropOf(token) }
+    : null;
+}
 const figures = require('../../../loom-modules/combat/figures');
 const { systemOf } = require('../../../loom-canon/checks');
 const hazards = require('../../../loom-canon/hazards');
@@ -640,6 +648,16 @@ function characterDetail(world, character) {
       // turns (L-825).
       ...(character.combatNotes ? { combatNotes: character.combatNotes } : {}),
     },
+    // Their token picture (L-931): their own, else their stat block's, and
+    // where it comes from.
+    ...(tokens.tokenOf(character, world)
+      ? {
+          token: {
+            ...tokenView(tokens.tokenOf(character, world)),
+            from: tokens.isToken(character.token) ? 'own' : 'statBlock',
+          },
+        }
+      : {}),
     // Where they are (L-682): a square, a town point or a world point, or why
     // they have none yet.
     position: positions.positionView(world, character),
@@ -743,6 +761,15 @@ function figureRows(world, map) {
   const system = systemOf(world);
   return (map.figures || []).map((g) => ({
     ...g,
+    // Their token (L-931): the group's own, else its stat block's.
+    ...(tokens.tokenOf(g, world)
+      ? {
+          token: {
+            ...tokenView(tokens.tokenOf(g, world)),
+            from: tokens.isToken(g.token) ? 'own' : 'statBlock',
+          },
+        }
+      : {}),
     side: g.side || 'hostile',
     role: figures.roleOf(system, {
       ...g,

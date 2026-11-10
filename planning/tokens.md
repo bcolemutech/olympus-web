@@ -1,6 +1,6 @@
 # The Loom — Tokens — Design Document v0.1
 
-**Status:** Decided (2026-11-06). Revised 2026-11-07: tokens stand (TK5), built after L-940's view. Sub-issues filed 2026-11-06 (#789–#792, §6).
+**Status:** In progress. Decided (2026-11-06). Revised 2026-11-07: tokens stand (TK5), built after L-940's view. Sub-issues filed 2026-11-06 (#789–#792, §6). L-931 (token pictures as data) built 2026-11-10.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-930 (#788), Phase 10 — Levels and Vehicles (milestone #26).
 **Depends on:** L-393 (named stat blocks), L-922 (size classes), L-700 (the image studio).
@@ -46,7 +46,7 @@ Animation is not wanted (the user, 2026-11-06).
 ### 4.1 Token pictures as data (TK1)
 
 - **A token picture** is `{ image, crop? }`:
-  - `image` is a library image (`img_…`), or for a player's upload its stored file (§4.3);
+  - `image` is a library image (`img_…`), or for a player's upload its stored file (§4.3); stored as the library's reference (`{ imageId, link, width, height, format }`, as other art) with `crop` beside it (L-931);
   - `crop` is `{ x, y, zoom }`, the circle's centre on the image (0–1) and how far in, so a full portrait can be framed on its face. The default is centred and fitted.
 - **On:** a character (`character.token`), a stat block (`statBlock.token`), and a placed figure or group (`token` beside its `statBlock`, overriding it).
 - **Resolved on the server** (`functions/loom-canon/tokens.js`, `tokenOf(person, world)`): figure, then character, then stat block, else none. The page gets a link and the crop only, never library records.

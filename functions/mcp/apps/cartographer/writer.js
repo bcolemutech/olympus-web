@@ -17,7 +17,11 @@ const { ToolError } = require('../../registry');
 //
 // `change({ world, meta, uid, ref, set, create, update, remove, updateWorld })`
 // may only queue writes (they are applied after it returns, so every read in
-// the transaction precedes every write) and returns the tool result.
+// the transaction precedes every write) and returns the tool result. It may
+// also read a library image (`readImage(imageId)`, its record or null) and
+// queue writes to one (`image(imageId)`, its ref), so a token set on a
+// character, a stat block or figures keeps the image's "in use" right in the
+// same transaction (L-931).
 //
 // create(uid, { name, systemId, map }) makes a new, empty draft world, as an
 // import does but with no Azgaar map (L-391): its locations are added after.
@@ -71,6 +75,11 @@ function createFirestoreWorldWriter(getDb, { now = () => Date.now() } = {}) {
         create: (ref, data) => writes.push((t) => t.create(ref, data)),
         update: (ref, ...args) => writes.push((t) => t.update(ref, ...args)),
         remove: (ref) => writes.push((t) => t.delete(ref)),
+        image: (imageId) => getDb().collection('studio_images').doc(imageId),
+        readImage: async (imageId) => {
+          const snap = await tx.get(getDb().collection('studio_images').doc(imageId));
+          return snap.exists ? { ...snap.data(), id: snap.id } : null;
+        },
         updateWorld: (fields) => {
           worldChanges = { ...(worldChanges || {}), ...fields };
         },

@@ -5,6 +5,7 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
+const tokens = require('../loom-canon/tokens');
 const { turnStateOf, nextTurnState, applyStateMutations } = require('../loom-models');
 const apRules = require('../loom-canon/ap');
 const clock = require('../loom-canon/clock');
@@ -1314,7 +1315,8 @@ function hurtBy(characterState, mutations) {
 
 // The turns everyone else played, for the Loom to play out on the map
 // (L-828; combat UI3): each fighter's walk, only the squares the player can
-// see once it's done, and their attack's roll as a card.
+// see once it's done, and their attack's roll as a card; and their token
+// picture (L-931), link and crop only.
 function playbackOf(turns, characterState, canonWorld, after) {
   if (!turns || !turns.length) return null;
   const system = checks.systemOf(canonWorld);
@@ -1324,9 +1326,12 @@ function playbackOf(turns, characterState, canonWorld, after) {
     map && cell
       ? sight.inSight(map, maps.viewerOf(canonWorld || {}, after || characterState), doors)
       : {};
+  const tokenFor = (id) =>
+    tokens.forPlayer(tokens.tokenOf(((canonWorld || {}).characters || {})[id], canonWorld));
   return turns.map((t) => ({
     id: t.id,
     name: t.name,
+    ...(tokenFor(t.id) ? { token: tokenFor(t.id) } : {}),
     path: (t.path || [])
       .filter((step) => seen[step.x + ',' + step.y])
       .map((step) => ({ x: step.x, y: step.y })),

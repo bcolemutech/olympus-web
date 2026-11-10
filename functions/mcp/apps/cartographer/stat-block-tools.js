@@ -12,6 +12,7 @@ const {
   sheetFromStatBlock,
   apFor,
 } = require('../../../loom-canon/sheets');
+const { tokenInput, writeToken, tokenRow } = require('./token-tools');
 
 // Named stat blocks in the Cartographer connector (planning/builders-tools.md
 // §4.3; L-393 / #739): set_stat_block and list_stat_blocks, and set_sheets,
@@ -101,6 +102,7 @@ function row(world, entry) {
     id: entry.id,
     name: entry.name,
     statBlock: entry.statBlock,
+    ...(tokenRow(entry.token) ? { token: tokenRow(entry.token) } : {}),
     usedBy: users,
     ...(misfits.length ? { misfits } : {}),
   };
@@ -139,8 +141,11 @@ function statBlockTools({ writer, worldFor }) {
         ' at once (blocks). A stat block is the short form of a sheet (set_sheet), checked ' +
         'against the world’s system. Characters (add_character, update_character, ' +
         'set_sheets) and figures (place_figures) name it by id, with overrides for what ' +
-        'differs; a change here reaches them all, and their overrides stay. statBlock null ' +
-        'deletes one, once nobody names it. All are checked first; if any is refused, ' +
+        'differs; a change here reaches them all, and their overrides stay. token gives it ' +
+        'the picture they all show on battle maps unless they have their own (L-931; ' +
+        'set_token sets it alone); a stat block replaced without one keeps its picture. ' +
+        'statBlock null deletes one, once nobody names it. All are checked first; if any is ' +
+        'refused, ' +
         'nothing is written and each problem is named. ' +
         editNote,
       inputSchema: {
@@ -148,12 +153,14 @@ function statBlockTools({ writer, worldFor }) {
         id: blockId.optional(),
         name: blockName.optional(),
         statBlock: statBlockShape.nullable().optional(),
+        token: tokenInput.optional(),
         blocks: z
           .array(
             z.strictObject({
               id: blockId,
               name: blockName.optional(),
               statBlock: statBlockShape.nullable(),
+              token: tokenInput.optional(),
             })
           )
           .min(1)
@@ -164,16 +171,16 @@ function statBlockTools({ writer, worldFor }) {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       handler: (ctx, args) => {
         const single = args.id !== undefined || args.statBlock !== undefined;
-        if (single && args.blocks)
+        if ((single || args.token !== undefined) && args.blocks)
           throw new ToolError('Give id and statBlock, or blocks, not both.');
         if (!single && !args.blocks) throw new ToolError('Give id and statBlock, or blocks.');
         if (single && (args.id === undefined || args.statBlock === undefined)) {
           throw new ToolError('A stat block needs its id and statBlock (null to delete it).');
         }
         const list = single
-          ? [{ id: args.id, name: args.name, statBlock: args.statBlock }]
+          ? [{ id: args.id, name: args.name, statBlock: args.statBlock, token: args.token }]
           : args.blocks;
-        return edit(ctx, args, (e) => {
+        return edit(ctx, args, async (e) => {
           const { world } = e;
           const system = systemOf(world);
           const problems = [];
@@ -195,12 +202,14 @@ function statBlockTools({ writer, worldFor }) {
                   `${at}${before.name} is named by ${names.join(', ')}. Give them another first.`
                 );
               }
-              return writes.push({ id: item.id, name: before.name, deleted: true });
+              return writes.push({ id: item.id, name: before.name, deleted: true, before });
             }
             const entry = {
               id: item.id,
               name: item.name || (before && before.name),
               statBlock: item.statBlock,
+              // Its picture is kept when it isn't given (L-931).
+              ...(before && before.token ? { token: before.token } : {}),
             };
             if (!entry.name) return problems.push(`${at}a new stat block needs its name.`);
             const wrong = statBlocks.validateEntry(system, entry);
@@ -209,9 +218,22 @@ function statBlockTools({ writer, worldFor }) {
                 `${at}it doesn’t fit the world’s rules (${system.name}): ${wrong.join(' ')}`
               );
             }
-            writes.push({ id: item.id, name: entry.name, entry, created: !before });
+            writes.push({ id: item.id, name: entry.name, entry, created: !before, item, before });
           });
           if (problems.length) throw new ToolError(problems.join('\n'));
+          // Token pictures (L-931): each checked, and its image's "in use"
+          // kept, a deleted block's let go.
+          for (const w of writes) {
+            const use = { worldId: args.worldId, target: 'statBlock', id: w.id };
+            const was = (w.before && w.before.token) || null;
+            const given = w.deleted ? null : w.item.token;
+            if (w.deleted && !was) continue;
+            const where = single ? 'token' : `blocks (${w.id}).token`;
+            const token = await writeToken(e, given, was, use, where);
+            if (w.deleted || token === undefined) continue;
+            if (token) w.entry.token = token;
+            else delete w.entry.token;
+          }
           for (const w of writes) {
             const ref = e.ref('statBlocks', w.id);
             if (w.deleted) e.remove(ref);
@@ -225,6 +247,7 @@ function statBlockTools({ writer, worldFor }) {
               id: w.id,
               name: w.name,
               created: w.created,
+              ...(w.entry.token ? { token: tokenRow(w.entry.token) } : {}),
               ...(reach
                 ? {
                     reaches:
@@ -245,7 +268,8 @@ function statBlockTools({ writer, worldFor }) {
       description:
         `Give up to ${MAX_SHEETS} named characters their sheets in one call (L-393): each a ` +
         'whole sheet, a stat block of their own, or a named stat block’s id with overrides ' +
-        '(set_sheet takes one). All are checked first; if any doesn’t fit, nothing is ' +
+        '(set_sheet takes one), and with token their picture on battle maps (L-931). All are ' +
+        'checked first; if any doesn’t fit, nothing is ' +
         'written and each problem is named. ' +
         editNote,
       inputSchema: {
@@ -257,6 +281,7 @@ function statBlockTools({ writer, worldFor }) {
               sheet: z.object({}).passthrough().optional().describe('A whole sheet.'),
               statBlock: blockRef.optional(),
               overrides: overrides.optional(),
+              token: tokenInput.optional(),
             })
           )
           .min(1)
@@ -264,7 +289,7 @@ function statBlockTools({ writer, worldFor }) {
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       handler: (ctx, args) =>
-        edit(ctx, args, (e) => {
+        edit(ctx, args, async (e) => {
           const { world } = e;
           const problems = [];
           const writes = [];
@@ -275,18 +300,34 @@ function statBlockTools({ writer, worldFor }) {
             if (!c) return problems.push(`${at}: no character "${item.characterId}".`);
             if (seen.has(c.id)) return problems.push(`${at}: ${c.name} is given twice.`);
             seen.add(c.id);
-            if ((item.sheet === undefined) === (item.statBlock === undefined)) {
-              return problems.push(`${at}: give sheet or statBlock.`);
+            const sheetGiven = item.sheet !== undefined || item.statBlock !== undefined;
+            if (item.sheet !== undefined && item.statBlock !== undefined) {
+              return problems.push(`${at}: give sheet or statBlock, not both.`);
             }
+            if (!sheetGiven && item.token === undefined) {
+              return problems.push(`${at}: give sheet, statBlock or token.`);
+            }
+            if (!sheetGiven) return writes.push({ c, fields: {}, item, at });
             try {
-              writes.push({ c, ...sheetFields(world, c.name, item) });
+              writes.push({ c, ...sheetFields(world, c.name, item), item, at });
             } catch (err) {
               if (!(err instanceof ToolError)) throw err;
               problems.push(`${at}: ${err.message}`);
             }
           });
           if (problems.length) throw new ToolError(problems.join('\n'));
-          for (const w of writes) e.update(e.ref('characters', w.c.id), w.fields);
+          // Their token pictures (L-931), with the images' "in use".
+          for (const w of writes) {
+            if (w.item.token === undefined) continue;
+            const was = w.c.token || null;
+            const use = { worldId: args.worldId, target: 'character', id: w.c.id };
+            const token = await writeToken(e, w.item.token, was, use, `${w.at}.token`);
+            if (token) w.fields.token = token;
+            else if (was) w.fields.token = FieldValue.delete();
+          }
+          for (const w of writes) {
+            if (Object.keys(w.fields).length) e.update(e.ref('characters', w.c.id), w.fields);
+          }
           return {
             set: writes.map((w) => ({
               id: w.c.id,
