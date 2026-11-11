@@ -71,33 +71,3 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
           projectId: olympus-dfa00
           expires: 1h
-  test_firestore_rules:
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22" # match the Functions runtime (firebase.json nodejs22)
-      - uses: w9jds/setup-firebase@v1.0.0
-        with:
-          gcp_sa_key: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_OLYMPUS_DFA00 }}
-      - name: Firebase CLI version
-        id: firebase-cli
-        run: echo "version=$(firebase --version)" >> "$GITHUB_OUTPUT"
-      # Keyed on the CLI version, as in firestore-rules.yml.
-      - name: Cache Firebase emulators
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/firebase/emulators
-          key: firebase-emulators-${{ runner.os }}-${{ steps.firebase-cli.outputs.version }}
-      - name: Install functions dependencies
-        run: npm ci --prefix functions
-      - name: Install test dependencies
-        run: npm ci --prefix tests
-      - name: Run Firestore rules tests
-        run: firebase emulators:exec --only firestore,storage --project olympus-dfa00 "cd tests && npm test"
