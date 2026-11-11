@@ -253,8 +253,8 @@
 
   var PORTRAIT_PX = 44;
 
-  function portraitCircle(token) {
-    var circle = el('span', 'carto-portrait');
+  function portraitCircle(token, side) {
+    var circle = el('span', 'carto-portrait' + (side ? ' carto-portrait--' + side : ''));
     circle.style.width = circle.style.height = PORTRAIT_PX + 'px';
     var img = document.createElement('img');
     img.alt = '';
@@ -297,6 +297,75 @@
       row.appendChild(portraitCircle(token));
     });
     return row;
+  }
+
+  // ── Token previews (L-934) ───────────────────────
+  // Each named character's and stat block's token as the Loom draws it: the
+  // picture in its circle at its crop, the ring coloured by side; and those
+  // with none listed, behind a toggle. Sent by cartographerCompletion
+  // (`tokens`, loom-canon/tokens.js previewsOf).
+
+  var TOKEN_GROUPS = [
+    ['characters', 'Characters'],
+    ['statBlocks', 'Stat blocks'],
+  ];
+
+  function tokenGroup(label, group) {
+    var box = el('div', 'carto-token-group');
+    box.appendChild(
+      el(
+        'p',
+        'carto-meta',
+        label +
+          ': ' +
+          (group.total - group.withoutCount) +
+          ' of ' +
+          group.total +
+          ' have a token picture'
+      )
+    );
+    if (group.with.length) {
+      var row = el('div', 'carto-portraits');
+      group.with.forEach(function (who) {
+        var item = el('figure', 'carto-token');
+        item.title = who.name;
+        item.appendChild(portraitCircle(who, who.side));
+        item.appendChild(el('figcaption', 'carto-meta', who.name));
+        row.appendChild(item);
+      });
+      box.appendChild(row);
+    }
+    if (group.without.length) {
+      var more = group.withoutCount - group.without.length;
+      box.appendChild(
+        el(
+          'p',
+          'carto-meta carto-token-missing',
+          'No picture: ' +
+            group.without
+              .map(function (who) {
+                return who.name;
+              })
+              .join(', ') +
+            (more > 0 ? ' and ' + more + ' more' : '') +
+            '.'
+        )
+      );
+    }
+    return box;
+  }
+
+  function renderTokens(tokens) {
+    var shown = TOKEN_GROUPS.filter(function (g) {
+      return tokens && tokens[g[0]] && tokens[g[0]].total;
+    });
+    if (!shown.length) return null;
+    var details = el('details', 'carto-tokens');
+    details.appendChild(el('summary', null, 'Tokens'));
+    shown.forEach(function (g) {
+      details.appendChild(tokenGroup(g[1], tokens[g[0]]));
+    });
+    return details;
   }
 
   // ── Completion ───────────────────────────────────
@@ -378,6 +447,8 @@
       node.appendChild(details);
     }
     if (c.maps) node.appendChild(renderMaps(c.maps));
+    var tokens = renderTokens(c.tokens);
+    if (tokens) node.appendChild(tokens);
   }
 
   // A world's maps as a tree (L-905; map levels UI4): each with its kind, its
@@ -477,6 +548,7 @@
 
   Cartographer.worlds = {
     loadWorlds: loadWorlds,
+    renderCompletion: renderCompletion,
     describeCounts: describeCounts,
     warningsList: warningsList,
   };

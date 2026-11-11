@@ -7,6 +7,7 @@ const { KINDS, normalizeLabels, LibraryError } = require('./library');
 const { readImage } = require('./formats');
 const { priceOf, CostError } = require('./costs');
 const { chooseStyle, snapshot, StyleError } = require('./styles');
+const { usersOf } = require('../loom-canon/stat-blocks');
 
 /**
  * Generation jobs (planning/the-image-studio.md §4.3; L-707 / #543).
@@ -52,7 +53,14 @@ const { chooseStyle, snapshot, StyleError } = require('./styles');
 
 const MAX_PROMPT = 4000;
 const MAX_TITLE = 120;
-const FROM_KINDS = ['location', 'town', 'battleMap', 'character'];
+const FROM_KINDS = ['location', 'town', 'battleMap', 'character', 'statBlock'];
+
+// What a token or portrait is drawn like (planning/tokens.md §4.4; L-934): it
+// is shown in a circle, so the face is centred and nothing matters near the edge.
+const TOKEN_KINDS = ['token', 'portrait'];
+const TOKEN_PROMPT =
+  'Draw a head-and-shoulders portrait, the face centred, on a plain background. ' +
+  'Keep anything important well away from the edge: it will be cropped to a circle.';
 // Reference formats the model reads; SVG is drawn to PNG first.
 const READABLE = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
 
@@ -159,6 +167,30 @@ function fromData(world, from, { placesOf }) {
       name: map.name,
     };
   }
+  if (from.kind === 'statBlock') {
+    const entry = (world.statBlocks || {})[from.id];
+    if (!entry || entry.retired) throw new JobError('not-found', `No stat block "${from.id}".`);
+    const block = entry.statBlock || {};
+    const users = usersOf(world, from.id);
+    const who = users.groups
+      .map((g) => g.name)
+      .concat(users.characters.map((c) => c.name))
+      .filter(Boolean)
+      .slice(0, 6);
+    return {
+      text: [
+        `${entry.name}: one kind of creature or person, shared by everyone who stands for it.`,
+        Array.isArray(block.traits) && block.traits.length && `Traits: ${block.traits.join(', ')}.`,
+        block.size && `Size: ${block.size}.`,
+        who.length && `Seen as: ${who.join(', ')}.`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      aspectRatio: null,
+      kind: 'token',
+      name: entry.name,
+    };
+  }
   const person = (world.characters || {})[from.id];
   if (!person || person.retired) throw new JobError('not-found', `No character "${from.id}".`);
   return {
@@ -216,8 +248,9 @@ function editPrompt(instruction, extraReferences, style = null) {
  * The prompt sent: the world's data first, then the style (L-709), then what
  * was asked. A style's images come first among the references.
  */
-function buildPrompt(prompt, from, style = null) {
-  if (!from && !style) return prompt;
+function buildPrompt(prompt, from, style = null, kind = null) {
+  const tokenLike = TOKEN_KINDS.includes(kind);
+  if (!from && !style && !tokenLike) return prompt;
   const shown = styleImages(style, 1);
   return [
     from && `About what to draw:\n${from.text}`,
@@ -225,6 +258,7 @@ function buildPrompt(prompt, from, style = null) {
       `The style:\n${style.prompt}` +
         (shown ? `\nFollow the style of ${shown} (the look, not the subject).` : ''),
     `The image:\n${prompt}`,
+    tokenLike && TOKEN_PROMPT,
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -506,7 +540,7 @@ function createJobs({
           if (!world) throw new JobError('not-found', 'Its world is gone.');
           from = fromData(world, request.from, { placesOf });
         }
-        prompt = buildPrompt(request.prompt, from, style);
+        prompt = buildPrompt(request.prompt, from, style, request.kind);
       }
       // The style's images, then the request's own.
       for (const id of style ? style.references : []) references.push(await referenceOf(id));
@@ -714,4 +748,5 @@ module.exports = {
   nearestRatio,
   JobError,
   FROM_KINDS,
+  TOKEN_PROMPT,
 };

@@ -674,6 +674,8 @@ describe('get_character and get_lore', () => {
         expect.objectContaining({ criterion: 'character.description', gain: 25 }),
         expect.objectContaining({ criterion: 'character.sheet', gain: 20 }),
         expect.objectContaining({ criterion: 'character.lore', gain: 15 }),
+        // A token picture is a bonus the score doesn't wait on (L-934).
+        expect.objectContaining({ criterion: 'character.token', gain: 10 }),
       ],
       checklist: [
         {
@@ -696,6 +698,7 @@ describe('get_character and get_lore', () => {
           met: false,
           tool: 'set_sheet',
         }),
+        expect.objectContaining({ id: 'character.token', weight: 10, met: false, bonus: true }),
       ],
       sheet: null,
       side: 'neutral',

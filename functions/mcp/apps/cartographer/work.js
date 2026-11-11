@@ -101,6 +101,14 @@ const HOW_TO = {
     'map for the world map), or upload it on the Cartographer page. Line the grid up with ' +
     'view_image. For a battle map it is a small bonus: a map drawn from data can reach the ' +
     'top band without it.',
+  token:
+    'Give them a picture in the circle on a battle map: set_token (a studio image of kind ' +
+    'token or portrait, with a crop to frame the face). A character with a stat block shows ' +
+    'its picture if they have none of their own. Make one with studio_generate (from a ' +
+    'character or stat block).',
+  tokens:
+    'Give each stat block placed on a battle map a token picture: set_token (target ' +
+    'statBlock); `lacking` names them. Make them with studio_generate (from a stat block).',
   features: 'Name the features on its battle map (the bar, the altar): set_battle_map.',
   exits: 'Place its battle map’s exits: set_battle_map.',
   faction: 'Give them a realm: update_character with factionId.',

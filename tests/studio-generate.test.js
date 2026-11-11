@@ -301,7 +301,7 @@ describe('the request', () => {
     ]);
     await drain();
     // They run side by side: find each by its prompt, not its place.
-    const called = (end) => model.calls.find((c) => c.prompt.endsWith(end));
+    const called = (part) => model.calls.find((c) => c.prompt.includes(part));
     const [t, m, p] = ['Lanterns along the quay', 'Damp stone', 'Head and shoulders'].map(called);
     expect(t.prompt).toMatch(/^About what to draw:\n.*settlement/);
     expect(t.prompt).toMatch(/A rain-soaked port of slate roofs\./);
@@ -313,6 +313,9 @@ describe('the request', () => {
     expect(m.prompt).toMatch(/Features: the wine casks\./);
     expect(m.prompt).toMatch(/Ways out: the stairs\./);
     expect(p.prompt).toMatch(/Mara Quill, of .*\nHarbourmaster, grey-eyed\./);
+    // A portrait is asked for as a face that crops to a circle (L-934).
+    expect(p.prompt).toMatch(/head-and-shoulders portrait, the face centred/);
+    expect(t.prompt).not.toMatch(/head-and-shoulders/);
     expect((await jobDoc(townJob.id)).request.from).toEqual({
       worldId: WORLD,
       kind: 'town',
