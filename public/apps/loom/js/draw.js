@@ -88,15 +88,33 @@
   // texture, or the callbacks waiting for it.
   var pictures = {};
 
+  // A picture's key and the URL to load it from (state.js, L-933), else its
+  // link alone.
+  function keyOf(pic) {
+    if (Loom.tokenKey) return Loom.tokenKey(pic);
+    return pic && pic.link ? pic.link : null;
+  }
+  function urlOf(pic) {
+    return Loom.tokenUrl ? Loom.tokenUrl(pic) : Promise.resolve(pic.link);
+  }
+
   /**
-   * A token's picture by its link: the texture once loaded, else null (and
-   * `onLoad` is called when it arrives). One that fails stays initials.
+   * A token's picture: the texture once loaded, else null (and `onLoad` is
+   * called when it arrives). One that fails stays initials. `pic` is
+   * `{ link }` or the player's own upload `{ file, version }` (L-933), read
+   * as its owner (Loom.tokenUrl); a link alone is taken as `{ link }`.
    */
-  function picture(link, onLoad) {
+  function picture(pic, onLoad) {
+    if (typeof pic === 'string') pic = { link: pic };
+    var link = keyOf(pic);
+    if (!link) return null;
     var entry = pictures[link];
     if (!entry) {
       entry = pictures[link] = { texture: null, failed: false, waiting: [] };
-      loadTexture({ url: link })
+      urlOf(pic)
+        .then(function (url) {
+          return loadTexture({ url: url });
+        })
         .then(function (texture) {
           entry.texture = texture;
           entry.waiting.splice(0).forEach(function (fn) {
@@ -166,8 +184,9 @@
       update: function (o) {
         container.position.set(o.x, o.y);
         options = o;
-        var link = o.picture && o.picture.link ? o.picture.link : null;
-        var texture = link ? picture(link, loaded) : null;
+        // A portrait's link, or the player's own upload (L-933).
+        var link = keyOf(o.picture);
+        var texture = link ? picture(o.picture, loaded) : null;
         var crop = (o.picture && o.picture.crop) || {};
         var key = [
           o.radius,

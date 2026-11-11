@@ -55,7 +55,7 @@ npm run format
 
 - **Vanilla JavaScript** — IIFE namespace pattern (no bundler, no build step)
 - **React 18.3.1** — CDN via unpkg.com (used in JSX Runner applets only)
-- **Preact 10.29.8 + htm 3.1.1** — CDN via unpkg.com, no build: the Loom's play view (components in `window.Loom`, one store; `ui.js`, `shell.js`, `journal.js`, `character.js`, `creation.js`, `levelup.js`, `map.js`, `rules.js`; look in `loom.css`, accents in `theme.js`). Details: [`docs/reference/loom-client.md`](docs/reference/loom-client.md)
+- **Preact 10.29.8 + htm 3.1.1** — CDN via unpkg.com, no build: the Loom's play view (components in `window.Loom`, one store; `ui.js`, `shell.js`, `journal.js`, `character.js`, `creation.js`, `token-picker.js`, `levelup.js`, `map.js`, `rules.js`; look in `loom.css`, accents in `theme.js`). Details: [`docs/reference/loom-client.md`](docs/reference/loom-client.md)
 - **PixiJS 8.21.0** — CDN via unpkg.com: the Loom's map engine (`engine.js`; `world.js`, `town.js`, `battle.js`, `draw.js`), every map drawn from its geometry by one painter, `paint.js`, in three-quarter view (L-941–L-946). Details: [`docs/reference/loom-client.md`](docs/reference/loom-client.md)
 - **Babel Standalone 7.26.10** — In-browser JSX transpilation (JSX Runner only)
 - **Firebase SDK v12.9** — CDN, compat mode (`firebase/compat/app`, etc.)
@@ -67,7 +67,7 @@ npm run format
 - **Firebase Hosting** — Static, `public/` directory
 - **Firestore** — `us-central1`, schema enforced by security rules
 - **Cloud Functions v2** — Node.js 22, CommonJS; entry point `functions/index.js`
-- **Cloud Storage** — `olympus-dfa00.firebasestorage.app`, rules in `storage.rules` (Cartographer map uploads and world images); its CORS policy in `storage-cors.json` (GET from any origin, so WebGL and canvas can use its images as textures), applied by the Set Storage CORS workflow
+- **Cloud Storage** — `olympus-dfa00.firebasestorage.app`, rules in `storage.rules` (Cartographer map uploads, world images, and players' own tokens at `loom_tokens/{uid}/`, read by their owner only, L-933); its CORS policy in `storage-cors.json` (GET from any origin, so WebGL and canvas can use its images as textures), applied by the Set Storage CORS workflow
 - **MCP server** — `@modelcontextprotocol/sdk`, Streamable HTTP with its own OAuth 2.1 authorization server, in `functions/mcp/`
 - **Firebase Auth** — Email/password + Google Sign-in
 
@@ -245,7 +245,8 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 - `manageAccess` — Admin only. Add/remove app from user's claims
 - `setUserDisabled` — Admin only. Enable/disable a user
 - `loomCreateSave` / `loomDeleteSave` — `loom` claim (own saves). Start or delete a game; a new game's character is made from the player's choices by the world's system's method (`creation`, checked by `functions/loom-canon/creation.js`), or is the world's premade one (`rules.startingSheet`)
-- `loomCreationRules` — `loom` claim. How a new character is made in a world, for the new-game form: the method and its settings, each score's modifier, the skills and traits to choose; or that it's premade
+- `loomCreationRules` — `loom` claim. How a new character is made in a world, for the new-game form: the method and its settings, each score's modifier, the skills and traits to choose; or that it's premade; and the world's player portraits (L-933)
+- `loomUploadToken` — `loom` claim (own saves). A player's own picture for their token (L-933): checked, squared at its crop to 512 px WebP with no metadata, stored at `loom_tokens/{uid}/{saveId}.webp` for its owner only
 - `loomRollCharacter` — `loom` claim. Rolls a new character's scores with the server's dice, for a system that makes characters by rolling; kept in `loom_creation_rolls` for `loomCreateSave` to use once
 - `loomPlayTurn` — `loom` claim (own saves). Runs one turn of the Loom pipeline: typed actions, moves, objects, searching, fights and reactions, rests, levelling up, travel at any depth
 - `loomWorldRatings` — `loom` claim. Each published world's band (Playable, Rich, Vivid or Legendary) for the Loom's world list; the band's name only

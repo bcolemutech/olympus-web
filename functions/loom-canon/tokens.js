@@ -23,7 +23,19 @@
  * so both come out the same way.
  *
  * The page is sent the link and the crop only (`forPlayer`), never the
- * library record (A5). Pure.
+ * library record (A5).
+ *
+ * The player's own (planning/tokens.md §4.3, TK2; L-933) is the save's
+ * `character.token`: one of the portraits the world offers players
+ * (`world.tokens.player`, library references as above), with its crop; or
+ * their own upload, a file only they can read:
+ *
+ *   { file: 'loom_tokens/{uid}/{saveId}.webp', version, width, height,
+ *     format: 'webp' }
+ *
+ * already squared at the crop they chose, so it keeps none. The page is sent
+ * `{ file, version, crop }` for it and reads the file as its owner (rules,
+ * not a link anyone could open). Pure.
  */
 
 const MAX_ZOOM = 10;
@@ -89,12 +101,71 @@ function tokenOf(person, world) {
   return statBlockToken(world, person);
 }
 
-/** What the page is sent for a token: its link and its crop, or null. */
+/** Where a player's uploaded token is kept (L-933). */
+function uploadPath(uid, saveId) {
+  return `loom_tokens/${uid}/${saveId}.webp`;
+}
+
+/** Whether something stored is a player's own uploaded token (L-933). */
+function isUpload(token) {
+  return (
+    isObject(token) &&
+    typeof token.file === 'string' &&
+    /^loom_tokens\/[^/]+\/[^/]+\.webp$/.test(token.file)
+  );
+}
+
+/** The portraits a world offers players for their own token (L-933). */
+function playerPortraits(world) {
+  const list = ((world && world.tokens) || {}).player;
+  return Array.isArray(list) ? list.filter(isToken) : [];
+}
+
+/**
+ * What the page is sent for a token: its link and its crop; for a player's
+ * upload its file, version and crop (L-933); or null.
+ */
 function forPlayer(token) {
-  return isToken(token) ? { link: token.link, crop: cropOf(token) } : null;
+  if (isToken(token)) return { link: token.link, crop: cropOf(token) };
+  if (isUpload(token)) {
+    return { file: token.file, version: token.version || 0, crop: cropOf(token) };
+  }
+  return null;
+}
+
+/**
+ * The player's token as they choose it (L-933): `given` is `{ image, crop? }`,
+ * one of the world's player portraits by its image id, its crop the one
+ * given else the world's; `{ crop }` alone, the circle moved on the token
+ * they have (`previous`, a portrait or their upload); or null, none.
+ * Returns `{ token }` (null for none) or `{ error }`.
+ */
+function pickToken(world, given, previous) {
+  if (given === null) return { token: null };
+  if (!isObject(given)) return { error: 'A token is { image, crop? }, { crop } or null.' };
+  for (const key of Object.keys(given)) {
+    if (!['image', 'crop'].includes(key)) return { error: `token.${key} isn't part of a token.` };
+  }
+  const problems = validateCrop(given.crop, 'token.crop');
+  if (problems.length) return { error: problems.join(' ') };
+  const crop = isObject(given.crop) ? { ...cropOf({ crop: given.crop }) } : null;
+  if (given.image === undefined) {
+    if (!crop) return { error: 'Give a portrait (image), a crop, or both.' };
+    if (!isToken(previous) && !isUpload(previous)) {
+      return { error: 'You have no token yet: pick a portrait or upload your own.' };
+    }
+    return { token: { ...previous, crop } };
+  }
+  if (typeof given.image !== 'string') return { error: 'token.image is a portrait’s id.' };
+  const portrait = playerPortraits(world).find((t) => t.imageId === given.image);
+  if (!portrait) return { error: "That portrait isn't one this world offers." };
+  const token = { ...portrait };
+  if (crop) token.crop = crop;
+  return { token };
 }
 
 module.exports = {
+  pickToken,
   KINDS,
   MAX_ZOOM,
   validateCrop,
@@ -103,4 +174,7 @@ module.exports = {
   statBlockToken,
   tokenOf,
   forPlayer,
+  uploadPath,
+  isUpload,
+  playerPortraits,
 };

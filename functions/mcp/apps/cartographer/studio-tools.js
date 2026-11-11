@@ -31,11 +31,12 @@ const { MAX_NAME, MAX_STYLE_PROMPT, MAX_STYLE_REFERENCES } = require('../../../s
 //   (functions/studio/styles.js).
 
 const TARGET = z
-  .enum(['map', 'cover', 'town', 'battleMap'])
+  .enum(['map', 'cover', 'town', 'battleMap', 'playerToken'])
   .describe(
     'What the image is for: the world map (a worldMap image), the cover shown on the Loom’s ' +
-      'world list (a cover image), a settlement’s town art (a town image), or a battle map’s ' +
-      'art (a battleMap image).'
+      'world list (a cover image), a settlement’s town art (a town image), a battle map’s ' +
+      'art (a battleMap image), or a portrait offered to players for their own token (a ' +
+      'token or portrait image; L-933, set_world_tokens sets the whole list).'
   );
 const imageId = z
   .string()
@@ -99,7 +100,10 @@ function detail(record) {
 
 const targetId = entityId('settlement or battle map', 'find_locations or list_battle_maps')
   .optional()
-  .describe('The settlement (town) or battle map (battleMap). Not for map or cover.');
+  .describe(
+    'The settlement (town) or battle map (battleMap); for playerToken the image’s own id ' +
+      '(left out when assigning). Not for map or cover.'
+  );
 
 const readOnly = { readOnlyHint: true, openWorldHint: false };
 

@@ -2566,6 +2566,129 @@ body.loom-playing .app-divider {
   margin: 0;
 }
 
+/* The player's token (L-933): the picker in the new-game flow and the
+   Character panel (token-picker.js). */
+.loom-token-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.loom-token-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.loom-token-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.9rem;
+  min-height: 3.9rem;
+  padding: 2px;
+  border: 2px solid var(--loom-edge);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--loom-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.loom-token-choice.is-on {
+  border-color: var(--loom-accent);
+  box-shadow: 0 0 0 2px var(--loom-accent);
+}
+
+.loom-token-choice:focus-visible,
+.loom-token-frame:focus-visible {
+  outline: 2px solid var(--loom-accent);
+  outline-offset: 2px;
+}
+
+.loom-token-upload {
+  position: relative;
+  padding: 0 0.9rem;
+  border-style: dashed;
+  font-size: 0.85rem;
+}
+
+.loom-token-upload:focus-within {
+  outline: 2px solid var(--loom-accent);
+  outline-offset: 2px;
+}
+
+.loom-token-upload input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.loom-token-circle {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--loom-raised);
+}
+
+.loom-token-circle img {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.loom-token-initials {
+  color: var(--loom-muted);
+  font-weight: 700;
+}
+
+.loom-token-crop {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.loom-token-frame {
+  display: inline-flex;
+  padding: 3px;
+  border: 3px solid var(--loom-edge-bright);
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.loom-token-frame:active {
+  cursor: grabbing;
+}
+
+.loom-token-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(100%, 16rem);
+}
+
+.loom-token-zoom input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--loom-accent);
+}
+
+.loom-character-token {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 /* A story that has ended (L-827). */
 .loom-turn-ended {
   margin: 0;

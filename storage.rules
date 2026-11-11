@@ -61,6 +61,16 @@ service firebase.storage {
       allow read: if hasApp('cartographer');
     }
 
+    // ── Players' own tokens (L-933) ───────────────────────
+    // loom_tokens/{uid}/{saveId}.webp: a player's picture for their
+    // character's token, made by loomUploadToken from their upload and
+    // deleted with the save. Only its owner reads it (the page fetches it
+    // signed in, never by a link); only the server writes.
+
+    match /loom_tokens/{uid}/{file} {
+      allow read: if isOwner(uid) && hasApp('loom');
+    }
+
     // ── World map images ──────────────────────────────────
     // The world map (map.png), towns' art (town-<settlement>-<n>.png) and
     // battle maps' art (map-<map>-<n>.png),

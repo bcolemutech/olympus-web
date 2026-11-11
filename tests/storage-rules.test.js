@@ -221,3 +221,36 @@ test('everything else is denied', async () => {
   );
   await assertFails(builder().ref('anything/else.txt').getMetadata());
 });
+
+describe("players' own tokens (L-933)", () => {
+  const PLAYER = 'player-001';
+  const tokenPath = (uid = PLAYER, save = 'save-0001') => `loom_tokens/${uid}/${save}.webp`;
+  const WEBP = { contentType: 'image/webp' };
+  const player = () => storageAs(PLAYER, ['loom']);
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.storage().ref(tokenPath()).put(bytes(64), WEBP);
+    });
+  });
+
+  test('its owner reads their token file', async () => {
+    await assertSucceeds(player().ref(tokenPath()).getMetadata());
+    await assertSucceeds(player().ref(tokenPath()).getDownloadURL());
+  });
+
+  test('nobody else can: another player, an editor, or the signed-out', async () => {
+    await assertFails(storageAs('player-002', ['loom']).ref(tokenPath()).getMetadata());
+    await assertFails(builder().ref(tokenPath()).getMetadata());
+    await assertFails(testEnv.unauthenticatedContext().storage().ref(tokenPath()).getMetadata());
+    // Without the loom claim, not even its owner.
+    await assertFails(storageAs(PLAYER, []).ref(tokenPath()).getMetadata());
+  });
+
+  test('no client writes or deletes one, its owner included (loomUploadToken writes it)', async () => {
+    await assertFails(player().ref(tokenPath()).put(bytes(64), WEBP));
+    await assertFails(player().ref(tokenPath(PLAYER, 'save-0002')).put(bytes(64), WEBP));
+    await assertFails(player().ref(tokenPath()).delete());
+    await assertFails(storageAs('player-002', ['loom']).ref(tokenPath()).put(bytes(64), WEBP));
+  });
+});

@@ -530,6 +530,8 @@ function makeWorldState(fields) {
 
 function makeCharacter(fields) {
   fields = fields || {};
+  // Their token picture (L-933; ./loom-canon/tokens.js), when one was chosen.
+  const token = fields.token ? { token: fields.token } : {};
   // With a sheet (L-811): its condition, traits and pool of AP are in it.
   if (fields.sheet) {
     return {
@@ -537,6 +539,7 @@ function makeCharacter(fields) {
       inventory: fields.inventory || [],
       goals: fields.goals || [],
       sheet: fields.sheet,
+      ...token,
     };
   }
   return {
