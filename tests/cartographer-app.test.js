@@ -435,6 +435,11 @@ describe('cartographerCompletion (L-323)', () => {
       gaps: expect.any(Array),
       // Its maps as a tree (L-905): one, the world map, with what it lacks.
       maps: expect.objectContaining({ mapId: 'map_world', kind: 'region', children: [] }),
+      // Who has a token picture (L-934): this world has no people or stat blocks.
+      tokens: {
+        characters: { total: 0, with: [], without: [], withoutCount: 0 },
+        statBlocks: { total: 0, with: [], without: [], withoutCount: 0 },
+      },
     });
     // The five biggest, as list_work orders its score work: most points first,
     // each with its tool and a line to show.

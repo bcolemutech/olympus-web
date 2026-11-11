@@ -380,6 +380,41 @@ textarea.carto-input {
   border-radius: 50%;
 }
 
+/* Token previews: the ring is coloured by side, as the Loom draws it (L-934). */
+.carto-token {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: 5rem;
+  margin: 0;
+  text-align: center;
+}
+
+.carto-token figcaption {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carto-portrait--hostile {
+  border-color: #e57373;
+}
+
+.carto-portrait--party {
+  border-color: #81c784;
+}
+
+.carto-portrait--wary {
+  border-color: #ffb74d;
+}
+
+.carto-portrait--neutral {
+  border-color: #4db6ac;
+}
+
 .carto-portrait img {
   position: absolute;
   max-width: none;

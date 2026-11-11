@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Cartographer's token previews, for tests</title>
+    <!--
+      The Cartographer page's world card and its completion panel
+      (public/apps/cartographer/js/worlds.js; L-934 / #792), on the real
+      script, with Firebase stubbed. For headless Chrome
+      (tests/cartographer-token-previews.test.js).
+    -->
+    <link rel="stylesheet" href="/styles/app.css" />
+    <link rel="stylesheet" href="/apps/cartographer/cartographer.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #0a0e1a;
+        color: #ece6d8;
+        font-family: system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="carto-completion"></div>
+    <script src="/apps/cartographer/js/state.js"></script>
+    <script src="/apps/cartographer/js/worlds.js"></script>
+  </body>
+</html>

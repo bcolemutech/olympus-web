@@ -133,6 +133,44 @@ function forPlayer(token) {
   return null;
 }
 
+const PREVIEW_SHOWN = 24;
+
+/**
+ * Who has a token picture and who doesn't (L-934; tokens §4.4), for the
+ * Cartographer page's previews: the world's live characters and named stat
+ * blocks, each as the Loom would draw it (a character's own, else their stat
+ * block's, TK1). Per group: how many there are, those with a picture (link
+ * and crop, the page's `forPlayer` shape) and those without, each at most
+ * `limit`, in name order. Pure.
+ */
+function previewsOf(world, limit = PREVIEW_SHOWN) {
+  const group = (entries, tokenFor) => {
+    const live = entries
+      .filter((e) => e && !e.retired)
+      .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+    const withPicture = [];
+    const without = [];
+    for (const e of live) {
+      const picture = forPlayer(tokenFor(e));
+      const who = { id: e.id, name: e.name || e.id, ...(e.side ? { side: e.side } : {}) };
+      if (picture && picture.link) withPicture.push({ ...who, ...picture });
+      else without.push(who);
+    }
+    return {
+      total: live.length,
+      with: withPicture.slice(0, limit),
+      without: without.slice(0, limit),
+      withoutCount: without.length,
+    };
+  };
+  return {
+    characters: group(Object.values((world && world.characters) || {}), (c) => tokenOf(c, world)),
+    statBlocks: group(Object.values((world && world.statBlocks) || {}), (b) =>
+      isToken(b.token) ? b.token : null
+    ),
+  };
+}
+
 /**
  * The player's token as they choose it (L-933): `given` is `{ image, crop? }`,
  * one of the world's player portraits by its image id, its crop the one
@@ -166,6 +204,8 @@ function pickToken(world, given, previous) {
 
 module.exports = {
   pickToken,
+  previewsOf,
+  PREVIEW_SHOWN,
   KINDS,
   MAX_ZOOM,
   validateCrop,

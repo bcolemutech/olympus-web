@@ -323,6 +323,9 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
         gaps: biggestGaps(world, GAPS_SHOWN),
         // Its maps as a tree, each graded by its kind (L-905; map levels UI4).
         maps: mapTreeOf(world),
+        // Each named character's and stat block's token as the Loom draws it,
+        // and who has none (L-934; tokens §4.4).
+        tokens: require('../loom-canon/tokens').previewsOf(world),
       };
     }
     return { worlds };

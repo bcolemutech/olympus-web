@@ -487,7 +487,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   expect(overview).toMatchObject({ score: overview.completion.score, band: 'playable' });
   expect(overview.completion).toMatchObject({
     graded: true,
-    rubricVersion: 12,
+    rubricVersion: 13,
     band: 'playable',
     places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
@@ -518,6 +518,8 @@ test('get_character and get_battle_map show their score, band and weighted check
     expect.objectContaining({ id: 'character.lore', weight: 15, met: false }),
     expect.objectContaining({ id: 'character.faction', weight: 10, met: false }),
     expect.objectContaining({ id: 'character.sheet', weight: 20, met: false }),
+    // A token picture is a bonus (L-934).
+    expect.objectContaining({ id: 'character.token', weight: 10, met: false, bonus: true }),
   ]);
   expect(character.missing[0]).toMatchObject({ criterion: 'character.description', gain: 25 });
 

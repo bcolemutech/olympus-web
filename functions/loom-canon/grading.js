@@ -47,8 +47,8 @@
 // character's sheet (L-813); 8: a fighter's attacks (L-822); 9: foes at a
 // dangerous place (L-824); 10: templates on a large map's places (L-906).
 // 11: a map's data is enough to draw it (L-929); 12: a map's look, and its art
-// a bonus (L-947).
-const RUBRIC_VERSION = 12;
+// a bonus (L-947). 13: people's token pictures (L-934).
+const RUBRIC_VERSION = 13;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -71,11 +71,12 @@ const IMPORT = 'import';
 const WEIGHTS = Object.freeze({
   settlement: { residents: 15, lore: 10, townArt: 15, description: 20, loreLinks: 5, ground: 10 },
   place: { ownMap: 15, mapArt: 5, someone: 15, lore: 30, description: 10, foes: 10 },
-  character: { description: 25, lore: 15, faction: 10, sheet: 20, attacks: 15 },
+  // token is a bonus too (L-934).
+  character: { description: 25, lore: 15, faction: 10, sheet: 20, attacks: 15, token: 10 },
   // art is a bonus: points over the 100 the rest make, capped at 100 (L-947).
   battleMap: { drawn: 30, look: 30, art: 5, features: 20, exits: 20 },
   realm: { description: 30, lore: 30, people: 20 },
-  world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15, templates: 10 },
+  world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15, templates: 10, tokens: 10 },
 });
 const QUALITY = Object.freeze({
   // A region map this many places or more is large: its ordinary places
@@ -657,6 +658,25 @@ const CRITERIA = Object.freeze([
     },
   },
 
+  {
+    // A picture in the circle on a battle map (L-934; tokens §4.5): their
+    // own, else their stat block's (TK1). A bonus, as map art is (L-947):
+    // points over the rest, so a character built without one is not marked
+    // down, and one with it gets closer to the top.
+    id: 'character.token',
+    kinds: ['character'],
+    weight: WEIGHTS.character.token,
+    bonus: true,
+    feature: 'L-934',
+    label: 'A token picture',
+    need: 'token',
+    tool: 'set_token',
+    check: (world, character) =>
+      require('./tokens').tokenOf(character, world)
+        ? met()
+        : { progress: 0, message: 'They have no token picture; give them one with set_token.' },
+  },
+
   // Battle maps.
   {
     // Its data is enough to draw it, or it has art (PL2; L-929): floors and
@@ -898,6 +918,33 @@ const CRITERIA = Object.freeze([
     },
   },
   {
+    // Every stat block placed on a map has a token picture (L-934; tokens
+    // §4.5): the groups of figures on its battle maps, by the stat block
+    // they name. A world that places none isn't graded on it.
+    id: 'world.tokens',
+    kinds: ['world'],
+    weight: WEIGHTS.world.tokens,
+    feature: 'L-934',
+    label: 'Token pictures for the stat blocks placed on maps',
+    need: 'tokens',
+    tool: 'set_token',
+    applies: (world) => placedStatBlocks(world).length > 0,
+    check: (world) => {
+      const placed = placedStatBlocks(world);
+      const lacking = placed.filter((entry) => !require('./tokens').isToken(entry.token));
+      if (!lacking.length) return met();
+      const names = lacking.map((entry) => entry.name || entry.id);
+      const shown = names.slice(0, 6).join(', ') + (names.length > 6 ? ', …' : '');
+      return {
+        progress: (placed.length - lacking.length) / placed.length,
+        have: placed.length - lacking.length,
+        want: placed.length,
+        lacking: names,
+        message: `${lacking.length} of the ${placed.length} stat blocks placed on maps have no token picture: ${shown}. Give each one with set_token.`,
+      };
+    },
+  },
+  {
     // Its large maps' ordinary places open, by hand or from a template
     // (L-906; map levels §4.8, TM3; decided with the user 2026-11-01:
     // weight 10, a region map of 25 places or more is large).
@@ -928,6 +975,20 @@ const CRITERIA = Object.freeze([
     },
   },
 ]);
+
+// The named stat blocks that groups of figures on a world's battle maps
+// stand for (L-934): each once, as the world holds it.
+function placedStatBlocks(world) {
+  const named = new Set();
+  for (const map of Object.values((world && world.battleMaps) || {}).filter(live)) {
+    for (const group of map.figures || []) {
+      if (typeof group.statBlock === 'string') named.add(group.statBlock);
+    }
+  }
+  return [...named]
+    .map((id) => ((world && world.statBlocks) || {})[id])
+    .filter((entry) => live(entry));
+}
 
 // The frames of a world's large region maps (L-906): 25 places or more.
 function largeMaps(world) {

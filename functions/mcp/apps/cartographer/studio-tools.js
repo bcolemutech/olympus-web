@@ -484,9 +484,10 @@ function generateTools({ studio }) {
         'charged (draft about $0.07, final about $0.13; see studio_costs), and kept in the ' +
         'library with its prompt. Give the kind; the tier (draft, the default, or final) or a ' +
         'model; optionally a size and shape; library images as references (style, layout or ' +
-        'subject to follow); and `from`, a place, town, battle map or character in a world, ' +
+        'subject to follow); and `from`, a place, town, battle map, character or stat block in a world, ' +
         'whose data is added to the prompt (a town is drawn square from above, a battle map ' +
-        'in its grid’s shape). Then label it, and assign it with studio_assign.',
+        'in its grid’s shape, a stat block as a square token; a token or portrait is asked ' +
+        'for as a head-and-shoulders face centred on a plain background, to crop to a circle). Then label it, and assign it with studio_assign.',
       inputSchema: {
         prompt: z.string().min(1).max(4000).describe('What to draw, in words.'),
         kind: KIND.optional().describe(
@@ -517,7 +518,10 @@ function generateTools({ studio }) {
           .object({
             worldId,
             kind: z.enum(FROM_KINDS),
-            id: entityId('place, battle map or character', 'find_locations, list_battle_maps'),
+            id: entityId(
+              'place, battle map, character or stat block',
+              'find_locations, list_battle_maps, list_stat_blocks'
+            ),
           })
           .optional()
           .describe('A thing in a world whose data is added to the prompt.'),
