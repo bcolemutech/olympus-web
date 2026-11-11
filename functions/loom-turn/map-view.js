@@ -548,8 +548,11 @@ function battleView(canonWorld, save, record) {
     height: map.height,
     image: artOf.forPlayer(artOf.mapArt(map)),
     here: { x: cell.x, y: cell.y },
-    // The player's own token on it (L-933), as the page draws it.
-    you: { token: tokens.forPlayer(save.character && save.character.token) },
+    // The player's own token on it (L-933), as the page draws it; left out
+    // with none (initials).
+    ...(tokens.forPlayer(save.character && save.character.token)
+      ? { you: { token: tokens.forPlayer(save.character.token) } }
+      : {}),
     // Where in it, in feet, and how wide the character is (L-922), for the
     // grid view's paths (../loom-canon/map-paths.js).
     herePoint: { x: point.x, y: point.y },
