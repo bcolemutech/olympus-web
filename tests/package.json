@@ -27,6 +27,7 @@
       "<rootDir>",
       "<rootDir>/../functions/node_modules"
     ],
-    "maxWorkers": 1
+    "maxWorkers": 1,
+    "testSequencer": "<rootDir>/helpers/sequencer.js"
   }
 }
