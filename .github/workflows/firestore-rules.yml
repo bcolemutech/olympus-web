@@ -10,8 +10,17 @@ permissions:
   contents: read
 
 jobs:
-  test-rules:
+  # The suite in four shards at once, each with its own emulators, so the
+  # suites in a shard still run one at a time (they share emulator data).
+  # tests/helpers/sequencer.js splits them by tests/suite-times.json so the
+  # shards finish together.
+  tests:
+    name: tests (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +35,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22" # match the Functions runtime (firebase.json nodejs22)
+          cache: npm
+          cache-dependency-path: |
+            functions/package-lock.json
+            tests/package-lock.json
 
       - name: Install Firebase CLI
         id: firebase-cli
@@ -52,7 +65,17 @@ jobs:
       - name: Install Chromium for the headless tests
         run: cd tests && npx playwright install --with-deps chromium
 
-      - name: Run Firestore rules tests
-        run: firebase emulators:exec --only firestore,storage --project demo-olympus-rules-test "cd tests && npm test"
+      - name: Run the tests (shard ${{ matrix.shard }} of 4)
+        run: firebase emulators:exec --only firestore,storage --project demo-olympus-rules-test "cd tests && npm test -- --shard=${{ matrix.shard }}/4"
         env:
           CI: true
+
+  # One check for the whole suite, under the name it has always had
+  # (test-rules), for branch protection: it passes only if every shard did.
+  test-rules:
+    if: always()
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every shard passed
+        run: test "${{ needs.tests.result }}" = "success"

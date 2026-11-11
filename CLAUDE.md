@@ -275,7 +275,7 @@ Functions preserve existing custom claims when modifying them (merge pattern, no
 - `firebase-hosting-pull-request.yml` — Pull Request. Deploy preview channel (lives 1 hour; first deletes channels older than that and the oldest past 10), comment URL on PR
 - `firebase-hosting-pr-cleanup.yml` — Pull Request closed. Delete the PR's preview channel, so the channel quota doesn't run out
 - `firebase-hosting-merge.yml` — Push to main. Deploy hosting + Firestore rules/indexes + Storage rules + Cloud Functions
-- `firestore-rules.yml` — Push/PR to main. Run the Jest suite against the Firestore and Storage emulators, with Playwright's Chromium installed for the headless tests
+- `firestore-rules.yml` — Push/PR to main. Run the Jest suite against the Firestore and Storage emulators, with Playwright's Chromium installed for the headless tests, in 4 shards at once balanced by `tests/suite-times.json` (`tests/helpers/sequencer.js`; refresh the times with `tests/helpers/suite-times.js`); the `test-rules` check passes when every shard does
 - `set-admin.yml` — Manual dispatch. Grant or revoke admin claim
 - `seed-categories.yml` — Manual dispatch. Populate Symposium categories
 - `set-storage-cors.yml` — Manual dispatch. Apply `storage-cors.json` to the Storage bucket, so the Loom's map engine can draw art from it (dry run, then apply)
