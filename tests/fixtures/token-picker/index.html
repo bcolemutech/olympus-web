@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Loom's token picker, for tests</title>
+    <!--
+      The player's token picker (public/apps/loom/js/token-picker.js; L-933 /
+      #791) in the new-game flow (creation.js) and the Character panel
+      (character.js), on the real store and components (Preact, its hooks and
+      htm at the page's versions, from the tests' copy), with the callables
+      stubbed: each call is kept in window.__calls. For headless Chrome
+      (tests/loom-token-picker.test.js).
+    -->
+    <link rel="stylesheet" href="/styles/app.css" />
+    <link rel="stylesheet" href="/apps/loom/loom.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #0a0e1a;
+        color: #ece6d8;
+        font-family: system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="create-host" class="hidden"></div>
+    <script src="/preact.umd.js"></script>
+    <script src="/preact-hooks.umd.js"></script>
+    <script src="/htm.umd.js"></script>
+    <script>
+      window.Loom = {};
+    </script>
+    <script src="/apps/loom/js/state.js"></script>
+    <script src="/apps/loom/js/ui.js"></script>
+    <script>
+      window.__calls = [];
+      window.__answers = {};
+      Loom.state.worldId = 'faces';
+      Loom.state.saveId = 'save-1';
+      Loom.state.functions = {
+        httpsCallable(name) {
+          return async (data) => {
+            window.__calls.push({ name, data });
+            const answer = window.__answers[name];
+            if (answer instanceof Error) throw answer;
+            return { data: typeof answer === 'function' ? answer(data) : answer };
+          };
+        },
+      };
+      Loom.shell = {
+        addMenuButton(b) {
+          window.__menu = b;
+        },
+      };
+      window.__reloads = 0;
+      Loom.map = {
+        load() {
+          window.__reloads += 1;
+          return Promise.resolve();
+        },
+      };
+    </script>
+    <script src="/apps/loom/js/token-picker.js"></script>
+    <script src="/apps/loom/js/creation.js"></script>
+    <script src="/apps/loom/js/character.js"></script>
+  </body>
+</html>

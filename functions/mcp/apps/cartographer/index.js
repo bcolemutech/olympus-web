@@ -16,7 +16,7 @@ const { studioTools } = require('./studio-tools');
 const { materialTools } = require('./material-tools');
 const { systemTools } = require('./system-tools');
 const { statBlockTools } = require('./stat-block-tools');
-const { tokenTools } = require('./token-tools');
+const { tokenTools, portraitRows } = require('./token-tools');
 const artOf = require('../../../loom-canon/art');
 const { currentPath } = require('../../../studio/library');
 const { GRADES, BANDS } = require('../../../loom-canon/grading');
@@ -146,7 +146,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'realms, regions, characters and battle maps counted by band, and the world’s own ' +
           'checklist), counts, ' +
           'its realms (factions) with their regions, its characters and lore, and the art set ' +
-          'its maps are drawn with (list_art_sets). Start here ' +
+          'its maps are drawn with (list_art_sets) and the portraits it offers players for their ' +
+          'own token (set_world_tokens). Start here ' +
           'before exploring a world. ' +
           GRADE_HELP,
         inputSchema: { worldId },
@@ -159,6 +160,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           return {
             ...views.worldOverview(meta, world),
             art: { set: art.name, ...(art.warning ? { warning: art.warning } : {}) },
+            // The portraits it offers players for their own token (L-933).
+            tokens: { player: portraitRows(world) },
           };
         },
       },
@@ -898,7 +901,7 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
       ...generatorTools({ writer }),
       // Materials and the object catalog (L-925): list them, give a world's own art.
       ...materialTools({ studio, writer, worldFor }),
-      ...tokenTools({ studio, worldFor }),
+      ...tokenTools({ studio, writer, worldFor }),
       ...(studio ? studioTools({ studio, reader, writer }) : []),
       // Game systems (L-801): list, get, set and copy them.
       ...(systems ? systemTools({ systems, reader }) : []),

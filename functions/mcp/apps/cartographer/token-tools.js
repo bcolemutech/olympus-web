@@ -12,7 +12,8 @@ const { tokenFromTool, queueUse } = require('../../../studio/token-use');
 // set_token gives one to a character, a named stat block or a group of
 // figures through the studio's assigner; `tokenInput` is the `token` the
 // character, stat block and figure tools take, and `writeToken` keeps it and
-// the image's "in use" in the same edit.
+// the image's "in use" in the same edit. set_world_tokens (L-933) sets the
+// portraits a world offers players for their own character's token.
 
 const imageId = z
   .string()
@@ -68,9 +69,87 @@ function tokenRow(token) {
     : null;
 }
 
-function tokenTools({ studio, worldFor }) {
-  if (!studio) return [];
+const MAX_PLAYER_PORTRAITS = 24;
+
+/** The world's player portraits as a tool shows them (L-933). */
+function portraitRows(world) {
+  return tokens.playerPortraits(world).map(tokenRow);
+}
+
+function worldTokenTools({ writer, worldFor }) {
+  if (!writer) return [];
   return [
+    {
+      name: 'set_world_tokens',
+      title: 'Offer players portraits',
+      description:
+        'Set the portraits a world offers players for their own character’s token (L-933): ' +
+        'library images of kind token or portrait, each with a crop to frame the face, in the ' +
+        'order the new-game form and the Character panel show them. The list given replaces ' +
+        'the one there; [] offers none, and players can then only upload their own. A player ' +
+        'can always move the circle and zoom on the one they pick. studio_assign (target ' +
+        'playerToken) adds one at a time.',
+      inputSchema: {
+        worldId,
+        player: z
+          .array(z.strictObject({ image: imageId, crop: crop.optional() }))
+          .max(MAX_PLAYER_PORTRAITS)
+          .describe(
+            `The portraits, in order (${MAX_PLAYER_PORTRAITS} at most), each { image, crop? }.`
+          ),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      handler: async (ctx, args) => {
+        const seen = new Set();
+        for (const item of args.player) {
+          if (seen.has(item.image)) {
+            throw new ToolError(`${item.image} is in the list twice: offer each portrait once.`);
+          }
+          seen.add(item.image);
+        }
+        await writer.edit(args.worldId, ctx.uid, async (e) => {
+          const before = tokens.playerPortraits(e.world);
+          const byImage = new Map(before.map((t) => [t.imageId, t]));
+          const use = (id) => ({ worldId: args.worldId, target: 'playerToken', id });
+          const list = [];
+          for (let i = 0; i < args.player.length; i++) {
+            const item = args.player[i];
+            const was = byImage.get(item.image) || null;
+            const token = await tokenFromTool(e, item, was, { where: `player[${i}]`, fail });
+            if (!was) {
+              queueUse(
+                { update: (r, f) => e.update(r, f), imageRef: e.image },
+                use(item.image),
+                null,
+                token
+              );
+            }
+            list.push(token);
+          }
+          for (const was of before) {
+            if (!seen.has(was.imageId)) {
+              queueUse(
+                { update: (r, f) => e.update(r, f), imageRef: e.image },
+                use(was.imageId),
+                was,
+                null
+              );
+            }
+          }
+          e.updateWorld({ 'tokens.player': list });
+          return {};
+        });
+        const { world } = await worldFor(args.worldId);
+        return { worldId: args.worldId, player: portraitRows(world) };
+      },
+    },
+  ];
+}
+
+function tokenTools({ studio, writer, worldFor }) {
+  if (!studio) return worldTokenTools({ writer, worldFor });
+  return [
+    ...worldTokenTools({ writer, worldFor }),
     {
       name: 'set_token',
       title: 'Give a token picture',
@@ -160,4 +239,4 @@ function holderToken(world, target, id) {
   return (group && group.token) || null;
 }
 
-module.exports = { tokenTools, tokenInput, writeToken, tokenRow };
+module.exports = { tokenTools, tokenInput, writeToken, tokenRow, portraitRows };

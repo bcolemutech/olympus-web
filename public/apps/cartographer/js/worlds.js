@@ -204,6 +204,7 @@
       completion.id = 'carto-completion-' + world.id;
       card.appendChild(completion);
     }
+    if (status === 'draft' || status === 'published') card.appendChild(portraitsRow(world));
     if (status === 'failed' && world.error) card.appendChild(el('p', 'carto-error', world.error));
     if (world.warnings && world.warnings.length) card.appendChild(warningsList(world.warnings));
 
@@ -243,6 +244,59 @@
     }
     if (actions.children.length) card.appendChild(actions);
     return card;
+  }
+
+  // ── Player portraits (L-933) ─────────────────────
+  // The portraits a world offers players for their own token
+  // (`tokens.player`, set with set_world_tokens), each in its circle at its
+  // crop as the Loom's picker shows it.
+
+  var PORTRAIT_PX = 44;
+
+  function portraitCircle(token) {
+    var circle = el('span', 'carto-portrait');
+    circle.style.width = circle.style.height = PORTRAIT_PX + 'px';
+    var img = document.createElement('img');
+    img.alt = '';
+    img.addEventListener('load', function () {
+      var crop = token.crop || {};
+      var x = typeof crop.x === 'number' ? crop.x : 0.5;
+      var y = typeof crop.y === 'number' ? crop.y : 0.5;
+      var zoom = typeof crop.zoom === 'number' && crop.zoom >= 1 ? crop.zoom : 1;
+      var w = img.naturalWidth;
+      var h = img.naturalHeight;
+      var k = PORTRAIT_PX / (Math.min(w, h) / zoom);
+      img.style.width = w * k + 'px';
+      img.style.height = h * k + 'px';
+      img.style.left = PORTRAIT_PX / 2 - x * w * k + 'px';
+      img.style.top = PORTRAIT_PX / 2 - y * h * k + 'px';
+    });
+    img.src = token.link;
+    circle.appendChild(img);
+    return circle;
+  }
+
+  function portraitsRow(world) {
+    var list = ((world.tokens || {}).player || []).filter(function (t) {
+      return t && typeof t.link === 'string';
+    });
+    var row = el('div', 'carto-portraits');
+    row.id = 'carto-portraits-' + world.id;
+    if (!list.length) {
+      row.appendChild(
+        el(
+          'p',
+          'carto-meta',
+          'Player portraits: none, so players upload their own (offer some with set_world_tokens).'
+        )
+      );
+      return row;
+    }
+    row.appendChild(el('span', 'carto-meta', 'Player portraits:'));
+    list.forEach(function (token) {
+      row.appendChild(portraitCircle(token));
+    });
+    return row;
   }
 
   // ── Completion ───────────────────────────────────

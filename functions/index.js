@@ -17,6 +17,7 @@ const checks = require('./loom-canon/checks');
 const combat = require('./loom-modules/combat');
 const sheets = require('./loom-canon/sheets');
 const creation = require('./loom-canon/creation');
+const tokens = require('./loom-canon/tokens');
 const { rollDie } = require('./loom-turn/adjudicate');
 const { mapView } = require('./loom-turn/map-view');
 const { firstLook, seenRef } = require('./loom-turn/seen');
@@ -680,7 +681,23 @@ exports.loomPlayTurn = onCall(async (request) => {
       typeof action.choices === 'object' &&
       !Array.isArray(action.choices) &&
       JSON.stringify(action.choices).length <= 2000;
+    // The player's token chosen in play (L-933): a portrait, a crop, or none.
+    const isCrop = (crop) =>
+      Boolean(crop) &&
+      typeof crop === 'object' &&
+      ['x', 'y', 'zoom'].every((k) => crop[k] === undefined || Number.isFinite(crop[k]));
+    const choosingToken =
+      typeof action === 'object' &&
+      action.verb === 'token' &&
+      (action.token === null ||
+        (Boolean(action.token) &&
+          typeof action.token === 'object' &&
+          (action.token.image === undefined ||
+            (typeof action.token.image === 'string' &&
+              /^img_[0-9a-f]{16}$/.test(action.token.image))) &&
+          (action.token.crop === undefined || isCrop(action.token.crop))));
     if (
+      !choosingToken &&
       !bare &&
       !door &&
       !objecting &&
@@ -703,8 +720,8 @@ exports.loomPlayTurn = onCall(async (request) => {
           '{ verb: "object", object: <object id>, act: <action id> }, ' +
           '{ verb: "look", cell: { x, y } | door: <door id> | object: <object id> }, ' +
           '{ verb: "suggested", text, act?: { verb, target? } }, { verb: "confirm" }, ' +
-          '{ verb: "levelUp", choices: { attributes?, skills?, traits?, attacks? } } ' +
-          'or { verb: "end-turn" }.'
+          '{ verb: "levelUp", choices: { attributes?, skills?, traits?, attacks? } }, ' +
+          '{ verb: "token", token: { image?, crop? } | null } or { verb: "end-turn" }.'
       );
     }
   } else {
@@ -725,65 +742,81 @@ exports.loomPlayTurn = onCall(async (request) => {
       ...(action
         ? {
             action:
-              action.verb === 'levelUp'
-                ? { verb: 'levelUp', choices: action.choices }
-                : action.verb === 'suggested'
-                  ? {
-                      verb: 'suggested',
-                      text: action.text.trim(),
-                      ...(action.act
+              action.verb === 'token'
+                ? {
+                    verb: 'token',
+                    token: action.token && {
+                      ...(action.token.image ? { image: action.token.image } : {}),
+                      ...(action.token.crop
                         ? {
-                            act: {
-                              verb: action.act.verb,
-                              ...(action.act.target ? { target: action.act.target } : {}),
-                            },
+                            crop: Object.fromEntries(
+                              ['x', 'y', 'zoom']
+                                .filter((k) => action.token.crop[k] !== undefined)
+                                .map((k) => [k, action.token.crop[k]])
+                            ),
                           }
                         : {}),
-                    }
-                  : action.verb === 'look'
-                    ? action.door !== undefined
-                      ? { verb: 'look', door: action.door }
-                      : action.object !== undefined
-                        ? { verb: 'look', object: action.object }
-                        : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
-                    : action.verb === 'object'
-                      ? { verb: 'object', object: action.object, act: action.act }
-                      : action.verb === 'door'
-                        ? { verb: 'door', door: action.door, open: action.open }
-                        : action.verb === 'rest'
-                          ? { verb: 'rest', rest: action.rest }
-                          : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(
-                                action.verb
-                              )
-                            ? {
-                                verb: action.verb,
-                                ...(action.attack ? { attack: action.attack } : {}),
-                                ...(action.target ? { target: action.target } : {}),
-                                ...(action.feature ? { feature: action.feature } : {}),
-                              }
-                            : action.verb === 'attack'
+                    },
+                  }
+                : action.verb === 'levelUp'
+                  ? { verb: 'levelUp', choices: action.choices }
+                  : action.verb === 'suggested'
+                    ? {
+                        verb: 'suggested',
+                        text: action.text.trim(),
+                        ...(action.act
+                          ? {
+                              act: {
+                                verb: action.act.verb,
+                                ...(action.act.target ? { target: action.act.target } : {}),
+                              },
+                            }
+                          : {}),
+                      }
+                    : action.verb === 'look'
+                      ? action.door !== undefined
+                        ? { verb: 'look', door: action.door }
+                        : action.object !== undefined
+                          ? { verb: 'look', object: action.object }
+                          : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
+                      : action.verb === 'object'
+                        ? { verb: 'object', object: action.object, act: action.act }
+                        : action.verb === 'door'
+                          ? { verb: 'door', door: action.door, open: action.open }
+                          : action.verb === 'rest'
+                            ? { verb: 'rest', rest: action.rest }
+                            : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(
+                                  action.verb
+                                )
                               ? {
-                                  verb: 'attack',
-                                  target: action.target,
+                                  verb: action.verb,
                                   ...(action.attack ? { attack: action.attack } : {}),
-                                  ...(action.subdue ? { subdue: true } : {}),
+                                  ...(action.target ? { target: action.target } : {}),
+                                  ...(action.feature ? { feature: action.feature } : {}),
                                 }
-                              : action.verb === 'end-turn' ||
-                                  action.verb === 'continue' ||
-                                  action.verb === 'confirm' ||
-                                  action.verb === 'search'
-                                ? { verb: action.verb }
-                                : action.point !== undefined
-                                  ? {
-                                      verb: action.verb,
-                                      point: { x: action.point.x, y: action.point.y },
-                                    }
-                                  : typeof action.target === 'string'
-                                    ? { verb: action.verb, target: action.target }
-                                    : {
-                                        verb: 'move',
-                                        cell: { x: action.cell.x, y: action.cell.y },
-                                      },
+                              : action.verb === 'attack'
+                                ? {
+                                    verb: 'attack',
+                                    target: action.target,
+                                    ...(action.attack ? { attack: action.attack } : {}),
+                                    ...(action.subdue ? { subdue: true } : {}),
+                                  }
+                                : action.verb === 'end-turn' ||
+                                    action.verb === 'continue' ||
+                                    action.verb === 'confirm' ||
+                                    action.verb === 'search'
+                                  ? { verb: action.verb }
+                                  : action.point !== undefined
+                                    ? {
+                                        verb: action.verb,
+                                        point: { x: action.point.x, y: action.point.y },
+                                      }
+                                    : typeof action.target === 'string'
+                                      ? { verb: action.verb, target: action.target }
+                                      : {
+                                          verb: 'move',
+                                          cell: { x: action.cell.x, y: action.cell.y },
+                                        },
           }
         : { actionText: actionText.trim() }),
     });
@@ -933,13 +966,24 @@ const CREATION_ROLLS = 'loom_creation_rolls';
  * character (`rules.startingSheet`, set over MCP) uses it; with neither, the
  * system's defaults (L-811).
  *
- * Data: { worldId: string, name: string, characterName: string, creation?: object }
+ * Their token (L-933; planning/tokens.md §4.3) is `token: { image, crop? }`,
+ * one of the world's player portraits (`world.tokens.player`) by its image
+ * id; an upload of their own is sent once the save exists (loomUploadToken).
+ *
+ * Data: { worldId: string, name: string, characterName: string, creation?: object,
+ *         token?: { image, crop? } }
  * Returns: { saveId: string }
  */
 exports.loomCreateSave = onCall(async (request) => {
   const uid = requireLoomAuth(request);
 
-  const { worldId, name, characterName, creation: choices } = request.data || {};
+  const {
+    worldId,
+    name,
+    characterName,
+    creation: choices,
+    token: chosenToken,
+  } = request.data || {};
 
   if (typeof worldId !== 'string' || worldId.trim().length === 0) {
     throw new HttpsError('invalid-argument', 'worldId is required.');
@@ -1004,12 +1048,21 @@ exports.loomCreateSave = onCall(async (request) => {
     sheet = built.sheet;
   }
 
+  // Their token (L-933): one of the world's player portraits, with its crop.
+  // An upload is sent once the save exists (loomUploadToken).
+  let token = null;
+  if (chosenToken !== undefined && chosenToken !== null) {
+    const picked = tokens.pickToken(canonWorld, chosenToken, null);
+    if (picked.error) throw new HttpsError('invalid-argument', picked.error);
+    token = picked.token;
+  }
+
   const startPlace = arrivalPlace(canonWorld, start.id, null);
   const save = makeSave({
     ownerUid: uid,
     worldId: worldId.trim(),
     name: name.trim(),
-    character: { name: characterName.trim(), sheet },
+    character: { name: characterName.trim(), sheet, ...(token ? { token } : {}) },
     location: canonWorld.rules && canonWorld.rules.startingLocationId,
     // A start with a town layout (L-342) begins at its first open entrance,
     // and on its battle map if it has one (L-351).
@@ -1079,8 +1132,11 @@ async function playableWorld(worldId) {
  * the world gives every new game its own character, so there's nothing to
  * choose.
  *
+ * `portraits` are the pictures it offers players for their own token
+ * (L-933): each `{ id, link, crop }`, its image's id to pick it by.
+ *
  * Data: { worldId: string }
- * Returns: { system: { id, name, words }, creation, premade }
+ * Returns: { system: { id, name, words }, creation, premade, portraits }
  */
 exports.loomCreationRules = onCall(async (request) => {
   requireLoomAuth(request);
@@ -1090,6 +1146,11 @@ exports.loomCreationRules = onCall(async (request) => {
     system: { id: system.id, name: system.name, words: system.words || {} },
     creation: creation.creationView(system),
     premade: Boolean(canonWorld.rules && canonWorld.rules.startingSheet),
+    portraits: tokens.playerPortraits(canonWorld).map((t) => ({
+      id: t.imageId,
+      link: t.link,
+      crop: tokens.cropOf(t),
+    })),
   };
 });
 
@@ -1124,9 +1185,42 @@ exports.loomRollCharacter = onCall(async (request) => {
 });
 
 /**
+ * loomUploadToken — a player's own picture for their character's token
+ * (L-933; planning/tokens.md §4.3, TK2), for one of their saves: a PNG, JPEG
+ * or WebP of at most 5 MB, base64-encoded, and where to crop it. It is
+ * squared at the crop, resized to 512 px, stripped of metadata and stored as
+ * WebP at loom_tokens/{uid}/{saveId}.webp, which only its owner can read; the
+ * save's `character.token` names it. See ./loom-token-upload.js.
+ *
+ * Data: { saveId: string, image: string (base64), crop?: { x, y, zoom } }
+ * Returns: { token: { file, version, crop } }
+ */
+exports.loomUploadToken = onCall({ memory: '1GiB' }, async (request) => {
+  const uid = requireLoomAuth(request);
+  const { saveId, image, crop } = request.data || {};
+  const upload = require('./loom-token-upload');
+  const { getStorage } = require('firebase-admin/storage');
+  try {
+    return await upload.uploadToken({
+      db: getFirestore(),
+      bucket: getStorage().bucket(),
+      uid,
+      saveId: typeof saveId === 'string' ? saveId.trim() : saveId,
+      image,
+      crop,
+    });
+  } catch (err) {
+    if (err instanceof upload.UploadError) throw new HttpsError(err.code, err.message);
+    console.error('loomUploadToken error:', err);
+    throw new HttpsError('internal', 'Failed to store the picture.');
+  }
+});
+
+/**
  * loomDeleteSave — deletes one of the caller's own saves, including its
  * loom_turns event log and what it has seen on each map (`seen`; L-632)
- * (Firestore does not cascade-delete subcollections).
+ * (Firestore does not cascade-delete subcollections), and its uploaded token
+ * picture (L-933).
  * Callable by any signed-in user with the `loom` app claim who owns the save.
  *
  * Data: { saveId: string }
@@ -1164,6 +1258,16 @@ exports.loomDeleteSave = onCall(async (request) => {
   } catch (err) {
     console.error('loomDeleteSave error:', err);
     throw new HttpsError('internal', 'Failed to delete save.');
+  }
+  // Its own token picture, if it had one (L-933).
+  const character = saveSnap.data().character || {};
+  if (tokens.isUpload(character.token)) {
+    try {
+      const { getStorage } = require('firebase-admin/storage');
+      await require('./loom-token-upload').deleteUpload(getStorage().bucket(), uid, saveRef.id);
+    } catch (err) {
+      console.error('loomDeleteSave: could not delete its token:', err);
+    }
   }
 
   return { success: true };

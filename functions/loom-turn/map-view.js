@@ -162,6 +162,9 @@ function mapView(canonWorld, save, record, townRecord) {
       clock.timeOf(save),
       { world: canonWorld }
     ),
+    // Their own token (L-933): a portrait's link and crop, or their upload's
+    // file to read as its owner; null with none (drawn as initials).
+    token: tokens.forPlayer(save.character && save.character.token),
     // A level offered at the last long rest and not yet taken (L-845), with
     // the rules' own suggestion: the level-up form after a reload.
     levelUp: levelUpView(canonWorld, save),
@@ -545,6 +548,8 @@ function battleView(canonWorld, save, record) {
     height: map.height,
     image: artOf.forPlayer(artOf.mapArt(map)),
     here: { x: cell.x, y: cell.y },
+    // The player's own token on it (L-933), as the page draws it.
+    you: { token: tokens.forPlayer(save.character && save.character.token) },
     // Where in it, in feet, and how wide the character is (L-922), for the
     // grid view's paths (../loom-canon/map-paths.js).
     herePoint: { x: point.x, y: point.y },

@@ -18,8 +18,12 @@
   //   a mark when a level is ready (L-845).
   //   A press opens the panel. On a phone it runs under the menu bar.
   //
+  // - The panel's Token (L-933; planning/tokens.md §4.3): the character's
+  //   token as battle maps show it, and Change: the world's portraits or a
+  //   picture of their own, framed in its circle (token-picker.js). Choosing
+  //   costs no AP and no time.
+  //
   // The map reloads after every turn, so both follow what a turn changed.
-  // L-730 later adds the portrait and token to the panel.
 
   var Loom = window.Loom;
   var ui = Loom.ui;
@@ -155,6 +159,159 @@
     </section>`;
   }
 
+  function initialsOf(name) {
+    return String(name || '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(function (w) {
+        return w.charAt(0).toUpperCase();
+      })
+      .join('');
+  }
+
+  // The world's portraits for players, loaded once a world (loomCreationRules).
+  var portraitsByWorld = {};
+  function portraitsOf(worldId) {
+    if (!portraitsByWorld[worldId]) {
+      portraitsByWorld[worldId] = Loom.state.functions
+        .httpsCallable('loomCreationRules')({ worldId: worldId })
+        .then(function (result) {
+          return result.data.portraits || [];
+        })
+        .catch(function (err) {
+          delete portraitsByWorld[worldId];
+          throw err;
+        });
+    }
+    return portraitsByWorld[worldId];
+  }
+
+  // The token: as it shows, and changing it (L-933).
+  function TokenSection(props) {
+    var current = ui.useStore(function (s) {
+      return (s.map && s.map.token) || null;
+    });
+    var e = hooks.useState(false);
+    var editing = e[0];
+    var setEditing = e[1];
+    var p = hooks.useState(null);
+    var portraits = p[0];
+    var setPortraits = p[1];
+    var v = hooks.useState(null);
+    var value = v[0];
+    var setValue = v[1];
+    var b = hooks.useState(false);
+    var busy = b[0];
+    var setBusy = b[1];
+    var r = hooks.useState(null);
+    var error = r[0];
+    var setError = r[1];
+
+    function change() {
+      setError(null);
+      setEditing(true);
+      setValue(null);
+      // The token they have, to move its circle.
+      if (current) {
+        Loom.tokenUrl(current)
+          .then(function (src) {
+            setValue(function (was) {
+              return was || { keep: true, src: src, crop: current.crop };
+            });
+          })
+          .catch(function () {});
+      }
+      portraitsOf(Loom.state.worldId)
+        .then(setPortraits)
+        .catch(function (err) {
+          setPortraits([]);
+          setError('The portraits did not load: ' + (err.message || 'try again'));
+        });
+    }
+
+    function save(next) {
+      setBusy(true);
+      setError(null);
+      Loom.tokenPicker
+        .send(Loom.state.worldId, Loom.state.saveId, next)
+        .then(function () {
+          setBusy(false);
+          setEditing(false);
+          return Loom.map && Loom.map.load ? Loom.map.load() : null;
+        })
+        .catch(function (err) {
+          setBusy(false);
+          setError(err.message || 'Your token could not be changed.');
+        });
+    }
+
+    return html`<${Section} id="loom-character-token" title="Token">
+      <div class="loom-character-token">
+        <${Loom.tokenPicker.Token}
+          picture=${current}
+          size=${64}
+          initials=${initialsOf(props.name)}
+        />
+        ${!editing &&
+        html`<button
+          class="app-btn"
+          type="button"
+          id="loom-character-token-change"
+          onClick=${change}
+        >
+          ${current ? 'Change' : 'Choose a token'}
+        </button>`}
+      </div>
+      ${editing &&
+      html`${portraits === null
+          ? html`<p class="loom-rules-note">Loading the portraits…</p>`
+          : html`<${Loom.tokenPicker.Picker}
+              id="loom-character-picker"
+              portraits=${portraits}
+              value=${value}
+              onChange=${setValue}
+            />`}
+        <div class="loom-form-actions">
+          <button
+            class="app-btn"
+            type="button"
+            id="loom-character-token-save"
+            disabled=${busy || !value}
+            onClick=${function () {
+              save(value);
+            }}
+          >
+            Save
+          </button>
+          ${current &&
+          html`<button
+            class="loom-back-link"
+            type="button"
+            id="loom-character-token-remove"
+            disabled=${busy}
+            onClick=${function () {
+              save(null);
+            }}
+          >
+            No token
+          </button>`}
+          <button
+            class="loom-back-link"
+            type="button"
+            disabled=${busy}
+            onClick=${function () {
+              setEditing(false);
+              setError(null);
+            }}
+          >
+            Cancel
+          </button>
+        </div>`}
+      ${error && html`<p class="loom-error" id="loom-character-token-error">${error}</p>`}
+    <//>`;
+  }
+
   function Character() {
     var open = ui.useStore(function (s) {
       return s.ui.character;
@@ -215,6 +372,7 @@
               })}
             </ul>
           </div>`}
+          <${TokenSection} name=${c.name} />
           ${c.experience &&
           html`<${Section} id="loom-character-experience" title="Experience">
             <${Experience} experience=${c.experience} word=${c.level.name} level=${c.level.value} />

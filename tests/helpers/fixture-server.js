@@ -2,9 +2,10 @@
 
 /**
  * A static server for the headless Chrome tests (tests/loom-paint.test.js,
- * tests/loom-objects-menu.test.js): the app's `public/` directory, the tests'
- * `fixtures/`, and the libraries the page loads from a CDN, served from the
- * tests' own copy at the same version (PixiJS, Preact, htm).
+ * tests/loom-objects-menu.test.js, tests/loom-token-picker.test.js): the app's
+ * `public/` directory, the tests' `fixtures/`, and the libraries the page
+ * loads from a CDN, served from the tests' own copy at the same version
+ * (PixiJS, Preact and its hooks, htm).
  *
  *   const { server, origin } = await serveFixtures({ artDelay: () => ms });
  *
@@ -30,6 +31,7 @@ const TYPES = {
 const LIBRARIES = {
   '/pixi.min.js': 'node_modules/pixi.js/dist/pixi.min.js',
   '/preact.umd.js': 'node_modules/preact/dist/preact.umd.js',
+  '/preact-hooks.umd.js': 'node_modules/preact/hooks/dist/hooks.umd.js',
   '/htm.umd.js': 'node_modules/htm/dist/htm.umd.js',
 };
 
