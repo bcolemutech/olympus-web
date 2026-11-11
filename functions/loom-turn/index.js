@@ -34,6 +34,7 @@ const combat = require('../loom-modules/combat');
 const frames = require('../loom-canon/frames');
 const levelRules = require('../loom-modules/advancement/level-up');
 const levelUps = require('./level-up');
+const { tokenTurn } = require('./player-token');
 const { FieldValue } = require('firebase-admin/firestore');
 const noticing = require('./noticing');
 
@@ -160,6 +161,12 @@ async function runTurnPipeline(params) {
     worldId,
     saveId,
   });
+  // The player's token chosen in play (L-933): no AP, no time, and nothing
+  // waiting dropped.
+  if (action && action.verb === 'token') {
+    return tokenTurn({ saveRef, canonWorld }, action.token);
+  }
+
   // A question asked of a complicated action last turn (L-826; CB1): what the
   // player types next is read as the answer; anything they do drops it.
   const asked = save.asked || null;

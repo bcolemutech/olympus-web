@@ -109,10 +109,10 @@
 
   /**
    * Creates a new save via the loomCreateSave callable, with the character's
-   * making (`creation`, L-812) when there is one. Returns a promise of the new
-   * saveId.
+   * making (`creation`, L-812) when there is one, and a world portrait as
+   * its token (`token`, L-933). Returns a promise of the new saveId.
    */
-  function createSave(worldId, name, characterName, creation) {
+  function createSave(worldId, name, characterName, creation, token) {
     var errorEl = Loom.getRef('loom-new-save-error');
     var submitBtn = Loom.getRef('loom-new-save-submit');
     errorEl.classList.add('hidden');
@@ -121,6 +121,7 @@
     var loomCreateSave = state.functions.httpsCallable('loomCreateSave');
     var data = { worldId: worldId, name: name, characterName: characterName };
     if (creation) data.creation = creation;
+    if (token) data.token = token;
     return loomCreateSave(data)
       .then(function (result) {
         submitBtn.disabled = false;

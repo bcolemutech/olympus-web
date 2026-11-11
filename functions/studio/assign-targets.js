@@ -16,6 +16,9 @@
  *   statBlock  a stat block's token    statBlock.token      kind token or portrait
  *   figure     a group of figures'     its group in the battle map's figures;
  *              token                   id is "<mapId>/<groupId>" (L-931)
+ *   playerToken a portrait offered to   world.tokens.player, a list; id is the
+ *              players for their own   image's own id (L-933)
+ *              token                   kind token or portrait
  *
  * A token keeps its crop beside the reference (../loom-canon/tokens.js).
  */
@@ -30,6 +33,13 @@ const TARGETS = Object.freeze({
   character: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },
   statBlock: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },
   figure: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },
+  playerToken: {
+    kind: 'portrait',
+    kinds: ['token', 'portrait'],
+    label: 'a player portrait',
+    token: true,
+    list: true,
+  },
 });
 
 /** What a world holds for a library image: its link, and its current size. */

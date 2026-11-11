@@ -107,6 +107,20 @@ function tokenHolderOf(world, target, id) {
     if (!c || c.retired) throw new AssignError('not-found', `No character "${id}" in this world.`);
     return held(c, c.name);
   }
+  if (target === 'playerToken') {
+    // A portrait offered to players (L-933): an entry in the world's list,
+    // named by its image's id.
+    const list = ((world.tokens || {}).player || []).filter(tokens.isToken);
+    const index = list.findIndex((t) => t.imageId === id);
+    const entry = index >= 0 ? list[index] : null;
+    return {
+      name: `${world.name}: player portraits`,
+      token: entry,
+      previous: art.fromRef(entry),
+      list,
+      index,
+    };
+  }
   if (target === 'statBlock') {
     const block = (world.statBlocks || {})[id];
     if (!block) {
@@ -208,6 +222,15 @@ function writeToken(e, target, at, holder, ref) {
   const value = ref || FieldValue.delete();
   if (target === 'character') return e.update(e.ref('characters', at), { token: value });
   if (target === 'statBlock') return e.update(e.ref('statBlocks', at), { token: value });
+  if (target === 'playerToken') {
+    // The world's list of player portraits (L-933), written whole: a new one
+    // goes at the end, a taken one keeps its place.
+    const list = holder.list.slice();
+    if (!ref) list.splice(holder.index, holder.index >= 0 ? 1 : 0);
+    else if (holder.index >= 0) list[holder.index] = ref;
+    else list.push(ref);
+    return e.updateWorld({ 'tokens.player': list });
+  }
   const groups = (holder.map.figures || []).map((g, i) => {
     if (i !== holder.index) return g;
     const next = { ...g };
@@ -309,7 +332,19 @@ function createAssigner({ db, bucket, writer, library }) {
       const problems = tokens.validateCrop(crop);
       if (problems.length) throw new AssignError('invalid-argument', problems.join(' '));
     }
-    const at = target === 'map' || target === 'cover' ? worldId : id;
+    // A player portrait is named by its image (L-933).
+    const at =
+      target === 'map' || target === 'cover'
+        ? worldId
+        : target === 'playerToken'
+          ? id || imageId
+          : id;
+    if (target === 'playerToken' && imageId && at !== imageId) {
+      throw new AssignError(
+        'invalid-argument',
+        "A player portrait is named by its image's id: leave id out, or give the same one."
+      );
+    }
     if (typeof at !== 'string' || !at) {
       const which = {
         town: 'settlement',
@@ -318,6 +353,7 @@ function createAssigner({ db, bucket, writer, library }) {
         character: 'character',
         statBlock: 'stat block',
         figure: 'group of figures ("<mapId>/<groupId>")',
+        playerToken: 'player portrait (its image id)',
       };
       throw new AssignError('invalid-argument', `Say which ${which[target] || 'battle map'}.`);
     }

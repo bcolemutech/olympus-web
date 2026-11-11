@@ -11,10 +11,14 @@
   //    the modifier it gives (the server works it out; the page never runs a
   //    formula).
   // 2. Skills to train and traits to take, as many as the system allows.
-  // 3. A review of the sheet, then Begin, which sends the choices to
+  // 3. Their token (L-933; planning/tokens.md §4.3): one of the world's
+  //    player portraits or a picture of their own, framed in its circle
+  //    (token-picker.js), or none for now.
+  // 4. A review of the sheet, then Begin, which sends the choices to
   //    loomCreateSave. The server checks them again and says what's wrong.
   //
-  // A world with a premade character, or a system with no method, skips it.
+  // A world with a premade character, or a system with no method, skips
+  // straight to the token.
 
   var Loom = window.Loom;
   var ui = Loom.ui;
@@ -220,13 +224,28 @@
     return out;
   }
 
+  // The token step (L-933): the picker, and what the player chose.
+  function TokenStep(props) {
+    return html`<p class="loom-create-help">
+        Your token is how you show on battle maps: pick a portrait or upload your own, or skip it
+        and show your initials.
+      </p>
+      <${Loom.tokenPicker.Picker}
+        id="loom-create-token"
+        portraits=${props.portraits}
+        value=${props.value}
+        onChange=${props.onChange}
+      />`;
+  }
+
   function Creation(props) {
-    var c = props.rules.creation;
+    var making = needsChoices(props.rules);
+    var c = making ? props.rules.creation : null;
     var words = props.rules.system.words || {};
-    var s = hooks.useState('attributes');
+    var s = hooks.useState(making ? 'attributes' : 'token');
     var stepName = s[0];
     var setStep = s[1];
-    var a = hooks.useState(startingAttributes(c));
+    var a = hooks.useState(making ? startingAttributes(c) : {});
     var attributes = a[0];
     var setAttributes = a[1];
     var k = hooks.useState([]);
@@ -244,11 +263,17 @@
     var e = hooks.useState(null);
     var error = e[0];
     var setError = e[1];
+    var tk = hooks.useState(null); // the token chosen (token-picker.js), or none
+    var token = tk[0];
+    var setToken = tk[1];
 
-    var allChosen = c.attributes.every(function (attr) {
-      return attributes[attr.id] !== undefined;
-    });
-    var hasChoices = (c.skills.length && c.skillsToTrain) || (c.traits.length && c.traitsToPick);
+    var allChosen =
+      making &&
+      c.attributes.every(function (attr) {
+        return attributes[attr.id] !== undefined;
+      });
+    var hasChoices =
+      making && ((c.skills.length && c.skillsToTrain) || (c.traits.length && c.traitsToPick));
 
     function roll() {
       setBusy(true);
@@ -269,9 +294,9 @@
     function begin() {
       setBusy(true);
       setError(null);
-      var choices = { attributes: attributes, skills: skills, traits: traits };
-      if (rolled) choices.rollId = rolled.rollId;
-      props.onCreate(choices).catch(function (err) {
+      var choices = making ? { attributes: attributes, skills: skills, traits: traits } : null;
+      if (choices && rolled) choices.rollId = rolled.rollId;
+      props.onCreate(choices, token).catch(function (err) {
         setBusy(false);
         setError(err.message || 'The character could not be made.');
       });
@@ -319,7 +344,7 @@
             type="button"
             disabled=${!allChosen}
             onClick=${function () {
-              setStep(hasChoices ? 'choices' : 'review');
+              setStep(hasChoices ? 'choices' : 'token');
             }}
           >
             Next
@@ -353,7 +378,7 @@
             id="loom-create-next"
             type="button"
             onClick=${function () {
-              setStep('review');
+              setStep('token');
             }}
           >
             Next
@@ -368,6 +393,55 @@
             Back
           </button>
         </div>`;
+    } else if (stepName === 'token') {
+      body = html`<${TokenStep}
+          portraits=${props.rules.portraits || []}
+          value=${token}
+          onChange=${setToken}
+        />
+        <div class="loom-form-actions">
+          ${making
+            ? html`<button
+                class="app-btn"
+                id="loom-create-next"
+                type="button"
+                onClick=${function () {
+                  setStep('review');
+                }}
+              >
+                ${token ? 'Next' : 'Skip'}
+              </button>`
+            : html`<button
+                class="app-btn"
+                id="loom-create-begin"
+                type="button"
+                disabled=${busy}
+                onClick=${begin}
+              >
+                Begin
+              </button>`}
+          ${token &&
+          html`<button
+            class="loom-back-link"
+            type="button"
+            id="loom-create-token-clear"
+            onClick=${function () {
+              setToken(null);
+            }}
+          >
+            No token
+          </button>`}
+          <button
+            class="loom-back-link"
+            type="button"
+            onClick=${function () {
+              if (!making) props.onCancel();
+              else setStep(hasChoices ? 'choices' : 'attributes');
+            }}
+          >
+            Back
+          </button>
+        </div>`;
     } else {
       var nameOf = function (list, id) {
         var found = list.filter(function (x) {
@@ -375,7 +449,14 @@
         })[0];
         return found ? found.name : id;
       };
-      body = html`<dl class="loom-create-review" id="loom-create-review">
+      body = html`${token &&
+        html`<div class="loom-create-review-token" id="loom-create-review-token">
+          ${html`<${Loom.tokenPicker.Token}
+            picture=${{ link: token.src, crop: token.crop }}
+            size=${64}
+          />`}
+        </div>`}
+        <dl class="loom-create-review" id="loom-create-review">
           ${c.attributes.map(function (attr) {
             return html`<div key=${attr.id} class="loom-create-review-row">
               <dt>${attr.name}</dt>
@@ -419,7 +500,7 @@
             class="loom-back-link"
             type="button"
             onClick=${function () {
-              setStep(hasChoices ? 'choices' : 'attributes');
+              setStep('token');
             }}
           >
             Back
@@ -427,7 +508,12 @@
         </div>`;
     }
 
-    var titles = { attributes: 'Attributes', choices: 'Skills and traits', review: 'Review' };
+    var titles = {
+      attributes: 'Attributes',
+      choices: 'Skills and traits',
+      token: 'Token',
+      review: 'Review',
+    };
     return html`<section class="loom-create" id="loom-create" aria-labelledby="loom-create-title">
       <h3 class="loom-create-title" id="loom-create-title">
         ${props.characterName}: ${titles[stepName]}
@@ -452,8 +538,9 @@
   }
 
   /**
-   * Shows the flow in `host`. `onCreate(choices)` makes the save (a promise);
-   * `onCancel` goes back to the names.
+   * Shows the flow in `host`. `onCreate(choices, token)` makes the save (a
+   * promise; `choices` null when there's nothing to choose, `token` the
+   * picker's choice or null); `onCancel` goes back to the names.
    */
   function show(host, props) {
     root = host;

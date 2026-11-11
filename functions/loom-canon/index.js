@@ -195,6 +195,9 @@ async function readFirestoreWorld(db, worldId, meta) {
     // Its art (L-944; ./art-sets.js): { set }, the art set its maps are
     // drawn with; the built-in `classic` when it names none.
     art: meta.art || {},
+    // Its tokens (L-933; ./tokens.js): { player }, the portraits offered to
+    // players for their own character's token, library image references.
+    tokens: meta.tokens || {},
   };
   ENTITY_COLLECTIONS.forEach(function (name, i) {
     world[name] = {};

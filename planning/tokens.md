@@ -1,6 +1,6 @@
 # The Loom — Tokens — Design Document v0.1
 
-**Status:** In progress. Decided (2026-11-06). Revised 2026-11-07: tokens stand (TK5), built after L-940's view. Sub-issues filed 2026-11-06 (#789–#792, §6). L-931 (token pictures as data) built 2026-11-10; L-932 (drawing tokens) built 2026-11-10.
+**Status:** In progress. Decided (2026-11-06). Revised 2026-11-07: tokens stand (TK5), built after L-940's view. Sub-issues filed 2026-11-06 (#789–#792, §6). L-931 (token pictures as data) built 2026-11-10; L-932 (drawing tokens) built 2026-11-10; L-933 (the player's token) built 2026-11-11, ahead of L-934.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-930 (#788), Phase 10 — Levels and Vehicles (milestone #26).
 **Depends on:** L-393 (named stat blocks), L-922 (size classes), L-700 (the image studio).
@@ -79,6 +79,12 @@ Animation is not wanted (the user, 2026-11-06).
   - it lives at `loom_tokens/{uid}/{saveId}.webp` in Storage, readable by its owner only and written by the function only. The save gets `character.token`;
   - deleting the save deletes it.
 - **Saves from before** have no token and draw initials until one is chosen.
+- **As built (L-933, 2026-11-11):**
+  - choosing in play is a token turn, `{ verb: 'token', token: { image, crop? } | { crop } | null }`: no AP, no time, no turn recorded, nothing waiting dropped; giving up an upload deletes its file;
+  - the upload's crop is cut into the picture, so its token keeps none;
+  - the page reads an upload signed in (Storage's download endpoint with the player's ID token, which the rules check), never by a link anyone could open;
+  - the new-game flow always has a Token step (the only step for a world with a premade character), which can be skipped for initials;
+  - `studio_assign` (target `playerToken`) adds one portrait, named by its image's id; `set_world_tokens` replaces the list.
 
 ### 4.4 Making portraits
 

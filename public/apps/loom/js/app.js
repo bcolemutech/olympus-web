@@ -138,9 +138,23 @@
         var form = Loom.getRef('loom-new-save-form');
         var submit = Loom.getRef('loom-new-save-submit');
 
-        function create(choices) {
+        function create(choices, token) {
           return Loom.saves
-            .createSave(worldId, name, characterName, choices)
+            .createSave(worldId, name, characterName, choices, Loom.tokenPicker.forCreate(token))
+            .then(function (saveId) {
+              // A picture of their own goes once the save exists (L-933); the
+              // game starts either way, and the Character panel can try again.
+              if (!token || !token.file) return saveId;
+              return Loom.tokenPicker.send(worldId, saveId, token).then(
+                function () {
+                  return saveId;
+                },
+                function (err) {
+                  console.error('Could not store your token:', err);
+                  return saveId;
+                }
+              );
+            })
             .then(function (saveId) {
               hideNewSaveForm();
               showPlay(saveId, { recentSummary: '', character: { name: characterName } });
@@ -148,13 +162,13 @@
         }
 
         // The character is made by the world's system's method (L-812),
-        // unless the world gives one or there's nothing to choose.
+        // unless the world gives one or there's nothing to choose; either
+        // way the player picks their token (L-933).
         submit.disabled = true;
         Loom.creation
           .rulesFor(worldId)
           .then(function (rules) {
             submit.disabled = false;
-            if (!Loom.creation.needsChoices(rules)) return create(null);
             form.classList.add('hidden');
             Loom.creation.show(Loom.getRef('loom-create-host'), {
               worldId: worldId,

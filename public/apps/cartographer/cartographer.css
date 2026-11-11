@@ -362,3 +362,25 @@ textarea.carto-input {
   margin: 0.1rem 0 0 0.2rem;
   font-size: 0.8rem;
 }
+
+/* The portraits a world offers players for their own token (L-933). */
+.carto-portraits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0;
+}
+
+.carto-portrait {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  border: 2px solid var(--border-color, #444);
+  border-radius: 50%;
+}
+
+.carto-portrait img {
+  position: absolute;
+  max-width: none;
+}
