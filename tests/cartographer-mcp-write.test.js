@@ -196,6 +196,8 @@ test('exposes the write tools with honest hints', async () => {
     'add_map',
     'add_place',
     'add_places',
+    'add_realms',
+    'add_regions',
     'assign_battle_map',
     'assign_template',
     'connect_locations',

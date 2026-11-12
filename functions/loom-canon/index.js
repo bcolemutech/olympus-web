@@ -219,6 +219,9 @@ async function readFirestoreWorld(db, worldId, meta) {
   }
   // Its maps as a tree from the top (L-901): { top, orphans }.
   world.tree = require('./levels').treeOf(world);
+  // Each place's region and realm from where it sits, unless set by hand
+  // (L-712; ./realms.js), for every reader.
+  require('./realms').resolvePlaces(world);
   return deepFreeze(toPlayView(world));
 }
 

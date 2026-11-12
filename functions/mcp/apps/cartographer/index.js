@@ -35,6 +35,7 @@ const figures = require('../../../loom-modules/combat/figures');
 const { systemOf } = require('../../../loom-canon/checks');
 const tokens = require('../../../loom-canon/tokens');
 const sheets = require('../../../loom-canon/sheets');
+const realms = require('../../../loom-canon/realms');
 
 // The live characters whose position is at `level` and passes `keep`, as
 // view_image draws them (L-684): [{ id, name, x, y, place? }].
@@ -50,6 +51,55 @@ function peopleAt(world, level, keep) {
       y: at.point.y,
       ...(at.place ? { place: { id: at.place.id, name: at.place.name } } : {}),
     }));
+}
+
+// What view_image's overlay draws on a region map (L-712): each live region
+// with zones there, or each realm with its regions' zones there, and their
+// colours; `none` those with no land on this map.
+function overlayOf(world, mapId, kind) {
+  const regionsHere = Object.values(world.regions || {})
+    .filter((r) => !r.retired)
+    .map((r) => ({
+      region: r,
+      zones: (realms.regionLand(world, r.id).find((l) => l.mapId === mapId) || {}).zones || [],
+    }));
+  // The map's zones as they lie, bottom first.
+  const map = (world.maps || {})[mapId] || {};
+  const zoneOrder = (((map.geometry || {}).zones || []).filter((z) => z && z.id) || []).map(
+    (z) => z.id
+  );
+  if (kind === 'regions') {
+    return {
+      kind,
+      groups: regionsHere
+        .filter((x) => x.zones.length)
+        .map(({ region, zones }) => ({
+          id: region.id,
+          name: region.name,
+          colour:
+            typeof region.color === 'string' && /^#[0-9a-f]{6}$/i.test(region.color)
+              ? region.color.toLowerCase()
+              : realms.colourOf({ id: region.id }),
+          zones,
+        })),
+      none: regionsHere.filter((x) => !x.zones.length).map((x) => x.region.id),
+    };
+  }
+  const groups = Object.values(world.factions || {})
+    .filter((f) => !f.retired)
+    .map((f) => ({
+      id: f.id,
+      name: f.name,
+      colour: realms.colourOf(f),
+      zones: zoneOrder.filter((id) =>
+        regionsHere.some((x) => x.region.factionId === f.id && x.zones.includes(id))
+      ),
+    }));
+  return {
+    kind,
+    groups: groups.filter((g) => g.zones.length),
+    none: groups.filter((g) => !g.zones.length).map((g) => g.id),
+  };
 }
 
 // The Cartographer's MCP connector (design planning/the-cartographer-design.md
@@ -394,6 +444,106 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
         },
       },
       {
+        name: 'where',
+        title: 'What lies at a point',
+        description:
+          'What lies at a point on a region map (L-712): its terrain (the topmost ground there: ' +
+          'its id, material and the material’s name; none outside every ground item), its ' +
+          'region (the topmost zone naming one) and that region’s realm, and every zone holding ' +
+          'the point, bottom first. Terrain is set with set_ground, regions are shaped with ' +
+          'set_zones ({ region }), and realms hold their regions (add_regions). Give a point, ' +
+          'or a place’s id to read where it sits.',
+        inputSchema: {
+          worldId,
+          mapId: entityId('region map', 'list_maps').optional(),
+          point: z
+            .strictObject({ x: z.number(), y: z.number() })
+            .optional()
+            .describe('A point in the map’s own units.'),
+          placeId: z
+            .string()
+            .min(1)
+            .max(120)
+            .optional()
+            .describe('A location or place on a region map: where it sits (instead of a point).'),
+        },
+        annotations: readOnly,
+        handler: async (ctx, args) => {
+          const { world } = await worldFor(args.worldId);
+          if (!args.point === !args.placeId) {
+            throw new ToolError('Give a point (with its mapId), or a placeId.');
+          }
+          let mapId = args.mapId;
+          let point = args.point;
+          let place = null;
+          if (args.placeId) {
+            const model = modelOf(world);
+            const location = (world.locations || {})[args.placeId];
+            const stored = (world.mapPlaces || {})[args.placeId];
+            if (location && location.geo && Number.isFinite(location.geo.x)) {
+              mapId = model.topMapId;
+              point = { x: location.geo.x, y: location.geo.y };
+              place = location;
+            } else if (stored && stored.at && Number.isFinite(stored.at.x)) {
+              mapId = stored.mapId;
+              point = stored.at;
+              place = stored;
+            } else {
+              throw new ToolError(
+                `"${args.placeId}" is no location or place with a position on a region map.`
+              );
+            }
+            if (args.mapId && args.mapId !== mapId) {
+              throw new ToolError(
+                `${place.name || args.placeId} is on ${mapId}, not ${args.mapId}.`
+              );
+            }
+          }
+          if (!mapId) throw new ToolError('Give the mapId of the region map (list_maps).');
+          const map = (world.maps || {})[mapId];
+          if (!map || map.retired || map.kind !== 'region') {
+            throw new ToolError(
+              `"${mapId}" is no region map with a document of its own (list_maps shows them).`
+            );
+          }
+          const { width, height } = map.space || {};
+          if (!(point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height)) {
+            throw new ToolError(
+              `{ x: ${point.x}, y: ${point.y} } is off ${map.name || mapId} (${width} × ${height}).`
+            );
+          }
+          const found = realms.whereOn(world, mapId, [point.x, point.y]);
+          const g = (place && place.geo) || {};
+          return {
+            worldId: world.id,
+            map: { mapId, name: map.name || mapId },
+            point: { x: point.x, y: point.y },
+            ...(place
+              ? {
+                  place: {
+                    id: args.placeId,
+                    name: place.name || args.placeId,
+                    // What the place is in: by hand, or from where it sits.
+                    region: g.regionId
+                      ? {
+                          id: g.regionId,
+                          name: ((world.regions || {})[g.regionId] || {}).name || g.regionId,
+                          from: g.regionFrom === 'position' ? 'position' : 'set by hand',
+                        }
+                      : null,
+                    realms: (place.factionIds || []).map((id) => ({
+                      id,
+                      name: ((world.factions || {})[id] || {}).name || id,
+                      from: g.realmFrom === 'region' ? 'region' : 'set by hand',
+                    })),
+                  },
+                }
+              : {}),
+            ...found,
+          };
+        },
+      },
+      {
         name: 'get_town',
         title: 'Get town',
         description:
@@ -566,6 +716,13 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
                 'player standing there sees it with doors as the map has them (sightFrom does ' +
                 'the same from an entry).'
             ),
+          overlay: z
+            .enum(['regions', 'realms'])
+            .optional()
+            .describe(
+              'A region map (of map): draw its regions, or its realms, over the terrain, each ' +
+                'in its colour with a numbered square, the legend naming them (L-712).'
+            ),
           sightFrom: z
             .string()
             .regex(/^[A-Za-z0-9_-]{1,40}$/)
@@ -623,8 +780,15 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
                   .placesOn(model, args.id)
                   .map((id) => ({ id, ...(levels.placeOf(model, id) || {}) }))
                   .filter((p) => !p.retired);
+                if (args.overlay) {
+                  if (stored.kind !== 'region') {
+                    throw new ToolError('overlay is for a region map; this is an area map.');
+                  }
+                  options.overlay = overlayOf(world, args.id, args.overlay);
+                }
                 rendered = images.renderMap(stored, places, options);
               } else {
+                if (args.overlay) throw new ToolError('overlay is for a region map (of map).');
                 if (args.of === 'map' && !grid) {
                   throw new ToolError(
                     `"${args.id}" is no grid, or region or area map made with add_map. ` +

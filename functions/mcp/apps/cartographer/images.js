@@ -7,6 +7,7 @@ const { isSvg, normaliseColours } = require('../../../cartographer/svg');
 const mapAreas = require('../../../loom-canon/map-areas');
 const layerGeometry = require('../../../loom-canon/layer-geometry');
 const { makePainter } = require('./geometry-image');
+const geo = require('../../../loom-canon/map-geometry');
 
 // Images Claude can see (planning/the-loom-layered-worlds.md §9; L-355 /
 // #417): a town's art, a battle map's art, or the world map, scaled down for
@@ -624,13 +625,86 @@ const hexColour = (text) => {
 };
 
 /**
+ * Regions or realms over a region map (L-712): `overlay` { kind: 'regions' |
+ * 'realms', groups: [{ id, name, colour, zones: [zoneId] }] }. Each group's
+ * zones are filled see-through in its colour and edged in it, in the order
+ * the zones lie (the topmost last). Returns the groups drawn, each with the
+ * pixel point of its largest zone's middle (`at`), for its marker.
+ */
+function paintOverlay(c, geometry, k, overlay) {
+  const compiled = geo.compile(geometry || {});
+  const owner = {};
+  const out = overlay.groups.map((g) => {
+    const rgb = hexColour(g.colour) || [200, 200, 200];
+    const entry = { ...g, rgb, best: 0, at: null };
+    g.zones.forEach((id) => (owner[id] = entry));
+    return entry;
+  });
+  for (const { item, rings } of compiled.zones) {
+    const entry = owner[item.id];
+    if (!entry || !rings) continue;
+    const px = rings.map((ring) => ring.map((p) => ({ x: p[0] * k, y: p[1] * k })));
+    fillRingsEvenOdd(c, px, [...entry.rgb, 95]);
+    px.forEach((ring) => outline(c, ring, [...entry.rgb, 255], 2));
+    rings.forEach((ring, i) => {
+      const area = Math.abs(ringArea(ring));
+      if (area > entry.best) {
+        entry.best = area;
+        const xs = px[i].map((p) => p.x);
+        const ys = px[i].map((p) => p.y);
+        entry.at = [
+          (Math.min(...xs) + Math.max(...xs)) / 2,
+          (Math.min(...ys) + Math.max(...ys)) / 2,
+        ];
+      }
+    });
+  }
+  return out.filter((o) => o.at);
+}
+
+// Fills rings ([{ x, y }] in pixels) together, even-odd: a ring inside another is a hole.
+function fillRingsEvenOdd(c, rings, colour) {
+  const ys = rings.flatMap((ring) => ring.map((p) => p.y));
+  if (!ys.length) return;
+  const y0 = Math.max(0, Math.floor(Math.min(...ys)));
+  const y1 = Math.min(c.height - 1, Math.ceil(Math.max(...ys)));
+  for (let y = y0; y <= y1; y++) {
+    const cy = y + 0.5;
+    const xs = [];
+    for (const points of rings) {
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const a = points[i];
+        const b = points[j];
+        if (a.y > cy !== b.y > cy) xs.push(a.x + ((cy - a.y) * (b.x - a.x)) / (b.y - a.y));
+      }
+    }
+    xs.sort((p, q) => p - q);
+    for (let n = 0; n + 1 < xs.length; n += 2) {
+      const from = Math.max(0, Math.ceil(xs[n] - 0.5));
+      const to = Math.min(c.width - 1, Math.floor(xs[n + 1] - 0.5));
+      for (let x = from; x <= to; x++) blend(c, x, y, colour);
+    }
+  }
+}
+
+function ringArea(ring) {
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const p = ring[i];
+    const q = ring[(i + 1) % ring.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return a / 2;
+}
+
+/**
  * A region or area map made with add_map (L-929): its geometry in the map's own
  * units (coasts and terrain, streets and footprints), on a plain background (its
  * `backdrop` colour, if it has one), a grid with its lines labelled, and numbered
  * markers for its places (`places`: [{ id, name, kind, at }]) and for what the
  * geometry holds (as a battle map's).
  */
-function renderMap(map, places = [], { heights = true, hidden = true } = {}) {
+function renderMap(map, places = [], { heights = true, hidden = true, overlay = null } = {}) {
   const space = map.space || { width: 1000, height: 1000 };
   const k = 1200 / Math.max(space.width, space.height);
   const backdrop = hexColour((map.backdrop || {}).colour) || COLOURS.plain;
@@ -641,6 +715,7 @@ function renderMap(map, places = [], { heights = true, hidden = true } = {}) {
   );
   const geometry = map.geometry || {};
   const under = painter.paintUnder(base, geometry, k, { heights, hidden });
+  const shown = overlay ? paintOverlay(base, geometry, k, overlay) : [];
   const step = niceStep(Math.max(space.width, space.height));
   const ls = labelScale(base);
   for (let gx = 0; gx <= space.width + 1e-9; gx += step) {
@@ -672,6 +747,18 @@ function renderMap(map, places = [], { heights = true, hidden = true } = {}) {
     });
     marker(base, p.at.x * k, p.at.y * k, n, 'circle', COLOURS.place, 7);
   });
+  // Each region or realm of the overlay (L-712), numbered at its largest zone.
+  const legendOverlay = shown.map((o) => {
+    const n = markers.length + 1;
+    markers.push({
+      n,
+      type: overlay.kind === 'realms' ? 'realm' : 'region',
+      id: o.id,
+      name: o.name,
+    });
+    if (o.at) marker(base, o.at[0], o.at[1], n, 'square', [...o.rgb, 255], 6);
+    return { n, id: o.id, name: o.name, colour: o.colour, zones: o.zones };
+  });
   queued.forEach((q) => {
     const n = markers.length + 1;
     markers.push({ n, type: q.type, ...q.info });
@@ -699,7 +786,20 @@ function renderMap(map, places = [], { heights = true, hidden = true } = {}) {
         'by (get_geometry, set_ground and the rest).',
       geometry: countsOf(geometry),
       ...(under.heights.length ? { heights: under.heights } : {}),
-      options: { heights, hidden },
+      ...(overlay
+        ? {
+            overlay: {
+              of: overlay.kind,
+              reading:
+                `Each ${overlay.kind === 'realms' ? 'realm' : 'region'} is filled in its colour ` +
+                'over the terrain and edged in it, with a numbered square at its largest zone; ' +
+                'where zones overlap the topmost wins.',
+              [overlay.kind]: legendOverlay,
+              ...(overlay.none && overlay.none.length ? { noLand: overlay.none } : {}),
+            },
+          }
+        : {}),
+      options: { heights, hidden, ...(overlay ? { overlay: overlay.kind } : {}) },
       markers,
     },
   };

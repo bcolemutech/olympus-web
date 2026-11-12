@@ -269,6 +269,7 @@ describe('connector surface', () => {
       'list_work',
       'list_worlds',
       'view_image',
+      'where',
     ]);
 
     const { resources } = await client.listResources();
