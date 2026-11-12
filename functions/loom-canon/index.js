@@ -175,6 +175,8 @@ async function readFirestoreWorld(db, worldId, meta) {
     name: meta.name,
     tagline: meta.tagline || '',
     openingHook: meta.openingHook || '',
+    // What kind of world it is (L-711; ./brief.js): { genre, tone, era, artDirection }.
+    brief: meta.brief || null,
     status: meta.status,
     canonVersion: meta.canonVersion,
     map: meta.map || null,

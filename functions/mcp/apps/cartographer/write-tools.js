@@ -16,6 +16,8 @@ const mapPaths = require('../../../loom-canon/map-paths');
 const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
 const { validateSheet } = require('../../../loom-canon/sheets');
+const brief = require('../../../loom-canon/brief');
+const { createScratchWorld, MIN_MAP, MAX_MAP } = require('../../../cartographer/scratch');
 const { systemOf } = require('../../../loom-canon/checks');
 const spawns = require('../../../loom-modules/combat/spawns');
 const { tokenInput, writeToken } = require('./token-tools');
@@ -98,17 +100,40 @@ const HINT = {
   battleMap: 'Use list_battle_maps to see them.',
 };
 const UNREACHABLE_SHOWN = 5;
-// Worlds from scratch (L-391): the backdrop's default size, in map units (as
-// an Azgaar world's), and how many locations or links one call may add.
-const DEFAULT_MAP = Object.freeze({ width: 1600, height: 1200 });
-const MIN_MAP = 100;
-const MAX_MAP = 10000;
+// Worlds from scratch (L-391): how many locations or links one call may add.
 const MAX_NEW_LOCATIONS = 50;
 const MAX_LINKS = 100;
 const COLOUR = /^#[0-9a-fA-F]{6}$/;
 const SLICE_NOTE =
-  'The first slice of worlds without Azgaar (L-710): the brief, realms, regions, waypoints ' +
-  'and map units come later.';
+  'Worlds without Azgaar (L-710) are built in slices: the brief is here; realms, regions, ' +
+  'waypoints and a world’s own terrain come later.';
+
+// A world's brief (L-711), as a tool takes it: each field optional text. On
+// update, "" clears a field.
+const briefSchema = (clears) => {
+  const field = (key) => {
+    const limit = brief.LIMITS[key];
+    const base = z
+      .string()
+      .trim()
+      .max(limit, `${brief.LABELS[key]} must be ${limit} characters or fewer`);
+    return (clears ? base : base.min(1, `${brief.LABELS[key]} must not be empty`)).optional();
+  };
+  return z
+    .strictObject({
+      genre: field('genre').describe('Its genre, e.g. "dark fantasy" or "space opera".'),
+      tone: field('tone').describe('Its tone, e.g. "grim, with dry humour".'),
+      era: field('era').describe('Its era, e.g. "a late-medieval age of plague".'),
+      artDirection: field('artDirection').describe(
+        'How it looks: the style new pictures for it are drawn in, when it has no style of its own.'
+      ),
+    })
+    .describe(
+      'What kind of world it is. The GM is told it every turn, and the image studio uses the ' +
+        'art direction as the world’s style when none is set' +
+        (clears ? '; "" clears a field.' : '.')
+    );
+};
 
 const text = (max, what) =>
   z
@@ -651,10 +676,12 @@ function writeTools({ writer, systems, studio }) {
         'come from distance as in any world. Then add places with add_locations, link them ' +
         'with connect_locations (links: many in one call), open towns with add_place, and ' +
         'publish with publish_world. Its world map is its top region map (map_world), for ' +
-        'add_map and the other map tools (L-905). ' +
+        'add_map and the other map tools (L-905). Give it a brief (genre, tone, era, art ' +
+        'direction) to say what kind of world it is. ' +
         SLICE_NOTE,
       inputSchema: {
         name,
+        brief: briefSchema(false).optional(),
         systemId: systemId.optional().describe('The game system it plays by, from list_systems.'),
         backdrop: z
           .union([
@@ -685,60 +712,7 @@ function writeTools({ writer, systems, studio }) {
           .describe('Miles per map unit (default 3).'),
       },
       annotations: additive,
-      handler: async (ctx, args) => {
-        const system = args.systemId ? systems && (await systems.get(args.systemId)) : null;
-        if (args.systemId && !system) {
-          throw new ToolError(`No system "${args.systemId}". list_systems shows them.`);
-        }
-        const backdrop = args.backdrop || { colour: '#26332a' };
-        if (backdrop.imageId && !studio) {
-          throw new ToolError('The image studio isn’t available here; give a colour instead.');
-        }
-        const map = {
-          width: args.width || DEFAULT_MAP.width,
-          height: args.height || DEFAULT_MAP.height,
-          imagePath: null,
-          backdrop: backdrop.colour || '#26332a',
-          ...(args.milesPerUnit ? { distance: { unit: 'mi', perMapUnit: args.milesPerUnit } } : {}),
-        };
-        const { worldId: id } = await writer.create(ctx.uid, {
-          name: args.name,
-          systemId: system ? system.id : null,
-          map,
-        });
-        // A studio image as its art, the way studio_assign sets a world's map.
-        let image = null;
-        if (backdrop.imageId) {
-          try {
-            const assigned = await studio.assign(ctx.uid, {
-              worldId: id,
-              target: 'map',
-              imageId: backdrop.imageId,
-            });
-            image = {
-              imageId: backdrop.imageId,
-              ...(assigned.warnings ? { warnings: assigned.warnings } : {}),
-            };
-          } catch (err) {
-            // The world stands; the art can be set again with studio_assign.
-            return {
-              worldId: id,
-              name: args.name,
-              warnings: [
-                `The world was made, but its image wasn't set: ${err.message} Try studio_assign.`,
-              ],
-            };
-          }
-        }
-        return {
-          worldId: id,
-          name: args.name,
-          status: 'draft',
-          ...(system ? { system: { id: system.id, name: system.name } } : {}),
-          map: { width: map.width, height: map.height, backdrop: image || map.backdrop },
-          next: 'Add places with add_locations, then link them with connect_locations.',
-        };
-      },
+      handler: (ctx, args) => createScratchWorld({ writer, systems, studio }, ctx.uid, args),
     },
     {
       name: 'update_world',
@@ -751,7 +725,8 @@ function writeTools({ writer, systems, studio }) {
         'skips making a character; null removes it), or death (on: a character with no one ' +
         'to help dies; off: they come round captured, robbed or rescued; null: the system’s ' +
         'default), or advancement (false: characters don’t grow in this world; true: they do, ' +
-        'by its system’s rules), or its art (art.set: the art set its maps are drawn with, ' +
+        'by its system’s rules), or its brief (brief: { genre, tone, era, artDirection }, the ' +
+        'fields you give; "" clears one), or its art (art.set: the art set its maps are drawn with, ' +
         'from list_art_sets; "classic", the built-in one, unless set). Fields you omit are ' +
         'left unchanged. ' +
         editNote,
@@ -797,6 +772,7 @@ function writeTools({ writer, systems, studio }) {
               'world (a one-shot, a fixed-power story): nothing is earned and no level comes; ' +
               'true, the default, grows them by the system’s advancement.'
           ),
+        brief: briefSchema(true).optional(),
         art: z
           .object({
             set: z
@@ -823,8 +799,14 @@ function writeTools({ writer, systems, studio }) {
           'startingSheet',
           'death',
           'advancement',
+          'brief',
           'art',
         ]);
+        if (args.brief && !Object.values(args.brief).some((value) => value !== undefined)) {
+          throw new ToolError(
+            `Nothing to change: give at least one of ${brief.FIELDS.join(', ')} in the brief.`
+          );
+        }
         if (args.art && !Object.prototype.hasOwnProperty.call(artSets.SETS, args.art.set)) {
           throw new ToolError(
             `No art set "${args.art.set}". There are: ${Object.keys(artSets.SETS).join(', ')} ` +
@@ -892,6 +874,11 @@ function writeTools({ writer, systems, studio }) {
           if (args.advancement === false && growing) fields['rules.advancement'] = false;
           else if (args.advancement === true && !growing) {
             fields['rules.advancement'] = FieldValue.delete();
+          }
+          // Its brief (L-711): the fields given, "" clearing one.
+          if (args.brief) {
+            const changes = brief.briefChanges(world.brief, args.brief, FieldValue.delete());
+            Object.assign(fields, changes);
           }
           // Its art set (L-944).
           if (args.art && args.art.set !== ((world.art || {}).set || artSets.DEFAULT_SET)) {

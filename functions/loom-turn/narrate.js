@@ -4,6 +4,7 @@ const { callGemini } = require('../gemini');
 const loomCanon = require('../loom-canon');
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
+const { briefLine } = require('../loom-canon/brief');
 const maps = require('../loom-canon/maps');
 const mapAreas = require('../loom-canon/map-areas');
 const { buildKnownEntities } = require('./interpret');
@@ -116,6 +117,8 @@ function buildSystemInstruction(knownEntities, canonWorld) {
     'says.\n\n' +
     buildSystemSection(canonWorld) +
     '\n\n' +
+    // What kind of world this is (L-711), for none that has no brief.
+    (briefLine(canonWorld) ? briefLine(canonWorld) + '\n\n' : '') +
     'Optionally suggest 2-4 next actions the player might take, each an object: { "text": ' +
     'a short phrase (e.g. "talk to the innkeeper"), "verb": one word (talk, examine, use, ' +
     'move, look, search, …), "target": the exact id from the known-entities list it is ' +

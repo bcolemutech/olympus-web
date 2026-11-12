@@ -204,7 +204,10 @@
       completion.id = 'carto-completion-' + world.id;
       card.appendChild(completion);
     }
-    if (status === 'draft' || status === 'published') card.appendChild(portraitsRow(world));
+    if (status === 'draft' || status === 'published') {
+      card.appendChild(Cartographer.brief.briefRow(world, loadWorlds));
+      card.appendChild(portraitsRow(world));
+    }
     if (status === 'failed' && world.error) card.appendChild(el('p', 'carto-error', world.error));
     if (world.warnings && world.warnings.length) card.appendChild(warningsList(world.warnings));
 
