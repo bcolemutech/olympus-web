@@ -194,6 +194,9 @@ async function readFirestoreWorld(db, worldId, meta) {
     // beside the catalog's. An object's art is its own, else its kind's here,
     // else the catalog's, else a box with a question mark.
     objectKinds: meta.objectKinds || {},
+    // Its own ground materials (L-713; ./materials.js): [{ id, name, like,
+    // art? }], each behaving as the built-in ground it is like.
+    materials: Array.isArray(meta.materials) ? meta.materials : [],
     // Its art (L-944; ./art-sets.js): { set }, the art set its maps are
     // drawn with; the built-in `classic` when it names none.
     art: meta.art || {},

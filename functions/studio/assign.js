@@ -152,8 +152,22 @@ function tokenHolderOf(world, target, id) {
   return { ...held(groups[index], groups[index].name || groupId), map, index };
 }
 
+// A world's own ground material (L-713): its entry, and the art it has.
+function materialHolderOf(world, id) {
+  const list = Array.isArray(world.materials) ? world.materials : [];
+  const index = list.findIndex((m) => m && m.id === id);
+  if (index < 0) {
+    throw new AssignError(
+      'not-found',
+      `No material "${id}" of this world’s own (set_world_materials makes one).`
+    );
+  }
+  return { name: list[index].name || id, previous: art.fromRef(list[index].art), list, index };
+}
+
 // The thing art is for, and the art it holds now.
 function holderOf(world, target, id) {
+  if (target === 'material') return materialHolderOf(world, id);
   if (target === 'objectKind' || target === 'object') return objectHolderOf(world, target, id);
   if (TARGETS[target] && TARGETS[target].token) return tokenHolderOf(world, target, id);
   if (target === 'map') return { name: world.name, previous: art.worldMapArt(world) };
@@ -349,6 +363,7 @@ function createAssigner({ db, bucket, writer, library }) {
       const which = {
         town: 'settlement',
         objectKind: 'object kind',
+        material: 'material',
         object: 'object ("<mapId>/<objectId>")',
         character: 'character',
         statBlock: 'stat block',
@@ -368,7 +383,7 @@ function createAssigner({ db, bucket, writer, library }) {
       if (spec.kinds && !spec.kinds.includes(record.kind)) {
         throw new AssignError(
           'failed-precondition',
-          `"${record.title}" is a ${record.kind} image; a token takes a token or portrait image.`
+          `"${record.title}" is a ${record.kind} image; ${spec.label} takes a ${spec.kinds.join(' or ')} image.`
         );
       }
       if (!spec.kinds && record.kind !== spec.kind) {
@@ -423,6 +438,17 @@ function createAssigner({ db, bucket, writer, library }) {
         e.updateWorld({ cover: value });
       } else if (target === 'town') {
         e.update(e.ref('locations', at), { 'town.image': value });
+      } else if (target === 'material') {
+        // The world's list, written whole (a list can't be changed in place).
+        e.updateWorld({
+          materials: holder.list.map((m, i) => {
+            if (i !== holder.index) return m;
+            const next = { ...m };
+            if (ref) next.art = ref;
+            else delete next.art;
+            return next;
+          }),
+        });
       } else if (target === 'objectKind') {
         // Taking the art away from a kind with nothing else of its own
         // takes the kind's entry with it.

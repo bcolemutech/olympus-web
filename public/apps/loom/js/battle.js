@@ -845,6 +845,7 @@
       tint: accent(),
       worldKinds: d.objectKinds || null,
       set: d.artSet || null, // the world's art set (L-944)
+      materials: d.materials || null, // the world's own ground (L-713)
       onProgress: engine.progress,
       onChange: function () {
         engine.draw();

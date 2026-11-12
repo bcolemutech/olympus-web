@@ -12,6 +12,8 @@
  *   objectKind a kind's art in a world world.objectKinds[id].art   kind object
  *   object     one object's art         its entry in the map's geometry (L-925);
  *                                       id is "<mapId>/<objectId>"  kind object
+ *   material   a world's own ground's  its entry in world.materials (L-713);
+ *              art                      id is the material's own  kind other
  *   character  a character's token     character.token      kind token or portrait
  *   statBlock  a stat block's token    statBlock.token      kind token or portrait
  *   figure     a group of figures'     its group in the battle map's figures;
@@ -30,6 +32,7 @@ const TARGETS = Object.freeze({
   battleMap: { kind: 'battleMap', label: 'battle-map art' },
   objectKind: { kind: 'object', label: 'object art' },
   object: { kind: 'object', label: 'object art' },
+  material: { kind: 'other', label: 'terrain art' },
   character: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },
   statBlock: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },
   figure: { kind: 'token', kinds: ['token', 'portrait'], label: 'a token', token: true },

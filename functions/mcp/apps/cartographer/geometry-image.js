@@ -171,14 +171,16 @@ function makePainter(h) {
   /** Floors, lines and dark areas: under the grid. Returns the heights drawn. */
   function paintUnder(c, geometry, scale, options = {}) {
     const K = typeof scale === 'number' ? { x: scale, y: scale } : scale;
-    const { art = false, heights = true, hidden = true } = options;
+    const { art = false, heights = true, hidden = true, materials = [] } = options;
     const g = geo.compile(geometry || {});
     const shown = (item) => hidden || !g.hidden[item.id];
     const shaded = [];
     const ls = labelScale(c);
     for (const { item, rings } of g.ground) {
       if (!shown(item) || !rings) continue;
-      const base = GROUND[item.material] || [120, 120, 120];
+      // A world's own ground is drawn as the built-in one it is like (L-713).
+      const own = catalog.ownMaterial(materials, item.material);
+      const base = GROUND[item.material] || GROUND[own && own.like] || [120, 120, 120];
       let f = 1;
       const height = typeof item.height === 'number' ? item.height : 0;
       if (heights && height) f *= clamp(1 + height / 40, 0.55, 1.5);

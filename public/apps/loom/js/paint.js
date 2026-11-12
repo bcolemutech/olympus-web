@@ -94,6 +94,7 @@
   //            wall (a wall's thickness in map units; 1 on a grid),
   //            art (true: the map has its own art), tint (the world's accent,
   //            0xRRGGBB, or null), worldKinds (the world's object kinds),
+  //            materials (the world's own ground, L-713: [{ id, like, art? }]),
   //            onProgress (fraction 0–1, then null when done), onChange
   //            (something new to show: draw the stage again), feet (map
   //            units a foot of height is; 1 on a grid), stand (a container
@@ -331,8 +332,8 @@
 
   // A material's art in the map's set (L-944; materials.js materialArt):
   // { key, span, face (a key or null), variants (keys) }.
-  function materialOf(kind, id, set) {
-    var art = mat.materialArt(kind, id, set);
+  function materialOf(kind, id, set, own) {
+    var art = mat.materialArt(kind, id, set, own);
     return {
       key: keyOf(art.picture),
       span: art.span,
@@ -733,7 +734,15 @@
     // null is never culled. A standing part's is its own `box`.
     var add = function (layer, kind, item, i, urls, build, extra, bounds) {
       out.push({
-        key: [kind, item.id || i, JSON.stringify(item), o.set || '', extra || ''].join('|'),
+        key: [
+          kind,
+          item.id || i,
+          JSON.stringify(item),
+          o.set || '',
+          // A world's own ground (L-713) is drawn with its art, which can change.
+          kind === 'ground' && o.materials ? JSON.stringify(o.materials) : '',
+          extra || '',
+        ].join('|'),
         layer: layer,
         order: i,
         urls: urls.filter(Boolean),
@@ -777,7 +786,7 @@
       list('ground').forEach(function (item, i) {
         var read = geo.ringsOf(item.shape);
         if (!read.rings) return;
-        var art = materialOf('ground', item.material, o.set);
+        var art = materialOf('ground', item.material, o.set, o.materials);
         var choices = [art.key].concat(art.variants);
         var url = choices[variantOf(item.id || i, choices.length)];
         var span = art.span;

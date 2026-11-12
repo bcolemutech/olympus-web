@@ -786,7 +786,10 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
                   }
                   options.overlay = overlayOf(world, args.id, args.overlay);
                 }
-                rendered = images.renderMap(stored, places, options);
+                rendered = images.renderMap(stored, places, {
+                  ...options,
+                  materials: world.materials,
+                });
               } else {
                 if (args.overlay) throw new ToolError('overlay is for a region map (of map).');
                 if (args.of === 'map' && !grid) {

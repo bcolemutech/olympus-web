@@ -33,6 +33,11 @@ const mockWorld = (() => {
     height: 64,
   });
   w.objectKinds = { chest: { art: art('img-chest'), size: [3, 2] } };
+  // The world's own ground (L-713): one with art, one without.
+  w.materials = [
+    { id: 'ashwaste', name: 'Ashwaste', like: 'desert', art: art('img-ash') },
+    { id: 'bonefield', name: 'Bonefield', like: 'dirt' },
+  ];
   // The deck, 60 × 40 ft: a bulkhead at x = 30 with a 5 ft gap, a lamp, a
   // pipe along the floor, a crate with its own art, and a hidden hatch.
   w.maps.deck = {
@@ -210,6 +215,17 @@ describe('what the painter is sent', () => {
     expect(battleMap.objectKinds).toEqual({
       chest: { art: { link: 'https://images.example/img-chest' }, size: [3, 2] },
     });
+    // The world's own ground, its art as a link only, on every level's data (L-713).
+    const own = [
+      {
+        id: 'ashwaste',
+        name: 'Ashwaste',
+        like: 'desert',
+        art: { link: 'https://images.example/img-ash' },
+      },
+      { id: 'bonefield', name: 'Bonefield', like: 'dirt' },
+    ];
+    expect(battleMap.materials).toEqual(own);
     // What's in sight, as an outline round the player's eyes: the near side
     // of the bulkhead, and a cone through its gap.
     const view = battleMap.fog.view;

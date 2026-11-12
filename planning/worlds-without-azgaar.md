@@ -1,6 +1,6 @@
 # The Cartographer — Worlds Without Azgaar — Design Document v0.2
 
-**Status:** Decided (2026-10-10), refreshed 2026-11-12 (§3). Sub-issues L-711 to L-718 filed as #816–#823 (§6). L-711 (the brief and New world) built 2026-11-12: the BRIEF line is in the narrator's prompt. L-712 (realms, regions and terrain) built 2026-11-12: `add_realms`, `add_regions`, regions' zones, places' region and realm from where they sit, `where`, and `view_image`'s overlays.
+**Status:** Decided (2026-10-10), refreshed 2026-11-12 (§3). Sub-issues L-711 to L-718 filed as #816–#823 (§6). L-711 (the brief and New world) built 2026-11-12: the BRIEF line is in the narrator's prompt. L-712 (realms, regions and terrain) built 2026-11-12: `add_realms`, `add_regions`, regions' zones, places' region and realm from where they sit, `where`, and `view_image`'s overlays. L-713 (a world's own terrain) built 2026-11-12: `world.materials`, `set_world_materials`, ground checks, `list_materials` with a world, the `material` assigner target, and the painter drawing them.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-710 (#524)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4)

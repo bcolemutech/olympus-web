@@ -40,7 +40,11 @@ function unpainted(world, map, { ownArt = false } = {}) {
       const name = `${kind}/${item.material}`;
       if (!item.material || seen.has(name)) continue;
       seen.add(name);
-      if (materials.materialArt(kind, item.material, setName).from !== 'set') {
+      if (
+        !['set', 'world'].includes(
+          materials.materialArt(kind, item.material, setName, world && world.materials).from
+        )
+      ) {
         lacking.materials.push(name);
       }
     }

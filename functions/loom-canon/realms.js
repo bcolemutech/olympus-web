@@ -107,7 +107,7 @@ const ref = (e) => (e ? { id: e.id, name: e.name || e.id } : null);
 function whereOn(world, mapId, point) {
   const c = compiledOf(world, mapId);
   const ground = c && c.ground.length ? geo.groundAt(c, point) : null;
-  const material = ground && materials.materialOf('ground', ground.material);
+  const material = ground && materials.materialOf('ground', ground.material, world.materials);
   const at = regionAt(world, mapId, point);
   const realm = at ? realmOf(world, at.region.id) : null;
   return {
