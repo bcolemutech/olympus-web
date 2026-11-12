@@ -512,3 +512,62 @@ describe('finding images by style', () => {
     expect((await ok('studio_find', { styleId: ink.id, words: 'mill' })).images).toHaveLength(0);
   });
 });
+
+describe('a world’s brief (L-711)', () => {
+  let ink;
+  let oil;
+  const from = { worldId: WORLD, kind: 'location', id: 'loc_1' };
+  const DIRECTION = 'Gouache on rough paper, warm lamplight.';
+  beforeAll(async () => {
+    [ink, oil] = (await ok('studio_styles', {})).styles;
+    await ok('update_world', { worldId: WORLD, brief: { artDirection: DIRECTION } });
+  });
+
+  test('its art direction stands in for a style when the world has none', async () => {
+    expect((await worldDoc()).studio || {}).toEqual({});
+    const { job, sent, image } = await generate({
+      prompt: 'Its market square.',
+      kind: 'scene',
+      from,
+    });
+    expect(job.request.style).toEqual({ id: null, name: 'Art direction' });
+    expect(sent.prompt).toMatch(/^About what to draw:\n.+\n\nThe style:\nGouache on rough paper/s);
+    expect(sent.references).toEqual([]);
+    expect(image.styleId).toBeNull();
+  });
+
+  test('a style named, "none" and the world’s own style all come before it', async () => {
+    const named = await generate({
+      prompt: 'Its market square.',
+      kind: 'scene',
+      from,
+      styleId: oil.id,
+    });
+    expect(named.sent.prompt).toMatch(/The style:\nThick oil paint\./);
+    expect(named.sent.prompt).not.toContain('Gouache');
+
+    const none = await generate({
+      prompt: 'Its market square.',
+      kind: 'scene',
+      from,
+      styleId: 'none',
+    });
+    expect(none.job.request.style).toBeNull();
+    expect(none.sent.prompt).not.toMatch(/The style:/);
+
+    await ok('studio_set_style', { styleId: ink.id, worldId: WORLD });
+    const own = await generate({ prompt: 'Its market square.', kind: 'scene', from });
+    expect(own.job.request.style).toEqual({ id: ink.id, name: 'Ink and wash' });
+    expect(own.sent.prompt).not.toContain('Gouache');
+    await ok('studio_set_style', { worldId: WORLD, clearDefault: true });
+  });
+
+  test('a request not about the world, or a world without an art direction, has none', async () => {
+    const elsewhere = await generate({ prompt: 'A lone lighthouse.', kind: 'scene' });
+    expect(elsewhere.sent.prompt).toBe('A lone lighthouse.');
+    await ok('update_world', { worldId: WORLD, brief: { artDirection: '' } });
+    const cleared = await generate({ prompt: 'Its gate.', kind: 'scene', from });
+    expect(cleared.job.request.style).toBeNull();
+    expect(cleared.sent.prompt).not.toMatch(/The style:/);
+  });
+});

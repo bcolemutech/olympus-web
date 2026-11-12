@@ -215,7 +215,7 @@ npm run deploy            # Deploy hosting only (production)
 - `symposium_categories/{id}` — `hasApp('symposium')`. Categories/subcategories
 - `apps/{appId}` — `hasApp(appId)` or admin. App registry
 - `pool_handicap/{userId}` — Self read/write only. Billiards handicap data
-- `loom_worlds/{worldId}` — `hasApp('cartographer')`; `hasApp('loom')` for published only. Worlds, Cartographer drafts and published, with subcollections (`locations`, `factions`, `regions`, `characters`, `lore`, `places`, `battleMaps`, `statBlocks`, `maps`); maps' geometry, materials, art sets, decor, usable objects, hidden things and spawns
+- `loom_worlds/{worldId}` — `hasApp('cartographer')`; `hasApp('loom')` for published only. Worlds (with a `brief`, L-711), Cartographer drafts and published, with subcollections (`locations`, `factions`, `regions`, `characters`, `lore`, `places`, `battleMaps`, `statBlocks`, `maps`); maps' geometry, materials, art sets, decor, usable objects, hidden things and spawns
 - `loom_saves/{saveId}` (+ `loom_turns`) — Owner with `hasApp('loom')`, read only. Game saves and turn history: clock, character sheet, where it stands (`at`), turn and AP, fight, figures, secrets, spawns, level offers
 - `loom_world_state/{worldId}` — `hasApp('loom')`, read only. Shared world state
 - `loom_creation_rolls/{rollId}` — Deny (server only). Scores rolled for a new character (L-812): the player, the world and the values, used once by `loomCreateSave`
@@ -252,6 +252,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 - `loomWorldRatings` — `loom` claim. Each published world's band (Playable, Rich, Vivid or Legendary) for the Loom's world list; the band's name only
 - `loomGetMap` — `loom` claim (own saves). What a save may see: its map and places, routes and journeys, time, turn and prices, sheet, fight, level offer, and on a battle map its geometry as far as seen
 - `cartographerImport` — `cartographer` claim. Uploaded Azgaar map → draft world
+- `cartographerCreateWorld` / `cartographerSetBrief` — `cartographer` claim. New world from scratch (a name, an optional studio map image, the scale, a brief) and a world's brief (genre, tone, era, art direction; L-711)
 - `cartographerPublish` — `cartographer` claim. Publish a draft world to the Loom
 - `cartographerCompletion` — `cartographer` claim. How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, its biggest gaps, and its maps as a tree, each graded by its kind with what it lacks (`maps`; L-905, `grading.js` `gradeMaps`)
 - `cartographerTownImage` — `cartographer` claim. Attach, replace or remove a town's art (an uploaded PNG or SVG drawn behind the town view), through the image studio's library

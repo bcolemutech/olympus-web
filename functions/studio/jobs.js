@@ -7,6 +7,7 @@ const { KINDS, normalizeLabels, LibraryError } = require('./library');
 const { readImage } = require('./formats');
 const { priceOf, CostError } = require('./costs');
 const { chooseStyle, snapshot, StyleError } = require('./styles');
+const { artStyleOf } = require('../loom-canon/brief');
 const { usersOf } = require('../loom-canon/stat-blocks');
 
 /**
@@ -286,7 +287,14 @@ function createJobs({
   // The style a request uses (L-709), as it is now, or null.
   async function styleFor(requested, world) {
     const styleId = chooseStyle(requested, world);
-    if (!styleId) return null;
+    // No style named and none the world's own: its brief's art direction
+    // stands in for one (L-711), with no images of its own.
+    if (!styleId) {
+      const direction = requested === undefined ? artStyleOf(world) : '';
+      return direction
+        ? { id: null, name: 'Art direction', prompt: direction, references: [] }
+        : null;
+    }
     if (!styles) throw invalid('Styles are not available here.');
     return snapshot(await styles.get(styleId));
   }
@@ -662,7 +670,7 @@ function createJobs({
         instruction: request.instruction,
         cost: price,
         // Redrawn in a style (L-709): the image is in that style now.
-        ...(request.style ? { styleId: request.style.id } : {}),
+        ...(request.style && request.style.id ? { styleId: request.style.id } : {}),
       });
     } catch (err) {
       // Deleted while it was being edited: the call was still charged.

@@ -248,6 +248,8 @@ describe.each([
     expect(mockNarrate).toHaveLength(1);
     const { systemInstruction, userMessage } = mockNarrate[0];
     expect(systemInstruction).toContain('THE GAME SYSTEM: ' + system.name);
+    // A world with no brief has no BRIEF line (L-711).
+    expect(systemInstruction).not.toContain('BRIEF:');
     for (const word of words) expect(systemInstruction).toContain(`"${word}"`);
     expect(systemInstruction).toContain('Success at a cost: it works, but it costs something');
     expect(systemInstruction).toContain('GM notes for this system: ' + system.gmNotes);

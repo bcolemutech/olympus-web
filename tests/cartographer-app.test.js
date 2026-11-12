@@ -31,6 +31,8 @@ const {
   cartographerCompletion,
   cartographerTownImage,
   cartographerMapImage,
+  cartographerCreateWorld,
+  cartographerSetBrief,
   loomCreateSave,
   loomWorldRatings,
 } = require('../functions/index');
@@ -803,6 +805,142 @@ describe('cartographerMapImage (L-355)', () => {
     });
     await expect(mapArtAs(BUILDER, { worldId, mapId: 'bm_tavern' })).rejects.toMatchObject({
       code: 'invalid-argument',
+    });
+  });
+});
+
+// An image in the studio's library, as the page's picker lists it.
+async function libraryImage(kind, title) {
+  const { PNG } = require(require.resolve('pngjs', { paths: [functionsDir] }));
+  const { createLibrary } = require('../functions/studio/library');
+  const { readImage } = require('../functions/studio/formats');
+  const img = new PNG({ width: 40, height: 30 });
+  img.data.fill(120);
+  const record = await createLibrary({ db, bucket }).addImage({
+    title,
+    kind,
+    labels: [],
+    file: readImage(PNG.sync.write(img)),
+    createdBy: BUILDER.uid,
+    via: 'page',
+  });
+  return record.id;
+}
+
+describe('New world and the brief (L-711)', () => {
+  const make = (data, auth = BUILDER) => cartographerCreateWorld.run({ data, auth });
+  const setBrief = (data, auth = BUILDER) => cartographerSetBrief.run({ data, auth });
+  const stored = async (worldId) => (await db.collection('loom_worlds').doc(worldId).get()).data();
+  const BRIEF = {
+    genre: 'steampunk',
+    tone: 'wry',
+    era: 'a foggy age',
+    artDirection: 'brass and ink',
+  };
+
+  test('makes a draft from scratch with a plain backdrop, the scale and a brief', async () => {
+    const made = await make({ name: 'Brassgate', milesPerUnit: 2, brief: BRIEF });
+    expect(made).toMatchObject({
+      worldId: expect.stringMatching(/^brassgate-[0-9a-f]{6}$/),
+      status: 'draft',
+      brief: BRIEF,
+    });
+    expect(await stored(made.worldId)).toMatchObject({
+      name: 'Brassgate',
+      status: 'draft',
+      brief: BRIEF,
+      source: { kind: 'scratch', createdBy: BUILDER.uid },
+      map: { backdrop: '#26332a', distance: { unit: 'mi', perMapUnit: 2 } },
+    });
+  });
+
+  test('a world made with no brief has none, and an empty one is none', async () => {
+    const made = await make({ name: 'Plain', brief: { genre: '', tone: '  ' } });
+    expect(made.brief).toBeUndefined();
+    expect((await stored(made.worldId)).brief).toBeUndefined();
+  });
+
+  test('a studio map image becomes the world map; one that is not a world map is refused', async () => {
+    const imageId = await libraryImage('worldMap', 'A coast');
+    const made = await make({ name: 'Pictured', imageId });
+    expect(made.warnings).toBeUndefined();
+    expect((await stored(made.worldId)).map.image).toMatchObject({ imageId });
+
+    const scene = await libraryImage('scene', 'A scene');
+    const refusedImage = await make({ name: 'Wrong kind', imageId: scene });
+    expect(refusedImage.warnings.join(' ')).toMatch(/image wasn't set/);
+    await expect(make({ name: 'Missing', imageId: 'img_nope' })).resolves.toMatchObject({
+      warnings: [expect.stringMatching(/image wasn't set/)],
+    });
+  });
+
+  test('refuses a missing name, a bad scale and a brief field over its length', async () => {
+    await expect(make({ name: '  ' })).rejects.toMatchObject({ code: 'invalid-argument' });
+    await expect(make({ name: 'X', milesPerUnit: 'far' })).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    await expect(make({ name: 'X', milesPerUnit: -1 })).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message: expect.stringMatching(/milesPerUnit/),
+    });
+    await expect(make({ name: 'X', brief: { genre: 'x'.repeat(81) } })).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message: expect.stringMatching(/genre is 81 characters; at most 80/),
+    });
+  });
+
+  test('cartographerSetBrief sets the fields given, clears one set to "", and keeps the rest', async () => {
+    const { worldId } = await make({ name: 'Edited', brief: BRIEF });
+    const saved = await setBrief({ worldId, brief: { tone: 'grim', era: '' } });
+    expect(saved.brief).toEqual({
+      genre: 'steampunk',
+      tone: 'grim',
+      artDirection: 'brass and ink',
+    });
+    expect((await stored(worldId)).brief).toEqual(saved.brief);
+
+    // Clearing the last field leaves no brief at all.
+    await setBrief({ worldId, brief: { genre: '', tone: '', artDirection: '' } });
+    expect((await stored(worldId)).brief || {}).toEqual({});
+  });
+
+  test('a published world’s brief can be edited too, and the change reaches games', async () => {
+    const { worldId } = await importAs(BUILDER, { uploadId: await upload() });
+    const before = (await stored(worldId)).canonVersion;
+    await setBrief({ worldId, brief: { genre: 'high fantasy' } });
+    expect(await stored(worldId)).toMatchObject({
+      brief: { genre: 'high fantasy' },
+      canonVersion: before + 1,
+    });
+    expect((await loomCanon.loadWorld(worldId, { db, playableOnly: false })).brief).toEqual({
+      genre: 'high fantasy',
+    });
+  });
+
+  test('refuses a bad brief, an unknown world and a malformed id', async () => {
+    const { worldId } = await make({ name: 'Refusals' });
+    await expect(setBrief({ worldId, brief: { mood: 'sad' } })).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+    await expect(setBrief({ worldId, brief: { era: 'x'.repeat(121) } })).rejects.toMatchObject({
+      code: 'invalid-argument',
+      message: expect.stringMatching(/era is 121 characters; at most 120/),
+    });
+    await expect(
+      setBrief({ worldId: 'nowhere-aaaaaa', brief: { era: 'x' } })
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
+    await expect(setBrief({ worldId: 'Bad Id', brief: {} })).rejects.toMatchObject({
+      code: 'invalid-argument',
+    });
+  });
+
+  test('needs sign-in and the cartographer claim', async () => {
+    await expect(cartographerCreateWorld.run({ data: { name: 'X' } })).rejects.toMatchObject({
+      code: 'unauthenticated',
+    });
+    await expect(make({ name: 'X' }, PLAYER)).rejects.toMatchObject({ code: 'permission-denied' });
+    await expect(setBrief({ worldId: 'x-aaaaaa', brief: {} }, PLAYER)).rejects.toMatchObject({
+      code: 'permission-denied',
     });
   });
 });

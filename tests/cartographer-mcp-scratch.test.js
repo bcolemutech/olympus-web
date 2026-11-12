@@ -193,6 +193,7 @@ describe('a world from scratch', () => {
     const { worldId } = await ok('create_world', {
       name: 'Combat Test',
       milesPerUnit: 0.1,
+      brief: { genre: 'frontier fantasy', tone: 'wry', era: 'a muster year' },
     });
     // The generic battle map, for places that need one.
     await worlds().doc(worldId).collection('battleMaps').doc(GATEWAY.id).set(GATEWAY);
@@ -278,6 +279,15 @@ describe('a world from scratch', () => {
     const trip = travel.trip(world, id.Ashwick, id.Brennock, clock.timeOf(before));
     expect(trip.seconds).toBeGreaterThan(0);
     expect(clock.timeOf(after) - clock.timeOf(before)).toBeGreaterThanOrEqual(trip.seconds);
+
+    // The GM was told the brief (L-711): a BRIEF line in the narrator's prompt.
+    const narrator = mockCallGemini.mock.calls
+      .map(([options]) => options.systemInstruction)
+      .filter((text) => text.includes('You are the narrator'));
+    expect(narrator.length).toBeGreaterThan(0);
+    for (const text of narrator) {
+      expect(text).toContain('BRIEF: genre: frontier fantasy. tone: wry. era: a muster year.');
+    }
   });
 
   test('add_locations refuses repeats, places off the map and facts of the wrong kind', async () => {
@@ -336,6 +346,67 @@ describe('a world from scratch', () => {
     expect(
       await ok('connect_locations', { worldId, fromId: 'loc_ayle', toId: 'loc_bree', via: 'sea' })
     ).toMatchObject({ connection: { via: 'sea' } });
+  });
+});
+
+describe('a world’s brief (L-711)', () => {
+  const BRIEF = {
+    genre: 'dark fantasy',
+    tone: 'grim, with dry humour',
+    era: 'an age of plague',
+    artDirection: 'painted, muted colours',
+  };
+
+  test('create_world takes a brief; get_world and the draft read it back', async () => {
+    const made = await ok('create_world', { name: 'Briefed', brief: BRIEF });
+    expect(made.brief).toEqual(BRIEF);
+    expect((await worlds().doc(made.worldId).get()).data().brief).toEqual(BRIEF);
+    expect((await ok('get_world', { worldId: made.worldId })).brief).toEqual(BRIEF);
+    expect((await loaded(made.worldId)).brief).toEqual(BRIEF);
+  });
+
+  test('a world made without one has none', async () => {
+    const made = await ok('create_world', { name: 'Plain' });
+    expect(made.brief).toBeUndefined();
+    expect((await worlds().doc(made.worldId).get()).data().brief).toBeUndefined();
+    expect((await ok('get_world', { worldId: made.worldId })).brief).toBeNull();
+  });
+
+  test('update_world changes one field and leaves the rest; "" clears one', async () => {
+    const { worldId } = await ok('create_world', { name: 'Changing', brief: BRIEF });
+    const changed = await ok('update_world', { worldId, brief: { tone: 'hopeful' } });
+    expect(changed.updated).toEqual(['brief.tone']);
+    expect((await ok('get_world', { worldId })).brief).toEqual({ ...BRIEF, tone: 'hopeful' });
+
+    await ok('update_world', { worldId, brief: { era: '' } });
+    const { era, ...rest } = BRIEF;
+    expect(era).toBeTruthy();
+    expect((await ok('get_world', { worldId })).brief).toEqual({ ...rest, tone: 'hopeful' });
+
+    // Saying what it already is changes nothing; a world with none gets one.
+    expect((await ok('update_world', { worldId, brief: { genre: BRIEF.genre } })).updated).toEqual(
+      []
+    );
+    const plain = await ok('create_world', { name: 'Late brief' });
+    await ok('update_world', { worldId: plain.worldId, brief: { genre: 'space opera' } });
+    expect((await ok('get_world', { worldId: plain.worldId })).brief).toEqual({
+      genre: 'space opera',
+    });
+  });
+
+  test('a field over its length, an unknown field or an empty brief is refused with its reason', async () => {
+    const { worldId } = await ok('create_world', { name: 'Refusing' });
+    expect(await refused('update_world', { worldId, brief: { genre: 'x'.repeat(81) } })).toMatch(
+      /genre must be 80 characters or fewer/
+    );
+    expect(
+      await refused('create_world', { name: 'Too long', brief: { artDirection: 'x'.repeat(601) } })
+    ).toMatch(/art direction must be 600 characters or fewer/);
+    expect(await refused('update_world', { worldId, brief: { mood: 'sad' } })).toMatch(/mood/);
+    expect(await refused('update_world', { worldId, brief: {} })).toMatch(
+      /Nothing to change|brief/
+    );
+    expect((await ok('get_world', { worldId })).brief).toBeNull();
   });
 });
 

@@ -86,6 +86,18 @@ The world map a save may see: its discovered places, links, and which are open; 
 
 Uploaded Azgaar map → draft world
 
+## `cartographerCreateWorld`
+
+**Who can call:** `cartographer` claim
+
+New world (L-711), from the Cartographer page: a draft world from scratch, made as the connector's `create_world` makes it (`functions/cartographer/scratch.js`): a name, an optional studio image of kind `worldMap` (`imageId`, else a plain backdrop), the scale (`milesPerUnit`, default 3) and a brief (`brief`: `genre`, `tone`, `era`, `artDirection`; `functions/loom-canon/brief.js`). A map image that can't be set leaves the world made, with a warning
+
+## `cartographerSetBrief`
+
+**Who can call:** `cartographer` claim
+
+A world's brief, from its card on the page (L-711): `{ worldId, brief }`, each field given set and one given as `""` cleared; on a draft or a published world, reaching games on their next turn. A field over its length (genre 80, tone 160, era 120, art direction 600 characters) is refused with its reason
+
 ## `cartographerPublish`
 
 **Who can call:** `cartographer` claim

@@ -419,3 +419,16 @@ textarea.carto-input {
   position: absolute;
   max-width: none;
 }
+
+/* A world's brief (L-711) */
+.carto-brief {
+  margin: 0.2rem 0 0.4rem;
+}
+
+.carto-brief-text {
+  white-space: pre-wrap;
+}
+
+select.carto-input {
+  appearance: auto;
+}

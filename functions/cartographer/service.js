@@ -15,6 +15,8 @@ const {
 const { biggestGaps } = require('../mcp/apps/cartographer/work');
 const { unplacedCharacters } = require('../loom-canon/positions');
 const { ToolError } = require('../mcp/registry');
+const { createScratchWorld } = require('./scratch');
+const briefs = require('../loom-canon/brief');
 
 // Unplaced characters a publish refusal names before "and N more" (L-683).
 const UNPLACED_SHOWN = 3;
@@ -28,6 +30,11 @@ const UNPLACED_SHOWN = 3;
 //   Reads cartographer/{uid}/{uploadId}/map.json (+ optional map.png) from
 //   Storage, runs parse → map → load, copies a valid PNG to
 //   worlds/{worldId}/map.png, and deletes the upload.
+//
+// createWorld(uid, { name, imageId?, milesPerUnit?, brief? })
+//   New world (L-711): a draft from scratch, as the connector's create_world
+//   makes it, behind the page's New world button. setBrief(uid, { worldId,
+//   brief }) edits a world's brief from its card.
 //
 // publishWorld(uid, { worldId, openingHook, startingLocationId, tagline })
 //   Applies the given opening hook / starting location / tagline, checks the
@@ -485,8 +492,59 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     }
   }
 
+  // New world (L-711): a draft from scratch, as create_world makes it — a
+  // name, an optional studio image of kind worldMap (else a plain backdrop),
+  // the scale (miles per map unit) and a brief.
+  async function createWorld(uid, { name, imageId, milesPerUnit, brief } = {}) {
+    const worldName = optionalText(name, MAX_NAME, 'name');
+    if (!worldName) throw new HttpsError('invalid-argument', 'A world needs a name.');
+    if (imageId !== undefined && imageId !== null && typeof imageId !== 'string') {
+      throw new HttpsError('invalid-argument', 'imageId must be text.');
+    }
+    if (milesPerUnit !== undefined && milesPerUnit !== null && typeof milesPerUnit !== 'number') {
+      throw new HttpsError('invalid-argument', 'The scale must be a number.');
+    }
+    try {
+      return await createScratchWorld({ writer, systems: null, studio: studio() }, uid, {
+        name: worldName,
+        ...(imageId ? { backdrop: { imageId } } : {}),
+        ...(milesPerUnit ? { milesPerUnit } : {}),
+        ...(brief ? { brief } : {}),
+      });
+    } catch (err) {
+      throw asHttps(err);
+    }
+  }
+
+  // A world's brief (L-711), from the world's page: the fields given are set,
+  // and one given as "" is cleared.
+  async function setBrief(uid, { worldId, brief } = {}) {
+    if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
+      throw new HttpsError('invalid-argument', 'A valid worldId is required.');
+    }
+    const { fields, errors } = briefs.checkBrief(brief);
+    if (errors.length) throw new HttpsError('invalid-argument', errors.join(' '));
+    const { FieldValue } = require('firebase-admin/firestore');
+    try {
+      return await writer.edit(worldId, uid, (e) => {
+        const changes = briefs.briefChanges(e.world.brief, fields, FieldValue.delete());
+        if (Object.keys(changes).length) e.updateWorld(changes);
+        const after = { ...(e.world.brief || {}) };
+        for (const key of briefs.FIELDS) {
+          if (fields[key] === '') delete after[key];
+          else if (fields[key] !== undefined) after[key] = fields[key];
+        }
+        return { brief: briefs.briefFrom(after) };
+      });
+    } catch (err) {
+      throw asHttps(err);
+    }
+  }
+
   return {
     importUpload,
+    createWorld,
+    setBrief,
     publishWorld,
     worldCompletion,
     townImage,

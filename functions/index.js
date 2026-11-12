@@ -55,6 +55,18 @@ exports.cartographerImport = onCall({ memory: '1GiB', timeoutSeconds: 300 }, asy
   return cartographerService().importUpload(uid, request.data || {});
 });
 
+// New world (L-711): a draft from scratch with a brief, and a brief edited on
+// the world's card.
+exports.cartographerCreateWorld = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return cartographerService().createWorld(uid, request.data || {});
+});
+
+exports.cartographerSetBrief = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return cartographerService().setBrief(uid, request.data || {});
+});
+
 exports.cartographerPublish = onCall(async (request) => {
   const uid = cartographer.requireCartographer(request);
   return cartographerService().publishWorld(uid, request.data || {});

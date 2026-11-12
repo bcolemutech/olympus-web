@@ -237,6 +237,8 @@ function worldOverview(meta, world) {
     name: world.name,
     tagline: world.tagline || '',
     openingHook: world.openingHook || '',
+    // What kind of world it is (L-711): the fields it has, or null.
+    brief: require('../../../loom-canon/brief').briefOf(world),
     status: world.status,
     canonVersion: world.canonVersion,
     startingLocation: start ? ref(world.locations, start) : null,

@@ -529,7 +529,8 @@ function generateTools({ studio }) {
         labels: LABELS.optional(),
         styleId: STYLE_CHOICE.describe(
           'A style from studio_styles: its text and reference images are added. With `from`, ' +
-            'the world’s default style is used unless another is named, or "none".'
+            'the world’s default style is used unless another is named, or "none"; with none, the art ' +
+            'direction in its brief (update_world) stands in for one.'
         ),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },

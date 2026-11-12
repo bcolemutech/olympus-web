@@ -46,12 +46,14 @@
         var apps = Array.isArray(token.claims.apps) ? token.claims.apps : [];
         if (apps.indexOf('cartographer') === -1) {
           Cartographer.show('carto-denied', true);
+          Cartographer.show('carto-new-section', false);
           Cartographer.show('carto-upload-section', false);
           Cartographer.show('carto-claude-section', false);
           Cartographer.show('carto-worlds-section', false);
           return;
         }
         Cartographer.upload.init();
+        Cartographer.brief.init();
         initConnector();
         Cartographer.worlds.loadWorlds();
       });

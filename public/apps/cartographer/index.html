@@ -40,14 +40,55 @@
           You don't have access to the Cartographer. Ask an admin to grant it in The Pantheon.
         </p>
 
-        <!-- New world from a map -->
-        <section class="carto-section" id="carto-upload-section">
-          <h2 class="carto-section-title">New world from a map</h2>
+        <!-- New world (L-711) -->
+        <section class="carto-section" id="carto-new-section">
+          <h2 class="carto-section-title">New world</h2>
           <p class="carto-help">
-            In Azgaar's Fantasy Map Generator, use <b>Save → "Save as JSON"</b> for the map, and
-            optionally <b>Export → PNG</b> for its image. The map becomes a <b>draft</b> world: its
-            places, routes, realms, provinces and points of interest. Add the story later, then
-            publish it to the Loom.
+            Start a world from scratch. It becomes a <b>draft</b> with an empty map: build its
+            places, routes and land with Claude, then publish it to the Loom. The <b>brief</b> says
+            what kind of world it is: the GM is told it every turn, and the studio draws in its art
+            direction.
+          </p>
+          <form class="carto-form" id="carto-new-form">
+            <div class="carto-form-group">
+              <label class="carto-label" for="carto-new-name">World name</label>
+              <input class="carto-input" id="carto-new-name" type="text" maxlength="100" required />
+            </div>
+            <div class="carto-form-group">
+              <label class="carto-label" for="carto-new-image">Map image (optional)</label>
+              <select class="carto-input" id="carto-new-image">
+                <option value="">None — a plain backdrop</option>
+              </select>
+              <p class="carto-hint">
+                A studio image of kind world map. You can set or change one on any map later.
+              </p>
+            </div>
+            <div class="carto-form-group">
+              <label class="carto-label" for="carto-new-scale">Scale (miles per map unit)</label>
+              <input
+                class="carto-input"
+                id="carto-new-scale"
+                type="number"
+                min="0.01"
+                max="1000"
+                step="any"
+              />
+            </div>
+            <div id="carto-new-brief"></div>
+            <p class="carto-status hidden" id="carto-new-status" role="status"></p>
+            <p class="carto-error hidden" id="carto-new-error" role="alert"></p>
+            <button class="app-btn" id="carto-new-btn" type="submit">Make the world</button>
+          </form>
+        </section>
+
+        <!-- Import an Azgaar map -->
+        <section class="carto-section" id="carto-upload-section">
+          <h2 class="carto-section-title">Import an Azgaar map</h2>
+          <p class="carto-help">
+            Or start from a map you made in Azgaar. In Azgaar's Fantasy Map Generator, use
+            <b>Save → "Save as JSON"</b> for the map, and optionally <b>Export → PNG</b> for its
+            image. The map becomes a <b>draft</b> world: its places, routes, realms, provinces and
+            points of interest. Add the story later, then publish it to the Loom.
           </p>
           <form class="carto-form" id="carto-upload-form">
             <div class="carto-form-group">
@@ -108,7 +149,7 @@
           </div>
           <p class="carto-error hidden" id="carto-worlds-error" role="alert"></p>
           <p class="carto-empty hidden" id="carto-worlds-empty">
-            No worlds yet. Upload a map to start one.
+            No worlds yet. Make a new world or import an Azgaar map to start one.
           </p>
           <div class="carto-world-list" id="carto-world-list"></div>
         </section>
@@ -121,6 +162,7 @@
     <!-- Cartographer modules (load order matters) -->
     <script src="/apps/cartographer/js/state.js"></script>
     <script src="/apps/cartographer/js/upload.js"></script>
+    <script src="/apps/cartographer/js/brief.js"></script>
     <script src="/apps/cartographer/js/art.js"></script>
     <script src="/apps/cartographer/js/worlds.js"></script>
     <script src="/apps/cartographer/js/app.js"></script>

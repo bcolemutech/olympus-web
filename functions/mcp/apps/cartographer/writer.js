@@ -23,7 +23,7 @@ const { ToolError } = require('../../registry');
 // character, a stat block or figures keeps the image's "in use" right in the
 // same transaction (L-931).
 //
-// create(uid, { name, systemId, map }) makes a new, empty draft world, as an
+// create(uid, { name, systemId, map, brief }) makes a new, empty draft world, as an
 // import does but with no Azgaar map (L-391): its locations are added after.
 //
 // publish(uid, worldId) publishes a draft through the Cartographer's own
@@ -128,7 +128,7 @@ function createFirestoreWorldWriter(getDb, { now = () => Date.now() } = {}) {
 
   // A new draft world from scratch (planning/builders-tools.md §4.1; L-391):
   // the world document only, with no entities yet, its id readable and new.
-  async function create(uid, { name, systemId, map }) {
+  async function create(uid, { name, systemId, map, brief }) {
     const { newWorldId } = require('../../../cartographer/load');
     const at = now();
     const id = newWorldId(name);
@@ -141,6 +141,7 @@ function createFirestoreWorldWriter(getDb, { now = () => Date.now() } = {}) {
         openingHook: '',
         rules: {},
         map,
+        ...(brief ? { brief } : {}),
         ...(systemId ? { systemId } : {}),
         status: 'draft',
         canonVersion: 1,
