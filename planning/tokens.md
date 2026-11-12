@@ -1,6 +1,6 @@
 # The Loom — Tokens — Design Document v0.1
 
-**Status:** In progress. Decided (2026-11-06). Revised 2026-11-07: tokens stand (TK5), built after L-940's view. Sub-issues filed 2026-11-06 (#789–#792, §6). L-931 (token pictures as data) built 2026-11-10; L-932 (drawing tokens) built 2026-11-10; L-933 (the player's token) built 2026-11-11; L-934 (making portraits and grading) built 2026-11-11, which finishes the epic.
+**Status:** Shipped (2026-11-11). Decided (2026-11-06). Revised 2026-11-07: tokens stand (TK5), built after L-940's view. Sub-issues filed 2026-11-06 (#789–#792, §6). L-931 (token pictures as data) built 2026-11-10; L-932 (drawing tokens) built 2026-11-10; L-933 (the player's token) built 2026-11-11; L-934 (making portraits and grading) built 2026-11-11, which finishes the epic.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-930 (#788), Phase 10 — Levels and Vehicles (milestone #26).
 **Depends on:** L-393 (named stat blocks), L-922 (size classes), L-700 (the image studio).
