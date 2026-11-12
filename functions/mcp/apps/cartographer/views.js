@@ -25,6 +25,7 @@ const routes = require('../../../loom-canon/routes');
 const { validateSheet, apFor, sheetFromStatBlock } = require('../../../loom-canon/sheets');
 const statBlocks = require('../../../loom-canon/stat-blocks');
 const tokens = require('../../../loom-canon/tokens');
+const realms = require('../../../loom-canon/realms');
 
 // A token picture as the tools show it (L-931): its image, link and crop.
 function tokenView(token) {
@@ -403,6 +404,11 @@ function locationDetail(world, location) {
   }
   result.region = geo.regionId ? ref(world.regions, geo.regionId) : null;
   result.factions = (location.factionIds || []).map((id) => ref(world.factions, id));
+  // Where they came from (L-712): taken from where it sits, or set by hand.
+  if (result.region) {
+    result.region.from = geo.regionFrom === 'position' ? 'position' : 'set by hand';
+  }
+  if (geo.realmFrom === 'region') result.factionsFrom = 'region';
   // Each route's length in miles (L-372): the map's straight line, scaled,
   // × 1.25 for winding (loom-canon/routes.js); null without positions.
   result.connections = (location.connections || []).map((id) => ({
@@ -456,8 +462,11 @@ function factionDetail(world, faction) {
       .map((region) => ({
         id: region.id,
         name: region.name,
-        settlements: (region.locationIds || []).length,
+        settlements: regionLocations(world, region).length,
       })),
+    // Its colour on the map, and its land: its regions' zones (L-712).
+    colour: realms.colourOf(faction),
+    land: realms.realmLand(world, faction.id).land,
     relations,
     characters: Object.values(world.characters || {})
       .filter((c) => c.factionId === faction.id && !c.retired)
@@ -468,11 +477,17 @@ function factionDetail(world, faction) {
   return result;
 }
 
+// A region's locations: those it lists (an Azgaar province's), and those in
+// it by hand or by where they sit (L-712).
+function regionLocations(world, region) {
+  const listed = new Set(region.locationIds || []);
+  return Object.values(world.locations || {}).filter(
+    (l) => listed.has(l.id) || geoOf(l).regionId === region.id
+  );
+}
+
 function regionDetail(world, region) {
-  const locations = (region.locationIds || [])
-    .map((id) => world.locations[id])
-    .filter(Boolean)
-    .sort(byPopulationThenName);
+  const locations = regionLocations(world, region).sort(byPopulationThenName);
   const list = capped(
     locations.map((location) => locationRow(world, location, { region: true, realm: true })),
     100
@@ -485,6 +500,8 @@ function regionDetail(world, region) {
     form: region.formName || null,
     realm: region.factionId ? ref(world.factions, region.factionId) : null,
     capital: ref(world.locations, region.capitalLocationId),
+    // Its shape (L-712): the zones naming it, by map.
+    land: realms.regionLand(world, region.id),
     settlements: locations.length,
     locations: list.items,
     lore: loreAbout(world, region.id),

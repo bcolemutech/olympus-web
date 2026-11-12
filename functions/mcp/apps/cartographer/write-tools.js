@@ -17,6 +17,7 @@ const ground = require('../../../loom-canon/ground');
 const { whyClosed } = require('../../../cartographer/service');
 const { validateSheet } = require('../../../loom-canon/sheets');
 const brief = require('../../../loom-canon/brief');
+const realms = require('../../../loom-canon/realms');
 const { createScratchWorld, MIN_MAP, MAX_MAP } = require('../../../cartographer/scratch');
 const { systemOf } = require('../../../loom-canon/checks');
 const spawns = require('../../../loom-modules/combat/spawns');
@@ -104,9 +105,14 @@ const UNREACHABLE_SHOWN = 5;
 const MAX_NEW_LOCATIONS = 50;
 const MAX_LINKS = 100;
 const COLOUR = /^#[0-9a-fA-F]{6}$/;
+// Realms and regions (L-712): how many one call may add, and a colour.
+const MAX_NEW_REALMS = 20;
+const MAX_NEW_REGIONS = 50;
+const colour = z.string().regex(COLOUR, 'a colour is #rrggbb');
 const SLICE_NOTE =
-  'Worlds without Azgaar (L-710) are built in slices: the brief is here; realms, regions, ' +
-  'waypoints and a world’s own terrain come later.';
+  'Worlds without Azgaar (L-710) are built in slices: the brief is here; realms and regions ' +
+  'are add_realms and add_regions, shaped by zones on a region map (set_zones), and terrain ' +
+  'is its ground (set_ground); waypoints and a world’s own terrain come later.';
 
 // A world's brief (L-711), as a tool takes it: each field optional text. On
 // update, "" clears a field.
@@ -195,6 +201,18 @@ function checkName(world, wanted, selfId) {
             'unique in a world so players can refer to them.'
         );
       }
+    }
+  }
+  return wanted;
+}
+
+// Region names are unique among the world's live regions (L-712).
+function regionName(world, wanted, selfId) {
+  const key = normalizeName(wanted);
+  if (!key) throw new ToolError('A name needs at least one letter or digit.');
+  for (const region of Object.values(world.regions || {})) {
+    if (region.id !== selfId && !region.retired && normalizeName(region.name) === key) {
+      throw new ToolError(`The region "${region.name}" (${region.id}) already has that name.`);
     }
   }
   return wanted;
@@ -912,7 +930,9 @@ function writeTools({ writer, systems, studio }) {
         'back to the default for its size: village 300, town 600, city 1200, great city 2500; ' +
         'a capital one size larger); get_town shows it. danger (none, low, high) says how ' +
         'dangerous it is. encounters is the table its map’s generic spawns are filled from ' +
-        'when a rest is broken there. ' +
+        'when a rest is broken there. regionId sets its region by hand; null goes back to the ' +
+        'region of the zone it sits in (L-712), as an empty factionIds goes back to that ' +
+        'region’s realm. ' +
         editNote,
       inputSchema: {
         worldId,
@@ -961,6 +981,10 @@ function writeTools({ writer, systems, studio }) {
               'or characters placed there; none is the default.'
           ),
         encounters: encounters.optional(),
+        regionId: entityId('region', 'get_world')
+          .nullable()
+          .optional()
+          .describe('Its region, set by hand; null to take it from the zone it sits in (L-712).'),
       },
       annotations: replacing,
       handler: (ctx, args) => {
@@ -968,6 +992,7 @@ function writeTools({ writer, systems, studio }) {
           'name',
           'description',
           'factionIds',
+          'regionId',
           'rules',
           'townSize',
           'danger',
@@ -981,10 +1006,18 @@ function writeTools({ writer, systems, studio }) {
             fields.name = checkName(world, args.name, place.id);
           }
           Object.assign(fields, describe(place, args.description));
+          // What is stored, not what its position gave it (L-712).
+          const g = place.geo || {};
+          const ownRealms = g.realmFrom ? [] : place.factionIds || [];
           if (args.factionIds !== undefined) {
             const ids = [...new Set(args.factionIds)];
             ids.forEach((id) => live(world, 'faction', id));
-            if (ids.join() !== (place.factionIds || []).join()) fields.factionIds = ids;
+            if (ids.join() !== ownRealms.join()) fields.factionIds = ids;
+          }
+          if (args.regionId !== undefined) {
+            const own = g.regionFrom ? null : g.regionId || null;
+            if (args.regionId !== null) live(world, 'region', args.regionId);
+            if (args.regionId !== own) fields['geo.regionId'] = args.regionId;
           }
           // Its danger (L-824): none is the default, so it isn't kept.
           if (args.danger !== undefined && args.danger !== (place.danger || 'none')) {
@@ -1282,11 +1315,13 @@ function writeTools({ writer, systems, studio }) {
         'Change a realm or faction’s name, description, disposition toward the player ' +
         '(friendly, neutral or hostile), or its relations with other realms. Relations are ' +
         'kept mutual: setting A vassal of B makes B suzerain of A; other stances are the same ' +
-        'both ways. ' +
+        'both ways. colour (#rrggbb) is its colour on the map: its land’s edge, and the ' +
+        'realms overlay of view_image. ' +
         editNote,
       inputSchema: {
         worldId,
         factionId: entityId('faction', 'get_world'),
+        colour: colour.optional().describe('Its colour on the map, #rrggbb (L-712).'),
         name: name.optional().describe('New name.'),
         description: text(MAX_DESCRIPTION, 'description').optional().describe('New description.'),
         disposition: z.enum(DISPOSITIONS).optional().describe('Default stance toward the player.'),
@@ -1300,7 +1335,7 @@ function writeTools({ writer, systems, studio }) {
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description', 'disposition', 'relations']);
+        requireSome(args, ['name', 'description', 'disposition', 'relations', 'colour']);
         if (Object.keys(args.relations || {}).length > MAX_RELATIONS) {
           throw new ToolError(`Change at most ${MAX_RELATIONS} relations at a time.`);
         }
@@ -1321,6 +1356,14 @@ function writeTools({ writer, systems, studio }) {
           if (args.disposition !== undefined && args.disposition !== faction.disposition) {
             patch('faction', faction.id, 'disposition', args.disposition);
             updated.push('disposition');
+          }
+          const own = (faction.politics || {}).color;
+          if (
+            args.colour !== undefined &&
+            args.colour.toLowerCase() !== (own || '').toLowerCase()
+          ) {
+            patch('faction', faction.id, 'politics.color', args.colour.toLowerCase());
+            updated.push('colour');
           }
           const current = (faction.politics || {}).relations || {};
           for (const [otherId, stance] of Object.entries(args.relations || {})) {
@@ -1357,14 +1400,24 @@ function writeTools({ writer, systems, studio }) {
         description: text(MAX_DESCRIPTION, 'description')
           .optional()
           .describe('New description: the land, its people, what it is known for.'),
+        factionId: entityId('faction', 'get_world')
+          .nullable()
+          .optional()
+          .describe('The realm it belongs to; null for none (L-712).'),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description']);
+        requireSome(args, ['name', 'description', 'factionId']);
         return edit(ctx, args, (e) => {
           const region = existing(e.world, 'region', args.regionId);
           const fields = describe(region, args.description);
-          if (args.name !== undefined && args.name !== region.name) fields.name = args.name;
+          if (args.name !== undefined && args.name !== region.name) {
+            fields.name = regionName(e.world, args.name, region.id);
+          }
+          if (args.factionId !== undefined && args.factionId !== (region.factionId || null)) {
+            if (args.factionId !== null) live(e.world, 'faction', args.factionId);
+            fields.factionId = args.factionId;
+          }
           if (Object.keys(fields).length) e.update(e.ref('regions', region.id), fields);
           return {
             region: { id: region.id, name: fields.name || region.name },
@@ -1372,6 +1425,130 @@ function writeTools({ writer, systems, studio }) {
           };
         });
       },
+    },
+    {
+      name: 'add_realms',
+      title: 'Add realms',
+      description:
+        `Add up to ${MAX_NEW_REALMS} realms (kingdoms, empires, city-states, tribes) in one ` +
+        'call. A realm’s land is its regions’ land: add_regions names the realm a region ' +
+        'belongs to, and set_zones on a region map shapes each region. Names are unique in the ' +
+        'world. colour (#rrggbb) is its colour on the map; one is picked from its id if left ' +
+        'out. Returns the new ids. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        realms: z
+          .array(
+            z.strictObject({
+              name: name.describe('The realm’s name.'),
+              description: text(MAX_DESCRIPTION, 'description')
+                .optional()
+                .describe('Who rules it, its people, what it wants.'),
+              disposition: z
+                .enum(DISPOSITIONS)
+                .optional()
+                .describe('Its stance toward the player; neutral if left out.'),
+              colour: colour.optional().describe('Its colour on the map, #rrggbb.'),
+            })
+          )
+          .min(1)
+          .max(MAX_NEW_REALMS),
+      },
+      annotations: additive,
+      handler: (ctx, args) =>
+        edit(ctx, args, (e) => {
+          const { world } = e;
+          const taken = new Set();
+          const ids = new Set();
+          const added = args.realms.map((spec, i) => {
+            const at = `Realm ${i + 1} (${spec.name})`;
+            checkName(world, spec.name);
+            const key = normalizeName(spec.name);
+            if (taken.has(key)) throw new ToolError(`${at}: that name is given twice.`);
+            taken.add(key);
+            let id = newId(world, 'faction', 'fac', spec.name);
+            for (let n = 2; ids.has(id); n += 1) id = `${id}-${n}`;
+            ids.add(id);
+            const faction = {
+              id,
+              name: spec.name,
+              description: spec.description || '',
+              disposition: spec.disposition || 'neutral',
+              politics: {
+                relations: {},
+                ...(spec.colour ? { color: spec.colour.toLowerCase() } : {}),
+              },
+              ...(spec.description ? { sources: { description: SOURCES.MCP } } : {}),
+            };
+            e.create(e.ref('factions', id), faction);
+            return { id, name: spec.name, colour: realms.colourOf(faction) };
+          });
+          return { realms: added, next: 'add_regions names the realm each region belongs to.' };
+        }),
+    },
+    {
+      name: 'add_regions',
+      title: 'Add regions',
+      description:
+        `Add up to ${MAX_NEW_REGIONS} regions (provinces, counties, wilds) in one call, each ` +
+        'naming the realm it belongs to, or none. A region’s shape is one or more zones on a ' +
+        'region map naming it: set_zones with { id, region: <regionId>, shape }. A place takes ' +
+        'its region from the topmost zone naming one where it sits, and its realm from that ' +
+        'region, unless set by hand (update_location). where reads what lies at a point. ' +
+        'Region names are unique among the world’s regions. Returns the new ids. ' +
+        editNote,
+      inputSchema: {
+        worldId,
+        regions: z
+          .array(
+            z.strictObject({
+              name: name.describe('The region’s name.'),
+              description: text(MAX_DESCRIPTION, 'description')
+                .optional()
+                .describe('The land, its people, what it is known for.'),
+              factionId: entityId('faction', 'get_world')
+                .optional()
+                .describe('The realm it belongs to (add_realms); none if left out.'),
+            })
+          )
+          .min(1)
+          .max(MAX_NEW_REGIONS),
+      },
+      annotations: additive,
+      handler: (ctx, args) =>
+        edit(ctx, args, (e) => {
+          const { world } = e;
+          const taken = new Set();
+          const ids = new Set();
+          const added = args.regions.map((spec, i) => {
+            const at = `Region ${i + 1} (${spec.name})`;
+            regionName(world, spec.name);
+            const key = normalizeName(spec.name);
+            if (taken.has(key)) throw new ToolError(`${at}: that name is given twice.`);
+            taken.add(key);
+            const realm = spec.factionId ? live(world, 'faction', spec.factionId) : null;
+            let id = newId(world, 'region', 'reg', spec.name);
+            for (let n = 2; ids.has(id); n += 1) id = `${id}-${n}`;
+            ids.add(id);
+            e.create(e.ref('regions', id), {
+              id,
+              name: spec.name,
+              description: spec.description || '',
+              factionId: realm ? realm.id : null,
+              ...(spec.description ? { sources: { description: SOURCES.MCP } } : {}),
+            });
+            return {
+              id,
+              name: spec.name,
+              realm: realm ? { id: realm.id, name: realm.name } : null,
+            };
+          });
+          return {
+            regions: added,
+            next: 'Shape each with set_zones on a region map: { id, region: <regionId>, shape }.',
+          };
+        }),
     },
     {
       name: 'add_character',

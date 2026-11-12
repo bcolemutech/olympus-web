@@ -34,7 +34,9 @@
   //            (L-945) only dresses the room: no menu, never noticed or
   //            searched, and blocking movement only when it's over 2.5 ft
   //            both ways (objectBlocksMove), unless `blocksMove` says
-  //   zones    [{ id, name?, shape }] — named or not (DA1b)
+  //   zones    [{ id, name?, region?, shape }] — named or not (DA1b); on a
+  //            region map, `region` names the world's region it shapes
+  //            (L-712; checked against the world by its callers)
   //   spawns   [{ id, name?, at | shape, what?, count? }] (DA4)
   //   lights   [{ id, at, radius, dim? }] a source, or [{ id, shape, dark:
   //            true }] a dark area
@@ -1201,6 +1203,8 @@
         } else if (key === 'zones') {
           if (raw.name !== undefined && typeof raw.name !== 'string')
             problems.push(name + ' has a name that isn’t text.');
+          if (raw.region !== undefined && !(typeof raw.region === 'string' && ID.test(raw.region)))
+            problems.push(name + ' has a region that isn’t a region’s id.');
           area(name, raw.shape);
         } else if (key === 'spawns' || key === 'notes') {
           if ((raw.at !== undefined) === (raw.shape !== undefined) && key === 'spawns') {

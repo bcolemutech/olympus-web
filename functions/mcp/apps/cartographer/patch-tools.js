@@ -9,6 +9,7 @@ const mapPaths = require('../../../loom-canon/map-paths');
 const scale = require('../../../loom-canon/scale');
 const { worldId, entityId } = require('./schemas');
 const mapTools = require('./map-tools');
+const realms = require('../../../loom-canon/realms');
 
 // Patching a map's shapes by id (planning/maps-from-data.md §4.8; L-929 /
 // #733, #735 gap 17). Claude builds a map from data with one tool a kind of
@@ -130,7 +131,10 @@ const SHAPES = [
     title: 'Set zones',
     what:
       'Zones: named or unnamed areas (the cellar, the dais), for the narrator and for what ' +
-      'happens in them. Fields: id, name?, shape.',
+      'happens in them. Fields: id, name?, shape, region? (on a region map: the id of the ' +
+      'world’s region it shapes, add_regions; a region’s land is its zones, a realm’s its ' +
+      'regions’, and a place is in the topmost zone naming a region where it sits; null takes ' +
+      'it away).',
   },
   {
     tool: 'set_spawns',
@@ -244,6 +248,22 @@ function patchTools({ writer, worldFor }) {
           { set: args.set, remove: args.remove },
           home.bounds
         );
+        // A zone naming a region (L-712): on a region map, a region the world has.
+        if (!done.problems && key === 'zones') {
+          const touched = new Set([...done.added, ...done.changed]);
+          const named = (done.geometry.zones || []).filter(
+            (z) => touched.has(z.id) && z.region !== undefined
+          );
+          if (named.length && home.kind !== 'region') {
+            done.problems = [
+              `zones.${named[0].id}: only a zone on a region map names a region; this is ` +
+                `${home.kind === 'grid' ? 'a grid' : 'an area map'}.`,
+            ];
+          } else {
+            const problems = realms.zoneProblems(world, named);
+            if (problems.length) done.problems = problems;
+          }
+        }
         if (done.problems) {
           throw new ToolError(
             `That won’t do for ${home.doc.name}: ${done.problems.slice(0, 10).join(' ')}`
