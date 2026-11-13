@@ -342,6 +342,7 @@ test('get_location shows the score, band, what it is missing and its weighted ch
     'settlement.description',
     'settlement.loreLinks',
     'settlement.ground',
+    'settlement.region',
   ]);
   expect(place.checklist[0]).toEqual({
     id: 'settlement.residents',
@@ -428,7 +429,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   }
   // Rich already, with only its town's art and ground (L-655) to go.
   const unground = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
-  expect(unground.missing.map((item) => item.need)).toEqual(['townArt', 'ground']);
+  expect(unground.missing.map((item) => item.need)).toEqual(['townArt', 'ground', 'region']);
   expect(unground).toMatchObject({ grade: 'playable', band: 'rich' });
   expect(unground.score).toBeGreaterThanOrEqual(40);
   await ok('update_place', {
@@ -607,6 +608,7 @@ test('update_region writes a description at last, and grades the region', async 
     'realm.description',
     'realm.lore',
     'realm.people',
+    'realm.land',
   ]);
   expect((await call('update_region', { worldId: WORLD, regionId: 'reg_1' })).isError).toBe(true);
 });

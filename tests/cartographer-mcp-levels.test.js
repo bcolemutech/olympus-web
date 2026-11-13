@@ -372,7 +372,13 @@ describe('a world three maps deep, built with the map tools', () => {
     const W = ids.world;
     const work = await ok('list_work', { worldId: W, kind: 'map' });
     // The lower deck, with no way off it, and nothing else built enough yet.
-    expect(work.items.every((i) => i.kind === 'map')).toBe(true);
+    // Maps still closed, and the score work for the maps' land (L-718).
+    expect(
+      work.items.every(
+        (i) =>
+          i.kind === 'map' || (i.type === 'criterion' && i.entities.every((e) => e.kind === 'map'))
+      )
+    ).toBe(true);
     const service = require('../functions/cartographer/service').createCartographerService({
       db,
       bucket: null,
