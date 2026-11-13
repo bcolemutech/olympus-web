@@ -14,6 +14,10 @@
   //   place and where you are, and for every place once zoomed in.
   // - A click hit-tests places, then routes, and opens the engine's menu
   //   (I2): Move (travel there, the same turn as before) and Look.
+  // - On a region map with no image, who holds the land (L-714; worlds-
+  //   without-azgaar.md §4.4, R8): each realm's land has a soft inner edge in
+  //   its colour and its name at its centre, from loomGetMap's `map.realms`,
+  //   under the routes and places. With an image, nothing extra is drawn.
 
   var Loom = window.Loom;
   var M = Loom.mapMath;
@@ -22,6 +26,18 @@
   var HIT_RADIUS = 18; // px around a pin that a click selects
   var ROUTE_HIT = 6; // px either side of a route
   var LABEL_ALL_SCALE = 1.2; // above this zoom, every place is labelled
+  // A realm's soft edge (R8): the widths of its strokes as fractions of the
+  // map's space, centred on the border and clipped to the land, so only the
+  // inner half shows; each lays its alpha over the one before.
+  var EDGE_WIDTH = 1 / 24;
+  var EDGE_BANDS = [
+    { width: 1, alpha: 0.07 },
+    { width: 0.78, alpha: 0.08 },
+    { width: 0.58, alpha: 0.1 },
+    { width: 0.4, alpha: 0.12 },
+    { width: 0.22, alpha: 0.14 },
+    { width: 0.1, alpha: 0.16 },
+  ];
 
   var COLOURS = {
     road: 0xffb74d,
@@ -47,6 +63,9 @@
     look: null, // what Look is showing: { kind: 'route', link } or null
     art: null, // the map's art (Loom.draw.art): its copy, then the full image
     nodes: null, // the PixiJS objects, built on first draw
+    realmsKey: null, // what the realms drawn were made from
+    realmNodes: [], // [{ id, root, name, bounds }] one a realm drawn
+    realmBuilds: 0, // how many times they have been built, for tests
     labels: {}, // place id → its label
   };
 
@@ -144,14 +163,18 @@
     var backdrop = new PIXI.Graphics();
     var art = new PIXI.Sprite();
     var painted = new PIXI.Container(); // the region map drawn from its data (L-924)
+    var realms = new PIXI.Container(); // realms' soft edges, in map space (L-714)
+    var realmNames = new PIXI.Container(); // and their names, in screen space
     var routes = new PIXI.Graphics();
     var pins = new PIXI.Graphics();
     var labels = new PIXI.Container();
-    container.addChild(backdrop, art, painted, routes, pins, labels);
+    container.addChild(backdrop, art, painted, realms, realmNames, routes, pins, labels);
     world.nodes = {
       backdrop: backdrop,
       art: art,
       painted: painted,
+      realms: realms,
+      realmNames: realmNames,
       routes: routes,
       pins: pins,
       labels: labels,
@@ -221,6 +244,157 @@
     }
   }
 
+  // ── Realms (L-714) ────────────────────────────────
+
+  function colourNumber(hex) {
+    var m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+    return m ? parseInt(m[1], 16) : 0xa0a0a0;
+  }
+
+  // A colour a third of the way to white, so a name reads on the land and the
+  // dark edge the label draws round it.
+  function lighter(colour) {
+    var mix = function (shift) {
+      var c = (colour >> shift) & 255;
+      return Math.round(c + (255 - c) * 0.35);
+    };
+    return (mix(16) << 16) | (mix(8) << 8) | mix(0);
+  }
+
+  // What the realms drawn are made from: a cheap key, so a map sent again
+  // with the same realms (every turn) isn't rebuilt.
+  function realmsKey(realms) {
+    return realms
+      .map(function (r) {
+        var sum = 0;
+        var count = 0;
+        r.outlines
+          .concat(
+            r.land.map(function (l) {
+              return l.outer;
+            })
+          )
+          .forEach(function (flat) {
+            count += flat.length;
+            for (var i = 0; i < flat.length; i++) sum += flat[i];
+          });
+        return [r.id, r.name, r.colour, count, Math.round(sum * 100)].join(':');
+      })
+      .join('|');
+  }
+
+  // A realm's land in map units, for culling it.
+  function boundsOfRealm(r) {
+    var b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    r.land.forEach(function (l) {
+      for (var i = 0; i + 1 < l.outer.length; i += 2) {
+        b.x0 = Math.min(b.x0, l.outer[i]);
+        b.x1 = Math.max(b.x1, l.outer[i]);
+        b.y0 = Math.min(b.y0, l.outer[i + 1]);
+        b.y1 = Math.max(b.y1, l.outer[i + 1]);
+      }
+    });
+    return b;
+  }
+
+  function clearRealms(n) {
+    n.realms.removeChildren().forEach(function (c) {
+      c.destroy({ children: true });
+    });
+    n.realmNames.removeChildren().forEach(function (c) {
+      c.destroy();
+    });
+    world.realmNodes = [];
+    world.realmsKey = null;
+  }
+
+  // Builds each realm's edge once: its outline stroked in three bands and
+  // clipped to its land, so the colour fades in from the border. In map
+  // space, so it moves with the camera and costs nothing to pan.
+  function buildRealms(n, realms, space) {
+    var PIXI = window.PIXI;
+    world.realmBuilds++;
+    var full = space.width * EDGE_WIDTH;
+    realms.forEach(function (r) {
+      var colour = colourNumber(r.colour);
+      var root = new PIXI.Container();
+      var edge = new PIXI.Graphics();
+      EDGE_BANDS.forEach(function (band) {
+        r.outlines.forEach(function (flat) {
+          if (flat.length < 4) return;
+          edge.moveTo(flat[0], flat[1]);
+          for (var i = 2; i + 1 < flat.length; i += 2) edge.lineTo(flat[i], flat[i + 1]);
+        });
+        edge.stroke({
+          width: full * band.width,
+          color: colour,
+          alpha: band.alpha,
+          join: 'round',
+          cap: 'round',
+        });
+      });
+      var land = new PIXI.Graphics();
+      r.land.forEach(function (l) {
+        land.poly(l.outer).fill({ color: 0xffffff });
+        l.holes.forEach(function (hole) {
+          land.poly(hole).cut();
+        });
+      });
+      root.addChild(edge, land);
+      edge.mask = land;
+      n.realms.addChild(root);
+      var name = Loom.draw.label(String(r.name).toUpperCase(), 15);
+      name.style.fill = lighter(colour);
+      name.style.letterSpacing = 3;
+      name.alpha = 0.9;
+      name.anchor.set(0.5, 0.5);
+      n.realmNames.addChild(name);
+      world.realmNodes.push({
+        id: r.id,
+        root: root,
+        name: name,
+        centre: r.centre,
+        bounds: boundsOfRealm(r),
+      });
+    });
+  }
+
+  // Who holds the land, on a region map with no image (R8): its realms'
+  // edges and names, or nothing.
+  function paintRealms(n, data, view) {
+    var map = data.map;
+    var realms = map && !map.image && map.space && map.space.width ? map.realms : null;
+    if (!realms || !realms.length) {
+      n.realms.visible = false;
+      n.realmNames.visible = false;
+      if (world.realmNodes.length) clearRealms(n);
+      return;
+    }
+    n.realms.visible = true;
+    n.realmNames.visible = true;
+    var key = realmsKey(realms);
+    if (key !== world.realmsKey) {
+      clearRealms(n);
+      buildRealms(n, realms, map.space);
+      world.realmsKey = key;
+    }
+    var k = (view.scale * map.width) / map.space.width;
+    n.realms.position.set(view.x, view.y);
+    n.realms.scale.set(k);
+    var shown = engine.size();
+    world.realmNodes.forEach(function (r) {
+      var b = r.bounds;
+      var off =
+        view.x + b.x1 * k < 0 ||
+        view.y + b.y1 * k < 0 ||
+        view.x + b.x0 * k > shown.width ||
+        view.y + b.y0 * k > shown.height;
+      r.root.visible = !off;
+      r.name.visible = !off;
+      r.name.position.set(view.x + r.centre.x * k, view.y + r.centre.y * k);
+    });
+  }
+
   function draw(container, view) {
     if (!world.nodes) build(container);
     var n = world.nodes;
@@ -248,6 +422,7 @@
     // routes and places, when it has some: its art (EX2) in place of its
     // ground and lines.
     paintRegion(n, data, view);
+    paintRealms(n, data, view);
 
     var byId = {};
     positioned().forEach(function (p) {
@@ -592,6 +767,22 @@
     },
     selected: function () {
       return world.selected;
+    },
+    /** How many times the realms have been built (they aren't for the same ones). */
+    realmBuilds: function () {
+      return world.realmBuilds;
+    },
+    /** The realms drawn now: [{ id, name, shown, x, y }], for tests (L-714). */
+    realmsDrawn: function () {
+      return world.realmNodes.map(function (r) {
+        return {
+          id: r.id,
+          name: r.name.text,
+          shown: r.root.visible,
+          x: r.name.position.x,
+          y: r.name.position.y,
+        };
+      });
     },
   };
 })();
