@@ -126,7 +126,7 @@ function apply(items, { set = [], remove = [] }, label, taken = () => null) {
   return { list, added, unnamed, changed, removed, problems };
 }
 
-function patch(geometry, key, change, bounds) {
+function patch(geometry, key, change, bounds, own) {
   if (!geo.LISTS.includes(key)) return { problems: [`"${key}" is no part of a map's geometry.`] };
   const stored = isObject(geometry) ? geometry : {};
   const label = NAMES[key];
@@ -151,8 +151,8 @@ function patch(geometry, key, change, bounds) {
   }
   if (done.problems.length) return { problems: done.problems };
   const after = geo.normalize(next);
-  const was = geo.check(geo.normalize(stored), bounds);
-  const problems = geo.check(after, bounds).filter((p) => !was.includes(p));
+  const was = geo.check(geo.normalize(stored), bounds, own);
+  const problems = geo.check(after, bounds, own).filter((p) => !was.includes(p));
   if (problems.length) return { problems };
   // Ids given to what had none stand where they were given.
   const added = done.added.map((a) =>

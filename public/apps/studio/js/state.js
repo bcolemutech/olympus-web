@@ -48,6 +48,7 @@
     battleMap: 'Battle-map art',
     objectKind: 'Object art',
     object: 'Object art',
+    material: 'Terrain art',
     character: 'Token',
     statBlock: 'Token',
     figure: 'Token',

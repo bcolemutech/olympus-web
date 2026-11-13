@@ -704,7 +704,11 @@ function ringArea(ring) {
  * markers for its places (`places`: [{ id, name, kind, at }]) and for what the
  * geometry holds (as a battle map's).
  */
-function renderMap(map, places = [], { heights = true, hidden = true, overlay = null } = {}) {
+function renderMap(
+  map,
+  places = [],
+  { heights = true, hidden = true, overlay = null, materials = [] } = {}
+) {
   const space = map.space || { width: 1000, height: 1000 };
   const k = 1200 / Math.max(space.width, space.height);
   const backdrop = hexColour((map.backdrop || {}).colour) || COLOURS.plain;
@@ -714,7 +718,7 @@ function renderMap(map, places = [], { heights = true, hidden = true, overlay = 
     backdrop
   );
   const geometry = map.geometry || {};
-  const under = painter.paintUnder(base, geometry, k, { heights, hidden });
+  const under = painter.paintUnder(base, geometry, k, { heights, hidden, materials });
   const shown = overlay ? paintOverlay(base, geometry, k, overlay) : [];
   const step = niceStep(Math.max(space.width, space.height));
   const ls = labelScale(base);

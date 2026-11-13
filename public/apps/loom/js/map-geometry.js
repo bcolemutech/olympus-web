@@ -640,9 +640,13 @@
     return isObject(geometry) && Array.isArray(geometry[key]) ? geometry[key] : [];
   }
 
-  function materialInfo(key, material) {
+  // A material's flags; with a world's own ground (`own`, L-713 / #818), its
+  // own ids too, with the flags of the built-in ground each is like.
+  function materialInfo(key, material, own) {
     var set = MATERIALS[MATERIAL_OF[key]];
-    return set && has(set, material) ? set[material] : null;
+    if (set && has(set, material)) return set[material];
+    var mine = key === 'ground' ? catalog.ownMaterial(own, material) : null;
+    return mine && has(MATERIALS.ground, mine.like) ? MATERIALS.ground[mine.like] : null;
   }
 
   function wallFlags(item) {
@@ -912,9 +916,10 @@
    * or [] if it's sound: shapes that don't read, open or crossed polygons,
    * unknown materials, doors and windows off their walls, anything outside
    * `bounds` (in the geometry's units), ids missing or used twice, hidden ids
-   * naming nothing.
+   * naming nothing. `own` is the world's own ground materials (`world.
+   * materials`, L-713), whose ids ground may use as well as the built-in ones.
    */
-  function check(geometry, bounds) {
+  function check(geometry, bounds, own) {
     var problems = [];
     if (geometry === undefined || geometry === null) return problems;
     if (!isObject(geometry)) return ['The geometry must be an object of lists.'];
@@ -993,7 +998,7 @@
     function material(key, name, item) {
       if (typeof item.material !== 'string' || !item.material) {
         problems.push(name + ' needs a material.');
-      } else if (!materialInfo(key, item.material)) {
+      } else if (!materialInfo(key, item.material, own)) {
         problems.push(
           name +
             ' has an unknown material "' +
@@ -1001,7 +1006,15 @@
             '": the ' +
             MATERIAL_OF[key] +
             ' materials are ' +
-            Object.keys(MATERIALS[MATERIAL_OF[key]]).join(', ') +
+            Object.keys(MATERIALS[MATERIAL_OF[key]])
+              .concat(
+                key === 'ground'
+                  ? (Array.isArray(own) ? own : []).map(function (m2) {
+                      return m2.id;
+                    })
+                  : []
+              )
+              .join(', ') +
             '.'
         );
       }
@@ -1142,7 +1155,7 @@
           }
           if (raw.depth !== undefined) {
             if (!num(raw.depth) || raw.depth < 0) problems.push(name + ' has a depth below 0.');
-            else if (!(materialInfo(key, raw.material) || {}).water) {
+            else if (!(materialInfo(key, raw.material, own) || {}).water) {
               problems.push(name + ' has a depth but isn’t water.');
             }
           }

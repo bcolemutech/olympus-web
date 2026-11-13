@@ -700,6 +700,7 @@
         // A foot of height, for walls standing (L-941): a town is in metres.
         feet: space.width / metres / 3.2808,
         set: data.artSet || null, // the world's art set (L-944)
+        materials: data.materials || null, // the world's own ground (L-713)
         art: hasArt,
         tint: accent(),
         onProgress: engine.progress,

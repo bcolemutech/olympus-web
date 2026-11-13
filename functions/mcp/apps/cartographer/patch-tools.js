@@ -246,7 +246,8 @@ function patchTools({ writer, worldFor }) {
           home.doc.geometry,
           key,
           { set: args.set, remove: args.remove },
-          home.bounds
+          home.bounds,
+          world.materials
         );
         // A zone naming a region (L-712): on a region map, a region the world has.
         if (!done.problems && key === 'zones') {

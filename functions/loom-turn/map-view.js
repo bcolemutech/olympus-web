@@ -122,17 +122,21 @@ function mapView(canonWorld, save, record, townRecord) {
   const map = canonWorld.map;
   // The art set its maps are drawn with (L-944), on each level's data.
   const artSet = artSets.setFor(canonWorld).name;
+  // The world's own ground, art as links (L-713), on each level's data.
+  const own = ownMaterialsView(canonWorld);
+  const withOwn = own ? { materials: own } : {};
   const townData = townView(canonWorld, save, discovered, townRecord);
   const battleData = battleView(canonWorld, save, record);
   return {
     worldId: canonWorld.id,
     name: canonWorld.name,
     artSet,
+    ...withOwn,
     here: save.location || null,
     places,
     links,
-    town: townData ? { ...townData, artSet } : townData,
-    battleMap: battleData ? { ...battleData, artSet } : battleData,
+    town: townData ? { ...townData, artSet, ...withOwn } : townData,
+    battleMap: battleData ? { ...battleData, artSet, ...withOwn } : battleData,
     // The turn (L-611 / #441; L-832): which it is, the AP left of the
     // character's pool, any long action under way, any plan kept, and what
     // a step costs them.
@@ -619,6 +623,20 @@ function battleView(canonWorld, save, record) {
     // The world's own art for kinds of object (L-925), as links (A5).
     ...(objectKindsView(canonWorld) ? { objectKinds: objectKindsView(canonWorld) } : {}),
   };
+}
+
+// The world's own ground materials as the page draws them (L-713): id, name
+// and the built-in ground each is like, its art as a link only (A5); null
+// when it has none.
+function ownMaterialsView(canonWorld) {
+  const list = (canonWorld && canonWorld.materials) || [];
+  if (!list.length) return null;
+  return list.map((m) => ({
+    id: m.id,
+    name: m.name,
+    like: m.like,
+    ...(artLink(m.art) ? { art: artLink(m.art) } : {}),
+  }));
 }
 
 // The world's own object kinds as the page draws them (L-924): each kind's

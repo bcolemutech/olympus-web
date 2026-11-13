@@ -6,9 +6,12 @@
   // OB1; §4.4, §4.6; L-925 / #729): the built-in set a map's floors, walls,
   // doors and windows are made of, and the common objects a map can hold,
   // each with its art. The set is fixed: a world can't add a material over
-  // MCP (RD1). A world can give its own art to an object kind, or to a single
-  // object (an object's art, else its world's art for its kind, else the
-  // catalog's, else a box with a question mark; artFor).
+  // MCP (RD1), except ground (L-713 / #818; worlds-without-azgaar.md R2): a
+  // world can add ground of its own, `world.materials`, each behaving as a
+  // built-in one it names (`like`) and drawn with art of its own, else its
+  // `like`'s (ownMaterial, checkOwn). A world can give its own art to an
+  // object kind, or to a single object (an object's art, else its world's art
+  // for its kind, else the catalog's, else a box with a question mark; artFor).
   //
   // The art is in the repo, under public/apps/loom/art/ (the engine draws it
   // from there, with no call on the library; scripts/build-art.js makes it):
@@ -235,12 +238,85 @@
     });
   }
 
-  /** A material by kind and id, or null. */
-  function materialOf(kind, id) {
+  // ── A world's own ground (L-713) ──────────────────────────────────────
+
+  var OWN_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+  var MAX_OWN = 50;
+
+  function builtIn(kind, id) {
     for (var i = 0; i < MATERIALS.length; i++) {
       if (MATERIALS[i].kind === kind && MATERIALS[i].id === id) return MATERIALS[i];
     }
     return null;
+  }
+
+  /** A world's own ground material by id in its `materials` list, or null. */
+  function ownMaterial(own, id) {
+    if (!Array.isArray(own)) return null;
+    for (var i = 0; i < own.length; i++) {
+      if (own[i] && own[i].id === id) return own[i];
+    }
+    return null;
+  }
+
+  /**
+   * What's wrong with a world's own ground materials (`[{ id, name, like,
+   * art? }]`), as sentences (none: []): an id of lower-case letters, digits
+   * and - (40 at most) that no built-in ground has and no other of its own
+   * has, a name, and a `like` that is a built-in ground material.
+   */
+  function checkOwn(list) {
+    var out = [];
+    if (list === undefined || list === null) return out;
+    if (!Array.isArray(list)) return ['A world’s materials are a list.'];
+    if (list.length > MAX_OWN) out.push('A world has ' + MAX_OWN + ' materials at most.');
+    var seen = {};
+    list.forEach(function (item, i) {
+      var at = 'Material ' + (i + 1);
+      if (!item || typeof item !== 'object') {
+        out.push(at + ' must be an object.');
+        return;
+      }
+      if (typeof item.id !== 'string' || !OWN_ID.test(item.id)) {
+        out.push(at + '’s id is lower-case letters, digits and -, up to 40.');
+        return;
+      }
+      at = 'Material "' + item.id + '"';
+      if (builtIn('ground', item.id)) {
+        out.push(at + ' clashes with the built-in ground of that id; pick another.');
+      }
+      if (has(seen, item.id)) out.push(at + ' is listed twice.');
+      seen[item.id] = true;
+      if (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 60) {
+        out.push(at + ' needs a name of up to 60 characters.');
+      }
+      if (typeof item.like !== 'string' || !builtIn('ground', item.like)) {
+        out.push(at + ' behaves like "' + item.like + '", which is no built-in ground material.');
+      }
+    });
+    return out;
+  }
+
+  /**
+   * A material by kind and id, or null. With a world's own `materials`, its
+   * ground too: the entry of the built-in material it is like (its flags and
+   * art), under its own id, name and `own: true`.
+   */
+  function materialOf(kind, id, own) {
+    var found = builtIn(kind, id);
+    if (found) return found;
+    var mine = kind === 'ground' ? ownMaterial(own, id) : null;
+    var like = mine && builtIn('ground', mine.like);
+    if (!like) return null;
+    var out = {};
+    Object.keys(like).forEach(function (k) {
+      out[k] = like[k];
+    });
+    out.id = mine.id;
+    out.name = mine.name || mine.id;
+    out.like = like.id;
+    out.own = true;
+    return out;
   }
 
   /** A catalog object kind by id, or null. */
@@ -403,12 +479,21 @@
   }
 
   /**
-   * A material's art in a set (L-944): { from: 'set' | 'catalog', picture
-   * ({ url } or { atlas, frame }), span, variants: [picture], face?:
+   * A material's art in a set (L-944): { from: 'set' | 'catalog' | 'world',
+   * picture ({ url } or { atlas, frame }), span, variants: [picture], face?:
    * picture }. What the set lacks is the built-in SVG's: its picture, a span
-   * of 1, no variants, no face.
+   * of 1, no variants, no face. A world's own ground (`own`, L-713) is drawn
+   * with its art (`from: 'world'`), else its `like`'s.
    */
-  function materialArt(kind, id, setName) {
+  function materialArt(kind, id, setName, own) {
+    var mine = kind === 'ground' ? ownMaterial(own, id) : null;
+    if (mine) {
+      // A world's own ground: its art (a link), else its `like`'s (L-713).
+      if (mine.art && mine.art.link) {
+        return { from: 'world', picture: { url: mine.art.link }, span: 1, variants: [] };
+      }
+      return materialArt('ground', mine.like, setName);
+    }
     var m = materialOf(kind, id);
     var found = entryOf(setName, 'materials', kind + '/' + id);
     var e = found && found.entry;
@@ -504,6 +589,9 @@
     OBJECT_KINDS: OBJECT_KINDS,
     materialsOf: materialsOf,
     materialOf: materialOf,
+    ownMaterial: ownMaterial,
+    checkOwn: checkOwn,
+    MAX_OWN: MAX_OWN,
     objectKind: objectKind,
     isDecor: isDecor,
     artUrl: artUrl,
