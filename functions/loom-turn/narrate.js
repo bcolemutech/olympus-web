@@ -6,6 +6,7 @@ const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const town = require('../loom-canon/town');
 const { briefLine } = require('../loom-canon/brief');
 const maps = require('../loom-canon/maps');
+const realms = require('../loom-canon/realms');
 const mapAreas = require('../loom-canon/map-areas');
 const { buildKnownEntities } = require('./interpret');
 const { retrieveContextForEntities } = require('./retrieval');
@@ -505,6 +506,23 @@ function buildTimeSection(save, resolution) {
   return 'TIME (final):\n' + clock.timeLine(now, resolution.time || null);
 }
 
+// The land the player stands in once this resolves (L-716; worlds-without-
+// azgaar.md §4.6): the terrain, region and realm at their place on the lowest
+// region map of their path. Inside a town or on a grid it is the place's own
+// position on that map. None where nothing is painted there, or off a place.
+function buildWhereSection(canonWorld, position, save) {
+  const mapId = canonWorld.frame && canonWorld.frame.mapId;
+  const host = position.location && (canonWorld.locations || {})[position.location];
+  const g = host && host.geo;
+  if (!mapId || !g || !Number.isFinite(g.x) || !Number.isFinite(g.y)) return null;
+  const walking = Boolean(save && save.townPoint && save.location === position.location);
+  const inside = Boolean(position.placeId || position.mapId || walking);
+  return (
+    realms.whereLine(canonWorld, mapId, [g.x, g.y], inside ? host.name || position.location : '') ||
+    null
+  );
+}
+
 // Where the player is in their turn once this resolves (L-614 / #444): the
 // action points left (L-832) and any long action under way, for pacing;
 // the rules have already decided what they may do.
@@ -781,6 +799,7 @@ function buildUserMessage(params) {
     exitsSection,
     turnSection,
     timeSection,
+    whereSection,
     sheetSection,
   } = params;
   const rollSection = buildRollSection(resolution, canonWorld);
@@ -815,6 +834,7 @@ function buildUserMessage(params) {
     (namedSection ? namedSection + '\n\n' : '') +
     (effectsSection ? effectsSection + '\n\n' : '') +
     (timeSection ? timeSection + '\n\n' : '') +
+    (whereSection ? whereSection + '\n\n' : '') +
     'ROLLING SUMMARY:\n' +
     (recentSummary || '(none yet)') +
     '\n\n' +
@@ -967,6 +987,7 @@ async function narrateResolution(params) {
         exitsSection: buildExitsSection(canonWorld, position, save, resolution, view),
         turnSection: buildTurnSection(save, resolution, canonWorld),
         timeSection: buildTimeSection(save, resolution),
+        whereSection: buildWhereSection(canonWorld, position, save),
         sheetSection: buildSheetSection(save, canonWorld),
         save,
       }),
@@ -999,4 +1020,10 @@ async function narrateResolution(params) {
   };
 }
 
-module.exports = { narrateResolution, resolveSceneEntityIds, sanitizeSuggestions };
+module.exports = {
+  narrateResolution,
+  resolveSceneEntityIds,
+  sanitizeSuggestions,
+  buildWhereSection,
+  buildUserMessage,
+};

@@ -1,6 +1,6 @@
 # The Cartographer — Worlds Without Azgaar — Design Document v0.2
 
-**Status:** Decided (2026-10-10), refreshed 2026-11-12 (§3). Sub-issues L-711 to L-718 filed as #816–#823 (§6). L-711 (the brief and New world) built 2026-11-12: the BRIEF line is in the narrator's prompt. L-712 (realms, regions and terrain) built 2026-11-12: `add_realms`, `add_regions`, regions' zones, places' region and realm from where they sit, `where`, and `view_image`'s overlays. L-713 (a world's own terrain) built 2026-11-12: `world.materials`, `set_world_materials`, ground checks, `list_materials` with a world, the `material` assigner target, and the painter drawing them. L-714 (realm borders in play) built 2026-11-13: `loomGetMap`'s `map.realms` (each realm's edge with the border between its own regions left out, its land, colour and name's centre; `functions/loom-canon/realm-borders.js`) and the world view drawing a soft inner edge and a name for each, on region maps with no image.
+**Status:** Decided (2026-10-10), refreshed 2026-11-12 (§3). Sub-issues L-711 to L-718 filed as #816–#823 (§6). L-711 (the brief and New world) built 2026-11-12: the BRIEF line is in the narrator's prompt. L-712 (realms, regions and terrain) built 2026-11-12: `add_realms`, `add_regions`, regions' zones, places' region and realm from where they sit, `where`, and `view_image`'s overlays. L-713 (a world's own terrain) built 2026-11-12: `world.materials`, `set_world_materials`, ground checks, `list_materials` with a world, the `material` assigner target, and the painter drawing them. L-714 (realm borders in play) built 2026-11-13: `loomGetMap`'s `map.realms` (each realm's edge with the border between its own regions left out, its land, colour and name's centre; `functions/loom-canon/realm-borders.js`) and the world view drawing a soft inner edge and a name for each, on region maps with no image. L-716 (the GM knows where) built 2026-11-13: a WHERE line in the narrator's message every turn (`realms.whereLine`, `buildWhereSection` in `functions/loom-turn/narrate.js`): terrain, region and realm at the player's place on the lowest region map of their path, inside a town or on a grid that place's own position.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-710 (#524)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4)
@@ -115,6 +115,8 @@ Settled with the user through a questionnaire. These replace the 2026-10-10 deci
 ### 4.6 The GM knows where
 
 - A WHERE line in the GM's prompts: the terrain, region and realm at the player's position on the lowest region map of their path, from `where`.
+- **Shape:** `WHERE: terrain: Ashwaste; region: The Cinder Reach — <first sentence>; realm: The Duchy of Keld — <first sentence>.` Terrain is named only (a ground has no description); whatever isn't known there is left out, and there is no line where nothing is painted. Inside a town or on a grid it reads `WHERE (the land around Keld): …`, from the place's own position on the region map above.
+- **Where it is:** the narrator's message (beside TIME), built by `buildWhereSection` from the frame the player stands in (`canonWorld.frame.mapId`) and where the resolution leaves them.
 
 ### 4.7 Nisia from its save (AZ2, AZ5)
 
