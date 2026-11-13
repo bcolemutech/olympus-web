@@ -14,7 +14,8 @@
  * Above the gate, a score from 0 to 100 says how built it is, from weighted
  * criteria (CRITERIA, WEIGHTS), and puts it in a band: Playable under 40,
  * Rich from 40, Vivid from 70, Legendary from 90 (BANDS). Characters, battle
- * maps, realms, regions and the world are scored too. Each criterion is data
+ * maps, region maps (their painted land), realms, regions and the world are
+ * scored too. Each criterion is data
  * in one registry; a feature that adds content adds its criteria there
  * (the-loom-grading.md §4.6), and every change to them bumps RUBRIC_VERSION.
  *
@@ -47,8 +48,9 @@
 // character's sheet (L-813); 8: a fighter's attacks (L-822); 9: foes at a
 // dangerous place (L-824); 10: templates on a large map's places (L-906).
 // 11: a map's data is enough to draw it (L-929); 12: a map's look, and its art
-// a bonus (L-947). 13: people's token pictures (L-934).
-const RUBRIC_VERSION = 13;
+// a bonus (L-947). 13: people's token pictures (L-934). 14: a world's brief and
+// its painted land: terrain, shaped regions and realms (L-718).
+const RUBRIC_VERSION = 14;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -69,14 +71,35 @@ const IMPORT = 'import';
  * a place that met rubric 2's Rich bar scores about 40.
  */
 const WEIGHTS = Object.freeze({
-  settlement: { residents: 15, lore: 10, townArt: 15, description: 20, loreLinks: 5, ground: 10 },
+  settlement: {
+    residents: 15,
+    lore: 10,
+    townArt: 15,
+    description: 20,
+    loreLinks: 5,
+    ground: 10,
+    // a bonus too (L-718).
+    region: 5,
+  },
   place: { ownMap: 15, mapArt: 5, someone: 15, lore: 30, description: 10, foes: 10 },
   // token is a bonus too (L-934).
   character: { description: 25, lore: 15, faction: 10, sheet: 20, attacks: 15, token: 10 },
   // art is a bonus: points over the 100 the rest make, capped at 100 (L-947).
   battleMap: { drawn: 30, look: 30, art: 5, features: 20, exits: 20 },
-  realm: { description: 30, lore: 30, people: 20 },
-  world: { mapArt: 20, lore: 20, hook: 10, cover: 15, system: 15, templates: 10, tokens: 10 },
+  // land is a realm's alone: a region's shape is asked of its map (L-718).
+  realm: { description: 30, lore: 30, people: 20, land: 20 },
+  // A region map's own: its terrain, and its regions' shapes (L-718).
+  regionMap: { terrain: 60, regions: 40 },
+  world: {
+    mapArt: 20,
+    lore: 20,
+    hook: 10,
+    cover: 15,
+    system: 15,
+    templates: 10,
+    tokens: 10,
+    brief: 20,
+  },
 });
 const QUALITY = Object.freeze({
   // A region map this many places or more is large: its ordinary places
@@ -100,6 +123,11 @@ const QUALITY = Object.freeze({
   rollup: { settlement: 0.6, poi: 0.7, place: 0.7, realm: 0.7 },
   // The world: its places, and its own criteria.
   world: { places: 0.8, own: 0.2 },
+  // A region map: its places, and the land painted on it (L-718).
+  regionMap: { places: 0.8, own: 0.2 },
+  // The share of a region map under ground that counts as covered (L-718): a
+  // few points short is the sampling and the odd gap between shapes.
+  landCover: 0.95,
   // How much a place counts toward the world's score by nearness to play.
   nearness: { play: 3, near: 1, far: 0.25, nearHops: 2 },
 });
@@ -428,6 +456,38 @@ const CRITERIA = Object.freeze([
       !layers.ground || layers.ground(world, settlement)
         ? met()
         : { progress: 0, message: 'Its town has no ground yet.' },
+  },
+  {
+    // Inside a region (GR1; L-718): in one of the world's live regions, set
+    // by hand or taken from the zone it sits in (R6), and that region painted:
+    // a region with no shape is a name only. A bonus, as a token picture is
+    // (L-934): points over the rest, so a settlement built before the land was
+    // painted is not marked down and the Nisia calibration stands.
+    id: 'settlement.region',
+    kinds: ['settlement'],
+    weight: WEIGHTS.settlement.region,
+    bonus: true,
+    feature: 'L-718',
+    label: 'Inside a painted region',
+    need: 'region',
+    tool: 'update_location',
+    check: (world, settlement) => {
+      const region = ((world && world.regions) || {})[(settlement.geo || {}).regionId];
+      if (!live(region)) {
+        return {
+          progress: 0,
+          message:
+            'It is in no region: shape a region over it (add_regions, then set_zones with ' +
+            'region), or name one with update_location regionId.',
+        };
+      }
+      if (require('./land').regionHasShape(world, region.id)) return met();
+      return {
+        progress: 0,
+        tool: 'set_zones',
+        message: `Its region, ${region.name || region.id}, has no shape: give it a zone (set_zones with region).`,
+      };
+    },
   },
 
   // Points of interest and places in town.
@@ -815,7 +875,113 @@ const CRITERIA = Object.freeze([
     },
   },
 
+  {
+    // A realm's land is its regions' shapes together (GR1; R3; L-718): at
+    // least one of its regions has a zone on a region map.
+    id: 'realm.land',
+    kinds: ['realm'],
+    weight: WEIGHTS.realm.land,
+    feature: 'L-718',
+    label: 'Land: a region with a shape',
+    need: 'land',
+    tool: 'set_zones',
+    check: (world, realm) => {
+      const { regions } = require('./realms').realmLand(world, realm.id);
+      if (require('./land').realmHasLand(world, realm.id)) return met();
+      return regions.length
+        ? {
+            progress: 0,
+            message: `None of its ${regions.length} regions has a shape: give one a zone naming it (set_zones with region).`,
+          }
+        : {
+            progress: 0,
+            tool: 'add_regions',
+            message: 'It has no regions, so no land: add_regions with factionId, then shape them.',
+          };
+    },
+  },
+
+  // Region maps (GR1; L-718).
+  {
+    // Terrain covers its land: the share of its area under ground, water
+    // counting (R1). Partial, up to the cover that counts.
+    id: 'regionMap.terrain',
+    kinds: ['regionMap'],
+    weight: WEIGHTS.regionMap.terrain,
+    feature: 'L-718',
+    label: 'Terrain covering its land',
+    need: 'terrain',
+    tool: 'set_ground',
+    check: (world, map) => {
+      const share = require('./land').terrainCover(world, map.id);
+      if (share >= QUALITY.landCover) return met();
+      const have = Math.round(share * 100);
+      return {
+        progress: share / QUALITY.landCover,
+        have,
+        want: Math.round(QUALITY.landCover * 100),
+        message: share
+          ? `Its ground covers ${have}% of it: paint the rest (set_ground; view_image shows what is bare).`
+          : 'Its land has no terrain: paint it with set_ground (grassland, forest, ocean, …; list_materials).',
+      };
+    },
+  },
+  {
+    // Every region on it has a shape (GR1): a zone naming it. A map with no
+    // regions isn't graded on it.
+    id: 'regionMap.regions',
+    kinds: ['regionMap'],
+    weight: WEIGHTS.regionMap.regions,
+    feature: 'L-718',
+    label: 'Every region on it shaped',
+    need: 'shapes',
+    tool: 'set_zones',
+    applies: (world, map) => require('./land').regionsOnMap(world, map.id).length > 0,
+    check: (world, map) => {
+      const land = require('./land');
+      const ids = land.regionsOnMap(world, map.id);
+      const lacking = ids
+        .filter((id) => !land.regionHasShape(world, id))
+        .map((id) => world.regions[id].name || id);
+      if (!lacking.length) return met();
+      const shown = lacking.slice(0, 6).join(', ') + (lacking.length > 6 ? ', …' : '');
+      return {
+        progress: (ids.length - lacking.length) / ids.length,
+        have: ids.length - lacking.length,
+        want: ids.length,
+        lacking,
+        message: `${lacking.length} of the ${ids.length} regions on it have no shape: ${shown}. Give each a zone naming it (set_zones with region).`,
+      };
+    },
+  },
+
   // The world.
+  {
+    // The brief (GR1; L-711): genre, tone, era and art direction, the share
+    // of the four written.
+    id: 'world.brief',
+    kinds: ['world'],
+    weight: WEIGHTS.world.brief,
+    feature: 'L-718',
+    label: 'A brief: genre, tone, era and art direction',
+    need: 'brief',
+    tool: 'update_world',
+    check: (world) => {
+      const brief = require('./brief');
+      const have = brief.briefOf(world) || {};
+      const missing = brief.FIELDS.filter((key) => !have[key]);
+      if (!missing.length) return met();
+      const written = brief.FIELDS.length - missing.length;
+      return {
+        progress: written / brief.FIELDS.length,
+        have: written,
+        want: brief.FIELDS.length,
+        message: written
+          ? `Its brief lacks ${missing.map((key) => brief.LABELS[key]).join(', ')}.`
+          : 'The world has no brief: set its genre, tone, era and art direction with update_world.',
+      };
+    },
+  },
   {
     id: 'world.mapArt',
     kinds: ['world'],
@@ -1203,6 +1369,28 @@ function gradeCharacter(world, character) {
   return result([], own, own.score);
 }
 
+/**
+ * Grades a region map's own land (GR1; L-718): its terrain and its regions'
+ * shapes. Never gated, scored on its own criteria. `world` is the world or its
+ * play shape (./frames.js).
+ */
+function gradeRegionMap(world, map) {
+  if (!isGraded(world)) return EXEMPT;
+  const play = require('./frames').playWorld(world);
+  const own = ownScore(play, 'regionMap', map, LAYER_CHECKS);
+  return result([], own, own.score);
+}
+
+// A region map's score with the land painted on it (QUALITY.regionMap): its
+// places' score, and its own criteria's.
+function withLand(play, mapId, placesScore) {
+  const map = (play.maps || {})[mapId];
+  if (!map) return { score: placesScore, own: null };
+  const own = ownScore(play, 'regionMap', { ...map, id: mapId }, LAYER_CHECKS);
+  const keep = QUALITY.regionMap;
+  return { score: keep.places * placesScore + keep.own * own.score, own };
+}
+
 /** Grades a battle map: never gated, scored on its own criteria. */
 function gradeBattleMap(world, map) {
   if (!isGraded(world)) return EXEMPT;
@@ -1212,7 +1400,7 @@ function gradeBattleMap(world, map) {
 
 /**
  * Grades an entity of a given kind: 'location', 'place', 'faction' (a realm),
- * 'region', 'character' or 'battleMap'.
+ * 'region', 'character', 'battleMap' or 'regionMap'.
  */
 function gradeEntity(world, kind, entity, options) {
   if (kind === 'location') return gradeLocation(world, entity, options);
@@ -1221,6 +1409,7 @@ function gradeEntity(world, kind, entity, options) {
   if (kind === 'region') return gradeDescribed(world, entity, 'region');
   if (kind === 'character') return gradeCharacter(world, entity);
   if (kind === 'battleMap') return gradeBattleMap(world, entity);
+  if (kind === 'regionMap') return gradeRegionMap(world, entity);
   throw new Error(`gradeEntity: can't grade a ${kind}`);
 }
 
@@ -1331,7 +1520,9 @@ function gradeMaps(world, options) {
         weighed += weights.get(l.id);
         sum += weights.get(l.id) * score;
       }
-      const score = round1(weighed ? sum / weighed : 0);
+      // Its places' score, with the land painted on it (L-718).
+      const land = withLand(play, mapId, weighed ? sum / weighed : 0);
+      const score = round1(land.score);
       const open = [...grades.values()].some((g) => rank(g.grade) >= rank('playable'));
       const closed = located.filter((l) => rank(grades.get(l.id).grade) < rank('playable'));
       return {
@@ -1339,9 +1530,10 @@ function gradeMaps(world, options) {
         grade: open ? 'playable' : located.length ? 'stub' : 'unbuilt',
         band: open ? bandOf(score) : located.length ? 'stub' : 'unbuilt',
         score,
-        lacks: located.length
+        lacks: (located.length
           ? closed.slice(0, 3).map((l) => l.name + ': ' + lacksOf(grades.get(l.id)).join(' '))
-          : ['It has no places.'],
+          : ['It has no places.']
+        ).concat(land.own ? land.own.unmet.map((item) => item.message) : []),
         children,
       };
     }
@@ -1480,7 +1672,15 @@ function gradeWorld(world, options) {
     top &&
     Object.entries(play.maps).some(([id, m]) => id !== top && m.kind === 'region' && m.parent);
   const tree = deeper ? gradeMaps(world, options) : null;
-  const placesScore = tree ? tree.score : weighed ? sum / weighed : 0;
+  // Without region maps below the top, the top map's places, with the land
+  // painted on it (L-718).
+  const placesScore = tree
+    ? tree.score
+    : top
+      ? withLand(play, top, weighed ? sum / weighed : 0).score
+      : weighed
+        ? sum / weighed
+        : 0;
   const score = round1(QUALITY.world.places * placesScore + QUALITY.world.own * own.score);
   return {
     graded: true,
@@ -1516,6 +1716,7 @@ module.exports = {
   gradePlace,
   gradeCharacter,
   gradeBattleMap,
+  gradeRegionMap,
   gradeEntity,
   gradeWorld,
   gradeMaps,

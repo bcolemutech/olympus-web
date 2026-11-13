@@ -108,7 +108,7 @@ Publish a draft world to the Loom
 
 **Who can call:** `cartographer` claim
 
-How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, its biggest gaps, and its maps as a tree, each graded by its kind with what it lacks (`maps`; L-905, `grading.js` `gradeMaps`); and its tokens (`tokens`; L-934, `loom-canon/tokens.js` `previewsOf`): for characters and for stat blocks, how many there are and which have a picture (link, crop and, for a character, side, as the Loom draws it) or none, at most 24 of each, shown on the page as a Tokens section
+How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, its biggest gaps, and its maps as a tree, each graded by its kind with what it lacks (`maps`; L-905, `grading.js` `gradeMaps`; a region map also lacks terrain and shaped regions, L-718); and its tokens (`tokens`; L-934, `loom-canon/tokens.js` `previewsOf`): for characters and for stat blocks, how many there are and which have a picture (link, crop and, for a character, side, as the Loom draws it) or none, at most 24 of each, shown on the page as a Tokens section
 
 ## `cartographerTownImage`
 
