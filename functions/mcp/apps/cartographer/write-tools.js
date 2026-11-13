@@ -5,7 +5,18 @@ const artSets = require('../../../loom-canon/art-sets');
 const { FieldValue, FieldPath } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const { normalizeName } = require('../../../loom-turn/interpret');
-const { worldId, entityId, systemId, challenge, triggers, encounters } = require('./schemas');
+const {
+  worldId,
+  entityId,
+  systemId,
+  challenge,
+  triggers,
+  encounters,
+  routeWaypoints,
+  routeRules,
+} = require('./schemas');
+const routeLines = require('../../../loom-canon/routes');
+const { routeInput, extrasAfter } = require('./route-edit');
 const { SOURCES } = require('../../../cartographer/sources');
 const { isPlayable } = require('../../../loom-canon/grading');
 const town = require('../../../loom-canon/town');
@@ -286,6 +297,7 @@ function patcher(e) {
 }
 
 const link = (id) => new FieldPath('geo', 'links', id);
+const routeAt = (id) => new FieldPath('geo', 'routes', id);
 const relation = (id) => new FieldPath('politics', 'relations', id);
 
 // A description set over MCP: the new text if it changed, and the 'mcp' stamp
@@ -577,6 +589,10 @@ function deleteFromDraft(e, kind, entity) {
       if (place.id !== id && (place.connections || []).includes(id)) {
         patch('location', place.id, 'connections', FieldValue.arrayRemove(id));
         patch('location', place.id, link(id), FieldValue.delete());
+        // And the route's line and rules (L-715).
+        if (((place.geo || {}).routes || {})[id]) {
+          patch('location', place.id, routeAt(id), FieldValue.delete());
+        }
       }
     }
     for (const region of Object.values(world.regions || {})) {
@@ -602,6 +618,17 @@ function deleteFromDraft(e, kind, entity) {
       }
       if ((place.rules || {}).hostileToFactionId === id) {
         patch('location', place.id, 'rules.hostileToFactionId', FieldValue.delete());
+      }
+      // Routes hostile to it (L-715).
+      for (const [other, extras] of Object.entries((place.geo || {}).routes || {})) {
+        if (((extras || {}).rules || {}).hostileToFactionId === id) {
+          patch(
+            'location',
+            place.id,
+            new FieldPath('geo', 'routes', other, 'rules', 'hostileToFactionId'),
+            FieldValue.delete()
+          );
+        }
       }
     }
     for (const region of Object.values(world.regions || {})) {
@@ -1188,20 +1215,29 @@ function writeTools({ writer, systems, studio }) {
         '(default road): one pair (fromId, toId, via), or many in one call (links, up to ' +
         MAX_LINKS +
         '). Links are two-way; connecting places that are already linked changes how. A ' +
-        'route’s length comes from the distance between them. A shortcut: these are the top ' +
-        'map’s links (connect_places links places on any map; L-905). ' +
+        'route’s length comes from the distance between them, or, with waypoints (points ' +
+        'it bends through, in order from the first place), from the line through them: ' +
+        'its length × the scale, with no winding factor. It can carry rules too ' +
+        '(requiresAbility, hostileToFactionId), read as a place’s are: a move or journey ' +
+        'along it is refused to a traveller lacking the ability. Connecting again changes ' +
+        'only what you give. A shortcut: these are the top map’s links (connect_places ' +
+        'links places on any map; L-905). ' +
         editNote,
       inputSchema: {
         worldId,
         fromId: entityId('location', 'find_locations').optional(),
         toId: entityId('location', 'find_locations').optional(),
         via: z.enum(LINKS).optional().describe('road, trail or sea (default road).'),
+        waypoints: routeWaypoints.optional(),
+        rules: routeRules.optional(),
         links: z
           .array(
             z.strictObject({
               fromId: entityId('location', 'find_locations'),
               toId: entityId('location', 'find_locations'),
               via: z.enum(LINKS).optional().describe('road, trail or sea (default road).'),
+              waypoints: routeWaypoints.optional(),
+              rules: routeRules.optional(),
             })
           )
           .min(1)
@@ -1218,10 +1254,22 @@ function writeTools({ writer, systems, studio }) {
           throw new ToolError('A link needs both fromId and toId.');
         }
         const wanted = single
-          ? [{ fromId: args.fromId, toId: args.toId, via: args.via }]
+          ? [
+              {
+                fromId: args.fromId,
+                toId: args.toId,
+                via: args.via,
+                waypoints: args.waypoints,
+                rules: args.rules,
+              },
+            ]
           : args.links;
         return edit(ctx, args, (e) => {
           const { world } = e;
+          // The top map's size, for waypoints (L-715).
+          const size = world.map || {};
+          const bounds =
+            size.width && size.height ? { width: size.width, height: size.height } : null;
           // Each pair once: the last one given decides how.
           const pairs = new Map();
           wanted.forEach((l, i) => {
@@ -1229,35 +1277,69 @@ function writeTools({ writer, systems, studio }) {
             if (l.fromId === l.toId) throw new ToolError(`${at}A place can’t connect to itself.`);
             const a = live(world, 'location', l.fromId);
             const b = live(world, 'location', l.toId);
-            pairs.set([a.id, b.id].sort().join('|'), { a, b, via: l.via || 'road' });
+            const key = [a.id, b.id].sort().join('|');
+            // Waypoints run from the first place given; a pair given twice
+            // keeps the last word on how, and adds what each gives.
+            const given = routeInput(world, l, bounds, at);
+            const before = pairs.get(key);
+            const turned = before && before.a.id !== a.id;
+            const kept = before ? before.change : {};
+            const mine =
+              turned && given.waypoints
+                ? { ...given, waypoints: given.waypoints.slice().reverse() }
+                : given;
+            pairs.set(key, {
+              a: before ? before.a : a,
+              b: before ? before.b : b,
+              via: l.via || 'road',
+              change: { ...kept, ...mine, rules: { ...kept.rules, ...mine.rules } },
+            });
           });
-          // One update per place: its new neighbours and how each is linked.
+          // One update per place: its new neighbours, how each is linked, and
+          // each route's line and rules.
           const changes = new Map();
-          const change = (x, y, via) => {
-            if (!changes.has(x.id)) changes.set(x.id, { ids: [], links: [] });
-            changes.get(x.id).ids.push(y.id);
-            changes.get(x.id).links.push(link(y.id), via);
+          const touch = (x) => {
+            if (!changes.has(x.id)) changes.set(x.id, { ids: [], fields: [] });
+            return changes.get(x.id);
           };
           const connections = [];
-          for (const { a, b, via } of pairs.values()) {
+          for (const { a, b, via, change } of pairs.values()) {
             const linked = (x, y) =>
               (x.connections || []).includes(y.id) && ((x.geo || {}).links || {})[y.id] === via;
             if (!(linked(a, b) && linked(b, a))) {
-              change(a, b, via);
-              change(b, a, via);
+              for (const [x, y] of [
+                [a, b],
+                [b, a],
+              ]) {
+                touch(x).ids.push(y.id);
+                touch(x).fields.push(link(y.id), via);
+              }
             }
+            // The route's extras, each end in its own direction.
+            const had = routeLines.extrasOf(world, a, b);
+            const after = extrasAfter(had, change);
+            const stored = (x, y) => ((x.geo || {}).routes || {})[y.id];
+            for (const [x, y, now] of [
+              [a, b, after.a],
+              [b, a, after.b],
+            ]) {
+              if (JSON.stringify(stored(x, y) || null) === JSON.stringify(now)) continue;
+              touch(x).fields.push(routeAt(y.id), now === null ? FieldValue.delete() : now);
+            }
+            const shown = after.a || {};
             connections.push({
               from: { id: a.id, name: a.name },
               to: { id: b.id, name: b.name },
               via,
+              ...(shown.waypoints ? { waypoints: routeLines.pairsOf(shown.waypoints) } : {}),
+              ...(shown.rules ? { rules: shown.rules } : {}),
             });
           }
-          for (const [id, { ids, links }] of changes) {
+          for (const [id, { ids, fields }] of changes) {
             e.update(
               e.ref('locations', id),
-              'connections',
-              FieldValue.arrayUnion(...ids),
-              ...links
+              ...(ids.length ? ['connections', FieldValue.arrayUnion(...ids)] : []),
+              ...fields
             );
           }
           return single ? { connection: connections[0] } : { connections };
@@ -1298,6 +1380,9 @@ function writeTools({ writer, systems, studio }) {
               'connections',
               FieldValue.arrayRemove(y.id),
               link(y.id),
+              FieldValue.delete(),
+              // And the route's line and rules with it (L-715).
+              routeAt(y.id),
               FieldValue.delete()
             );
           }

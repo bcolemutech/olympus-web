@@ -29,6 +29,7 @@
 const levels = require('../loom-canon/levels');
 const frames = require('../loom-canon/frames');
 const travel = require('../loom-canon/travel');
+const routes = require('../loom-canon/routes');
 const clock = require('../loom-canon/clock');
 const town = require('../loom-canon/town');
 const { isPlayable } = require('../loom-canon/grading');
@@ -189,6 +190,8 @@ function cross(world, mapId, fromId, goals, characterState, start) {
     for (const next of (loc && loc.connections) || []) {
       const there = view.locations[next];
       if (!passable(there)) continue;
+      // And the route between has its rules too (L-715).
+      if (routes.missingAbility(view, id, next, characterState)) continue;
       const trip = travel.trip(view, id, next, start + here.seconds);
       const seconds = here.seconds + (trip ? trip.seconds : 0);
       if (best.has(next) && best.get(next).seconds <= seconds) continue;

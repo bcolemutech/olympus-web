@@ -3,6 +3,7 @@
 const { isPlayable, isPlaceOpen } = require('../loom-canon/grading');
 const artSets = require('../loom-canon/art-sets');
 const town = require('../loom-canon/town');
+const routes = require('../loom-canon/routes');
 const maps = require('../loom-canon/maps');
 const mapObjects = require('../loom-canon/objects');
 const mapAreas = require('../loom-canon/map-areas');
@@ -113,6 +114,10 @@ function mapView(canonWorld, save, record, townRecord) {
       if (!shown.has(other) || seen.has(key)) continue;
       seen.add(key);
       const link = { from: id, to: other, via: via[other] || null };
+      // The route's bends, from here to the other (L-715): the world view
+      // draws it along them.
+      const bends = routes.waypointsOf(canonWorld, id, other);
+      if (bends.length) link.waypoints = bends;
       // A route out of here: how long it takes (L-373; game time R3).
       const out = id === save.location ? other : other === save.location ? id : null;
       if (out) link.travel = estimate(canonWorld, save, out);

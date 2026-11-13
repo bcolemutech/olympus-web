@@ -10,6 +10,7 @@ const { turnStateOf, nextTurnState, applyStateMutations } = require('../loom-mod
 const apRules = require('../loom-canon/ap');
 const clock = require('../loom-canon/clock');
 const travel = require('../loom-canon/travel');
+const routes = require('../loom-canon/routes');
 const journeys = require('../loom-canon/journeys');
 const checks = require('../loom-canon/checks');
 const {
@@ -873,6 +874,15 @@ function leavingTown(proposedAction, characterState, canonWorld, found = null) {
   if (required) {
     return {
       result: blocked('You lack what it takes to make that crossing (requires: ' + required + ').'),
+    };
+  }
+  // The route has its own rules, as a place has (L-715; PL7).
+  const routeRequired = routes.missingAbility(canonWorld, currentId, targetId, characterState);
+  if (routeRequired) {
+    return {
+      result: blocked(
+        'You lack what it takes to go that way (the route requires: ' + routeRequired + ').'
+      ),
     };
   }
 
