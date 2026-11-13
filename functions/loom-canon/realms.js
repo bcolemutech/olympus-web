@@ -24,6 +24,7 @@
  *
  *   regionAt(world, mapId, point)   { region, zone } at a point, or null
  *   whereOn(world, mapId, point)    terrain, region, realm and zones there
+ *   whereLine(world, mapId, point, near)  the WHERE line the GM is told (L-716)
  *   regionLand(world, regionId)     [{ mapId, zones: [zoneId] }]
  *   realmLand(world, factionId)     { regions: [regionId], land: [...] }
  *   realmOf(world, regionId)        the region's live realm, or null
@@ -126,6 +127,40 @@ function whereOn(world, mapId, point) {
       ...(z.region ? { region: z.region } : {}),
     })),
   };
+}
+
+/** The first sentence of some text, without its full stop, or ''. */
+function firstSentence(text) {
+  const plain = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
+  const end = plain.search(/[.!?](\s|$)/);
+  const sentence = (end < 0 ? plain : plain.slice(0, end)).trim();
+  return sentence.length > 200 ? sentence.slice(0, 199).trimEnd() + '…' : sentence;
+}
+
+/**
+ * The WHERE line the GM is told every turn (L-716; planning/worlds-without-
+ * azgaar.md §4.6): the terrain, region and realm at a point on a region map,
+ * each by name with the first sentence of its description where it has one
+ * (terrain is named, as a material has no description). Whatever isn't known
+ * there is left out; '' where nothing is (no geometry, or no ground, region
+ * or realm at the point). `near` names the place the point is the position of
+ * when the player is inside it (a town, a battle map): "the land around …".
+ */
+function whereLine(world, mapId, point, near) {
+  if (!world || !mapId || !Array.isArray(point)) return '';
+  const here = whereOn(world, mapId, point);
+  const parts = [];
+  if (here.terrain) parts.push(`terrain: ${here.terrain.name}`);
+  const entity = (kind, found, pool) => {
+    if (!found) return;
+    const about = firstSentence(((world[pool] || {})[found.id] || {}).description);
+    parts.push(`${kind}: ${found.name}${about ? ' — ' + about : ''}`);
+  };
+  entity('region', here.region, 'regions');
+  entity('realm', here.realm, 'factions');
+  if (!parts.length) return '';
+  const lead = near ? `WHERE (the land around ${near}): ` : 'WHERE: ';
+  return lead + parts.join('; ') + '.';
 }
 
 /** A region's land: the zones naming it, by map: [{ mapId, zones: [zoneId] }]. */
@@ -254,6 +289,8 @@ module.exports = {
   PALETTE,
   regionAt,
   whereOn,
+  whereLine,
+  firstSentence,
   regionLand,
   realmLand,
   realmOf,
