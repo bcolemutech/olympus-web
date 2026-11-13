@@ -108,7 +108,7 @@ olympus-web/
 │   ├── cartographer/              # Azgaar parse → map → load, import and publish service
 │   └── mcp/                       # MCP host, OAuth server, registry, apps/ (scriptorium, cartographer)
 ├── tests/                         # Jest suites (rules, Loom, Cartographer, MCP) + fixtures/
-├── scripts/                       # Admin scripts the workflows run (set-admin, seed-categories, studio-generate, migrate-map-levels, convert-map-layers), build-art (the Loom's built-in art, run by hand) and art/ (the game art pipeline: fetch, slice, key, seamless, fit, check, and for art sets webp, atlas and budget, with the size budget in art/budget.cjs; L-944)
+├── scripts/                       # Admin scripts the workflows run (set-admin, seed-categories, studio-generate, migrate-map-levels, convert-map-layers), build-art (the Loom's built-in art, run by hand), azgaar/ (an Azgaar full JSON export → a world's terrain, rivers and province zones, run by Claude; L-717) and art/ (the game art pipeline: fetch, slice, key, seamless, fit, check, and for art sets webp, atlas and budget, with the size budget in art/budget.cjs; L-944)
 ├── planning/                      # Design docs per phase; roadmap.md orders the work
 ├── .github/workflows/             # CI/CD pipelines
 ├── firebase.json                  # Firebase configuration
