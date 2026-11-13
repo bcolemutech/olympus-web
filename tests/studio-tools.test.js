@@ -66,6 +66,8 @@ const library = createLibrary({ db, bucket });
 const costs = createCosts({ db, FieldValue });
 const load = async (at) => (await bucket.file(at).download())[0];
 
+// What studio_import's fake links hold (studio_import, below).
+const REMOTE = {};
 const registry = createRegistry();
 registry.registerApp(
   'cartographer',
@@ -78,6 +80,11 @@ registry.registerApp(
       library: () => library,
       load,
       costs: () => costs,
+      // studio_import's links, served from here: no network in tests.
+      fetchImage: async (url) => {
+        if (REMOTE[url]) return REMOTE[url];
+        throw Object.assign(new Error('The link answered 404.'), { code: 'invalid-argument' });
+      },
     },
   })
 );
@@ -412,6 +419,9 @@ describe('costs (L-706)', () => {
       studio_unassign: { worldId: WORLD, target: 'cover' },
       studio_delete: { imageId: spare.id },
       studio_costs: {},
+      studio_import: {
+        images: [{ data: png(8, 8).toString('base64'), title: 'A dot', kind: 'other' }],
+      },
     };
     const { tools } = await client.listTools();
     const studioNames = tools.map((t) => t.name).filter((n) => n.startsWith('studio_'));
@@ -456,5 +466,87 @@ describe('costs (L-706)', () => {
       expect(cost.warning).toMatch(/WARNING: .*past the \$50\.00 warning figure/);
     }
     expect((await ok('studio_costs', {})).warning).toMatch(/past the/);
+  });
+});
+
+describe('studio_import', () => {
+  const CRAFT = 'https://res.craft.do/user/full/abc/harbour.png';
+
+  test('brings images in by link and by data, kept with where they came from', async () => {
+    REMOTE[`${CRAFT}?token=secret`] = png(320, 200);
+    const out = await ok('studio_import', {
+      images: [
+        {
+          url: `${CRAFT}?token=secret`,
+          title: 'Harbour at dusk',
+          kind: 'scene',
+          labels: ['Craft'],
+        },
+        { data: jpeg(64, 48).toString('base64'), title: 'A face', kind: 'portrait' },
+      ],
+    });
+    expect(out).toMatchObject({ imported: 2, existing: 0, failed: 0 });
+    const [harbour, face] = out.images;
+    expect(harbour.image.id).toMatch(/^img_[0-9a-f]{16}$/);
+    const saved = await record(harbour.image.id);
+    expect(saved).toMatchObject({ title: 'Harbour at dusk', kind: 'scene', labels: ['craft'] });
+    expect(saved.via).toBe('import');
+    // The link is kept without its query, which may hold a key.
+    expect(saved.source).toEqual({ url: CRAFT });
+    expect(saved.versions[0]).toMatchObject({ width: 320, height: 200, format: 'png' });
+    expect((await record(face.image.id)).versions[0].format).toBe('jpeg');
+    expect(out.next).toMatch(/studio_assign/);
+  });
+
+  test('a link imported before returns that image, unless asked again', async () => {
+    const again = await ok('studio_import', {
+      images: [{ url: `${CRAFT}?token=other`, title: 'Harbour again', kind: 'scene' }],
+    });
+    expect(again).toMatchObject({ imported: 0, existing: 1 });
+    expect(again.images[0].image.title).toBe('Harbour at dusk');
+    REMOTE[`${CRAFT}?token=other`] = png(320, 200);
+    const fresh = await ok('studio_import', {
+      images: [{ url: `${CRAFT}?token=other`, title: 'Harbour again', kind: 'scene' }],
+      skipExisting: false,
+    });
+    expect(fresh).toMatchObject({ imported: 1, existing: 0 });
+    expect(fresh.images[0].image.title).toBe('Harbour again');
+  });
+
+  test('each image fails on its own, saying why', async () => {
+    REMOTE['https://example.com/notes.txt'] = Buffer.from('not an image');
+    REMOTE['https://example.com/gate.webp'] = webp(100, 80);
+    const out = await ok('studio_import', {
+      images: [
+        { url: 'https://example.com/gate.webp', title: 'Gate', kind: 'town' },
+        { url: 'https://example.com/notes.txt', title: 'Notes', kind: 'other' },
+        { url: 'https://example.com/missing.png', title: 'Missing', kind: 'other' },
+        { url: 'http://example.com/plain.png', title: 'Plain', kind: 'other' },
+        { url: 'https://169.254.169.254/latest', title: 'Metadata', kind: 'other' },
+        { title: 'Nothing', kind: 'other' },
+        { url: 'https://example.com/gate.webp', data: 'AAAA', title: 'Both', kind: 'other' },
+      ],
+    });
+    expect(out).toMatchObject({ imported: 1, failed: 6 });
+    const errors = Object.fromEntries(out.images.map((r) => [r.title, r.error]));
+    expect(errors.Gate).toBeUndefined();
+    expect(errors.Notes).toMatch(/can’t be used/);
+    expect(errors.Missing).toMatch(/404/);
+    expect(errors.Plain).toMatch(/https/);
+    expect(errors.Metadata).toMatch(/private address/);
+    expect(errors.Nothing).toMatch(/url or its data/);
+    expect(errors.Both).toMatch(/url or its data/);
+  });
+
+  test('refuses a kind outside the list and more than ten at once', async () => {
+    await refused('studio_import', {
+      images: [{ url: CRAFT, title: 'Odd', kind: 'poster' }],
+    });
+    const many = Array.from({ length: 11 }, (_, i) => ({
+      url: `${CRAFT}${i}`,
+      title: `n${i}`,
+      kind: 'other',
+    }));
+    await refused('studio_import', { images: many });
   });
 });

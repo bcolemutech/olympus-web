@@ -5,6 +5,8 @@ const { ToolError } = require('../../registry');
 const { worldId, entityId } = require('./schemas');
 const { KINDS, summary, normalizeLabels } = require('../../../studio/library');
 const { viewLibraryImage } = require('./images');
+const { readImage } = require('../../../studio/formats');
+const fetcher = require('../../../studio/fetch');
 const { TIERS, MODELS, ASPECT_RATIOS, MAX_REFERENCES } = require('../../../studio/config');
 const { FROM_KINDS } = require('../../../studio/jobs');
 const { MAX_NAME, MAX_STYLE_PROMPT, MAX_STYLE_REFERENCES } = require('../../../studio/styles');
@@ -29,6 +31,9 @@ const { MAX_NAME, MAX_STYLE_PROMPT, MAX_STYLE_REFERENCES } = require('../../../s
 // - Styles (L-709 / #545): studio_styles and studio_set_style; a style named
 //   in studio_generate or studio_edit, or a world's default style
 //   (functions/studio/styles.js).
+// - Importing: studio_import brings images already made elsewhere (a Craft
+//   document, a web page) into the library by their link or their data
+//   (functions/studio/fetch.js holds the link to the public web).
 
 const TARGET = z
   .enum(['map', 'cover', 'town', 'battleMap', 'playerToken'])
@@ -106,6 +111,12 @@ const targetId = entityId('settlement or battle map', 'find_locations or list_ba
   );
 
 const readOnly = { readOnlyHint: true, openWorldHint: false };
+
+// studio_import (images already made elsewhere): how many a call, and the
+// largest file sent as base64 data rather than a link.
+const MAX_IMPORT = 10;
+const MAX_DATA_BYTES = 5 * 1024 * 1024;
+const MAX_DATA_CHARS = Math.ceil(MAX_DATA_BYTES / 3) * 4;
 
 // The studio's refusals, as tool errors.
 async function relay(run) {
@@ -255,6 +266,56 @@ function assignTools({ studio }) {
 
 function libraryTools({ studio }) {
   const library = () => studio.library();
+  const fetchImage = studio.fetchImage || fetcher.fetchImage;
+
+  // One image of studio_import: its bytes from its link or its data, checked as
+  // an upload is, and added to the library; a refusal is this image's error.
+  async function importOne(uid, item, skipExisting) {
+    const label = { title: item.title, ...(item.url ? { url: item.url } : {}) };
+    try {
+      if (!item.url === !item.data) {
+        throw new ToolError('Give each image a url or its data, not both.');
+      }
+      let source = null;
+      let bytes;
+      if (item.url) {
+        fetcher.checkUrl(item.url);
+        source = { url: fetcher.sourceOf(item.url) };
+        if (skipExisting) {
+          const found = await library().findBySource(source.url);
+          if (found) return { ...label, existing: true, image: dated(summary(found.id, found)) };
+        }
+        bytes = await fetchImage(item.url);
+      } else {
+        bytes = Buffer.from(item.data, 'base64');
+        if (!bytes.length || bytes.length > MAX_DATA_BYTES) {
+          throw new ToolError('The data must be base64, up to 5 MB.');
+        }
+      }
+      let file;
+      try {
+        file = readImage(bytes);
+      } catch (err) {
+        throw new ToolError(`The image can’t be used: ${err.message}.`);
+      }
+      const record = await library().addImage({
+        title: item.title,
+        kind: item.kind,
+        labels: item.labels,
+        prompt: item.prompt || null,
+        file,
+        createdBy: uid,
+        via: 'import',
+        source,
+      });
+      return { ...label, image: dated(summary(record.id, record)) };
+    } catch (err) {
+      if (err instanceof ToolError || (err && typeof err.code === 'string' && err.message)) {
+        return { ...label, error: err.message };
+      }
+      throw err;
+    }
+  }
   return [
     {
       name: 'studio_find',
@@ -396,6 +457,73 @@ function libraryTools({ studio }) {
             if (changed.length) result.next = 'Check each with view_image.';
           }
           return { image: dated(summary(record.id, record)), ...result };
+        }),
+    },
+    {
+      name: 'studio_import',
+      title: 'Bring images into the library',
+      description:
+        'Add images that already exist elsewhere (a Craft document, a web page) to the image ' +
+        'studio’s library, by their https link, so they needn’t be made again or uploaded by ' +
+        'hand. Up to ' +
+        MAX_IMPORT +
+        ' a call, each with a title and kind; PNG, JPEG, WebP or SVG, judged by the file itself, ' +
+        'up to 30 MB. A small image can be sent as base64 `data` instead of a link. A link ' +
+        'imported before returns that image (existing: true) unless skipExisting is false. ' +
+        'Each image succeeds or fails on its own: the result lists every one, with its id to ' +
+        'use with studio_assign, set_token, set_object_art and the rest. Costs nothing.',
+      inputSchema: {
+        images: z
+          .array(
+            z.object({
+              url: z
+                .string()
+                .max(2000)
+                .optional()
+                .describe('The image’s https link, e.g. a Craft image’s link.'),
+              data: z
+                .string()
+                .max(MAX_DATA_CHARS)
+                .optional()
+                .describe('Or the file itself, base64 (up to 5 MB), when there is no link.'),
+              title: z.string().min(1).max(120).describe('A title.'),
+              kind: KIND,
+              labels: LABELS.optional(),
+              prompt: z
+                .string()
+                .max(4000)
+                .optional()
+                .describe('How it was made, if known: kept with the image for finding it.'),
+            })
+          )
+          .min(1)
+          .max(MAX_IMPORT)
+          .describe('The images to bring in.'),
+        skipExisting: z
+          .boolean()
+          .optional()
+          .describe('Return an image already imported from the same link (true, the default).'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      handler: (ctx, args) =>
+        relay(async () => {
+          const skipExisting = args.skipExisting !== false;
+          const results = [];
+          for (const item of args.images) {
+            results.push(await importOne(ctx.uid, item, skipExisting));
+          }
+          const count = (test) => results.filter(test).length;
+          const body = {
+            imported: count((r) => r.image && !r.existing),
+            existing: count((r) => r.existing),
+            failed: count((r) => r.error),
+            images: results,
+          };
+          if (body.imported || body.existing) {
+            body.next =
+              'Look with studio_get; use with studio_assign, set_token or set_object_art.';
+          }
+          return body;
         }),
     },
     {

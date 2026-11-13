@@ -53,7 +53,7 @@ const KINDS = Object.freeze([
   'other',
 ]);
 // How an image came in; 'fit': cropped or padded to what it is drawn on (L-396).
-const VIAS = Object.freeze(['page', 'mcp', 'upload', 'backfill', 'fit']);
+const VIAS = Object.freeze(['page', 'mcp', 'upload', 'backfill', 'fit', 'import']);
 const LINK_CACHE = 'public, max-age=300';
 const MAX_TITLE = 120;
 const MAX_LABELS = 20;
@@ -269,6 +269,13 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
     return record;
   }
 
+  // The image imported from a link before, if any (studio_import): matched by
+  // the link as kept, without its query.
+  async function findBySource(url) {
+    const snap = await images().where('source.url', '==', String(url)).limit(1).get();
+    return snap.empty ? null : snap.docs[0].data();
+  }
+
   async function getImage(imageId) {
     const snap = await images().doc(String(imageId)).get();
     if (!snap.exists) throw new LibraryError('not-found', `No image "${imageId}" in the library.`);
@@ -441,6 +448,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
     setCurrent,
     updateImage,
     getImage,
+    findBySource,
     search,
     labels,
     deleteImage,
