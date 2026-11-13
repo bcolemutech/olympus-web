@@ -21,6 +21,7 @@
     upload: 'uploaded',
     backfill: 'moved in from a world',
     fit: 'fitted to its map',
+    import: 'imported from a link',
   };
 
   function slug(text) {

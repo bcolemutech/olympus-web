@@ -84,7 +84,7 @@ Play-invented entities
 
 **Access:** `hasApp('cartographer')`, read only
 
-The image studio's library: one record per image, with its kind, labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`)
+The image studio's library: one record per image, with its kind, labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`); `via` says how it came (`page`, `mcp`, `upload`, `backfill`, `fit`, or `import` by `studio_import`, its link without the query at `source.url`)
 
 ## `studio_jobs/{jobId}`
 

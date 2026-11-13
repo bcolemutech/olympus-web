@@ -121,7 +121,7 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 
 ### 4.2 Data
 
-- **`studio_images/{imageId}`:** `{ title, kind, labels[], prompt, model, tier, styleId, from, references[], parentId, current (version number), versions: [{ n, path, width, height, format, bytes, createdAt, createdBy, via, instruction, cost }], usedIn: [{ worldId, target, id }], link, createdBy, via ('page' | 'mcp' | 'upload' | 'backfill'), source, createdAt, updatedAt }`. Versions live on the document (an image has few); `usedIn` is kept up to date by assignment so "in use" (L5) and "worlds used in" (L3) are one read.
+- **`studio_images/{imageId}`:** `{ title, kind, labels[], prompt, model, tier, styleId, from, references[], parentId, current (version number), versions: [{ n, path, width, height, format, bytes, createdAt, createdBy, via, instruction, cost }], usedIn: [{ worldId, target, id }], link, createdBy, via ('page' | 'mcp' | 'upload' | 'backfill' | 'fit' | 'import'), source, createdAt, updatedAt }`. Versions live on the document (an image has few); `usedIn` is kept up to date by assignment so "in use" (L5) and "worlds used in" (L3) are one read.
 - **Files:** `studio/{imageId}/v{n}.{png|jpg|webp|svg}` in the default bucket. A version's file never changes; making a version current moves the link (4.6).
 - **`studio_styles/{styleId}`:** `{ id, name, prompt, references[], createdBy, createdAt, updatedBy, updatedAt }`. A world's default style is `world.studio.styleId`. Names are unique (any case); a style holds at most 3 reference images, so a request keeps room for its own (6 in all). Built in L-709:
   - **Which style:** the one a request names; none when it asks for `"none"`; else, when `studio_generate` is about a world (`from`), that world's default. An edit uses a style only when it names one, and otherwise keeps the image's own look.
@@ -246,6 +246,13 @@ Settled with the user through a questionnaire (2026-10-09), with two follow-ups 
 | `studio_costs`                       | Totals by day, month and who, against the warning figure                                                      |
 
 Uploading stays on the page (S5): binary files don't travel well through a tool call.
+
+**Added 2026-11-13: importing by link.** Building a world from a Craft project needed its images, already made, in the library. Uploading by hand one at a time, or making them again, was the only way. **`studio_import`** brings in up to 10 images a call, each by its https link (or, small ones, as base64 data), with a title and kind:
+
+- **The link is held to the public web** (`functions/studio/fetch.js`): https on the default port, no name and password, every address the host resolves to public (checked when the connection is made, so the metadata server and the private network can't be reached), at most 3 redirects each checked the same way, 30 MB and 20 s.
+- **Judged by its bytes,** as an upload is (`formats.js`), and added with `via: 'import'` and `source.url`, the link without its query (which may hold a key).
+- **A link imported before** returns that image, unless `skipExisting: false`, so a batch can be run again safely.
+- **Each image succeeds or fails on its own,** and the result lists every one with its id or its reason.
 
 **As built (L-703):**
 
