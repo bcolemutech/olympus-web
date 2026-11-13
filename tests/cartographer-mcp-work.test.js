@@ -342,6 +342,7 @@ test('get_location shows the score, band, what it is missing and its weighted ch
     'settlement.description',
     'settlement.loreLinks',
     'settlement.ground',
+    'settlement.region',
   ]);
   expect(place.checklist[0]).toEqual({
     id: 'settlement.residents',
@@ -428,7 +429,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   }
   // Rich already, with only its town's art and ground (L-655) to go.
   const unground = await ok('get_location', { worldId: WORLD, locationId: 'loc_1' });
-  expect(unground.missing.map((item) => item.need)).toEqual(['townArt', 'ground']);
+  expect(unground.missing.map((item) => item.need)).toEqual(['townArt', 'ground', 'region']);
   expect(unground).toMatchObject({ grade: 'playable', band: 'rich' });
   expect(unground.score).toBeGreaterThanOrEqual(40);
   await ok('update_place', {
@@ -455,7 +456,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   expect(built).toMatchObject({ grade: 'playable', band: 'rich' });
   expect(built.score).toBeGreaterThan(unground.score);
   // Town art is what is left of its own: Vivid takes more than this.
-  expect(built.missing.map((item) => item.need)).toEqual(['townArt']);
+  expect(built.missing.map((item) => item.need)).toEqual(['townArt', 'region']);
   const closed = await work({ kind: 'settlement', limit: 1 });
   const list = await work({
     kind: 'settlement',
@@ -463,12 +464,15 @@ test('people, lore and a long description make it Rich; ground raises it', async
   });
   expect(list.completion).toMatchObject({ playable: 0, rich: 1 });
   // What is left for it is town art, in its group with its tool.
-  expect(scoreItems(list).map((g) => g.criterion)).toEqual(['settlement.townArt']);
+  expect(scoreItems(list).map((g) => g.criterion)).toEqual([
+    'settlement.townArt',
+    'settlement.region',
+  ]);
   expect(groupOf(list, 'settlement.townArt')).toMatchObject({
     tool: 'studio_assign',
     entities: [expect.objectContaining({ id: 'loc_1', band: 'rich' })],
   });
-  expect((await work({ band: 'rich', kind: 'settlement' })).total).toBe(1);
+  expect((await work({ band: 'rich', kind: 'settlement' })).total).toBe(2);
 
   const rich = await ok('find_locations', { worldId: WORLD, band: 'rich' });
   expect(rich.locations).toEqual([
@@ -487,7 +491,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   expect(overview).toMatchObject({ score: overview.completion.score, band: 'playable' });
   expect(overview.completion).toMatchObject({
     graded: true,
-    rubricVersion: 13,
+    rubricVersion: 14,
     band: 'playable',
     places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
@@ -496,6 +500,8 @@ test('people, lore and a long description make it Rich; ground raises it', async
   });
   expect(overview.score).toBeGreaterThan(0);
   expect(overview.completion.criteria.map((c) => c.id)).toEqual([
+    // The brief comes first in the registry (L-718).
+    'world.brief',
     'world.mapArt',
     'world.cover',
     'world.lore',
@@ -607,6 +613,7 @@ test('update_region writes a description at last, and grades the region', async 
     'realm.description',
     'realm.lore',
     'realm.people',
+    'realm.land',
   ]);
   expect((await call('update_region', { worldId: WORLD, regionId: 'reg_1' })).isError).toBe(true);
 });

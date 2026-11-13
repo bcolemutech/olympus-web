@@ -46,6 +46,19 @@ const layers = { ...LAYER_CHECKS, town: () => true };
 const criterion = (id) => CRITERIA.find((c) => c.id === id);
 const check = (id, world, entity, kind) => criterion(id).check(world, entity, { kind, layers });
 
+// A region map painted all over, with one region shaped on it (L-718).
+const ALL = { rect: { x: 0, y: 0, w: 1000, h: 1000 } };
+const PAINTED = {
+  id: 'map_world',
+  name: 'The Sea',
+  kind: 'region',
+  space: { width: 1000, height: 1000 },
+  geometry: {
+    ground: [{ id: 'sea', material: 'ocean', shape: ALL }],
+    zones: [{ id: 'county', region: 'reg_1', shape: ALL }],
+  },
+};
+
 const MAP = require('./helpers/grid').gridMap({
   id: 'bm_inn',
   name: 'The inn',
@@ -141,6 +154,16 @@ function world(overrides = {}) {
         placeId: 'plc_inn',
       },
     },
+    // Its brief (L-711) and its land painted (L-718): terrain over the whole
+    // top map, and the one region shaped over it.
+    brief: {
+      genre: 'Pirate fantasy',
+      tone: 'Salt and smoke',
+      era: 'An age of sail',
+      artDirection: 'Inked sea charts',
+    },
+    topMapId: 'map_world',
+    maps: { map_world: PAINTED },
     lore: {
       l_port: { id: 'l_port', title: 'Founding', text: LONG, entityRefs: ['port', 'plc_inn'] },
       l_inn: { id: 'l_inn', title: 'The ale', text: LONG, entityRefs: ['plc_inn', 'chr_mara'] },
@@ -191,7 +214,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(13);
+    expect(RUBRIC_VERSION).toBe(14);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -683,9 +706,12 @@ describe('scores and rollups', () => {
       town: { ground: w.locations.port.town.ground },
     });
     const graded = gradeLocation(port, port.locations.port, { layers });
-    const total = Object.values(WEIGHTS.settlement).reduce((a, b) => a + b, 0);
+    // Its region is a bonus (L-718): over the rest, not part of the total. The
+    // fixture's port sits in a painted region, so it earns it.
+    const { region: bonus, ...rest } = WEIGHTS.settlement;
+    const total = Object.values(rest).reduce((a, b) => a + b, 0);
     expect(graded.ownScore).toBe(
-      Math.round(((total - WEIGHTS.settlement.townArt) / total) * 1000) / 10
+      Math.round(((total - WEIGHTS.settlement.townArt) / total) * 1000) / 10 + bonus
     );
     expect(graded.checklist).toEqual([
       expect.objectContaining({
@@ -799,9 +825,12 @@ describe('the world’s score', () => {
       sum += weights.get(l.id) * gradeLocation(w, l).score;
       weighed += weights.get(l.id);
     }
-    expect(summary.placesScore).toBeCloseTo(sum / weighed, 1);
+    // Its places, with the land painted on its top map (L-718): 80% its
+    // places' average and 20% the map's own score, which is full here.
+    const placesScore = 0.8 * (sum / weighed) + 0.2 * 100;
+    expect(summary.placesScore).toBeCloseTo(placesScore, 1);
     expect(summary.ownScore).toBe(100);
-    expect(summary.score).toBeCloseTo(0.8 * (sum / weighed) + 0.2 * 100, 1);
+    expect(summary.score).toBeCloseTo(0.8 * placesScore + 0.2 * 100, 1);
     expect(summary.band).toBe(bandOf(summary.score));
     // Far, imported, is a closed frontier place: it weighs 3 and scores 0.
     expect(weights.get('far')).toBe(3);

@@ -1,6 +1,6 @@
 # The Cartographer — Worlds Without Azgaar — Design Document v0.2
 
-**Status:** Decided (2026-10-10), refreshed 2026-11-12 (§3). Sub-issues L-711 to L-718 filed as #816–#823 (§6). L-711 (the brief and New world) built 2026-11-12: the BRIEF line is in the narrator's prompt. L-712 (realms, regions and terrain) built 2026-11-12: `add_realms`, `add_regions`, regions' zones, places' region and realm from where they sit, `where`, and `view_image`'s overlays. L-713 (a world's own terrain) built 2026-11-12: `world.materials`, `set_world_materials`, ground checks, `list_materials` with a world, the `material` assigner target, and the painter drawing them. L-714 (realm borders in play) built 2026-11-13: `loomGetMap`'s `map.realms` (each realm's edge with the border between its own regions left out, its land, colour and name's centre; `functions/loom-canon/realm-borders.js`) and the world view drawing a soft inner edge and a name for each, on region maps with no image. L-716 (the GM knows where) built 2026-11-13: a WHERE line in the narrator's message every turn (`realms.whereLine`, `buildWhereSection` in `functions/loom-turn/narrate.js`): terrain, region and realm at the player's place on the lowest region map of their path, inside a town or on a grid that place's own position.
+**Status:** Decided (2026-10-10), refreshed 2026-11-12 (§3). Sub-issues L-711 to L-718 filed as #816–#823 (§6). L-711 (the brief and New world) built 2026-11-12: the BRIEF line is in the narrator's prompt. L-712 (realms, regions and terrain) built 2026-11-12: `add_realms`, `add_regions`, regions' zones, places' region and realm from where they sit, `where`, and `view_image`'s overlays. L-713 (a world's own terrain) built 2026-11-12: `world.materials`, `set_world_materials`, ground checks, `list_materials` with a world, the `material` assigner target, and the painter drawing them. L-714 (realm borders in play) built 2026-11-13: `loomGetMap`'s `map.realms` (each realm's edge with the border between its own regions left out, its land, colour and name's centre; `functions/loom-canon/realm-borders.js`) and the world view drawing a soft inner edge and a name for each, on region maps with no image. L-716 (the GM knows where) built 2026-11-13: a WHERE line in the narrator's message every turn (`realms.whereLine`, `buildWhereSection` in `functions/loom-turn/narrate.js`): terrain, region and realm at the player's place on the lowest region map of their path, inside a town or on a grid that place's own position. L-718 (grading) built 2026-11-13: rubric 14, with a world's brief, a region map's terrain and its regions' shapes, a settlement inside a region and a realm's land (§4.8).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-710 (#524)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4)
@@ -137,6 +137,16 @@ This epic adds the criteria the grading rework planned for it ([`the-loom-gradin
 - **Region map:** terrain covering its land; every region on it with a shape.
 - **Settlement:** inside a region.
 - **Realm:** its land (at least one region with a shape).
+
+**As built (L-718, rubric version 14;** `functions/loom-canon/grading.js`, `land.js`**):**
+
+- **`world.brief`** (weight 20): the share of the four fields written.
+- **`regionMap.terrain`** (60): the share of the map's area under any ground, water counting, sampled on a 48-point grid; full at 95% (`QUALITY.landCover`). Tool `set_ground`.
+- **`regionMap.regions`** (40): every region on the map has a zone naming it, on any map. A region is on the map its places name it on (by hand or from where they sit) and the maps its zones are on; one nothing has placed belongs on the top map. A map with no regions isn't graded on it; `lacking` names the regions. Tool `set_zones`.
+- **A region map's score** is 80% its places' (as before) and 20% its own two criteria (`QUALITY.regionMap`), so the world's score rolls it up through the tree. `gradeMaps` lists what it lacks; `list_work` shows it under `kind: 'map'`.
+- **`settlement.region`** (a bonus of 5, as a token picture is, so the Nisia calibration stands): the settlement is in a live region that has a shape, the region set by hand or taken from its zone.
+- **`realm.land`** (20): one of its live regions has a zone. Tool `set_zones`, or `add_regions` for a realm with none.
+- **A region's shape** is asked of its map, not of the region, so a region's own score is as it was.
 
 ---
 

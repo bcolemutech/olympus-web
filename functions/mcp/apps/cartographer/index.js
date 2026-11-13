@@ -321,7 +321,7 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
             .optional()
             .describe(
               'Only this kind of thing (place: a place in town; faction: a realm; map: a map ' +
-                'made with add_map, still closed, L-905).'
+                'made with add_map, still closed, L-905, and a region map’s painted land, L-718).'
             ),
           grade: z.enum(GRADES).optional().describe('Only things with this grade (the gate).'),
           band: z

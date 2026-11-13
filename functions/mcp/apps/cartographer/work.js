@@ -6,6 +6,7 @@ const {
   gradeEntity,
   gradeCharacter,
   gradeBattleMap,
+  gradeRegionMap,
   gradeWorld,
   gradeMaps,
   placeWeights,
@@ -109,6 +110,23 @@ const HOW_TO = {
   tokens:
     'Give each stat block placed on a battle map a token picture: set_token (target ' +
     'statBlock); `lacking` names them. Make them with studio_generate (from a stat block).',
+  terrain:
+    'Paint the land with set_ground on its region map: terrain areas (grassland, forest, ' +
+    'desert, mountains, ocean, lake, …; list_materials, or the world’s own, ' +
+    'set_world_materials), a later one over an earlier. Water counts. view_image shows what ' +
+    'is still bare; it is covered at 95%.',
+  shapes:
+    'Give each region a shape: set_zones on a region map with `region` naming it ' +
+    '(add_regions makes the regions). `lacking` names the regions with none.',
+  land:
+    'A realm’s land is its regions’ shapes: add_regions with factionId, then give a region a ' +
+    'zone naming it (set_zones).',
+  region:
+    'Put the settlement in a region: shape a region over it (set_zones with region; the ' +
+    'settlement takes it from where it sits), or name one by hand with update_location regionId.',
+  brief:
+    'Set the world’s brief with update_world (brief: genre, tone, era, artDirection): the GM ' +
+    'is told it every turn, and the studio uses the art direction as the world’s style.',
   features: 'Name the features on its battle map (the bar, the altar): set_battle_map.',
   exits: 'Place its battle map’s exits: set_battle_map.',
   faction: 'Give them a realm: update_character with factionId.',
@@ -126,6 +144,7 @@ const NOUNS = {
   place: ['place in town', 'places in town'],
   character: ['character', 'characters'],
   battleMap: ['battle map', 'battle maps'],
+  map: ['region map', 'region maps'],
   faction: ['realm', 'realms'],
   region: ['region', 'regions'],
   world: ['the world', 'the world'],
@@ -314,6 +333,32 @@ function scorable(world, grades) {
       entity: region,
       graded: gradeEntity(world, 'region', region),
       nearness: most(homes.map((l) => l.id)),
+    });
+  }
+  // Region maps (L-718): their terrain and their regions' shapes. A map is as
+  // near play as the place that opens it on the top map; the top map is where
+  // play begins.
+  const frames = require('../../../loom-canon/frames');
+  const mapsOf = frames.playWorld(world);
+  const mapNearness = (id) => {
+    if (id === mapsOf.topMapId) return play;
+    let at = id;
+    for (let hops = 0; hops < 32; hops++) {
+      const parent = (mapsOf.maps[at] || {}).parent;
+      if (!parent) return far;
+      if (parent.mapId === mapsOf.topMapId) return parent.placeId ? weightOf(parent.placeId) : far;
+      at = parent.mapId;
+    }
+    return far;
+  };
+  for (const [id, map] of Object.entries(mapsOf.maps || {})) {
+    if (map.kind !== 'region' || map.retired || map.template || map.instanceOf) continue;
+    out.push({
+      type: 'map',
+      kind: 'map',
+      entity: { id, name: map.name || id },
+      graded: gradeRegionMap(world, { ...map, id }),
+      nearness: mapNearness(id),
     });
   }
   const summary = gradeWorld(world);
