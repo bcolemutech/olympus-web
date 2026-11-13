@@ -5,6 +5,7 @@ const jpeg = require('jpeg-js');
 const { pngDimensions } = require('../../../cartographer/service');
 const { isSvg, normaliseColours } = require('../../../cartographer/svg');
 const mapAreas = require('../../../loom-canon/map-areas');
+const { pairsOf } = require('../../../loom-canon/routes');
 const layerGeometry = require('../../../loom-canon/layer-geometry');
 const { makePainter } = require('./geometry-image');
 const geo = require('../../../loom-canon/map-geometry');
@@ -737,6 +738,33 @@ function renderMap(
     queued.push({ type, info, x, y, shape, colour });
     return 0;
   });
+  // Routes between the map's places (L-715), each along its waypoints, the
+  // bends marked with a small dot.
+  const byId = Object.fromEntries(places.map((p) => [p.id, p]));
+  const drawn = new Set();
+  let routes = 0;
+  places.forEach((p) => {
+    for (const l of p.links || []) {
+      const q = byId[l.placeId];
+      const key = [p.id, l.placeId].sort().join('|');
+      if (!p.at || !q || !q.at || drawn.has(key)) continue;
+      drawn.add(key);
+      routes += 1;
+      const along = [p.at, ...pairsOf(l.waypoints).map(([x, y]) => ({ x, y })), q.at];
+      for (let i = 1; i < along.length; i++) {
+        line(
+          base,
+          along[i - 1].x * k,
+          along[i - 1].y * k,
+          along[i].x * k,
+          along[i].y * k,
+          COLOURS.link,
+          Math.max(2, Math.round(base.width / 400))
+        );
+      }
+      for (const w of along.slice(1, -1)) fillCircle(base, w.x * k, w.y * k, 3, COLOURS.link);
+    }
+  });
   const markers = [];
   places.forEach((p) => {
     if (!p.at) return;
@@ -787,8 +815,10 @@ function renderMap(
         'the deeper; lines are rivers, roads and streets; walls, doors, windows, objects, ' +
         'zones, spawns, lights, notes and hidden things as on a battle map (hidden false ' +
         'draws the map without what is hidden). Each numbered thing says the id to patch it ' +
-        'by (get_geometry, set_ground and the rest).',
+        'by (get_geometry, set_ground and the rest). Pale lines between places are their ' +
+        'routes, bent through their waypoints (a small dot at each bend).',
       geometry: countsOf(geometry),
+      ...(routes ? { routes } : {}),
       ...(under.heights.length ? { heights: under.heights } : {}),
       ...(overlay
         ? {

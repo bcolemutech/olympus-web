@@ -1,6 +1,7 @@
 'use strict';
 
 const travel = require('./travel');
+const routes = require('./routes');
 const town = require('./town');
 const clock = require('./clock');
 const { isPlayable } = require('./grading');
@@ -16,11 +17,15 @@ const { isPlayable } = require('./grading');
  * Pure.
  */
 
-/** Whether a save can make a leg into a settlement: there, open, nothing it lacks. */
-function legOpen(world, state, toId) {
+/**
+ * Whether a save can make a leg from one settlement into the next: there,
+ * open, nothing it lacks, and the route between takes nothing it lacks
+ * (L-715; PL7).
+ */
+function legOpen(world, state, fromId, toId) {
   const to = world.locations[toId];
   if (!to || to.retired || !isPlayable(world, to)) return false;
-  return !town.missingAbility(to, state);
+  return !town.missingAbility(to, state) && !routes.missingAbility(world, fromId, toId, state);
 }
 
 /**
@@ -43,7 +48,7 @@ function routeOf(world, state, fromId, toId) {
     if (here === toId) break;
     done.add(here);
     for (const next of world.locations[here].connections || []) {
-      if (!visited.has(next) || done.has(next) || !legOpen(world, state, next)) continue;
+      if (!visited.has(next) || done.has(next) || !legOpen(world, state, here, next)) continue;
       const leg = travel.trip(world, here, next, clock.START);
       if (!leg) continue;
       const cost = best[here] + leg.seconds;

@@ -10,7 +10,9 @@ const ground = require('../../../loom-canon/ground');
 const town = require('../../../loom-canon/town');
 const { gradeMaps, isGraded } = require('../../../loom-canon/grading');
 const { SOURCES } = require('../../../cartographer/sources');
-const { worldId, entityId } = require('./schemas');
+const { worldId, entityId, routeWaypoints, routeRules } = require('./schemas');
+const { routeInput, extrasAfter } = require('./route-edit');
+const { pairsOf } = require('../../../loom-canon/routes');
 const mapTools = require('./map-tools');
 const { GROUND_SHAPES, withoutBlanks } = require('./town-tools');
 
@@ -108,7 +110,16 @@ function placeRow(model, id) {
     ...(p.entrance ? { wayInAndOut: true } : {}),
     ...(isObject(p.opens) ? { opens: p.opens.mapId || p.opens.template } : {}),
     ...((p.links || []).length
-      ? { links: p.links.map((l) => ({ placeId: l.placeId, kind: l.kind || null })) }
+      ? {
+          links: p.links.map((l) => ({
+            placeId: l.placeId,
+            kind: l.kind || null,
+            ...(Array.isArray(l.waypoints) && l.waypoints.length
+              ? { waypoints: pairsOf(l.waypoints) }
+              : {}),
+            ...(l.rules && Object.keys(l.rules).length ? { rules: l.rules } : {}),
+          })),
+        }
       : {}),
     ...((p.exits || []).length ? { exits: p.exits } : {}),
     ...(p.retired ? { retired: true } : {}),
@@ -190,10 +201,19 @@ function addPlacesTo(e, mapId, list) {
   const docs = {};
   const back = [];
   for (const { id, item } of made) {
-    const links = (item.links || []).map((l) => ({
-      placeId: resolve(typeof l === 'string' ? l : l.to),
-      kind: (typeof l === 'string' ? null : l.kind) || null,
-    }));
+    // Each link with its route's line and rules (L-715), and the other end's
+    // copy, the line turned round.
+    const bounds = width && height ? { width, height } : null;
+    const links = [];
+    const returns = [];
+    for (const l of item.links || []) {
+      const placeId = resolve(typeof l === 'string' ? l : l.to);
+      const kind = (typeof l === 'string' ? null : l.kind) || null;
+      const given = typeof l === 'string' ? {} : routeInput(world, l, bounds, `"${item.name}": `);
+      const { a, b } = extrasAfter(null, given);
+      links.push({ placeId, kind, ...(a || {}) });
+      returns.push({ placeId: id, kind, ...(b || {}) });
+    }
     docs[id] = {
       id,
       mapId,
@@ -211,7 +231,7 @@ function addPlacesTo(e, mapId, list) {
     if (item.fill && !map.template) {
       throw new ToolError('Fill tables go on a template’s places (add_map with template).');
     }
-    for (const l of links) back.push([l.placeId, { placeId: id, kind: l.kind }]);
+    links.forEach((l, i) => back.push([l.placeId, returns[i]]));
   }
   // Links both ways: on places of this call, and on those already there.
   for (const [to, link] of back) {
@@ -259,6 +279,8 @@ const linkTo = z.union([
       .max(80)
       .describe('A place on the map, by id, or by name in this call.'),
     kind: z.string().regex(ROUTE).optional().describe('The route kind: road, sea, jump, …'),
+    waypoints: routeWaypoints.optional(),
+    rules: routeRules.optional(),
   }),
 ]);
 const newPlace = z.strictObject({

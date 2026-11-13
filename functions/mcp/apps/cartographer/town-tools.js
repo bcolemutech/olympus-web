@@ -7,7 +7,9 @@ const { normalizeName } = require('../../../loom-turn/interpret');
 const town = require('../../../loom-canon/town');
 const ground = require('../../../loom-canon/ground');
 const { SOURCES } = require('../../../cartographer/sources');
-const { worldId, entityId, encounters } = require('./schemas');
+const { worldId, entityId, encounters, routeWaypoints, routeRules } = require('./schemas');
+const { routeInput, extrasAfter } = require('./route-edit');
+const { pairsOf } = require('../../../loom-canon/routes');
 const views = require('./views');
 const { helpers } = require('./write-tools');
 
@@ -436,6 +438,15 @@ function townTools({ writer }) {
           .regex(/^[a-z][a-z-]{0,23}$/)
           .optional()
           .describe('For places on a region map (L-905): the route kind, e.g. jump.'),
+        waypoints: routeWaypoints
+          .optional()
+          .describe(
+            'For places on a region map (L-715): points the route bends through, in order from ' +
+              'fromId, inside the map. The route is drawn along them and its length is the line’s.'
+          ),
+        rules: routeRules
+          .optional()
+          .describe('For places on a region map (L-715): rules on the route, as on a place.'),
       },
       annotations: replacing,
       handler: (ctx, args) =>
@@ -455,12 +466,19 @@ function townTools({ writer }) {
             if (a.mapId !== b.mapId) {
               throw new ToolError('Links stay on one map: use add_exit between maps.');
             }
-            for (const [x, id, other] of [
-              [a, args.fromId, args.toId],
-              [b, args.toId, args.fromId],
+            // The route's line and rules (L-715): waypoints inside the map, from
+            // fromId; what isn't given stays as it was.
+            const space = ((world.maps || {})[a.mapId] || {}).space || {};
+            const bounds = space.width && space.height ? space : null;
+            const given = routeInput(world, args, bounds);
+            const had = (a.links || []).find((l) => l.placeId === args.toId) || {};
+            const { a: mine, b: theirs } = extrasAfter(had, given);
+            for (const [x, id, other, extras] of [
+              [a, args.fromId, args.toId, mine],
+              [b, args.toId, args.fromId, theirs],
             ]) {
               const links = (x.links || []).filter((l) => l.placeId !== other);
-              links.push({ placeId: other, kind: args.kind || null });
+              links.push({ placeId: other, kind: args.kind || null, ...(extras || {}) });
               e.update(e.ref('places', id), 'links', links);
             }
             return {
@@ -469,6 +487,8 @@ function townTools({ writer }) {
                 to: { id: args.toId, name: b.name },
                 mapId: a.mapId,
                 ...(args.kind ? { kind: args.kind } : {}),
+                ...(mine && mine.waypoints ? { waypoints: pairsOf(mine.waypoints) } : {}),
+                ...(mine && mine.rules ? { rules: mine.rules } : {}),
               },
             };
           }

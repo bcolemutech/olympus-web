@@ -181,7 +181,16 @@
     };
   }
 
-  var line = Loom.draw.line;
+  var polyline = Loom.draw.polyline;
+
+  // The points a route runs through, in map units: its first place, its
+  // waypoints (L-715) and its second place.
+  function routePoints(link, a, b) {
+    var through = (link.waypoints || []).map(function (w) {
+      return { x: w[0], y: w[1] };
+    });
+    return [{ x: a.x, y: a.y }].concat(through, [{ x: b.x, y: b.y }]);
+  }
 
   function radiusOf(p) {
     return p.capital ? 5 : p.kind === 'settlement' ? 4 : 3;
@@ -439,16 +448,16 @@
       var a = byId[link.from];
       var b = byId[link.to];
       if (!a || !b) return;
-      line(g, screen(a), screen(b));
-      g.stroke({ width: 5.5, color: COLOURS.casing, alpha: 0.55, cap: 'round' });
+      polyline(g, routePoints(link, a, b).map(screen));
+      g.stroke({ width: 5.5, color: COLOURS.casing, alpha: 0.55, cap: 'round', join: 'round' });
     });
     data.links.forEach(function (link) {
       var a = byId[link.from];
       var b = byId[link.to];
       if (!a || !b) return;
       var via = COLOURS[link.via] ? link.via : 'road';
-      line(g, screen(a), screen(b), DASHES[via]);
-      g.stroke({ width: 3, color: COLOURS[via], cap: 'round' });
+      polyline(g, routePoints(link, a, b).map(screen), DASHES[via]);
+      g.stroke({ width: 3, color: COLOURS[via], cap: 'round', join: 'round' });
     });
 
     // Pins, quiet (A2).
@@ -503,14 +512,20 @@
       var a = placeById(link.from);
       var b = placeById(link.to);
       if (!a || !b || typeof a.x !== 'number' || typeof b.x !== 'number') return;
-      var s = M.toScreen(view, a.x, a.y);
-      var t = M.toScreen(view, b.x, b.y);
-      var dx = t.x - s.x;
-      var dy = t.y - s.y;
-      var len2 = dx * dx + dy * dy || 1;
-      var k = Math.max(0, Math.min(1, ((point.x - s.x) * dx + (point.y - s.y) * dy) / len2));
-      var d = Math.hypot(point.x - (s.x + k * dx), point.y - (s.y + k * dy));
-      if (d <= ROUTE_HIT && (!best || d < best.d)) best = { link: link, d: d };
+      // Every leg of the route, along its waypoints (L-715).
+      var pts = routePoints(link, a, b).map(function (p) {
+        return M.toScreen(view, p.x, p.y);
+      });
+      for (var i = 1; i < pts.length; i++) {
+        var s = pts[i - 1];
+        var t = pts[i];
+        var dx = t.x - s.x;
+        var dy = t.y - s.y;
+        var len2 = dx * dx + dy * dy || 1;
+        var k = Math.max(0, Math.min(1, ((point.x - s.x) * dx + (point.y - s.y) * dy) / len2));
+        var d = Math.hypot(point.x - (s.x + k * dx), point.y - (s.y + k * dy));
+        if (d <= ROUTE_HIT && (!best || d < best.d)) best = { link: link, d: d };
+      }
     });
     return best ? best.link : null;
   }

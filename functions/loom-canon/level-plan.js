@@ -54,6 +54,15 @@ const GRID_LAYERS = [
 ];
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+// A route's line and rules (L-715), carried onto the place's link.
+const routeExtras = (extras) => ({
+  ...(extras && Array.isArray(extras.waypoints) && extras.waypoints.length
+    ? { waypoints: extras.waypoints }
+    : {}),
+  ...(extras && isObject(extras.rules) && Object.keys(extras.rules).length
+    ? { rules: extras.rules }
+    : {}),
+});
 const has = (v) => v !== undefined && v !== null;
 const pick = (from, keys) =>
   Object.fromEntries(keys.filter((k) => has(from[k])).map((k) => [k, from[k]]));
@@ -138,7 +147,7 @@ function plan(raw) {
       ...(has(loc.description) ? { description: loc.description } : {}),
       ...(Number.isFinite(geo.x) && Number.isFinite(geo.y) ? { at: { x: geo.x, y: geo.y } } : {}),
       links: Object.entries(geo.links || {})
-        .map(([placeId, kind]) => ({ placeId, kind }))
+        .map(([placeId, kind]) => ({ placeId, kind, ...routeExtras((geo.routes || {})[placeId]) }))
         .sort((a, b) => a.placeId.localeCompare(b.placeId)),
       ...(hasTown
         ? { opens: { mapId: townMapId(id) } }

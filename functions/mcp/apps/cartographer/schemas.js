@@ -1,6 +1,7 @@
 'use strict';
 
 const { z } = require('zod');
+const { MAX_WAYPOINTS, MAX_ABILITY } = require('../../../loom-canon/routes');
 
 // Input schemas shared by the Cartographer's read and write tools.
 
@@ -87,4 +88,43 @@ const encounters = z
       '[] removes the table.'
   );
 
-module.exports = { worldId, entityId, systemId, challenge, triggers, encounters };
+// A route's line and rules (L-715; planning/worlds-without-azgaar.md §4.5).
+const routeWaypoints = z
+  .array(z.tuple([z.number(), z.number()]))
+  .max(MAX_WAYPOINTS)
+  .describe(
+    'Points [x, y] the route bends through, in order from the first place to the second, in ' +
+      'the map’s units and inside the map. The route is drawn along them and its length is ' +
+      'the line’s length × the scale (no winding factor). [] takes them away; leave it out to ' +
+      'keep them.'
+  );
+const routeRules = z
+  .strictObject({
+    requiresAbility: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_ABILITY)
+      .nullable()
+      .optional()
+      .describe('An ability needed to take this route, e.g. "swimmer" for a ford.'),
+    hostileToFactionId: entityId('faction', 'get_world')
+      .nullable()
+      .optional()
+      .describe('A realm this route is hostile to.'),
+  })
+  .describe(
+    'Rules on the route, read as a place’s are: a move or journey along it is refused when the ' +
+      'traveller lacks the ability. A rule set to null is removed; others are left unchanged.'
+  );
+
+module.exports = {
+  worldId,
+  entityId,
+  systemId,
+  challenge,
+  triggers,
+  encounters,
+  routeWaypoints,
+  routeRules,
+};

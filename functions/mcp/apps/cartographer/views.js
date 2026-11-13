@@ -61,6 +61,18 @@ function fold(text) {
     .trim();
 }
 
+// A route's waypoints and rules, when it has them (L-715), as seen from `from`.
+function routeExtrasOf(world, from, toId) {
+  const there = world.locations[toId];
+  if (!there) return {};
+  const waypoints = routes.waypointsOf(world, from, there);
+  const rules = routes.rulesOf(world, from, there);
+  return {
+    ...(waypoints.length ? { waypoints } : {}),
+    ...(Object.keys(rules).length ? { rules } : {}),
+  };
+}
+
 function ref(collection, id, label = 'name') {
   if (!id) return null;
   const entity = collection[id];
@@ -410,11 +422,14 @@ function locationDetail(world, location) {
   }
   if (geo.realmFrom === 'region') result.factionsFrom = 'region';
   // Each route's length in miles (L-372): the map's straight line, scaled,
-  // × 1.25 for winding (loom-canon/routes.js); null without positions.
+  // × 1.25 for winding, or the length of its waypoints' line with none
+  // (L-715; loom-canon/routes.js); null without positions. Its waypoints and
+  // rules when it has them.
   result.connections = (location.connections || []).map((id) => ({
     ...ref(world.locations, id),
     via: links[id] || null,
     miles: routes.roundMiles(routes.routeMiles(world, location, world.locations[id])),
+    ...routeExtrasOf(world, location, id),
     direction: bearing(location, world.locations[id] || {}).direction,
     ...(world.locations[id]
       ? (({ grade, band }) => ({ grade, band }))(gradeLocation(world, world.locations[id]))

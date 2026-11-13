@@ -84,11 +84,26 @@ function below(play, id, place) {
   return { ...map, id: place.opens.mapId || place.opens.template };
 }
 
+// What a link holds besides its kind (L-715): its waypoints and rules.
+function routeExtras(link) {
+  const out = {};
+  if (Array.isArray(link.waypoints) && link.waypoints.length) out.waypoints = link.waypoints;
+  if (isObject(link.rules) && Object.keys(link.rules).length) out.rules = link.rules;
+  return Object.keys(out).length ? out : null;
+}
+
 // A region map's place as today's rules read a location.
 function asLocation(play, id, place) {
   const under = below(play, id, place);
   const links = {};
-  for (const l of place.links || []) if (l && l.placeId) links[l.placeId] = l.kind || null;
+  // A route's line and rules (L-715), as a legacy place keeps them.
+  const routes = {};
+  for (const l of place.links || []) {
+    if (!l || !l.placeId) continue;
+    links[l.placeId] = l.kind || null;
+    const extras = routeExtras(l);
+    if (extras) routes[l.placeId] = extras;
+  }
   const kind = under && under.kind === 'area' ? 'settlement' : place.kind || 'place';
   return {
     ...place,
@@ -100,6 +115,7 @@ function asLocation(play, id, place) {
       ...(point(place.at) ? { x: place.at.x, y: place.at.y } : {}),
       kind,
       links,
+      ...(Object.keys(routes).length ? { routes } : {}),
     },
     connections: Object.keys(links),
     npcIds: place.npcIds || [],
@@ -168,6 +184,17 @@ function symmetric(byId) {
       if (!there || !there.native || there.connections.includes(id)) continue;
       there.connections.push(id);
       there.geo.links[id] = loc.geo.links[other] || null;
+      // Its line and rules too, the line turned round (L-715).
+      const extras = (loc.geo.routes || {})[other];
+      if (extras) {
+        there.geo.routes = {
+          ...(there.geo.routes || {}),
+          [id]: {
+            ...extras,
+            ...(extras.waypoints ? { waypoints: extras.waypoints.slice().reverse() } : {}),
+          },
+        };
+      }
     }
   }
   for (const loc of Object.values(byId)) {
