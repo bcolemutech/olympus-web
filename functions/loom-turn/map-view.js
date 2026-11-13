@@ -13,6 +13,7 @@ const { knownMap, artLink, drawnGeometry } = require('./known-map');
 const tokens = require('../loom-canon/tokens');
 const sight = require('../loom-canon/sight');
 const levels = require('../loom-canon/levels');
+const realmBorders = require('../loom-canon/realm-borders');
 const { walksTown, townPlanOf, streetOf } = require('./town-steps');
 const ground = require('../loom-canon/ground');
 const artOf = require('../loom-canon/art');
@@ -120,6 +121,7 @@ function mapView(canonWorld, save, record, townRecord) {
   }
 
   const map = canonWorld.map;
+  const mapImage = map && map.width ? artOf.forPlayer(artOf.worldMapArt(canonWorld)) : null;
   // The art set its maps are drawn with (L-944), on each level's data.
   const artSet = artSets.setFor(canonWorld).name;
   // The world's own ground, art as links (L-713), on each level's data.
@@ -178,12 +180,15 @@ function mapView(canonWorld, save, record, townRecord) {
             width: map.width,
             height: map.height,
             // Its art (L-704): a library image's link, or an older path.
-            image: artOf.forPlayer(artOf.worldMapArt(canonWorld)),
+            image: mapImage,
             // A world made from scratch (L-391): its plain colour, under any art.
             ...(map.backdrop ? { backdrop: map.backdrop } : {}),
             // The region map's own geometry, whole (L-924), and its space,
             // for drawing it under the places.
             ...regionDrawing(canonWorld),
+            // Who holds the land (L-714; R8): each realm's edge, its colour
+            // and name, on a map with no image of its own.
+            ...(mapImage ? {} : realmsDrawing(canonWorld)),
           }
         : null,
   };
@@ -197,6 +202,15 @@ function regionDrawing(canonWorld) {
   const geometry = region ? drawnGeometry(region.geometry) : null;
   if (!geometry || !region.space) return {};
   return { geometry, space: { width: region.space.width, height: region.space.height } };
+}
+
+// The realms' borders on the region map the view shows (L-714; worlds-
+// without-azgaar.md §4.4), or nothing: `{ realms: [{ id, name, colour,
+// outlines, land, centre }] }` (../loom-canon/realm-borders.js).
+function realmsDrawing(canonWorld) {
+  const id = canonWorld.frame && canonWorld.frame.mapId;
+  const realms = id ? realmBorders.bordersOn(canonWorld, id) : [];
+  return realms.length ? { realms } : {};
 }
 
 // The level-up offer kept on the save (L-843's levelOffer), or null.
