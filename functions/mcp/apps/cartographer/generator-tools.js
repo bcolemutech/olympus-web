@@ -37,6 +37,9 @@ const KIND_WORDS = {
   caves: 'a cave, its walls at angles, with side passages and rock pillars',
   interior: 'a building’s ground floor in its street, rooms with a door between each',
   deck: 'a ship’s deck: sailing (a wooden deck in the sea) or starship (a metal hull)',
+  wilds:
+    'the wilderness for an event on the way: a terrain (a ground material) and a scene, ' +
+    generators.SCENES.join(', '),
 };
 
 function generatorTools({ writer }) {
@@ -64,8 +67,17 @@ function generatorTools({ writer }) {
         sizes +
         ', at most 64. Leave out mapId to make a new map; give it to replace that map’s grid ' +
         '(players forget what they had seen of it, as with set_battle_map). Assign it with ' +
-        'assign_battle_map. Works on drafts and published worlds; a change to a published ' +
-        'world reaches games on their next turn.',
+        'assign_battle_map. A wilds map (L-365) is open country: its terrain (' +
+        generators.TERRAINS.join(', ') +
+        ') is its ground, with patches of a neighbour; its scene (clearing, forest-track, ford, ' +
+        'ridge, marsh-path or ruins; by default its terrain’s likeliest) its shape: trees, ' +
+        'bushes, rocks and fallen logs, a path or track, a river crossed only at its ford, a ' +
+        'ridge’s slope and cliff, a marsh’s pools, broken walls. It has a way in and an exit on ' +
+        'two or three edges, each reaching the others, three-square spawn areas (spawn-1…) away ' +
+        'from them, and its scene’s zone (clearing, track, ford, ridge, cliff-foot, causeway, ' +
+        'ruins); no lights but a campfire’s. It is made generic for its scene and terrain ' +
+        '(generic: { kind: scene, terrain }) unless you say otherwise. Works on drafts and ' +
+        'published worlds; a change to a published world reaches games on their next turn.',
       inputSchema: {
         worldId,
         mapId: entityId('battle map', 'list_battle_maps')
@@ -83,6 +95,14 @@ function generatorTools({ writer }) {
           .enum(generators.STYLES.deck)
           .optional()
           .describe('A deck’s: sailing (the default) or starship.'),
+        terrain: z
+          .enum(generators.TERRAINS)
+          .optional()
+          .describe('A wilds map’s ground: grass by default.'),
+        scene: z
+          .enum(generators.SCENES)
+          .optional()
+          .describe('A wilds map’s scene: by default its terrain’s likeliest.'),
         generic: mapTools.shapes.generic.nullable().optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -95,6 +115,8 @@ function generatorTools({ writer }) {
             width: args.width,
             height: args.height,
             style: args.style,
+            terrain: args.terrain,
+            scene: args.scene,
           });
         } catch (err) {
           throw new ToolError(err.message);
@@ -125,14 +147,21 @@ function generatorTools({ writer }) {
             kind: made.kind,
             seed: made.seed,
             ...(made.style ? { style: made.style } : {}),
+            ...(made.scene ? { terrain: made.terrain, scene: made.scene } : {}),
             version: generators.VERSION,
           };
+          // A wilds map serves any place of its scene and terrain (EV5).
+          const ownGeneric = made.scene ? { kind: made.scene, terrain: made.terrain } : null;
           const doc = {
             id,
             ...mapTools.stored(def),
             image: before ? before.image || null : null,
             generic:
-              args.generic === undefined ? (before ? before.generic || null : null) : args.generic,
+              args.generic === undefined
+                ? before
+                  ? before.generic || ownGeneric
+                  : ownGeneric
+                : args.generic,
             sources: { map: 'mcp', generated },
             // A replaced grid is a new map to players (loom-turn/seen.js).
             ...(before ? { revision: (before.revision || 0) + 1 } : {}),
@@ -148,6 +177,7 @@ function generatorTools({ writer }) {
               Object.entries(def.geometry).map(([k, list]) => [k, list.length])
             ),
             rooms: (def.geometry.zones || []).map((z) => z.id),
+            ...(made.scene ? { spawns: (def.geometry.spawns || []).map((sp) => sp.id) } : {}),
             entries: made.entries,
             exits: made.exits,
             next:

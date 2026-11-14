@@ -3,7 +3,7 @@
 /**
  * Seeded map generators (planning/maps-from-data.md §4.8, AU2; L-929 /
  * #733): a first draft of a grid battle map, for Claude to name and edit with
- * the patch tools. Four kinds:
+ * the patch tools. Five kinds:
  *
  *   rooms     rooms and corridors cut into rock: a dungeon
  *   caves     a cave grown by a cellular automaton, its walls traced at angles
@@ -14,6 +14,11 @@
  *             'starship' (a metal hull, a corridor down its spine,
  *             compartments either side, an engine room, a bridge in the bow,
  *             an airlock to a docking tube)
+ *   wilds     open country for an event on the way (L-365; planning/off-road-
+ *             travel.md §4.6): a `terrain` (TERRAINS, outdoor grounds) and a
+ *             `scene` (SCENES: clearing, forest-track, ford, ridge,
+ *             marsh-path, ruins), entries and exits on two or three edges,
+ *             spawn areas; see "The wilds" below
  *
  * Seeded (decided with the user 2026-11-06): the same kind, seed, size and
  * style always give the same map (a seeded generator, never Math.random).
@@ -31,12 +36,13 @@
  * (`problems`). The generators check their own output and leave out
  * furniture that would block the way; the tests check a set of seeds.
  *
- *   generate(kind, { seed, width, height, style })
- *       { kind, seed, style?, width, height, geometry, entries, exits,
+ *   generate(kind, { seed, width, height, style, terrain, scene })
+ *       { kind, seed, style? | terrain and scene, width, height, geometry, entries, exits,
  *         features, rooms, floor } (`floor`: the squares that should be
  *         walkable, by "x,y", for `problems`; not stored)
  *   problems(map, { floor })   what keeps a map from being playable
- *   KINDS, STYLES, SIZES (each kind's default and smallest), VERSION
+ *   KINDS, STYLES, SIZES (each kind's default and smallest), SCENES,
+ *   TERRAINS, DEFAULT_SCENE (a terrain's scene when none is asked), VERSION
  *
  * Pure.
  */
@@ -48,13 +54,14 @@ const materials = require('./materials');
 const FEET = 5;
 const VERSION = 1;
 const MAX_SIDE = 64;
-const KINDS = ['rooms', 'caves', 'interior', 'deck'];
+const KINDS = ['rooms', 'caves', 'interior', 'deck', 'wilds'];
 const STYLES = { deck: ['sailing', 'starship'] };
 const SIZES = {
   rooms: { width: 32, height: 32, min: { width: 16, height: 16 } },
   caves: { width: 32, height: 32, min: { width: 16, height: 16 } },
   interior: { width: 24, height: 18, min: { width: 12, height: 10 } },
   deck: { width: 36, height: 16, min: { width: 20, height: 12 } },
+  wilds: { width: 30, height: 30, min: { width: 16, height: 16 } },
 };
 
 // ── Seeded randomness ──────────────────────────────────────────────────
@@ -1610,16 +1617,774 @@ function deck(r, W, H, style) {
   };
 }
 
+// ── The wilds ──────────────────────────────────────────────────────────
+
+// A wilderness battle map (planning/off-road-travel.md §4.6, EV5; L-365 /
+// #839): open ground in a terrain, for an event on the way to be played on.
+// The scenes, each a different shape of the same country:
+//
+//   clearing      an open glade with the trees (or rocks) thick round it
+//   forest-track  a cart track between close trees, fallen logs beside it
+//   ford          a river nobody crosses but at its ford, shallow water
+//   ridge         a ridge across the map, a slope up one side and a cliff
+//                 down the other, its heights the ground's own
+//   marsh-path    a causeway through marsh, shallow pools and deep ones
+//   ruins         broken walls of an old building the way runs through
+//
+// It is built in a frame where the way runs west to east and turned at the
+// end when it runs north to south, so a map is either. Every blocking thing
+// keeps a walker's gap from every other, the map's edge, water nobody
+// crosses, a ledge and a wall, so nothing shuts a square in; nothing at all
+// stands on the way, at an entry or in a spawn area.
+
+const SCENES = ['clearing', 'forest-track', 'ford', 'ridge', 'marsh-path', 'ruins'];
+
+// Each terrain a map is made for: its floor (the terrain's own ground; a
+// taiga's own picture is treetops seen from a height, so its floor is the
+// tundra under them), the grounds of its patches, the way's bed, how thick
+// its trees, bushes, rocks and fallen logs stand (0 none, 1 a forest's), and
+// whether it is wet ground.
+function terrain(floor, patches, bed, trees, bushes, rocks, logs, wet) {
+  return { floor, patches, bed, trees, bushes, rocks, logs, wet: Boolean(wet) };
+}
+const TERRAINS = {
+  grass: terrain('grass', ['dirt', 'grassland'], 'dirt', 0.35, 0.45, 0.15, 0.2),
+  grassland: terrain('grassland', ['grass', 'dirt'], 'dirt', 0.25, 0.4, 0.15, 0.1),
+  farmland: terrain('farmland', ['grass', 'dirt'], 'dirt', 0.15, 0.3, 0.1, 0.1),
+  savanna: terrain('savanna', ['dirt', 'sand'], 'dirt', 0.2, 0.35, 0.3, 0.1),
+  forest: terrain('forest', ['grass', 'dirt'], 'dirt', 1, 0.6, 0.2, 0.6),
+  jungle: terrain('jungle', ['mud', 'grass'], 'mud', 1, 0.9, 0.1, 0.5),
+  taiga: terrain('tundra', ['snow', 'forest'], 'dirt', 0.9, 0.3, 0.3, 0.4),
+  hills: terrain('hills', ['grass', 'gravel'], 'dirt', 0.25, 0.4, 0.6, 0.1),
+  mountains: terrain('mountains', ['gravel', 'snow'], 'gravel', 0.08, 0.1, 1, 0),
+  desert: terrain('desert', ['sand', 'gravel'], 'sand', 0, 0.12, 0.5, 0),
+  sand: terrain('sand', ['desert', 'gravel'], 'gravel', 0, 0.12, 0.4, 0),
+  tundra: terrain('tundra', ['snow', 'gravel'], 'gravel', 0.08, 0.2, 0.5, 0.05),
+  snow: terrain('snow', ['ice', 'tundra'], 'gravel', 0.08, 0.1, 0.4, 0.05),
+  glacier: terrain('glacier', ['snow', 'ice'], 'snow', 0, 0, 0.4, 0),
+  swamp: terrain('swamp', ['mud', 'marsh'], 'mud', 0.45, 0.6, 0, 0.4, true),
+  marsh: terrain('marsh', ['mud', 'grass'], 'mud', 0.15, 0.5, 0, 0.2, true),
+  dirt: terrain('dirt', ['grass', 'gravel'], 'gravel', 0.2, 0.3, 0.3, 0.1),
+  mud: terrain('mud', ['dirt', 'marsh'], 'dirt', 0.2, 0.4, 0.1, 0.2, true),
+  gravel: terrain('gravel', ['dirt', 'rock'], 'dirt', 0.05, 0.15, 0.6, 0),
+};
+const TERRAIN_IDS = Object.keys(TERRAINS);
+// The scene a terrain's map is when none is asked for.
+const DEFAULT_SCENE = {
+  forest: 'forest-track',
+  jungle: 'forest-track',
+  taiga: 'forest-track',
+  hills: 'ridge',
+  mountains: 'ridge',
+  swamp: 'marsh-path',
+  marsh: 'marsh-path',
+  mud: 'marsh-path',
+};
+// How a scene thins or thickens what stands in it.
+const SCENE_MIX = {
+  clearing: { trees: 1.4, bushes: 1, rocks: 1, logs: 1 },
+  'forest-track': { trees: 1.5, bushes: 1, rocks: 0.6, logs: 1.5 },
+  ford: { trees: 0.7, bushes: 1, rocks: 1, logs: 0.6 },
+  ridge: { trees: 0.6, bushes: 0.8, rocks: 1.4, logs: 0.4 },
+  'marsh-path': { trees: 0.5, bushes: 1.5, rocks: 0.3, logs: 1 },
+  ruins: { trees: 0.7, bushes: 1, rocks: 0.6, logs: 0.6 },
+};
+const GAP = 3.5; // feet kept clear between things that block: a medium walker passes
+const STEP_FT = 2; // a ridge's rise from one level to the next (under map-paths' step up)
+
+/** A polyline rounded at its corners (Chaikin), its ends kept. */
+function rounded(points, rounds) {
+  let p = points;
+  for (let k = 0; k < rounds; k++) {
+    const out = [p[0]];
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i];
+      const b = p[i + 1];
+      out.push(
+        [a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25],
+        [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]
+      );
+    }
+    out.push(p[p.length - 1]);
+    p = out;
+  }
+  return p;
+}
+
+/** How far a point is from a polyline. */
+function toLine(p, line) {
+  let best = Infinity;
+  for (let i = 0; i < line.length - 1; i++) {
+    const a = line[i];
+    const b = line[i + 1];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = dx * dx + dy * dy;
+    const t = len ? clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len, 0, 1) : 0;
+    best = Math.min(best, Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy));
+  }
+  return best;
+}
+
+/** The gap between two boxes ({ x0, y0, x1, y1 }): 0 or less when they touch. */
+function boxGap(a, b) {
+  const dx = Math.max(b.x0 - a.x1, a.x0 - b.x1);
+  const dy = Math.max(b.y0 - a.y1, a.y0 - b.y1);
+  if (dx > 0 && dy > 0) return Math.hypot(dx, dy);
+  return Math.max(dx, dy);
+}
+
+function wilds(r, W, H, style) {
+  const [terrainId, scene] = style.split('/');
+  const T = TERRAINS[terrainId];
+  const id = idMaker();
+  // The frame: the way runs west to east in it; turned (x for y) at the end
+  // when it runs north to south.
+  const flip = r.chance(0.5);
+  const CW = flip ? H : W;
+  const CH = flip ? W : H;
+  const at = (x, y) => y * CW + x;
+  const inMap = (x, y) => x >= 0 && y >= 0 && x < CW && y < CH;
+  const cells = () => new Uint8Array(CW * CH);
+  const each = (fn) => {
+    for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) fn(x, y);
+  };
+  const centre = (x, y) => [(x + 0.5) * FEET, (y + 0.5) * FEET];
+  const clear = cells(); // nothing that blocks stands here: the way, entries, a clearing
+  const bare = cells(); // nothing stands here at all: water, spawn areas
+  const rough = cells(); // nothing that blocks: beside water, ledges and walls
+  const deep = cells(); // water nobody crosses
+  const walled = cells(); // either side of a wall: nothing but flat decor stands here
+  const level = new Int8Array(CW * CH); // a ridge's levels, STEP_FT apart
+  const mark = (set, x, y, d = 0) => {
+    for (let dy = -d; dy <= d; dy++) {
+      for (let dx = -d; dx <= d; dx++) if (inMap(x + dx, y + dy)) set[at(x + dx, y + dy)] = 1;
+    }
+  };
+  const ringsOf = (set) => {
+    const loops = chain(traceOpen(CW, CH, (x, y) => set[at(x, y)] > 0));
+    return loops.map((l) => (l.length > 1 && l[0] === l[l.length - 1] ? l.slice(0, -1) : l));
+  };
+  const blob = (cx, cy, rad) => {
+    const waves = [2, 3, 5].map((k) => [k, r.next() * 0.25, r.next() * Math.PI * 2]);
+    const set = cells();
+    each((x, y) => {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const a = Math.atan2(dy, dx);
+      let f = 1;
+      for (const [k, amp, ph] of waves) f += amp * Math.sin(k * a + ph);
+      if (Math.hypot(dx, dy) <= rad * f) set[at(x, y)] = 1;
+    });
+    return set;
+  };
+  const near = (line, d) => {
+    const set = cells();
+    each((x, y) => {
+      if (toLine(centre(x, y), line) <= d * FEET) set[at(x, y)] = 1;
+    });
+    return set;
+  };
+  const any = (set) => set.some((v) => v > 0);
+
+  const ground = [{ id: 'floor', material: T.floor, rings: [ringOf(0, 0, CW, CH)] }];
+  const lines = [];
+  const walls = [];
+  const zones = [];
+  const lights = [];
+  const placed = []; // { kind, box, blocks, object }
+
+  // ── The ways in: west and east, sometimes north or south too.
+  const third = r.chance(scene === 'clearing' || scene === 'ruins' ? 0.5 : 0.3);
+  const ya = r.int(Math.floor(CH / 3), Math.ceil((2 * CH) / 3) - 1);
+  const yb = r.int(Math.floor(CH / 3), Math.ceil((2 * CH) / 3) - 1);
+  let side = third ? r.pick(['north', 'south']) : null;
+
+  // ── The scene's shape, and the way's bends through it.
+  const ways = [];
+  let mids = [];
+  let ford = null;
+  let ridge = null;
+  let glade = null;
+  let ruin = null;
+  if (scene === 'ford') {
+    const half = CW >= 40 ? 2 : 1;
+    const xr = r.int(
+      Math.floor(CW / 2) - Math.floor(CW / 8),
+      Math.ceil(CW / 2) + Math.floor(CW / 8)
+    );
+    const yf = r.int(Math.floor(CH / 3), Math.ceil((2 * CH) / 3) - 1);
+    const phase = r.next() * Math.PI * 2;
+    const xOf = (y) => xr + Math.round(1.6 * Math.sin(y * 0.35 + phase));
+    ford = { xr, yf, half, xOf };
+    // Straight across the ford, well to either side of the river's bends.
+    const far = Math.min(8, xr - 1, CW - 1 - xr);
+    const close = Math.max(half + 3, Math.floor(far / 2));
+    mids = [
+      [xr - far, yf + 0.5],
+      [xr - close, yf + 0.5],
+      [xr + close, yf + 0.5],
+      [xr + far, yf + 0.5],
+    ];
+  } else if (scene === 'ridge') {
+    const top = clamp(Math.floor(Math.min(CW, CH) / 5), 3, 6);
+    // Nearly across the map, its ends tapering to the ground two squares in
+    // from the edges, so the foot of the cliff is reached round either end.
+    const xa = 3;
+    const xb = CW - 4;
+    const yc = r.int(Math.max(4, Math.floor(CH * 0.35)), Math.floor(CH * 0.5));
+    const phase = r.next() * Math.PI * 2;
+    const crestY = (x) => yc + Math.round(Math.sin(x * 0.4 + phase));
+    ridge = { top, xa, xb, yc, crestY };
+    const xm = Math.round((xa + xb) / 2);
+    const below = Math.min(CH - 3, yc + top + 2);
+    mids = [
+      [xa - 1, below + 0.5],
+      [xm, crestY(xm) + 1.5],
+      [xb + 1, below + 0.5],
+    ];
+  } else if (scene === 'clearing') {
+    const rad = Math.min(CW, CH) * (0.2 + r.next() * 0.06);
+    glade = { x: CW / 2 + r.int(-2, 2), y: CH / 2 + r.int(-2, 2), rad };
+    mids = [[glade.x, glade.y]];
+  } else if (scene === 'ruins') {
+    const w = clamp(r.int(6, 10), 5, Math.floor(CW / 3));
+    const h = clamp(r.int(6, 9), 4, Math.floor(CH / 3));
+    const x = Math.floor(CW / 2 - w / 2) + r.int(-2, 2);
+    const y = clamp(Math.floor(CH / 2 - h / 2) + r.int(-2, 2), 3, CH - h - 3);
+    // The way runs through nearer one side, leaving room on the other.
+    const row = h >= 6 ? y + r.pick([2, h - 3]) : y + Math.floor(h / 2);
+    ruin = { x, y, w, h };
+    mids = [
+      [x - 3, row + 0.5],
+      [x, row + 0.5],
+      [x + w, row + 0.5],
+      [x + w + 3, row + 0.5],
+    ];
+  } else {
+    const n = r.int(2, 3);
+    for (let k = 1; k <= n; k++) {
+      const t = k / (n + 1);
+      const y = ya + (yb - ya) * t + r.int(-Math.floor(CH / 6), Math.floor(CH / 6));
+      mids.push([CW * t, clamp(y, 3, CH - 4) + 0.5]);
+    }
+  }
+  const main = rounded(
+    [[0, ya + 0.5], ...mids, [CW, yb + 0.5]].map(([x, y]) => [x * FEET, y * FEET]),
+    3
+  );
+  ways.push({ id: 'way', points: main });
+  // A side way in from the north or south, to the way at its middle third,
+  // clear of a river.
+  let xn = null;
+  if (side) {
+    const lo = Math.ceil(CW / 3);
+    const hi = Math.floor((2 * CW) / 3);
+    const choices = [];
+    for (let x = lo; x <= hi; x++) {
+      if (ford && Math.abs(x - ford.xr) < 6) continue;
+      if (ridge && x >= ridge.xa - ridge.top - 1 && x <= ridge.xb + ridge.top + 1) continue;
+      if (ruin && x >= ruin.x - 2 && x <= ruin.x + ruin.w + 1) continue;
+      choices.push(x);
+    }
+    if (choices.length) {
+      xn = r.pick(choices);
+      // Where the way is at that column.
+      let meet = main[0];
+      for (const p of main)
+        if (Math.abs(p[0] - (xn + 0.5) * FEET) < Math.abs(meet[0] - (xn + 0.5) * FEET)) meet = p;
+      const y0 = side === 'north' ? 0 : CH * FEET;
+      const bend = [(xn + 0.5) * FEET, (y0 + meet[1]) / 2];
+      ways.push({ id: 'branch', points: rounded([[(xn + 0.5) * FEET, y0], bend, meet], 2) });
+    } else side = null;
+  }
+  const lineWidth = scene === 'forest-track' ? 7 : scene === 'marsh-path' ? 5 : 4;
+  const lineMaterial = scene === 'forest-track' ? 'track' : 'path';
+  for (const w of ways) {
+    lines.push({ id: w.id, material: lineMaterial, points: w.points, width: lineWidth });
+    const set = near(w.points, 1.6);
+    for (let i = 0; i < set.length; i++) if (set[i]) clear[i] = 1;
+  }
+
+  // ── Entries one square in from their edge, exits on it.
+  // Named by the edge they're on once the frame is turned (a transpose:
+  // west and north trade, east and south).
+  const edgeName = (e) =>
+    flip ? { west: 'north', east: 'south', north: 'west', south: 'east' }[e] : e;
+  const entries = [];
+  const exits = [];
+  const way = (edge, x, y, ex, ey) => {
+    const name = edgeName(edge);
+    entries.push({ id: name, x, y });
+    exits.push({ id: 'way-' + name, name: 'the way ' + name, x: ex, y: ey, to: 'out' });
+  };
+  way('west', 1, ya, 0, ya);
+  way('east', CW - 2, yb, CW - 1, yb);
+  if (side === 'north') way('north', xn, 1, xn, 0);
+  if (side === 'south') way('south', xn, CH - 2, xn, CH - 1);
+  for (const e of entries) mark(clear, e.x, e.y, 2);
+  for (const e of exits) mark(clear, e.x, e.y, 1);
+
+  // ── Patches of a neighbouring ground.
+  const patchCount = r.int(3, 6);
+  // Not a clearing's grass anywhere but the clearing.
+  const kinds = scene === 'clearing' ? T.patches.filter((m) => m !== 'grass') : T.patches;
+  if (!kinds.length) kinds.push(T.floor === 'dirt' ? 'gravel' : 'dirt');
+  for (let k = 0; k < patchCount; k++) {
+    const set = blob(r.next() * CW, r.next() * CH, 1.5 + r.next() * (T.trees > 0.5 ? 2 : 3.5));
+    const rings = ringsOf(set);
+    if (rings.length) ground.push({ id: 'patch-' + (k + 1), material: r.pick(kinds), rings });
+  }
+
+  // ── The scene's own ground.
+  if (ruin) {
+    const inside = cells();
+    for (let y = ruin.y; y < ruin.y + ruin.h; y++)
+      for (let x = ruin.x; x < ruin.x + ruin.w; x++) inside[at(x, y)] = 1;
+    ground.push({
+      id: 'ruin-floor',
+      material: r.pick(['flagstone', 'flagstone', 'cobble']),
+      rings: [ringOf(ruin.x, ruin.y, ruin.w, ruin.h)],
+    });
+    // The old floor broken through.
+    for (let k = 0; k < r.int(1, 3); k++) {
+      const hole = blob(ruin.x + r.next() * ruin.w, ruin.y + r.next() * ruin.h, 1 + r.next() * 1.5);
+      for (let i = 0; i < hole.length; i++) hole[i] = hole[i] && inside[i];
+      if (any(hole))
+        ground.push({ id: 'ruin-break-' + (k + 1), material: T.floor, rings: ringsOf(hole) });
+    }
+    zones.push({ id: 'ruins', rings: [ringOf(ruin.x, ruin.y, ruin.w, ruin.h)] });
+  }
+  for (const w of ways) {
+    const bed = near(w.points, scene === 'marsh-path' ? 1 : 0.7);
+    if (any(bed)) ground.push({ id: w.id + '-bed', material: T.bed, rings: ringsOf(bed) });
+  }
+
+  if (ford) {
+    const river = cells();
+    const shallow = cells();
+    for (let y = 0; y < CH; y++) {
+      const x0 = ford.xOf(y) - ford.half;
+      for (let x = x0; x <= ford.xOf(y) + ford.half; x++) {
+        if (!inMap(x, y)) continue;
+        if (Math.abs(y - ford.yf) <= 1) shallow[at(x, y)] = 1;
+        else river[at(x, y)] = 1;
+      }
+    }
+    const banks = cells();
+    each((x, y) => {
+      if (river[at(x, y)] || shallow[at(x, y)]) mark(banks, x, y, 1);
+    });
+    ground.push({ id: 'banks', material: r.pick(['mud', 'gravel']), rings: ringsOf(banks) });
+    ground.push({
+      id: 'river',
+      material: 'deep-water',
+      rings: ringsOf(river),
+      depth: 8,
+      cost: 'never',
+    });
+    ground.push({
+      id: 'ford-water',
+      material: 'water',
+      rings: ringsOf(shallow),
+      depth: 2,
+      cost: 2,
+    });
+    each((x, y) => {
+      if (river[at(x, y)]) {
+        deep[at(x, y)] = 1;
+        mark(rough, x, y, 1);
+      }
+      if (river[at(x, y)] || shallow[at(x, y)]) bare[at(x, y)] = 1;
+    });
+    zones.push({ id: 'ford', rings: ringsOf(shallow) });
+  }
+
+  if (scene === 'marsh-path') {
+    // Marsh all round where the ground isn't marsh already.
+    if (!T.wet) {
+      for (let k = 0; k < r.int(4, 7); k++) {
+        const set = blob(r.next() * CW, r.next() * CH, 2.5 + r.next() * 3.5);
+        ground.push({ id: 'marsh-' + (k + 1), material: 'marsh', rings: ringsOf(set) });
+      }
+    }
+    // Shallow pools waded through, and deep ones kept apart, off the way.
+    const pools = cells();
+    for (let k = 0; k < r.int(6, 10); k++) {
+      const set = blob(r.next() * CW, r.next() * CH, 1 + r.next() * 2);
+      for (let i = 0; i < set.length; i++) if (set[i] && !clear[i]) pools[i] = 1;
+    }
+    const deepPools = cells();
+    const keepOff = cells();
+    each((x, y) => {
+      if (clear[at(x, y)] || x < 2 || y < 2 || x >= CW - 2 || y >= CH - 2) mark(keepOff, x, y, 2);
+    });
+    for (let k = 0, n = 0; k < 30 && n < 3; k++) {
+      const set = blob(2 + r.next() * (CW - 4), 2 + r.next() * (CH - 4), 1.2 + r.next() * 1.5);
+      let ok = any(set);
+      const grown = cells();
+      each((x, y) => {
+        if (set[at(x, y)]) mark(grown, x, y, 2);
+      });
+      for (let i = 0; i < set.length && ok; i++)
+        if (grown[i] && (keepOff[i] || deepPools[i])) ok = false;
+      if (!ok) continue;
+      for (let i = 0; i < set.length; i++) {
+        if (set[i]) {
+          deepPools[i] = 1;
+          pools[i] = 0;
+        }
+        if (grown[i]) keepOff[i] = 1;
+      }
+      n++;
+    }
+    if (any(pools)) {
+      ground.push({ id: 'pools', material: 'water', rings: ringsOf(pools), depth: 1, cost: 2 });
+    }
+    if (any(deepPools)) {
+      ground.push({
+        id: 'deep-pools',
+        material: 'deep-water',
+        rings: ringsOf(deepPools),
+        depth: 6,
+        cost: 'never',
+      });
+    }
+    each((x, y) => {
+      if (pools[at(x, y)]) bare[at(x, y)] = 1;
+      if (deepPools[at(x, y)]) {
+        bare[at(x, y)] = 1;
+        deep[at(x, y)] = 1;
+        mark(rough, x, y, 1);
+      }
+    });
+    zones.push({ id: 'causeway', rings: ringsOf(near(main, 1)) });
+  }
+
+  // A stream across a clearing or a track, sometimes: waded anywhere.
+  if ((scene === 'clearing' || scene === 'forest-track') && T.trees > 0 && r.chance(0.35)) {
+    const xs = r.int(Math.floor(CW / 4), Math.ceil((3 * CW) / 4));
+    const phase = r.next() * Math.PI * 2;
+    const pts = [];
+    for (let y = 0; y <= CH; y += 2)
+      pts.push([(xs + 0.5 + 1.5 * Math.sin(y * 0.3 + phase)) * FEET, y * FEET]);
+    const bed = near(pts, 0.45);
+    if (any(bed)) {
+      ground.push({ id: 'stream-bed', material: 'water', rings: ringsOf(bed), depth: 1, cost: 2 });
+      lines.push({ id: 'stream', material: 'stream', points: pts, width: 3 });
+      for (let i = 0; i < bed.length; i++) if (bed[i]) bare[i] = 1;
+    }
+  }
+
+  if (glade) {
+    const set = blob(glade.x, glade.y, glade.rad);
+    zones.push({ id: 'clearing', rings: ringsOf(set) });
+    if (T.trees >= 0.2 && T.floor !== 'grass') {
+      ground.push({
+        id: 'glade-grass',
+        material: 'grass',
+        rings: ringsOf(blob(glade.x, glade.y, glade.rad * 0.8)),
+      });
+    }
+    glade.set = set;
+    for (let i = 0; i < set.length; i++) if (set[i]) clear[i] = 1;
+  }
+
+  if (ridge) {
+    const { top, xa, xb, crestY } = ridge;
+    const crest = [];
+    for (let x = xa; x <= xb; x++)
+      crest.push([x, crestY(x), Math.min(top, 1 + Math.min(x - xa, xb - x))]);
+    each((x, y) => {
+      if (x >= xa && x <= xb && y < crestY(x)) return; // below the cliff
+      let best = 0;
+      for (const [cx, cy, l] of crest)
+        best = Math.max(best, l - Math.max(Math.abs(x - cx), Math.abs(y - cy)));
+      level[at(x, y)] = best;
+    });
+    for (let k = 1; k <= top; k++) {
+      const set = cells();
+      each((x, y) => {
+        if (level[at(x, y)] >= k) set[at(x, y)] = 1;
+      });
+      if (!any(set)) continue;
+      // Bare rock above its lowest slopes, so the ridge reads from above.
+      const material = k > top / 3 ? (T.floor === 'glacier' ? 'ice' : 'rock') : T.floor;
+      ground.push({ id: 'ridge-' + k, material, rings: ringsOf(set), height: k * STEP_FT });
+      if (k === 1) zones.push({ id: 'ridge', rings: ringsOf(set) });
+    }
+    // Ledges: where a square stands more than a step above its neighbour.
+    each((x, y) => {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (inMap(x + dx, y + dy) && Math.abs(level[at(x, y)] - level[at(x + dx, y + dy)]) > 1) {
+            mark(rough, x, y, 1);
+          }
+        }
+      }
+    });
+    const foot = cells();
+    for (let x = xa + 1; x < xb; x++) {
+      for (let y = crestY(x) - 3; y < crestY(x); y++)
+        if (inMap(x, y) && !level[at(x, y)]) foot[at(x, y)] = 1;
+    }
+    if (any(foot)) zones.push({ id: 'cliff-foot', rings: ringsOf(foot) });
+    ridge.foot = foot;
+  }
+
+  if (scene === 'forest-track') zones.push({ id: 'track', rings: ringsOf(near(main, 1)) });
+
+  // ── Things standing: a footprint box in the frame, its cells, and the
+  // rules above.
+  // Trees and bushes grow to sizes of their own, within the scale rule's
+  // half to double (scale.js); everything else is the catalog's size.
+  const GROWN = { tree: [7, 12], bush: [3, 5] };
+  const sizeFor = (kind) => {
+    const range = GROWN[kind];
+    if (!range) return KIND[kind].size.slice();
+    const s = range[0] + Math.round(r.next() * (range[1] - range[0]) * 2) / 2;
+    return [s, s];
+  };
+  const boxCells = (box) => {
+    const out = [];
+    for (let x = Math.floor(box.x0 / FEET); x <= Math.floor((box.x1 - 1e-6) / FEET); x++)
+      for (let y = Math.floor(box.y0 / FEET); y <= Math.floor((box.y1 - 1e-6) / FEET); y++)
+        out.push([x, y]);
+    return out;
+  };
+  function place(kind, cx, cy, { onClear = false, extra, size } = {}) {
+    const grown = size || KIND[kind].size;
+    const [w, h] = flip ? [grown[1], grown[0]] : grown;
+    const box = { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
+    const stops = KIND[kind].blocksMove !== false;
+    const pad = stops ? GAP : 0.5;
+    if (box.x0 < pad || box.y0 < pad || box.x1 > CW * FEET - pad || box.y1 > CH * FEET - pad)
+      return null;
+    for (const [x, y] of boxCells(box)) {
+      const i = at(x, y);
+      if (bare[i]) return null;
+      if (clear[i] && !onClear) return null;
+      if (stops && rough[i]) return null;
+      if (walled[i] && !(KIND[kind].decor && KIND[kind].blocksMove === false)) return null;
+      if (level[i] !== level[at(Math.floor(cx / FEET), Math.floor(cy / FEET))]) return null;
+    }
+    for (const p of placed) {
+      const gap = boxGap(box, p.box);
+      if (gap < 0.25 || (stops && p.stops && gap < GAP)) return null;
+    }
+    const o = { id: id(kind), kind, at: [round3(cx), round3(cy)], size: grown.slice() };
+    if (KIND[kind].blocksMove === false) o.blocksMove = false;
+    Object.assign(o, extra || {});
+    placed.push({ box, stops, object: o });
+    return o;
+  }
+  const somewhere = (kind, count, where) => {
+    let made = 0;
+    for (let k = 0; k < count * 30 && made < count; k++) {
+      const p = where ? where() : [r.next() * CW * FEET, r.next() * CH * FEET];
+      if (p && place(kind, p[0], p[1], { size: sizeFor(kind) })) made++;
+    }
+    return made;
+  };
+
+  // The scene's own things first.
+  if (glade && r.chance(0.35)) {
+    // A campfire someone left, in the clearing.
+    for (let k = 0; k < 30; k++) {
+      const a = r.next() * Math.PI * 2;
+      const d = r.next() * glade.rad * 0.5;
+      const p = [(glade.x + Math.cos(a) * d) * FEET, (glade.y + Math.sin(a) * d) * FEET];
+      const o = place('campfire', p[0], p[1], { onClear: true });
+      if (o) {
+        lights.push(lightAt(o, 20));
+        break;
+      }
+    }
+  }
+  if (ruin) {
+    // The walls round it, broken: open where a way runs through and in a
+    // gap or two on each side.
+    const edges = [];
+    for (let x = ruin.x; x < ruin.x + ruin.w; x++) {
+      edges.push({ side: 0, key: edgeKey('h', x, ruin.y) });
+      edges.push({ side: 1, key: edgeKey('h', x, ruin.y + ruin.h) });
+    }
+    for (let y = ruin.y; y < ruin.y + ruin.h; y++) {
+      edges.push({ side: 2, key: edgeKey('v', ruin.x, y) });
+      edges.push({ side: 3, key: edgeKey('v', ruin.x + ruin.w, y) });
+    }
+    const gone = new Set();
+    for (let s = 0; s < 4; s++) {
+      const mine = edges.filter((e) => e.side === s);
+      for (let g = 0; g < r.int(1, 2); g++) {
+        const start = r.int(0, mine.length - 1);
+        const len = r.int(1, 3);
+        for (let k = start; k < Math.min(mine.length, start + len); k++) gone.add(mine[k].key);
+      }
+    }
+    const kept = edges.filter(
+      (e) => !gone.has(e.key) && !sidesOf(e.key).some(([x, y]) => inMap(x, y) && clear[at(x, y)])
+    );
+    // Runs of the same side, each its own wall of its own height.
+    for (let s = 0; s < 4; s++) {
+      for (const run of chain(kept.filter((e) => e.side === s).map((e) => edgeEnds(e.key)))) {
+        walls.push({
+          id: id('wall'),
+          material: 'stone',
+          points: run.map(ft),
+          height: r.pick([3, 4, 6, 8]),
+        });
+      }
+    }
+    for (const e of kept) {
+      for (const [x, y] of sidesOf(e.key)) {
+        mark(rough, x, y, 0);
+        mark(walled, x, y, 0);
+      }
+    }
+    for (const e of kept) {
+      for (const [x, y] of edgeEnds(e.key)) {
+        for (const [dx, dy] of [
+          [-1, -1],
+          [0, -1],
+          [-1, 0],
+          [0, 0],
+        ])
+          if (inMap(x + dx, y + dy)) rough[at(x + dx, y + dy)] = 1;
+      }
+    }
+    // Inside: pillars still standing, a statue, rubble.
+    const inside = () => [
+      (ruin.x + 1.5 + r.next() * (ruin.w - 3)) * FEET,
+      (ruin.y + 1.5 + r.next() * (ruin.h - 3)) * FEET,
+    ];
+    somewhere('pillar', r.int(1, 3), inside);
+    if (r.chance(0.4)) somewhere('statue', 1, inside);
+    for (let k = 0; k < r.int(2, 4); k++) {
+      for (let t = 0; t < 20; t++) {
+        const [x, y] = inside();
+        if (place('rubble', x, y, { onClear: true })) break;
+      }
+    }
+  }
+
+  // ── Spawn areas: three squares across, all walkable, far from the ways
+  // in; where the scene says, else anywhere.
+  const spawns = [];
+  const far = Math.max(5, Math.floor(Math.min(CW, CH) / 3));
+  const free = (x0, y0) => {
+    for (let y = y0; y < y0 + 3; y++) {
+      for (let x = x0; x < x0 + 3; x++) {
+        if (!inMap(x, y) || bare[at(x, y)]) return false;
+        const p = centre(x, y);
+        if (
+          placed.some(
+            (q) =>
+              p[0] > q.box.x0 - 1 &&
+              p[0] < q.box.x1 + 1 &&
+              p[1] > q.box.y0 - 1 &&
+              p[1] < q.box.y1 + 1
+          )
+        )
+          return false;
+      }
+    }
+    return entries.every((e) => Math.max(Math.abs(e.x - x0 - 1), Math.abs(e.y - y0 - 1)) >= far);
+  };
+  const prefer = [];
+  if (glade) prefer.push((x, y) => glade.set[at(x + 1, y + 1)]);
+  if (ridge) {
+    prefer.push((x, y) => level[at(x + 1, y + 1)] >= ridge.top - 1);
+    prefer.push((x, y) => ridge.foot[at(x + 1, y + 1)]);
+  }
+  if (ruin)
+    prefer.push(
+      (x, y) => x >= ruin.x && y >= ruin.y && x + 3 <= ruin.x + ruin.w && y + 3 <= ruin.y + ruin.h
+    );
+  if (ford) prefer.push((x) => Math.abs(x + 1 - ford.xr) >= 3 && Math.abs(x + 1 - ford.xr) <= 7);
+  const wanted = CW * CH >= 900 ? 3 : 2;
+  const spots = [];
+  for (let y = 0; y <= CH - 3; y++)
+    for (let x = 0; x <= CW - 3; x++) if (free(x, y)) spots.push([x, y]);
+  const order = r.shuffle(spots);
+  const apart = (s) =>
+    spawns.every((o) => Math.max(Math.abs(o.x - s[0]), Math.abs(o.y - s[1])) >= 5);
+  const take = (s) => {
+    spawns.push({ x: s[0], y: s[1] });
+    for (let y = s[1]; y < s[1] + 3; y++) for (let x = s[0]; x < s[0] + 3; x++) bare[at(x, y)] = 1;
+  };
+  for (const test of prefer) {
+    if (spawns.length >= wanted) break;
+    const s = order.find((p) => test(p[0], p[1]) && apart(p) && free(p[0], p[1]));
+    if (s) take(s);
+  }
+  for (const s of order) {
+    if (spawns.length >= wanted) break;
+    if (apart(s) && free(s[0], s[1])) take(s);
+  }
+
+  // ── What stands about, the biggest first.
+  const mix = SCENE_MIX[scene];
+  const area = (CW * CH) / 900;
+  const count = (base, k) => Math.round(base * T[k] * mix[k] * area);
+  somewhere('log', count(4, 'logs'));
+  somewhere('boulder', count(7, 'rocks'));
+  somewhere('tree', count(64, 'trees'));
+  somewhere('bush', count(24, 'bushes'));
+
+  // ── Out of the frame.
+  const P = flip ? (p) => [round3(p[1]), round3(p[0])] : (p) => [round3(p[0]), round3(p[1])];
+  const C = flip ? (c) => ({ ...c, x: c.y, y: c.x }) : (c) => ({ ...c });
+  const shape = (rings) => rings.map((ring) => ringPath(ring.map(P))).join('');
+  const floor = [];
+  each((x, y) => {
+    if (!deep[at(x, y)]) floor.push(flip ? keyOf(y, x) : keyOf(x, y));
+  });
+  const outGround = ground
+    .filter((g) => g.rings.length)
+    .map(({ rings, ...g }) => ({ ...g, shape: shape(rings) }));
+  return {
+    geometry: {
+      ground: outGround,
+      lines: lines.map((l) => ({ ...l, points: l.points.map(P) })),
+      walls: walls.map((w) => ({ ...w, points: w.points.map(P) })),
+      objects: placed.map((p) => ({ ...p.object, at: P(p.object.at) })),
+      zones: zones
+        .filter((z) => z.rings.length)
+        .map(({ rings, ...z }) => ({ ...z, shape: shape(rings) })),
+      spawns: spawns.map((s, i) => {
+        const c = C(s);
+        return { id: 'spawn-' + (i + 1), shape: rectShape(c.x, c.y, 3, 3) };
+      }),
+      lights: lights.map((l) => ({ ...l, at: P(l.at) })),
+    },
+    entries: entries.map(C),
+    exits: exits.map(C),
+    rooms: zones.length,
+    floor,
+  };
+}
+
+/** A rectangle of squares as a ring of its corners, in feet. */
+function ringOf(x, y, w, h) {
+  return [
+    [x * FEET, y * FEET],
+    [(x + w) * FEET, y * FEET],
+    [(x + w) * FEET, (y + h) * FEET],
+    [x * FEET, (y + h) * FEET],
+  ];
+}
+
 // ── Generating ─────────────────────────────────────────────────────────
 
-const GENERATORS = { rooms, caves, interior, deck };
+const GENERATORS = { rooms, caves, interior, deck, wilds };
 
 /**
  * A map of `kind`, from `seed` (a number or a string): the same kind, seed,
  * size and style, the same map. Throws for a kind, size or style it can't
  * make, and if what it made isn't playable (which the tests guard against).
  */
-function generate(kind, { seed, width, height, style } = {}) {
+function generate(kind, { seed, width, height, style, terrain, scene } = {}) {
   if (!KINDS.includes(kind)) throw new Error(`No generator makes "${kind}": ${KINDS.join(', ')}.`);
   const size = SIZES[kind];
   const W = width === undefined ? size.width : width;
@@ -1640,7 +2405,24 @@ function generate(kind, { seed, width, height, style } = {}) {
       styles ? `A ${kind} map’s style is ${styles.join(' or ')}.` : `A ${kind} map takes no style.`
     );
   }
-  const chosen = styles ? style || styles[0] : undefined;
+  const wild = kind === 'wilds';
+  if (!wild && (terrain !== undefined || scene !== undefined)) {
+    throw new Error(`A ${kind} map takes no terrain or scene; a wilds map does.`);
+  }
+  const ground = wild ? (terrain === undefined ? 'grass' : terrain) : undefined;
+  if (wild && !TERRAIN_IDS.includes(ground)) {
+    throw new Error(`A wilds map’s terrain is one of ${TERRAIN_IDS.join(', ')}.`);
+  }
+  const shown = wild
+    ? scene === undefined
+      ? DEFAULT_SCENE[ground] || 'clearing'
+      : scene
+    : undefined;
+  if (wild && !SCENES.includes(shown)) {
+    throw new Error(`A wilds map’s scene is one of ${SCENES.join(', ')}.`);
+  }
+  // A wilds map's terrain and scene seed it as a deck's style does.
+  const chosen = wild ? ground + '/' + shown : styles ? style || styles[0] : undefined;
   const s = seed === undefined ? 0 : seed;
   const r = random([kind, chosen || '', W + 'x' + H, String(s)].join('|'));
   const made = GENERATORS[kind](r, W, H, chosen);
@@ -1664,7 +2446,7 @@ function generate(kind, { seed, width, height, style } = {}) {
   return {
     kind,
     seed: s,
-    ...(chosen ? { style: chosen } : {}),
+    ...(wild ? { terrain: ground, scene: shown } : chosen ? { style: chosen } : {}),
     ...map,
     rooms: made.rooms,
     floor: made.floor,
@@ -1672,4 +2454,16 @@ function generate(kind, { seed, width, height, style } = {}) {
   };
 }
 
-module.exports = { KINDS, STYLES, SIZES, VERSION, generate, problems, random, hash };
+module.exports = {
+  KINDS,
+  STYLES,
+  SIZES,
+  SCENES,
+  TERRAINS: TERRAIN_IDS,
+  DEFAULT_SCENE,
+  VERSION,
+  generate,
+  problems,
+  random,
+  hash,
+};

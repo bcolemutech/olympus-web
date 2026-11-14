@@ -27,6 +27,11 @@
       "file": "atlas/sheet-4.webp",
       "width": 2035,
       "height": 961
+    },
+    "sheet-5": {
+      "file": "atlas/sheet-5.webp",
+      "width": 774,
+      "height": 201
     }
   },
   "materials": {
@@ -641,6 +646,20 @@
         "foot": [0.5, 1],
         "atlas": "sheet-3",
         "frame": [1525, 1480, 256, 303]
+      }
+    },
+    "bush": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-5",
+        "frame": [516, 2, 256, 188]
+      }
+    },
+    "log": {
+      "stand": {
+        "foot": [0.5, 1],
+        "atlas": "sheet-5",
+        "frame": [2, 2, 512, 197]
       }
     }
   }

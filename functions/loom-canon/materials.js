@@ -220,6 +220,10 @@
     o('well', 'Well', 'outdoors', [4, 4]),
     o('cart', 'Cart', 'outdoors', [5, 10]),
     o('tent', 'Tent', 'outdoors', [8, 8], TALL),
+    // A bush hides what's behind it and is pushed through; a fallen log is
+    // climbed round and seen over (L-365).
+    o('bush', 'Bush', 'outdoors', [4, 4], { blocksMove: false, blocksSight: true }),
+    o('log', 'Fallen log', 'outdoors', [8, 2]),
     o('stairs', 'Stairs', 'ways', [5, 10], WALK),
     o('trapdoor', 'Trapdoor', 'ways', [3, 3], WALK),
     o('rubble', 'Rubble', 'decor', [4, 4], FLAT),

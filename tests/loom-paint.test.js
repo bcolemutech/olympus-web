@@ -41,7 +41,9 @@
  *     fades it, behind a chest nothing; a path preview fades the pieces it
  *     passes behind; describe() reports what's faded; checking costs next to
  *     nothing on the large dungeon; and in the grid view the same from its
- *     tokens, the pointer and the preview.
+ *     tokens, the pointer and the preview;
+ *   - the wilds (L-365): a generated forest track and a ford in the classic
+ *     set, against their screenshots.
  *
  * It needs Playwright and its Chromium (in the tests' dependencies; CI
  * installs the browser): where the browser is missing the suite is skipped,
@@ -1553,6 +1555,35 @@ describe('the classic set, painted (L-946)', () => {
     expect(builtIn(drawn)).toEqual([]);
     expect(fromClassic(drawn).some((d) => d.kind === 'wall')).toBe(true);
     matchesBaseline(PNG.sync.read(await page.screenshot()), 'classic-interior.png');
+    expect(page.errors).toEqual([]);
+    await page.close();
+  });
+
+  // The wilds (L-365): a generated forest track and a ford, their trees,
+  // bushes, logs and water in the set's pictures.
+  test.each([
+    ['forest-track', 'forest', 'wilds-track'],
+    ['ford', 'grass', 'wilds-ford'],
+  ])('a %s in the %s, generated', async (scene, terrain, key) => {
+    if (!browser) {
+      console.warn(`Skipped "${key}": Playwright's Chromium isn't installed here.`);
+      return;
+    }
+    const page = await painterPage();
+    const map = generators.generate('wilds', { seed: key, terrain, scene });
+    const scale = Math.min(900 / (map.width * 5), 560 / (map.height * 5));
+    await drawAt(page, key, geo.normalize(map.geometry), { y: 60, scale }, CLASSIC);
+    await loaded(page);
+    const drawn = await page.evaluate((k) => Loom.mapPaint.describe(k), key);
+    expect(builtIn(drawn)).toEqual([]);
+    const kinds = new Set(standingOf(drawn).map((d) => d.kind === 'object' && d.art));
+    expect([...kinds].some((a) => typeof a === 'string' && a.includes('sheet-5'))).toBe(true);
+    if (scene === 'ford') {
+      const art = (id) => drawn.find((d) => d.kind === 'ground' && d.id === id).art;
+      expect(art('river')).toMatch(/deep-water\.webp$/);
+      expect(art('ford-water')).toMatch(/\/water\.webp$/);
+    }
+    matchesBaseline(PNG.sync.read(await page.screenshot()), `classic-${key}.png`);
     expect(page.errors).toEqual([]);
     await page.close();
   });

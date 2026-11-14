@@ -709,6 +709,66 @@ describe('generate_map: a seeded first draft to edit', () => {
     );
   });
 
+  test('a wilds map (L-365): its terrain and scene, made generic for them, drawn by view_image', async () => {
+    const made = await ok('generate_map', {
+      worldId: W,
+      name: 'The ford at the willows',
+      kind: 'wilds',
+      terrain: 'forest',
+      scene: 'ford',
+      seed: 12,
+    });
+    expect(made).toMatchObject({
+      created: true,
+      generated: { kind: 'wilds', seed: 12, terrain: 'forest', scene: 'ford', width: 30 },
+      map: { name: 'The ford at the willows' },
+    });
+    expect(made.rooms).toContain('ford');
+    expect(made.spawns).toEqual(['spawn-1', 'spawn-2', 'spawn-3']);
+    expect(made.entries.length).toBeGreaterThanOrEqual(2);
+    expect(made.exits.every((e) => e.to === 'out')).toBe(true);
+    const doc = await docOf(made.map.id);
+    const pure = generators.generate('wilds', { seed: 12, terrain: 'forest', scene: 'ford' });
+    expect(doc.geometry).toEqual(geo.normalize(pure.geometry));
+    expect(doc.generic).toEqual({ kind: 'ford', terrain: 'forest' });
+    expect(doc.sources.generated).toEqual({
+      kind: 'wilds',
+      seed: 12,
+      terrain: 'forest',
+      scene: 'ford',
+      version: generators.VERSION,
+    });
+    // Its objects are to scale: no warning.
+    expect(made.warnings).toBeUndefined();
+
+    // A terrain's own scene when none is asked for; a generic given is kept.
+    const ridge = await ok('generate_map', {
+      worldId: W,
+      name: 'Under the scarp',
+      kind: 'wilds',
+      terrain: 'hills',
+      seed: 3,
+      generic: { kind: 'scarp' },
+    });
+    expect(ridge.generated.scene).toBe('ridge');
+    expect((await docOf(ridge.map.id)).generic).toEqual({ kind: 'scarp' });
+
+    const view = await call('view_image', { worldId: W, of: 'battleMap', id: made.map.id });
+    expect(view.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+    expect(view.structuredContent.geometry).toMatchObject({
+      objects: doc.geometry.objects.length,
+      spawns: 3,
+    });
+
+    // A terrain or scene there isn't, or one for another kind, is refused.
+    expect(
+      await refused('generate_map', { worldId: W, name: 'X', kind: 'wilds', terrain: 'ocean' })
+    ).toMatch(/terrain/);
+    expect(
+      await refused('generate_map', { worldId: W, name: 'X', kind: 'rooms', scene: 'ford' })
+    ).toMatch(/takes no terrain or scene/);
+  });
+
   test('replacing a map’s grid makes players forget it', async () => {
     const first = await ok('generate_map', {
       worldId: W,

@@ -1,6 +1,6 @@
 # The Loom — Off-Road Travel and the Wilderness — Design Document v0.2
 
-**Status:** Decided (2026-10-11), refreshed 2026-11-14 (§3). Sub-issues L-361 to L-368 filed as #835–#842 (§6). Shipped: L-361 to L-364.
+**Status:** Decided (2026-10-11), refreshed 2026-11-14 (§3). Sub-issues L-361 to L-368 filed as #835–#842 (§6). Shipped: L-361 to L-365.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-360 (#418)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4), after L-710.
@@ -114,6 +114,7 @@ Settled with the user through a questionnaire; every answer took the recommendat
 ### 4.6 Wilderness maps and playing an event (EV4, EV5, EV8)
 
 - **The map** (EV5): a generic battle map tagged for the camp's terrain (`generic.terrain`), the world's own first; else a seeded wilderness map from a new `generate_map` kind, `wilds`, with a `terrain` and a `scene` (clearing, forest track, ford, ridge, marsh path, ruins), built from the same seed for the same event. It is kept on the save, not the world, unless a builder saves it.
+- **The generator, as built** (L-365, 2026-11-14): `generate_map` kind `wilds`, `terrain` (any of 19 outdoor grounds; grass by default) and `scene` (by default its terrain's likeliest: forest-track in woods, marsh-path in wet ground, ridge in hills and mountains, else clearing), 30 × 30 squares by default, 16 to 64 a side. Its floor is the terrain's own ground (a taiga's is tundra: taiga's own picture is treetops from a height), with patches of a neighbour and the way's bed. The way runs edge to edge west–east or north–south by the seed, sometimes with a side way from a third edge; each edge has an entry one square in and an exit `out` on it, named for the edge (`west`, `way-west`). Trees (7–12 ft) and bushes (3–5 ft) grow to sizes of their own within the scale rule; rocks are boulders. Everything that blocks keeps 3.5 ft from everything else that does, the edge, a wall, a ledge and water nobody crosses, so no square is shut in; nothing stands on the way, at an entry or in a spawn area. A river is deep water (`cost: 'never'`) but its ford, shallow water (cost 2) three squares wide; a ridge is ground in 2 ft levels, its slope walked up and its cliff a drop of up to 12 ft (a fall from 10); a marsh has shallow pools and deep ones kept apart; ruins are low broken stone walls the way runs through, with pillars and rubble. Two or three spawn areas of 3 × 3 squares (`spawn-1`…), far from the entries and where the scene says (the clearing, the ridge's top and foot, inside the ruins, the far bank). Its scene's zone (clearing, track, ford, ridge and cliff-foot, causeway, ruins). Made generic for its scene and terrain (`generic: { kind: scene, terrain }`) unless the builder says otherwise. Two catalog objects join for it: a **bush** (4 × 4 ft; hides what's behind it, pushed through) and a **fallen log** (8 × 2 ft; blocks the way, seen over), each with its `classic` picture (studio, "Loom painted three-quarter", about $0.42 with one remake; board in `boards/l-365/`).
 - **Arriving** (EV4): at an entry of the map, the event's figures placed from their stat blocks as `place_figures` places them; the GM told the event's text. A narrated event has no map.
 - **Play** is ordinary battle-map play.
 - **Leaving** (EV8): by any edge or exit, back to the journey: go on, turn back or change course.
@@ -130,6 +131,7 @@ This epic adds ([`the-loom-grading.md`](./the-loom-grading.md) §4.3), by the ru
 
 - **Region:** a danger level set; an encounter table with rows that fit its terrain.
 - **World (bonus):** a generic battle map for each terrain on its land.
+- **Open country counts as drawn** (the user, 2026-11-14, found building L-365): a battle map's `drawn` asks for floors and walls, so a wilds map, with none, grades half drawn and is told to add walls. L-368 makes a map with floors and lines or objects, and no walls, count as drawn.
 
 ---
 
