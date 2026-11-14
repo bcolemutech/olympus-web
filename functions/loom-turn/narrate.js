@@ -659,6 +659,21 @@ function buildEffectsSection(save, resolution, canonWorld) {
   return lines.length ? lines.join('\n\n') : null;
 }
 
+// Something on the way across country (L-364): the rules decided it
+// happens and what it is; NARRATE tells it, never changing it.
+function buildEventSection(resolution) {
+  const event = resolution.event && resolution.event.event;
+  if (!event) return null;
+  return (
+    "ON THE WAY: something happens at the end of the day's travel (" +
+    event.kind +
+    '): ' +
+    event.text +
+    ' Tell it as it is given, in the fiction, and let the journey go on after it; do not ' +
+    'add a fight or a loss the rules did not decide.'
+  );
+}
+
 // A fight (L-821; planning/combat.md EN5): NARRATE writes when one starts
 // and ends; the rules write each round. Told who is in it and how it went,
 // and never to invent blows or wounds the rules didn't roll.
@@ -830,6 +845,7 @@ function buildUserMessage(params) {
   const levelsSection = params.save ? buildLevelsSection(params.save, canonWorld) : null;
   const fallenSection = buildFallenSection(resolution);
   const namedSection = buildNamedSection(resolution);
+  const eventSection = buildEventSection(resolution);
 
   const constraintsText =
     (resolution.constraints || []).map((c) => '- ' + c).join('\n') || '(none)';
@@ -853,6 +869,7 @@ function buildUserMessage(params) {
     (fallenSection ? fallenSection + '\n\n' : '') +
     (namedSection ? namedSection + '\n\n' : '') +
     (effectsSection ? effectsSection + '\n\n' : '') +
+    (eventSection ? eventSection + '\n\n' : '') +
     (timeSection ? timeSection + '\n\n' : '') +
     (whereSection ? whereSection + '\n\n' : '') +
     'ROLLING SUMMARY:\n' +

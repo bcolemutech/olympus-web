@@ -512,6 +512,10 @@ function levelTools({ writer, worldFor }) {
           const node = isGraded(world) ? findNode(gradeMaps(world), args.mapId) : null;
           return {
             map: mapRow(model, args.mapId),
+            // Events on the way across its land (L-364): its table, as written.
+            ...(((model.maps[args.mapId] || {}).encounters || []).length
+              ? { encounters: model.maps[args.mapId].encounters }
+              : {}),
             trail: chain.map((id) => ({ mapId: id, name: (model.maps[id] || {}).name || id })),
             places: levels.placesOn(model, args.mapId).map((id) => placeRow(model, id)),
             children: levels.childrenOf(model, args.mapId).map((id) => ({

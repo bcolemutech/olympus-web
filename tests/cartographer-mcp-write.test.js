@@ -214,6 +214,7 @@ test('exposes the write tools with honest hints', async () => {
     'set_art',
     'set_battle_map',
     'set_doors',
+    'set_encounters',
     'set_entries',
     'set_exits',
     'set_features',

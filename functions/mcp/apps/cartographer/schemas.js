@@ -88,6 +88,55 @@ const encounters = z
       '[] removes the table.'
   );
 
+// A table of events on the way across country (L-364; loom-modules/wilds/
+// events.js): the encounters format, extended with words, a kind and the
+// ground a row fits, set on a region, a region map or the world.
+const wildEncounters = z
+  .array(
+    z.strictObject({
+      what: z
+        .string()
+        .regex(/^[a-z0-9][a-z0-9-]{0,39}$/)
+        .optional()
+        .describe('A stat block of the world (list_stat_blocks): figures to meet. "wolf".'),
+      count: z.number().int().min(1).max(20).optional().describe('How many (1 by default).'),
+      weight: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('How likely this row is against the others that fit (1 by default).'),
+      text: z
+        .string()
+        .max(400)
+        .optional()
+        .describe('What happens, in a sentence or two, as the game master is to tell it.'),
+      kind: z
+        .enum(['travellers', 'creatures', 'hazard', 'weather', 'find'])
+        .optional()
+        .describe('What sort of event: needed with text and no what; a creature’s with a what.'),
+      terrain: z
+        .array(z.string().max(40))
+        .min(1)
+        .max(12)
+        .optional()
+        .describe('The ground materials it fits ("forest", "swamp"); any ground if left out.'),
+      narrated: z
+        .boolean()
+        .optional()
+        .describe('True: only told, with no map, even with a what. Words alone are narrated.'),
+    })
+  )
+  .max(20)
+  .describe(
+    'Rows of { what?, text?, kind?, terrain?, count?, weight?, narrated? }: each needs a what ' +
+      'or a text. After each day’s travel off the road a roll decides whether something ' +
+      'happens at the camp; the event is picked by weight from the first of its region’s, ' +
+      'its map’s and the world’s tables with a row that fits the ground, else a built-in one. ' +
+      '[] removes the table.'
+  );
+
 // A route's line and rules (L-715; planning/worlds-without-azgaar.md §4.5).
 const routeWaypoints = z
   .array(z.tuple([z.number(), z.number()]))
@@ -125,6 +174,7 @@ module.exports = {
   challenge,
   triggers,
   encounters,
+  wildEncounters,
   routeWaypoints,
   routeRules,
 };
