@@ -25,21 +25,22 @@ const FANTASY = BUILT_IN['d20-fantasy'];
 const SCIFI = BUILT_IN['pool-scifi'];
 
 // A hall 10 × 5, in at the west door; a winch on the north wall.
-const mockHall = () => jest.requireActual('./helpers/grid').gridMap({
-  id: 'bm_hall',
-  name: 'The hall',
-  width: 10,
-  height: 5,
-  image: null,
-  entries: [{ id: 'door', x: 1, y: 2 }],
-  exits: [{ id: 'out', name: 'the door', x: 0, y: 2, to: 'out' }],
-  features: [{ id: 'winch', name: 'the winch', x: 4, y: 0 }],
-  walls: [],
-  doors: [],
-  // A crate just south of where Grell stands: cover from below.
-  obstacles: [{ id: 'crate', name: 'a crate', kind: 'low', x: 6, y: 3 }],
-  hazards: [],
-});
+const mockHall = () =>
+  jest.requireActual('./helpers/grid').gridMap({
+    id: 'bm_hall',
+    name: 'The hall',
+    width: 10,
+    height: 5,
+    image: null,
+    entries: [{ id: 'door', x: 1, y: 2 }],
+    exits: [{ id: 'out', name: 'the door', x: 0, y: 2, to: 'out' }],
+    features: [{ id: 'winch', name: 'the winch', x: 4, y: 0 }],
+    walls: [],
+    doors: [],
+    // A crate just south of where Grell stands: cover from below.
+    obstacles: [{ id: 'crate', name: 'a crate', kind: 'low', x: 6, y: 3 }],
+    hazards: [],
+  });
 // Grell strikes hard with a club: every die high, it hits.
 const mockCases = {
   'd20-fantasy': { system: FANTASY, club: '1d20 + 10', melee: 'sword' },
@@ -279,7 +280,12 @@ describe.each(Object.keys(mockCases))('position in play under %s', (id) => {
     // Beside the player with AP for two blows, Grell strikes twice (L-836):
     // each its own card.
     expect(answer.turns).toEqual([
-      expect.objectContaining({ id: 'grell', name: 'Grell', path: expect.any(Array), attack: blow }),
+      expect.objectContaining({
+        id: 'grell',
+        name: 'Grell',
+        path: expect.any(Array),
+        attack: blow,
+      }),
       expect.objectContaining({ id: 'grell', name: 'Grell', path: [], attack: blow }),
     ]);
     // Not kept in the turn's record.

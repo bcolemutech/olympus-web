@@ -118,8 +118,8 @@ describe.each(Object.keys(mockCases))('plausibility under %s', (id) => {
   });
 
   // The AP a turn has spent (L-832): a typed action is a standard one, 10.
-const spentOf = (save) => save.character.sheet.ap - save.turn.ap;
-const intent = (verb, params) => ({ verb, targets: [], params });
+  const spentOf = (save) => save.character.sheet.ap - save.turn.ap;
+  const intent = (verb, params) => ({ verb, targets: [], params });
   async function saveOf(saveId, { fight = false } = {}) {
     await db
       .collection('loom_saves')

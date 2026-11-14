@@ -340,7 +340,9 @@ test('refusals: no map, off it, already there', () => {
 });
 
 test('a map with no exits holds nobody: there is no moving on it', () => {
-  const sealed = { battleMaps: require('./helpers/grid').gridMaps({ bm_room: { ...ROOM, exits: [] } }) };
+  const sealed = {
+    battleMaps: require('./helpers/grid').gridMaps({ bm_room: { ...ROOM, exits: [] } }),
+  };
   expect(planStep(sealed, standing({ x: 1, y: 1 }), { cell: { x: 2, y: 2 } })).toEqual({
     refused: "There's no map here to move on.",
   });

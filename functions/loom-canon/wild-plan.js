@@ -18,6 +18,10 @@
  *   planOn(view, from, to, opts)  wildPaths.plan on the frame's map, or null:
  *                                 `from` and `to` points ([x, y] or { x, y }) or
  *                                 place ids; opts { state, pace, cells }
+ *   groundAt(view, point)         the ground at a point on the frame's map
+ *                                 (wildPaths.at): { speed, danger, material },
+ *                                 or null (L-363: the camp's danger)
+ *   boundsOf(view)                the frame's map's { width, height }, or null
  *
  * Pure.
  */
@@ -92,25 +96,55 @@ function pointFor(view, p) {
   return null;
 }
 
-function planOn(view, from, to, opts = {}) {
+function boundsOf(view) {
+  const map = (view && view.map) || {};
+  return map.width > 0 && map.height > 0 ? { width: map.width, height: map.height } : null;
+}
+
+// The planner's options for the frame's map's ground, or null without any.
+function groundOptions(view, cells) {
   const map = (view && view.map) || {};
   const geometry = isObject(map.geometry) ? map.geometry : null;
+  const bounds = boundsOf(view);
+  if (!geometry || !bounds) return null;
+  return {
+    geometry,
+    bounds,
+    cells,
+    own: view.materials,
+    wilds: view.wilds,
+    regions: regionDangers(view),
+  };
+}
+
+function planOn(view, from, to, opts = {}) {
+  const ground = groundOptions(view, opts.cells);
   const a = pointFor(view, from);
   const b = pointFor(view, to);
-  if (!geometry || !a || !b || !(map.width > 0) || !(map.height > 0)) return null;
+  if (!ground || !a || !b) return null;
   return wildPaths.plan({
-    geometry,
-    bounds: { width: map.width, height: map.height },
+    ...ground,
     from: a,
     to: b,
     scale: scaleOf(view),
     pace: opts.pace,
-    cells: opts.cells,
-    own: view.materials,
-    wilds: view.wilds,
-    regions: regionDangers(view),
     routes: lanesOf(view, opts.state),
   });
 }
 
-module.exports = { REGION_DANGER, lanesOf, regionDangers, scaleOf, planOn };
+function groundAt(view, point) {
+  const ground = groundOptions(view);
+  const p = pointFor(view, point);
+  return ground && p ? wildPaths.at(ground, p) : null;
+}
+
+module.exports = {
+  REGION_DANGER,
+  lanesOf,
+  regionDangers,
+  scaleOf,
+  planOn,
+  groundAt,
+  boundsOf,
+  pointFor,
+};

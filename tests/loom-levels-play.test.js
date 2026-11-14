@@ -203,12 +203,20 @@ test('an exit to another map takes its own time (TV3)', async () => {
   expect(lines).toContain('You go by the old jump gate to Rigel.');
 });
 
-test('a closed place is refused at depth, and the save stays put', async () => {
+test('a closed place at depth is reached and stood outside of (L-363)', async () => {
   await seed('closed', GATE, { time: clock.START });
-  const { lines, save } = await moveTo('closed', 'pl_outpost');
-  expect(lines).toContain('The way to The Outpost is closed. Turn back.');
-  expect(save.at).toEqual(GATE);
-  expect(save.time).toBe(clock.START);
+  let { lines, save } = await moveTo('closed', 'pl_outpost');
+  expect(lines).toMatch(/you come to The Outpost, but its way is closed to you/);
+  // In the wilds of Vega, at the Outpost's edge.
+  expect(save.at).toHaveLength(2);
+  expect(save.at[0]).toEqual(GATE[0]);
+  expect(save.at[1].mapId).toBe('vega');
+  expect(Math.hypot(save.at[1].point.x - 50, save.at[1].point.y - 90)).toBeCloseTo(1, 6);
+  expect(save.time).toBeGreaterThan(clock.START);
+  // Going in from there is refused.
+  ({ lines, save } = await moveTo('closed', 'pl_outpost'));
+  expect(save.at[1].point).toBeDefined();
+  expect(lines).toBe('The Outpost is closed to you: you can go no further in.');
 });
 
 test('loomGetMap peeks at a region map on the trail, from where the save stands on it (L-904)', async () => {

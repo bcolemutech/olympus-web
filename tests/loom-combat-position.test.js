@@ -69,19 +69,20 @@ const CASES = {
 };
 
 // A room 40 × 10, open unless given layers.
-const room = (layers = {}) => jest.requireActual('./helpers/grid').gridMap({
-  id: 'bm',
-  name: 'Room',
-  width: 40,
-  height: 10,
-  entries: [{ id: 'in', x: 1, y: 5 }],
-  exits: [{ id: 'out', name: 'the door', x: 0, y: 5, to: 'out' }],
-  features: [],
-  walls: [],
-  doors: [],
-  obstacles: [],
-  ...layers,
-});
+const room = (layers = {}) =>
+  jest.requireActual('./helpers/grid').gridMap({
+    id: 'bm',
+    name: 'Room',
+    width: 40,
+    height: 10,
+    entries: [{ id: 'in', x: 1, y: 5 }],
+    exits: [{ id: 'out', name: 'the door', x: 0, y: 5, to: 'out' }],
+    features: [],
+    walls: [],
+    doors: [],
+    obstacles: [],
+    ...layers,
+  });
 
 describe.each(Object.keys(CASES))('position under %s', (id) => {
   const c = CASES[id];

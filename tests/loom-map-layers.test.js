@@ -73,7 +73,11 @@ describe('what covers a square, and walking past it', () => {
   });
 
   test('what covers a square: solid and low obstacles, difficult ground, open floor', () => {
-    expect(maps.blockerAt(map, sq(4, 2))).toEqual({ id: 'layer-bar', name: 'the bar', kind: 'low' });
+    expect(maps.blockerAt(map, sq(4, 2))).toEqual({
+      id: 'layer-bar',
+      name: 'the bar',
+      kind: 'low',
+    });
     expect(maps.blockerAt(map, sq(6, 6))).toMatchObject({ name: 'a pillar', kind: 'solid' });
     expect(maps.blockerAt(map, sq(3, 6))).toMatchObject({ name: 'rubble', kind: 'difficult' });
     expect(maps.blockerAt(map, sq(9, 1))).toBeNull();

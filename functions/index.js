@@ -579,6 +579,32 @@ function requireLoomAuth(request) {
  * model and also returns step: { cell, ap, plan, lines }.
  * Returns: { narration: string, stateSummary: string, suggestedActions: string[] }
  */
+// A `travel` action as the turn takes it (L-363), or null when malformed:
+// `{ verb, go }` or `{ verb, to, offRoad }`, `to` a place id or a point on a
+// region map (map units, never negative).
+function travelOf(action) {
+  if (action.go !== undefined) {
+    return action.go === 'on' || action.go === 'stop' ? { verb: 'travel', go: action.go } : null;
+  }
+  const to = action.to;
+  if (typeof to === 'string') {
+    return /^[A-Za-z0-9_-]{1,80}$/.test(to) ? { verb: 'travel', to, offRoad: true } : null;
+  }
+  const p = to && typeof to === 'object' && to.point;
+  const good =
+    Boolean(p) &&
+    typeof p === 'object' &&
+    [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 100000) &&
+    (to.mapId === undefined ||
+      (typeof to.mapId === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(to.mapId)));
+  if (!good) return null;
+  return {
+    verb: 'travel',
+    to: { ...(to.mapId ? { mapId: to.mapId } : {}), point: { x: p.x, y: p.y } },
+    offRoad: true,
+  };
+}
+
 exports.loomPlayTurn = onCall(async (request) => {
   const uid = requireLoomAuth(request);
 
@@ -708,7 +734,11 @@ exports.loomPlayTurn = onCall(async (request) => {
             (typeof action.token.image === 'string' &&
               /^img_[0-9a-f]{16}$/.test(action.token.image))) &&
           (action.token.crop === undefined || isCrop(action.token.crop))));
+    // Across country (L-363): setting out for a place or a point on the
+    // region map, going on with the journey, or stopping.
+    const travelling = typeof action === 'object' && action.verb === 'travel' && travelOf(action);
     if (
+      !travelling &&
       !choosingToken &&
       !bare &&
       !door &&
@@ -733,7 +763,9 @@ exports.loomPlayTurn = onCall(async (request) => {
           '{ verb: "look", cell: { x, y } | door: <door id> | object: <object id> }, ' +
           '{ verb: "suggested", text, act?: { verb, target? } }, { verb: "confirm" }, ' +
           '{ verb: "levelUp", choices: { attributes?, skills?, traits?, attacks? } }, ' +
-          '{ verb: "token", token: { image?, crop? } | null } or { verb: "end-turn" }.'
+          '{ verb: "token", token: { image?, crop? } | null }, ' +
+          '{ verb: "travel", to: <place id> | { mapId?, point: { x, y } }, offRoad: true }, ' +
+          '{ verb: "travel", go: "on" | "stop" } or { verb: "end-turn" }.'
       );
     }
   } else {
@@ -754,81 +786,83 @@ exports.loomPlayTurn = onCall(async (request) => {
       ...(action
         ? {
             action:
-              action.verb === 'token'
-                ? {
-                    verb: 'token',
-                    token: action.token && {
-                      ...(action.token.image ? { image: action.token.image } : {}),
-                      ...(action.token.crop
-                        ? {
-                            crop: Object.fromEntries(
-                              ['x', 'y', 'zoom']
-                                .filter((k) => action.token.crop[k] !== undefined)
-                                .map((k) => [k, action.token.crop[k]])
-                            ),
-                          }
-                        : {}),
-                    },
-                  }
-                : action.verb === 'levelUp'
-                  ? { verb: 'levelUp', choices: action.choices }
-                  : action.verb === 'suggested'
-                    ? {
-                        verb: 'suggested',
-                        text: action.text.trim(),
-                        ...(action.act
+              action.verb === 'travel'
+                ? travelOf(action)
+                : action.verb === 'token'
+                  ? {
+                      verb: 'token',
+                      token: action.token && {
+                        ...(action.token.image ? { image: action.token.image } : {}),
+                        ...(action.token.crop
                           ? {
-                              act: {
-                                verb: action.act.verb,
-                                ...(action.act.target ? { target: action.act.target } : {}),
-                              },
+                              crop: Object.fromEntries(
+                                ['x', 'y', 'zoom']
+                                  .filter((k) => action.token.crop[k] !== undefined)
+                                  .map((k) => [k, action.token.crop[k]])
+                              ),
                             }
                           : {}),
-                      }
-                    : action.verb === 'look'
-                      ? action.door !== undefined
-                        ? { verb: 'look', door: action.door }
-                        : action.object !== undefined
-                          ? { verb: 'look', object: action.object }
-                          : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
-                      : action.verb === 'object'
-                        ? { verb: 'object', object: action.object, act: action.act }
-                        : action.verb === 'door'
-                          ? { verb: 'door', door: action.door, open: action.open }
-                          : action.verb === 'rest'
-                            ? { verb: 'rest', rest: action.rest }
-                            : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(
-                                  action.verb
-                                )
-                              ? {
-                                  verb: action.verb,
-                                  ...(action.attack ? { attack: action.attack } : {}),
-                                  ...(action.target ? { target: action.target } : {}),
-                                  ...(action.feature ? { feature: action.feature } : {}),
-                                }
-                              : action.verb === 'attack'
+                      },
+                    }
+                  : action.verb === 'levelUp'
+                    ? { verb: 'levelUp', choices: action.choices }
+                    : action.verb === 'suggested'
+                      ? {
+                          verb: 'suggested',
+                          text: action.text.trim(),
+                          ...(action.act
+                            ? {
+                                act: {
+                                  verb: action.act.verb,
+                                  ...(action.act.target ? { target: action.act.target } : {}),
+                                },
+                              }
+                            : {}),
+                        }
+                      : action.verb === 'look'
+                        ? action.door !== undefined
+                          ? { verb: 'look', door: action.door }
+                          : action.object !== undefined
+                            ? { verb: 'look', object: action.object }
+                            : { verb: 'look', cell: { x: action.cell.x, y: action.cell.y } }
+                        : action.verb === 'object'
+                          ? { verb: 'object', object: action.object, act: action.act }
+                          : action.verb === 'door'
+                            ? { verb: 'door', door: action.door, open: action.open }
+                            : action.verb === 'rest'
+                              ? { verb: 'rest', rest: action.rest }
+                              : ['dash', 'dodge', 'withdraw', 'stand', 'ready', 'use'].includes(
+                                    action.verb
+                                  )
                                 ? {
-                                    verb: 'attack',
-                                    target: action.target,
+                                    verb: action.verb,
                                     ...(action.attack ? { attack: action.attack } : {}),
-                                    ...(action.subdue ? { subdue: true } : {}),
+                                    ...(action.target ? { target: action.target } : {}),
+                                    ...(action.feature ? { feature: action.feature } : {}),
                                   }
-                                : action.verb === 'end-turn' ||
-                                    action.verb === 'continue' ||
-                                    action.verb === 'confirm' ||
-                                    action.verb === 'search'
-                                  ? { verb: action.verb }
-                                  : action.point !== undefined
-                                    ? {
-                                        verb: action.verb,
-                                        point: { x: action.point.x, y: action.point.y },
-                                      }
-                                    : typeof action.target === 'string'
-                                      ? { verb: action.verb, target: action.target }
-                                      : {
-                                          verb: 'move',
-                                          cell: { x: action.cell.x, y: action.cell.y },
-                                        },
+                                : action.verb === 'attack'
+                                  ? {
+                                      verb: 'attack',
+                                      target: action.target,
+                                      ...(action.attack ? { attack: action.attack } : {}),
+                                      ...(action.subdue ? { subdue: true } : {}),
+                                    }
+                                  : action.verb === 'end-turn' ||
+                                      action.verb === 'continue' ||
+                                      action.verb === 'confirm' ||
+                                      action.verb === 'search'
+                                    ? { verb: action.verb }
+                                    : action.point !== undefined
+                                      ? {
+                                          verb: action.verb,
+                                          point: { x: action.point.x, y: action.point.y },
+                                        }
+                                      : typeof action.target === 'string'
+                                        ? { verb: action.verb, target: action.target }
+                                        : {
+                                            verb: 'move',
+                                            cell: { x: action.cell.x, y: action.cell.y },
+                                          },
           }
         : { actionText: actionText.trim() }),
     });

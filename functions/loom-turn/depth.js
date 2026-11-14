@@ -20,6 +20,11 @@
  *             and the arrival line names the whole journey. Only places the
  *             save has discovered are gone to, and only through open ones.
  *
+ * A closed place (one not yet Playable) is reached and stood outside of
+ * (planning/off-road-travel.md TR1; L-363 / #837): the save is left in the
+ * wilds at its edge on its map (./wild-journeys.js outside), never turned
+ * back before setting out.
+ *
  * A move starts from the frame's region map: not on a grid (its exits come
  * first), and in a town only from a way out.
  *
@@ -33,6 +38,8 @@ const routes = require('../loom-canon/routes');
 const clock = require('../loom-canon/clock');
 const town = require('../loom-canon/town');
 const { isPlayable } = require('../loom-canon/grading');
+// ./wild-journeys.js needs ./adjudicate.js, which needs this: required when used.
+const outside = (...args) => require('./wild-journeys').outside(...args);
 
 const blocked = (message) => ({ outcome: 'blocked', mutations: [], constraints: [message] });
 const set = (path, value) => ({ target: 'save', op: 'set-flag', path, value });
@@ -125,10 +132,22 @@ function exitTo(view, characterState, exit, fromId) {
   const path = to && levels.pathTo(view, exit.placeId);
   if (!path || !live(to))
     return blocked('The way by ' + (exit.name || 'there') + ' leads nowhere now.');
+  const seconds = Number.isFinite(exit.seconds) && exit.seconds > 0 ? exit.seconds : 0;
+  const start = clock.timeOf(characterState);
   if (kindOf(view, to.mapId) === 'region') {
-    const there = frames.viewFor(view, to.mapId);
-    if (!isPlayable(there, there.locations[exit.placeId] || to)) {
-      return blocked('The way to ' + to.name + ' is closed. Turn back.');
+    const there = frames.viewFor(view, to.mapId, path.slice(0, -1));
+    const place = there.locations[exit.placeId];
+    if (place && !isPlayable(there, place)) {
+      // Closed (L-363): stood outside it, on its map.
+      const out = outside(there, place, null);
+      return {
+        outcome: 'success',
+        mutations: out.mutations
+          .concat(seconds ? [set('time', start + seconds)] : [])
+          .concat([{ op: 'increment', path: 'worldClock', value: 1 }]),
+        constraints: ['You go by ' + (exit.name || 'the way') + '. ' + out.line],
+        ...(seconds ? { time: travel.timeSpent(start, seconds) } : {}),
+      };
     }
   }
   let at = settled(view, path);
@@ -143,8 +162,6 @@ function exitTo(view, characterState, exit, fromId) {
       line += ' You come into ' + opens.name + ' by ' + down.way.name + '.';
     }
   }
-  const seconds = Number.isFinite(exit.seconds) && exit.seconds > 0 ? exit.seconds : 0;
-  const start = clock.timeOf(characterState);
   return {
     outcome: 'success',
     mutations: [set('at', at)]
@@ -164,12 +181,15 @@ function exitTo(view, characterState, exit, fromId) {
  * of `goals` (ids), through open places only, setting out at `start`:
  * `{ path: [ids], seconds, legs: [{ from, to, trip }] }`, or null.
  */
-function cross(world, mapId, fromId, goals, characterState, start) {
+function cross(world, mapId, fromId, goals, characterState, start, reachClosed = false) {
   const view = frames.viewFor(world, mapId);
   const goal = new Set(goals);
   if (goal.has(fromId)) return { path: [fromId], seconds: 0, legs: [] };
+  // A closed goal may be reached, to stand outside it (L-363), never passed through.
   const passable = (loc) =>
-    live(loc) && isPlayable(view, loc) && !town.missingAbility(loc, characterState);
+    live(loc) &&
+    ((reachClosed && goal.has(loc.id) && !isPlayable(view, loc)) ||
+      (isPlayable(view, loc) && !town.missingAbility(loc, characterState)));
   const best = new Map([[fromId, { seconds: 0, prev: null, trip: null }]]);
   const open = [fromId];
   while (open.length) {
@@ -284,18 +304,16 @@ function betweenParents(proposedAction, characterState, view) {
     from[i].placeId,
     [to[i].placeId],
     characterState,
-    start + seconds
+    start + seconds,
+    true
   );
-  if (!across) {
-    const closed = frames.viewFor(view, common).locations[to[i].placeId];
-    if (closed && !isPlayable(frames.viewFor(view, common), closed)) {
-      return blocked('The way to ' + closed.name + ' is closed. Turn back.');
-    }
-    return blocked('No way you know leads there.');
-  }
+  if (!across) return blocked('No way you know leads there.');
   seconds += across.seconds;
   stages.push({ mapId: common, across });
   across.path.forEach((id) => found.add(id));
+  // Closed (L-363): stood outside it.
+  const shut = closedAt(view, common, to.slice(0, i), across);
+  if (shut) return outsideAt(shut, { start, seconds, stages, found });
   // Down: into each region map by its way in, across it to the next place.
   let at = to.slice(0, i + 1).map((s) => ({ ...s }));
   for (let k = i + 1; k < to.length; k++) {
@@ -304,14 +322,16 @@ function betweenParents(proposedAction, characterState, view) {
     const down = into(view, at.slice(0, k), mapId, cameFrom);
     if (!down) return blocked('The way into ' + nameOf(view, mapId) + ' is closed. Turn back.');
     down.found.forEach((id) => found.add(id));
-    const there = cross(view, mapId, down.way.id, [to[k].placeId], characterState, start + seconds);
-    if (!there) {
-      const closed = frames.viewFor(view, mapId).locations[to[k].placeId];
-      if (closed && !isPlayable(frames.viewFor(view, mapId), closed)) {
-        return blocked('The way to ' + closed.name + ' is closed. Turn back.');
-      }
-      return blocked('No way you know leads there.');
-    }
+    const there = cross(
+      view,
+      mapId,
+      down.way.id,
+      [to[k].placeId],
+      characterState,
+      start + seconds,
+      true
+    );
+    if (!there) return blocked('No way you know leads there.');
     seconds += there.seconds;
     stages.push({
       mapId,
@@ -319,6 +339,8 @@ function betweenParents(proposedAction, characterState, view) {
       line: 'You come into ' + nameOf(view, mapId) + ' by ' + down.way.name + '.',
     });
     there.path.forEach((id) => found.add(id));
+    const shutHere = closedAt(view, mapId, at.slice(0, k), there);
+    if (shutHere) return outsideAt(shutHere, { start, seconds, stages, found });
     at = at.slice(0, k).concat([{ mapId, placeId: to[k].placeId }]);
   }
   // Arriving at a place that opens a region map goes on into it.
@@ -348,6 +370,42 @@ function betweenParents(proposedAction, characterState, view) {
     mutations: [set('at', at)]
       .concat([...found].map((id) => add('discovered', id)))
       .concat([add('visited', targetId)])
+      .concat(seconds ? [set('time', start + seconds)] : [])
+      .concat([{ op: 'increment', path: 'worldClock', value: 1 }]),
+    constraints: lines,
+    journey: {
+      stages: stages.map((s) => ({
+        mapId: s.mapId,
+        through: s.across.path,
+        seconds: s.across.seconds,
+      })),
+    },
+    ...(seconds ? { time: travel.timeSpent(start, seconds) } : {}),
+  };
+}
+
+// The place a crossing of region map `mapId` reached, when it is closed:
+// `{ view, place, from }` (the frame on that map, under `prefix`, and the
+// place it came from there), else null.
+function closedAt(world, mapId, prefix, across) {
+  const view = frames.viewFor(world, mapId, prefix);
+  const place = view.locations[across.path[across.path.length - 1]];
+  if (!place || isPlayable(view, place)) return null;
+  const before = view.locations[across.path[across.path.length - 2]];
+  const g = before && before.geo;
+  return { view, place, from: g ? [g.x, g.y] : null };
+}
+
+// A trip between parents that ends outside a closed place (L-363).
+function outsideAt(shut, { start, seconds, stages, found }) {
+  const out = outside(shut.view, shut.place, shut.from);
+  const lines = stages.filter((s) => s.line).map((s) => s.line);
+  lines.push((seconds > 0 ? 'After ' + clock.duration(seconds) + ', y' : 'Y') + out.line.slice(1));
+  found.delete(shut.place.id);
+  return {
+    outcome: 'success',
+    mutations: out.mutations
+      .concat([...found].map((id) => add('discovered', id)))
       .concat(seconds ? [set('time', start + seconds)] : [])
       .concat([{ op: 'increment', path: 'worldClock', value: 1 }]),
     constraints: lines,

@@ -24,31 +24,32 @@ const FANTASY = BUILT_IN['d20-fantasy'];
 const SCIFI = BUILT_IN['pool-scifi'];
 
 // A hall 8 × 5, in at the west door; two bandits at the east end, in sight.
-const mockHall = (group) => jest.requireActual('./helpers/grid').gridMap({
-  id: 'bm_hall',
-  name: 'The hall',
-  width: 8,
-  height: 5,
-  image: null,
-  entries: [{ id: 'door', x: 1, y: 2 }],
-  exits: mockState.exits ? [{ id: 'out', name: 'the door', x: 0, y: 2, to: 'out' }] : [],
-  features: [],
-  walls: [],
-  // A locked cell door on the south edge of (2, 2) (L-844).
-  doors: [
-    {
-      id: 'cell',
-      name: 'the cell door',
-      from: { x: 2, y: 3 },
-      to: { x: 3, y: 3 },
-      locked: true,
-      difficulty: 10,
-    },
-  ],
-  obstacles: [],
-  hazards: [],
-  figures: mockState.foes ? [group] : [],
-});
+const mockHall = (group) =>
+  jest.requireActual('./helpers/grid').gridMap({
+    id: 'bm_hall',
+    name: 'The hall',
+    width: 8,
+    height: 5,
+    image: null,
+    entries: [{ id: 'door', x: 1, y: 2 }],
+    exits: mockState.exits ? [{ id: 'out', name: 'the door', x: 0, y: 2, to: 'out' }] : [],
+    features: [],
+    walls: [],
+    // A locked cell door on the south edge of (2, 2) (L-844).
+    doors: [
+      {
+        id: 'cell',
+        name: 'the cell door',
+        from: { x: 2, y: 3 },
+        to: { x: 3, y: 3 },
+        locked: true,
+        difficulty: 10,
+      },
+    ],
+    obstacles: [],
+    hazards: [],
+    figures: mockState.foes ? [group] : [],
+  });
 const mockCases = {
   'd20-fantasy': {
     system: FANTASY,

@@ -76,9 +76,7 @@ describe.each([
 ])('tokenOf with %s', (systemId, block) => {
   const system = BUILT_IN[systemId];
   const world = worldFor(system, block);
-  const all = world.battleMaps.camp.figures.flatMap((g) =>
-    figures.instancesOf(system, g, world)
-  );
+  const all = world.battleMaps.camp.figures.flatMap((g) => figures.instancesOf(system, g, world));
   const byGroup = (id) => all.filter((f) => f.figure === id);
 
   test('six bandits from one stat block share its picture', () => {

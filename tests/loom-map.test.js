@@ -173,16 +173,19 @@ describe('moves made on the map', () => {
     });
   });
 
-  test('are still gated: a closed place turns the player back', async () => {
+  test('are still gated: a closed place is reached and stood outside of (L-363)', async () => {
     const { saveId } = await newGame();
     await clickTo(saveId, 'loc_229');
     expect(interpretCalls()).toHaveLength(0);
-    expect((await saveOf(saveId)).location).toBe('loc_1');
+    const save = await saveOf(saveId);
+    expect(save.location).toBeNull();
+    expect(save.wild).toEqual(expect.objectContaining({ x: expect.any(Number) }));
     const turns = await db.collection('loom_saves').doc(saveId).collection('loom_turns').get();
-    expect(turns.docs[0].data().resolution).toMatchObject({
-      outcome: 'blocked',
-      constraints: ['The way to Wisin is closed. Turn back.'],
-    });
+    const { resolution } = turns.docs[0].data();
+    expect(resolution.outcome).toBe('success');
+    expect(resolution.constraints.join(' ')).toMatch(
+      /you come to Wisin, but its way is closed to you/
+    );
   });
 
   test('can only reach connected places, like typed moves', async () => {

@@ -152,6 +152,33 @@ async function intake(params) {
  *           actionText?: string, action?: { verb: 'move', target: string } }} params
  * @returns {Promise<{ narration: string, stateSummary: string, suggestedActions: string[] }>}
  */
+// A structured `travel` action as the turn's words and proposed action (L-363).
+function travelOf(action, canonWorld) {
+  if (action.go === 'on' || action.go === 'stop') {
+    return {
+      actionText: action.go === 'on' ? 'go on with the journey' : 'stop the journey here',
+      proposedAction: { verb: 'travel', targets: [], params: { go: action.go } },
+    };
+  }
+  const id = typeof action.to === 'string' ? action.to : null;
+  const point =
+    action.to && typeof action.to === 'object' && action.to.point
+      ? {
+          mapId: action.to.mapId ? String(action.to.mapId) : undefined,
+          point: { x: Number(action.to.point.x), y: Number(action.to.point.y) },
+        }
+      : null;
+  const target = id && canonWorld.locations[id];
+  return {
+    actionText: 'travel across country to ' + (target ? target.name : id || 'a point on the map'),
+    proposedAction: {
+      verb: 'travel',
+      targets: id ? [id] : [],
+      params: { offRoad: true, ...(point ? { to: point } : {}) },
+    },
+  };
+}
+
 async function runTurnPipeline(params) {
   const { db, uid, worldId, saveId, action } = params;
 
@@ -609,6 +636,11 @@ async function runTurnPipeline(params) {
             known,
             asked,
           });
+  } else if (action && action.verb === 'travel') {
+    // Across country (L-363; ./wild-journeys.js): setting out for a place or
+    // a point on the map, going on with the journey, or stopping it. No
+    // model reads it.
+    ({ actionText, proposedAction } = travelOf(action, canonWorld));
   } else if (action) {
     const target = canonWorld.locations[action.target] || (canonWorld.places || {})[action.target];
     actionText = 'travel to ' + (target ? target.name : action.target);

@@ -58,8 +58,16 @@ const SCREENS = {
 };
 
 const PORTRAITS = [
-  { id: 'img_00000000000000a1', link: '/fixtures/tokens/chief.png', crop: { x: 0.5, y: 0.3, zoom: 1 } },
-  { id: 'img_00000000000000a2', link: '/fixtures/tokens/villain.png', crop: { x: 0.5, y: 0.5, zoom: 1 } },
+  {
+    id: 'img_00000000000000a1',
+    link: '/fixtures/tokens/chief.png',
+    crop: { x: 0.5, y: 0.3, zoom: 1 },
+  },
+  {
+    id: 'img_00000000000000a2',
+    link: '/fixtures/tokens/villain.png',
+    crop: { x: 0.5, y: 0.5, zoom: 1 },
+  },
 ];
 const RULES = (portraits) => ({
   system: { id: 'd20-fantasy', name: 'd20 fantasy', words: {} },

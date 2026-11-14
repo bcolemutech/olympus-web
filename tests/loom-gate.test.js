@@ -155,22 +155,43 @@ describe('travel', () => {
     await writeUp(worldId, 'loc_1');
     loomCanon.clearWorldCache();
     ({ saveId } = await newGame(worldId));
+    await offMap(db, saveId).catch(() => {});
+    home = await saveOf(saveId);
   });
+  // Back at Burdendal's gate, as the game began.
+  let home;
+  const goHome = () => db.collection('loom_saves').doc(saveId).set(home);
 
-  test('a move into a closed place is turned back, and the narrator knows the way is closed', async () => {
+  test('a move to a closed place ends outside it (L-363), and the narrator knows the way is closed', async () => {
     playerMovesTo('loc_631'); // Dunsmouth, still import text
     await expect(turn(worldId, saveId)).resolves.toMatchObject({ narration: 'The road unfolds.' });
-    expect((await saveOf(saveId)).location).toBe('loc_1');
-    expect((await lastTurn(saveId)).resolution).toEqual({
+    const outside = await saveOf(saveId);
+    expect(outside.location).toBeNull();
+    expect(outside.wild).toEqual(expect.objectContaining({ x: expect.any(Number) }));
+    const { resolution } = await lastTurn(saveId);
+    expect(resolution.outcome).toBe('success');
+    expect(resolution.constraints.join(' ')).toMatch(
+      /you come to Dunsmouth, but its way is closed to you: you stand outside/
+    );
+    expect(prompts.at(-1)).toContain('but its way is closed to you');
+    // Going in from there is refused.
+    playerMovesTo('loc_631');
+    await turn(worldId, saveId);
+    expect((await lastTurn(saveId)).resolution).toMatchObject({
       outcome: 'blocked',
-      mutations: [],
-      constraints: ['The way to Dunsmouth is closed. Turn back.'],
+      constraints: ['Dunsmouth is closed to you: you can go no further in.'],
     });
-    const state = (await db.collection('loom_world_state').doc(worldId).get()).data();
-    expect(state.worldClock || 0).toBe(0);
-    expect(prompts.at(-1)).toContain('The way to Dunsmouth is closed. Turn back.');
 
-    // The narrator is told which ways on are open and which are closed.
+    // At the gate, the narrator is told which ways on are open and which are closed.
+    await goHome();
+    mockCallGemini.mockImplementation(async (options) => {
+      if (options.systemInstruction.includes('INTERPRET stage')) {
+        return { verb: 'look', targets: [], params: {} };
+      }
+      prompts.push(options.userMessage);
+      return { narration: 'Dust and stone.', inventedEntities: [], suggestedActions: [] };
+    });
+    await turn(worldId, saveId);
     expect(prompts.at(-1)).toContain('WAYS ON FROM The Town Gate, Burdendal:');
     expect(prompts.at(-1)).toContain('- Dunsmouth (loc_631), out of town by trail: CLOSED');
     expect(prompts.at(-1)).toContain('- Wisin (loc_229), out of town by sea: CLOSED');
@@ -184,17 +205,18 @@ describe('travel', () => {
       .doc('loc_631')
       .update({ description: 'Written up: loc_631.', 'sources.description': 'mcp' });
     await ref.update({ canonVersion: (await ref.get()).data().canonVersion + 1 });
+    await goHome();
     playerMovesTo('loc_631');
     await turn(worldId, saveId);
-    expect((await saveOf(saveId)).location).toBe('loc_1');
-    expect((await lastTurn(saveId)).resolution).toMatchObject({
-      outcome: 'blocked',
-      constraints: ['The way to Dunsmouth is closed. Turn back.'],
-    });
+    expect((await saveOf(saveId)).location).toBeNull();
+    expect((await lastTurn(saveId)).resolution.constraints.join(' ')).toMatch(
+      /you come to Dunsmouth, but its way is closed to you/
+    );
   });
 
   test('once written up and laid out, the same place can be entered', async () => {
     await writeUp(worldId, 'loc_631');
+    await goHome();
     playerMovesTo('loc_631');
     await turn(worldId, saveId);
     expect((await saveOf(saveId)).location).toBe('loc_631');

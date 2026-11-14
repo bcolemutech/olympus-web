@@ -184,7 +184,23 @@ function positionAfter(save, resolution) {
   const step = change('placeId');
   const onto = change('mapId');
   const cell = change('cell');
+  // In the wilds (L-363): a camp, or outside a closed place, at a point on
+  // the region map.
+  const at = change('at');
+  const last = at && Array.isArray(at.value) && at.value[at.value.length - 1];
+  if (last && last.point && !move) {
+    return {
+      location: null,
+      placeId: null,
+      mapId: null,
+      cell: null,
+      wild: last.point,
+      wildMap: last.mapId,
+    };
+  }
+  const wild = change('wild');
   return {
+    wild: wild ? wild.value : move ? null : (!save.location && save.wild) || null,
     location: move ? move.value : save.location,
     // A move across the map leaves town unless it lands somewhere in the next.
     placeId: step ? step.value : move ? null : save.placeId,
@@ -512,6 +528,10 @@ function buildTimeSection(save, resolution) {
 // position on that map. None where nothing is painted there, or off a place.
 function buildWhereSection(canonWorld, position, save) {
   const mapId = canonWorld.frame && canonWorld.frame.mapId;
+  const w = position.wild;
+  if (mapId && w && Number.isFinite(w.x) && Number.isFinite(w.y)) {
+    return realms.whereLine(canonWorld, position.wildMap || mapId, [w.x, w.y], '') || null;
+  }
   const host = position.location && (canonWorld.locations || {})[position.location];
   const g = host && host.geo;
   if (!mapId || !g || !Number.isFinite(g.x) || !Number.isFinite(g.y)) return null;

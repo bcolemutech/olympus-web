@@ -25,6 +25,8 @@
   //
   //   plan(opts) → null when there is no way, else
   //     { path: [[x, y]],        the points walked, in map units
+  //       times: [hours],        the hours from the start at each point
+  //                              (L-363: a journey's day legs are cut by them)
   //       length,                its length in map units
   //       distance,              in the map's distance unit (× scale)
   //       hours,                 at the pace given
@@ -48,6 +50,10 @@
   //   grid(opts)   the rasterised grid alone (cached per geometry and
   //                settings): { cols, rows, cell, speed, danger, material,
   //                materials }
+  //
+  //   at(opts, [x, y])   the ground at a point as the grid has it: { speed,
+  //                danger (material × region), material (or null) }; null
+  //                off the map or without a grid
   //
   // This file is kept in two places with the same bytes, functions/loom-
   // canon/wild-paths.js and public/apps/loom/js/wild-paths.js (the page
@@ -499,6 +505,7 @@
 
     function describe(ids) {
       var path = [];
+      var times = [];
       var legs = [];
       var byMaterial = {};
       var length = 0;
@@ -515,6 +522,7 @@
         var p = where(ids[s]);
         if (s === 0) {
           path.push(p);
+          times.push(gScore[ids[s]]);
           continue;
         }
         var prevId = ids[s - 1];
@@ -543,10 +551,21 @@
           legs.push({ by: by, route: routeId, from: a, to: p, length: len, hours: hours });
         }
         var before = path[path.length - 1];
-        if (p[0] !== before[0] || p[1] !== before[1]) path.push(p);
+        if (p[0] !== before[0] || p[1] !== before[1]) {
+          path.push(p);
+          times.push(gScore[ids[s]]);
+        } else {
+          times[times.length - 1] = gScore[ids[s]];
+        }
       }
+      var kept = straighten(path);
       return {
-        path: straighten(path),
+        path: kept.map(function (k) {
+          return path[k];
+        }),
+        times: kept.map(function (k) {
+          return times[k];
+        }),
         length: length,
         distance: length * scale,
         hours: gScore[goal],
@@ -573,20 +592,35 @@
     }
   }
 
-  // A path less the points lying on a straight run between their neighbours.
+  // The indices of a path's points less those lying on a straight run
+  // between their neighbours.
   function straighten(path) {
-    if (path.length < 3) return path;
-    var out = [path[0]];
+    var out = [0];
+    if (path.length < 2) return out;
     for (var i = 1; i < path.length - 1; i++) {
-      var a = out[out.length - 1];
+      var a = path[out[out.length - 1]];
       var b = path[i];
       var c = path[i + 1];
       var cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
       var dot = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]);
-      if (Math.abs(cross) > 1e-9 || dot < 0) out.push(b);
+      if (Math.abs(cross) > 1e-9 || dot < 0) out.push(i);
     }
-    out.push(path[path.length - 1]);
+    out.push(path.length - 1);
     return out;
+  }
+
+  /** The ground at a point (see the top of this file), or null. */
+  function at(opts, point) {
+    var g = grid(opts);
+    var p = pointOf(point);
+    if (!g || !p) return null;
+    var idx = cellAt(g, p[0], p[1]);
+    if (idx < 0) return null;
+    return {
+      speed: g.speed[idx],
+      danger: g.danger[idx],
+      material: g.material[idx] >= 0 ? g.materials[g.material[idx]] : null,
+    };
   }
 
   var api = {
@@ -595,6 +629,7 @@
     RIVER_SLOW: RIVER_SLOW,
     grid: grid,
     plan: plan,
+    at: at,
   };
 
   if (typeof window !== 'undefined') {

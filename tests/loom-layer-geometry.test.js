@@ -38,10 +38,7 @@ const hall = () => ({
   entries: [{ id: 'west', x: 1, y: 3 }],
   exits: [{ id: 'out', name: 'the far door', x: 9, y: 3, to: 'out' }],
   features: [{ id: 'altar', name: 'the altar', x: 7, y: 1, ap: 3 }],
-  walls: [
-    { points: [sq(5, 0), sq(5, 3)] },
-    { points: [sq(5, 4), sq(5, 7)] },
-  ],
+  walls: [{ points: [sq(5, 0), sq(5, 3)] }, { points: [sq(5, 4), sq(5, 7)] }],
   doors: [
     {
       id: 'mid',
@@ -153,7 +150,9 @@ describe('converting a battle map’s layers', () => {
   test('a map’s own geometry is kept, its own items winning on an id', () => {
     const map = hall();
     map.geometry = geo.normalize({
-      windows: [{ id: 'slit', material: 'glass', from: [25, 5], to: [25, 10], wall: 'layer-wall-0' }],
+      windows: [
+        { id: 'slit', material: 'glass', from: [25, 5], to: [25, 10], wall: 'layer-wall-0' },
+      ],
       // Its own door of the same id: a gate, which wins.
       doors: [{ id: 'mid', material: 'gate', from: [25, 15], to: [25, 20], state: 'closed' }],
     });
@@ -191,7 +190,12 @@ describe('converting a battle map’s layers', () => {
     expect(ids(g.lights)).toEqual(['lamp']);
     expect(g.ground).toBeUndefined();
     expect(g.doors[0].state).toBe('closed');
-    expect(ids(g.walls)).toEqual(['layer-wall-0', 'layer-wall-1', 'layer-doorway-mid', 'layer-table']);
+    expect(ids(g.walls)).toEqual([
+      'layer-wall-0',
+      'layer-wall-1',
+      'layer-doorway-mid',
+      'layer-table',
+    ]);
     const table = g.walls.find((w) => w.id === 'layer-table');
     expect(table.points).toBe('M5 25L15 25L15 30L5 30L5 25');
     // None left: only its own.

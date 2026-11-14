@@ -100,13 +100,13 @@ describe.each(BOTH)('the settings, in %s', (id, system) => {
       'modules.wilds.navigation.harder must be the danger above 1 that makes it a rung harder ' +
         '(above 0, at most 1.5), or null: never harder.',
     ]);
-    expect(nav({ check: { skill: 'Survival' }, dc: 'Hard', lost: { failure: 2, oops: 0 } })).toEqual(
-      [
-        'modules.wilds.navigation.lost.failure must be a share of the day from 0 to 1.',
-        'modules.wilds.navigation.lost: "oops" isn\'t a degree (criticalSuccess, success, ' +
-          'successAtCost, failure, criticalFailure).',
-      ]
-    );
+    expect(
+      nav({ check: { skill: 'Survival' }, dc: 'Hard', lost: { failure: 2, oops: 0 } })
+    ).toEqual([
+      'modules.wilds.navigation.lost.failure must be a share of the day from 0 to 1.',
+      'modules.wilds.navigation.lost: "oops" isn\'t a degree (criticalSuccess, success, ' +
+        'successAtCost, failure, criticalFailure).',
+    ]);
     expect(nav({ check: { skill: 'Survival' }, dc: 'Hard', stray: 1 })).toEqual([
       'modules.wilds.navigation: "stray" isn\'t part of the check (check, dc, harder, lost).',
     ]);
