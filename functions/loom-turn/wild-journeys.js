@@ -34,8 +34,11 @@
  * wilds/events.js): a roll seeded by the save, the leg and the hour it began,
  * against the module's chance for the camp's danger, far lower on a route; the
  * path walked (the wilds, or a route's kind) shapes it. The roll, the chance
- * and the event are the turn's `event`, and the event is told with the leg. One with figures to meet is played on a map later
- * (L-366); until then it is told like the rest.
+ * and the event are the turn's `event`, and the event is told with the leg. One
+ * with figures to meet is played on a battle map (L-366; ../loom-modules/wilds/
+ * arrive.js): at a camp or where the leg ends in the wilds the save is put on the
+ * map at an entry, its figures standing there, and leaves by its edge back to
+ * the journey; arriving at a place, it is told like the rest.
  *
  * Pure: returns a resolution, as ./adjudicate.js does.
  */
@@ -384,6 +387,7 @@ function stop(save) {
 
 function goOn(save, view, dice, seed) {
   const journey = save.journey;
+  if (save.mapId) return blocked(NOT_HERE + ' Leave the map first.');
   if (!journey) return blocked("You aren't on a journey. Choose where to head.");
   if (!view.frame || journey.mapId !== view.frame.mapId || !(journey.path || []).length) {
     return blocked('That journey is behind you now. Choose where to head.');
@@ -500,6 +504,8 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = [], see
   let next = null;
   // Where the leg ends: the camp, or the arrival.
   let spot = end;
+  // Whether it ends in the wilds (an event with figures is played on a map there).
+  let inWilds = true;
   if (arrives) {
     const goal = journey.to || {};
     const place = goal.placeId && view.locations[goal.placeId];
@@ -510,6 +516,7 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = [], see
     } else if (place && live(place)) {
       mutations.push(...arriveAt(view, save, place));
       lines.push('You arrive at ' + place.name + '.');
+      inWilds = false;
     } else {
       const p = goal.point ? pair(goal.point) : end;
       mutations.push(set('at', prefix.concat([{ mapId: view.frame.mapId, point: xy(p) }])));
@@ -559,14 +566,39 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = [], see
   // less likely than off the road; the sort of path walked (the wilds, or a
   // route's kind) shapes the event.
   const walkedPath = wilds.events.pathOf(journey.routes, done, done + progress);
-  const onTheWay = wilds.events.happen(view, {
+  const eventSeed = [seed, leg, start].join(':');
+  let onTheWay = wilds.events.happen(view, {
     settings,
     point: spot,
-    seed: [seed, leg, start].join(':'),
+    seed: eventSeed,
     path: walkedPath.path,
     share: walkedPath.share,
   });
-  if (onTheWay.event) lines.push(onTheWay.event.text);
+  if (onTheWay.event) {
+    // One with figures is played on a map (L-366): the save put on it at an
+    // entry, on the side it came from, its figures standing there.
+    const played = inWilds
+      ? wilds.arrive.arrive(view, save, {
+          at: spot,
+          event: onTheWay.event,
+          from: walked.length > 1 ? walked[walked.length - 2] : null,
+          seed: eventSeed,
+          dice: wilds.events.dice(eventSeed + ':figures'),
+        })
+      : null;
+    if (played) {
+      lines.push(played.line);
+      mutations.push(...played.mutations);
+      onTheWay = {
+        ...onTheWay,
+        event: {
+          ...onTheWay.event,
+          map: { id: played.map.id, name: played.map.name, from: played.from },
+        },
+      };
+    }
+    lines.push(onTheWay.event.text);
+  }
   mutations.push(set('time', start + seconds), tick);
 
   return {

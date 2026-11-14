@@ -35,6 +35,7 @@ const ground = require('../loom-canon/ground');
 const { planTownStep, walksTown, nearestWayOut } = require('./town-steps');
 const { UNKNOWN } = require('./town-found');
 const combat = require('../loom-modules/combat');
+const wilds = require('../loom-modules/wilds');
 const { namedTurn } = require('./named-turns');
 const depth = require('./depth');
 const wildJourneys = require('./wild-journeys');
@@ -585,6 +586,11 @@ function evaluateMapMove(proposedAction, characterState, canonWorld, here, known
 }
 
 function leaveMapBy(exit, host, hostName, canonWorld, characterState = {}) {
+  // An event's map in the wilds (L-366): back to the journey at the camp.
+  if (wilds.arrive.isOn(characterState)) {
+    const left = wilds.arrive.leave(characterState, exit);
+    return { outcome: 'success', mutations: left.mutations, constraints: left.lines };
+  }
   const to = exit.to && typeof exit.to === 'object' ? exit.to : null;
   // A square leading to a place on any map (L-903; map levels TV3).
   if (to && to.placeId) {
@@ -651,14 +657,16 @@ function chosenWayIn(proposedAction, canonWorld) {
 
 function evaluateMove(proposedAction, worldState, characterState, canonWorld, known, found, dice) {
   const currentId = characterState.location;
-
-  if (!currentId || !canonWorld.locations[currentId]) {
-    return blocked('You have nowhere established to move from yet.');
-  }
-
   // On a battle map (L-351), moves happen on the map until the player leaves
   // it. A map with no exits holds nobody: it is passed over.
   const onMap = maps.positionOf(canonWorld, characterState);
+
+  // An event's map in the wilds has no place of the world to stand in (L-366).
+  const inWilds = Boolean(onMap.map) && wilds.arrive.isOn(characterState);
+  if (!inWilds && (!currentId || !canonWorld.locations[currentId])) {
+    return blocked('You have nowhere established to move from yet.');
+  }
+
   if (onMap.map && (onMap.map.exits || []).length) {
     return evaluateMapMove(proposedAction, characterState, canonWorld, onMap, known, dice);
   }
@@ -2432,11 +2440,21 @@ function afterMove(resolution, characterState, canonWorld, dice, choose = null) 
     resolution.mutations.filter((m) => m.target === 'save')
   );
   const current = combat.play.fightOf(characterState);
+  // Set out for a camp where an event with figures is played (L-366): they
+  // come for the player as a broken rest's do, a fight starting.
+  const met = !current && !characterState.wildEvent && wilds.arrive.isOn(after);
   const changed = current
     ? combat.play.leftMap(characterState, after.mapId)
-    : combat.play.hostilesInSight(canonWorld, after).length
-      ? fightStarted(after, canonWorld, { by: 'seen', ambushers: 'hostile', dice, choose })
-      : null;
+    : met
+      ? fightStarted(after, wilds.arrive.worldFor(canonWorld, after), {
+          by: 'event',
+          ambushers: 'hostile',
+          dice,
+          choose,
+        })
+      : combat.play.hostilesInSight(canonWorld, after).length
+        ? fightStarted(after, canonWorld, { by: 'seen', ambushers: 'hostile', dice, choose })
+        : null;
   if (!changed) return resolution;
   return {
     ...resolution,
@@ -2670,6 +2688,8 @@ function evaluate(
 function isTravel(proposedAction, characterState) {
   if (proposedAction.verb === 'travel') return true;
   if (proposedAction.verb !== 'move' || characterState.location) return false;
+  // A move on an event's battle map is a step on it (L-366), not a journey.
+  if (characterState.mapId) return false;
   const params = proposedAction.params || {};
   return Boolean(characterState.wild) && !params.cell;
 }
