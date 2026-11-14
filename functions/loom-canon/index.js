@@ -197,6 +197,9 @@ async function readFirestoreWorld(db, worldId, meta) {
     // Its own ground materials (L-713; ./materials.js): [{ id, name, like,
     // art? }], each behaving as the built-in ground it is like.
     materials: Array.isArray(meta.materials) ? meta.materials : [],
+    // Crossing its wilds (L-361; ./wild-paths.js): { materials: { [id]:
+    // { speed?, danger?, impassable? } } }, over the materials' defaults.
+    wilds: meta.wilds || {},
     // Its art (L-944; ./art-sets.js): { set }, the art set its maps are
     // drawn with; the built-in `classic` when it names none.
     art: meta.art || {},

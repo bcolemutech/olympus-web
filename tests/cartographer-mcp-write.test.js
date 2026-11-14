@@ -233,6 +233,7 @@ test('exposes the write tools with honest hints', async () => {
     'set_tactics',
     'set_town_ground',
     'set_walls',
+    'set_wilds',
     'set_windows',
     'set_world_materials',
     'set_world_tokens',

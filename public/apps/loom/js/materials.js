@@ -19,10 +19,13 @@
   // a transparent picture in its own shape, `size` its default size in feet
   // ([width, depth]; a square is 5 ft).
   //
-  //   MATERIALS      [{ kind, id, name, art, seeThrough?, water? }]
+  //   MATERIALS      [{ kind, id, name, art, seeThrough?, water?, wild? }]
   //                    kind: ground | line | wall | door | window; a
   //                    see-through wall, door or window lets sight through
-  //                    by default (GE3); water takes a depth
+  //                    by default (GE3); water takes a depth; ground has
+  //                    `wild` (L-361): { speed, danger, impassable? } off
+  //                    the road, read through wildOf with a world's own
+  //                    materials and its `wilds` overrides (checkWilds)
   //   OBJECT_KINDS   [{ id, name, group, size, art, blocksMove?, blocksSight?,
   //                    decor?, onWall? }]
   //                    movement is blocked and sight isn't unless it says;
@@ -80,45 +83,62 @@
   }
   var WATER = { water: true };
   var SEE = { seeThrough: true };
+  // Crossing the wilds (planning/off-road-travel.md §4.1, TR2, TR4, EV6;
+  // L-361 / #835): a ground material's `wild` — its speed off the road (a
+  // factor on the pace: plains 1, forest 0.5, mountains 0.3), its danger
+  // (0.5 calm to 2 deadly) and whether it can't be crossed at all (deep
+  // water, lava). Danger is 1 unless set.
+  function w(speed) {
+    return { wild: Object.freeze({ speed: speed, danger: 1 }) };
+  }
+  var IMPASSABLE = { wild: Object.freeze({ speed: 0, danger: 1, impassable: true }) };
+  function withWild(flags, wild) {
+    var out = {};
+    Object.keys(flags).forEach(function (k) {
+      out[k] = flags[k];
+    });
+    out.wild = wild.wild;
+    return out;
+  }
 
   var MATERIALS = [
     // Floors and terrain: on a grid or an area map, and (the last dozen,
     // Azgaar's biomes) on a region map.
-    m('ground', 'stone', 'Stone'),
-    m('ground', 'flagstone', 'Flagstone'),
-    m('ground', 'cobble', 'Cobblestone'),
-    m('ground', 'marble', 'Marble'),
-    m('ground', 'tile', 'Tile'),
-    m('ground', 'wood', 'Wood planks'),
-    m('ground', 'carpet', 'Carpet'),
-    m('ground', 'dirt', 'Dirt'),
-    m('ground', 'grass', 'Grass'),
-    m('ground', 'sand', 'Sand'),
-    m('ground', 'gravel', 'Gravel'),
-    m('ground', 'mud', 'Mud'),
-    m('ground', 'rock', 'Cave rock'),
-    m('ground', 'snow', 'Snow'),
-    m('ground', 'ice', 'Ice'),
-    m('ground', 'lava', 'Lava'),
-    m('ground', 'roof', 'Roof'),
-    m('ground', 'metal', 'Metal deck'),
-    m('ground', 'water', 'Water', WATER),
-    m('ground', 'deep-water', 'Deep water', WATER),
-    m('ground', 'swamp', 'Swamp', WATER),
-    m('ground', 'ocean', 'Ocean', WATER),
-    m('ground', 'lake', 'Lake', WATER),
-    m('ground', 'marsh', 'Marsh', WATER),
-    m('ground', 'grassland', 'Grassland'),
-    m('ground', 'farmland', 'Farmland'),
-    m('ground', 'forest', 'Forest'),
-    m('ground', 'jungle', 'Jungle'),
-    m('ground', 'savanna', 'Savanna'),
-    m('ground', 'desert', 'Desert'),
-    m('ground', 'hills', 'Hills'),
-    m('ground', 'mountains', 'Mountains'),
-    m('ground', 'tundra', 'Tundra'),
-    m('ground', 'taiga', 'Taiga'),
-    m('ground', 'glacier', 'Glacier'),
+    m('ground', 'stone', 'Stone', w(1)),
+    m('ground', 'flagstone', 'Flagstone', w(1)),
+    m('ground', 'cobble', 'Cobblestone', w(1)),
+    m('ground', 'marble', 'Marble', w(1)),
+    m('ground', 'tile', 'Tile', w(1)),
+    m('ground', 'wood', 'Wood planks', w(1)),
+    m('ground', 'carpet', 'Carpet', w(1)),
+    m('ground', 'dirt', 'Dirt', w(1)),
+    m('ground', 'grass', 'Grass', w(1)),
+    m('ground', 'sand', 'Sand', w(0.7)),
+    m('ground', 'gravel', 'Gravel', w(0.9)),
+    m('ground', 'mud', 'Mud', w(0.5)),
+    m('ground', 'rock', 'Cave rock', w(0.8)),
+    m('ground', 'snow', 'Snow', w(0.5)),
+    m('ground', 'ice', 'Ice', w(0.4)),
+    m('ground', 'lava', 'Lava', IMPASSABLE),
+    m('ground', 'roof', 'Roof', w(1)),
+    m('ground', 'metal', 'Metal deck', w(1)),
+    m('ground', 'water', 'Water', withWild(WATER, w(0.3))),
+    m('ground', 'deep-water', 'Deep water', withWild(WATER, IMPASSABLE)),
+    m('ground', 'swamp', 'Swamp', withWild(WATER, w(0.4))),
+    m('ground', 'ocean', 'Ocean', withWild(WATER, IMPASSABLE)),
+    m('ground', 'lake', 'Lake', withWild(WATER, IMPASSABLE)),
+    m('ground', 'marsh', 'Marsh', withWild(WATER, w(0.4))),
+    m('ground', 'grassland', 'Grassland', w(1)),
+    m('ground', 'farmland', 'Farmland', w(0.9)),
+    m('ground', 'forest', 'Forest', w(0.5)),
+    m('ground', 'jungle', 'Jungle', w(0.4)),
+    m('ground', 'savanna', 'Savanna', w(0.9)),
+    m('ground', 'desert', 'Desert', w(0.6)),
+    m('ground', 'hills', 'Hills', w(0.6)),
+    m('ground', 'mountains', 'Mountains', w(0.3)),
+    m('ground', 'tundra', 'Tundra', w(0.6)),
+    m('ground', 'taiga', 'Taiga', w(0.5)),
+    m('ground', 'glacier', 'Glacier', w(0.2)),
     // Rivers and roads, as lines.
     m('line', 'river', 'River'),
     m('line', 'stream', 'Stream'),
@@ -316,6 +336,93 @@
     out.name = mine.name || mine.id;
     out.like = like.id;
     out.own = true;
+    return out;
+  }
+
+  // ── Crossing the wilds (L-361) ───────────────────────────────────────
+
+  var WILD_SPEED_MAX = 2;
+  var DANGER_MIN = 0.5;
+  var DANGER_MAX = 2;
+  var DEFAULT_WILD = Object.freeze({ speed: 1, danger: 1 });
+
+  /**
+   * How a ground material is crossed off the road (planning/off-road-
+   * travel.md §4.1): `{ speed, danger, impassable? }`. A world's override
+   * (`wilds.materials[id]`, set with set_wilds) wins key by key; a world's
+   * own material takes its override, else its `like`'s override, else its
+   * `like`'s defaults. An unknown material, or none, crosses as open ground
+   * (speed 1, danger 1). An impassable one has speed 0.
+   */
+  function wildOf(id, own, wilds) {
+    var overrides = wilds && typeof wilds === 'object' && wilds.materials;
+    overrides = overrides && typeof overrides === 'object' ? overrides : {};
+    var found = builtIn('ground', id);
+    var mine = found ? null : ownMaterial(own, id);
+    var base = found || (mine && builtIn('ground', mine.like));
+    var out = { speed: DEFAULT_WILD.speed, danger: DEFAULT_WILD.danger };
+    var layers = [base && base.wild];
+    if (mine && has(overrides, mine.like)) layers.push(overrides[mine.like]);
+    if (typeof id === 'string' && has(overrides, id)) layers.push(overrides[id]);
+    layers.forEach(function (layer) {
+      if (!layer || typeof layer !== 'object') return;
+      if (typeof layer.speed === 'number' && layer.speed > 0) out.speed = layer.speed;
+      if (typeof layer.danger === 'number') out.danger = layer.danger;
+      if (typeof layer.impassable === 'boolean') out.impassable = layer.impassable;
+    });
+    if (out.impassable) out.speed = 0;
+    else delete out.impassable;
+    return out;
+  }
+
+  /**
+   * What's wrong with a world's `wilds.materials` (`{ [id]: { speed?,
+   * danger?, impassable? } }`), as sentences (none: []): each id a built-in
+   * ground material or one of the world's own (`own`), a speed above 0 and
+   * at most 2, a danger from 0.5 to 2, impassable true or false.
+   */
+  function checkWilds(materials, own) {
+    var out = [];
+    if (materials === undefined || materials === null) return out;
+    if (typeof materials !== 'object' || Array.isArray(materials)) {
+      return ['A world’s wild materials are an object by material id.'];
+    }
+    Object.keys(materials).forEach(function (id) {
+      var at = 'Material "' + id + '"';
+      if (!builtIn('ground', id) && !ownMaterial(own, id)) {
+        out.push(at + ' is no ground material, built-in or the world’s own.');
+        return;
+      }
+      var entry = materials[id];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        out.push(at + ' must be an object.');
+        return;
+      }
+      Object.keys(entry).forEach(function (k) {
+        if (k !== 'speed' && k !== 'danger' && k !== 'impassable') {
+          out.push(at + ' has "' + k + '": only speed, danger and impassable.');
+        }
+      });
+      if (
+        entry.speed !== undefined &&
+        !(typeof entry.speed === 'number' && entry.speed > 0 && entry.speed <= WILD_SPEED_MAX)
+      ) {
+        out.push(at + '’s speed is above 0 and at most ' + WILD_SPEED_MAX + '.');
+      }
+      if (
+        entry.danger !== undefined &&
+        !(
+          typeof entry.danger === 'number' &&
+          entry.danger >= DANGER_MIN &&
+          entry.danger <= DANGER_MAX
+        )
+      ) {
+        out.push(at + '’s danger is from ' + DANGER_MIN + ' to ' + DANGER_MAX + '.');
+      }
+      if (entry.impassable !== undefined && typeof entry.impassable !== 'boolean') {
+        out.push(at + '’s impassable is true or false.');
+      }
+    });
     return out;
   }
 
@@ -592,6 +699,11 @@
     ownMaterial: ownMaterial,
     checkOwn: checkOwn,
     MAX_OWN: MAX_OWN,
+    wildOf: wildOf,
+    checkWilds: checkWilds,
+    WILD_SPEED_MAX: WILD_SPEED_MAX,
+    DANGER_MIN: DANGER_MIN,
+    DANGER_MAX: DANGER_MAX,
     objectKind: objectKind,
     isDecor: isDecor,
     artUrl: artUrl,
