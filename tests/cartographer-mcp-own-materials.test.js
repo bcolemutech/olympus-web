@@ -227,6 +227,8 @@ describe('set_world_materials', () => {
       own: true,
       like: 'desert',
       art: ids.tile,
+      // Crossed as the desert it is like (L-361).
+      wild: { speed: 0.6, danger: 1 },
     });
     expect(listed.materials.filter((m) => m.own)).toHaveLength(1);
     // Without a world, the built-in set only.
