@@ -66,7 +66,28 @@ function kindOf(world, entity) {
  */
 function hostOf(world, save) {
   const { location, place } = town.positionOf(world, save);
-  return place || (location ? world.locations[location] : null);
+  return place || (location ? world.locations[location] : null) || wildHostOn(world, save);
+}
+
+// ── An event in the wilds (planning/off-road-travel.md §4.6; L-366) ────
+
+const WILD_HOST = 'wild:';
+
+/**
+ * The host of a map an event in the wilds is played on: the map's own, kept on
+ * the save (`wild: true`, ../loom-modules/wilds/arrive.js), has no place of the
+ * world, so figures stand at `wild:<map id>`. `{ id, name, battleMap, wild }`,
+ * or null when the map isn't one.
+ */
+function wildHost(world, mapId) {
+  const map = mapId && (world.battleMaps || {})[mapId];
+  if (!live(map) || !map.wild) return null;
+  return { id: WILD_HOST + mapId, name: map.name, battleMap: { mapId }, wild: true };
+}
+
+// The host of the map a save stands on, when that is an event's.
+function wildHostOn(world, save) {
+  return save && save.mapId ? wildHost(world, save.mapId) : null;
 }
 
 function inBounds(map, cell) {
@@ -174,7 +195,11 @@ function exitsOut(map) {
  */
 function characterHost(world, character) {
   if (character.placeId) return (world.places || {})[character.placeId] || null;
-  return world.locations[character.locationId] || null;
+  const id = character.locationId;
+  if (typeof id === 'string' && id.indexOf(WILD_HOST) === 0) {
+    return wildHost(world, id.slice(WILD_HOST.length));
+  }
+  return world.locations[id] || null;
 }
 
 /**
@@ -326,6 +351,7 @@ module.exports = {
   mapOf,
   kindOf,
   hostOf,
+  wildHost,
   inBounds,
   entryCell,
   positionOf,

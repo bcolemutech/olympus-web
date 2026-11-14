@@ -96,8 +96,9 @@ const ASHBY = [{ mapId: 'weald', placeId: 'pl_ashby' }];
 const saveRef = (saveId) => db.collection('loom_saves').doc(saveId);
 const saveOf = async (saveId) => (await saveRef(saveId).get()).data();
 const lastTurn = async (saveId) =>
-  (await saveRef(saveId).collection('loom_turns').orderBy('index', 'desc').limit(1).get()).docs[0]
-    .data();
+  (
+    await saveRef(saveId).collection('loom_turns').orderBy('index', 'desc').limit(1).get()
+  ).docs[0].data();
 
 // The seed of the roll after leg `leg` of a journey set out on at the start,
 // camping each night: the save, the leg, and the hour it began.
@@ -149,8 +150,7 @@ describe.each(['d20-fantasy', 'pool-scifi'])('events on the way under %s', (syst
   }
   const travelTo = (worldId, saveId, to) =>
     play(worldId, saveId, { action: { verb: 'travel', to, offRoad: true } });
-  const goOn = (worldId, saveId) =>
-    play(worldId, saveId, { action: { verb: 'travel', go: 'on' } });
+  const goOn = (worldId, saveId) => play(worldId, saveId, { action: { verb: 'travel', go: 'on' } });
   const HIT = `ev-hit-${systemId}`;
   const QUIET = `ev-quiet-${systemId}`;
   const MEET = `ev-meet-${systemId}`;
@@ -233,7 +233,7 @@ describe.each(['d20-fantasy', 'pool-scifi'])('events on the way under %s', (syst
     expect(lines).toContain('You make camp for the night in the forest.');
   });
 
-  test('a row with figures is a creature to meet, named, and told until it is played on a map', async () => {
+  test('a row with figures is a creature to meet, named, and played on a map (tests/loom-wild-event-maps-play)', async () => {
     const id = idWhere(`${systemId}-meet`, true, 1);
     await seed(MEET, id);
     const { resolution, lines } = await travelTo(MEET, id, 'pl_carrow');
@@ -244,6 +244,8 @@ describe.each(['d20-fantasy', 'pool-scifi'])('events on the way under %s', (syst
       what: 'wolf',
       count: 2,
       narrated: false,
+      // Played on a map made for the forest (L-366).
+      map: { id: expect.stringMatching(/^wild-/), name: 'A forest track', from: 'generated' },
     });
     expect(lines).toContain('You are set upon by 2 Wolf.');
   });

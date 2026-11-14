@@ -38,6 +38,11 @@
  * save's path ends at a point on a region map, not a place: the frame's
  * fields read it as `wild: { x, y }`, with no `location`.
  *
+ * An event played in the wilds (L-366, planning/off-road-travel.md §4.6) is on
+ * a battle map kept on the save, `wildMaps` (and `wildEvent`, where it is the
+ * one the save stands on): the frame's `battleMaps` gain it, and the save
+ * keeps its `mapId`, `cell` and `gridPoint` while `at` stays at the camp.
+ *
  * Place ids are the world's: `discovered`, `visited` and `waysKnown` stay
  * flat lists by place, which holds by map as well.
  *
@@ -437,6 +442,28 @@ function atFromFields(play, save) {
 }
 
 /**
+ * An event played in the wilds (L-366): the save stands at a camp in the
+ * wilds (`at` ends at a point) and on the battle map of the event, which `at`
+ * doesn't name, so the fields keep its square.
+ */
+function keepEventMap(fields, save) {
+  const event = save && save.wildEvent;
+  if (event && fields.wild && !fields.location && save.mapId && save.mapId === event.mapId) {
+    fields.mapId = save.mapId;
+    fields.cell = save.cell || null;
+    fields.gridPoint = save.gridPoint || null;
+  }
+  return fields;
+}
+
+// The frame with the battle maps its save keeps (L-366: events in the wilds).
+function withWildMaps(view, save) {
+  const kept = save && save.wildMaps;
+  if (!isObject(kept) || !Object.keys(kept).length) return view;
+  return { ...view, battleMaps: { ...(view.battleMaps || {}), ...kept } };
+}
+
+/**
  * The frame a save stands in: `{ view, save, at }`, `save` with the frame's
  * fields read from its `at` (or, from before `at`, its own, and `at` from
  * them).
@@ -445,17 +472,20 @@ function frameOf(play, stored) {
   const usable = Array.isArray(stored.at) && stored.at.length && regionIndex(play, stored.at) >= 0;
   if (usable) {
     const { fields, mapId, prefix } = legacyOf(play, stored.at);
+    keepEventMap(fields, stored);
     // Every write keeps the two together: fields written alone (an older
     // writer, a test) are newer than `at`, and `at` follows them.
     if (!stored.location || sameFields(fields, stored)) {
-      const view = viewFor(play, mapId, prefix);
+      const view = withWildMaps(viewFor(play, mapId, prefix), stored);
       return { view, save: { ...stored, ...fields }, at: stored.at };
     }
   }
   const at = atFromFields(play, stored);
   const r = at ? regionIndex(play, at) : -1;
-  const view =
-    r >= 0 ? viewFor(play, at[r].mapId, at.slice(0, r)) : viewFor(play, play.topMapId, []);
+  const view = withWildMaps(
+    r >= 0 ? viewFor(play, at[r].mapId, at.slice(0, r)) : viewFor(play, play.topMapId, []),
+    stored
+  );
   return { view, save: { ...stored }, at };
 }
 
@@ -469,13 +499,15 @@ function settle(view, save, atSet = false) {
   const play = view;
   if (atSet && Array.isArray(save.at)) {
     const { fields, mapId, prefix } = legacyOf(play, save.at);
-    Object.assign(save, fields);
-    if (mapId === (view.frame || {}).mapId && samePrefix(prefix, view.frame.prefix)) return view;
-    return viewFor(play, mapId, prefix);
+    Object.assign(save, keepEventMap(fields, save));
+    if (mapId === (view.frame || {}).mapId && samePrefix(prefix, view.frame.prefix)) {
+      return withWildMaps(view, save);
+    }
+    return withWildMaps(viewFor(play, mapId, prefix), save);
   }
   const at = atOf(view, save);
   if (at) save.at = at;
-  return view;
+  return withWildMaps(view, save);
 }
 
 const samePrefix = (a, b) => JSON.stringify(a || []) === JSON.stringify(b || []);

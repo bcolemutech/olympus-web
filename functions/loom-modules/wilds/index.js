@@ -11,10 +11,13 @@
  *                  rung by danger, the roll, and the share of the day lost
  *   ./events.js    events on the way (L-364): the seeded roll after a day leg
  *                  off the road and the event picked from the encounter tables
+ *   ./arrive.js    playing one with figures (L-366): the map it is played on,
+ *                  kept on the save, its figures standing there, and leaving it
  */
 
 module.exports = {
   settings: require('./settings'),
   navigate: require('./navigate'),
   events: require('./events'),
+  arrive: require('./arrive'),
 };
