@@ -272,6 +272,8 @@ function worldOverview(meta, world) {
     // Its off-road travel (L-362): the wilds settings in play, its system's
     // with its own over them, or false when it is off.
     wilds: require('../../../loom-modules/wilds/settings').settingsOf(world.system, world) || false,
+    // Events on the way across country (L-364): the world's own table, the fallback.
+    ...((world.encounters || []).length ? { encounters: world.encounters } : {}),
     readyToPublish: missing.length === 0,
     ...(missing.length ? { missing } : {}),
     map: {
@@ -519,6 +521,8 @@ function regionDetail(world, region) {
     realm: region.factionId ? ref(world.factions, region.factionId) : null,
     // How dangerous its wilds are (L-361): null when unset (it counts as 1).
     danger: typeof region.danger === 'number' ? region.danger : null,
+    // Events on the way across its land (L-364): its table, as written.
+    ...((region.encounters || []).length ? { encounters: region.encounters } : {}),
     capital: ref(world.locations, region.capitalLocationId),
     // Its shape (L-712): the zones naming it, by map.
     land: realms.regionLand(world, region.id),

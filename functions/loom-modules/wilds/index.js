@@ -9,9 +9,12 @@
  *                  world's over its system's
  *   ./navigate.js  the navigation check each day leg off the road: its
  *                  rung by danger, the roll, and the share of the day lost
+ *   ./events.js    events on the way (L-364): the seeded roll after a day leg
+ *                  off the road and the event picked from the encounter tables
  */
 
 module.exports = {
   settings: require('./settings'),
   navigate: require('./navigate'),
+  events: require('./events'),
 };

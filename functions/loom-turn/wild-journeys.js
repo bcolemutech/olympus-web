@@ -30,6 +30,13 @@
  * loses a share of the day: the camp is that much short and drifts off the
  * path, and the rest is planned again from there.
  *
+ * After each day leg an event may happen at the camp (L-364; ../loom-modules/
+ * wilds/events.js): a roll seeded by the save, the leg and the hour it began,
+ * against the module's chance for the camp's danger, far lower on a route; the
+ * path walked (the wilds, or a route's kind) shapes it. The roll, the chance
+ * and the event are the turn's `event`, and the event is told with the leg. One with figures to meet is played on a map later
+ * (L-366); until then it is told like the rest.
+ *
  * Pure: returns a resolution, as ./adjudicate.js does.
  */
 
@@ -122,12 +129,21 @@ function goalOf(view, save, action) {
 
 // ── A journey along a plan ───────────────────────────────────────────
 
+// The kind of a route (a lane's id is its two ends', in order, joined by "|").
+function routeKindOf(view, routeId) {
+  const [a, b] = String(routeId || '').split('|');
+  const links = (((view.locations || {})[a] || {}).geo || {}).links || {};
+  return links[b] || 'trail';
+}
+
 // The journey kept on the save for a plan to `goal`.
 function journeyOf(view, plan, goal) {
   const spans = [];
   let t = 0;
   for (const leg of plan.legs || []) {
-    if (leg.by === 'route') spans.push({ from: t, to: t + leg.hours });
+    if (leg.by === 'route') {
+      spans.push({ from: t, to: t + leg.hours, kind: routeKindOf(view, leg.route) });
+    }
     t += leg.hours;
   }
   return {
@@ -341,12 +357,16 @@ function outside(view, place, from) {
 
 // ── The verb ─────────────────────────────────────────────────────────
 
-/** The `travel` verb (and a move made in the wilds): see the top of this file. */
-function travelAction(proposedAction, save, view, dice) {
+/**
+ * The `travel` verb (and a move made in the wilds): see the top of this
+ * file. `seed` (the save's id) seeds the event rolls.
+ */
+function travelAction(proposedAction, save, view, dice, { seed } = {}) {
   const params = proposedAction.params || {};
+  const by = seed || [save.ownerUid, save.worldId].filter(Boolean).join(':');
   if (params.go === 'stop') return stop(save);
-  if (params.go === 'on') return goOn(save, view, dice);
-  return setOut(proposedAction, save, view, dice);
+  if (params.go === 'on') return goOn(save, view, dice, by);
+  return setOut(proposedAction, save, view, dice, by);
 }
 
 function stop(save) {
@@ -362,7 +382,7 @@ function stop(save) {
   };
 }
 
-function goOn(save, view, dice) {
+function goOn(save, view, dice, seed) {
   const journey = save.journey;
   if (!journey) return blocked("You aren't on a journey. Choose where to head.");
   if (!view.frame || journey.mapId !== view.frame.mapId || !(journey.path || []).length) {
@@ -370,10 +390,10 @@ function goOn(save, view, dice) {
   }
   const settings = settingsFor(view);
   if (!settings) return blocked(OFF);
-  return walkLeg(view, save, journey, dice, settings, []);
+  return walkLeg(view, save, journey, dice, settings, [], [], seed);
 }
 
-function setOut(proposedAction, save, view, dice) {
+function setOut(proposedAction, save, view, dice, seed) {
   if (!view.frame) return blocked(NOT_HERE);
   const settings = settingsFor(view);
   if (!settings) return blocked(OFF);
@@ -414,15 +434,15 @@ function setOut(proposedAction, save, view, dice) {
   ];
   // Leaving a town's way out (or a place): out onto the map.
   const leaving = save.placeId ? [set('placeId', null)] : [];
-  return walkLeg(view, save, journey, dice, settings, opening, leaving);
+  return walkLeg(view, save, journey, dice, settings, opening, leaving, seed);
 }
 
 /**
  * Walks a journey's next day leg from where the save stands: the time, the
- * navigation check off the road, the camp or the arrival, and what is
- * discovered on the way.
+ * navigation check off the road, the camp or the arrival, what is
+ * discovered on the way, and the event at the end of a leg off the road.
  */
-function walkLeg(view, save, journey, dice, settings, opening, leaving = []) {
+function walkLeg(view, save, journey, dice, settings, opening, leaving = [], seed = '') {
   const system = checks.systemOf(view);
   const day = settings.dayHours;
   const done = journey.done || 0;
@@ -478,6 +498,8 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = []) {
   const end = walked[walked.length - 1];
   const prefix = view.frame.prefix.map((s) => ({ ...s }));
   let next = null;
+  // Where the leg ends: the camp, or the arrival.
+  let spot = end;
   if (arrives) {
     const goal = journey.to || {};
     const place = goal.placeId && view.locations[goal.placeId];
@@ -509,6 +531,7 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = []) {
         wildPlan.planOn(view, off, pair(journey.to.point), { state: save, pace: settings.pace });
       if (again && (again.path || []).length) {
         camp = off;
+        spot = off;
         next = {
           ...journeyOf(view, again, {
             point: pair(journey.to.point),
@@ -530,6 +553,20 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = []) {
     mutations.push(set('journey', next));
   }
   if (near.length) lines.push('On the way you find ' + andList(near.map((p) => p.name)) + '.');
+
+  // Something on the way (L-364, EV7): after each leg, a roll seeded by the
+  // save, the leg and the hour it began. A route is the safer way, so far
+  // less likely than off the road; the sort of path walked (the wilds, or a
+  // route's kind) shapes the event.
+  const walkedPath = wilds.events.pathOf(journey.routes, done, done + progress);
+  const onTheWay = wilds.events.happen(view, {
+    settings,
+    point: spot,
+    seed: [seed, leg, start].join(':'),
+    path: walkedPath.path,
+    share: walkedPath.share,
+  });
+  if (onTheWay.event) lines.push(onTheWay.event.text);
   mutations.push(set('time', start + seconds), tick);
 
   return {
@@ -546,6 +583,8 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = []) {
       ...(arrives ? { arrived: true } : { camp: true }),
       ...(nav ? { lost: lostHours } : {}),
     },
+    // The roll, the chance and what it brought, for the record and the GM (L-364).
+    ...(onTheWay ? { event: onTheWay } : {}),
   };
 }
 

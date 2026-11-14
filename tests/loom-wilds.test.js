@@ -41,6 +41,7 @@ describe.each(BOTH)('the settings, in %s', (id, system) => {
       pace: 1.5,
       dayHours: 8,
       eventChance: 0.25,
+      routeChance: 0.2,
       discover: 3,
       navigation: {
         check: { skill: 'Survival' },
@@ -72,11 +73,14 @@ describe.each(BOTH)('the settings, in %s', (id, system) => {
     expect(bad({ eventChance: 1 })).toEqual([
       'modules.wilds.eventChance must be a chance from 0 to 0.95.',
     ]);
+    expect(bad({ routeChance: 2 })).toEqual([
+      'modules.wilds.routeChance must be a share from 0 to 1 of the event chance kept on a route.',
+    ]);
     expect(bad({ discover: 'far' })).toEqual([
       'modules.wilds.discover must be a distance from 0 to 100.',
     ]);
     expect(bad({ hours: 8 })).toEqual([
-      'modules.wilds: "hours" isn\'t a wilds setting (pace, dayHours, eventChance, discover, ' +
+      'modules.wilds: "hours" isn\'t a wilds setting (pace, dayHours, eventChance, routeChance, discover, ' +
         'navigation).',
     ]);
     expect(bad('fast')).toEqual([
@@ -123,6 +127,7 @@ describe.each(BOTH)('the settings, in %s', (id, system) => {
       pace: 1.5,
       dayHours: 8,
       eventChance: 0.25,
+      routeChance: 0.2,
       discover: 3,
       navigation: null,
     });
@@ -136,6 +141,7 @@ describe.each(BOTH)('the settings, in %s', (id, system) => {
       pace: 1,
       dayHours: 8,
       eventChance: 0.1,
+      routeChance: 0.2,
       discover: 3,
       navigation: {
         check: { skill: 'Survival' },

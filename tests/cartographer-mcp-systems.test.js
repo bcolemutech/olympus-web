@@ -715,7 +715,7 @@ test('set_system and copy_system take the wilds module, checked (L-362)', async 
   });
   expect(text).toBe(
     'The system has problems:\n' +
-      '- modules.wilds: "speed" isn\'t a wilds setting (pace, dayHours, eventChance, discover, navigation).\n' +
+      '- modules.wilds: "speed" isn\'t a wilds setting (pace, dayHours, eventChance, routeChance, discover, navigation).\n' +
       '- modules.wilds.pace must be a number of distance units an hour, above 0 and at most 100.\n' +
       '- modules.wilds.eventChance must be a chance from 0 to 0.95.\n' +
       '- modules.wilds.navigation.check.skill "Survival" isn\'t one of the system\'s skills.\n' +
@@ -742,6 +742,7 @@ test('update_world sets its own wilds settings over its system’s, or turns the
     pace: 1.5,
     dayHours: 8,
     eventChance: 0.25,
+    routeChance: 0.2,
     discover: 3,
     navigation: { check: { skill: 'Survival' }, dc: 'Moderate', harder: 0.5 },
   });

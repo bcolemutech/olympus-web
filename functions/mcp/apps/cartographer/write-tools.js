@@ -830,7 +830,7 @@ function writeTools({ writer, systems, studio }) {
           .describe(
             'Its off-road travel (L-362): the wilds module’s settings over its system’s ' +
               '(modules.wilds; get_system shows them): { pace (distance units an hour at ' +
-              'speed 1), dayHours, eventChance (0–0.95), discover (distance), navigation: ' +
+              'speed 1), dayHours, eventChance (0–0.95), routeChance (0–1: the share kept on a route), discover (distance), navigation: ' +
               '{ check: { skill } | { attribute }, dc (a rung), harder (danger a rung), ' +
               'lost: { [degree]: share of the day } } }; navigation’s parts change the ' +
               'system’s one by one, and null there means nobody gets lost. Replaces the ' +

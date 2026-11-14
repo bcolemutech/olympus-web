@@ -200,6 +200,9 @@ async function readFirestoreWorld(db, worldId, meta) {
     // Crossing its wilds (L-361; ./wild-paths.js): { materials: { [id]:
     // { speed?, danger?, impassable? } } }, over the materials' defaults.
     wilds: meta.wilds || {},
+    // Events on the way across its country (L-364; ../loom-modules/wilds/events.js): the
+    // world's table of encounters, the fallback after a region's and a map's.
+    encounters: Array.isArray(meta.encounters) ? meta.encounters : [],
     // Its art (L-944; ./art-sets.js): { set }, the art set its maps are
     // drawn with; the built-in `classic` when it names none.
     art: meta.art || {},

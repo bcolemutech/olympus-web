@@ -2540,7 +2540,7 @@ function evaluate(
   canonWorld,
   known,
   found,
-  { choose = null } = {}
+  { choose = null, seed = null } = {}
 ) {
   let resolution;
   // Down (L-827): nothing but ending the turn.
@@ -2570,7 +2570,8 @@ function evaluate(
           : proposedAction,
         characterState,
         canonWorld,
-        diceSource(dice)
+        diceSource(dice),
+        { seed }
       ),
       characterState,
       canonWorld
@@ -2659,6 +2660,8 @@ function evaluate(
     ...(resolution.walkedTown ? { walkedTown: Object.freeze(resolution.walkedTown) } : {}),
     // A journey made (L-384): its stops and the towns passed, for the GM.
     ...(resolution.journey ? { journey: Object.freeze({ ...resolution.journey }) } : {}),
+    // The roll for something on the way across country, and what it brought (L-364).
+    ...(resolution.event ? { event: Object.freeze({ ...resolution.event }) } : {}),
   });
 }
 
@@ -2697,9 +2700,11 @@ const MAX_NAMED_TURNS = 12;
  * @returns {Promise<{ outcome: string, mutations: object[], constraints: string[] }>}
  */
 async function adjudicateAction(params, rollFn = rollDie) {
-  const { proposedAction, canonWorld, save, worldState, known, found } = params;
+  const { proposedAction, canonWorld, save, worldState, known, found, seed } = params;
   const decide = params.decide === undefined ? namedTurn : params.decide;
-  if (!decide) return evaluate(proposedAction, worldState, save, rollFn, canonWorld, known, found);
+  if (!decide) {
+    return evaluate(proposedAction, worldState, save, rollFn, canonWorld, known, found, { seed });
+  }
   // Named characters' turns (L-825; EN3b): evaluate stays pure and
   // synchronous, so a turn that reaches one stops there (NeedChoice), the
   // model is asked, and the turn is worked out again from the start with the
@@ -2726,6 +2731,7 @@ async function adjudicateAction(params, rollFn = rollDie) {
     try {
       return evaluate(proposedAction, worldState, save, dice, canonWorld, known, found, {
         choose,
+        seed,
       });
     } catch (err) {
       if (!(err instanceof NeedChoice)) throw err;

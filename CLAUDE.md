@@ -104,7 +104,7 @@ olympus-web/
 │   ├── loom-canon/                # World canon: static worlds + Firestore worlds (loadWorld)
 │   ├── loom-turn/                 # Turn pipeline: intake → interpret → adjudicate → narrate → commit
 │   ├── loom-models.js             # Loom save and turn document shapes
-│   ├── loom-modules/              # Game-system modules (Phase 9): combat/ (settings, fights, attacks, strikes, play), wilds/ (off-road travel's settings, navigation)
+│   ├── loom-modules/              # Game-system modules (Phase 9): combat/ (settings, fights, attacks, strikes, play), wilds/ (off-road travel's settings, navigation, events)
 │   ├── cartographer/              # Azgaar parse → map → load, import and publish service
 │   └── mcp/                       # MCP host, OAuth server, registry, apps/ (scriptorium, cartographer)
 ├── tests/                         # Jest suites (rules, Loom, Cartographer, MCP) + fixtures/
@@ -248,7 +248,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 - `loomCreationRules` — `loom` claim. How a new character is made in a world, for the new-game form: the method and its settings, each score's modifier, the skills and traits to choose; or that it's premade; and the world's player portraits (L-933)
 - `loomUploadToken` — `loom` claim (own saves). A player's own picture for their token (L-933): checked, squared at its crop to 512 px WebP with no metadata, stored at `loom_tokens/{uid}/{saveId}.webp` for its owner only
 - `loomRollCharacter` — `loom` claim. Rolls a new character's scores with the server's dice, for a system that makes characters by rolling; kept in `loom_creation_rolls` for `loomCreateSave` to use once
-- `loomPlayTurn` — `loom` claim (own saves). Runs one turn of the Loom pipeline: typed actions, moves, objects, searching, fights and reactions, rests, levelling up, travel at any depth and across country in day legs (L-363)
+- `loomPlayTurn` — `loom` claim (own saves). Runs one turn of the Loom pipeline: typed actions, moves, objects, searching, fights and reactions, rests, levelling up, travel at any depth and across country in day legs, with events on the way (L-363, L-364)
 - `loomWorldRatings` — `loom` claim. Each published world's band (Playable, Rich, Vivid or Legendary) for the Loom's world list; the band's name only
 - `loomGetMap` — `loom` claim (own saves). What a save may see: its map and places, routes and journeys, time, turn and prices, sheet, fight, level offer, and on a battle map its geometry as far as seen
 - `cartographerImport` — `cartographer` claim. Uploaded Azgaar map → draft world

@@ -715,6 +715,8 @@ async function runTurnPipeline(params) {
     worldState,
     known,
     found,
+    // Seeds the roll for something on the way across country (L-364).
+    seed: saveRef.id,
   });
   // An action the AP left won't pay for is turned down plainly: not
   // narrated, not recorded (L-614 / #444; L-832); so is one a condition

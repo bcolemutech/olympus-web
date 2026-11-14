@@ -1,6 +1,6 @@
 # The Loom — Off-Road Travel and the Wilderness — Design Document v0.2
 
-**Status:** Decided (2026-10-11), refreshed 2026-11-14 (§3). Sub-issues L-361 to L-368 filed as #835–#842 (§6).
+**Status:** Decided (2026-10-11), refreshed 2026-11-14 (§3). Sub-issues L-361 to L-368 filed as #835–#842 (§6). Shipped: L-361 to L-364.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-360 (#418)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4), after L-710.
@@ -86,6 +86,7 @@ Settled with the user through a questionnaire; every answer took the recommendat
   - `pace` (map distance units per hour off-road at speed 1; d20 1.5 mph),
   - `dayHours` (8, from L-370's travel day unless set),
   - `eventChance` (0.25),
+  - `routeChance` (0.2: the share of that kept on a leg walked on a route, by the hours of the leg on one; added in L-364),
   - `discover` (miles within which places on the path are discovered: 3),
   - `navigation: { check, dc, harder }`: the system's check (d20: Survival; dice-pool: its survival skill), its difficulty on the ladder, and how much harder per step of terrain danger above 1.
 - **Both built-ins** set it; a system can leave it out, and a world can override any setting (`world.rules.wilds`) or turn off-road travel off (`world.rules.wilds: false`).
@@ -102,13 +103,13 @@ Settled with the user through a questionnaire; every answer took the recommendat
 
 ### 4.5 Events on the way (EV1–EV3, EV7)
 
-- **Encounter tables** (EV2): the `encounters` format extended to `{ what?, count?, weight?, text?, kind?, terrain?, narrated? }`:
+- **Encounter tables** (EV2): the `encounters` format extended to `{ what?, count?, weight?, text?, kind?, terrain?, path?, narrated? }`:
   - `what` a stat block (or a figure group as `place_figures` takes), `text` what happens, `kind` one of travellers, creatures, hazard, weather, find;
   - `terrain` the materials it fits (any when absent), `narrated` for one told by the GM with no map;
   - set on regions, region maps and the world with `set_encounters` (MCP: a target, `{ regionId }`, `{ mapId }` or the world, and its rows), the world's as a fallback; places keep theirs as today.
 - **Built-in fallbacks:** narrated events of each kind, plain enough for any world.
-- **The roll** (EV7): after each leg, a roll seeded by the save and leg against `eventChance × material danger × region danger` at the camp, capped at 95%; the roll, chance and result recorded on the turn.
-- **Choosing:** a weighted pick among the rows that fit the camp's terrain: the region's, then the map's, then the world's, then the built-ins.
+- **The roll** (EV7): after each leg, a roll seeded by the save, the leg and the hour it began against `eventChance × material danger × region danger` at the camp (or the arrival), capped at 95%; the roll, chance, path and result recorded on the turn (`event`). A route is the safer way: a leg walked on one keeps only `routeChance` of the chance (a fifth), by the hours on it (built in L-364, decided 2026-11-14).
+- **Choosing:** a weighted pick among the rows that fit the camp's terrain and the path walked (`path`: `wild`, or a route kind such as `road`, `trail` or `sea`; the one most of the leg's hours were spent on), from the first of the region's, the map's, the world's and the built-ins' tables with a row that fits. A row needs a `what` or a `text`, and a `kind` when it has no `what`. One with figures is told until L-366 plays it on a map.
 
 ### 4.6 Wilderness maps and playing an event (EV4, EV5, EV8)
 

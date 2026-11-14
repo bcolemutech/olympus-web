@@ -82,9 +82,12 @@ function encountersOf(host) {
 /**
  * What's wrong with an encounter table against a world's stat blocks, each
  * named: its shape, each row's `what` a stat block of the world, `count`
- * from 1 to 20, `weight` from 1 to 100. Errors only.
+ * from 1 to 20, `weight` from 1 to 100. Errors only. With `wild` (a table
+ * for the wilds, ../wilds/events.js: its rows may carry words and ground
+ * too), a row needn't name a stat block and its other fields are the
+ * caller's to check.
  */
-function validateEncounters(world, list) {
+function validateEncounters(world, list, { wild = false } = {}) {
   if (!Array.isArray(list)) return ['encounters must be a list.'];
   const errors = [];
   if (list.length > MAX_ROWS) errors.push(`A table has at most ${MAX_ROWS} rows.`);
@@ -92,11 +95,13 @@ function validateEncounters(world, list) {
   list.forEach((row, i) => {
     const at = `encounters[${i}]`;
     if (!isObject(row)) return errors.push(`${at} must be { what, count?, weight? }.`);
-    for (const k of Object.keys(row)) {
+    for (const k of wild ? [] : Object.keys(row)) {
       if (!['what', 'count', 'weight'].includes(k))
         errors.push(`${at}.${k} isn't a field of a row.`);
     }
-    if (typeof row.what !== 'string' || !ID.test(row.what)) {
+    if (wild && row.what === undefined) {
+      // Words only: nothing to meet.
+    } else if (typeof row.what !== 'string' || !ID.test(row.what)) {
       errors.push(`${at}.what must be a stat block's id.`);
     } else if (!blocks[row.what]) {
       errors.push(`${at}.what "${row.what}" isn't one of the world's stat blocks.`);

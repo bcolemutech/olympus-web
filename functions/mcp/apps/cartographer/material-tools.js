@@ -1,10 +1,13 @@
 'use strict';
 
 const { z } = require('zod');
+const { FieldValue } = require('firebase-admin/firestore');
 const { ToolError } = require('../../registry');
 const catalog = require('../../../loom-canon/materials');
+const levels = require('../../../loom-canon/levels');
+const wildEvents = require('../../../loom-modules/wilds/events');
 const artSets = require('../../../loom-canon/art-sets');
-const { worldId } = require('./schemas');
+const { worldId, entityId, wildEncounters } = require('./schemas');
 const { relay } = require('./studio-tools');
 
 // The look of a map's data (planning/maps-from-data.md RD1, RD3, OB1; L-925 /
@@ -19,6 +22,9 @@ const { relay } = require('./studio-tools');
 //   set_wilds          how a world's ground is crossed off the road (L-361 /
 //                      #835; off-road-travel.md §4.1): speed, danger and
 //                      impassable per ground material, over the defaults
+//   set_encounters     the events that can happen on the way across country
+//                      (L-364 / #838; off-road-travel.md §4.5): a table on a
+//                      region, a region map or the world
 //   list_object_kinds  the catalog's object kinds, with a world's own, and
 //                      where each one's art comes from
 //   list_art_sets      the art sets a world's maps can be drawn with (L-944)
@@ -38,6 +44,18 @@ const kindId = z
   .regex(/^[A-Za-z0-9_-]{1,60}$/, 'letters, digits, - and _')
   .describe('The object kind: a catalog kind (see list_object_kinds) or one of the world’s own.');
 const readOnly = { readOnlyHint: true, openWorldHint: false };
+
+// A value as JSON with its keys in order (Firestore keeps maps' in its own), to compare.
+const canon = (v) =>
+  JSON.stringify(v, (k, x) =>
+    x && typeof x === 'object' && !Array.isArray(x)
+      ? Object.fromEntries(
+          Object.keys(x)
+            .sort()
+            .map((key) => [key, x[key]])
+        )
+      : x
+  );
 
 const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 
@@ -377,6 +395,87 @@ function materialTools({ studio, writer, worldFor }) {
           worldId: args.worldId,
           materials: result.materials,
           next: 'list_materials with worldId shows every ground’s values.',
+        };
+      }),
+  });
+
+  tools.push({
+    name: 'set_encounters',
+    title: 'Set the events on the way',
+    description:
+      'Write the table of events that can happen on the way across country (L-364): after each ' +
+      'day’s travel a roll decides whether something happens at the camp (more likely in ' +
+      'dangerous ground and regions, and far less likely on a route than off the road), and ' +
+      'the event is picked by weight from the ' +
+      'first of these with a row that fits the camp’s ground: the camp’s region’s table, ' +
+      'then its map’s, then the world’s, then the built-in events. Give exactly one of ' +
+      'regionId, mapId (a region map) or world: true. Each row is { what?, text?, kind?, ' +
+      'terrain?, path?, count?, weight?, narrated? }: `what` a stat block of the world (figures to ' +
+      'meet; list_stat_blocks) and/or `text` what happens, `kind` travellers, creatures, ' +
+      'hazard, weather or find (needed with text and no what), `terrain` the ground ' +
+      'materials it fits (list_materials; any if left out), `path` the paths it fits ("wild", ' +
+      'off the road, or route kinds such as "road", "trail", "sea"; any if left out), `weight` ' +
+      'how likely it is. ' +
+      'Replaces the whole table; rows [] removes it. A place’s own table is set with ' +
+      'update_place and is for its map’s spawns, not these.',
+    inputSchema: {
+      worldId,
+      regionId: entityId('region', 'get_world').optional().describe('Set this region’s table.'),
+      mapId: entityId('map', 'list_maps').optional().describe('Set this region map’s table.'),
+      world: z.literal(true).optional().describe('Set the world’s table, the fallback.'),
+      rows: wildEncounters,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    handler: (ctx, args) =>
+      relay(async () => {
+        const targets = [args.regionId, args.mapId, args.world].filter((t) => t !== undefined);
+        if (targets.length !== 1) {
+          throw new ToolError('Give exactly one of regionId, mapId or world: true.');
+        }
+        const result = await writer.edit(args.worldId, ctx.uid, (e) => {
+          const world = e.world;
+          const problems = wildEvents.validateRows(world, args.rows);
+          if (problems.length) {
+            throw new ToolError('Those events won’t do:\n- ' + problems.join('\n- '));
+          }
+          const rows = args.rows.map((row) => ({ ...row }));
+          // Nothing is written when the table is already as given.
+          const changes = (next, was) =>
+            next.length ? canon(next) !== canon(was) : Boolean(was && was.length);
+          const value = rows.length ? rows : FieldValue.delete();
+          let on;
+          let had;
+          if (args.regionId) {
+            const region = (world.regions || {})[args.regionId];
+            if (!region || region.retired) {
+              throw new ToolError(`No region "${args.regionId}". get_world lists them.`);
+            }
+            on = { regionId: region.id, name: region.name };
+            had = region.encounters;
+            if (changes(rows, had)) e.update(e.ref('regions', region.id), { encounters: value });
+          } else if (args.mapId) {
+            const map = levels.mapOf(world, args.mapId);
+            if (!map || map.retired || map.kind !== 'region') {
+              throw new ToolError(`"${args.mapId}" isn’t a region map. list_maps shows them.`);
+            }
+            on = { mapId: args.mapId, name: map.name || args.mapId };
+            had = map.encounters;
+            if (changes(rows, had)) e.update(e.ref('maps', args.mapId), { encounters: value });
+          } else {
+            on = { world: true };
+            had = world.encounters && world.encounters.length ? world.encounters : null;
+            if (changes(rows, had)) e.updateWorld({ encounters: value });
+          }
+          return { on, rows: rows.length, removed: !rows.length && Boolean(had && had.length) };
+        });
+        return {
+          worldId: args.worldId,
+          on: result.on,
+          rows: result.rows,
+          ...(result.removed ? { removed: true } : {}),
+          next:
+            'A journey across country rolls for an event after each day off the road. ' +
+            'get_region, get_map and get_world show the tables.',
         };
       }),
   });
