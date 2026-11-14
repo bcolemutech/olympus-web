@@ -269,6 +269,9 @@ function worldOverview(meta, world) {
     death: require('../../../loom-modules/combat/down').deathOf(world),
     // Whether characters grow here (L-841): false when the world turns it off.
     advancement: require('../../../loom-modules/advancement').isOn(world),
+    // Its off-road travel (L-362): the wilds settings in play, its system's
+    // with its own over them, or false when it is off.
+    wilds: require('../../../loom-modules/wilds/settings').settingsOf(world.system, world) || false,
     readyToPublish: missing.length === 0,
     ...(missing.length ? { missing } : {}),
     map: {

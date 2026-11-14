@@ -34,8 +34,10 @@
  *     advancement: { experience?, use? } how characters grow (L-841,
  *                                        ../loom-modules/advancement/): each
  *                                        part on when given; {} is off
- *     modules: { [module]: settings }    combat (L-821, ../loom-modules/combat/);
- *                                        others are kept, unused, with a warning
+ *     modules: { [module]: settings }    combat (L-821, ../loom-modules/combat/),
+ *                                        wilds (L-362, ../loom-modules/wilds/;
+ *                                        false: no off-road travel); others
+ *                                        are kept, unused, with a warning
  *     tables:  { [name]: [{ min?, max?, value }] }   lookups for table(name, x)
  *     ap:      { costs?, tiers?, keepLimit? }  what AP pays for (L-831; ./ap.js)
  *     gmNotes: tone and pacing for NARRATE
@@ -79,7 +81,10 @@ const formulaLanguage = require('./formula');
 const apRules = require('./ap');
 
 // The modules built (MD1; ../loom-modules/): each checks its own settings.
-const MODULES = { combat: require('../loom-modules/combat/settings') };
+const MODULES = {
+  combat: require('../loom-modules/combat/settings'),
+  wilds: require('../loom-modules/wilds/settings'),
+};
 // Advancement is the system's own `advancement`, not one of its modules (L-841).
 const advancement = require('../loom-modules/advancement');
 

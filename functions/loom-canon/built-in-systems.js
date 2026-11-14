@@ -260,6 +260,15 @@ const FANTASY = {
         },
       ],
     },
+    // Off-road travel (L-362; planning/off-road-travel.md MD1, MD2): 1.5 mph
+    // on foot over open ground, the travel day's hours; Survival against
+    // Moderate to keep on course, a rung harder for each 0.5 of danger above 1.
+    wilds: {
+      pace: 1.5,
+      eventChance: 0.25,
+      discover: 3,
+      navigation: { check: { skill: 'Survival' }, dc: 'Moderate', harder: 0.5 },
+    },
   },
   gmNotes:
     'Heroic fantasy: swords, old roads, ruins and the people who live among them. Danger is ' +
@@ -308,6 +317,8 @@ const SCIFI = {
       ['Tech', 'Tech', 'Mind'],
       ['Medicine', 'Medicine', 'Mind'],
       ['Notice', 'Notice', 'Mind'],
+      // Finding the way off the road (L-362, the wilds module's navigation).
+      ['Survival', 'Survival', 'Mind'],
       ['Persuade', 'Persuade', 'Presence'],
       ['Command', 'Command', 'Presence'],
     ].map(([id, name, attribute]) => ({ id, name, attribute })),
@@ -521,6 +532,16 @@ const SCIFI = {
           type: 'energy',
         },
       ],
+    },
+    // Off-road travel (L-362; planning/off-road-travel.md MD1, MD2): on foot
+    // at 1.5 an hour, the travel day's hours; a Survival pool (Mind) against
+    // Moderate on its own ladder of successes, a rung harder for each 0.5 of
+    // danger above 1.
+    wilds: {
+      pace: 1.5,
+      eventChance: 0.25,
+      discover: 3,
+      navigation: { check: { skill: 'Survival' }, dc: 'Moderate', harder: 0.5 },
     },
   },
   gmNotes:
