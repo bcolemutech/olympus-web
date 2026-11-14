@@ -211,7 +211,10 @@ describe('a walk through Burdendal', () => {
   test('arriving by sea lands at the harbour', async () => {
     await standAt(saveId, 'loc_229', null); // Wisin, an older save with no place
     // Never in Burdendal before, so arriving lands on the harbour's map (L-382).
-    await db.collection('loom_saves').doc(saveId).update({ visited: ['loc_229'] });
+    await db
+      .collection('loom_saves')
+      .doc(saveId)
+      .update({ visited: ['loc_229'] });
     expect(await moveTo(saveId, 'loc_1')).toMatchObject({
       outcome: 'success',
       constraints: [
@@ -330,11 +333,11 @@ describe('a walk through Burdendal', () => {
     }
   });
 
-  test('a closed destination is reported before the way out', async () => {
+  test('a closed destination is travelled to, and stood outside of (L-363)', async () => {
     await standAt(saveId, 'loc_1', 'plc_1_market');
-    expect((await moveTo(saveId, 'loc_231')).constraints).toEqual([
-      'The way to Ashleaches is closed. Turn back.',
-    ]);
+    const r = await moveTo(saveId, 'loc_231');
+    expect(r.outcome).toBe('success');
+    expect(r.constraints.join(' ')).toMatch(/you come to Ashleaches, but its way is closed to you/);
   });
 
   test('a structured move from the map can walk to a place in town', async () => {

@@ -42,40 +42,41 @@ const CASES = {
 // The Hulks: a hold 12 × 6, in at the west. Two guards stand mid-deck; the
 // hold grating (a locked door) on the deck's edge above (8, 1); a lever at (10, 5); the hold
 // itself, an area, the east end.
-const hulks = (group, extra = {}) => jest.requireActual('./helpers/grid').gridMap({
-  id: 'bm',
-  name: 'The Hulks',
-  width: 12,
-  height: 6,
-  entries: [{ id: 'in', x: 1, y: 3 }],
-  exits: [{ id: 'out', name: 'the gangway', x: 0, y: 3, to: 'out' }],
-  features: [{ id: 'lever', name: 'a lever', x: 10, y: 5 }],
-  walls: [],
-  doors: [
-    {
-      id: 'grating',
-      name: 'the hold grating',
-      from: { x: 8, y: 1 },
-      to: { x: 9, y: 1 },
-      locked: true,
-    },
-  ],
-  obstacles: [],
-  areas: [
-    {
-      id: 'hold',
-      name: 'The hold',
-      polygon: [
-        { x: 9, y: 0 },
-        { x: 12, y: 0 },
-        { x: 12, y: 6 },
-        { x: 9, y: 6 },
-      ],
-    },
-  ],
-  figures: [group],
-  ...extra,
-});
+const hulks = (group, extra = {}) =>
+  jest.requireActual('./helpers/grid').gridMap({
+    id: 'bm',
+    name: 'The Hulks',
+    width: 12,
+    height: 6,
+    entries: [{ id: 'in', x: 1, y: 3 }],
+    exits: [{ id: 'out', name: 'the gangway', x: 0, y: 3, to: 'out' }],
+    features: [{ id: 'lever', name: 'a lever', x: 10, y: 5 }],
+    walls: [],
+    doors: [
+      {
+        id: 'grating',
+        name: 'the hold grating',
+        from: { x: 8, y: 1 },
+        to: { x: 9, y: 1 },
+        locked: true,
+      },
+    ],
+    obstacles: [],
+    areas: [
+      {
+        id: 'hold',
+        name: 'The hold',
+        polygon: [
+          { x: 9, y: 0 },
+          { x: 12, y: 0 },
+          { x: 12, y: 6 },
+          { x: 9, y: 6 },
+        ],
+      },
+    ],
+    figures: [group],
+    ...extra,
+  });
 const guards = (block, patch = {}) => ({
   id: 'guards',
   name: 'Guard',
@@ -153,7 +154,10 @@ describe.each(Object.keys(CASES))('wary figures under %s', (id) => {
   });
 
   test('with the setting off, wary reads as hostile: they fight on sight', () => {
-    const system = { ...c.system, modules: { combat: { ...c.system.modules.combat, wary: false } } };
+    const system = {
+      ...c.system,
+      modules: { combat: { ...c.system.modules.combat, wary: false } },
+    };
     const world = worldOf(system, hulks(guards(c.block)));
     const save = saveOf(system);
     expect(play.hostilesInSight(seen(world, save), save).map((x) => x.side)).toEqual([
@@ -280,7 +284,9 @@ describe.each(Object.keys(CASES))('wary figures under %s', (id) => {
     test('forcing the grating in play turns the guards and starts the fight', () => {
       const world = worldOf(
         c.system,
-        hulks(guards(c.block, { triggers: [{ on: 'doorForced', target: 'grating', then: 'hostile' }] }))
+        hulks(
+          guards(c.block, { triggers: [{ on: 'doorForced', target: 'grating', then: 'hostile' }] })
+        )
       );
       // Beside the grating, below it.
       const save = saveOf(c.system, { cell: { x: 8, y: 1 } });
@@ -334,7 +340,9 @@ describe.each(Object.keys(CASES))('wary figures under %s', (id) => {
   test('those turned hostile in a fight under way join it', () => {
     const world = worldOf(
       c.system,
-      hulks(guards(c.block, { triggers: [{ on: 'featureTouched', target: 'lever', then: 'hostile' }] }))
+      hulks(
+        guards(c.block, { triggers: [{ on: 'featureTouched', target: 'lever', then: 'hostile' }] })
+      )
     );
     const save = saveOf(c.system, {
       cell: { x: 9, y: 5 },

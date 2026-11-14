@@ -70,8 +70,28 @@ function buildSystemInstruction(knownEntities, save, canonWorld, asked = null) {
     'night; add {"how": "sleep"} or {"how": "rest"} when the player sleeps or rests. For a ' +
     'short rest or a long rest (to recover), use the verb "rest" with params {"rest": ' +
     '"short"} or {"rest": "long"}.\n\n' +
+    travelSection(canonWorld, save) +
     askedSection(asked) +
     'Respond with ONLY a JSON object: { "verb": string, "targets": string[], "params": object }'
+  );
+}
+
+// Travelling across country (L-363; off-road travel §4.4): setting out off
+// the roads for a place, and going on with or stopping a journey under way.
+function travelSection(canonWorld, save) {
+  const journey = save && save.journey;
+  const to = journey && journey.to;
+  const name = to && (to.name || (to.placeId && (canonWorld.locations[to.placeId] || {}).name));
+  return (
+    'To travel across country, off the roads, toward a place ("cut through the forest to ' +
+    'Carrow"), use the verb "travel" with params {"offRoad": true}, targeting the place.\n' +
+    (journey
+      ? 'The player is on a journey across country' +
+        (name ? ' to ' + name : '') +
+        '. To go on with it ("keep going", "press on"), use the verb "travel" with params ' +
+        '{"go": "on"}; to stop it where they are, params {"go": "stop"}.\n'
+      : '') +
+    '\n'
   );
 }
 

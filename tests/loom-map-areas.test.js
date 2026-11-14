@@ -31,37 +31,38 @@ const rect = (x0, y0, x1, y1) => [
 // An inn 12 × 6: a wall down x = 6 with a shut door in it; west of it the
 // taproom (its top two rows), the door out, and Mira; east of it the back
 // room, and Grell in it.
-const mockInn = () => jest.requireActual('./helpers/grid').gridMap({
-  id: 'bm_inn',
-  name: 'The inn',
-  width: 12,
-  height: 6,
-  image: null,
-  entries: [{ id: 'door', x: 1, y: 3 }],
-  exits: [{ id: 'out', name: 'the street door', x: 0, y: 3, to: 'out' }],
-  features: [],
-  walls: [
-    {
-      points: [
-        { x: 6, y: 0 },
-        { x: 6, y: 2 },
-      ],
-    },
-    {
-      points: [
-        { x: 6, y: 3 },
-        { x: 6, y: 6 },
-      ],
-    },
-  ],
-  doors: [{ id: 'back-door', name: 'the back door', from: { x: 6, y: 2 }, to: { x: 6, y: 3 } }],
-  obstacles: [],
-  hazards: [],
-  areas: [
-    { id: 'taproom', name: 'the taproom', polygon: rect(0, 0, 6, 2) },
-    { id: 'back-room', name: 'the back room', polygon: rect(6, 0, 12, 6) },
-  ],
-});
+const mockInn = () =>
+  jest.requireActual('./helpers/grid').gridMap({
+    id: 'bm_inn',
+    name: 'The inn',
+    width: 12,
+    height: 6,
+    image: null,
+    entries: [{ id: 'door', x: 1, y: 3 }],
+    exits: [{ id: 'out', name: 'the street door', x: 0, y: 3, to: 'out' }],
+    features: [],
+    walls: [
+      {
+        points: [
+          { x: 6, y: 0 },
+          { x: 6, y: 2 },
+        ],
+      },
+      {
+        points: [
+          { x: 6, y: 3 },
+          { x: 6, y: 6 },
+        ],
+      },
+    ],
+    doors: [{ id: 'back-door', name: 'the back door', from: { x: 6, y: 2 }, to: { x: 6, y: 3 } }],
+    obstacles: [],
+    hazards: [],
+    areas: [
+      { id: 'taproom', name: 'the taproom', polygon: rect(0, 0, 6, 2) },
+      { id: 'back-room', name: 'the back room', polygon: rect(6, 0, 12, 6) },
+    ],
+  });
 
 const mockCases = {
   'd20-fantasy': BUILT_IN['d20-fantasy'],

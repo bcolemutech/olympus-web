@@ -34,6 +34,10 @@
  *   geometryOf(play, id) a map's geometry (L-921): a grid's from its battle
  *                      map, a region or area map's from its map doc
  *
+ * In the wilds (planning/off-road-travel.md §4.4, TR6; L-363 / #837), a
+ * save's path ends at a point on a region map, not a place: the frame's
+ * fields read it as `wild: { x, y }`, with no `location`.
+ *
  * Place ids are the world's: `discovered`, `visited` and `waysKnown` stay
  * flat lists by place, which holds by map as well.
  *
@@ -304,7 +308,7 @@ function regionIndex(play, at) {
   return -1;
 }
 
-const LEGACY = ['location', 'placeId', 'townPoint', 'mapId', 'cell', 'gridPoint'];
+const LEGACY = ['location', 'placeId', 'townPoint', 'mapId', 'cell', 'gridPoint', 'wild'];
 
 // Whether a save's own fields are those a path gives (nulls and absence alike).
 function sameFields(fields, stored) {
@@ -325,10 +329,13 @@ function legacyOf(play, at) {
     mapId: null,
     cell: null,
     gridPoint: null,
+    wild: null,
   };
   const r = Array.isArray(at) ? regionIndex(play, at) : -1;
   if (r < 0) return { fields: out, mapId: play.topMapId, prefix: [] };
   out.location = at[r].placeId || null;
+  // In the wilds (L-363): a point on the region map.
+  if (!out.location && point(at[r].point)) out.wild = { x: at[r].point.x, y: at[r].point.y };
   for (let i = r + 1; i < at.length; i++) {
     const step = at[i];
     const kind = mapKind(play, step.mapId);
@@ -387,6 +394,11 @@ function gridSteps(play, hostId, mapId, cell, gridPoint) {
  */
 function atOf(view, save) {
   const frame = view && view.frame;
+  if (frame && save && !save.location && point(save.wild)) {
+    return frame.prefix
+      .map((s) => ({ ...s }))
+      .concat([{ mapId: frame.mapId, point: { x: save.wild.x, y: save.wild.y } }]);
+  }
   if (!frame || !save || !save.location || !view.locations[save.location]) return null;
   const steps = frame.prefix.map((s) => ({ ...s }));
   steps.push({ mapId: frame.mapId, placeId: save.location });
@@ -552,6 +564,7 @@ function peekAt(play, at, mapId) {
       mapId: null,
       cell: null,
       gridPoint: null,
+      wild: null,
     },
   };
 }

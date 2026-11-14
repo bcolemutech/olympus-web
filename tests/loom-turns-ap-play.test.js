@@ -26,33 +26,34 @@ const SCIFI = BUILT_IN['pool-scifi'];
 
 // A hall 12 × 5, in at the west: mud down column 2, a wall at x = 4 with
 // the gate in it at y 2–3, and Grell, minding his own business, at (8, 2).
-const mockHall = () => jest.requireActual('./helpers/grid').gridMap({
-  id: 'bm_hall',
-  name: 'The hall',
-  width: 12,
-  height: 5,
-  image: null,
-  entries: [{ id: 'west', x: 1, y: 2 }],
-  exits: [{ id: 'out', name: 'the way out', x: 0, y: 2, to: 'out' }],
-  features: [],
-  walls: [
-    {
-      points: [
-        { x: 4, y: 0 },
-        { x: 4, y: 2 },
-      ],
-    },
-    {
-      points: [
-        { x: 4, y: 3 },
-        { x: 4, y: 5 },
-      ],
-    },
-  ],
-  doors: [{ id: 'gate', name: 'the gate', from: { x: 4, y: 2 }, to: { x: 4, y: 3 } }],
-  obstacles: [{ id: 'mud', name: 'mud', kind: 'difficult', x: 2, y: 0, h: 5 }],
-  hazards: [],
-});
+const mockHall = () =>
+  jest.requireActual('./helpers/grid').gridMap({
+    id: 'bm_hall',
+    name: 'The hall',
+    width: 12,
+    height: 5,
+    image: null,
+    entries: [{ id: 'west', x: 1, y: 2 }],
+    exits: [{ id: 'out', name: 'the way out', x: 0, y: 2, to: 'out' }],
+    features: [],
+    walls: [
+      {
+        points: [
+          { x: 4, y: 0 },
+          { x: 4, y: 2 },
+        ],
+      },
+      {
+        points: [
+          { x: 4, y: 3 },
+          { x: 4, y: 5 },
+        ],
+      },
+    ],
+    doors: [{ id: 'gate', name: 'the gate', from: { x: 4, y: 2 }, to: { x: 4, y: 3 } }],
+    obstacles: [{ id: 'mud', name: 'mud', kind: 'difficult', x: 2, y: 0, h: 5 }],
+    hazards: [],
+  });
 const mockCases = {
   'd20-fantasy': { system: FANTASY, club: '1d20 + 10' },
   'pool-scifi': { system: SCIFI, club: 'count(8d10, >= 7)' },

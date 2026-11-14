@@ -166,12 +166,27 @@ describe.each([
     ]);
   });
 
-  test('to a closed place, or one not discovered, it is turned down', () => {
+  test('to a closed place, it ends outside it (L-363); to one not discovered, it is turned down', () => {
     const gate = from([
       { mapId: 'sector', placeId: 'pl_vega' },
       { mapId: 'vega', placeId: 'pl_vega_gate' },
     ]);
-    expect(move(gate, 'pl_deneb').constraints).toEqual(['The way to Deneb is closed. Turn back.']);
+    // Out of Vega by its gate, across the sector toward Deneb, and stood
+    // outside it, at its edge toward Vega: in the wilds of the sector.
+    const shut = move(gate, 'pl_deneb');
+    expect(shut.outcome).toBe('success');
+    const at = set(shut, 'at');
+    expect(at).toHaveLength(1);
+    expect(at[0].mapId).toBe('sector');
+    expect(Math.hypot(at[0].point.x - 10, at[0].point.y - 10)).toBeCloseTo(1, 6);
+    expect(at[0].point.x).toBeGreaterThan(10);
+    expect(shut.constraints).toEqual([
+      'You leave Vega by Vega Gate.',
+      expect.stringMatching(
+        /^After about 18 hours, you come to Deneb, but its way is closed to you/
+      ),
+    ]);
+    expect(set(shut, 'time')).toBe(clock.START + Math.round((Math.hypot(30, 20) / 2) * H));
     const unknown = from(gate.at, { discovered: [] });
     expect(move(unknown, 'pl_sol_port').constraints).toEqual([
       "You can't get there directly from here.",

@@ -207,7 +207,12 @@ describe.each(Object.keys(mockCases))('foes on AP in play under %s', (id) => {
       auth: PLAYER,
     });
     // The menu's costs: each action, each attack.
-    expect(view.turn.prices.actions).toMatchObject({ dodge: 8, withdraw: 5, standUp: 5, object: 5 });
+    expect(view.turn.prices.actions).toMatchObject({
+      dodge: 8,
+      withdraw: 5,
+      standUp: 5,
+      object: 5,
+    });
     expect(view.combat.attacks.every((a) => a.ap === 10)).toBe(true);
     // The rules reference: the pool, each cost and the tiers.
     expect(view.rules.ap.pool).toBe(c.system.sheet.ap);

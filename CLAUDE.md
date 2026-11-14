@@ -216,7 +216,7 @@ npm run deploy            # Deploy hosting only (production)
 - `apps/{appId}` — `hasApp(appId)` or admin. App registry
 - `pool_handicap/{userId}` — Self read/write only. Billiards handicap data
 - `loom_worlds/{worldId}` — `hasApp('cartographer')`; `hasApp('loom')` for published only. Worlds (with a `brief`, L-711), Cartographer drafts and published, with subcollections (`locations`, `factions`, `regions`, `characters`, `lore`, `places`, `battleMaps`, `statBlocks`, `maps`); maps' geometry, materials, art sets, decor, usable objects, hidden things and spawns
-- `loom_saves/{saveId}` (+ `loom_turns`) — Owner with `hasApp('loom')`, read only. Game saves and turn history: clock, character sheet, where it stands (`at`), turn and AP, fight, figures, secrets, spawns, level offers
+- `loom_saves/{saveId}` (+ `loom_turns`) — Owner with `hasApp('loom')`, read only. Game saves and turn history: clock, character sheet, where it stands (`at`; in the wilds, a point), a journey across country, turn and AP, fight, figures, secrets, spawns, level offers
 - `loom_world_state/{worldId}` — `hasApp('loom')`, read only. Shared world state
 - `loom_creation_rolls/{rollId}` — Deny (server only). Scores rolled for a new character (L-812): the player, the world and the values, used once by `loomCreateSave`
 - `loom_systems/{systemId}` — Deny (server only). Game systems as data (L-801, `functions/loom-canon/systems.js`), written over MCP; built-ins `d20-fantasy` and `pool-scifi`
@@ -248,7 +248,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 - `loomCreationRules` — `loom` claim. How a new character is made in a world, for the new-game form: the method and its settings, each score's modifier, the skills and traits to choose; or that it's premade; and the world's player portraits (L-933)
 - `loomUploadToken` — `loom` claim (own saves). A player's own picture for their token (L-933): checked, squared at its crop to 512 px WebP with no metadata, stored at `loom_tokens/{uid}/{saveId}.webp` for its owner only
 - `loomRollCharacter` — `loom` claim. Rolls a new character's scores with the server's dice, for a system that makes characters by rolling; kept in `loom_creation_rolls` for `loomCreateSave` to use once
-- `loomPlayTurn` — `loom` claim (own saves). Runs one turn of the Loom pipeline: typed actions, moves, objects, searching, fights and reactions, rests, levelling up, travel at any depth
+- `loomPlayTurn` — `loom` claim (own saves). Runs one turn of the Loom pipeline: typed actions, moves, objects, searching, fights and reactions, rests, levelling up, travel at any depth and across country in day legs (L-363)
 - `loomWorldRatings` — `loom` claim. Each published world's band (Playable, Rich, Vivid or Legendary) for the Loom's world list; the band's name only
 - `loomGetMap` — `loom` claim (own saves). What a save may see: its map and places, routes and journeys, time, turn and prices, sheet, fight, level offer, and on a battle map its geometry as far as seen
 - `cartographerImport` — `cartographer` claim. Uploaded Azgaar map → draft world

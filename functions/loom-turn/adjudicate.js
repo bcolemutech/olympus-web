@@ -37,6 +37,7 @@ const { UNKNOWN } = require('./town-found');
 const combat = require('../loom-modules/combat');
 const { namedTurn } = require('./named-turns');
 const depth = require('./depth');
+const wildJourneys = require('./wild-journeys');
 
 // A lock's difficulty when its door gives none (L-626).
 const DEFAULT_LOCK_DIFFICULTY = 15;
@@ -689,7 +690,7 @@ function frameMove(proposedAction, characterState, canonWorld, found) {
   }
   const out = leavingTown(proposedAction, characterState, canonWorld, found);
   if (out.result) return out.result;
-  const { targetId, targetLocation, wayIn, via, here, exits, atWayOut, journey } = out;
+  const { targetId, targetLocation, wayIn, via, here, exits, atWayOut, journey, closed } = out;
 
   // In a town with ground, a typed move out walks to the nearest way out
   // first (L-663), and sets out from there if it gets there this turn. (The
@@ -724,6 +725,8 @@ function frameMove(proposedAction, characterState, canonWorld, found) {
     walkedOut = here && wayOutWalk(canonWorld, characterState, here, exits);
     if (!walkedOut) return blocked(leaveHint(targetLocation, exits, via));
   }
+
+  if (closed) return outsideByRoad(characterState, canonWorld, targetLocation, walkedOut, here);
 
   // By the way in chosen, else the most direct (L-381): facing where you
   // came from.
@@ -787,6 +790,33 @@ function frameMove(proposedAction, characterState, canonWorld, found) {
           : ['Y' + arrived.slice(1)]
     ),
     ...(made ? { journey: { stops: made.stops, through: made.through } } : {}),
+    ...(end !== start ? { time: travel.timeSpent(start, end - start) } : {}),
+  };
+}
+
+// The road to a closed place travelled (L-363; off-road travel TR1): the
+// trip's time, and the save left outside it, in the wilds at its edge.
+function outsideByRoad(characterState, canonWorld, targetLocation, walkedOut, here) {
+  const currentId = characterState.location;
+  const from = canonWorld.locations[currentId].geo || {};
+  const start = clock.timeOf(characterState);
+  const walked = walkedOut ? walkedOut.seconds : 0;
+  const trip = travel.trip(canonWorld, currentId, targetLocation.id, start + walked);
+  const end = trip ? trip.to : start + walked;
+  const out = wildJourneys.outside(canonWorld, targetLocation, [from.x, from.y]);
+  const mutations = (walkedOut && walkedOut.spend ? [walkedOut.spend] : []).concat(out.mutations);
+  if (end !== start) mutations.push({ target: 'save', op: 'set-flag', path: 'time', value: end });
+  mutations.push({ op: 'increment', path: 'worldClock', value: 1 });
+  const arrived =
+    'you come to ' +
+    targetLocation.name +
+    ', but its way is closed to you: you stand outside, and can go no further in.';
+  return {
+    outcome: 'success',
+    mutations,
+    constraints: (walkedOut ? [wayOutLine(here, walkedOut)] : []).concat(
+      trip ? travel.tripLines(trip, arrived) : ['Y' + arrived.slice(1)]
+    ),
     ...(end !== start ? { time: travel.timeSpent(start, end - start) } : {}),
   };
 }
@@ -867,10 +897,10 @@ function leavingTown(proposedAction, characterState, canonWorld, found = null) {
   // A retired place stays resolvable for saves already there, but nobody can
   // travel to it (Firestore worlds also drop it from connections).
   if (targetLocation.retired) return { result: blocked("That place can't be reached anymore.") };
-  if (!isPlayable(canonWorld, targetLocation)) {
-    return { result: blocked('The way to ' + targetLocation.name + ' is closed. Turn back.') };
-  }
-  const required = missingAbility(targetLocation, characterState);
+  // A closed place is reached, and stood outside of (L-363; off-road travel
+  // TR1): the way there is travelled, and entering it is refused.
+  const closed = !isPlayable(canonWorld, targetLocation);
+  const required = !closed && missingAbility(targetLocation, characterState);
   if (required) {
     return {
       result: blocked('You lack what it takes to make that crossing (requires: ' + required + ').'),
@@ -889,12 +919,13 @@ function leavingTown(proposedAction, characterState, canonWorld, found = null) {
   // Leaving a town (L-342): only from a way out that serves the route — a
   // harbour for the sea, a gate for the roads and trails.
   const via = town.routeBetween(canonWorld, currentId, targetId);
-  return leavingBy(characterState, canonWorld, found, {
+  const out = leavingBy(characterState, canonWorld, found, {
     targetId,
     targetLocation,
     wayIn,
     via,
   });
+  return closed && !out.result ? { ...out, closed } : out;
 }
 
 // The rest of leaving (#669, L-381): a chosen way in checked, where the save
@@ -2521,12 +2552,29 @@ function evaluate(
       plain: true,
     });
   }
-  const held = proposedAction.verb === 'move' ? heldBy(canonWorld, characterState) : null;
+  const travelling = isTravel(proposedAction, characterState);
+  const held =
+    proposedAction.verb === 'move' || travelling ? heldBy(canonWorld, characterState) : null;
   const judged = plausibilityOf(proposedAction);
   if (judged) {
     resolution = judged;
   } else if (held) {
     resolution = { ...blocked(held), plain: true };
+  } else if (travelling) {
+    // Across country (L-363; ./wild-journeys.js): setting out, going on or
+    // stopping; a move made in the wilds sets out for its place.
+    resolution = depth.withDescent(
+      wildJourneys.travel(
+        proposedAction.verb === 'move'
+          ? { ...proposedAction, params: { ...proposedAction.params, offRoad: true } }
+          : proposedAction,
+        characterState,
+        canonWorld,
+        diceSource(dice)
+      ),
+      characterState,
+      canonWorld
+    );
   } else if (proposedAction.verb === 'move') {
     resolution = evaluateMove(
       proposedAction,
@@ -2550,7 +2598,7 @@ function evaluate(
   } else {
     resolution = evaluateAction(proposedAction, characterState, diceSource(dice), canonWorld);
   }
-  if (proposedAction.verb === 'move' && resolution.outcome === 'success') {
+  if ((proposedAction.verb === 'move' || travelling) && resolution.outcome === 'success') {
     resolution = afterMove(resolution, characterState, canonWorld, diceSource(dice), choose);
   }
   // Wary figures turned by what was done (L-392), unless a fight began anyway.
@@ -2612,6 +2660,15 @@ function evaluate(
     // A journey made (L-384): its stops and the towns passed, for the GM.
     ...(resolution.journey ? { journey: Object.freeze({ ...resolution.journey }) } : {}),
   });
+}
+
+// Whether an action travels across country (L-363): the `travel` verb, or
+// a move to a place made in the wilds (where there are no routes to take).
+function isTravel(proposedAction, characterState) {
+  if (proposedAction.verb === 'travel') return true;
+  if (proposedAction.verb !== 'move' || characterState.location) return false;
+  const params = proposedAction.params || {};
+  return Boolean(characterState.wild) && !params.cell;
 }
 
 // A named character's turn reached with no choice yet (L-825): what to ask.
@@ -2691,6 +2748,7 @@ module.exports = {
   DEFAULT_LOCK_DIFFICULTY,
   ACTED,
   priceOf,
+  rolled,
   NOT_SEEN,
   NOBODY_SEEN,
 };

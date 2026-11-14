@@ -33,6 +33,7 @@ const sheets = require('../loom-canon/sheets');
 const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
 const combat = require('../loom-modules/combat');
+const wildJourneys = require('./wild-journeys');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -140,6 +141,10 @@ function mapView(canonWorld, save, record, townRecord) {
     artSet,
     ...withOwn,
     here: save.location || null,
+    // In the wilds (L-363): the point on this map the save stands at, and
+    // the journey across country it is on (the way still ahead).
+    wild: !save.location && save.wild ? { x: save.wild.x, y: save.wild.y } : null,
+    journey: journeyView(canonWorld, save),
     places,
     links,
     town: townData ? { ...townData, artSet, ...withOwn } : townData,
@@ -196,6 +201,30 @@ function mapView(canonWorld, save, record, townRecord) {
             ...(mapImage ? {} : realmsDrawing(canonWorld)),
           }
         : null,
+  };
+}
+
+// The journey across country a save is on, as the map draws it (L-363):
+// where it heads, the path still ahead from where it stands, the legs
+// walked, and the hours of travel left. Null with none, or one on another map.
+function journeyView(canonWorld, save) {
+  const j = save.journey;
+  if (!j || !canonWorld.frame || j.mapId !== canonWorld.frame.mapId || !(j.path || []).length) {
+    return null;
+  }
+  const done = j.done || 0;
+  const here = wildJourneys.pointAt(j, done);
+  const ahead = [{ x: here[0], y: here[1] }].concat(
+    j.path.filter((p, i) => j.times[i] > done + 1e-6).map((p) => ({ x: p.x, y: p.y }))
+  );
+  const left = Math.max(0, j.hours - done);
+  return {
+    mapId: j.mapId,
+    to: j.to,
+    path: ahead,
+    leg: j.leg || 0,
+    hoursLeft: left,
+    label: clock.duration(left * clock.HOUR) + ' of travel',
   };
 }
 
