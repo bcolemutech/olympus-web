@@ -29,6 +29,7 @@ const { whyClosed } = require('../../../cartographer/service');
 const { validateSheet } = require('../../../loom-canon/sheets');
 const brief = require('../../../loom-canon/brief');
 const realms = require('../../../loom-canon/realms');
+const { REGION_DANGER } = require('../../../loom-canon/wild-plan');
 const { createScratchWorld, MIN_MAP, MAX_MAP } = require('../../../cartographer/scratch');
 const { systemOf } = require('../../../loom-canon/checks');
 const spawns = require('../../../loom-modules/combat/spawns');
@@ -120,6 +121,8 @@ const COLOUR = /^#[0-9a-fA-F]{6}$/;
 const MAX_NEW_REALMS = 20;
 const MAX_NEW_REGIONS = 50;
 const colour = z.string().regex(COLOUR, 'a colour is #rrggbb');
+// A region's danger (L-361; off-road-travel.md EV6).
+const regionDanger = z.number().min(REGION_DANGER.min).max(REGION_DANGER.max);
 const SLICE_NOTE =
   'Worlds without Azgaar (L-710) are built in slices: the brief is here; realms and regions ' +
   'are add_realms and add_regions, shaped by zones on a region map (set_zones), and terrain ' +
@@ -1474,7 +1477,8 @@ function writeTools({ writer, systems, studio }) {
       name: 'update_region',
       title: 'Update region',
       description:
-        'Change a region’s (province’s) name or description. Regions arrive from the map with ' +
+        'Change a region’s (province’s) name, description, realm or danger (how dangerous its ' +
+        'wilds are, raising the odds of trouble on the way). Regions arrive from the map with ' +
         'no description; writing one, or sending the current text again, marks it as written ' +
         'up. ' +
         editNote,
@@ -1489,10 +1493,17 @@ function writeTools({ writer, systems, studio }) {
           .nullable()
           .optional()
           .describe('The realm it belongs to; null for none (L-712).'),
+        danger: regionDanger
+          .nullable()
+          .optional()
+          .describe(
+            'How dangerous its wilds are (L-361), 0.5 calm to 2 deadly; null takes it back to ' +
+              'the default, 1.'
+          ),
       },
       annotations: replacing,
       handler: (ctx, args) => {
-        requireSome(args, ['name', 'description', 'factionId']);
+        requireSome(args, ['name', 'description', 'factionId', 'danger']);
         return edit(ctx, args, (e) => {
           const region = existing(e.world, 'region', args.regionId);
           const fields = describe(region, args.description);
@@ -1503,7 +1514,12 @@ function writeTools({ writer, systems, studio }) {
             if (args.factionId !== null) live(e.world, 'faction', args.factionId);
             fields.factionId = args.factionId;
           }
-          if (Object.keys(fields).length) e.update(e.ref('regions', region.id), fields);
+          const update = { ...fields };
+          if (args.danger !== undefined && args.danger !== (region.danger ?? null)) {
+            update.danger = args.danger === null ? FieldValue.delete() : args.danger;
+            fields.danger = args.danger;
+          }
+          if (Object.keys(update).length) e.update(e.ref('regions', region.id), update);
           return {
             region: { id: region.id, name: fields.name || region.name },
             updated: changedFields(fields),
@@ -1580,7 +1596,9 @@ function writeTools({ writer, systems, studio }) {
         'naming the realm it belongs to, or none. A region’s shape is one or more zones on a ' +
         'region map naming it: set_zones with { id, region: <regionId>, shape }. A place takes ' +
         'its region from the topmost zone naming one where it sits, and its realm from that ' +
-        'region, unless set by hand (update_location). where reads what lies at a point. ' +
+        'region, unless set by hand (update_location). where reads what lies at a point. A ' +
+        'region’s danger (0.5 calm to 2 deadly, 1 by default) raises the odds of trouble in its ' +
+        'wilds. ' +
         'Region names are unique among the world’s regions. Returns the new ids. ' +
         editNote,
       inputSchema: {
@@ -1595,6 +1613,11 @@ function writeTools({ writer, systems, studio }) {
               factionId: entityId('faction', 'get_world')
                 .optional()
                 .describe('The realm it belongs to (add_realms); none if left out.'),
+              danger: regionDanger
+                .optional()
+                .describe(
+                  'How dangerous its wilds are (L-361), 0.5 calm to 2 deadly; 1 if left out.'
+                ),
             })
           )
           .min(1)
@@ -1621,6 +1644,7 @@ function writeTools({ writer, systems, studio }) {
               name: spec.name,
               description: spec.description || '',
               factionId: realm ? realm.id : null,
+              ...(spec.danger !== undefined ? { danger: spec.danger } : {}),
               ...(spec.description ? { sources: { description: SOURCES.MCP } } : {}),
             });
             return {

@@ -199,6 +199,7 @@ describe('the tools', () => {
       id: 'water',
       name: 'Water',
       water: true,
+      wild: { speed: 0.3, danger: 1 },
     });
     const walls = await ok('list_materials', { kind: 'wall' });
     expect(walls.materials.map((m) => m.id)).toEqual(catalog.materialsOf('wall').map((m) => m.id));
