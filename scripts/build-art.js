@@ -1114,6 +1114,29 @@ const OBJECT = {
       ],
       '#65635f'
     ),
+  bush: (W, H, r) => {
+    let out = circle(W / 2 + 3, H / 2 + 4, W / 2 - 5, 'rgba(0,0,0,0.22)');
+    out += circle(W / 2, H / 2, W / 2 - 4, '#2c5a2a');
+    const greens = ['#3a7034', '#447d3a', '#356a30', '#4f8a41'];
+    for (let i = 0; i < 9; i++) {
+      const a = between(r, 0, Math.PI * 2);
+      const d = between(r, 0, W / 2 - 18);
+      out += circle(
+        W / 2 + Math.cos(a) * d,
+        H / 2 + Math.sin(a) * d,
+        between(r, 9, 14),
+        pick(r, greens)
+      );
+    }
+    return out;
+  },
+  log: (W, H) =>
+    rect(4, H / 2 - 12, W - 8, 24, '#6b4a2b', { stroke: WOOD_DARK, 'stroke-width': 2, rx: 11 }) +
+    line(14, H / 2 - 5, W - 30, H / 2 - 6, shade(WOOD, 0.7), 1.4) +
+    line(20, H / 2 + 5, W - 24, H / 2 + 4, shade(WOOD, 0.7), 1.4) +
+    ellipse(W - 12, H / 2, 8, 11, '#b08850', { stroke: WOOD_DARK, 'stroke-width': 1.4 }) +
+    ellipse(W - 12, H / 2, 3.5, 5, 'none', { stroke: '#7a5a30', 'stroke-width': 1 }) +
+    rect(W * 0.4, H / 2 - 16, 5, 8, '#5a3d22', { rx: 2 }),
   well: (W) =>
     circle(W / 2, W / 2, W / 2 - 1.5, '#8a8a90', { stroke: STONE_DARK, 'stroke-width': 2 }) +
     Array.from({ length: 12 }, (_, i) =>

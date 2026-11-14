@@ -23,6 +23,7 @@ const gen = require('../functions/loom-canon/map-generators');
 const geo = require('../functions/loom-canon/map-geometry');
 const mapPaths = require('../functions/loom-canon/map-paths');
 const materials = require('../functions/loom-canon/materials');
+const scale = require('../functions/loom-canon/scale');
 
 const KINDS = [
   ['rooms', undefined],
@@ -252,5 +253,204 @@ describe('problems finds a map that is not playable', () => {
     const bad = JSON.parse(JSON.stringify(made));
     bad.geometry.walls[0].material = 'cheese';
     expect(gen.problems(bad)[0]).toMatch(/material/);
+  });
+});
+
+// ── The wilds (planning/off-road-travel.md §4.6, EV5; L-365 / #839) ──────
+
+describe('the wilds: every scene in three terrains (L-365)', () => {
+  // A wooded terrain, a dry one and a wet one: they differ in what stands in
+  // them and in their ground.
+  const TERRAINS = ['forest', 'desert', 'swamp'];
+  const CASES = gen.SCENES.flatMap((scene) => TERRAINS.map((terrain) => [scene, terrain]));
+  const SEEDS_W = [1, 2, 3];
+  const edgeOf = (map, e) =>
+    e.x === 0 ? 'west' : e.x === map.width - 1 ? 'east' : e.y === 0 ? 'north' : 'south';
+
+  test.each(CASES)(
+    '%s in %s: the same seed, the same map; another seed, another',
+    (scene, terrain) => {
+      const a = gen.generate('wilds', { seed: 41, terrain, scene });
+      expect(gen.generate('wilds', { seed: 41, terrain, scene })).toEqual(a);
+      expect(gen.generate('wilds', { seed: 42, terrain, scene }).geometry).not.toEqual(a.geometry);
+      expect(a).toMatchObject({ kind: 'wilds', terrain, scene, width: 30, height: 30 });
+    }
+  );
+
+  test.each(CASES)(
+    '%s in %s: every entry reaches every other, nothing blocks one, and it is playable',
+    (scene, terrain) => {
+      for (const seed of SEEDS_W) {
+        const made = gen.generate('wilds', { seed, terrain, scene });
+        const stored = geo.normalize(made.geometry);
+        const map = { ...made, geometry: stored };
+        expect({ seed, problems: unplayable(made) }).toEqual({ seed, problems: [] });
+        expect(made.removed).toEqual([]);
+        // Entries on at least two edges, each by its exit on the edge.
+        expect(made.entries.length).toBeGreaterThanOrEqual(2);
+        expect(made.exits).toHaveLength(made.entries.length);
+        expect(new Set(made.exits.map((e) => edgeOf(made, e))).size).toBe(made.entries.length);
+        made.exits.forEach((e, i) => {
+          expect(e.to).toBe('out');
+          expect(edgeOf(made, e)).toBe(made.entries[i].id);
+        });
+        // Every entry reaches every other, for a medium walker.
+        for (const from of made.entries) {
+          const reached = mapPaths.squaresReached(map, [from], { width: 2.5 });
+          for (const to of made.entries)
+            expect({ seed, from: from.id, to: to.id, ok: Boolean(reached[key(to)]) }).toEqual({
+              seed,
+              from: from.id,
+              to: to.id,
+              ok: true,
+            });
+        }
+        // Nothing blocks an entry or its exit: a medium walker stands in
+        // the middle of each, on ground anyone crosses.
+        const c = geo.compile(stored);
+        for (const sq of [...made.entries, ...made.exits]) {
+          const p = [sq.x * 5 + 2.5, sq.y * 5 + 2.5];
+          expect({ seed, at: sq.id, fits: geo.fits(c, p, 2.5) }).toEqual({
+            seed,
+            at: sq.id,
+            fits: true,
+          });
+          const g = geo.groundAt(c, p);
+          expect(g && g.cost).not.toBe('never');
+        }
+        // Spawn areas, three squares across, every square of them reached.
+        const spawns = stored.spawns || [];
+        expect(spawns.length).toBeGreaterThanOrEqual(2);
+        const reached = mapPaths.squaresReached(map, made.entries);
+        for (const s of spawns) {
+          const { rect } = made.geometry.spawns.find((x) => x.id === s.id).shape;
+          expect([rect.w, rect.h]).toEqual([15, 15]);
+          for (let y = rect.y / 5; y < (rect.y + rect.h) / 5; y++)
+            for (let x = rect.x / 5; x < (rect.x + rect.w) / 5; x++)
+              expect({ seed, spawn: s.id, x, y, ok: Boolean(reached[`${x},${y}`]) }).toEqual({
+                seed,
+                spawn: s.id,
+                x,
+                y,
+                ok: true,
+              });
+        }
+        // Catalog objects, to scale; its ground the terrain's own.
+        for (const o of stored.objects || []) expect(CATALOG.has(o.kind)).toBe(true);
+        expect(scale.warnings(stored)).toEqual([]);
+        expect(made.geometry.ground[0]).toMatchObject({ id: 'floor', material: terrain });
+      }
+    },
+    60000
+  );
+});
+
+describe('the wilds: what makes each scene', () => {
+  const water = (made, id) => made.geometry.ground.find((g) => g.id === id);
+
+  test('a ford: its water is crossed, the river nowhere else', () => {
+    for (const terrain of ['grass', 'forest', 'desert']) {
+      for (const seed of [1, 2, 3]) {
+        const made = gen.generate('wilds', { seed, terrain, scene: 'ford' });
+        expect(water(made, 'ford-water')).toMatchObject({ material: 'water', cost: 2 });
+        expect(water(made, 'river')).toMatchObject({ material: 'deep-water', cost: 'never' });
+        const map = { ...made, geometry: geo.normalize(made.geometry) };
+        const [west, east] = made.entries;
+        expect(mapPaths.squaresReached(map, [west])[key(east)]).toBe(true);
+        // The way across goes through the ford.
+        const plan = mapPaths.planner(map);
+        const path = mapPaths.pathTo(plan, mapPaths.centreOf(west), mapPaths.centreOf(east));
+        const c = geo.compile(map.geometry);
+        expect(
+          path.points.some((p) => (geo.groundAt(c, [p.x, p.y]) || {}).id === 'ford-water')
+        ).toBe(true);
+        // Without the ford the river is crossed nowhere.
+        const dry = JSON.parse(JSON.stringify(made));
+        water(dry, 'ford-water').cost = 'never';
+        const noFord = { ...dry, geometry: geo.normalize(dry.geometry) };
+        expect(mapPaths.squaresReached(noFord, [west])[key(east)]).toBeUndefined();
+      }
+    }
+  });
+
+  test('a ridge: its slope walked up, a cliff down its other side, its top and foot as zones', () => {
+    const made = gen.generate('wilds', { seed: 4, terrain: 'hills', scene: 'ridge' });
+    const levels = made.geometry.ground.filter((g) => /^ridge-/.test(g.id));
+    expect(levels.length).toBeGreaterThanOrEqual(3);
+    levels.forEach((g, i) => expect(g.height).toBe((i + 1) * 2));
+    expect(Math.max(...levels.map((g) => g.height))).toBeGreaterThanOrEqual(mapPaths.FALL);
+    expect(made.geometry.zones.map((z) => z.id)).toEqual(['ridge', 'cliff-foot']);
+    // Its top is reached, by its slope.
+    const map = { ...made, geometry: geo.normalize(made.geometry) };
+    const c = geo.compile(map.geometry);
+    const reached = mapPaths.squaresReached(map, made.entries);
+    const top = Object.keys(reached).filter((k) => {
+      const [x, y] = k.split(',').map(Number);
+      return mapPaths.floorAt(map, { x: x * 5 + 2.5, y: y * 5 + 2.5 }) === levels.length * 2;
+    });
+    expect(top.length).toBeGreaterThan(0);
+    // Its cliff is a drop of a fall or more.
+    expect(c.ground.some((g) => g.item.height >= mapPaths.FALL)).toBe(true);
+  });
+
+  test('ruins: broken stone walls the way runs through; a clearing, a track and a marsh', () => {
+    const ruins = gen.generate('wilds', { seed: 2, terrain: 'grassland', scene: 'ruins' });
+    expect(ruins.geometry.walls.length).toBeGreaterThan(1);
+    ruins.geometry.walls.forEach((w) => expect(w.material).toBe('stone'));
+    expect(ruins.geometry.zones.map((z) => z.id)).toContain('ruins');
+    expect(ruins.geometry.objects.some((o) => o.kind === 'pillar')).toBe(true);
+
+    const clearing = gen.generate('wilds', { seed: 2, terrain: 'forest', scene: 'clearing' });
+    expect(clearing.geometry.zones.map((z) => z.id)).toContain('clearing');
+    // No tree stands in the clearing.
+    const glade = clearing.geometry.zones.find((z) => z.id === 'clearing');
+    for (const o of clearing.geometry.objects.filter((x) => x.kind === 'tree')) {
+      expect(geo.pointInShape(o.at, glade.shape)).toBe(false);
+    }
+
+    const track = gen.generate('wilds', { seed: 2, terrain: 'forest', scene: 'forest-track' });
+    expect(track.geometry.lines.find((l) => l.id === 'way')).toMatchObject({ material: 'track' });
+    expect(track.geometry.objects.filter((o) => o.kind === 'tree').length).toBeGreaterThan(30);
+    expect(track.geometry.objects.some((o) => o.kind === 'log')).toBe(true);
+
+    const marsh = gen.generate('wilds', { seed: 2, terrain: 'marsh', scene: 'marsh-path' });
+    expect(water(marsh, 'pools')).toMatchObject({ material: 'water', cost: 2 });
+    expect(marsh.geometry.zones.map((z) => z.id)).toContain('causeway');
+  });
+
+  test('trees and bushes grow to their own sizes; a bush is pushed through, a log climbed round', () => {
+    const made = gen.generate('wilds', { seed: 5, terrain: 'forest', scene: 'forest-track' });
+    const sizes = new Set(
+      made.geometry.objects.filter((o) => o.kind === 'tree').map((o) => o.size[0])
+    );
+    expect(sizes.size).toBeGreaterThan(3);
+    expect(materials.objectKind('bush')).toMatchObject({ blocksSight: true, blocksMove: false });
+    expect(materials.objectKind('log').blocksMove).toBeUndefined();
+    for (const o of made.geometry.objects.filter((x) => x.kind === 'bush')) {
+      expect(o.blocksMove).toBe(false);
+    }
+  });
+
+  test('every terrain makes every scene, at its smallest', () => {
+    for (const terrain of gen.TERRAINS) {
+      for (const scene of gen.SCENES) {
+        const made = gen.generate('wilds', { seed: 7, terrain, scene, width: 16, height: 16 });
+        expect({ terrain, scene, problems: unplayable(made) }).toEqual({
+          terrain,
+          scene,
+          problems: [],
+        });
+      }
+    }
+  }, 60000);
+
+  test('a terrain’s own scene by default; what it refuses', () => {
+    expect(gen.generate('wilds', { terrain: 'forest' }).scene).toBe('forest-track');
+    expect(gen.generate('wilds', { terrain: 'swamp' }).scene).toBe('marsh-path');
+    expect(gen.generate('wilds', {})).toMatchObject({ terrain: 'grass', scene: 'clearing' });
+    expect(() => gen.generate('wilds', { terrain: 'ocean' })).toThrow(/terrain is one of/);
+    expect(() => gen.generate('wilds', { scene: 'volcano' })).toThrow(/scene is one of/);
+    expect(() => gen.generate('rooms', { terrain: 'forest' })).toThrow(/takes no terrain/);
+    expect(() => gen.generate('wilds', { style: 'sailing' })).toThrow(/takes no style/);
   });
 });
