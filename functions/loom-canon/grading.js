@@ -49,8 +49,10 @@
 // dangerous place (L-824); 10: templates on a large map's places (L-906).
 // 11: a map's data is enough to draw it (L-929); 12: a map's look, and its art
 // a bonus (L-947). 13: people's token pictures (L-934). 14: a world's brief and
-// its painted land: terrain, shaped regions and realms (L-718).
-const RUBRIC_VERSION = 14;
+// its painted land: terrain, shaped regions and realms (L-718). 15: the wilds:
+// a region's danger and events, a generic map for each terrain, and open
+// country drawn without walls (L-368).
+const RUBRIC_VERSION = 15;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -88,6 +90,8 @@ const WEIGHTS = Object.freeze({
   battleMap: { drawn: 30, look: 30, art: 5, features: 20, exits: 20 },
   // land is a realm's alone: a region's shape is asked of its map (L-718).
   realm: { description: 30, lore: 30, people: 20, land: 20 },
+  // A region's wilds (L-368): its danger level, and events that fit its ground.
+  region: { danger: 5, encounters: 10 },
   // A region map's own: its terrain, and its regions' shapes (L-718).
   regionMap: { terrain: 60, regions: 40 },
   world: {
@@ -99,6 +103,8 @@ const WEIGHTS = Object.freeze({
     templates: 10,
     tokens: 10,
     brief: 20,
+    // a bonus: a generic battle map for each terrain on its land (L-368).
+    wildMaps: 10,
   },
 });
 const QUALITY = Object.freeze({
@@ -128,6 +134,9 @@ const QUALITY = Object.freeze({
   // The share of a region map under ground that counts as covered (L-718): a
   // few points short is the sampling and the odd gap between shapes.
   landCover: 0.95,
+  // A ground is under a region when it holds this share of its land (L-368):
+  // a sliver of one isn't a terrain its events need to name.
+  wildsTerrainShare: 0.1,
   // How much a place counts toward the world's score by nearness to play.
   nearness: { play: 3, near: 1, far: 0.25, nearHops: 2 },
 });
@@ -314,7 +323,9 @@ function undrawn(map) {
     return {
       need: 'drawn',
       tool: 'set_walls',
-      message: 'Its battle map has floors but no walls: draw them (set_walls), or give it art.',
+      message:
+        'Its battle map has floors but no walls: draw them (set_walls), or, for open country, ' +
+        'add lines or objects (set_lines, set_objects), or give it art.',
     };
   }
   if (how === 'part') {
@@ -349,6 +360,58 @@ function lookCheck(world, map) {
     lacking,
     message: `${lacking.length} of the ${look.total} materials and objects on its battle map have no painted art: ${shown}. Give them art (set_object_art, or an art set that paints them).`,
   };
+}
+
+// ── The wilds (planning/off-road-travel.md §4.8, X1; L-368) ─────────────
+
+// Off-road travel is on unless the world's system or the world turns it off:
+// a world that has no use for the wilds isn't asked for them.
+const wildsOn = (world) => !require('../loom-modules/wilds/settings').isOff(world.system, world);
+
+const names = (list) => list.slice(0, 6).join(', ') + (list.length > 6 ? ', …' : '');
+
+// The rows of the tables a region's events are picked from, its own and its
+// region maps' (the world's and the built-ins' are the fallback), that say
+// something can happen.
+function regionRows(world, region) {
+  const events = require('../loom-modules/wilds/events');
+  const tables = [region.encounters].concat(
+    require('./land')
+      .regionMapIds(world, region.id)
+      .map((id) => world.maps[id].encounters)
+  );
+  return []
+    .concat(...tables.map((t) => (Array.isArray(t) ? t : [])))
+    .filter((row) => row && typeof row === 'object' && events.usable(row));
+}
+
+// Whether a row of events fits ground of a material: it names none, or it.
+const fitsGround = (row, material) =>
+  !Array.isArray(row.terrain) || !row.terrain.length || row.terrain.includes(material);
+
+// The ground a region's events must fit: what holds its land (a sliver
+// doesn't count), crossable.
+function regionTerrains(world, region) {
+  return Object.entries(require('./land').regionGrounds(world, region.id))
+    .filter(
+      ([material, held]) =>
+        held >= QUALITY.wildsTerrainShare &&
+        !require('./materials').wildOf(material, world.materials, world.wilds).impassable
+    )
+    .map(([material]) => material)
+    .sort();
+}
+
+// The terrains the world's land is, as the generator knows them (a world's own
+// ground is the terrain it is like), each with the ground that is it.
+function landTerrains(world) {
+  const arrive = require('../loom-modules/wilds/arrive');
+  const by = {};
+  for (const material of require('./land').landGrounds(world)) {
+    const terrain = arrive.terrainOf(world, material);
+    (by[terrain] = by[terrain] || []).push(material);
+  }
+  return by;
 }
 
 /**
@@ -875,6 +938,62 @@ const CRITERIA = Object.freeze([
     },
   },
 
+  // A region's wilds (planning/off-road-travel.md §4.8, X1; L-368).
+  {
+    // How dangerous its wilds are (EV6): set, not left to the default of 1.
+    id: 'region.danger',
+    kinds: ['region'],
+    weight: WEIGHTS.region.danger,
+    feature: 'L-368',
+    label: 'A danger level',
+    need: 'danger',
+    tool: 'update_region',
+    applies: (world) => wildsOn(world),
+    check: (world, region) =>
+      Number.isFinite(region.danger)
+        ? met()
+        : {
+            progress: 0,
+            message:
+              'It has no danger level: set one with update_region, 0.5 calm to 2 deadly. ' +
+              'Journeys across its wilds roll for events by it.',
+          },
+  },
+  {
+    // A table of events, on the region or its map (EV2), with a row for the
+    // ground under it. A region with no ground known has none to disagree
+    // with, so any row that says something can happen counts.
+    id: 'region.encounters',
+    kinds: ['region'],
+    weight: WEIGHTS.region.encounters,
+    feature: 'L-368',
+    label: 'Events on the way that fit its terrain',
+    need: 'encounters',
+    tool: 'set_encounters',
+    applies: (world) => wildsOn(world),
+    check: (world, region) => {
+      const rows = regionRows(world, region);
+      if (!rows.length) {
+        return {
+          progress: 0,
+          message:
+            'It has no table of events: write one with set_encounters (regionId), rows that ' +
+            'name the ground they fit (terrain), or none at all.',
+        };
+      }
+      const terrains = regionTerrains(world, region);
+      const lacking = terrains.filter((material) => !rows.some((row) => fitsGround(row, material)));
+      if (!lacking.length) return met();
+      return {
+        progress: (terrains.length - lacking.length) / terrains.length,
+        have: terrains.length - lacking.length,
+        want: terrains.length,
+        lacking,
+        message: `Its events have nothing for ${lacking.length} of the ${terrains.length} grounds under it: ${names(lacking)}. Add rows that fit them (set_encounters with regionId, terrain naming each).`,
+      };
+    },
+  },
+
   {
     // A realm's land is its regions' shapes together (GR1; R3; L-718): at
     // least one of its regions has a zone on a region map.
@@ -979,6 +1098,37 @@ const CRITERIA = Object.freeze([
         message: written
           ? `Its brief lacks ${missing.map((key) => brief.LABELS[key]).join(', ')}.`
           : 'The world has no brief: set its genre, tone, era and art direction with update_world.',
+      };
+    },
+  },
+  {
+    // A generic battle map for each terrain on its land (EV5, X1): a bonus,
+    // not a gap, since the generator makes one on the spot where it has none.
+    id: 'world.wildMaps',
+    kinds: ['world'],
+    bonus: true,
+    weight: WEIGHTS.world.wildMaps,
+    feature: 'L-368',
+    label: 'A generic map for each terrain on its land (a bonus)',
+    need: 'wildMaps',
+    tool: 'generate_map',
+    applies: (world) => wildsOn(world) && Object.keys(landTerrains(world)).length > 0,
+    check: (world) => {
+      const arrive = require('../loom-modules/wilds/arrive');
+      const by = landTerrains(world);
+      const terrains = Object.keys(by).sort();
+      // A map tagged for the terrain, or for any ground of it on the land,
+      // is what an event there would be played on.
+      const lacking = terrains.filter(
+        (terrain) => !by[terrain].some((m) => arrive.genericFor(world, m, terrain, null).length)
+      );
+      if (!lacking.length) return met();
+      return {
+        progress: (terrains.length - lacking.length) / terrains.length,
+        have: terrains.length - lacking.length,
+        want: terrains.length,
+        lacking,
+        message: `${lacking.length} of the ${terrains.length} terrains on its land have no generic map: ${names(lacking)}. Make each with generate_map (kind wilds, terrain); a world without one gets a map made on the spot.`,
       };
     },
   },

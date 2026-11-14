@@ -392,6 +392,7 @@ module.exports = {
   isOn,
   terrainOf,
   sceneOf,
+  genericFor,
   mapFor,
   entryOf,
   groupsFor,

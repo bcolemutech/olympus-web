@@ -1,6 +1,6 @@
 # The Loom — Off-Road Travel and the Wilderness — Design Document v0.2
 
-**Status:** Decided (2026-10-11), refreshed 2026-11-14 (§3). Sub-issues L-361 to L-368 filed as #835–#842 (§6). Shipped: L-361 to L-367.
+**Status:** Decided (2026-10-11), refreshed 2026-11-14 (§3). Sub-issues L-361 to L-368 filed as #835–#842 (§6). **Shipped:** L-361 to L-368 (2026-11-14).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-360 (#418)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4), after L-710.
@@ -147,6 +147,14 @@ This epic adds ([`the-loom-grading.md`](./the-loom-grading.md) §4.3), by the ru
 - **Region:** a danger level set; an encounter table with rows that fit its terrain.
 - **World (bonus):** a generic battle map for each terrain on its land.
 - **Open country counts as drawn** (the user, 2026-11-14, found building L-365): a battle map's `drawn` asks for floors and walls, so a wilds map, with none, grades half drawn and is told to add walls. L-368 makes a map with floors and lines or objects, and no walls, count as drawn.
+
+**As built** (L-368, 2026-11-14; rubric version 15; the criteria's full account is in [`the-loom-grading.md`](./the-loom-grading.md) §4.4):
+
+- **`region.danger`** (5): a danger level set, any number from 0.5 to 2, even 1. **`region.encounters`** (10): a table on the region or on a region map it has a zone on, with a row for each ground under it: the grounds that hold a tenth of its land, sampled in its zones, less water and impassable ground. A row with no `terrain` fits any; one naming a ground fits it by id, as the game's choice of an event does. The world's table and the built-ins are the fallback and don't count. A region with no shape has no ground, so any row that says something can happen counts. Partial progress by the grounds with a row; `lacking` names the rest.
+- **`world.wildMaps`** (bonus, 10): each terrain on the land (passable ground on the world's region maps, a world's own ground as the terrain it is `like`) has a live generic battle map tagged for it, or for any ground of it, with a way out. A bonus: it adds points and never takes any away. Made with `generate_map` (kind `wilds`, `terrain`).
+- **Off:** a world whose system or rules turn off-road travel off is graded on none of them.
+- **Open country counts as drawn:** `drawnOf` is `full` with floors and walls, or floors with lines or objects and no walls; floors alone or walls alone are still half. A map the wilds generator makes is fully drawn.
+- **The work list** names regions with no danger level (`update_region`) or no fitting table (`set_encounters`, `lacking` the grounds), and the terrains with no generic map (`generate_map`); the Cartographer page's biggest gaps carry them, as they carry every criterion.
 
 ---
 

@@ -87,7 +87,8 @@ const HOW_TO = {
   drawn:
     'Draw its battle map from data: floors with set_ground and walls with set_walls (doors, ' +
     'windows and objects go in them: set_doors, set_windows, set_objects), or give it art. ' +
-    'It is drawn when it has art, or both floors and walls. Check it with view_image.',
+    'It is drawn when it has art, or both floors and walls; open country has no walls, so ' +
+    'floors with lines or objects (set_lines, set_objects) are drawn. Check it with view_image.',
   look:
     'Paint what its battle map shows: `lacking` names the materials (wall/stone) and object ' +
     'kinds that have no painted art in the world’s art set. Give an object kind art with ' +
@@ -124,6 +125,20 @@ const HOW_TO = {
   region:
     'Put the settlement in a region: shape a region over it (set_zones with region; the ' +
     'settlement takes it from where it sits), or name one by hand with update_location regionId.',
+  danger:
+    'Give the region a danger level with update_region (danger: 0.5 calm to 2 deadly, 1 by ' +
+    'default). Journeys across its wilds roll for events by it, with the ground’s own danger ' +
+    '(set_wilds).',
+  encounters:
+    'Write the region’s events on the way with set_encounters (regionId, or a region map’s ' +
+    'mapId): rows of { what or text, kind, terrain, weight }, `terrain` naming the ground ' +
+    'materials a row fits (list_materials; any if left out). `lacking` names the grounds ' +
+    'under the region that no row fits. The world’s table and the built-in events are only ' +
+    'the fallback.',
+  wildMaps:
+    'A bonus: make a generic battle map for each terrain on the land with generate_map (kind ' +
+    'wilds, terrain; it is made generic for its scene and terrain). `lacking` names the ' +
+    'terrains. Events are played on the world’s map for the ground, else one made on the spot.',
   brief:
     'Set the world’s brief with update_world (brief: genre, tone, era, artDirection): the GM ' +
     'is told it every turn, and the studio uses the art direction as the world’s style.',

@@ -491,7 +491,7 @@ test('people, lore and a long description make it Rich; ground raises it', async
   expect(overview).toMatchObject({ score: overview.completion.score, band: 'playable' });
   expect(overview.completion).toMatchObject({
     graded: true,
-    rubricVersion: 14,
+    rubricVersion: 15,
     band: 'playable',
     places: { total: 719, rich: 1, unbuilt: 718, stub: 0 },
     factions: { stub: 23 },
@@ -600,10 +600,13 @@ test('update_region writes a description at last, and grades the region', async 
   expect(region.missing.map((item) => item.criterion)).toEqual(
     expect.arrayContaining(['realm.description', 'realm.lore'])
   );
+  // And, since L-368, its wilds: a danger level and events that fit its ground.
   expect(region.checklist.map((c) => c.id)).toEqual([
     'realm.description',
     'realm.lore',
     'realm.people',
+    'region.danger',
+    'region.encounters',
   ]);
   // Burdendal's twelve locals are its notable people.
   expect(region.checklist.find((c) => c.id === 'realm.people').met).toBe(true);

@@ -27,6 +27,8 @@
  *                                  walked most, and the share on routes
  *   fits(row, material, path)      whether a row fits ground of this material
  *                                  and this path
+ *   usable(row)                    whether a row says something can happen:
+ *                                  figures to meet or words to tell
  *   choose(view, at, dice)         the event at a camp, or null
  *   happen(view, opts)             the roll and, on a hit, the event: what a
  *                                  day leg's turn records (`event`)
@@ -420,6 +422,7 @@ module.exports = {
   dice,
   tablesOf,
   fits,
+  usable,
   choose,
   happen,
   validateRows,
