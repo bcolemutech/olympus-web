@@ -1,6 +1,6 @@
 # The Loom — Off-Road Travel and the Wilderness — Design Document v0.2
 
-**Status:** Decided (2026-10-11), refreshed 2026-11-14 (§3). Sub-issues L-361 to L-368 filed as #835–#842 (§6). Shipped: L-361 to L-366.
+**Status:** Decided (2026-10-11), refreshed 2026-11-14 (§3). Sub-issues L-361 to L-368 filed as #835–#842 (§6). Shipped: L-361 to L-367.
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-360 (#418)
 **Phase:** 6 — Studio and new worlds ([`roadmap.md`](./roadmap.md) §4), after L-710.
@@ -124,7 +124,7 @@ Settled with the user through a questionnaire; every answer took the recommendat
   - **The fight:** creatures come for the player as a broken rest's do, by `event`, whether or not they are in sight; travellers (neutral) start none.
   - **Entry:** on the side the traveller came from (the entry facing the leg's last bearing).
   - **Leaving:** any exit, a fight fled; the map, figures, doors, objects and finds are dropped, and the journey is as it was: `go on`, `stop` and `travel` are refused on the map ("Leave the map first").
-  - **Not done here:** the map's own `seen` record is left behind, and an arrival turn is narrated before the map is in play (the GM is told the event's text and the scene). L-367 draws the camp's map; L-368 grades.
+  - **Not done here:** the map's own `seen` record is left behind, and an arrival turn is narrated before the map is in play (the GM is told the event's text and the scene). L-367 draws the camp on the region map; L-368 grades.
 - **Play** is ordinary battle-map play.
 - **Leaving** (EV8): by any edge or exit, back to the journey: go on, turn back or change course.
 
@@ -133,6 +133,12 @@ Settled with the user through a questionnaire; every answer took the recommendat
 - **The preview** runs the planner in the page: the path drawn on the region map, its distance, days, terrain crossed and a wildness rating from its average danger, beside the route option if there is one.
 - **The journey** on the map: the path, each camp, and the save's position in the wilds.
 - **Setting out:** a point on the map, or a place, with "Travel across country".
+- **As built** (L-367, 2026-11-14): `public/apps/loom/js/wild-view.js` and `world.js`.
+  - **The preview is the turn's plan.** loomGetMap sends `wilds` (`map-view.js` `wildsView`): the module's `pace`, `dayHours` and `discover`, the map's `scale` and `unit`, the world's `overrides` of ground speed and danger, the regions' dangers and the zones that name them (a map's drawn geometry has no zones, so they are sent beside it), and the routes as `lanes` at their kinds' speeds. The page runs `wild-paths.js` on them (`Loom.wildView.planTo`), so its path, distance and hours are the journey's; a test checks it against `wildPlan.planOn` and `wildJourneys.journeyOf`. `wilds` is `null` (and nothing is offered or drawn) with off-road travel off, on a battle map or on a peeked map.
+  - **Only found routes are lanes.** The page is sent the routes between places the save has found and may take, never an undiscovered place's. The turn plans over every route, so a road the player hasn't found can make the turn's journey shorter than the preview; the rest of the preview is the same.
+  - **Where:** a click on open ground names it ("Forest") and offers "Travel across country" for that point; a place's menu has it beside its route (in the wilds it replaces the route, which there is none to take). Both draw the path, dashed, and the card gives its distance, time (hours for a day or less, else days), the two longest grounds crossed and a rating. The card's button and the menu item send `travel` with `offRoad`.
+  - **Wildness rating** (a decision of this story): by the average danger along the way, below 0.8 calm, below 1.3 wild, below 1.8 dangerous, else deadly. An unmodified way (danger 1) is wild.
+  - **The journey:** `journey.camps` records each camp made (kept with the journey, so a reload and a replan keep them); loomGetMap sends them with the way still ahead. Drawn: the way ahead (dashed pale yellow), a tent at each camp, a ring where it heads, the marker in the wilds (a ring, with a dot unless a tent is under it). The card says where it heads, the time left and the camps made, with Continue (`travel go: on`) and Stop (`go: stop`).
 
 ### 4.8 Grading (X1)
 

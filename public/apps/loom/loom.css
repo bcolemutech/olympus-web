@@ -906,6 +906,30 @@
   color: var(--loom-muted);
 }
 
+/* Travel across country, Continue and Stop on the world card (L-367). */
+.loom-map-info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0.6rem;
+}
+
+.loom-map-info-btn {
+  padding: 0.3rem 0.85rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--loom-accent);
+  background: color-mix(in srgb, var(--loom-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--loom-accent) 45%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.loom-map-info-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* Continue and End turn on the grid card (L-613). */
 .loom-map-turn {
   display: flex;
