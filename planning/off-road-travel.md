@@ -131,6 +131,7 @@ This epic adds ([`the-loom-grading.md`](./the-loom-grading.md) §4.3), by the ru
 
 - **Region:** a danger level set; an encounter table with rows that fit its terrain.
 - **World (bonus):** a generic battle map for each terrain on its land.
+- **Open country counts as drawn** (the user, 2026-11-14, found building L-365): a battle map's `drawn` asks for floors and walls, so a wilds map, with none, grades half drawn and is told to add walls. L-368 makes a map with floors and lines or objects, and no walls, count as drawn.
 
 ---
 
