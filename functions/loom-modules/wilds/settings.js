@@ -11,6 +11,9 @@
  *                world's travel day (L-370, clock.timeRules: 8)
  *   eventChance  the base chance of an event each day leg (0.25), before
  *                terrain and region danger (EV7); at most 0.95
+ *   routeChance  the share of the event chance a leg walked on a route keeps
+ *                (0.2: a fifth as likely as off the road; 0 to 1; a leg part
+ *                on a route, part off, by the hours of each; L-364)
  *   discover     how near a leg's path, in map distance units, a place is
  *                discovered (3; TR7)
  *   navigation   the check that keeps a traveller on course each day leg
@@ -33,13 +36,14 @@
  * Pure.
  */
 
-const KEYS = ['pace', 'dayHours', 'eventChance', 'discover', 'navigation'];
+const KEYS = ['pace', 'dayHours', 'eventChance', 'routeChance', 'discover', 'navigation'];
 const NAVIGATION_KEYS = ['check', 'dc', 'harder', 'lost'];
 const DEGREES = ['criticalSuccess', 'success', 'successAtCost', 'failure', 'criticalFailure'];
 
 const DEFAULTS = Object.freeze({
   pace: 1.5,
   eventChance: 0.25,
+  routeChance: 0.2,
   discover: 3,
   harder: 0.5,
   lost: Object.freeze({
@@ -94,6 +98,9 @@ function settingsOf(system, world) {
     eventChance: Number.isFinite(given.eventChance)
       ? Math.max(0, Math.min(MAX_CHANCE, given.eventChance))
       : DEFAULTS.eventChance,
+    routeChance: Number.isFinite(given.routeChance)
+      ? Math.max(0, Math.min(1, given.routeChance))
+      : DEFAULTS.routeChance,
     discover:
       Number.isFinite(given.discover) && given.discover >= 0 ? given.discover : DEFAULTS.discover,
     navigation: navigationOf(system, given.navigation),
@@ -163,6 +170,7 @@ function check(settings, { system, errors, at = 'modules.wilds', partial = false
   });
   number('dayHours', 1, 24, 'a number of hours from 1 to 24');
   number('eventChance', 0, MAX_CHANCE, `a chance from 0 to ${MAX_CHANCE}`);
+  number('routeChance', 0, 1, 'a share from 0 to 1 of the event chance kept on a route');
   number('discover', 0, 100, 'a distance from 0 to 100');
   if (has(settings, 'navigation')) {
     checkNavigation(settings.navigation, {

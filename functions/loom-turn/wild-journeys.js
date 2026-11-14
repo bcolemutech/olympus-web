@@ -30,11 +30,11 @@
  * loses a share of the day: the camp is that much short and drifts off the
  * path, and the rest is planned again from there.
  *
- * After each day leg off the road, an event may happen at the camp (L-364;
- * ../loom-modules/wilds/events.js): a roll seeded by the save, the leg and
- * the hour it began, against the module's chance for the camp's danger; the
- * roll, the chance and the event are the turn's `event`, and the event is
- * told with the leg. One with figures to meet is played on a map later
+ * After each day leg an event may happen at the camp (L-364; ../loom-modules/
+ * wilds/events.js): a roll seeded by the save, the leg and the hour it began,
+ * against the module's chance for the camp's danger, far lower on a route; the
+ * path walked (the wilds, or a route's kind) shapes it. The roll, the chance
+ * and the event are the turn's `event`, and the event is told with the leg. One with figures to meet is played on a map later
  * (L-366); until then it is told like the rest.
  *
  * Pure: returns a resolution, as ./adjudicate.js does.
@@ -129,12 +129,21 @@ function goalOf(view, save, action) {
 
 // ── A journey along a plan ───────────────────────────────────────────
 
+// The kind of a route (a lane's id is its two ends', in order, joined by "|").
+function routeKindOf(view, routeId) {
+  const [a, b] = String(routeId || '').split('|');
+  const links = (((view.locations || {})[a] || {}).geo || {}).links || {};
+  return links[b] || 'trail';
+}
+
 // The journey kept on the save for a plan to `goal`.
 function journeyOf(view, plan, goal) {
   const spans = [];
   let t = 0;
   for (const leg of plan.legs || []) {
-    if (leg.by === 'route') spans.push({ from: t, to: t + leg.hours });
+    if (leg.by === 'route') {
+      spans.push({ from: t, to: t + leg.hours, kind: routeKindOf(view, leg.route) });
+    }
     t += leg.hours;
   }
   return {
@@ -545,17 +554,19 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = [], see
   }
   if (near.length) lines.push('On the way you find ' + andList(near.map((p) => p.name)) + '.');
 
-  // Something on the way (L-364, EV7): after a leg off the road, a roll
-  // seeded by the save, the leg and the hour it began. A leg walked wholly
-  // on a route is the safe way, and has none.
-  const onTheWay = offRoad
-    ? wilds.events.happen(view, {
-        settings,
-        point: spot,
-        seed: [seed, leg, start].join(':'),
-      })
-    : null;
-  if (onTheWay && onTheWay.event) lines.push(onTheWay.event.text);
+  // Something on the way (L-364, EV7): after each leg, a roll seeded by the
+  // save, the leg and the hour it began. A route is the safer way, so far
+  // less likely than off the road; the sort of path walked (the wilds, or a
+  // route's kind) shapes the event.
+  const walkedPath = wilds.events.pathOf(journey.routes, done, done + progress);
+  const onTheWay = wilds.events.happen(view, {
+    settings,
+    point: spot,
+    seed: [seed, leg, start].join(':'),
+    path: walkedPath.path,
+    share: walkedPath.share,
+  });
+  if (onTheWay.event) lines.push(onTheWay.event.text);
   mutations.push(set('time', start + seconds), tick);
 
   return {

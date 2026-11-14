@@ -122,6 +122,15 @@ const wildEncounters = z
         .max(12)
         .optional()
         .describe('The ground materials it fits ("forest", "swamp"); any ground if left out.'),
+      path: z
+        .array(z.string().regex(/^[a-z][a-z0-9_-]{0,29}$/, 'wild, or a route kind like road'))
+        .min(1)
+        .max(6)
+        .optional()
+        .describe(
+          'The paths it fits: "wild" (off the road) or route kinds ("road", "trail", "sea"); ' +
+            'any path if left out.'
+        ),
       narrated: z
         .boolean()
         .optional()
@@ -130,9 +139,9 @@ const wildEncounters = z
   )
   .max(20)
   .describe(
-    'Rows of { what?, text?, kind?, terrain?, count?, weight?, narrated? }: each needs a what ' +
-      'or a text. After each day’s travel off the road a roll decides whether something ' +
-      'happens at the camp; the event is picked by weight from the first of its region’s, ' +
+    'Rows of { what?, text?, kind?, terrain?, path?, count?, weight?, narrated? }: each needs a ' +
+      'what or a text. After each day’s travel a roll decides whether something happens at ' +
+      'the camp (far less likely on a route than off the road); the event is picked by weight from the first of its region’s, ' +
       'its map’s and the world’s tables with a row that fits the ground, else a built-in one. ' +
       '[] removes the table.'
   );

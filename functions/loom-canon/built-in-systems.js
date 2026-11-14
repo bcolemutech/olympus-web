@@ -266,6 +266,7 @@ const FANTASY = {
     wilds: {
       pace: 1.5,
       eventChance: 0.25,
+      routeChance: 0.2,
       discover: 3,
       navigation: { check: { skill: 'Survival' }, dc: 'Moderate', harder: 0.5 },
     },
@@ -540,6 +541,7 @@ const SCIFI = {
     wilds: {
       pace: 1.5,
       eventChance: 0.25,
+      routeChance: 0.2,
       discover: 3,
       navigation: { check: { skill: 'Survival' }, dc: 'Moderate', harder: 0.5 },
     },

@@ -404,15 +404,18 @@ function materialTools({ studio, writer, worldFor }) {
     title: 'Set the events on the way',
     description:
       'Write the table of events that can happen on the way across country (L-364): after each ' +
-      'day’s travel off the road a roll decides whether something happens at the camp (more ' +
-      'likely in dangerous ground and regions), and the event is picked by weight from the ' +
+      'day’s travel a roll decides whether something happens at the camp (more likely in ' +
+      'dangerous ground and regions, and far less likely on a route than off the road), and ' +
+      'the event is picked by weight from the ' +
       'first of these with a row that fits the camp’s ground: the camp’s region’s table, ' +
       'then its map’s, then the world’s, then the built-in events. Give exactly one of ' +
       'regionId, mapId (a region map) or world: true. Each row is { what?, text?, kind?, ' +
-      'terrain?, count?, weight?, narrated? }: `what` a stat block of the world (figures to ' +
+      'terrain?, path?, count?, weight?, narrated? }: `what` a stat block of the world (figures to ' +
       'meet; list_stat_blocks) and/or `text` what happens, `kind` travellers, creatures, ' +
       'hazard, weather or find (needed with text and no what), `terrain` the ground ' +
-      'materials it fits (list_materials; any if left out), `weight` how likely it is. ' +
+      'materials it fits (list_materials; any if left out), `path` the paths it fits ("wild", ' +
+      'off the road, or route kinds such as "road", "trail", "sea"; any if left out), `weight` ' +
+      'how likely it is. ' +
       'Replaces the whole table; rows [] removes it. A place’s own table is set with ' +
       'update_place and is for its map’s spawns, not these.',
     inputSchema: {

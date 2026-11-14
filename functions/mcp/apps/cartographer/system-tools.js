@@ -41,7 +41,7 @@ const SHAPE =
   '"Hull" }: names the Loom shows), sheet, checks, creation, advancement ({ experience?: { curve, foe, story, quest, grants, skillMax }, use?: { threshold, skills, attacks, maxRank } }: how characters grow), ' +
   'modules ({ combat?, wilds? }: each module’s settings; copy a built-in to see them. ' +
   'wilds, off-road travel: { pace (distance units an hour at speed 1), dayHours (the ' +
-  'travel day if left out), eventChance (0–0.95), discover (distance), navigation: { check: ' +
+  'travel day if left out), eventChance (0–0.95), routeChance (0–1: the share of it kept on a route), discover (distance), navigation: { check: ' +
   '{ skill } | { attribute }, dc (a rung), harder (danger above 1 a rung harder), lost?: ' +
   '{ [degree]: share of the day } } or null }, or false: no off-road travel) and gmNotes ' +
   '(tone and pacing for the narrator). ' +

@@ -9,8 +9,8 @@
  * same; at a camp in the forest the event is a row of the region's table, on
  * the grassland the world's; the roll, the chance and the event are recorded
  * on the turn, told with the leg and handed to the GM; one with figures is a
- * named creature to meet; a roll that misses brings nothing; and the road is
- * the safe way, with no roll.
+ * named creature to meet; a roll that misses brings nothing; and on a road the
+ * chance is a fifth of it and the event is one for a road, not for the wilds.
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest loom-wild-events-play --verbose"
@@ -25,6 +25,7 @@ const { wildsWorld: mockWildsWorld } = require('./fixtures/wilds-world');
 
 const RAIN = 'A hard rain drums on the leaves, and the path turns to mud.';
 const SHRINE = 'A wayside shrine stands by the track, its offerings fresh.';
+const TOLL = 'A toll-keeper holds the road and waves you through for a coin.';
 
 // The Weald with its region's danger 2 (so the forest's chance is the 95% cap),
 // a region table for the forest, a world table for anywhere, and a chance:
@@ -41,7 +42,10 @@ function eventsWorld(id, systemId, kind) {
     kind === 'meet'
       ? [{ what: 'wolf', count: 2, kind: 'creatures' }]
       : [{ kind: 'weather', text: RAIN, terrain: ['forest'] }];
-  world.encounters = [{ kind: 'find', text: SHRINE }];
+  world.encounters = [
+    { kind: 'find', text: SHRINE, path: ['wild'] },
+    { kind: 'travellers', text: TOLL, path: ['road'] },
+  ];
   return world;
 }
 const mockWorlds = {};
@@ -86,6 +90,8 @@ const db = getFirestore();
 const PLAYER = { uid: 'player-events', token: { apps: ['loom'] } };
 const H = clock.HOUR;
 const CAP = 0.95;
+// The chance on a road: a fifth of the base.
+const ROAD = 0.95 * 0.2;
 const ASHBY = [{ mapId: 'weald', placeId: 'pl_ashby' }];
 const saveRef = (saveId) => db.collection('loom_saves').doc(saveId);
 const saveOf = async (saveId) => (await saveRef(saveId).get()).data();
@@ -98,10 +104,10 @@ const lastTurn = async (saveId) =>
 const seedOf = (saveId, leg) => `${saveId}:${leg}:${clock.START + (leg - 1) * 24 * H}`;
 
 // A save id whose rolls on each of the first `legs` legs hit (or all miss) at 95%.
-function idWhere(prefix, hit, legs = 3) {
+function idWhere(prefix, hit, legs = 3, chance = CAP) {
   for (let n = 0; n < 500; n++) {
     const id = `${prefix}-${n}`;
-    const rolls = Array.from({ length: legs }, (_, i) => events.rollOf(seedOf(id, i + 1), CAP));
+    const rolls = Array.from({ length: legs }, (_, i) => events.rollOf(seedOf(id, i + 1), chance));
     if (rolls.every((r) => r.happened === hit)) return id;
   }
   throw new Error('no such save id');
@@ -161,6 +167,7 @@ describe.each(['d20-fantasy', 'pool-scifi'])('events on the way under %s', (syst
       happened: true,
       danger: 2,
       material: 'forest',
+      path: 'wild',
       event: { kind: 'weather', text: RAIN, source: 'region', narrated: true },
     });
     // Told with the leg, after the camp.
@@ -241,12 +248,32 @@ describe.each(['d20-fantasy', 'pool-scifi'])('events on the way under %s', (syst
     expect(lines).toContain('You are set upon by 2 Wolf.');
   });
 
-  test('the road is the safe way: a leg wholly on a route has no roll', async () => {
+  test('on a road the chance is a fifth of it, and the event is one for a road', async () => {
     // Ashby to Dunsmouth by the road, set out across country: the planner takes it.
-    await seed(HIT, `${systemId}-road`);
-    const { resolution, lines } = await travelTo(HIT, `${systemId}-road`, 'pl_dunsmouth');
+    const id = idWhere(`${systemId}-road`, true, 1, ROAD);
+    await seed(HIT, id);
+    const { resolution, lines } = await travelTo(HIT, id, 'pl_dunsmouth');
     expect(lines).toMatch(/You come to Dunsmouth, but its way is closed to you/);
+    expect(resolution.event).toEqual({
+      roll: events.rollOf(seedOf(id, 1), ROAD).roll,
+      chance: ROAD,
+      happened: true,
+      danger: 1,
+      material: 'grassland',
+      path: 'road',
+      event: { kind: 'travellers', text: TOLL, source: 'world', narrated: true },
+    });
+    // Told with the leg, and not the wilds' own.
+    expect(lines).toContain(TOLL);
     expect(lines).not.toContain(SHRINE);
-    expect(resolution.event).toBeUndefined();
+  });
+
+  test('a roll on a road that misses brings nothing', async () => {
+    const id = idWhere(`${systemId}-roadmiss`, false, 1, ROAD);
+    await seed(HIT, id);
+    const { resolution, lines } = await travelTo(HIT, id, 'pl_dunsmouth');
+    expect(resolution.event).toMatchObject({ chance: ROAD, happened: false, path: 'road' });
+    expect(resolution.event.event).toBeUndefined();
+    expect(lines).not.toContain(TOLL);
   });
 });

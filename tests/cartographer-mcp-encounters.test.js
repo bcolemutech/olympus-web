@@ -134,7 +134,6 @@ afterAll(async () => {
   await db.recursiveDelete(worlds());
 });
 
-
 describe('events on the way, set by Claude', () => {
   let worldId;
   let place;
@@ -191,7 +190,7 @@ describe('events on the way, set by Claude', () => {
 
   test('set_encounters writes a region’s table, shown by get_region', async () => {
     const rows = [
-      { text: RAIN, kind: 'weather', terrain: ['forest'], weight: 3 },
+      { text: RAIN, kind: 'weather', terrain: ['forest'], path: ['wild'], weight: 3 },
       { what: 'wolf', count: 2, terrain: ['forest'] },
     ];
     const out = await ok('set_encounters', { worldId, regionId, rows });
@@ -208,9 +207,9 @@ describe('events on the way, set by Claude', () => {
   test('a map’s table and the world’s, shown by get_map and get_world', async () => {
     const mapRows = [{ text: 'A drover hurries his cattle past.', kind: 'travellers' }];
     const worldRows = [{ text: 'A shrine stands by the track.', kind: 'find' }];
-    expect(await ok('set_encounters', { worldId, mapId: 'map_world', rows: mapRows })).toMatchObject(
-      { on: { mapId: 'map_world' }, rows: 1 }
-    );
+    expect(
+      await ok('set_encounters', { worldId, mapId: 'map_world', rows: mapRows })
+    ).toMatchObject({ on: { mapId: 'map_world' }, rows: 1 });
     expect(await ok('set_encounters', { worldId, world: true, rows: worldRows })).toMatchObject({
       on: { world: true },
       rows: 1,
@@ -227,9 +226,9 @@ describe('events on the way, set by Claude', () => {
     const before = (await worlds().doc(worldId).get()).data().canonVersion;
     const rows = [{ text: 'x', kind: 'find' }];
     expect(await refused('set_encounters', { worldId, rows })).toMatch(/Give exactly one of/);
-    expect(
-      await refused('set_encounters', { worldId, regionId, world: true, rows })
-    ).toMatch(/Give exactly one of/);
+    expect(await refused('set_encounters', { worldId, regionId, world: true, rows })).toMatch(
+      /Give exactly one of/
+    );
     expect(
       await refused('set_encounters', { worldId, regionId, rows: [{ what: 'dragon' }] })
     ).toMatch(/"dragon" isn't one of the world's stat blocks/);
@@ -246,6 +245,13 @@ describe('events on the way, set by Claude', () => {
         rows: [{ text: 'Something.', kind: 'find', terrain: ['plasma'] }],
       })
     ).toMatch(/"plasma" is no ground material/);
+    expect(
+      await refused('set_encounters', {
+        worldId,
+        regionId,
+        rows: [{ text: 'Something.', kind: 'find', path: ['Bad Kind'] }],
+      })
+    ).toMatch(/path/);
     expect(await refused('set_encounters', { worldId, regionId: 'nowhere', rows })).toMatch(
       /No region "nowhere"/
     );
@@ -279,7 +285,10 @@ describe('events on the way, set by Claude', () => {
       const proposed = {
         verb: 'travel',
         targets: to.targets || [],
-        params: { offRoad: true, ...(to.point ? { to: { mapId: 'map_world', point: to.point } } : {}) },
+        params: {
+          offRoad: true,
+          ...(to.point ? { to: { mapId: 'map_world', point: to.point } } : {}),
+        },
       };
       return evaluate(proposed, {}, framed.save, (sides) => sides, framed.view, null, null, {
         seed,
@@ -289,7 +298,12 @@ describe('events on the way, set by Claude', () => {
     // Leg 1 camps in the Greenwood (a 12-mile day: three on the grass, the rest in the wood).
     const hit = walk(idFor(true));
     expect(hit.journey).toMatchObject({ offRoad: true, camp: true });
-    expect(hit.event).toMatchObject({ chance: 0.95, happened: true, danger: 2, material: 'forest' });
+    expect(hit.event).toMatchObject({
+      chance: 0.95,
+      happened: true,
+      danger: 2,
+      material: 'forest',
+    });
     expect(hit.event.event).toMatchObject({ source: 'region', kind: expect.any(String) });
     // Either of the region's rows, as the seeded pick falls.
     expect([RAIN, 'You are set upon by 2 Wolf.']).toContain(hit.event.event.text);

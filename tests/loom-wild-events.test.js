@@ -7,7 +7,9 @@
  * camp's danger, capped; the same seed rolling the same; a forest row picked
  * in a forest and not on a plain; the region's table before the map's before
  * the world's; the built-ins when nothing fits; the roll at a camp on The
- * Weald, its region's danger raising it; and what a table may hold.
+ * Weald, its region's danger raising it; far lower on a route, by the hours
+ * on one; the path walked (the wilds, or a route's kind) deciding which rows
+ * and built-ins fit; and what a table may hold.
  *
  * Run: cd tests && npx jest loom-wild-events --verbose
  */
@@ -41,10 +43,94 @@ describe.each(SYSTEMS)('the chance of an event under %s', (systemId) => {
     expect(events.chanceOf(settings, 0.5)).toBeCloseTo(settings.eventChance / 2, 10);
   });
 
+  test('is far lower on a route, by the share of the leg’s hours on one', () => {
+    expect(settings.routeChance).toBe(0.2);
+    const wild = events.chanceOf(settings, 1, 0);
+    expect(events.chanceOf(settings, 1, 1)).toBeCloseTo(wild * 0.2, 10);
+    expect(events.chanceOf(settings, 1, 0.5)).toBeCloseTo(wild * 0.6, 10);
+    expect(events.chanceOf(settings, 2, 1)).toBeCloseTo(wild * 0.4, 10);
+    // A system may make a route as risky as the wilds, or safe.
+    expect(events.chanceOf({ ...settings, routeChance: 1 }, 1, 1)).toBeCloseTo(wild, 10);
+    expect(events.chanceOf({ ...settings, routeChance: 0 }, 1, 1)).toBe(0);
+  });
+
   test('is capped at 95%, and none with no base chance', () => {
     expect(events.chanceOf({ ...settings, eventChance: 0.95 }, 2)).toBe(0.95);
     expect(events.chanceOf({ ...settings, eventChance: 0.6 }, 2)).toBe(0.95);
     expect(events.chanceOf({ ...settings, eventChance: 0 }, 2)).toBe(0);
+  });
+});
+
+describe('the wilds module’s route chance', () => {
+  test('defaults to a fifth, is a share from 0 to 1, and is set by each built-in', () => {
+    for (const id of SYSTEMS) expect(BUILT_IN[id].modules.wilds.routeChance).toBe(0.2);
+    expect(settingsOf({ modules: { wilds: {} } }, {}).routeChance).toBe(0.2);
+    expect(settingsOf({ modules: { wilds: { routeChance: 0.5 } } }, {}).routeChance).toBe(0.5);
+    // A world's own over its system's.
+    expect(
+      settingsOf(BUILT_IN['d20-fantasy'], { rules: { wilds: { routeChance: 0.05 } } }).routeChance
+    ).toBe(0.05);
+    const errors = [];
+    require('../functions/loom-modules/wilds/settings').check(
+      { routeChance: 2 },
+      { system: BUILT_IN['d20-fantasy'], errors }
+    );
+    expect(errors).toEqual([
+      'modules.wilds.routeChance must be a share from 0 to 1 of the event chance kept on a route.',
+    ]);
+  });
+});
+
+describe('the path walked', () => {
+  const spans = [
+    { from: 2, to: 6, kind: 'road' },
+    { from: 8, to: 9, kind: 'trail' },
+  ];
+
+  test('is the one most hours were spent on, with the share on routes', () => {
+    expect(events.pathOf(spans, 2, 6)).toEqual({ path: 'road', share: 1 });
+    expect(events.pathOf(spans, 0, 2)).toEqual({ path: 'wild', share: 0 });
+    expect(events.pathOf(spans, 1, 7)).toEqual({ path: 'road', share: 4 / 6 });
+    // Four hours each of wild and road: a tie goes to the wilds.
+    expect(events.pathOf(spans, 0, 8)).toEqual({ path: 'wild', share: 0.5 });
+    expect(events.pathOf(spans, 0, 9)).toEqual({ path: 'wild', share: 5 / 9 });
+    expect(events.pathOf([], 0, 8)).toEqual({ path: 'wild', share: 0 });
+    expect(events.pathOf(spans, 4, 8)).toEqual({ path: 'wild', share: 0.5 });
+  });
+
+  test('a span with no kind is a trail', () => {
+    expect(events.pathOf([{ from: 0, to: 4 }], 0, 4)).toEqual({ path: 'trail', share: 1 });
+  });
+
+  test('decides which rows fit: a road row not in the wilds, a wild row not on a road', () => {
+    const road = { kind: 'travellers', text: 'A toll-keeper.', path: ['road'] };
+    const wild = { kind: 'creatures', text: 'Wolves.', path: ['wild'] };
+    const view = viewWith({ world: [road, wild] });
+    expect(events.choose(view, { ...AT, path: 'road' }, always).text).toBe(road.text);
+    expect(events.choose(view, { ...AT, path: 'wild' }, always).text).toBe(wild.text);
+    // No path given: the wilds.
+    expect(events.choose(view, AT, always).text).toBe(wild.text);
+    // Neither fits a trail, so the built-ins.
+    expect(events.choose(view, { ...AT, path: 'trail' }, always).source).toBe('built-in');
+    expect(events.fits({ path: ['road', 'trail'] }, 'forest', 'trail')).toBe(true);
+    expect(events.fits({ terrain: ['forest'], path: ['road'] }, 'forest', 'wild')).toBe(false);
+    expect(events.fits({ terrain: ['swamp'], path: ['road'] }, 'forest', 'road')).toBe(false);
+  });
+
+  test('the built-ins differ by path: the wilds’ beasts, the road’s traders, the sea’s vessels', () => {
+    const texts = (path) => events.builtInsFor(path).map((r) => r.text);
+    expect(texts('wild').join(' ')).toMatch(/tracks of some beast/);
+    expect(texts('road').join(' ')).not.toMatch(/tracks of some beast/);
+    expect(texts('road').join(' ')).toMatch(/trader on the road/);
+    expect(texts('wild').join(' ')).not.toMatch(/trader on the road/);
+    expect(texts('sea').join(' ')).toMatch(/vessel/);
+    expect(texts('road').join(' ')).not.toMatch(/vessel/);
+    // Any path has some, of a route kind the built-ins don't know too.
+    expect(texts('canal').length).toBeGreaterThan(3);
+    // Every path's built-ins are all narrated, and no path-less one names a path.
+    for (const path of ['wild', 'road', 'trail', 'sea', 'canal']) {
+      expect(events.builtInsFor(path).every((r) => r.narrated)).toBe(true);
+    }
   });
 });
 
@@ -126,7 +212,10 @@ describe('choosing an event', () => {
       region: [{ kind: 'find', text: 'Swamp only.', terrain: ['swamp'] }],
       world: [{ kind: 'find', text: 'The world’s.' }],
     });
-    expect(events.choose(view, AT, always)).toMatchObject({ text: 'The world’s.', source: 'world' });
+    expect(events.choose(view, AT, always)).toMatchObject({
+      text: 'The world’s.',
+      source: 'world',
+    });
     expect(events.choose(view, { ...AT, material: 'swamp' }, always)).toMatchObject({
       text: 'Swamp only.',
       source: 'region',
@@ -136,7 +225,7 @@ describe('choosing an event', () => {
   test('the built-ins are used when nothing fits, of every kind, each narrated', () => {
     const view = viewWith({ region: [{ kind: 'find', text: 'Swamp.', terrain: ['swamp'] }] });
     const seen = new Set();
-    for (let n = 1; n <= events.BUILT_INS.length; n++) {
+    for (let n = 1; n <= events.builtInsFor('wild').length; n++) {
       const event = events.choose(view, AT, () => n);
       expect(event).toMatchObject({ source: 'built-in', narrated: true });
       expect(event.text.length).toBeGreaterThan(10);
@@ -173,7 +262,9 @@ describe('choosing an event', () => {
       count: 3,
       narrated: false,
     });
-    const told = viewWith({ world: [{ what: 'wolf', text: 'Wolves ring the camp.', narrated: true }] });
+    const told = viewWith({
+      world: [{ what: 'wolf', text: 'Wolves ring the camp.', narrated: true }],
+    });
     expect(events.choose(told, AT, always)).toMatchObject({
       text: 'Wolves ring the camp.',
       what: 'wolf',
@@ -219,6 +310,38 @@ describe.each(SYSTEMS)('the roll at a camp on The Weald under %s', (systemId) =>
     expect(plain).toMatchObject({ material: 'grassland', danger: 1 });
   });
 
+  test('on a road the chance is a fifth of it, and the event fits the road', () => {
+    const settings = settingsOf(BUILT_IN[systemId], {});
+    const wild = events.happen(view(), { settings, point: GRASS, seed: 's' });
+    const road = events.happen(view(), {
+      settings,
+      point: GRASS,
+      seed: 's',
+      path: 'road',
+      share: 1,
+    });
+    expect(wild.path).toBe('wild');
+    expect(road.path).toBe('road');
+    expect(road.chance).toBeCloseTo(wild.chance * 0.2, 4);
+    const roadWorld = view((w) => {
+      w.encounters = [{ kind: 'travellers', text: 'A toll-keeper.', path: ['road'] }];
+    });
+    const sure = { ...settings, eventChance: 0.95, routeChance: 1 };
+    for (let i = 0; i < 40; i++) {
+      const r = events.happen(roadWorld, {
+        settings: sure,
+        point: GRASS,
+        seed: 'x' + i,
+        path: 'road',
+      });
+      if (r.happened) {
+        expect(r.event).toMatchObject({ text: 'A toll-keeper.', source: 'world' });
+        return;
+      }
+    }
+    throw new Error('no event in 40 tries');
+  });
+
   test('picks from the region’s table in its land, and the world’s outside it', () => {
     const settings = { ...settingsOf(BUILT_IN[systemId], {}), eventChance: 0.95 };
     const v = view((w) => {
@@ -236,14 +359,21 @@ describe.each(SYSTEMS)('the roll at a camp on The Weald under %s', (systemId) =>
     expect(hit(FOREST).event).toMatchObject({ text: 'Rain.', source: 'region', kind: 'weather' });
     expect(hit(GRASS).event).toMatchObject({ text: 'The world’s.', source: 'world' });
     // A miss has no event.
-    const none = events.happen(v, { settings: { ...settings, eventChance: 0 }, point: FOREST, seed: 'x' });
+    const none = events.happen(v, {
+      settings: { ...settings, eventChance: 0 },
+      point: FOREST,
+      seed: 'x',
+    });
     expect(none.happened).toBe(false);
     expect(none.event).toBeUndefined();
   });
 });
 
 describe('what a table may hold', () => {
-  const world = { statBlocks: { wolf: { name: 'Wolf' } }, materials: [{ id: 'deadwood', like: 'forest' }] };
+  const world = {
+    statBlocks: { wolf: { name: 'Wolf' } },
+    materials: [{ id: 'deadwood', like: 'forest' }],
+  };
   const check = (rows) => events.validateRows(world, rows);
 
   test('rows with figures, words or both, with ground, kind and weight', () => {
@@ -281,9 +411,18 @@ describe('what a table may hold', () => {
     expect(check([{ what: 'wolf', terrain: ['deadwood'] }])).toEqual([]);
   });
 
+  test('checks the paths: wild or a route kind', () => {
+    expect(check([{ what: 'wolf', path: ['wild', 'road', 'sea'] }])).toEqual([]);
+    expect(check([{ what: 'wolf', path: ['Bad Kind'] }]).join(' ')).toMatch(/path "Bad Kind"/);
+    expect(check([{ what: 'wolf', path: [] }]).join(' ')).toMatch(/path must list/);
+    expect(check([{ what: 'wolf', path: 'road' }]).join(' ')).toMatch(/path must list/);
+  });
+
   test('a place’s own table is checked as it was: a stat block each', () => {
     const spawns = require('../functions/loom-modules/combat/spawns');
     expect(spawns.validateEncounters(world, [{ what: 'wolf' }])).toEqual([]);
-    expect(spawns.validateEncounters(world, [{ text: 'x', kind: 'find' }]).length).toBeGreaterThan(0);
+    expect(spawns.validateEncounters(world, [{ text: 'x', kind: 'find' }]).length).toBeGreaterThan(
+      0
+    );
   });
 });
