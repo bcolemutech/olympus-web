@@ -34,6 +34,7 @@ const hazards = require('../loom-canon/hazards');
 const conditions = require('../loom-canon/conditions');
 const combat = require('../loom-modules/combat');
 const wildJourneys = require('./wild-journeys');
+const wildPlan = require('../loom-canon/wild-plan');
 
 const ROUTES = ['road', 'trail', 'sea'];
 const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.position)
@@ -61,7 +62,10 @@ const TOWN_SPAN = 1000; // town coordinates run 0–1000 each way (place.positio
  * characterView), or null for a save without one. `fight` is the fight
  * the save is in (L-821; ../loom-modules/combat/play.js viewOf): the round,
  * whose turn, and everyone in it in order, or null. `combat` is what the
- * player fights with on a battle map (L-828), or null elsewhere.
+ * player fights with on a battle map (L-828), or null elsewhere. `wilds` is
+ * what the page plans a journey across country with, and `journey` the one
+ * under way with its camps (L-367; wildsView below), both null with off-road
+ * travel off.
  */
 function mapView(canonWorld, save, record, townRecord) {
   const discovered = new Set(discoveredBy(canonWorld, save));
@@ -135,6 +139,7 @@ function mapView(canonWorld, save, record, townRecord) {
   const withOwn = own ? { materials: own } : {};
   const townData = townView(canonWorld, save, discovered, townRecord);
   const battleData = battleView(canonWorld, save, record);
+  const wilds = wildsView(canonWorld, save, new Set(places.map((p) => p.id)));
   return {
     worldId: canonWorld.id,
     name: canonWorld.name,
@@ -142,9 +147,13 @@ function mapView(canonWorld, save, record, townRecord) {
     ...withOwn,
     here: save.location || null,
     // In the wilds (L-363): the point on this map the save stands at, and
-    // the journey across country it is on (the way still ahead).
+    // the journey across country it is on (the way still ahead, the camps
+    // made; L-367). With off-road travel off, no journey is shown and
+    // nothing is offered.
     wild: !save.location && save.wild ? { x: save.wild.x, y: save.wild.y } : null,
-    journey: journeyView(canonWorld, save),
+    journey: wilds ? journeyView(canonWorld, save) : null,
+    // What the page needs to plan across country as the turn does (L-367).
+    wilds,
     places,
     links,
     town: townData ? { ...townData, artSet, ...withOwn } : townData,
@@ -222,9 +231,52 @@ function journeyView(canonWorld, save) {
     mapId: j.mapId,
     to: j.to,
     path: ahead,
+    camps: (j.camps || []).map((p) => ({ x: p.x, y: p.y })),
     leg: j.leg || 0,
     hoursLeft: left,
     label: clock.duration(left * clock.HOUR) + ' of travel',
+  };
+}
+
+// What the page plans a journey across country with (L-367; planning/off-
+// road-travel.md §4.7, TR5), so its preview is the turn's plan: the wilds
+// module's pace and day, the map's scale and unit, the world's own overrides
+// of its ground's speed and danger, the regions' dangers and the zones that
+// name them (a map's drawn geometry has no zones), and the routes as lanes,
+// each at its kind's speed, only those between places the save has found
+// (nothing undiscovered is sent) and that it may take. Null when off-road
+// travel is off here, the map has no ground, or the save isn't on this map.
+function wildsView(canonWorld, save, shown) {
+  const frame = canonWorld.frame;
+  const settings = frame && !save.mapId && wildJourneys.settingsFor(canonWorld);
+  const bounds = wildPlan.boundsOf(canonWorld);
+  const stored = frame && levels.mapOf(canonWorld, frame.mapId);
+  if (!settings || !bounds || !stored || !drawnGeometry(stored.geometry)) return null;
+  const regions = wildPlan.regionDangers(canonWorld);
+  const zones = ((stored.geometry && stored.geometry.zones) || [])
+    .filter((z) => z && z.region && z.region in regions && z.shape)
+    .map((z) => ({ id: z.id, region: z.region, shape: z.shape }));
+  const own = routes.ownUnit(canonWorld);
+  return {
+    pace: settings.pace,
+    dayHours: settings.dayHours,
+    discover: settings.discover,
+    scale: wildPlan.scaleOf(canonWorld),
+    unit: own ? ((canonWorld.map && canonWorld.map.distance) || {}).unit || 'units' : 'miles',
+    ...(canonWorld.wilds && canonWorld.wilds.materials
+      ? { overrides: { materials: canonWorld.wilds.materials } }
+      : {}),
+    regions,
+    zones,
+    lanes: wildPlan
+      .lanesOf(canonWorld, save)
+      .filter((l) => shown.has(l.from) && shown.has(l.to))
+      .map((l) => ({
+        id: l.id,
+        points: l.points,
+        speed: l.speed,
+        ...(l.ends ? { ends: true } : {}),
+      })),
   };
 }
 

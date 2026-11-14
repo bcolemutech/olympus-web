@@ -152,6 +152,25 @@
   }
 
   /**
+   * Sets out across country (L-367; off-road travel TR1): `to` a place id or
+   * `{ point: { x, y } }` on the region map. The journey goes in day legs; the
+   * first is walked at once.
+   */
+  function travelAcross(to, label) {
+    playTurn({ action: { verb: 'travel', to: to, offRoad: true } }, label);
+  }
+
+  /** Walks the journey's next day leg (L-367), from the camp. */
+  function journeyOn() {
+    playTurn({ action: { verb: 'travel', go: 'on' } }, 'go on');
+  }
+
+  /** Puts off the journey, where the player stands (L-367): in the wilds, at the camp. */
+  function journeyStop() {
+    playTurn({ action: { verb: 'travel', go: 'stop' } }, 'stop the journey', { keep: true });
+  }
+
+  /**
    * Steps to a cell on a battle map, from the grid view (L-354 / #403): as far
    * as this turn's movement goes, keeping the rest as the plan (L-613).
    */
@@ -258,6 +277,9 @@
     init: init,
     submitTurn: submitTurn,
     travelTo: travelTo,
+    travelAcross: travelAcross,
+    journeyOn: journeyOn,
+    journeyStop: journeyStop,
     moveToCell: moveToCell,
     continuePlan: continuePlan,
     walkTo: walkTo,

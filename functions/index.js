@@ -931,6 +931,9 @@ exports.loomGetMap = onCall(async (request) => {
       ...mapView(world, sheets.withAp(there, checks.systemOf(world), world), null, null),
       mapId: peek,
       peek: true,
+      // Only the map the save is on offers travel across country (L-367).
+      wilds: null,
+      journey: null,
       trail: frames.trailOf(play, at),
     };
   }

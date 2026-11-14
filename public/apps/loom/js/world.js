@@ -18,6 +18,13 @@
   //   without-azgaar.md §4.4, R8): each realm's land has a soft inner edge in
   //   its colour and its name at its centre, from loomGetMap's `map.realms`,
   //   under the routes and places. With an image, nothing extra is drawn.
+  // - Across country (L-367; planning/off-road-travel.md §4.7, TR5): where the
+  //   world offers it (loomGetMap's `wilds`), a click on open ground, or the
+  //   Travel across country item of a place's menu, previews the way (wild-
+  //   view.js runs the turn's own planner): its path on the map and, on the
+  //   card, its distance, time, ground crossed and how wild it is. A journey
+  //   under way is drawn as the way still ahead, a tent at each camp made and
+  //   the save's marker in the wilds, with Continue and Stop on the card.
 
   var Loom = window.Loom;
   var M = Loom.mapMath;
@@ -52,6 +59,9 @@
     selected: 0xffffff,
     label: 0xe0e0e0,
     labelClosed: 0x9ca3af,
+    preview: 0x80deea,
+    journey: 0xfff59d,
+    camp: 0xd7b98a,
   };
   // Dash and gap lengths in px, by route (a road is solid).
   var DASHES = { trail: [6, 5], sea: [2, 6] };
@@ -67,6 +77,8 @@
     realmNodes: [], // [{ id, root, name, bounds }] one a realm drawn
     realmBuilds: 0, // how many times they have been built, for tests
     labels: {}, // place id → its label
+    preview: null, // the way across country being looked at (L-367): { to, plan, ... }
+    trek: null, // what was drawn of it, in screen px, for tests
   };
 
   // ── Data ──────────────────────────────────────────
@@ -134,6 +146,7 @@
     world.data = data;
     if (world.selected && !placeById(world.selected)) world.selected = null;
     world.look = null;
+    world.preview = null;
     loadArt(data && data.map && data.map.image);
   }
 
@@ -142,6 +155,8 @@
     world.selected = null;
     world.hovered = null;
     world.look = null;
+    world.preview = null;
+    world.trek = null;
   }
 
   // The world's art, as a texture under the camera: its screen-sized copy
@@ -166,9 +181,10 @@
     var realms = new PIXI.Container(); // realms' soft edges, in map space (L-714)
     var realmNames = new PIXI.Container(); // and their names, in screen space
     var routes = new PIXI.Graphics();
+    var trek = new PIXI.Graphics(); // the way across country (L-367)
     var pins = new PIXI.Graphics();
     var labels = new PIXI.Container();
-    container.addChild(backdrop, art, painted, realms, realmNames, routes, pins, labels);
+    container.addChild(backdrop, art, painted, realms, realmNames, routes, trek, pins, labels);
     world.nodes = {
       backdrop: backdrop,
       art: art,
@@ -176,6 +192,7 @@
       realms: realms,
       realmNames: realmNames,
       routes: routes,
+      trek: trek,
       pins: pins,
       labels: labels,
     };
@@ -404,6 +421,83 @@
     });
   }
 
+  // ── Across country (L-367) ────────────────────────
+
+  // Whether the world map offers travel across country: the world's wilds
+  // module on, this the map the save stands on.
+  function wildOn() {
+    return Boolean(world.data && !world.data.peek && Loom.wildView.ready(world.data));
+  }
+
+  // A tent at a camp: a small triangle with a dark edge.
+  function tent(g, x, y) {
+    g.poly([x, y - 6, x + 5.5, y + 4, x - 5.5, y + 4])
+      .fill({ color: COLOURS.camp })
+      .stroke({ width: 1.5, color: COLOURS.edge });
+  }
+
+  // Where it is heading: a ring.
+  function goalRing(g, x, y, colour) {
+    g.circle(x, y, 7).stroke({ width: 2.5, color: COLOURS.casing, alpha: 0.7 });
+    g.circle(x, y, 7).stroke({ width: 1.5, color: colour });
+  }
+
+  // The way across country being looked at (dashed), the journey under way
+  // (its way still ahead, the camps made, where it heads) and the save's
+  // marker in the wilds, in screen space. What it drew is kept for tests.
+  function drawTrek(n, data, screen) {
+    var g = n.trek;
+    g.clear();
+    var drawn = { preview: null, journey: null, marker: null };
+    var preview = world.preview;
+    if (preview && preview.plan) {
+      var pts = preview.plan.path.map(function (p) {
+        return screen({ x: p[0], y: p[1] });
+      });
+      polyline(g, pts);
+      g.stroke({ width: 5.5, color: COLOURS.casing, alpha: 0.55, cap: 'round', join: 'round' });
+      polyline(g, pts, [8, 5]);
+      g.stroke({ width: 3, color: COLOURS.preview, cap: 'round', join: 'round' });
+      var end = pts[pts.length - 1];
+      goalRing(g, end.x, end.y, COLOURS.preview);
+      drawn.preview = { path: pts, goal: end };
+    }
+    var journey = data.journey;
+    if (journey && journey.path.length) {
+      var ahead = journey.path.map(screen);
+      polyline(g, ahead);
+      g.stroke({ width: 5.5, color: COLOURS.casing, alpha: 0.55, cap: 'round', join: 'round' });
+      polyline(g, ahead, [12, 4]);
+      g.stroke({ width: 3, color: COLOURS.journey, cap: 'round', join: 'round' });
+      var camps = (journey.camps || []).map(screen);
+      camps.forEach(function (c) {
+        tent(g, c.x, c.y);
+      });
+      var goal =
+        journey.to && journey.to.point ? screen(journey.to.point) : ahead[ahead.length - 1];
+      goalRing(g, goal.x, goal.y, COLOURS.journey);
+      drawn.journey = { path: ahead, camps: camps, goal: goal };
+    }
+    // Standing in the wilds: where, as the place you are in is ringed.
+    if (data.wild && !data.here) {
+      var m = screen(data.wild);
+      g.circle(m.x, m.y, 11).stroke({ width: 2, color: COLOURS.here });
+      // At a camp the ring holds the tent; elsewhere a dot marks the spot.
+      var atCamp = drawn.journey
+        ? drawn.journey.camps.some(function (c) {
+            return Math.hypot(c.x - m.x, c.y - m.y) < 3;
+          })
+        : false;
+      if (!atCamp) {
+        g.circle(m.x, m.y, 4.5)
+          .fill({ color: COLOURS.here })
+          .stroke({ width: 1.5, color: COLOURS.edge });
+      }
+      drawn.marker = m;
+    }
+    world.trek = drawn;
+  }
+
   function draw(container, view) {
     if (!world.nodes) build(container);
     var n = world.nodes;
@@ -459,6 +553,7 @@
       polyline(g, routePoints(link, a, b).map(screen), DASHES[via]);
       g.stroke({ width: 3, color: COLOURS[via], cap: 'round', join: 'round' });
     });
+    drawTrek(n, data, screen);
 
     // Pins, quiet (A2).
     var pins = n.pins;
@@ -590,12 +685,92 @@
     return kind + ' between ' + (a ? a.name : '?') + ' and ' + (b ? b.name : '?');
   }
 
+  // ── Setting out across country (L-367) ────────────
+
+  // The way to a point or place, previewed: `target` { x, y, placeId?, name? }
+  // with the plan and its words, or null when there is nowhere to set out from.
+  function previewTo(target) {
+    var data = world.data;
+    var from = Loom.wildView.startOf(data, placeById(data.here));
+    if (!from) return null;
+    var plan = Loom.wildView.planTo(data, from, [target.x, target.y]);
+    return Object.assign({}, target, {
+      plan: plan,
+      summary: plan ? Loom.wildView.summary(data, plan) : null,
+    });
+  }
+
+  // Why it can't be set out on, or null.
+  function crossRefusal(preview) {
+    if (!preview) return 'There is nowhere to set out from here.';
+    if (!preview.plan) return 'There is no way across country there that you can take.';
+    return Loom.state.turnInProgress ? 'A turn is under way.' : null;
+  }
+
+  function round3(n) {
+    return Math.round(n * 1000) / 1000;
+  }
+
+  function setOut(preview) {
+    if (preview.placeId) {
+      Loom.play.travelAcross(preview.placeId, 'set out across country for ' + preview.name);
+    } else {
+      Loom.play.travelAcross(
+        { point: { x: round3(preview.x), y: round3(preview.y) } },
+        'set out across country'
+      );
+    }
+  }
+
+  // "Travel across country", beside a place's route (TR5): its time and how
+  // wild the way is in the label.
+  function crossItem(preview) {
+    var no = crossRefusal(preview);
+    var s = preview && preview.summary;
+    return {
+      label: 'Travel across country' + (s ? ' · ' + s.time + ', ' + s.rating : ''),
+      disabled: Boolean(no),
+      note: no || undefined,
+      onSelect: function () {
+        setOut(preview);
+      },
+    };
+  }
+
+  function title(text) {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  // A click on open ground: the way there previewed, with its menu.
+  function openCountry(point, view) {
+    var at = M.toMap(view, point.x, point.y);
+    var map = world.data.map;
+    if (at.x < 0 || at.y < 0 || at.x > map.width || at.y > map.height) {
+      Loom.map.render();
+      return;
+    }
+    world.preview = previewTo({ x: at.x, y: at.y });
+    Loom.map.render();
+    var ground = Loom.wildView.groundAt(world.data, [at.x, at.y]);
+    var s = world.preview && world.preview.summary;
+    Loom.engine.openMenu(point, {
+      title: ground ? title(ground) : 'Open country',
+      subtitle: s ? s.line : 'No way across country that you can take.',
+      items: [crossItem(world.preview)],
+    });
+  }
+
   // A click on the world map (I2): what is there, and a menu for it.
   function tap(point, view) {
     var found = hit(point, view);
     world.look = null;
+    world.preview = null;
     if (!found) {
       world.selected = null;
+      if (wildOn()) {
+        openCountry(point, view);
+        return;
+      }
       Loom.map.render();
       return;
     }
@@ -618,6 +793,12 @@
     }
     var place = found.place;
     world.selected = place.id;
+    // The way across country there, drawn while it is looked at (TR5).
+    var cross =
+      wildOn() && place.id !== world.data.here
+        ? previewTo({ x: place.x, y: place.y, placeId: place.id, name: place.name })
+        : null;
+    world.preview = cross;
     Loom.map.render();
     var via = neighboursOfHere()[place.id];
     var no = refusal(place, via);
@@ -655,6 +836,9 @@
         },
       });
     }
+    // In the wilds there is no route to take from here: across country is the way.
+    if (cross && world.data.wild && !world.data.here) items.length = 0;
+    if (cross) items.push(crossItem(cross));
     items.push({
       label: 'Look',
       onSelect: function () {
@@ -686,22 +870,107 @@
     return node;
   }
 
+  function button(label, id, disabled, onClick) {
+    var b = el('button', 'loom-map-info-btn', label);
+    b.type = 'button';
+    b.id = id;
+    b.disabled = Boolean(disabled);
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // The button that sets out on a previewed way (L-367).
+  function crossButton(info, preview) {
+    var actions = el('div', 'loom-map-info-actions');
+    actions.appendChild(
+      button(
+        'Travel across country',
+        'loom-wild-set-out',
+        Boolean(crossRefusal(preview)),
+        function () {
+          setOut(preview);
+        }
+      )
+    );
+    info.appendChild(actions);
+  }
+
+  // A journey under way (L-367): where it heads, the time left, the camps made,
+  // with Continue and Stop.
+  function journeyCard(info) {
+    var j = world.data.journey;
+    if (!j) return;
+    var camps = (j.camps || []).length;
+    var heading = j.to && j.to.name ? j.to.name : 'a point on the map';
+    info.appendChild(
+      el(
+        'p',
+        'loom-map-info-status loom-map-info-journey',
+        'On the way to ' +
+          heading +
+          ' · ' +
+          j.label +
+          ' left' +
+          (camps ? ' · ' + camps + (camps === 1 ? ' camp' : ' camps') + ' made' : '')
+      )
+    );
+    var busy = Loom.state.turnInProgress;
+    var actions = el('div', 'loom-map-info-actions');
+    actions.appendChild(
+      button('Continue', 'loom-journey-continue', busy, function () {
+        Loom.play.journeyOn();
+      })
+    );
+    actions.appendChild(
+      button('Stop', 'loom-journey-stop', busy, function () {
+        Loom.play.journeyStop();
+      })
+    );
+    info.appendChild(actions);
+  }
+
   /** The card under the map: the selected place, a route looked at, or a hint. */
   function renderInfo(info) {
     info.innerHTML = '';
     if (world.look && world.look.kind === 'route') {
       info.appendChild(el('h3', 'loom-map-info-name', routeName(world.look.link)));
+      journeyCard(info);
       return;
     }
     var place = placeById(world.selected);
+    var preview = world.preview;
+    // Open ground looked at: the way across country there (TR5).
+    if (!place && preview) {
+      var ground = Loom.wildView.groundAt(world.data, [preview.x, preview.y]);
+      info.appendChild(el('h3', 'loom-map-info-name', ground ? title(ground) : 'Open country'));
+      info.appendChild(
+        el(
+          'p',
+          'loom-map-info-facts loom-map-info-cross',
+          preview.summary ? preview.summary.line : 'No way across country that you can take.'
+        )
+      );
+      if (preview.plan) crossButton(info, preview);
+      journeyCard(info);
+      return;
+    }
     if (!place) {
+      var data = world.data;
+      var inWilds = wildOn() && data.wild && !data.here;
+      var where = inWilds ? Loom.wildView.groundAt(data, [data.wild.x, data.wild.y]) : null;
       info.appendChild(
         el(
           'p',
           'loom-map-hint',
-          'Click a place for what you can do there. Drag to pan, scroll or pinch to zoom.'
+          inWilds
+            ? 'You are in the wilds' +
+                (where ? ', in the ' + where : '') +
+                '. Click the map to set out across country.'
+            : 'Click a place for what you can do there. Drag to pan, scroll or pinch to zoom.' +
+                (wildOn() ? ' Click open ground to travel across country.' : '')
         )
       );
+      journeyCard(info);
       return;
     }
     var via = neighboursOfHere()[place.id];
@@ -717,6 +986,20 @@
         el('p', 'loom-map-info-status', 'A journey from here: ' + journeyWords(place.journey) + '.')
       );
     }
+    // The way across country there, beside the route (L-367; TR5).
+    if (preview && preview.placeId === place.id) {
+      info.appendChild(
+        el(
+          'p',
+          'loom-map-info-status loom-map-info-cross',
+          preview.summary
+            ? 'Across country: ' + preview.summary.line + '.'
+            : 'No way across country there that you can take.'
+        )
+      );
+      if (preview.plan) crossButton(info, preview);
+    }
+    journeyCard(info);
   }
 
   /** Where the camera frames the world: the discovered places, around you. */
@@ -782,6 +1065,29 @@
     },
     selected: function () {
       return world.selected;
+    },
+    /** Whether the map offers travel across country (L-367). */
+    wildOn: wildOn,
+    /**
+     * The way across country being looked at, for tests (L-367): its plan's
+     * hours, distance and path in map units, its words, and what was drawn.
+     */
+    previewed: function () {
+      var p = world.preview;
+      if (!p || !p.plan) return null;
+      return {
+        hours: p.plan.hours,
+        distance: p.plan.distance,
+        path: p.plan.path,
+        line: p.summary.line,
+        days: p.summary.days,
+        ratingId: p.summary.ratingId,
+        drawn: world.trek && world.trek.preview,
+      };
+    },
+    /** What is drawn of the journey: its way, camps and goal, and the marker (L-367). */
+    trekDrawn: function () {
+      return world.trek;
     },
     /** How many times the realms have been built (they aren't for the same ones). */
     realmBuilds: function () {

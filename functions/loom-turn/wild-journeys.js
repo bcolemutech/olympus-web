@@ -23,7 +23,8 @@
  * routes, hours, done, leg, by, distance }`: the plan's points ({ x, y })
  * and the hours from the start at each, the stretches on a route (in
  * hours), its whole time, the hours of it walked, the legs walked, and
- * `by: 'wild'`. A leg is the module's `dayHours` of travel; one that ends
+ * `by: 'wild'`, and `camps`, the points made camp at so far (L-367). A leg is
+ * the module's `dayHours` of travel; one that ends
  * short of the goal camps there for the night (the rest of the day), so the
  * whole journey takes the plan's hours and a night between each day, as a
  * trip by road does (../loom-canon/travel.js). A failed navigation check
@@ -550,6 +551,8 @@ function walkLeg(view, save, journey, dice, settings, opening, leaving = [], see
         lines.push('You end the day off your path, and set your course again from there.');
       }
     }
+    // The camps so far (L-367), for the map to draw after a reload.
+    next.camps = (journey.camps || []).concat([xy(camp)]);
     const g = wildPlan.groundAt(view, camp);
     lines.push(
       'You make camp for the night' +
