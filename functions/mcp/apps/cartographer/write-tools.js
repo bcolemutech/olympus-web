@@ -32,6 +32,7 @@ const realms = require('../../../loom-canon/realms');
 const { REGION_DANGER } = require('../../../loom-canon/wild-plan');
 const { createScratchWorld, MIN_MAP, MAX_MAP } = require('../../../cartographer/scratch');
 const { systemOf } = require('../../../loom-canon/checks');
+const wildsSettings = require('../../../loom-modules/wilds/settings');
 const spawns = require('../../../loom-modules/combat/spawns');
 const { tokenInput, writeToken } = require('./token-tools');
 
@@ -773,7 +774,9 @@ function writeTools({ writer, systems, studio }) {
         'skips making a character; null removes it), or death (on: a character with no one ' +
         'to help dies; off: they come round captured, robbed or rescued; null: the system’s ' +
         'default), or advancement (false: characters don’t grow in this world; true: they do, ' +
-        'by its system’s rules), or its brief (brief: { genre, tone, era, artDirection }, the ' +
+        'by its system’s rules), or its off-road travel (wilds: the wilds module’s settings ' +
+        'over its system’s, false turning travel off the road off, null the system’s own), ' +
+        'or its brief (brief: { genre, tone, era, artDirection }, the ' +
         'fields you give; "" clears one), or its art (art.set: the art set its maps are drawn with, ' +
         'from list_art_sets; "classic", the built-in one, unless set). Fields you omit are ' +
         'left unchanged. ' +
@@ -820,6 +823,19 @@ function writeTools({ writer, systems, studio }) {
               'world (a one-shot, a fixed-power story): nothing is earned and no level comes; ' +
               'true, the default, grows them by the system’s advancement.'
           ),
+        wilds: z
+          .union([z.literal(false), z.object({}).passthrough()])
+          .nullable()
+          .optional()
+          .describe(
+            'Its off-road travel (L-362): the wilds module’s settings over its system’s ' +
+              '(modules.wilds; get_system shows them): { pace (distance units an hour at ' +
+              'speed 1), dayHours, eventChance (0–0.95), discover (distance), navigation: ' +
+              '{ check: { skill } | { attribute }, dc (a rung), harder (danger a rung), ' +
+              'lost: { [degree]: share of the day } } }; navigation’s parts change the ' +
+              'system’s one by one, and null there means nobody gets lost. Replaces the ' +
+              'world’s own; false turns off-road travel off; null goes back to the system’s.'
+          ),
         brief: briefSchema(true).optional(),
         art: z
           .object({
@@ -847,6 +863,7 @@ function writeTools({ writer, systems, studio }) {
           'startingSheet',
           'death',
           'advancement',
+          'wilds',
           'brief',
           'art',
         ]);
@@ -922,6 +939,31 @@ function writeTools({ writer, systems, studio }) {
           if (args.advancement === false && growing) fields['rules.advancement'] = false;
           else if (args.advancement === true && !growing) {
             fields['rules.advancement'] = FieldValue.delete();
+          }
+          // Its off-road travel (L-362): the wilds module's settings over its
+          // system's, or false; checked against the system it will play by.
+          const wilds = (world.rules || {}).wilds;
+          if (args.wilds === null) {
+            if (wilds !== undefined) fields['rules.wilds'] = FieldValue.delete();
+          } else if (args.wilds !== undefined) {
+            const problems = wildsSettings.checkOverride(args.wilds, system || systemOf(world));
+            if (problems.length) {
+              throw new ToolError(
+                'The wilds settings don’t fit the world’s rules:\n- ' + problems.join('\n- ')
+              );
+            }
+            if (JSON.stringify(args.wilds) !== JSON.stringify(wilds)) {
+              fields['rules.wilds'] = args.wilds;
+            }
+          } else if (system && wilds !== undefined) {
+            // A new system: its own settings may no longer fit.
+            const problems = wildsSettings.checkOverride(wilds, system);
+            if (problems.length) {
+              warnings.push(
+                'Its wilds settings don’t fit the new system (update_world wilds): ' +
+                  problems.join(' ')
+              );
+            }
           }
           // Its brief (L-711): the fields given, "" clearing one.
           if (args.brief) {

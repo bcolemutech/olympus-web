@@ -5,7 +5,8 @@
  * by a real MCP client against the Firestore emulator: list_systems,
  * get_system, set_system (checked, refused with every problem, warnings
  * back), copy_system, and update_world with systemId, which get_world and
- * the world's grading then show.
+ * the world's grading then show; the wilds module's settings (L-362) on a
+ * system, copied with it, and a world's own over them.
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
  *        "cd tests && npx jest cartographer-mcp-systems --verbose"
@@ -181,7 +182,7 @@ test('list_systems: the two built-in systems, before any is written (L-804)', as
       builtIn: true,
       attributes: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'],
       optional: ['skills', 'traits', 'conditions', 'derived'],
-      modules: ['combat'],
+      modules: ['combat', 'wilds'],
     },
     {
       id: 'pool-scifi',
@@ -190,7 +191,7 @@ test('list_systems: the two built-in systems, before any is written (L-804)', as
       builtIn: true,
       attributes: ['Body', 'Reflex', 'Mind', 'Presence'],
       optional: ['skills', 'traits', 'conditions'],
-      modules: ['combat'],
+      modules: ['combat', 'wilds'],
     },
   ]);
 });
@@ -684,4 +685,91 @@ test('update_world turns advancement off and on (L-841)', async () => {
   expect((await ok('update_world', { worldId: WORLD, advancement: false })).updated).toEqual([]);
   await ok('update_world', { worldId: WORLD, advancement: true });
   expect((await ok('get_world', { worldId: WORLD })).advancement).toBe(true);
+});
+
+test('set_system and copy_system take the wilds module, checked (L-362)', async () => {
+  const wilds = {
+    pace: 2,
+    dayHours: 10,
+    eventChance: 0.3,
+    discover: 4,
+    navigation: { check: { skill: 'Piloting' }, dc: 'Tough', harder: 0.5 },
+  };
+  const saved = await ok('set_system', { system: { ...STARS, modules: { wilds } } });
+  expect(saved.system.modules).toEqual(['wilds']);
+  expect(saved.warnings).toBeUndefined();
+  expect((await ok('get_system', { systemId: 'star-pool' })).system.modules).toEqual({ wilds });
+  // A bad one is refused with its reasons.
+  const text = await refused('set_system', {
+    system: {
+      ...STARS,
+      modules: {
+        wilds: {
+          pace: 0,
+          eventChance: 2,
+          speed: 3,
+          navigation: { check: { skill: 'Survival' }, dc: 'Medium', harder: -1 },
+        },
+      },
+    },
+  });
+  expect(text).toBe(
+    'The system has problems:\n' +
+      '- modules.wilds: "speed" isn\'t a wilds setting (pace, dayHours, eventChance, discover, navigation).\n' +
+      '- modules.wilds.pace must be a number of distance units an hour, above 0 and at most 100.\n' +
+      '- modules.wilds.eventChance must be a chance from 0 to 0.95.\n' +
+      '- modules.wilds.navigation.check.skill "Survival" isn\'t one of the system\'s skills.\n' +
+      '- modules.wilds.navigation.dc must be a rung on the ladder (Routine, Tough, Legendary).\n' +
+      '- modules.wilds.navigation.harder must be the danger above 1 that makes it a rung ' +
+      'harder (above 0, at most 1.5), or null: never harder.'
+  );
+  // Off: no off-road travel.
+  await ok('set_system', { system: { ...STARS, modules: { wilds: false } } });
+  expect((await ok('get_system', { systemId: 'star-pool' })).system.modules).toEqual({
+    wilds: false,
+  });
+  // A copy of a built-in carries its settings.
+  await ok('copy_system', { fromSystemId: 'pool-scifi', id: 'isles-pool', name: 'Isles Pool' });
+  expect((await ok('get_system', { systemId: 'isles-pool' })).system.modules.wilds).toEqual(
+    BUILT_IN['pool-scifi'].modules.wilds
+  );
+});
+
+test('update_world sets its own wilds settings over its system’s, or turns them off (L-362)', async () => {
+  await ok('update_world', { worldId: WORLD, systemId: 'd20-fantasy' });
+  const fantasy = (await ok('get_world', { worldId: WORLD })).wilds;
+  expect(fantasy).toMatchObject({
+    pace: 1.5,
+    dayHours: 8,
+    eventChance: 0.25,
+    discover: 3,
+    navigation: { check: { skill: 'Survival' }, dc: 'Moderate', harder: 0.5 },
+  });
+  // A part of the navigation check changes the system's one.
+  const set = await ok('update_world', {
+    worldId: WORLD,
+    wilds: { pace: 1, navigation: { dc: 'Hard' } },
+  });
+  expect(set.updated).toEqual(['wilds']);
+  expect((await ok('get_world', { worldId: WORLD })).wilds).toMatchObject({
+    pace: 1,
+    eventChance: 0.25,
+    navigation: { check: { skill: 'Survival' }, dc: 'Hard', harder: 0.5 },
+  });
+  // Off, then back to the system's.
+  await ok('update_world', { worldId: WORLD, wilds: false });
+  expect((await ok('get_world', { worldId: WORLD })).wilds).toBe(false);
+  await ok('update_world', { worldId: WORLD, wilds: null });
+  expect((await ok('get_world', { worldId: WORLD })).wilds).toEqual(fantasy);
+  // Checked against the world's system.
+  expect(
+    await refused('update_world', {
+      worldId: WORLD,
+      wilds: { navigation: { check: { skill: 'Piloting' } }, dayHours: 30 },
+    })
+  ).toBe(
+    'The wilds settings don’t fit the world’s rules:\n' +
+      '- rules.wilds.dayHours must be a number of hours from 1 to 24.\n' +
+      '- rules.wilds.navigation.check.skill "Piloting" isn\'t one of the system\'s skills.'
+  );
 });

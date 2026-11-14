@@ -104,7 +104,7 @@ olympus-web/
 │   ├── loom-canon/                # World canon: static worlds + Firestore worlds (loadWorld)
 │   ├── loom-turn/                 # Turn pipeline: intake → interpret → adjudicate → narrate → commit
 │   ├── loom-models.js             # Loom save and turn document shapes
-│   ├── loom-modules/              # Game-system modules (Phase 9): combat/ (settings, fights, attacks, strikes, play)
+│   ├── loom-modules/              # Game-system modules (Phase 9): combat/ (settings, fights, attacks, strikes, play), wilds/ (off-road travel's settings, navigation)
 │   ├── cartographer/              # Azgaar parse → map → load, import and publish service
 │   └── mcp/                       # MCP host, OAuth server, registry, apps/ (scriptorium, cartographer)
 ├── tests/                         # Jest suites (rules, Loom, Cartographer, MCP) + fixtures/
