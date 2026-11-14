@@ -16,6 +16,9 @@ const { relay } = require('./studio-tools');
 //                      without-azgaar.md R2): an id, a name, the built-in
 //                      ground it behaves as and art of its own, through the
 //                      studio's assigner (target `material`)
+//   set_wilds          how a world's ground is crossed off the road (L-361 /
+//                      #835; off-road-travel.md §4.1): speed, danger and
+//                      impassable per ground material, over the defaults
 //   list_object_kinds  the catalog's object kinds, with a world's own, and
 //                      where each one's art comes from
 //   list_art_sets      the art sets a world's maps can be drawn with (L-944)
@@ -50,7 +53,9 @@ function materialTools({ studio, writer, worldFor }) {
         'of its own (set_world_materials): give worldId and its own come with the built-in ' +
         'ground, each marked `own` with the built-in one it is `like`. Name one in a shape’s ' +
         '`material`; any other is refused. A see-through one (glass, bars, a gate) lets sight ' +
-        'through but is not walked through; water takes a depth.',
+        'through but is not walked through; water takes a depth. Each ground has `wild`: how it ' +
+        'is crossed off the road (speed, a factor on the pace; danger, 0.5 calm to 2 deadly; ' +
+        'impassable), with the world’s changes (set_wilds) when worldId is given.',
       inputSchema: {
         worldId: worldId.optional().describe('Also this world’s own ground materials.'),
         kind: z
@@ -63,8 +68,12 @@ function materialTools({ studio, writer, worldFor }) {
         const list = args.kind ? catalog.materialsOf(args.kind) : catalog.MATERIALS;
         const mine =
           args.worldId && (!args.kind || args.kind === 'ground')
-            ? (await worldFor(args.worldId)).world.materials
+            ? (await worldFor(args.worldId)).world.materials || []
             : [];
+        const world = args.worldId ? (await worldFor(args.worldId)).world : null;
+        // How each ground is crossed off the road (L-361), with the world's
+        // overrides (set_wilds).
+        const wildOf = (id) => catalog.wildOf(id, world && world.materials, world && world.wilds);
         const rows = list.map((m) =>
           compact({
             kind: m.kind,
@@ -72,6 +81,7 @@ function materialTools({ studio, writer, worldFor }) {
             name: m.name,
             seeThrough: m.seeThrough || undefined,
             water: m.water || undefined,
+            wild: m.kind === 'ground' ? wildOf(m.id) : undefined,
           })
         );
         for (const m of mine) {
@@ -85,6 +95,7 @@ function materialTools({ studio, writer, worldFor }) {
               own: true,
               like: m.like,
               art: m.art && m.art.imageId ? m.art.imageId : undefined,
+              wild: wildOf(m.id),
             })
           );
         }
@@ -290,6 +301,82 @@ function materialTools({ studio, writer, worldFor }) {
           ),
           ...(remove.length ? { removed: remove } : {}),
           ...(warnings.length ? { warnings } : {}),
+        };
+      }),
+  });
+
+  tools.push({
+    name: 'set_wilds',
+    title: 'Set how a world’s ground is crossed',
+    description:
+      'Change how the world’s ground is crossed off the road (L-361; off-road travel): for any ' +
+      'ground material, built-in or the world’s own, its `speed` (a factor on the travel pace: ' +
+      'grassland 1, forest 0.5, hills 0.6, swamp 0.4, mountains 0.3; above 0, at most 2), its ' +
+      '`danger` (0.5 calm to 2 deadly, 1 by default; it raises the odds of trouble on the way) ' +
+      'and `impassable` (true: never crossed; ocean, lake, deep water and lava are by default). ' +
+      'list_materials with worldId shows each ground’s values as they stand. A world’s own ' +
+      'material takes its `like`’s values, and a change to its `like`, unless given its own ' +
+      'here. `set` merges by material and key (null takes a key, or a whole material, back to ' +
+      'the default). A ground item’s own `cost` slows it further, and cost "never" closes it.',
+    inputSchema: {
+      worldId,
+      set: z
+        .record(
+          z.string().max(40),
+          z
+            .object({
+              speed: z.number().positive().max(catalog.WILD_SPEED_MAX).nullable().optional(),
+              danger: z
+                .number()
+                .min(catalog.DANGER_MIN)
+                .max(catalog.DANGER_MAX)
+                .nullable()
+                .optional(),
+              impassable: z.boolean().nullable().optional(),
+            })
+            .strict()
+            .nullable()
+        )
+        .describe('By ground material id: { speed?, danger?, impassable? }, or null to reset it.'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    handler: (ctx, args) =>
+      relay(async () => {
+        const ids = Object.keys(args.set || {});
+        if (!ids.length) throw new ToolError('Give a material to set.');
+        const result = await writer.edit(args.worldId, ctx.uid, (e) => {
+          const world = e.world;
+          const had = (world.wilds && world.wilds.materials) || {};
+          const next = {};
+          for (const [id, entry] of Object.entries(had)) next[id] = { ...entry };
+          for (const id of ids) {
+            const change = args.set[id];
+            if (change === null) {
+              delete next[id];
+              continue;
+            }
+            const entry = { ...(next[id] || {}) };
+            for (const [key, value] of Object.entries(change)) {
+              if (value === undefined) continue;
+              if (value === null) delete entry[key];
+              else entry[key] = value;
+            }
+            if (Object.keys(entry).length) next[id] = entry;
+            else delete next[id];
+          }
+          const problems = catalog.checkWilds(next, world.materials);
+          if (problems.length) throw new ToolError(problems.join(' '));
+          e.updateWorld({ wilds: { ...(world.wilds || {}), materials: next } });
+          return {
+            materials: Object.fromEntries(
+              ids.map((id) => [id, catalog.wildOf(id, world.materials, { materials: next })])
+            ),
+          };
+        });
+        return {
+          worldId: args.worldId,
+          materials: result.materials,
+          next: 'list_materials with worldId shows every ground’s values.',
         };
       }),
   });

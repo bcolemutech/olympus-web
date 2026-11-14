@@ -514,6 +514,8 @@ function regionDetail(world, region) {
     ...graded(gradeEntity(world, 'region', region)),
     form: region.formName || null,
     realm: region.factionId ? ref(world.factions, region.factionId) : null,
+    // How dangerous its wilds are (L-361): null when unset (it counts as 1).
+    danger: typeof region.danger === 'number' ? region.danger : null,
     capital: ref(world.locations, region.capitalLocationId),
     // Its shape (L-712): the zones naming it, by map.
     land: realms.regionLand(world, region.id),
