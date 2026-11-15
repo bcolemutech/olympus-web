@@ -8,6 +8,11 @@
  *   regionHasShape(world, id)     a zone on a region map names the region
  *   regionsOnMap(world, mapId)    the regions that belong on a region map
  *   realmHasLand(world, id)       one of the realm's regions has a shape
+ *   regionGrounds(world, id)      the ground under a region, by material:
+ *                                 { [material]: share } (L-368)
+ *   regionMapIds(world, id)       the region maps a region has a zone on
+ *   landGrounds(world)            the ground materials painted on the world's
+ *                                 region maps, passable ones (L-368)
  *
  * Terrain is a region map's ground (R1), water counting: a lake or the ocean
  * is ground too. A map is covered where any ground item holds a point, so a
@@ -15,6 +20,7 @@
  */
 
 const geo = require('./map-geometry');
+const materials = require('./materials');
 const realms = require('./realms');
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -24,6 +30,10 @@ const live = (e) => Boolean(e) && !e.retired;
 // sample stands for the cell around it, so the share is within a few points
 // of the real area.
 const SAMPLES = 48;
+
+// A region's ground is sampled on a grid this many points along the longer
+// side of its zones' box (L-368).
+const REGION_SAMPLES = 24;
 
 const covers = new WeakMap();
 
@@ -94,8 +104,80 @@ function regionsOnMap(world, mapId) {
   return [...here].filter((id) => live_.some((r) => r.id === id)).sort();
 }
 
+/** The region maps a region has a zone on, sorted by id. */
+function regionMapIds(world, regionId) {
+  return realms.regionLand(world, regionId).map((part) => part.mapId);
+}
+
+/**
+ * The ground under a region (L-368): the share (0–1) of its land on each
+ * ground material, sampled inside its zones as the game finds a camp's region
+ * (the topmost zone naming a live region), by material id. `{}` for a region
+ * with no shape or no ground under it. The same land gives the same shares.
+ */
+function regionGrounds(world, regionId) {
+  const held = {};
+  let total = 0;
+  for (const mapId of regionMapIds(world, regionId)) {
+    const map = world.maps[mapId];
+    if (!isObject(map.geometry)) continue;
+    const c = geo.compile(map.geometry);
+    if (!c.ground.length) continue;
+    for (const zone of c.zones) {
+      if (!zone.item || zone.item.region !== regionId) continue;
+      const points = zone.rings.flat();
+      if (!points.length) continue;
+      const xs = points.map((p) => p[0]);
+      const ys = points.map((p) => p[1]);
+      const x0 = Math.min(...xs);
+      const y0 = Math.min(...ys);
+      const width = Math.max(...xs) - x0;
+      const height = Math.max(...ys) - y0;
+      const step = Math.max(width, height) / REGION_SAMPLES;
+      if (!(step > 0)) continue;
+      const across = Math.max(1, Math.round(width / step));
+      const down = Math.max(1, Math.round(height / step));
+      for (let j = 0; j < down; j++) {
+        for (let i = 0; i < across; i++) {
+          const point = [x0 + ((i + 0.5) * width) / across, y0 + ((j + 0.5) * height) / down];
+          const here = realms.regionAt(world, mapId, point);
+          if (!here || here.region.id !== regionId) continue;
+          const ground = geo.groundAt(c, point);
+          if (!ground || typeof ground.material !== 'string') continue;
+          held[ground.material] = (held[ground.material] || 0) + 1;
+          total += 1;
+        }
+      }
+    }
+  }
+  const out = {};
+  for (const [material, n] of Object.entries(held)) out[material] = n / total;
+  return out;
+}
+
+/**
+ * The ground materials painted on a world's live region maps that can be
+ * crossed (not water, nor ground marked impassable), by id, sorted (L-368).
+ */
+function landGrounds(world) {
+  const found = new Set();
+  for (const map of Object.values((world && world.maps) || {})) {
+    if (!isObject(map) || map.retired || map.kind !== 'region' || !isObject(map.geometry)) continue;
+    for (const item of map.geometry.ground || []) {
+      if (item && typeof item.material === 'string') found.add(item.material);
+    }
+  }
+  return [...found]
+    .filter((id) => !materials.wildOf(id, world.materials, world.wilds).impassable)
+    .sort();
+}
+
 module.exports = {
   SAMPLES,
+  REGION_SAMPLES,
+  regionMapIds,
+  regionGrounds,
+  landGrounds,
   terrainCover,
   regionHasShape,
   regionsOnMap,

@@ -214,7 +214,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(14);
+    expect(RUBRIC_VERSION).toBe(15);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -451,7 +451,9 @@ describe('character, battle map, realm and world criteria', () => {
     expect(check('battleMap.drawn', w, given({ ground: [floor] }))).toMatchObject({
       progress: 0.5,
       tool: 'set_walls',
-      message: 'Its battle map has floors but no walls: draw them (set_walls), or give it art.',
+      message:
+        'Its battle map has floors but no walls: draw them (set_walls), or, for open country, ' +
+        'add lines or objects (set_lines, set_objects), or give it art.',
     });
     expect(check('battleMap.drawn', w, given({ walls: [wall] }))).toMatchObject({
       progress: 0.5,
