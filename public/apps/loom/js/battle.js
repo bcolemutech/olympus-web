@@ -56,6 +56,13 @@
     var m = /[?&]rise=([0-9.]+)/.exec(QUERY);
     return m ? Math.max(0.3, Math.min(2, Number(m[1]))) : 1.22;
   })();
+  // The spike's scale switches: &floor=0.5 draws floor pictures at half size
+  // (nearer life), &props=1.4 draws props bigger over the same footprint.
+  function queryNumber(name, fallback) {
+    var m = new RegExp('[?&]' + name + '=([0-9.]+)').exec(QUERY);
+    var v = m ? Number(m[1]) : NaN;
+    return v > 0 && v <= 4 ? v : fallback;
+  }
   var ISO_PROPS = null; // the spike's isometric props: { kind: { facings, foot } }
   if (ISO && window.fetch) {
     window
@@ -1071,7 +1078,15 @@
       standAt: ISO
         ? { x: isoOrigin().x, y: isoOrigin().y, scale: CELL / MP.FEET }
         : { x: PAD, y: TOP, scale: CELL / MP.FEET },
-      iso: ISO ? { rise: ISO_RISE, props: ISO_PROPS || {}, low: Boolean(battle.wallsLow) } : null,
+      iso: ISO
+        ? {
+            rise: ISO_RISE,
+            props: ISO_PROPS || {},
+            low: Boolean(battle.wallsLow),
+            floor: queryNumber('floor', 1),
+            props_scale: queryNumber('props', 1),
+          }
+        : null,
       art: ISO ? false : Boolean(d.image),
       tint: accent(),
       worldKinds: d.objectKinds || null,

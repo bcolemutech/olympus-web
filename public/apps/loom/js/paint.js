@@ -914,7 +914,9 @@
           // A world's own ground (L-713) is drawn with its art, which can change.
           kind === 'ground' && o.materials ? JSON.stringify(o.materials) : '',
           extra || '',
-          o.iso ? 'iso' + (o.iso.low ? '-low' : '') : '',
+          o.iso
+            ? 'iso' + (o.iso.low ? '-low' : '') + '|' + o.iso.floor + '|' + o.iso.props_scale
+            : '',
         ].join('|'),
         layer: layer,
         order: i,
@@ -995,6 +997,8 @@
                   var m = new PIXI.Matrix();
                   // A picture spans `span` tiles, whatever its pixel size.
                   var px = (texture.width || TILE_PX) / span;
+                  // The spike's floor scale (&floor=): a picture over fewer tiles.
+                  if (o.iso && o.iso.floor > 0) px /= o.iso.floor;
                   m.scale(tile / px, tile / px);
                   pattern.setTransform(m);
                   return { fill: pattern };
@@ -1365,7 +1369,9 @@
           var sn = Math.abs(Math.sin(turnR));
           var w = size[0] * c + size[1] * sn;
           var d = size[0] * sn + size[1] * c;
-          var across = w + d; // the footprint's diamond, side to side on the screen
+          // The footprint's diamond, side to side on the screen; the spike's prop
+          // scale (&props=) draws it bigger over the same footprint.
+          var across = (w + d) * (o.iso.props_scale > 0 ? o.iso.props_scale : 1);
           var foot = (isoArt && isoArt.foot) || (stand && stand.foot) || [0.5, 1];
           var tall = (across * (texture.height || 1)) / (texture.width || 1);
           var up = new PIXI.Sprite(texture);
