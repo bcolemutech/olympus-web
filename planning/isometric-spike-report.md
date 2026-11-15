@@ -1,6 +1,6 @@
 # The Loom — The Isometric Spike — Report
 
-**Status:** Built and measured (2026-11-15). Waiting on the user's checkpoint (§6): playing the preview.
+**Status:** Done (2026-11-15). The user played the preview and answered the checkpoint (§6): go ahead, the true wall height, the props approved, floor-only paintings; rooms read empty, left to the rework (recorded in [`isometric-view.md`](./isometric-view.md) §3). The prototype stays on `spike/isometric` (#855, closed unmerged).
 **Scope:** [`isometric-view.md`](./isometric-view.md) §5.
 **Spent:** $0.70 of the $10 cap, for 5 images: three prop sheets and two paintings.
 **Branch:** `spike/isometric` (draft PR #855, not to merge) holds the prototype, the props and the paintings. Its preview channel serves the page with them.
