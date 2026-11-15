@@ -602,7 +602,9 @@
     if (nrm.x + nrm.y < 0 || (nrm.x + nrm.y === 0 && nrm.y < 0)) nrm = { x: -nrm.x, y: -nrm.y };
     var thick = o.thick;
     var half = { x: (nrm.x * thick) / 2, y: (nrm.y * thick) / 2 };
-    var n = Math.max(1, Math.ceil(len / o.piece - 1e-9));
+    // Half-tile pieces: each sorts by its own middle, so what stands beside a
+    // wall sorts against the stretch of wall next to it.
+    var n = Math.max(1, Math.ceil(len / (o.piece / 2) - 1e-9));
     var h = o.top - o.base;
     var parts = [];
     var endAtB = d.x + d.y > 0;
@@ -1376,7 +1378,9 @@
           return [
             {
               node: up,
-              depth: base.y + across / 4,
+              // Sorted by its middle, not its front corner: a prop behind a
+              // wall stays behind it near the wall's end (spike, found in play).
+              depth: base.y,
               box: {
                 x0: base.x - across / 2,
                 x1: base.x + across / 2,
