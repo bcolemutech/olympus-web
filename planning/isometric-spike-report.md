@@ -70,6 +70,14 @@ _Three-quarter on the left, isometric on the right, each drawn by the engine fro
 
 _A generated interior, walls up (left) and walls low (right)._
 
+- **Depth order, found in play (2026-11-15):**
+  - **What went wrong:** in The Corpse Tide's Market Hall, a desk in the next room showed through a wall near the wall's end. The spike sorted each prop by its footprint's front corner, one number against one number per wall piece, which put the desk in front.
+  - **The spike's fix:** props sort by their middle, and walls are cut into half-tile pieces. That fixed the desk and kept a crate standing in front of a wall in front of it.
+  - **For L-952:** a single depth per piece can still mis-order large props beside long walls. The real build should compare what overlaps on the screen by which side of a wall each thing stands, as isometric engines do.
+- **Painted maps, found in play:**
+  - **What went wrong:** the spike first kept a grid's own painting in place of its walls and floors, so The Border March's painted maps showed no walls, only flat door marks.
+  - **The fix:** every grid now draws its walls, doors and floors from its data, with an old painting used only as the floor where the map has no floor of its own. That matches AR2.
+
 ### 4.2 The props
 
 ![The isometric props](./isometric-spike/props.jpg)
