@@ -122,6 +122,8 @@
   // WALL_FT tall, a door DOOR_FT (or its wall's, if lower), a window from its
   // sill to its top.
   var RISE = 0.6;
+  var ISO_RISE = 1.22;
+  var LOW_FT = 2; // a wall with the walls-low button on // isometric (spike): a foot of height, up the screen, at 2:1
   var WALL_FT = 8;
   var DOOR_FT = 7;
   var SILL_FT = 3;
@@ -534,6 +536,141 @@
     return { x: p.x, y: p.y - h };
   }
 
+  // ── The isometric view (spike: planning/isometric-view.md §5) ─────────
+  //
+  // With `o.iso`, the standing layer is built in isometric units: a floor
+  // point (x, y) at height h stands at (x − y, (x + y) / 2 − h), the 2:1
+  // projection the drawer lays the flat layers under. Everything standing
+  // is depth-sorted by its foot's y in those units.
+
+  function isoP(p, h) {
+    return { x: p.x - p.y, y: (p.x + p.y) / 2 - (h || 0) };
+  }
+
+  function isoV(v) {
+    return { x: v.x - v.y, y: (v.x + v.y) / 2 };
+  }
+
+  // A picture laid on an upright face from `a` to `b` (floor points), `base`
+  // to `base + h` up: an affine map, exact for a flat face.
+  function isoFace(texture, a, b, base, h, thick, how, along) {
+    var PIXI = window.PIXI;
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len || h <= 0) return null;
+    var sd = isoV({ x: dx / len, y: dy / len });
+    if (Math.abs(sd.x) < 1e-3) return null; // a face seen edge-on
+    var o = isoP(a, base + h);
+    var s = new PIXI.TilingSprite({ texture: texture, width: len, height: h });
+    s.setFromMatrix(new PIXI.Matrix(sd.x, sd.y, 0, 1, o.x, o.y));
+    faceScale(s, texture, len, h, thick, how);
+    if (along) s.tilePosition.x = -along;
+    return s;
+  }
+
+  // A strip lying at height `h` from `a` to `b`, `thick` across: a wall's cap.
+  function isoCap(texture, a, b, h, thick) {
+    var PIXI = window.PIXI;
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len) return null;
+    var d = { x: dx / len, y: dy / len };
+    var n = { x: -d.y, y: d.x };
+    var sd = isoV(d);
+    var sn = isoV(n);
+    var o = isoP({ x: a.x - (n.x * thick) / 2, y: a.y - (n.y * thick) / 2 }, h);
+    var s = new PIXI.TilingSprite({ texture: texture, width: len, height: thick });
+    s.setFromMatrix(new PIXI.Matrix(sd.x, sd.y, sn.x, sn.y, o.x, o.y));
+    var th = texture.height || STRIP_PX.h;
+    s.tileScale.set(thick / th, thick / th);
+    return s;
+  }
+
+  // The isometric slab: a wall's piece as a prism, its faces toward the
+  // camera (the side its normal points to larger x + y), its end where the
+  // wall ends toward the camera, and its cap.
+  function isoSlab(a, b, o) {
+    var PIXI = window.PIXI;
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len) return [];
+    var d = { x: dx / len, y: dy / len };
+    var nrm = { x: -d.y, y: d.x };
+    if (nrm.x + nrm.y < 0 || (nrm.x + nrm.y === 0 && nrm.y < 0)) nrm = { x: -nrm.x, y: -nrm.y };
+    var thick = o.thick;
+    var half = { x: (nrm.x * thick) / 2, y: (nrm.y * thick) / 2 };
+    var n = Math.max(1, Math.ceil(len / o.piece - 1e-9));
+    var h = o.top - o.base;
+    var parts = [];
+    var endAtB = d.x + d.y > 0;
+    for (var k = 0; k < n; k++) {
+      var p = { x: a.x + (dx * k) / n, y: a.y + (dy * k) / n };
+      var q = { x: a.x + (dx * (k + 1)) / n, y: a.y + (dy * (k + 1)) / n };
+      var along = (len * k) / n;
+      var c = new PIXI.Container();
+      if (o.front && h > 0) {
+        var pf = { x: p.x + half.x, y: p.y + half.y };
+        var qf = { x: q.x + half.x, y: q.y + half.y };
+        var f = isoFace(o.front, pf, qf, o.base, h, thick, o.how, along);
+        if (f) {
+          f.tint = shadeFor(o.tint, nrm);
+          c.addChild(f);
+        }
+        var last = endAtB ? k === n - 1 : k === 0;
+        if (last) {
+          var e = endAtB ? q : p;
+          var e1 = { x: e.x - half.x, y: e.y - half.y };
+          var e2 = { x: e.x + half.x, y: e.y + half.y };
+          var ef = isoFace(o.front, endAtB ? e1 : e2, endAtB ? e2 : e1, o.base, h, thick, 'top');
+          if (ef) {
+            ef.tint = shadeFor(o.tint, endAtB ? d : { x: -d.x, y: -d.y });
+            c.addChild(ef);
+          }
+        }
+      }
+      if (o.cap) {
+        var t = isoCap(o.cap, p, q, o.top, thick);
+        if (t) {
+          if (along) t.tilePosition.x = -along;
+          if (o.capTint !== undefined) t.tint = o.capTint;
+          c.addChild(t);
+        }
+      }
+      if (!c.children.length) continue;
+      var mid = { x: (p.x + q.x) / 2 + half.x, y: (p.y + q.y) / 2 + half.y };
+      var corners = [];
+      [p, q].forEach(function (e) {
+        [-1, 1].forEach(function (sgn) {
+          [o.base, o.top].forEach(function (z) {
+            corners.push(isoP({ x: e.x + sgn * half.x, y: e.y + sgn * half.y }, z));
+          });
+        });
+      });
+      parts.push({
+        node: c,
+        depth: isoP(mid, 0).y,
+        box: boxOf(corners, 0),
+        hit: o.hit || null,
+      });
+    }
+    return parts;
+  }
+
+  // A face's shade by the way it faces (light from the upper left): faces
+  // toward the lower left lit, toward the lower right darker.
+  function shadeFor(tint, normal) {
+    var base = tint === undefined ? 0xffffff : tint;
+    var s = isoV(normal);
+    var k = s.x < 0 ? 1 : 0.78;
+    var r = Math.round(((base >> 16) & 255) * k);
+    var g = Math.round(((base >> 8) & 255) * k);
+    var b = Math.round((base & 255) * k);
+    return (r << 16) | (g << 8) | b;
+  }
+
   // A picture tiled over a face: `fit` stretches it once along the face
   // (a door), else it repeats at the face's height (a wall's face picture)
   // or, for a top's strip standing in for a face, at its own scale.
@@ -642,7 +779,8 @@
 
   // How far up the screen a height in feet stands, in map units.
   function riseFor(feet, o) {
-    return feet * RISE * (o.feet > 0 ? o.feet : 1);
+    var rise = o.iso ? o.iso.rise || ISO_RISE : RISE;
+    return feet * rise * (o.feet > 0 ? o.feet : 1);
   }
 
   function heightOf(item, fallback) {
@@ -652,6 +790,7 @@
   /** How far up the screen the tallest wall of a map reaches (map units). */
   function riseOf(geometry, options) {
     var o = options || {};
+    o = Object.assign({}, o);
     var walls = (geometry && Array.isArray(geometry.walls) && geometry.walls) || [];
     var tallest = walls.length ? WALL_FT : 0;
     walls.forEach(function (w) {
@@ -742,6 +881,7 @@
           // A world's own ground (L-713) is drawn with its art, which can change.
           kind === 'ground' && o.materials ? JSON.stringify(o.materials) : '',
           extra || '',
+          o.iso ? 'iso' + (o.iso.low ? '-low' : '') : '',
         ].join('|'),
         layer: layer,
         order: i,
@@ -768,9 +908,15 @@
     // cut along its length too, in pieces of two tiles at most, so the stretch
     // over a token fades alone; elsewhere it's whole, as before.
     var standSlab = function (a, b, so) {
+      if (o.iso) return isoSlab(a, b, Object.assign({}, so));
       return slab(a, b, Object.assign({ span: o.fades ? tile * 2 : 0 }, so));
     };
     var thick = o.wall;
+    // The isometric view's walls-low button (IS4, spike): every wall a stub.
+    var wallHeight = function (item) {
+      var h = heightOf(item, WALL_FT);
+      return o.iso && o.iso.low ? Math.min(h, LOW_FT) : h;
+    };
     var wallsById = {};
     list('walls').forEach(function (w) {
       if (w && w.id) wallsById[w.id] = w;
@@ -886,7 +1032,7 @@
         var url = wallArt.key;
         var fUrl = wallArt.face;
         var edges = byWall[item.id] || [];
-        var top = riseFor(heightOf(item, WALL_FT), o);
+        var top = riseFor(wallHeight(item), o);
         var cut = JSON.stringify(
           edges.map(function (e) {
             return [e.a, e.b];
@@ -950,7 +1096,7 @@
         var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
         var wUrl = wallArt.key || null;
         var fUrl = wallArt.face || null;
-        var height = heightOf(wall, WALL_FT);
+        var height = wallHeight(wall);
         var sill = Math.min(SILL_FT, height);
         var head = Math.min(heightOf(item, WINDOW_FT), height);
         var wallKey = wall ? wall.material + '|' + height + '|' + o.feet : '';
@@ -1048,7 +1194,7 @@
       var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
       var wUrl = wallArt.key || null;
       var fUrl = wallArt.face || null;
-      var height = heightOf(wall, WALL_FT);
+      var height = wallHeight(wall);
       var tall = Math.min(heightOf(item, DOOR_FT), height);
       var see = (mat.materialOf('door', item.material) || {}).seeThrough;
       add(
@@ -1081,6 +1227,7 @@
               tint: 0xffffff,
               cap: leafArt,
               capTint: FACE_SHADE,
+              hit: o.iso && item.id ? 'door:' + item.id : null,
             }).forEach(function (part) {
               if (see) part.node.alpha = 0.8;
               parts.push(part);
@@ -1096,6 +1243,7 @@
               tint: state === 'locked' ? LOCKED : 0xffffff,
               cap: leafArt,
               capTint: state === 'locked' ? LOCKED : FACE_SHADE,
+              hit: o.iso && item.id ? 'door:' + item.id : null,
             }).forEach(function (part) {
               if (see) part.node.alpha = 0.8;
               parts.push(part);
@@ -1114,8 +1262,10 @@
               front: own || cap,
               how: own ? 'face' : 'top',
               tint: own ? FACE_LIT : FACE_SHADE,
-              cap: across ? cap : leafArt || cap,
-              capTint: across || !leafArt ? undefined : state === 'locked' ? LOCKED : undefined,
+              cap: o.iso || across ? cap : leafArt || cap,
+              capTint:
+                o.iso || across || !leafArt ? undefined : state === 'locked' ? LOCKED : undefined,
+              hit: o.iso && item.id ? 'door:' + item.id : null,
             })
           );
           if (!leafArt) {
@@ -1123,7 +1273,7 @@
             var line = doorLine(a, b, state, thick);
             parts.push({
               node: line,
-              depth: Math.max(a.y, b.y) + thick / 2,
+              depth: o.iso ? Math.max(isoP(a).y, isoP(b).y) : Math.max(a.y, b.y) + thick / 2,
               box: null,
             });
           }
@@ -1155,6 +1305,85 @@
           : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
       var stand = mat.standFor(item, o.worldKinds, o.set);
       var standKey = stand ? keyOf(stand.picture) : null;
+      // The isometric view (spike): the kind's isometric picture by facing,
+      // else its three-quarter one, standing on its footprint's front corner.
+      var isoArt = o.iso && o.iso.props ? o.iso.props[item.kind] || null : null;
+      if (o.iso && (isoArt || stand)) {
+        var turnQ = ((Math.round((Number(item.turn) || 0) / 90) % 4) + 4) % 4;
+        // On the screen south is lower left, west upper left, north upper right
+        // and east lower right. Facing south (turn 0) the front picture; west
+        // (90) the back one mirrored; north (180) the back; east (270) the
+        // front mirrored.
+        var facing = isoArt ? isoArt.facings[turnQ === 1 || turnQ === 2 ? 1 : 0] : null;
+        var picKey = facing || standKey;
+        var mirror = turnQ === 1 || turnQ === 3;
+        // A long thing painted long one way, standing long the other: mirrored.
+        if (isoArt && isoArt.long) {
+          var sz0 = turnQ % 2 ? [size[1], size[0]] : size;
+          var longX = sz0[0] > sz0[1];
+          if (sz0[0] !== sz0[1] && longX !== (isoArt.long === 'x')) mirror = !mirror;
+        }
+        add('standing', 'object', item, i, [picKey], function () {
+          var at = pt(item.at);
+          var texture = loaded(picKey);
+          if (!at || !texture) return [];
+          var turnR = ((Number(item.turn) || 0) * Math.PI) / 180;
+          var c = Math.abs(Math.cos(turnR));
+          var sn = Math.abs(Math.sin(turnR));
+          var w = size[0] * c + size[1] * sn;
+          var d = size[0] * sn + size[1] * c;
+          var across = w + d; // the footprint's diamond, side to side on the screen
+          var foot = (isoArt && isoArt.foot) || (stand && stand.foot) || [0.5, 1];
+          var tall = (across * (texture.height || 1)) / (texture.width || 1);
+          var up = new PIXI.Sprite(texture);
+          up.anchor.set(foot[0], foot[1]);
+          var base = isoP(at, 0);
+          up.position.set(base.x, base.y + across / 4);
+          up.width = across;
+          up.height = tall;
+          if (mirror) up.scale.x = -Math.abs(up.scale.x);
+          return [
+            {
+              node: up,
+              depth: base.y + across / 4,
+              box: {
+                x0: base.x - across / 2,
+                x1: base.x + across / 2,
+                y0: base.y + across / 4 - tall * foot[1],
+                y1: base.y + across / 4 + tall * (1 - foot[1]),
+              },
+              hit: mat.isDecor(item) ? null : item.id || null,
+              fades:
+                typeof item.blocksSight === 'boolean'
+                  ? item.blocksSight
+                  : Boolean((mat.objectKind(item.kind) || {}).blocksSight),
+            },
+          ];
+        });
+        var turnedI = ((Number(item.turn) || 0) * Math.PI) / 180;
+        var swI = size[0] * Math.abs(Math.cos(turnedI)) + size[1] * Math.abs(Math.sin(turnedI));
+        var sdI = size[0] * Math.abs(Math.sin(turnedI)) + size[1] * Math.abs(Math.cos(turnedI));
+        add(
+          'shadows',
+          'shadow',
+          item,
+          i + 3000,
+          [],
+          function () {
+            var at = pt(item.at);
+            if (!at) return new PIXI.Container();
+            var sp = new PIXI.Sprite(shadowTexture());
+            sp.anchor.set(0.5);
+            sp.position.set(at.x, at.y);
+            sp.width = swI * 1.3;
+            sp.height = sdI * 1.3;
+            return sp;
+          },
+          'object-iso',
+          boxOf([item.at], Math.max(swI, sdI))
+        );
+        return;
+      }
       if (stand) {
         // Standing on the south edge of its footprint (SC1): as wide as the
         // footprint turned by its `turn`, as tall as its picture's shape.
@@ -1882,7 +2111,29 @@
     return null;
   }
 
+  // The isometric view's hover (IN1, spike): what a click would pick, lit.
+  var lit = null;
+  function highlight(key, hit) {
+    var s = maps.get(key);
+    if (!s) return;
+    if (!lit && window.PIXI.ColorMatrixFilter) {
+      lit = new window.PIXI.ColorMatrixFilter();
+      lit.brightness(1.7, false);
+    }
+    s.stand.children.forEach(function (wrap) {
+      var on = Boolean(hit) && wrap.__loomHit === hit;
+      if (on && !wrap.__loomLit) {
+        wrap.filters = lit ? [lit] : null;
+        wrap.__loomLit = true;
+      } else if (!on && wrap.__loomLit) {
+        wrap.filters = null;
+        wrap.__loomLit = false;
+      }
+    });
+  }
+
   Loom.mapPaint = {
+    highlight: highlight,
     paint: paint,
     forget: forget,
     stats: stats,

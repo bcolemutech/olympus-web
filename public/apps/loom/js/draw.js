@@ -182,7 +182,9 @@
         return photo.visible;
       },
       update: function (o) {
-        container.position.set(o.x, o.y);
+        // A drawer may place it elsewhere than its point (the grid's isometric view).
+        var at = api.project ? api.project(o) : o;
+        container.position.set(at.x, at.y);
         options = o;
         // A portrait's link, or the player's own upload (L-933).
         var link = keyOf(o.picture);

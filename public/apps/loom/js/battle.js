@@ -46,6 +46,33 @@
   // Room above the grid (L-941, TV4): PAD, or more for walls standing on its
   // top edge to rise into; set with the map.
   var TOP = PAD;
+  // The isometric view (spike: planning/isometric-view.md §5), with ?view=iso:
+  // the grid's flat layers drawn under a 2:1 isometric transform, the
+  // standing layer built isometric by the painter, tokens, clicks and fading
+  // projected to match. The rules are untouched.
+  var QUERY = (window.location && window.location.search) || '';
+  var ISO = /[?&]view=iso\b/.test(QUERY);
+  var ISO_RISE = (function () {
+    var m = /[?&]rise=([0-9.]+)/.exec(QUERY);
+    return m ? Math.max(0.3, Math.min(2, Number(m[1]))) : 1.22;
+  })();
+  var ISO_PROPS = null; // the spike's isometric props: { kind: { facings, foot } }
+  if (ISO && window.fetch) {
+    window
+      .fetch('/apps/loom/art/iso/props.json')
+      .then(function (r) {
+        return r.ok ? r.json() : null;
+      })
+      .then(function (json) {
+        ISO_PROPS = json || {};
+        battle.paintedFor = null; // painted again with them
+        battle.version += 1;
+        if (engine && engine.draw) engine.draw();
+      })
+      .catch(function () {
+        ISO_PROPS = {};
+      });
+  }
   var RISE_PX = 0; // how far up the screen the tallest wall rises
   var STEP_MS = 110; // the token's walk: a square (5 ft) in this long
   var DOOR_HIT = 0.2; // squares from a door's line that a click picks it
@@ -346,8 +373,90 @@
 
   // The room above the grid (TV4): its tallest wall's rise, and a little.
   function topOf(d) {
-    RISE_PX = d ? (Loom.mapPaint.riseOf(MP.geometryOf(d), { feet: 1 }) / MP.FEET) * CELL : 0;
+    var opts = ISO ? { feet: 1, iso: { rise: ISO_RISE } } : { feet: 1 };
+    RISE_PX = d ? (Loom.mapPaint.riseOf(MP.geometryOf(d), opts) / MP.FEET) * CELL : 0;
+    if (ISO) return PAD;
     return d ? Math.max(PAD, Math.ceil(RISE_PX + 24)) : PAD;
+  }
+
+  // ── The isometric view (spike) ────────────────────
+
+  // Where the map's north-west corner stands: its west corner at the left
+  // edge, room above for what rises at its north edge.
+  function isoOrigin() {
+    var d = battle.data;
+    return { x: PAD + (d ? d.height * CELL : 0), y: PAD + RISE_PX };
+  }
+
+  // A point on the grid (its own coordinates, PAD and TOP at its corner) on the
+  // isometric screen, and back.
+  function toIso(g) {
+    var o = isoOrigin();
+    var u = g.x - PAD;
+    var v = g.y - TOP;
+    return { x: o.x + u - v, y: o.y + (u + v) / 2 };
+  }
+
+  function fromIso(s) {
+    var o = isoOrigin();
+    var a = s.x - o.x; // u − v
+    var b = 2 * (s.y - o.y); // u + v
+    return { x: PAD + (a + b) / 2, y: TOP + (b - a) / 2 };
+  }
+
+  // A point on the isometric screen in the painter's standing units (feet).
+  function isoUnits(s) {
+    var o = isoOrigin();
+    var k = MP.FEET / CELL;
+    return { x: (s.x - o.x) * k, y: (s.y - o.y) * k };
+  }
+
+  // A floor point in feet, in those units.
+  function isoFeet(f) {
+    return { x: f.x - f.y, y: (f.x + f.y) / 2 };
+  }
+
+  // The walls-low button (IS4, spike): every wall drops to a stub, and back.
+  function wallsButton() {
+    if (!ISO || battle.wallsButton || !document.body) return;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'loom-iso-walls';
+    b.textContent = 'Walls: up';
+    b.style.cssText =
+      'position:fixed;right:16px;bottom:16px;z-index:50;padding:8px 14px;border-radius:8px;' +
+      'border:1px solid #c9a35a;background:#1d2230;color:#f0e6d0;font:600 14px sans-serif;cursor:pointer';
+    b.addEventListener('click', function () {
+      battle.wallsLow = !battle.wallsLow;
+      b.textContent = battle.wallsLow ? 'Walls: low' : 'Walls: up';
+      battle.paintedFor = null;
+      battle.version += 1;
+      engine.draw();
+    });
+    document.body.appendChild(b);
+    battle.wallsButton = b;
+  }
+
+  // What a click at a point on the isometric screen would pick, lit (IN1).
+  function lightUnder(raw) {
+    if (!ISO || !battle.data) return;
+    var hit = null;
+    if (raw) {
+      var p = isoUnits(raw);
+      hit = Loom.mapPaint.standingAt('battle:' + battle.data.id, p.x, p.y);
+    }
+    if (hit === battle.lit) return;
+    battle.lit = hit;
+    Loom.mapPaint.highlight('battle:' + battle.data.id, hit);
+  }
+
+  function applyIso(n) {
+    wallsButton();
+    if (!ISO || !n.flat) return;
+    var o = isoOrigin();
+    var m = new window.PIXI.Matrix(1, 0.5, -1, 0.5, o.x - PAD + TOP, o.y - (PAD + TOP) / 2);
+    n.flat.setFromMatrix(m);
+    n.flatTop.setFromMatrix(m);
   }
 
   // Whether bit `i` is set in squares packed as the server packs them (one bit
@@ -577,6 +686,10 @@
   /** The map's coordinate space: the grid, with room around it. */
   function bounds() {
     var d = battle.data;
+    if (ISO && d) {
+      var span = (d.width + d.height) * CELL;
+      return { width: span + 2 * PAD, height: span / 2 + isoOrigin().y + PAD };
+    }
     return d
       ? { width: d.width * CELL + 2 * PAD, height: d.height * CELL + TOP + PAD }
       : { width: 1, height: 1 };
@@ -585,6 +698,14 @@
   /** The grid, for framing: a battle map is small enough to show whole. */
   function framePoints() {
     var d = battle.data;
+    if (ISO) {
+      var o = isoOrigin();
+      var span = (d.width + d.height) * CELL;
+      return [
+        { x: PAD, y: o.y - RISE_PX },
+        { x: PAD + span, y: o.y + span / 2 },
+      ];
+    }
     return [
       { x: PAD, y: TOP - RISE_PX }, // with the walls standing on its top edge (TV4)
       { x: PAD + d.width * CELL, y: TOP + d.height * CELL },
@@ -625,8 +746,18 @@
     };
     n.art.alpha = 0.95;
     n.you.container.__loomPainted = { layer: 'standing', kind: 'token', id: 'you' };
-    n.scene.addChild(n.ground, n.art, n.painted, n.under, n.fogDark, n.mist);
-    n.scene.addChild(n.standing, n.standMask, n.fogDim, n.labels, n.over, n.cards);
+    if (ISO) {
+      n.flat = new PIXI.Container();
+      n.flatTop = new PIXI.Container();
+      n.flat.addChild(n.ground, n.art, n.painted, n.under, n.fogDark, n.mist);
+      n.flatTop.addChild(n.fogDim, n.over);
+      n.standing.sortableChildren = true;
+      n.scene.addChild(n.flat, n.standing, n.standMask, n.flatTop, n.labels, n.cards);
+      n.you.project = toIso;
+    } else {
+      n.scene.addChild(n.ground, n.art, n.painted, n.under, n.fogDark, n.mist);
+      n.scene.addChild(n.standing, n.standMask, n.fogDim, n.labels, n.over, n.cards);
+    }
     container.addChild(n.scene);
     battle.nodes = n;
   }
@@ -680,7 +811,7 @@
     if (container.parent !== stand) stand.addChild(container);
     container.__loomFoot = radius;
     container.__loomStanding = standing !== false;
-    container.zIndex = at.y;
+    container.zIndex = ISO ? toIso(at).y : at.y;
     if (container.__loomPainted) {
       container.__loomPainted.depth = Math.round(((at.y - TOP) / CELL) * MP.FEET * 100) / 100;
     }
@@ -733,6 +864,37 @@
     }
     var seen = unpacked(d.fog.seen);
     var rise = RISE_PX + CELL / 2; // the tallest wall's rise, and some
+    if (ISO) {
+      for (var yi = 0; yi < d.height; yi++) {
+        for (var xi = 0; xi < d.width; xi++) {
+          if (!seen(yi * d.width + xi)) continue;
+          var gx = PAD + xi * CELL;
+          var gy = TOP + yi * CELL;
+          var L = toIso({ x: gx, y: gy + CELL });
+          var T = toIso({ x: gx, y: gy });
+          var R = toIso({ x: gx + CELL, y: gy });
+          var B = toIso({ x: gx + CELL, y: gy + CELL });
+          g.poly([
+            L.x,
+            L.y + 1,
+            L.x,
+            L.y - rise,
+            T.x,
+            T.y - rise,
+            R.x,
+            R.y - rise,
+            R.x,
+            R.y + 1,
+            B.x,
+            B.y + 1,
+          ]);
+        }
+      }
+      g.fill({ color: 0xffffff });
+      g.visible = true;
+      n.standing.mask = g;
+      return;
+    }
     for (var y = 0; y < d.height; y++) {
       var x = 0;
       while (x < d.width) {
@@ -840,7 +1002,10 @@
       feet: 1,
       fades: true, // walls over a token fade (L-942), so they're cut along their length
       stand: n.standing,
-      standAt: { x: PAD, y: TOP, scale: CELL / MP.FEET },
+      standAt: ISO
+        ? { x: isoOrigin().x, y: isoOrigin().y, scale: CELL / MP.FEET }
+        : { x: PAD, y: TOP, scale: CELL / MP.FEET },
+      iso: ISO ? { rise: ISO_RISE, props: ISO_PROPS || {}, low: Boolean(battle.wallsLow) } : null,
       art: Boolean(d.image),
       tint: accent(),
       worldKinds: d.objectKinds || null,
@@ -862,6 +1027,7 @@
     var cellPx = CELL * view.scale;
     var gw = d.width * CELL;
     var gh = d.height * CELL;
+    applyIso(n);
 
     n.ground.clear();
     n.ground
@@ -1042,6 +1208,7 @@
       var token = battle.tokens[person.id || person.name];
       if (!token) {
         token = Loom.draw.token();
+        if (ISO) token.project = toIso;
         battle.tokens[person.id || person.name] = token;
         token.container.__loomPainted = {
           layer: 'standing',
@@ -1193,6 +1360,15 @@
       Loom.draw.polyline(o, [spot(hereFeet())].concat(plan.path.map(centre)), [2 * px, 7 * px]);
       o.stroke({ width: 3 * px, color: COLOURS.path, alpha: 0.5, cap: 'round' });
     }
+    if (ISO) {
+      // Labels sit on the isometric screen, upright.
+      n.labels.children.forEach(function (node) {
+        if (node.__iso) return;
+        var p = toIso(node.position);
+        node.position.set(p.x, p.y);
+        node.__iso = true;
+      });
+    }
   }
 
   // A label over a square of the path preview (L-837): its cost; or, under
@@ -1230,7 +1406,7 @@
     n.scene.scale.set(view.scale);
     // Only what's on the screen is drawn (L-943; EN5): the rest stays built.
     var shown = engine.size();
-    Loom.mapPaint.cull('battle:' + battle.data.id, shown.width, shown.height);
+    if (!ISO) Loom.mapPaint.cull('battle:' + battle.data.id, shown.width, shown.height);
     if (battle.playback) drawPlayback(view);
 
     // You: along your walk, or where you stand.
@@ -1267,12 +1443,13 @@
     var stand = Loom.mapPaint.standOf(key);
     var out = [];
     var spot1 = function (p) {
+      if (ISO) p = isoFeet(p);
       out.push({ box: { x0: p.x, y0: p.y, x1: p.x, y1: p.y }, depth: p.y });
     };
     if (stand) {
       stand.children.forEach(function (child) {
         if (child.__loomFoot === undefined || !child.visible) return;
-        var c = feetOf(child.position);
+        var c = ISO ? isoUnits(child.position) : feetOf(child.position);
         var r = (child.__loomFoot / CELL) * MP.FEET;
         // A standing disc (L-932) rises from its foot; one lying down covers its spot.
         out.push(
@@ -1422,11 +1599,21 @@
 
   // The object there is something to do with whose standing picture is under
   // a point (L-941; paint.js standingAt), the front-most, or null.
-  function standingObjectAt(m) {
-    if (!battle.data) return null;
-    var p = feetOf(m);
+  // A door standing under a point on the isometric screen (spike): its leaf
+  // or the wall over its doorway, so a door is picked by what's drawn of it.
+  function standingDoorAt(raw) {
+    if (!ISO || !battle.data || !raw) return null;
+    var p = isoUnits(raw);
     var id = Loom.mapPaint.standingAt('battle:' + battle.data.id, p.x, p.y);
-    if (!id) return null;
+    if (!id || String(id).indexOf('door:') !== 0) return null;
+    return doorById(String(id).slice(5));
+  }
+
+  function standingObjectAt(m, raw) {
+    if (!battle.data) return null;
+    var p = ISO && raw ? isoUnits(raw) : feetOf(m);
+    var id = Loom.mapPaint.standingAt('battle:' + battle.data.id, p.x, p.y);
+    if (!id || String(id).indexOf('door:') === 0) return null;
     var o = ((battle.data && battle.data.objects) || []).filter(function (x) {
       return x.id === id;
     })[0];
@@ -1630,10 +1817,11 @@
       return;
     }
     var d = battle.data;
-    var m = M.toMap(view, point.x, point.y);
+    var raw = M.toMap(view, point.x, point.y);
+    var m = ISO ? fromIso(raw) : raw;
     // A standing object's picture first (L-941): it rises over what's behind it.
-    var standing = standingObjectAt(m);
-    var door = standing ? null : doorAt(m);
+    var standing = standingObjectAt(m, raw);
+    var door = standing ? null : standingDoorAt(raw) || doorAt(m);
     if (door) {
       battle.selectedDoor = door.id;
       battle.selectedObject = null;
@@ -1991,7 +2179,10 @@
       );
       if (token.person) {
         token.update(personToken(token.person, at[id], token.radius, id === playing));
-      } else token.container.position.set(at[id].x, at[id].y);
+      } else {
+        var shown = ISO ? toIso(at[id]) : at[id];
+        token.container.position.set(shown.x, shown.y);
+      }
     });
   }
 
@@ -2034,6 +2225,7 @@
   /** A hover over the grid shows it can be clicked. */
   function hover(point, view) {
     if (!point || !battle.data) {
+      lightUnder(null);
       engine.panelCursor('');
       if (battle.cursor) {
         battle.cursor = null;
@@ -2041,14 +2233,18 @@
       }
       return;
     }
-    var m = M.toMap(view, point.x, point.y);
+    var raw = M.toMap(view, point.x, point.y);
+    var m = ISO ? fromIso(raw) : raw;
     battle.cursor = feetOf(m);
+    lightUnder(raw);
     fadeSoon();
     var d = battle.data;
     var gx = (m.x - PAD) / CELL;
     var gy = (m.y - TOP) / CELL;
     var onGrid = gx >= 0 && gy >= 0 && gx < d.width && gy < d.height;
-    engine.panelCursor(standingObjectAt(m) || doorAt(m) || onGrid ? 'pointer' : '');
+    engine.panelCursor(
+      standingObjectAt(m, raw) || standingDoorAt(raw) || doorAt(m) || onGrid ? 'pointer' : ''
+    );
   }
 
   // ── The card ──────────────────────────────────────

@@ -1,0 +1,56 @@
+{
+  "chest": {
+    "facings": ["/apps/loom/art/iso/chest.webp", "/apps/loom/art/iso/chest-back.webp"],
+    "foot": [0.5, 0.98],
+    "long": "x"
+  },
+  "barrel": {
+    "facings": ["/apps/loom/art/iso/barrel.webp", "/apps/loom/art/iso/barrel.webp"],
+    "foot": [0.5, 0.98]
+  },
+  "crate": {
+    "facings": ["/apps/loom/art/iso/crate.webp", "/apps/loom/art/iso/crate.webp"],
+    "foot": [0.5, 0.98]
+  },
+  "table": {
+    "facings": ["/apps/loom/art/iso/table.webp", "/apps/loom/art/iso/table.webp"],
+    "foot": [0.5, 0.98],
+    "long": "y"
+  },
+  "chair": {
+    "facings": ["/apps/loom/art/iso/chair.webp", "/apps/loom/art/iso/chair-back.webp"],
+    "foot": [0.5, 0.98]
+  },
+  "bookshelf": {
+    "facings": ["/apps/loom/art/iso/bookshelf.webp", "/apps/loom/art/iso/bookshelf-back.webp"],
+    "foot": [0.5, 0.98],
+    "long": "x"
+  },
+  "bed": {
+    "facings": ["/apps/loom/art/iso/bed.webp", "/apps/loom/art/iso/bed-back.webp"],
+    "foot": [0.5, 0.98],
+    "long": "y"
+  },
+  "wardrobe": {
+    "facings": ["/apps/loom/art/iso/wardrobe.webp", "/apps/loom/art/iso/wardrobe-back.webp"],
+    "foot": [0.5, 0.98],
+    "long": "x"
+  },
+  "altar": {
+    "facings": ["/apps/loom/art/iso/altar.webp", "/apps/loom/art/iso/altar-back.webp"],
+    "foot": [0.5, 0.98],
+    "long": "x"
+  },
+  "brazier": {
+    "facings": ["/apps/loom/art/iso/brazier.webp", "/apps/loom/art/iso/brazier.webp"],
+    "foot": [0.5, 0.98]
+  },
+  "statue": {
+    "facings": ["/apps/loom/art/iso/statue.webp", "/apps/loom/art/iso/statue.webp"],
+    "foot": [0.5, 0.98]
+  },
+  "pillar": {
+    "facings": ["/apps/loom/art/iso/pillar.webp", "/apps/loom/art/iso/pillar.webp"],
+    "foot": [0.5, 0.98]
+  }
+}
