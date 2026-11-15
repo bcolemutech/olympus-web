@@ -1,6 +1,6 @@
 # The Loom — The Isometric View — Design Document v0.1
 
-**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. A spike comes first (§5); the stories of L-950 and L-960 (§6) are filed after its checkpoint.
+**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md), 2026-11-15), waiting on the user's checkpoint; the stories of L-950 and L-960 (§6) are filed after it.
 **Project:** Olympus (`olympus-dfa00`)
 **Epics:** L-950 the isometric view (#852), L-960 reworking the worlds (#853); Phase 10 — Levels and Vehicles (milestone #26).
 **Replaces:** the three-quarter view on grid maps ([`game-art.md`](./game-art.md), L-941). Town and region maps keep it.
