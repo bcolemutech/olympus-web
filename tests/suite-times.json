@@ -55,5 +55,6 @@
   "loom-sight-play.test.js": 5,
   "loom-turns-ap-play.test.js": 5,
   "studio-edit.test.js": 5,
-  "studio-library.test.js": 5
+  "studio-library.test.js": 5,
+  "loom-iso-view.test.js": 24
 }
