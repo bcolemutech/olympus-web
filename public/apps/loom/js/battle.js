@@ -462,8 +462,60 @@
     },
   };
 
+  // What a map sent and what's drawn of it, with &debug=1 (spike).
+  function isoReadout() {
+    if (!ISO || !/[?&]debug=1\b/.test(QUERY) || !document.body || !battle.data) return;
+    var box = battle.readout;
+    if (!box) {
+      box = document.createElement('pre');
+      box.style.cssText =
+        'position:fixed;left:8px;bottom:70px;z-index:50;margin:0;padding:6px 8px;max-width:70vw;' +
+        'background:rgba(0,0,0,.75);color:#cfe;font:11px monospace;white-space:pre-wrap;pointer-events:none';
+      document.body.appendChild(box);
+      battle.readout = box;
+    }
+    var d = battle.data;
+    var g = MP.geometryOf(d) || {};
+    var len = function (k) {
+      return Array.isArray(g[k]) ? g[k].length : 0;
+    };
+    var stand = Loom.mapPaint.standOf('battle:' + d.id);
+    var kinds = {};
+    (stand ? stand.children : []).forEach(function (c) {
+      var k = (c.__loomPainted && c.__loomPainted.kind) || '?';
+      kinds[k] = (kinds[k] || 0) + 1;
+    });
+    var r = window.__PIXI_RENDERER__ || (engine.renderer && engine.renderer()) || null;
+    box.textContent =
+      'map ' +
+      d.id +
+      ' ' +
+      d.width +
+      'x' +
+      d.height +
+      (d.image ? ' IMAGE' : '') +
+      ' set=' +
+      (d.artSet || '-') +
+      '\nsent: ground ' +
+      len('ground') +
+      ', walls ' +
+      len('walls') +
+      ', doors ' +
+      len('doors') +
+      ', windows ' +
+      len('windows') +
+      ', objects ' +
+      len('objects') +
+      '\nstanding: ' +
+      JSON.stringify(kinds) +
+      '\nmask: ' +
+      Boolean(battle.nodes && battle.nodes.standing.mask) +
+      (r && r.name ? ' renderer: ' + r.name : '');
+  }
+
   function applyIso(n) {
     wallsButton();
+    window.setTimeout(isoReadout, 1500);
     if (!ISO || !n.flat) return;
     var o = isoOrigin();
     var m = new window.PIXI.Matrix(1, 0.5, -1, 0.5, o.x - PAD + TOP, o.y - (PAD + TOP) / 2);
@@ -1003,7 +1055,9 @@
     Object.keys(merged).forEach(function (k) {
       geometry[k] = merged[k];
     });
-    if (d.image) {
+    // The isometric view draws every grid from its data (AR2): a map's own
+    // painting is at most its floor, never its walls or doors.
+    if (d.image && !ISO) {
       geometry.objects = (merged.objects || []).filter(function (o) {
         return String(o.id).indexOf('layer-') !== 0;
       });
@@ -1018,7 +1072,7 @@
         ? { x: isoOrigin().x, y: isoOrigin().y, scale: CELL / MP.FEET }
         : { x: PAD, y: TOP, scale: CELL / MP.FEET },
       iso: ISO ? { rise: ISO_RISE, props: ISO_PROPS || {}, low: Boolean(battle.wallsLow) } : null,
-      art: Boolean(d.image),
+      art: ISO ? false : Boolean(d.image),
       tint: accent(),
       worldKinds: d.objectKinds || null,
       set: d.artSet || null, // the world's art set (L-944)
