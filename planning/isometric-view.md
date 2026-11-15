@@ -1,6 +1,6 @@
 # The Loom — The Isometric View — Design Document v0.1
 
-**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. A spike comes first (§5); the stories of L-950 and L-960 (§6) are filed after its checkpoint.
+**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md)); its checkpoint is answered (§3, 2026-11-15). L-950's stories L-951 to L-957 are filed as #857–#863 (§6); L-960's are filed when it is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epics:** L-950 the isometric view (#852), L-960 reworking the worlds (#853); Phase 10 — Levels and Vehicles (milestone #26).
 **Replaces:** the three-quarter view on grid maps ([`game-art.md`](./game-art.md), L-941). Town and region maps keep it.
@@ -86,6 +86,16 @@ Settled through a questionnaire. AR2 was then refined by a follow-up question.
 | **PL3** | Grading                        | **Unchanged:** a map's own art keeps its bonus. The user: "Gemini-generated images will always look better. It just needs to be generated in the same isometric perspective in order to support map data." Own art counts when it is made for the isometric view (AR3) |
 | **PL4** | Exit criterion                 | **As proposed** (§7)                                                                                                                                                                                                                                                   |
 
+### The checkpoint (the user, 2026-11-15, after playing the preview)
+
+| ID     | Question                         | Decision                                                                                                                                                                                                                                                                                      |
+| ------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C1** | Go ahead?                        | **Yes**                                                                                                                                                                                                                                                                                       |
+| **C2** | How tall walls look              | **The true 2:1 height:** a foot of height rises 1.22 floor units up the screen                                                                                                                                                                                                                |
+| **C3** | The props' look                  | **Approved** for the whole set                                                                                                                                                                                                                                                                |
+| **C4** | Isometric paintings of grid maps | **Floor only:** a grid's own painting is its floor, under walls, doors and props standing from its data                                                                                                                                                                                       |
+| **C5** | Anything wrong in play           | **Props looked small and rooms empty.** Scaling floors, doors or props didn't help (tried on the preview); the user: "we probably just need to fill the rooms more so they don't seem so empty. Not a problem I want to deal with now." Left to the rework (L-960), with `dress_room` (L-945) |
+
 ---
 
 ## 4. Design
@@ -95,7 +105,7 @@ Settled through a questionnaire. AR2 was then refined by a follow-up question.
 - **Grid maps only** are drawn isometric. A grid opened from a town zooms in as today and is drawn in its own projection.
 - **2:1 dimetric:** a point `(x, y)` in feet at height `z` is drawn at `sx = (x − y) · k`, `sy = (x + y) · k / 2 − z · k · r`.
   - `k` sets the zoom; a 5 ft square is a diamond twice as wide as tall.
-  - `r` sets how tall a foot of height looks; the spike settles it.
+  - `r` sets how tall a foot of height looks: 1.22, the true 2:1 height (C2).
   - The map's north points to the top right of the screen.
 - **Clicks on the floor** are worked back from the screen (`x`, `y` at the floor's height under the pointer).
 - **The camera** pans and zooms as now, over the map's diamond. A margin leaves room for walls and props rising at its top edge.
@@ -107,8 +117,8 @@ Settled through a questionnaire. AR2 was then refined by a follow-up question.
 - **Walls** are prisms: the geometry's line given a thickness by material (about a foot) and its height. Each side face is drawn with the material's face picture laid onto it, shaded by its direction. The top cap uses the material's top texture.
 - **Doors and windows** stand in walls in both directions as panels laid onto the wall's plane. An open door swings into the room.
 - **Props** stand on their feet at their size in feet. Their picture is chosen by facing: the object's `turn` picks one of two painted facings, mirrored for the other two.
-- **Depth order:** everything standing (walls, doors, props, tokens) is sorted by its foot's depth on screen (`x + y`), ties broken by height. A long wall is split into segments so it sorts correctly against what stands beside it.
-- **Contact shadows** sit under props and tokens and along walls' feet, laid on the floor plane. Culling works on screen boxes.
+- **Depth order:** everything standing (walls, doors, props, tokens) is drawn back to front. One depth number per piece mis-orders a prop beside a wall (the spike's desk showed through a wall near its end), so pieces whose drawn shapes overlap are ordered by which side of a wall each stands on, the way isometric engines sort, and tokens are placed in that order as they move. Walls are cut into pieces of at most half a tile.
+- **Contact shadows** sit under props and tokens and along walls' feet, laid on the floor plane. **Culling works on isometric screen boxes:** the spike drew 15–50% slower without it.
 - **Fog** darkens the floor diamonds not seen, and dims what stands on them.
 
 ### 4.3 Seeing behind walls and clicking (IS4, IN1, IN2)
@@ -125,11 +135,11 @@ Settled through a questionnaire. AR2 was then refined by a follow-up question.
 - **The art set** gains isometric props: each catalog object and decor kind in two facings, made with the studio in a new saved style ("Loom painted isometric"). They are reviewed by board per batch (AR4) and packed into atlases within the size budget (L-944). The three-quarter props stay for town maps.
 - **The manifest** gives each object an `iso: { facings: [picture, picture], foot }` beside its three-quarter picture.
 - **Library images** get a `view`: `iso`, `three-quarter` or `top-down`, set by `studio_generate`, `studio_import` and `studio_update`. Assigning art to a grid map, an object kind, a world material or an object checks it. On grid maps the painter draws only `iso` art, else the set's.
-- **Grid paintings:** top-down paintings are no longer drawn on grid maps (AR2). How an isometric painting is drawn is decided at the spike's checkpoint (§5.3).
+- **Grid paintings (AR2, C4):** today's top-down paintings, which show walls and furniture, are no longer drawn on grid maps. A grid's own painting is a **floor painting** (`view: 'floor'`): its floors only, painted from a guide of the map's floor geometry (`view_image` with `floor: true`). The painter lays it under everything standing, as the isometric floor, exactly as it lays a floor picture. Walls, doors and props always stand from the data, so fading, walls-low and doors' states keep working.
 
 ### 4.5 Grading (PL3)
 
-Unchanged in its criteria: a map's look counts (L-947), and a map's own art keeps its bonus. On a grid map, only art made for the isometric view counts toward the look and the bonus.
+Unchanged in its criteria: a map's look counts (L-947), and a map's own art keeps its bonus. On a grid map, only art made for the isometric view counts toward the look, and a floor painting earns the own-art bonus.
 
 ### 4.6 Unpublishing (WD1)
 
@@ -180,29 +190,29 @@ The stories of §6 are then filed, updated for what the spike found.
 
 ---
 
-## 6. Epics and sub-issues (planned; filed after the spike)
+## 6. Epics and sub-issues
 
 ### L-950 The isometric view
 
-| ID    | Story                                                                                                                                                                         | Depends on | Model  |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
-| L-951 | **The projection and camera:** isometric grid maps in the engine, floor picking, pan and zoom, the margin, the 5 ft diamonds                                                  | —          | Opus   |
-| L-952 | **The painter in isometric:** floors laid on the plane, walls as prisms with faces and caps, doors and windows both ways, props by facing, depth order, shadows, culling, fog | L-951      | Opus   |
-| L-953 | **Seeing and picking:** fading in isometric, the walls-low button, front-most picking with the hover outline, doorway targets                                                 | L-952      | Opus   |
-| L-954 | **The isometric props:** the style, 45 objects and decor in two facings, boards per batch, the manifest's facings, atlases in the budget                                      | —          | Sonnet |
-| L-955 | **Art by view:** images' `view`, a world's own art filtered on grids, grid paintings retired, isometric paintings as the spike decides                                        | L-952      | Sonnet |
-| L-956 | **Grading:** the look and the own-art bonus counting isometric art on grids                                                                                                   | L-955      | Sonnet |
-| L-957 | **Unpublishing worlds:** `unpublish_world`, the page's button, saves paused                                                                                                   | —          | Sonnet |
+| ID           | Story                                                                                                                                                                         | Depends on | Model  |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
+| L-951 (#857) | **The projection and camera:** isometric grid maps in the engine, floor picking, pan and zoom, the margin, the 5 ft diamonds                                                  | —          | Opus   |
+| L-952 (#858) | **The painter in isometric:** floors laid on the plane, walls as prisms with faces and caps, doors and windows both ways, props by facing, depth order, shadows, culling, fog | L-951      | Opus   |
+| L-953 (#859) | **Seeing and picking:** fading in isometric, the walls-low button, front-most picking with the hover outline, doorway targets                                                 | L-952      | Opus   |
+| L-954 (#860) | **The isometric props:** the style, 45 objects and decor in two facings, boards per batch, the manifest's facings, atlases in the budget                                      | —          | Sonnet |
+| L-955 (#861) | **Art by view, and floor paintings:** images' `view`, a world's own art filtered on grids, top-down grid paintings retired, floor paintings (C4)                              | L-952      | Sonnet |
+| L-956 (#862) | **Grading:** the look and the own-art bonus counting isometric art on grids                                                                                                   | L-955      | Sonnet |
+| L-957 (#863) | **Unpublishing worlds:** `unpublish_world`, the page's button, saves paused                                                                                                   | —          | Sonnet |
 
 **Order:** L-951, L-954 and L-957 can start at once. L-952 follows L-951. L-953 and L-955 follow L-952. L-956 follows L-955. When the epic ships, the three worlds are unpublished (WD1).
 
 ### L-960 Reworking the worlds
 
-| ID    | Story                                                                                                                                                   | Depends on | Model |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----- |
-| L-961 | **The Border March:** every grid dressed from data (materials, props, decor with `dress_room`), its own art made isometric, played through, republished | L-950      | Opus  |
-| L-962 | **The Corpse Tide:** the same                                                                                                                           | L-961      | Opus  |
-| L-963 | **Nisia:** the same, its 43 painted battle maps first, split by region as the work list shows                                                           | L-962      | Opus  |
+| ID    | Story                                                                                                                                                                                                     | Depends on | Model |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----- |
+| L-961 | **The Border March:** every grid dressed from data (materials, props, and rooms filled with decor by `dress_room`, so they don't read empty, C5), its own art made isometric, played through, republished | L-950      | Opus  |
+| L-962 | **The Corpse Tide:** the same                                                                                                                                                                             | L-961      | Opus  |
+| L-963 | **Nisia:** the same, its 43 painted battle maps first, split by region as the work list shows                                                                                                             | L-962      | Opus  |
 
 ---
 
