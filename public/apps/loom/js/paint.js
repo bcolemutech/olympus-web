@@ -654,9 +654,40 @@
         depth: isoP(mid, 0).y,
         box: boxOf(corners, 0),
         hit: o.hit || null,
+        outline: hull(corners),
       });
     }
     return parts;
+  }
+
+  // The convex hull of points (the spike's painting trial cuts a painting to it).
+  function hull(points) {
+    var ps = points.slice().sort(function (a, b) {
+      return a.x - b.x || a.y - b.y;
+    });
+    var cross = function (o, a, b) {
+      return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    };
+    var lower = [];
+    var upper = [];
+    ps.forEach(function (p) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+        lower.pop();
+      }
+      lower.push(p);
+    });
+    ps.slice()
+      .reverse()
+      .forEach(function (p) {
+        while (
+          upper.length >= 2 &&
+          cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0
+        ) {
+          upper.pop();
+        }
+        upper.push(p);
+      });
+    return lower.slice(0, -1).concat(upper.slice(0, -1));
   }
 
   // A face's shade by the way it faces (light from the upper left): faces
@@ -1884,6 +1915,7 @@
       wrap.__loomDepth = part.depth;
       wrap.__loomBox = part.box || null;
       wrap.__loomHit = part.hit || null;
+      wrap.__loomOutline = part.outline || null;
       // What fades over what's behind it (L-942): walls, windows and doors
       // (an open door's leaf and the wall over its doorway too), and tall objects.
       wrap.__loomFades =

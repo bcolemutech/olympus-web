@@ -450,6 +450,18 @@
     Loom.mapPaint.highlight('battle:' + battle.data.id, hit);
   }
 
+  // For the spike's painting trial (headless): the nodes and the projection.
+  battle.isoDebug = {
+    nodes: function () {
+      return battle.nodes;
+    },
+    toIso: toIso,
+    origin: isoOrigin,
+    unit: function () {
+      return CELL / MP.FEET;
+    },
+  };
+
   function applyIso(n) {
     wallsButton();
     if (!ISO || !n.flat) return;
@@ -2158,7 +2170,8 @@
         // Over its disc, standing on its base (L-932).
         var held = battle.tokens[st.id];
         var r = held && held.container.__loomFoot ? held.container.__loomFoot : CELL * 0.32;
-        node.position.set(at[st.id].x, at[st.id].y - r * Loom.draw.standHeight() - CELL * 0.3);
+        var over = ISO ? toIso(at[st.id]) : at[st.id];
+        node.position.set(over.x, over.y - r * Loom.draw.standHeight() - CELL * 0.3);
         n.cards.addChild(node);
       }
     });
@@ -2401,6 +2414,7 @@
   });
 
   Loom.battle = {
+    isoDebug: battle.isoDebug,
     setData: setData,
     reset: reset,
     bounds: bounds,
