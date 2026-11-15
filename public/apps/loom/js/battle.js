@@ -47,6 +47,19 @@
   // top edge to rise into; set with the map.
   var TOP = PAD;
   var RISE_PX = 0; // how far up the screen the tallest wall rises
+  // The isometric view (planning/isometric-view.md §4.1, IS1, IS2, IN2, C2;
+  // L-951 / #857): the grid turned 45° and drawn 2:1, a square a diamond
+  // twice as wide as tall, its north to the top right, and a foot of height
+  // rising ISO_RISE floor units up the screen. What lies on the floor (the
+  // painter's ground and, until L-952 stands them up, its walls, doors and
+  // objects lying flat; the reach, areas, hazards, fog, the path and
+  // selections) is drawn on the grid as before, under one transform; tokens,
+  // names and foes' cards are placed on the isometric screen, upright; clicks
+  // are worked back to the floor. The rules stay on the flat grid, in feet.
+  // Behind a switch until the view is whole (L-953): `?view=iso` on the page,
+  // or Loom.battle.setIso(true).
+  var ISO_RISE = 1.22;
+  var iso = /[?&]view=iso(&|#|$)/.test((window.location && window.location.search) || '');
   var STEP_MS = 110; // the token's walk: a square (5 ft) in this long
   var DOOR_HIT = 0.2; // squares from a door's line that a click picks it
 
@@ -176,6 +189,65 @@
   // A point in feet (L-922) in map coordinates.
   function spot(p) {
     return { x: PAD + (p.x / MP.FEET) * CELL, y: TOP + (p.y / MP.FEET) * CELL };
+  }
+
+  // ── The projection (L-951) ────────────────────────
+  //
+  // Map coordinates are the grid's, as the floor is drawn: PAD and TOP at its
+  // north-west corner, CELL a square. The scene is what the camera sees: the
+  // same in the three-quarter view; in the isometric one, a grid point (u, v)
+  // from the corner is drawn at (u − v, (u + v) / 2) from isoOrigin().
+
+  // Where the map's north-west corner is drawn in isometric: its west corner
+  // (the map's south-west) at the left margin, room above for what rises at
+  // its north edge.
+  function isoOrigin() {
+    var d = battle.data;
+    return { x: PAD + (d ? d.height * CELL : 0), y: PAD + RISE_PX };
+  }
+
+  // A point in map coordinates on the scene.
+  function toScene(g) {
+    if (!iso) return { x: g.x, y: g.y };
+    var o = isoOrigin();
+    var u = g.x - PAD;
+    var v = g.y - TOP;
+    return { x: o.x + u - v, y: o.y + (u + v) / 2 };
+  }
+
+  // A point on the scene back on the floor, in map coordinates.
+  function toGrid(s) {
+    if (!iso) return { x: s.x, y: s.y };
+    var o = isoOrigin();
+    var a = s.x - o.x; // u − v
+    var b = 2 * (s.y - o.y); // u + v
+    return { x: PAD + (a + b) / 2, y: TOP + (b - a) / 2 };
+  }
+
+  // The transform that lays what's drawn in map coordinates on the scene.
+  function floorMatrix() {
+    var PIXI = window.PIXI;
+    if (!iso) return new PIXI.Matrix();
+    var o = isoOrigin();
+    return new PIXI.Matrix(1, 0.5, -1, 0.5, o.x - PAD + TOP, o.y - (PAD + TOP) / 2);
+  }
+
+  // Where the painter's standing layer has its map's corner on the scene, and
+  // its scale (its units are feet), for its parts and the drawer's tokens.
+  function standAt() {
+    var at = iso ? isoOrigin() : { x: PAD, y: TOP };
+    return { x: at.x, y: at.y, scale: CELL / MP.FEET };
+  }
+
+  // A point on the scene in the standing layer's units.
+  function standUnits(s) {
+    var at = standAt();
+    return { x: (s.x - at.x) / at.scale, y: (s.y - at.y) / at.scale };
+  }
+
+  // A floor point in feet on the scene.
+  function sceneOf(p) {
+    return toScene(spot(p));
   }
 
   // Where the player stands, in feet: sent with the map, else its square's centre.
@@ -344,9 +416,13 @@
     changed();
   }
 
-  // The room above the grid (TV4): its tallest wall's rise, and a little.
+  // The room above the grid (TV4): its tallest wall's rise, and a little. In
+  // isometric the grid's own corner is PAD, the room above is the diamond's
+  // (isoOrigin), at the true 2:1 rise (C2).
   function topOf(d) {
-    RISE_PX = d ? (Loom.mapPaint.riseOf(MP.geometryOf(d), { feet: 1 }) / MP.FEET) * CELL : 0;
+    var rise = iso ? { feet: 1, rise: ISO_RISE } : { feet: 1 };
+    RISE_PX = d ? (Loom.mapPaint.riseOf(MP.geometryOf(d), rise) / MP.FEET) * CELL : 0;
+    if (iso) return PAD;
     return d ? Math.max(PAD, Math.ceil(RISE_PX + 24)) : PAD;
   }
 
@@ -574,17 +650,31 @@
     setData(null);
   }
 
-  /** The map's coordinate space: the grid, with room around it. */
+  /**
+   * The map's coordinate space on the scene: the grid, with room around it;
+   * in isometric, its diamond, with room above for what rises at its north.
+   */
   function bounds() {
     var d = battle.data;
-    return d
-      ? { width: d.width * CELL + 2 * PAD, height: d.height * CELL + TOP + PAD }
-      : { width: 1, height: 1 };
+    if (!d) return { width: 1, height: 1 };
+    if (iso) {
+      var span = (d.width + d.height) * CELL;
+      return { width: span + 2 * PAD, height: isoOrigin().y + span / 2 + PAD };
+    }
+    return { width: d.width * CELL + 2 * PAD, height: d.height * CELL + TOP + PAD };
   }
 
   /** The grid, for framing: a battle map is small enough to show whole. */
   function framePoints() {
     var d = battle.data;
+    if (iso) {
+      var o = isoOrigin();
+      var span = (d.width + d.height) * CELL;
+      return [
+        { x: PAD, y: o.y - RISE_PX }, // with what rises at its north corner
+        { x: PAD + span, y: o.y + span / 2 },
+      ];
+    }
     return [
       { x: PAD, y: TOP - RISE_PX }, // with the walls standing on its top edge (TV4)
       { x: PAD + d.width * CELL, y: TOP + d.height * CELL },
@@ -592,7 +682,7 @@
   }
 
   function herePoint() {
-    return battle.data ? spot(hereFeet()) : null;
+    return battle.data ? sceneOf(hereFeet()) : null;
   }
 
   function selectHere() {
@@ -622,13 +712,30 @@
       over: new PIXI.Graphics(), // the selected square and the way
       you: Loom.draw.token(),
       cards: new PIXI.Container(), // foes' cards while their turns play out (L-828)
+      // What lies on the floor, in map coordinates, laid on the scene by the
+      // projection (L-951): under what stands, the dimming over it, and the
+      // selection and the way over the names.
+      floor: new PIXI.Container(),
+      floorDim: new PIXI.Container(),
+      floorOver: new PIXI.Container(),
     };
     n.art.alpha = 0.95;
     n.you.container.__loomPainted = { layer: 'standing', kind: 'token', id: 'you' };
-    n.scene.addChild(n.ground, n.art, n.painted, n.under, n.fogDark, n.mist);
-    n.scene.addChild(n.standing, n.standMask, n.fogDim, n.labels, n.over, n.cards);
+    n.floor.addChild(n.ground, n.art, n.painted, n.under, n.fogDark, n.mist);
+    n.floorDim.addChild(n.fogDim);
+    n.floorOver.addChild(n.over);
+    n.scene.addChild(n.floor, n.standing, n.standMask, n.floorDim, n.labels, n.floorOver, n.cards);
     container.addChild(n.scene);
     battle.nodes = n;
+  }
+
+  // The floor laid on the scene: flat in the three-quarter view, under the
+  // isometric transform in the isometric one.
+  function project(n) {
+    var m = floorMatrix();
+    [n.floor, n.floorDim, n.floorOver].forEach(function (layer) {
+      layer.setFromMatrix(m);
+    });
   }
 
   // A deterministic grain for the dark (A3): 0–1 from a square.
@@ -671,19 +778,22 @@
   }
 
   // A token in the standing layer (L-941), in its place in the order: its
-  // foot at `at`, where they stand (L-932: the disc stands upright on its
-  // base above it, `radius` its radius in map coordinates; someone down
-  // lies flat on it, `standing` false).
+  // foot at `at` (map coordinates), where they stand (L-932: the disc stands
+  // upright on its base above it, `radius` its radius on the scene; someone
+  // down lies flat on it, `standing` false). Returns where its foot is drawn
+  // on the scene, for the token to be placed there.
   function standToken(container, at, radius, standing) {
+    var foot = toScene(at);
     var stand = battle.data && Loom.mapPaint.standOf('battle:' + battle.data.id);
-    if (!stand) return;
+    if (!stand) return foot;
     if (container.parent !== stand) stand.addChild(container);
     container.__loomFoot = radius;
     container.__loomStanding = standing !== false;
-    container.zIndex = at.y;
+    container.zIndex = foot.y;
     if (container.__loomPainted) {
-      container.__loomPainted.depth = Math.round(((at.y - TOP) / CELL) * MP.FEET * 100) / 100;
+      container.__loomPainted.depth = Math.round(standUnits(foot).y * 100) / 100;
     }
+    return foot;
   }
 
   // A person's token as it is drawn (L-932): their picture, side, size and
@@ -721,7 +831,7 @@
   // wall's face rises up the screen over the squares beyond it, but nothing
   // standing on a square never seen shows.
   function maskStanding(n, d) {
-    var key = d.fog ? d.id + '|' + d.fog.seen + '|' + TOP : null;
+    var key = d.fog ? d.id + '|' + d.fog.seen + '|' + TOP + '|' + (iso ? RISE_PX : '') : null;
     if (battle.standMaskKey === key) return;
     battle.standMaskKey = key;
     var g = n.standMask;
@@ -742,7 +852,30 @@
         }
         var x0 = x;
         while (x < d.width && seen(y * d.width + x)) x += 1;
-        g.rect(PAD + x0 * CELL, TOP + y * CELL - rise, (x - x0) * CELL, CELL + rise);
+        if (!iso) {
+          g.rect(PAD + x0 * CELL, TOP + y * CELL - rise, (x - x0) * CELL, CELL + rise);
+          continue;
+        }
+        // In isometric (L-951) the run's floor is a parallelogram, west corner
+        // at its south-west and east at its north-east, swept up by the rise.
+        var west = toScene({ x: PAD + x0 * CELL, y: TOP + (y + 1) * CELL });
+        var north = toScene({ x: PAD + x0 * CELL, y: TOP + y * CELL });
+        var east = toScene({ x: PAD + x * CELL, y: TOP + y * CELL });
+        var south = toScene({ x: PAD + x * CELL, y: TOP + (y + 1) * CELL });
+        g.poly([
+          west.x,
+          west.y + 1,
+          west.x,
+          west.y - rise,
+          north.x,
+          north.y - rise,
+          east.x,
+          east.y - rise,
+          east.x,
+          east.y + 1,
+          south.x,
+          south.y + 1,
+        ]);
       }
     }
     g.fill({ color: 0xffffff });
@@ -840,7 +973,11 @@
       feet: 1,
       fades: true, // walls over a token fade (L-942), so they're cut along their length
       stand: n.standing,
-      standAt: { x: PAD, y: TOP, scale: CELL / MP.FEET },
+      standAt: standAt(),
+      // In isometric, nothing stands yet: walls, doors and objects lie on the
+      // floor under the projection until L-952 stands them up.
+      flat: iso,
+      rise: iso ? ISO_RISE : undefined,
       art: Boolean(d.image),
       tint: accent(),
       worldKinds: d.objectKinds || null,
@@ -862,6 +999,7 @@
     var cellPx = CELL * view.scale;
     var gw = d.width * CELL;
     var gh = d.height * CELL;
+    project(n);
 
     n.ground.clear();
     n.ground
@@ -940,8 +1078,10 @@
       g.stroke({ width: 1.5 * px, color: COLOURS.area, alpha: 0.45 });
     });
 
-    // The grid, when its squares are big enough to see.
-    if (cellPx >= 6) {
+    // The grid, when its squares are big enough to see; in isometric, faint
+    // 5 ft diamonds only while a move or an aim is being chosen (IN2).
+    battle.gridShown = cellPx >= 6 && (!iso || choosing());
+    if (battle.gridShown) {
       [false, true].forEach(function (major) {
         for (var gx = 0; gx <= d.width; gx++) {
           if ((gx % 5 === 0) !== major) continue;
@@ -1058,20 +1198,22 @@
       // greyed and crossed.
       token.container.alpha = 1;
       var radius = Math.max(5, cellPx * Math.max(0.32, (person.width || 0) / MP.FEET / 2));
-      standToken(token.container, c, radius * px, !person.down);
+      var foot = standToken(token.container, c, radius * px, !person.down);
       token.person = person;
       token.radius = radius;
-      token.update(personToken(person, c, radius, false));
+      token.update(personToken(person, foot, radius, false));
     });
     Object.keys(battle.tokens).forEach(function (id) {
       if (!people[id]) battle.tokens[id].container.visible = false;
     });
 
-    // Names, drawn over the fog so one by a square at its edge still reads.
+    // Names, drawn over the fog so one by a square at its edge still reads,
+    // upright on the scene: under the square (in isometric, its diamond's
+    // lowest corner).
     n.labels.removeChildren();
     var label = function (cell, text, colour) {
       var node = Loom.draw.label(text, 11.5);
-      var c = cell.point ? spot(cell.point) : centre(cell);
+      var c = toScene(cell.point ? spot(cell.point) : centre(cell));
       node.style.fill = colour || COLOURS.label;
       node.alpha = faded(cell);
       node.scale.set(px);
@@ -1086,7 +1228,7 @@
     (d.areas || []).forEach(function (area) {
       if (!area.label) return;
       var node = Loom.draw.label(area.name, 12);
-      var c = centre(area.label);
+      var c = toScene(centre(area.label));
       node.style.fill = COLOURS.area;
       node.style.fontStyle = 'italic';
       node.anchor.set(0.5, 0.5);
@@ -1159,7 +1301,7 @@
         var coverLabel = Loom.draw.label(target.cover + ' cover', 11);
         coverLabel.style.fill = COLOURS.cover;
         coverLabel.scale.set(px);
-        var tc = centre(target);
+        var tc = toScene(centre(target));
         coverLabel.position.set(tc.x, tc.y - CELL / 2 - 16 * px);
         n.labels.addChild(coverLabel);
         battle.labels.push(coverLabel);
@@ -1195,13 +1337,19 @@
     }
   }
 
+  // Whether a move or an aim is being chosen (IN2): a square or someone other
+  // than your own selected, its path or your attacks' reach shown.
+  function choosing() {
+    return Boolean(battle.selected) && !same(battle.selected, battle.data.here);
+  }
+
   // A label over a square of the path preview (L-837): its cost; or, under
   // it (`below`), where the AP runs out.
   function pathLabel(n, px, cell, text, below) {
     var node = Loom.draw.label(text, 11);
     node.style.fill = COLOURS.path;
     node.scale.set(px);
-    var c = centre(cell);
+    var c = toScene(centre(cell));
     node.position.set(c.x, below ? c.y + CELL / 2 + 2 * px : c.y - CELL / 2 - 14 * px);
     n.labels.addChild(node);
     battle.labels.push(node);
@@ -1230,15 +1378,15 @@
     n.scene.scale.set(view.scale);
     // Only what's on the screen is drawn (L-943; EN5): the rest stays built.
     var shown = engine.size();
-    Loom.mapPaint.cull('battle:' + battle.data.id, shown.width, shown.height);
+    if (iso) cullFloor(view, shown);
+    else Loom.mapPaint.cull('battle:' + battle.data.id, shown.width, shown.height);
     if (battle.playback) drawPlayback(view);
 
     // You: along your walk, or where you stand.
     var cellPx = CELL * view.scale;
-    var me = tokenCentre();
     var save = Loom.store.get().save;
     n.you.container.scale.set(1 / view.scale);
-    standToken(n.you.container, me, Math.max(5, cellPx * 0.3) / view.scale);
+    var me = standToken(n.you.container, tokenCentre(), Math.max(5, cellPx * 0.3) / view.scale);
     n.you.update({
       x: me.x,
       y: me.y,
@@ -1254,6 +1402,32 @@
     fadeBehind();
   }
 
+  // In isometric (L-951), what lies on the floor culled to the floor the
+  // screen shows: the screen's corners worked back to the floor, in feet.
+  // (What stands is culled on the isometric screen with L-952.)
+  function cullFloor(view, shown) {
+    var corners = [
+      [0, 0],
+      [shown.width, 0],
+      [0, shown.height],
+      [shown.width, shown.height],
+    ].map(function (c) {
+      return feetOf(toGrid(M.toMap(view, c[0], c[1])));
+    });
+    var xs = corners.map(function (p) {
+      return p.x;
+    });
+    var ys = corners.map(function (p) {
+      return p.y;
+    });
+    Loom.mapPaint.view('battle:' + battle.data.id, {
+      x0: Math.min.apply(null, xs),
+      y0: Math.min.apply(null, ys),
+      x1: Math.max.apply(null, xs),
+      y1: Math.max.apply(null, ys),
+    });
+  }
+
   // ── Seeing behind walls (TV1; L-942) ──────────────
 
   var FADE_STEP_FT = 2.5; // the path's points checked this far apart
@@ -1261,19 +1435,21 @@
 
   // What is to be seen behind walls, for the painter's `fade`: the tokens'
   // discs (their foot's y the depth), the pointer's point and the points of
-  // the path preview, each a floor point (its y the depth).
+  // the path preview, each a floor point (its y the depth), all in the
+  // standing layer's units (in isometric, as the floor is drawn there).
   function fadeTargets() {
     var key = 'battle:' + battle.data.id;
     var stand = Loom.mapPaint.standOf(key);
     var out = [];
-    var spot1 = function (p) {
+    var spot1 = function (feet) {
+      var p = standUnits(sceneOf(feet));
       out.push({ box: { x0: p.x, y0: p.y, x1: p.x, y1: p.y }, depth: p.y });
     };
     if (stand) {
       stand.children.forEach(function (child) {
         if (child.__loomFoot === undefined || !child.visible) return;
-        var c = feetOf(child.position);
-        var r = (child.__loomFoot / CELL) * MP.FEET;
+        var c = standUnits(child.position);
+        var r = child.__loomFoot / standAt().scale;
         // A standing disc (L-932) rises from its foot; one lying down covers its spot.
         out.push(
           child.__loomStanding
@@ -1421,10 +1597,10 @@
   }
 
   // The object there is something to do with whose standing picture is under
-  // a point (L-941; paint.js standingAt), the front-most, or null.
-  function standingObjectAt(m) {
+  // a point on the scene (L-941; paint.js standingAt), the front-most, or null.
+  function standingObjectAt(s) {
     if (!battle.data) return null;
-    var p = feetOf(m);
+    var p = standUnits(s);
     var id = Loom.mapPaint.standingAt('battle:' + battle.data.id, p.x, p.y);
     if (!id) return null;
     var o = ((battle.data && battle.data.objects) || []).filter(function (x) {
@@ -1630,9 +1806,10 @@
       return;
     }
     var d = battle.data;
-    var m = M.toMap(view, point.x, point.y);
+    var raw = M.toMap(view, point.x, point.y);
+    var m = toGrid(raw); // on the floor (L-951)
     // A standing object's picture first (L-941): it rises over what's behind it.
-    var standing = standingObjectAt(m);
+    var standing = standingObjectAt(raw);
     var door = standing ? null : doorAt(m);
     if (door) {
       battle.selectedDoor = door.id;
@@ -1970,7 +2147,8 @@
         // Over its disc, standing on its base (L-932).
         var held = battle.tokens[st.id];
         var r = held && held.container.__loomFoot ? held.container.__loomFoot : CELL * 0.32;
-        node.position.set(at[st.id].x, at[st.id].y - r * Loom.draw.standHeight() - CELL * 0.3);
+        var over = toScene(at[st.id]); // upright on the scene (L-951)
+        node.position.set(over.x, over.y - r * Loom.draw.standHeight() - CELL * 0.3);
         n.cards.addChild(node);
       }
     });
@@ -1983,15 +2161,15 @@
       var token = battle.tokens[id];
       if (!token) return;
       token.container.visible = true;
-      standToken(
+      var foot = standToken(
         token.container,
         at[id],
         token.container.__loomFoot || 0,
         token.container.__loomStanding
       );
       if (token.person) {
-        token.update(personToken(token.person, at[id], token.radius, id === playing));
-      } else token.container.position.set(at[id].x, at[id].y);
+        token.update(personToken(token.person, foot, token.radius, id === playing));
+      } else token.container.position.set(foot.x, foot.y);
     });
   }
 
@@ -2041,14 +2219,15 @@
       }
       return;
     }
-    var m = M.toMap(view, point.x, point.y);
+    var raw = M.toMap(view, point.x, point.y);
+    var m = toGrid(raw); // on the floor (L-951)
     battle.cursor = feetOf(m);
     fadeSoon();
     var d = battle.data;
     var gx = (m.x - PAD) / CELL;
     var gy = (m.y - TOP) / CELL;
     var onGrid = gx >= 0 && gy >= 0 && gx < d.width && gy < d.height;
-    engine.panelCursor(standingObjectAt(m) || doorAt(m) || onGrid ? 'pointer' : '');
+    engine.panelCursor(standingObjectAt(raw) || doorAt(m) || onGrid ? 'pointer' : '');
   }
 
   // ── The card ──────────────────────────────────────
@@ -2162,7 +2341,10 @@
     Loom.play.continuePlan();
   }
 
-  /** The minimap's view of the map: the grid, the people in sight and you. */
+  /**
+   * The minimap's view of the map, on the scene: the grid (in isometric, its
+   * diamond: `rect` round it, `shape` its corners), the people in sight and you.
+   */
   function minimap() {
     var d = battle.data;
     var points = (d.people || [])
@@ -2170,15 +2352,36 @@
         return p.x !== undefined;
       })
       .map(function (p) {
-        var c = centre(p);
+        var c = toScene(centre(p));
         return { x: c.x, y: c.y, colour: '#4db6ac', r: 2.5 };
       });
-    var me = spot(hereFeet());
+    var me = sceneOf(hereFeet());
     points.push({ x: me.x, y: me.y, colour: '#ffffff', r: 3.5, ring: '#ffb74d' });
-    return {
-      rect: { x: PAD, y: TOP, width: d.width * CELL, height: d.height * CELL, fill: '#1a1f2c' },
-      points: points,
-    };
+    var rect = { x: PAD, y: TOP, width: d.width * CELL, height: d.height * CELL, fill: '#1a1f2c' };
+    if (iso) {
+      var corners = [
+        { x: PAD, y: TOP },
+        { x: PAD + d.width * CELL, y: TOP },
+        { x: PAD + d.width * CELL, y: TOP + d.height * CELL },
+        { x: PAD, y: TOP + d.height * CELL },
+      ].map(toScene);
+      var span = (d.width + d.height) * CELL;
+      rect = { x: PAD, y: isoOrigin().y, width: span, height: span / 2, fill: rect.fill };
+      rect.shape = corners;
+    }
+    return { rect: rect, points: points };
+  }
+
+  // Switches the isometric view on or off (L-951; `?view=iso` sets it at
+  // first): the map is drawn again in it, and the drawer frames it afresh.
+  function setIso(on) {
+    on = Boolean(on);
+    if (on === iso) return;
+    iso = on;
+    TOP = topOf(battle.data);
+    battle.paintedFor = null;
+    battle.standMaskKey = null;
+    changed();
   }
 
   function capitalise(text) {
@@ -2210,8 +2413,38 @@
     bounds: bounds,
     framePoints: framePoints,
     herePoint: herePoint,
-    /** A point in feet (L-922) in map coordinates: where to click it. */
-    mapPoint: spot,
+    /**
+     * A point in feet (L-922) on the scene the camera sees: where to click
+     * it (in isometric, its point on the isometric screen; L-951).
+     */
+    mapPoint: sceneOf,
+    /** A point on the scene back on the floor, in feet (L-951), for tests. */
+    floorPoint: function (s) {
+      return feetOf(toGrid(s));
+    },
+    setIso: setIso,
+    /** Whether grid maps are drawn in the isometric view (L-951). */
+    iso: function () {
+      return iso;
+    },
+    /**
+     * What's drawn upright on the scene, for tests (L-951): your token's
+     * foot, the names and foes' cards ({ text, x, y }), and whether the grid
+     * (in isometric, the 5 ft diamonds) shows.
+     */
+    drawn: function () {
+      var n = battle.nodes;
+      if (!n) return null;
+      var text = function (node) {
+        return { text: node.text, x: node.position.x, y: node.position.y };
+      };
+      return {
+        you: { x: n.you.container.position.x, y: n.you.container.position.y },
+        labels: n.labels.children.map(text),
+        cards: n.cards.children.map(text),
+        grid: Boolean(battle.gridShown),
+      };
+    },
     selectHere: function () {
       selectHere();
       battle.selectedDoor = null;

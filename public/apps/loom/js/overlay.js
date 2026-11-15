@@ -382,7 +382,16 @@
       return L.oy + y * L.k;
     };
     ctx.fillStyle = r.fill;
-    ctx.fillRect(X(r.x), Y(r.y), r.width * L.k, r.height * L.k);
+    if (r.shape) {
+      // A level not square on the screen (a grid in isometric, L-951): its outline.
+      ctx.beginPath();
+      r.shape.forEach(function (p, i) {
+        if (i) ctx.lineTo(X(p.x), Y(p.y));
+        else ctx.moveTo(X(p.x), Y(p.y));
+      });
+      ctx.closePath();
+      ctx.fill();
+    } else ctx.fillRect(X(r.x), Y(r.y), r.width * L.k, r.height * L.k);
     if (info.image) {
       try {
         ctx.drawImage(info.image, X(r.x), Y(r.y), r.width * L.k, r.height * L.k);

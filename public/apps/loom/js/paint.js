@@ -103,7 +103,13 @@
   //            standAt ({ x, y, scale }: where the map's units are in
   //            `stand`'s), fades (true: the drawer fades what stands over its
   //            tokens, L-942, so long walls are cut along their length), set (the world's art set, L-944: its pictures
-  //            over the built-in art; its manifest fetched the first time) }
+  //            over the built-in art; its manifest fetched the first time),
+  //            flat (true: nothing stands; walls and windows lie as their
+  //            top's strip, doors as lines by their state, objects as their
+  //            picture from above: the grid's isometric view lays it under
+  //            its projection until its painter stands them up, L-951),
+  //            rise (how far up the screen a foot of height stands, for
+  //            riseOf; RISE without it) }
 
   var Loom = window.Loom;
   var mat = Loom.materials;
@@ -640,9 +646,11 @@
     return parts;
   }
 
-  // How far up the screen a height in feet stands, in map units.
+  // How far up the screen a height in feet stands, in map units: RISE of a
+  // foot for each, or the drawer's own `rise` (the isometric view's 1.22,
+  // planning/isometric-view.md C2).
   function riseFor(feet, o) {
-    return feet * RISE * (o.feet > 0 ? o.feet : 1);
+    return feet * (o.rise > 0 ? o.rise : RISE) * (o.feet > 0 ? o.feet : 1);
   }
 
   function heightOf(item, fallback) {
@@ -742,6 +750,7 @@
           // A world's own ground (L-713) is drawn with its art, which can change.
           kind === 'ground' && o.materials ? JSON.stringify(o.materials) : '',
           extra || '',
+          o.flat ? 'flat' : '',
         ].join('|'),
         layer: layer,
         order: i,
@@ -886,6 +895,40 @@
         var url = wallArt.key;
         var fUrl = wallArt.face;
         var edges = byWall[item.id] || [];
+        if (o.flat) {
+          // Lying flat (the isometric view until L-952): its top's strip.
+          add(
+            'walls',
+            'wall',
+            item,
+            i,
+            [url],
+            function () {
+              return flatStrips(
+                loadedTiled(url),
+                edges.map(function (e) {
+                  return [pt(e.a), pt(e.b)];
+                }),
+                thick
+              );
+            },
+            JSON.stringify(
+              edges.map(function (e) {
+                return [e.a, e.b];
+              })
+            ),
+            boxOf(
+              [].concat.apply(
+                [],
+                edges.map(function (e) {
+                  return [e.a, e.b];
+                })
+              ),
+              thick
+            )
+          );
+          return;
+        }
         var top = riseFor(heightOf(item, WALL_FT), o);
         var cut = JSON.stringify(
           edges.map(function (e) {
@@ -946,6 +989,24 @@
         var url = paneArt.key;
         // A set's painted pane (its `face`, L-946), stretched over the opening.
         var pFace = paneArt.face;
+        if (o.flat) {
+          // Lying flat: its pane's strip, seen from above.
+          add(
+            'openings',
+            'window',
+            item,
+            i,
+            [url],
+            function () {
+              var strips = flatStrips(loadedTiled(url), [[pt(item.from), pt(item.to)]], thick);
+              strips.alpha = item.state === 'open' ? 0.55 : 0.85;
+              return strips;
+            },
+            '',
+            boxOf([item.from, item.to], thick)
+          );
+          return;
+        }
         var wall = wallsById[item.wall] || null;
         var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
         var wUrl = wallArt.key || null;
@@ -1018,11 +1079,11 @@
       });
     }
 
-    // Doors: over a map's own art, flat lines by their state; else standing
+    // Doors: over a map's own art or lying flat, lines by their state; else standing
     // (L-941): a closed one an upright panel in its wall, an open one a thin
     // leaf swung on its hinge (`from`), the wall going on above either.
     list('doors').forEach(function (item, i) {
-      if (o.art) {
+      if (o.art || o.flat) {
         add(
           'openings',
           'door',
@@ -1153,7 +1214,8 @@
         : typeof item.size === 'number'
           ? [item.size, item.size]
           : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
-      var stand = mat.standFor(item, o.worldKinds, o.set);
+      // Lying flat (o.flat), every object is its picture seen from above.
+      var stand = o.flat ? null : mat.standFor(item, o.worldKinds, o.set);
       var standKey = stand ? keyOf(stand.picture) : null;
       if (stand) {
         // Standing on the south edge of its footprint (SC1): as wide as the
@@ -1250,7 +1312,33 @@
     return out;
   }
 
-  // A door over a map's own art (EX2), or one whose art is missing: a line by
+  // Segments lying flat (`o.flat`): each a strip of a picture, `thick` wide,
+  // its ends capped; a plain dark line where the picture is missing.
+  function flatStrips(texture, segs, thick) {
+    var PIXI = window.PIXI;
+    var c = new PIXI.Container();
+    var plain = null;
+    segs.forEach(function (seg) {
+      var a = seg[0];
+      var b = seg[1];
+      if (!a || !b) return;
+      var s = texture ? strip(texture, a, b, thick, false, true) : null;
+      if (s) {
+        c.addChild(s);
+        return;
+      }
+      if (!plain) plain = new PIXI.Graphics();
+      plain.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    });
+    if (plain) {
+      plain.stroke({ width: thick, color: COLOURS.dark, cap: 'square' });
+      c.addChild(plain);
+    }
+    return c;
+  }
+
+  // A door over a map's own art (EX2), lying flat (`o.flat`), or one whose
+  // art is missing: a line by
   // its state, as the grid view drew doors before (closed amber, open dashed,
   // locked red).
   function doorLine(a, b, state, thick) {
