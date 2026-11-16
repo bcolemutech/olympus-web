@@ -91,10 +91,12 @@ const image = async (id) => (await db.collection('studio_images').doc(id).get())
 const worldDoc = async (id) => (await db.collection('loom_worlds').doc(id).get()).data();
 const entity = async (worldId, collection, id) =>
   (await db.collection('loom_worlds').doc(worldId).collection(collection).doc(id).get()).data();
-const addImage = (kind, { width = 64, height = 64, shade } = {}) =>
+const addImage = (kind, { width = 64, height = 64, shade, view } = {}) =>
   library.addImage({
     title: `A ${kind}`,
     kind,
+    // A battle map's art is a floor painting (L-955).
+    view: view === undefined ? (kind === 'battleMap' ? 'floor' : null) : view,
     file: readImage(solidPng(width, height, shade)),
     createdBy: BUILDER.uid,
     via: 'page',
@@ -346,6 +348,158 @@ describe('players and view_image see the assigned image', () => {
       const result = await call('view_image', { worldId, ...args });
       expect(result.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
     }
+  });
+});
+
+describe('art by view (L-955)', () => {
+  const rows = async () => (await call('list_battle_maps', { worldId })).maps;
+  const mapRow = async () => (await rows()).find((m) => m.id === BATTLE_MAP.id);
+
+  test('a grid’s art is a floor painting: another view is refused, with its reason', async () => {
+    await call('studio_unassign', { worldId, target: 'battleMap', id: BATTLE_MAP.id });
+    const walls = await addImage('battleMap', { view: 'top-down' });
+    const unmarked = await addImage('battleMap', { view: null });
+    for (const record of [walls, unmarked]) {
+      await expect(
+        call('studio_assign', {
+          worldId,
+          imageId: record.id,
+          target: 'battleMap',
+          id: BATTLE_MAP.id,
+        })
+      ).rejects.toThrow(/floor painting: the grid's floors only/);
+    }
+    expect((await entity(worldId, 'battleMaps', BATTLE_MAP.id)).image).toBeFalsy();
+  });
+
+  test('a floor painting is held with its view, and the reads say so', async () => {
+    const floor = await addImage('battleMap', { view: 'floor' });
+    await call('studio_assign', {
+      worldId,
+      imageId: floor.id,
+      target: 'battleMap',
+      id: BATTLE_MAP.id,
+    });
+    expect((await entity(worldId, 'battleMaps', BATTLE_MAP.id)).image).toMatchObject({
+      imageId: floor.id,
+      view: 'floor',
+    });
+    expect(await mapRow()).toMatchObject({ hasImage: true, floorPainting: true });
+    const detail = await call('get_battle_map', { worldId, mapId: BATTLE_MAP.id });
+    expect(detail.image).toMatchObject({ floorPainting: true });
+    expect(detail.image.note).toBeUndefined();
+    // What players are sent carries the view, for the grid's painter.
+    const art = require('../functions/loom-canon/art');
+    const { image } = await entity(worldId, 'battleMaps', BATTLE_MAP.id);
+    expect(art.forPlayer(art.fromRef(image))).toMatchObject({ view: 'floor' });
+  });
+
+  test('an older painting held already is kept, not drawn, and says how to replace it', async () => {
+    const old = await addImage('battleMap', { view: null });
+    // As it was held before there were views: a reference with no view.
+    const ref = {
+      imageId: old.id,
+      link: old.link,
+      width: 64,
+      height: 64,
+      format: 'png',
+    };
+    await call('studio_unassign', { worldId, target: 'battleMap', id: BATTLE_MAP.id });
+    await db
+      .collection('loom_worlds')
+      .doc(worldId)
+      .collection('battleMaps')
+      .doc(BATTLE_MAP.id)
+      .update({ image: ref });
+    await db
+      .collection('studio_images')
+      .doc(old.id)
+      .update({ usedIn: [{ worldId, target: 'battleMap', id: BATTLE_MAP.id }] });
+    await bump(worldId);
+    loomCanon.clearWorldCache();
+    expect(await mapRow()).toMatchObject({ hasImage: true, floorPainting: false });
+    const detail = await call('get_battle_map', { worldId, mapId: BATTLE_MAP.id });
+    expect(detail.image.note).toMatch(/does not draw it/);
+    // Assigned again to the same place (an edit refreshing its size), it is kept.
+    await service.assignImage(BUILDER.uid, {
+      worldId,
+      target: 'battleMap',
+      id: BATTLE_MAP.id,
+      imageId: old.id,
+    });
+    await call('studio_unassign', { worldId, target: 'battleMap', id: BATTLE_MAP.id });
+  });
+
+  test('an object kind’s art is marked: not iso, it works with a warning', async () => {
+    const flat = await addImage('object', { view: 'top-down' });
+    const iso = await addImage('object', { view: 'iso' });
+    const asKind = (record) =>
+      service.assignImage(BUILDER.uid, {
+        worldId,
+        target: 'objectKind',
+        id: 'chest',
+        imageId: record.id,
+      });
+    const first = await asKind(flat);
+    expect(first.warnings.join(' ')).toMatch(/top-down image.*set’s isometric picture/);
+    const second = await asKind(iso);
+    expect(second.warnings).toEqual([]);
+    expect((await worldDoc(worldId)).objectKinds.chest.art).toMatchObject({
+      imageId: iso.id,
+      view: 'iso',
+    });
+    await service.assignImage(BUILDER.uid, {
+      worldId,
+      target: 'objectKind',
+      id: 'chest',
+      imageId: null,
+    });
+  });
+
+  test('a view is fixed while a world uses the image, and one of the views', async () => {
+    const record = await addImage('object', { view: 'iso' });
+    await expect(library.updateImage(record.id, { view: 'sideways' })).rejects.toThrow(
+      /view must be one of/
+    );
+    expect(await library.updateImage(record.id, { view: 'floor' })).toMatchObject({
+      view: 'floor',
+    });
+    await service.assignImage(BUILDER.uid, {
+      worldId,
+      target: 'objectKind',
+      id: 'barrel',
+      imageId: record.id,
+    });
+    await expect(library.updateImage(record.id, { view: 'iso' })).rejects.toThrow(
+      /Unassign it before changing its view/
+    );
+    await service.assignImage(BUILDER.uid, {
+      worldId,
+      target: 'objectKind',
+      id: 'barrel',
+      imageId: null,
+    });
+    expect((await library.search({ view: 'floor' })).images.map((i) => i.id)).toContain(record.id);
+    expect((await library.search({ view: 'iso' })).images.map((i) => i.id)).not.toContain(
+      record.id
+    );
+  });
+
+  test('view_image with floor draws the floors alone', async () => {
+    const result = await call('view_image', {
+      worldId,
+      of: 'battleMap',
+      id: BATTLE_MAP.id,
+      floor: true,
+    });
+    expect(result.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+    expect(result.structuredContent).toMatchObject({
+      floor: true,
+      grid: { width: BATTLE_MAP.width, height: BATTLE_MAP.height },
+    });
+    await expect(
+      call('view_image', { worldId, of: 'town', id: 'loc_1', floor: true })
+    ).rejects.toThrow(/floor is for a grid/);
   });
 });
 

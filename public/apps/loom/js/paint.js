@@ -98,7 +98,9 @@
   //
   // options: { tile (map units a tile of ground covers; 5 on a grid),
   //            wall (a wall's thickness in map units; 1 on a grid),
-  //            art (true: the map has its own art), tint (the world's accent,
+  //            art (true: the map has its own art), floorArt (true: a grid has a
+  //            floor painting, drawn by the grid view under what stands, so its
+  //            floors and lines aren't drawn, L-955), tint (the world's accent,
   //            0xRRGGBB, or null), worldKinds (the world's object kinds),
   //            materials (the world's own ground, L-713: [{ id, like, art? }]),
   //            onProgress (fraction 0–1, then null when done), onChange
@@ -395,8 +397,8 @@
 
   // A material's art in the map's set (L-944; materials.js materialArt):
   // { key, span, face (a key or null), variants (keys) }.
-  function materialOf(kind, id, set, own) {
-    var art = mat.materialArt(kind, id, set, own);
+  function materialOf(kind, id, set, own, grid) {
+    var art = mat.materialArt(kind, id, set, own, grid);
     return {
       key: keyOf(art.picture),
       span: art.span,
@@ -425,11 +427,12 @@
   // world's for its kind (each a library image, which the page is sent as its
   // link alone, A5), else its set's (a key, L-944), else the catalog's file,
   // else the box with a question mark.
-  function objectUrl(item, worldKinds, set) {
-    if (item.art && item.art.link) return item.art.link;
+  function objectUrl(item, worldKinds, set, grid) {
+    // On a grid (L-955) a world's own art stands as isometric art or not at all.
+    if (!grid && item.art && item.art.link) return item.art.link;
     var own = worldKinds && worldKinds[item.kind];
-    if (own && own.art && own.art.link) return own.art.link;
-    var art = mat.artFor(item, worldKinds, set);
+    if (!grid && own && own.art && own.art.link) return own.art.link;
+    var art = grid ? mat.artFor({ kind: item.kind }, null, set) : mat.artFor(item, worldKinds, set);
     if (art.picture) return keyOf(art.picture);
     return art.ref ? art.ref.link || null : art.url;
   }
@@ -1049,6 +1052,7 @@
           kind === 'ground' && o.materials ? JSON.stringify(o.materials) : '',
           extra || '',
           o.iso ? 'iso|' + o.iso.rise : '',
+          o.floorArt ? 'floor' : '',
         ].join('|'),
         layer: layer,
         order: i,
@@ -1110,10 +1114,12 @@
       // own picture growing narrower and fainter outwards.
       var fade = FADE_FT * o.feet;
       var floors = [];
-      list('ground').forEach(function (item, i) {
+      // Under a floor painting (L-955) its floors, shading and lines aren't
+      // drawn: the painting is the floor.
+      (o.floorArt ? [] : list('ground')).forEach(function (item, i) {
         var read = geo.ringsOf(item.shape);
         if (!read.rings) return;
-        var art = materialOf('ground', item.material, o.set, o.materials);
+        var art = materialOf('ground', item.material, o.set, o.materials, Boolean(o.iso));
         var choices = [art.key].concat(art.variants);
         var url = choices[variantOf(item.id || i, choices.length)];
         var span = art.span;
@@ -1167,7 +1173,7 @@
         );
       });
       // Shading by height (DA2): the floors off the ground, then the ledges.
-      var heights = list('ground').filter(function (item) {
+      var heights = (o.floorArt ? [] : list('ground')).filter(function (item) {
         return typeof item.height === 'number' && item.height !== 0;
       });
       if (heights.length) {
@@ -1175,7 +1181,7 @@
           return shading(list('ground'), thick);
         });
       }
-      list('lines').forEach(function (item, i) {
+      (o.floorArt ? [] : list('lines')).forEach(function (item, i) {
         var read = geo.linesOf(item.points);
         if (!read.lines) return;
         var url = materialOf('line', item.material, o.set).key;
@@ -1496,7 +1502,7 @@
         : typeof item.size === 'number'
           ? [item.size, item.size]
           : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
-      var stand = mat.standFor(item, o.worldKinds, o.set);
+      var stand = mat.standFor(item, o.worldKinds, o.set, Boolean(o.iso));
       var standKey = stand ? keyOf(stand.picture) : null;
       // In isometric (L-952): its set's isometric pictures by facing, else its
       // three-quarter one, else it lies flat as below.
@@ -1567,7 +1573,7 @@
         );
         return;
       }
-      var url = objectUrl(item, o.worldKinds, o.set);
+      var url = objectUrl(item, o.worldKinds, o.set, Boolean(o.iso));
       add(
         'objects',
         'object',

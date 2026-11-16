@@ -77,6 +77,12 @@
                   <select class="studio-input" id="studio-gen-kind" required></select>
                 </div>
                 <div class="studio-form-group">
+                  <label class="studio-label" for="studio-gen-view">View</label>
+                  <select class="studio-input" id="studio-gen-view">
+                    <option value="">Not marked</option>
+                  </select>
+                </div>
+                <div class="studio-form-group">
                   <label class="studio-label" for="studio-tier">Tier</label>
                   <select class="studio-input" id="studio-tier">
                     <option value="draft">Draft (fast, about $0.07)</option>
@@ -150,6 +156,12 @@
                   <label class="studio-label" for="studio-kind">Kind</label>
                   <select class="studio-input" id="studio-kind" required></select>
                 </div>
+                <div class="studio-form-group">
+                  <label class="studio-label" for="studio-view">View</label>
+                  <select class="studio-input" id="studio-view">
+                    <option value="">Not marked</option>
+                  </select>
+                </div>
                 <div class="studio-form-group studio-grow">
                   <label class="studio-label" for="studio-title">Title</label>
                   <input
@@ -194,6 +206,9 @@
             />
             <select class="studio-input" id="studio-filter-kind" aria-label="Kind">
               <option value="">Any kind</option>
+            </select>
+            <select class="studio-input" id="studio-filter-view" aria-label="View">
+              <option value="">Any view</option>
             </select>
             <select class="studio-input" id="studio-filter-label" aria-label="Label">
               <option value="">Any label</option>

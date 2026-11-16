@@ -763,6 +763,14 @@ function usersOf(world, mapId) {
   ];
 }
 
+// Whether a battle map's art is a floor painting (L-955): the only art a grid
+// map draws, under its walls, doors and objects. Older top-down paintings
+// aren't, and are not drawn on a grid.
+function floorPainting(map) {
+  const art = artOf.mapArt(map);
+  return Boolean(art && art.view === 'floor');
+}
+
 function battleMapRow(world, map) {
   return {
     id: map.id,
@@ -770,6 +778,8 @@ function battleMapRow(world, map) {
     size: { width: map.width, height: map.height },
     generic: map.generic || null,
     hasImage: Boolean(map.image),
+    // Whether that is a floor painting, the only art a grid draws (L-955).
+    ...(map.image ? { floorPainting: floorPainting(map) } : {}),
     // Walls, doors or obstacles (L-622), in its geometry since L-928: what a
     // place's own map needs to count in full toward its score.
     hasLayers: layerGeometry.hasShapes(map),
@@ -859,6 +869,15 @@ function battleMapDetail(world, map) {
           width,
           height,
           format,
+          floorPainting: floorPainting(map),
+          ...(floorPainting(map)
+            ? {}
+            : {
+                note:
+                  'Not a floor painting, so the grid does not draw it. Make one: view_image ' +
+                  'this map with floor: true, then studio_generate from it with floor: true, ' +
+                  'and studio_assign it.',
+              }),
         }))(artOf.mapArt(map))
       : null,
     generic: map.generic || null,

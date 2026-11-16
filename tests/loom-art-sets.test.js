@@ -250,12 +250,18 @@ describe('a manifest, read', () => {
       foot: [0.5, 1],
       long: null,
     });
-    // None: it stands as its three-quarter picture; its own art comes first.
+    // None: it stands as its three-quarter picture.
     expect(catalog.isoFor({ kind: 'chest' }, null, 'iso-props')).toBeNull();
     expect(catalog.isoFor({ kind: 'table' }, null, 'no-such-set')).toBeNull();
+    // Its own art, if it was made for another view, is ignored on a grid (L-955):
+    // the set's picture stands; one made for the isometric view comes first.
+    const own = { link: 'https://x/t.png' };
+    expect(catalog.isoFor({ kind: 'table', art: own }, null, 'iso-props')).toMatchObject({
+      facings: [{ url: expect.stringContaining('iso-props/table-front') }, expect.anything()],
+    });
     expect(
-      catalog.isoFor({ kind: 'table', art: { link: 'https://x/t.png' } }, null, 'iso-props')
-    ).toBeNull();
+      catalog.isoFor({ kind: 'table', art: { ...own, view: 'iso' } }, null, 'iso-props')
+    ).toMatchObject({ own: true, facings: [{ url: own.link }, { url: own.link }] });
   });
 
   test('variants are read, up to three', () => {

@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const { setTimeout: sleep } = require('timers/promises');
 const { TIERS, MODELS, ASPECT_RATIOS, DEFAULT_RATIOS, MAX_REFERENCES } = require('./config');
-const { KINDS, normalizeLabels, LibraryError } = require('./library');
+const { KINDS, VIEWS, normalizeLabels, LibraryError } = require('./library');
 const { readImage } = require('./formats');
 const { priceOf, CostError } = require('./costs');
 const { chooseStyle, snapshot, StyleError } = require('./styles');
@@ -62,6 +62,16 @@ const TOKEN_KINDS = ['token', 'portrait'];
 const TOKEN_PROMPT =
   'Draw a head-and-shoulders portrait, the face centred, on a plain background. ' +
   'Keep anything important well away from the edge: it will be cropped to a circle.';
+// What a floor painting is asked for (isometric-view.md §4.4, C4; L-955): the
+// grid's floors only, top-down, over a guide of its floor geometry; its walls,
+// doors and objects stand from its data, drawn over it.
+const FLOOR_PROMPT =
+  'Paint only the floors of this map, seen from straight above, as a finished painting: ' +
+  'the ground, its wear and texture, rugs, pools and rims, cracks and grime. Keep every floor ' +
+  'shape, edge and colour change exactly where the guide has them, filling the whole image. ' +
+  'Do not paint walls, doors, windows, furniture, objects, people, shadows of things standing, ' +
+  'text or a grid: they are drawn separately over the painting, so leave the floor bare ' +
+  'where they will stand.';
 // Reference formats the model reads; SVG is drawn to PNG first.
 const READABLE = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
 
@@ -107,7 +117,7 @@ const clip = (text, n) => (text && text.length > n ? `${text.slice(0, n - 1)}…
  * What the `from` thing adds to the prompt (M7): its data, plainly, and the
  * shape it wants. Returns { text, aspectRatio, kind, name }.
  */
-function fromData(world, from, { placesOf }) {
+function fromData(world, from, { placesOf, floor = false }) {
   const named = (collection, id) => ((world[collection] || {})[id] || {}).name;
   if (from.kind === 'location' || from.kind === 'town') {
     const place = (world.locations || {})[from.id];
@@ -157,8 +167,9 @@ function fromData(world, from, { placesOf }) {
     const lines = [
       `${map.name}: a battle map ${map.width} by ${map.height} squares, seen from straight above, ` +
         'with no grid drawn (the grid is laid over it).',
-      list(map.features) && `Features: ${list(map.features)}.`,
-      list(map.exits) && `Ways out: ${list(map.exits)}.`,
+      // A floor painting has none of what stands (L-955).
+      !floor && list(map.features) && `Features: ${list(map.features)}.`,
+      !floor && list(map.exits) && `Ways out: ${list(map.exits)}.`,
       map.description && clip(map.description, 800),
     ];
     return {
@@ -275,6 +286,9 @@ function createJobs({
   placesOf,
   rasterize,
   load,
+  // A grid's floors drawn as a guide for a floor painting (L-955): (world,
+  // mapId) → PNG bytes. Not given, a floor painting can't be made here.
+  floorGuide = null,
   // Named styles (L-709, functions/studio/styles.js); none when not given.
   styles = null,
   // Refreshes the worlds using an image after its current version changes
@@ -335,11 +349,26 @@ function createJobs({
       fromInfo = fromData(world, { kind, id }, { placesOf });
       from = { worldId, kind, id };
     }
+    // A floor painting (L-955): a battle map's floors drawn from its geometry
+    // as a guide, which takes one of the references.
+    const floor = input.floor === true;
+    if (floor) {
+      if (!from || from.kind !== 'battleMap') {
+        throw invalid('floor is for an image of a battle map (from.kind battleMap).');
+      }
+      if (!floorGuide) throw invalid('A floor guide can’t be made here.');
+      if (input.view !== undefined && input.view !== null && input.view !== 'floor') {
+        throw invalid('A floor painting is a floor view image.');
+      }
+    }
+    if (input.view !== undefined && input.view !== null && !VIEWS.includes(input.view)) {
+      throw invalid(`The view is one of: ${VIEWS.join(', ')}.`);
+    }
     // The style named, else the world's default (L-709).
     const style = await styleFor(input.styleId, world);
 
     const references = input.references || [];
-    const room = MAX_REFERENCES - (style ? style.references.length : 0);
+    const room = MAX_REFERENCES - (floor ? 1 : 0) - (style ? style.references.length : 0);
     if (!Array.isArray(references) || references.length > room) {
       throw invalid(
         `At most ${room} reference images` +
@@ -368,6 +397,8 @@ function createJobs({
         input.aspectRatio || (fromInfo && fromInfo.aspectRatio) || DEFAULT_RATIOS[kind] || null,
       references,
       from,
+      ...(floor ? { floor: true } : {}),
+      view: floor ? 'floor' : input.view || null,
       title,
       labels: normalizeLabels(input.labels),
       style,
@@ -535,6 +566,7 @@ function createJobs({
     let result;
     try {
       let prompt;
+      let guide = null;
       const references = [];
       const style = request.style || null;
       if (job.kind === 'edit') {
@@ -546,13 +578,25 @@ function createJobs({
         if (request.from) {
           const world = await loadWorld(request.from.worldId);
           if (!world) throw new JobError('not-found', 'Its world is gone.');
-          from = fromData(world, request.from, { placesOf });
+          from = fromData(world, request.from, { placesOf, floor: request.floor });
+          // The floors as a guide, the last reference (L-955).
+          if (request.floor) guide = { world };
         }
         prompt = buildPrompt(request.prompt, from, style, request.kind);
+        if (guide) {
+          const at = (style ? style.references.length : 0) + request.references.length + 1;
+          prompt += `\n\nImage ${at} is the guide: the map's floors, in flat colours.\n${FLOOR_PROMPT}`;
+        }
       }
       // The style's images, then the request's own.
       for (const id of style ? style.references : []) references.push(await referenceOf(id));
       for (const id of request.references) references.push(await referenceOf(id));
+      if (guide) {
+        references.push({
+          bytes: await floorGuide(guide.world, request.from.id),
+          mimeType: 'image/png',
+        });
+      }
       result = await model.generate({
         model: request.model,
         prompt,
@@ -631,6 +675,7 @@ function createJobs({
     const record = await library.addImage({
       title: request.title,
       kind: request.kind,
+      view: request.view || null,
       labels: request.labels,
       prompt: request.prompt,
       model: request.model,
@@ -757,4 +802,5 @@ module.exports = {
   JobError,
   FROM_KINDS,
   TOKEN_PROMPT,
+  FLOOR_PROMPT,
 };

@@ -3,7 +3,7 @@
 const { z } = require('zod');
 const { ToolError } = require('../../registry');
 const { worldId, entityId } = require('./schemas');
-const { KINDS, summary, normalizeLabels } = require('../../../studio/library');
+const { KINDS, VIEWS, summary, normalizeLabels } = require('../../../studio/library');
 const { viewLibraryImage } = require('./images');
 const { readImage } = require('../../../studio/formats');
 const fetcher = require('../../../studio/fetch');
@@ -53,6 +53,15 @@ const KIND = z
     'What the image is: worldMap, regionMap, town, battleMap, cover, portrait, token, item, ' +
       'scene, interface or other. Assigning checks it fits.'
   );
+const VIEW = z
+  .enum(VIEWS)
+  .describe(
+    'What it was made to be seen as (L-955): iso (isometric art for standing things: ' +
+      'props, objects), floor (a grid’s floors only, top-down: a battle map’s painting, or ' +
+      'ground texture), three-quarter (the old view) or top-down. A grid map draws only a ' +
+      'floor painting as its art, and an object’s, kind’s or material’s own art only if iso ' +
+      '(a material’s: or floor); left out, it is not marked and grids draw nothing of it.'
+  );
 const LABELS = z
   .array(z.string().max(40))
   .max(20)
@@ -70,6 +79,7 @@ function detail(record) {
     id: record.id,
     title: record.title,
     kind: record.kind,
+    view: record.view || null,
     labels: record.labels || [],
     link: record.link,
     current: record.current,
@@ -212,7 +222,9 @@ function assignTools({ studio }) {
       description:
         'Use an image from the studio’s library for a world’s map, its cover (shown to players ' +
         'on the Loom’s world list), a town’s art or a battle map’s art. The image’s kind must ' +
-        'fit: worldMap, cover, town or battleMap. The world refers to the image, so a new ' +
+        'fit: worldMap, cover, town or battleMap; a battle map’s must also be a floor ' +
+        'painting (view floor, L-955): a grid draws only that, under its walls, doors and ' +
+        'objects, which stand from its data. The world refers to the image, so a new ' +
         'version of it shows wherever it is used. Replaces any art there. Warns when its shape ' +
         'doesn’t fit a battle map’s grid or a town’s square, unless fit says what to do; check ' +
         'it with view_image.',
@@ -301,6 +313,7 @@ function libraryTools({ studio }) {
       const record = await library().addImage({
         title: item.title,
         kind: item.kind,
+        view: item.view || null,
         labels: item.labels,
         prompt: item.prompt || null,
         file,
@@ -328,6 +341,7 @@ function libraryTools({ studio }) {
       inputSchema: {
         words: z.string().max(200).optional().describe('Words to match, e.g. "harbour night".'),
         kind: KIND.optional(),
+        view: VIEW.optional(),
         labels: LABELS.optional().describe('Only images carrying every one of these labels.'),
         worldId: worldId.optional().describe('Only images a world uses, from list_worlds.'),
         styleId: z.string().max(80).optional().describe('Only images made in this style.'),
@@ -396,16 +410,17 @@ function libraryTools({ studio }) {
       name: 'studio_update',
       title: 'Change a library image',
       description:
-        'Change an image’s title, kind or labels, or make an earlier version current. Labels ' +
+        'Change an image’s title, kind, view or labels, or make an earlier version current. Labels ' +
         'can be given whole (labels) or added and removed (addLabels, removeLabels); reuse ' +
-        'labels from studio_labels rather than coining near-duplicates. A kind can’t change ' +
-        'while a world uses the image. Making another version current changes the image ' +
+        'labels from studio_labels rather than coining near-duplicates. A kind or a view can’t ' +
+        'change while a world uses the image. Making another version current changes the image ' +
         'everywhere it is used, and its link serves that version within minutes; the result ' +
         'names those uses, so check them with view_image.',
       inputSchema: {
         imageId,
         title: z.string().min(1).max(120).optional().describe('A new title.'),
         kind: KIND.optional(),
+        view: VIEW.optional(),
         labels: LABELS.optional().describe('The labels, replacing all it has.'),
         addLabels: LABELS.optional().describe('Labels to add.'),
         removeLabels: LABELS.optional().describe('Labels to take off.'),
@@ -414,7 +429,15 @@ function libraryTools({ studio }) {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       handler: (ctx, args) =>
         relay(async () => {
-          const fields = ['title', 'kind', 'labels', 'addLabels', 'removeLabels', 'current'];
+          const fields = [
+            'title',
+            'kind',
+            'view',
+            'labels',
+            'addLabels',
+            'removeLabels',
+            'current',
+          ];
           if (!fields.some((key) => args[key] !== undefined)) {
             throw new ToolError(`Say what to change: ${fields.join(', ')}.`);
           }
@@ -438,6 +461,7 @@ function libraryTools({ studio }) {
           record = await library().updateImage(args.imageId, {
             title: args.title,
             kind: args.kind,
+            view: args.view,
             labels,
           });
           const result = {};
@@ -488,6 +512,7 @@ function libraryTools({ studio }) {
                 .describe('Or the file itself, base64 (up to 5 MB), when there is no link.'),
               title: z.string().min(1).max(120).describe('A title.'),
               kind: KIND,
+              view: VIEW.optional(),
               labels: LABELS.optional(),
               prompt: z
                 .string()
@@ -573,6 +598,8 @@ function jobView(job, image) {
         ? { instruction: clip200(r.instruction) }
         : { prompt: clip200(r.prompt) }),
       kind: r.kind,
+      ...(r.view ? { view: r.view } : {}),
+      ...(r.floor ? { floor: true } : {}),
       tier: r.tier,
       model: r.model,
       size: r.size,
@@ -653,6 +680,16 @@ function generateTools({ studio }) {
           })
           .optional()
           .describe('A thing in a world whose data is added to the prompt.'),
+        floor: z
+          .boolean()
+          .optional()
+          .describe(
+            'A floor painting of the battle map in `from` (L-955): the map’s floors drawn from ' +
+              'its geometry (view_image with floor: true shows it) go to the model as a guide, ' +
+              'and it paints the floors only, top-down, with no walls, doors or objects, which ' +
+              'stand from the data over it. Marked view floor; assign it to the map.'
+          ),
+        view: VIEW.optional(),
         title: z.string().min(1).max(120).optional().describe('Its title in the library.'),
         labels: LABELS.optional(),
         styleId: STYLE_CHOICE.describe(

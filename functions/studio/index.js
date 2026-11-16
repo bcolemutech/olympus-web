@@ -52,6 +52,11 @@ function studio() {
     loadWorld: (worldId) => loomCanon.loadWorld(worldId, { db, playableOnly: false }),
     placesOf: town.placesOf,
     rasterize,
+    // A grid's floors as the guide of a floor painting (L-955).
+    floorGuide: async (world, mapId) =>
+      require('../mcp/apps/cartographer/images').floorGuide(world.battleMaps[mapId], {
+        materials: world.materials,
+      }),
     styles,
     load: async (path) => (await bucket.file(path).download())[0],
     // An edit's new version (L-708): each world using the image is assigned it

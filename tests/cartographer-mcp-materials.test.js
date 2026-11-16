@@ -109,10 +109,12 @@ function png(width, height) {
   img.data.fill(170);
   return PNG.sync.write(img);
 }
-const addImage = (kind, { width = 64, height = 64 } = {}) =>
+const addImage = (kind, { width = 64, height = 64, view } = {}) =>
   library.addImage({
     title: `A ${kind}`,
     kind,
+    // An object's own art stands on a grid only if made for the isometric view (L-955).
+    view: view === undefined ? (kind === 'object' ? 'iso' : null) : view,
     file: readImage(png(width, height)),
     createdBy: BUILDER,
     via: 'page',

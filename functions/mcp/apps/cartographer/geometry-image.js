@@ -21,7 +21,8 @@ const catalog = require('../../../loom-canon/materials');
 // grid that isn't its shape). `options`: { art (the map has art: floors are
 // not filled, so it shows), heights (shade floors by height, default true),
 // hidden (draw what is hidden, marked; false draws the map as players see
-// it), doors (a save's door states), skipDoors and skipObjects (ids another
+// it), guide (floors and lines in flat colour only, for a floor painting,
+// L-955), doors (a save's door states), skipDoors and skipObjects (ids another
 // marker already numbers) }.
 
 const GROUND = {
@@ -171,7 +172,7 @@ function makePainter(h) {
   /** Floors, lines and dark areas: under the grid. Returns the heights drawn. */
   function paintUnder(c, geometry, scale, options = {}) {
     const K = typeof scale === 'number' ? { x: scale, y: scale } : scale;
-    const { art = false, heights = true, hidden = true, materials = [] } = options;
+    const { art = false, heights = true, hidden = true, materials = [], guide = false } = options;
     const g = geo.compile(geometry || {});
     const shown = (item) => hidden || !g.hidden[item.id];
     const shaded = [];
@@ -194,8 +195,9 @@ function makePainter(h) {
           : typeof item.cost === 'number' && item.cost >= 2
             ? [240, 170, 70, 255]
             : withAlpha(shade(base, 1.35), 200);
-      px.forEach((ring) => outlineRing(c, ring, rim, 1));
-      if (heights && height > 0 && !art) {
+      // A floor guide (L-955) is clean: flat colour, no rims or numbers.
+      if (!guide) px.forEach((ring) => outlineRing(c, ring, rim, 1));
+      if (heights && height > 0 && !art && !guide) {
         const at = middle(px[0]);
         number(c, Math.round(height), at[0] - 4, at[1] - 4, ls);
       }
@@ -220,7 +222,7 @@ function makePainter(h) {
       });
     }
     for (const { item, rings } of g.lights) {
-      if (!item.dark || !rings || !shown(item)) continue;
+      if (guide || !item.dark || !rings || !shown(item)) continue;
       fillRings(
         c,
         rings.map((ring) => scaled(ring, K)),

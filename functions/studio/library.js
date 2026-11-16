@@ -10,7 +10,8 @@ const screen = require('./screen');
  * any world.
  *
  *   studio_images/{imageId}
- *     title, kind (KINDS), labels[] (lower-case words), prompt, model, tier,
+ *     title, kind (KINDS), view (VIEWS, or null: not marked; L-955), labels[]
+ *     (lower-case words), prompt, model, tier,
  *     styleId, from, references[], parentId,
  *     current (a version number),
  *     versions: [{ n, path, width, height, format, bytes, createdAt,
@@ -52,6 +53,11 @@ const KINDS = Object.freeze([
   'object',
   'other',
 ]);
+// What an image was made to be seen as (isometric-view.md §4.4, AR3; L-955):
+// `iso` (isometric art for standing things), `floor` (a grid's floors only,
+// top-down, laid under what stands from its data), `three-quarter` (the old
+// view) or `top-down`. Null: not marked, which grid maps draw nothing of.
+const VIEWS = Object.freeze(['iso', 'floor', 'three-quarter', 'top-down']);
 // How an image came in; 'fit': cropped or padded to what it is drawn on (L-396).
 const VIAS = Object.freeze(['page', 'mcp', 'upload', 'backfill', 'fit', 'import']);
 const LINK_CACHE = 'public, max-age=300';
@@ -110,6 +116,14 @@ function checkKind(kind) {
   return kind;
 }
 
+function checkView(view) {
+  if (view === null || view === undefined) return null;
+  if (!VIEWS.includes(view)) {
+    throw new LibraryError('invalid-argument', `The view must be one of: ${VIEWS.join(', ')}.`);
+  }
+  return view;
+}
+
 const versionPath = (imageId, n, format) => `studio/${imageId}/v${n}.${FORMATS[format].ext}`;
 const currentPath = (imageId) => `studio/${imageId}/current`;
 
@@ -128,6 +142,7 @@ function summary(id, data) {
     id,
     title: data.title,
     kind: data.kind,
+    view: data.view || null,
     labels: data.labels || [],
     current: data.current,
     versions: (data.versions || []).length,
@@ -230,6 +245,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
   async function addImage(fields) {
     const title = checkTitle(fields.title);
     const kind = checkKind(fields.kind);
+    const view = checkView(fields.view);
     const labels = normalizeLabels(fields.labels);
     if (!VIAS.includes(fields.via)) throw new LibraryError('invalid-argument', 'Unknown via.');
     if (typeof fields.createdBy !== 'string' || !fields.createdBy) {
@@ -244,6 +260,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
       id,
       title,
       kind,
+      view,
       labels,
       prompt: fields.prompt || null,
       model: fields.model || null,
@@ -331,7 +348,7 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
   }
 
   /**
-   * Changes an image's title, kind or labels (L-703). A kind is fixed while a
+   * Changes an image's title, kind, view or labels (L-703, L-955). A kind is fixed while a
    * world uses the image, since assigning checked it fits (L1).
    */
   async function updateImage(imageId, fields = {}) {
@@ -348,6 +365,20 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
           'failed-precondition',
           `"${record.title}" is in use as a ${record.kind} image: ${where}. Unassign it before ` +
             'changing its kind.'
+        );
+      }
+    }
+    // A view, like a kind, is fixed while a world uses the image: assigning
+    // checked it fits (L-955), and a world's reference holds it.
+    if (fields.view !== undefined && (fields.view || null) !== (record.view || null)) {
+      update.view = checkView(fields.view);
+      const uses = record.usedIn || [];
+      if (uses.length) {
+        const where = uses.map((use) => `${use.worldId} (${use.target} ${use.id})`).join(', ');
+        throw new LibraryError(
+          'failed-precondition',
+          `"${record.title}" is in use as a ${record.view || 'not marked'} image: ${where}. ` +
+            'Unassign it before changing its view.'
         );
       }
     }
@@ -371,11 +402,13 @@ function createLibrary({ db, bucket, now = () => Date.now() }) {
       .split(/\s+/)
       .filter(Boolean);
     if (query.kind !== undefined) checkKind(query.kind);
+    if (query.view !== undefined) checkView(query.view);
     const snap = await images().get();
     const rows = snap.docs
       .map((doc) => doc.data())
       .filter((data) => {
         if (query.kind && data.kind !== query.kind) return false;
+        if (query.view && data.view !== query.view) return false;
         if (wanted.some((label) => !(data.labels || []).includes(label))) return false;
         if (query.worldId && !(data.usedIn || []).some((use) => use.worldId === query.worldId)) {
           return false;
@@ -461,6 +494,7 @@ module.exports = {
   summary,
   LibraryError,
   KINDS,
+  VIEWS,
   VIAS,
   LINK_CACHE,
   versionPath,

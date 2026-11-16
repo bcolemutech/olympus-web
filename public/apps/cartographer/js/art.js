@@ -45,10 +45,12 @@
     battleMap: {
       title: 'Battle-map art',
       hint:
-        "A battle map's art is drawn under its grid in the Loom, stretched to fit it. Draw the " +
-        'map with Claude first (set_battle_map). Upload a PNG or an SVG, or ask Claude to draw ' +
-        'one (set_art); Claude can check that its entries, exits and features line up with ' +
-        'the art, with view_image.',
+        "A battle map's art is its floor painting: the floors only, top-down, stretched to " +
+        'the grid and drawn under its walls, doors and objects, which stand from its data ' +
+        '(a painting with walls or furniture painted in would show them twice). Draw the map ' +
+        'with Claude first (set_battle_map). Upload a PNG or an SVG, or ask Claude to make ' +
+        'one (studio_generate from the map with floor: true, or set_art); Claude can check ' +
+        'that it lines up, with view_image.',
       pick: 'Battle map',
       of: 'battle maps',
       file: 'battlemap.png',

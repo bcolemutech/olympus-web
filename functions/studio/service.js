@@ -34,7 +34,7 @@ function createStudioService({ db, bucket, FieldValue, auth, jobs, now = () => D
   const library = createLibrary({ db, bucket, now });
   const ledger = FieldValue ? createCosts({ db, FieldValue, now }) : null;
 
-  async function upload(uid, { uploadId, title, kind, labels, prompt } = {}) {
+  async function upload(uid, { uploadId, title, kind, view, labels, prompt } = {}) {
     if (typeof uploadId !== 'string' || !UPLOAD_ID.test(uploadId)) {
       throw new HttpsError('invalid-argument', 'uploadId is required.');
     }
@@ -64,6 +64,7 @@ function createStudioService({ db, bucket, FieldValue, auth, jobs, now = () => D
       record = await library.addImage({
         title,
         kind,
+        view: view || null,
         labels,
         prompt: prompt || null,
         file: image,

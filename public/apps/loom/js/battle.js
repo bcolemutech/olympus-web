@@ -394,6 +394,14 @@
 
   // ── Data ──────────────────────────────────────────
 
+  // A grid's own painting is drawn only if it is a floor painting (L-955, AR2,
+  // C4): its floors, under the walls, doors and objects that stand from the
+  // data. A painting of anything else (the old top-down ones, with walls and
+  // furniture painted in) is not drawn, and the map draws from its data.
+  function floorArt(data) {
+    return data && data.image && data.image.view === 'floor' ? data.image : null;
+  }
+
   // The map's art: its screen-sized copy first, the full image once zoomed in
   // (A1; L-727).
   function loadArt(image) {
@@ -426,7 +434,7 @@
     if (battle.selectedObject && (!battle.data || !usable(battle.selectedObject))) {
       battle.selectedObject = null;
     }
-    loadArt(data && data.image);
+    loadArt(floorArt(data));
     computeFog();
     computeReach();
     computePreview();
@@ -1050,20 +1058,15 @@
   }
 
   // The map as the painter draws it (L-924): its geometry as far as seen,
-  // each door in this save's state (as the server sends it). Over a map's
-  // own art (EX2), the obstacles its layers of before made objects of
-  // (L-928) are the art's own and aren't drawn again.
+  // each door in this save's state (as the server sends it). Under a floor
+  // painting (L-955) its floors aren't drawn (`floorArt`); everything that
+  // stands is, from the data.
   function paintMap(n, d) {
     var merged = MP.geometryOf(d);
     var geometry = {};
     Object.keys(merged).forEach(function (k) {
       geometry[k] = merged[k];
     });
-    if (d.image) {
-      geometry.objects = (merged.objects || []).filter(function (o) {
-        return String(o.id).indexOf('layer-') !== 0;
-      });
-    }
     var root = Loom.mapPaint.paint(n.painted, 'battle:' + d.id, geometry, {
       tile: MP.FEET,
       wall: 1.5,
@@ -1074,7 +1077,7 @@
       // In isometric (L-952), what stands is built on the isometric screen.
       iso: iso ? { rise: ISO_RISE } : null,
       low: iso && wallsLow(), // the walls-low button (L-953)
-      art: Boolean(d.image),
+      floorArt: Boolean(floorArt(d)), // a floor painting lies under what stands (L-955)
       tint: accent(),
       worldKinds: d.objectKinds || null,
       set: d.artSet || null, // the world's art set (L-944)
@@ -1113,7 +1116,7 @@
     maskStanding(n, d);
 
     // The art is stretched to the grid, as Claude sees it in view_image.
-    var art = d.image && battle.art && battle.art.ready(d.image);
+    var art = floorArt(d) && battle.art && battle.art.ready(d.image);
     n.art.visible = Boolean(art);
     if (art) {
       n.art.texture = battle.art.texture;
@@ -2747,8 +2750,8 @@
     /**
      * What's drawn upright on the scene, for tests (L-951): your token's
      * foot, the names and foes' cards ({ text, x, y }), whether the grid
-     * (in isometric, the 5 ft diamonds) shows, and whether the hover's
-     * outline is drawn (L-953).
+     * (in isometric, the 5 ft diamonds) shows, whether the hover's
+     * outline is drawn (L-953) and the floor painting's place (L-955).
      */
     drawn: function () {
       var n = battle.nodes;
@@ -2762,6 +2765,16 @@
         cards: n.cards.children.map(text),
         grid: Boolean(battle.gridShown),
         lit: Boolean(battle.litKey), // the hover's outline drawn (L-953)
+        // The grid's floor painting (L-955), where it lies on the floor in
+        // feet, or null when none is drawn.
+        art: n.art.visible
+          ? {
+              x0: ((n.art.position.x - PAD) * MP.FEET) / CELL,
+              y0: ((n.art.position.y - TOP) * MP.FEET) / CELL,
+              x1: ((n.art.position.x + n.art.width - PAD) * MP.FEET) / CELL,
+              y1: ((n.art.position.y + n.art.height - TOP) * MP.FEET) / CELL,
+            }
+          : null,
       };
     },
     selectHere: function () {

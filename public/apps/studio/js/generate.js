@@ -137,6 +137,7 @@
     var data = {
       prompt: prompt,
       kind: ref('studio-gen-kind').value,
+      view: ref('studio-gen-view').value || undefined,
       tier: ref('studio-tier').value,
       references: references.slice(),
       labels: ref('studio-gen-labels')
@@ -173,6 +174,7 @@
         kinds.appendChild(new window.Option(k[1], k[0]));
       });
       kinds.value = 'worldMap';
+      Studio.fillViews(ref('studio-gen-view'));
       var ratios = ref('studio-ratio');
       RATIOS.forEach(function (r) {
         ratios.appendChild(new window.Option(r, r));
