@@ -144,7 +144,11 @@ describe('when the model is busy', () => {
       },
       drawn,
     ];
-    const { id: jobId } = await jobs.start(BUILDER, { prompt: 'A gate', kind: 'cover', tier: 'draft' });
+    const { id: jobId } = await jobs.start(BUILDER, {
+      prompt: 'A gate',
+      kind: 'cover',
+      tier: 'draft',
+    });
     // Queued again with its try count, between tries.
     await dispatched.shift();
     expect(await jobDoc(jobId)).toMatchObject({ state: 'queued', tries: 2 });
@@ -161,7 +165,11 @@ describe('when the model is busy', () => {
     model.answers = Array.from({ length: 6 }, () => () => {
       throw busy();
     });
-    const { id: jobId } = await jobs.start(BUILDER, { prompt: 'A gate', kind: 'cover', tier: 'draft' });
+    const { id: jobId } = await jobs.start(BUILDER, {
+      prompt: 'A gate',
+      kind: 'cover',
+      tier: 'draft',
+    });
     await drain();
     const job = await jobDoc(jobId);
     expect(job.state).toBe('failed');
@@ -177,7 +185,11 @@ describe('when the model is busy', () => {
         throw new Error('400 INVALID_ARGUMENT: bad prompt');
       },
     ];
-    const { id: jobId } = await jobs.start(BUILDER, { prompt: 'A gate', kind: 'cover', tier: 'draft' });
+    const { id: jobId } = await jobs.start(BUILDER, {
+      prompt: 'A gate',
+      kind: 'cover',
+      tier: 'draft',
+    });
     await drain();
     expect(await jobDoc(jobId)).toMatchObject({
       state: 'failed',
@@ -203,6 +215,7 @@ describe('fit: art to its grid’s shape', () => {
     library.addImage({
       title,
       kind: 'battleMap',
+      view: 'floor', // a grid's art is a floor painting (L-955)
       createdBy: BUILDER,
       via: 'page',
       file: readImage(png(400, 300)),
