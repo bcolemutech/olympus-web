@@ -64,7 +64,15 @@ const MAP = require('./helpers/grid').gridMap({
   name: 'The inn',
   width: 8,
   height: 8,
-  image: { path: 'art/inn.png', width: 8, height: 8 },
+  // A floor painting (L-955): the only painting a grid draws.
+  image: {
+    imageId: 'img_00000000000000a1',
+    link: 'https://x/inn',
+    width: 8,
+    height: 8,
+    format: 'png',
+    view: 'floor',
+  },
   entries: [{ id: 'door', x: 0, y: 1 }],
   exits: [{ id: 'out', name: 'the door', x: 0, y: 0, to: 'out' }],
   features: [
@@ -214,7 +222,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(15);
+    expect(RUBRIC_VERSION).toBe(16);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -342,7 +350,7 @@ describe('point of interest and place criteria', () => {
     const plain = without(w, 'battleMaps', 'bm_inn', { image: null });
     expect(check('place.mapArt', plain, plain.places.plc_inn, 'place')).toMatchObject({
       progress: 0,
-      message: 'Its battle map has no art.',
+      message: 'Its battle map has no floor painting.',
     });
     const generic = without(w, 'battleMaps', 'bm_inn', { generic: { kind: 'tavern' } });
     expect(check('place.mapArt', generic, generic.places.plc_inn, 'place').progress).toBe(0);
@@ -534,8 +542,9 @@ describe('character, battle map, realm and world criteria', () => {
         lacking: ['moonstone-altar'],
       });
       expect(criterion('battleMap.look')).toMatchObject({ need: 'look', tool: 'set_object_art' });
-      // Art of its own, on the object or its kind in the world, paints it.
-      const art = { imageId: 'img_1' };
+      // Art of its own made for the isometric view, on the object or its kind
+      // in the world, paints it (L-956).
+      const art = { imageId: 'img_1', link: 'https://x/1', view: 'iso' };
       const own = drawn({
         ground: [floor(60, 40)],
         walls: walls(60, 40),
@@ -564,7 +573,77 @@ describe('character, battle map, realm and world criteria', () => {
       }
     });
 
-    test('a map with its own art is looked at for its objects only', () => {
+    test('a grid dressed in the set’s isometric art grades as it did (L-956)', () => {
+      const w = world();
+      const m = drawn({ ground: [floor(60, 40)], walls: walls(60, 40), objects: [chest] });
+      const look = require('../functions/loom-canon/look');
+      expect(look.unpainted(w, m)).toMatchObject({ total: 3, painted: 3, ignored: [] });
+      expect(check('battleMap.look', w, m)).toEqual({ progress: 1 });
+    });
+
+    describe('art made for another view is missing on a grid', () => {
+      const odd = { id: 'o', kind: 'moonstone-altar', at: [20, 20], size: [3, 3] };
+      const link = 'https://x/altar';
+      const base = { ground: [floor(60, 40)], walls: walls(60, 40) };
+      const kindsOf = (view) => ({
+        objectKinds: { 'moonstone-altar': { art: { imageId: 'img_2', link, view } } },
+      });
+
+      test.each(['three-quarter', 'top-down', undefined])(
+        'an object kind’s art marked %s loses the look until it is isometric',
+        (view) => {
+          const w = { ...world(), ...kindsOf(view) };
+          const m = drawn({ ...base, objects: [chest, odd] });
+          expect(check('battleMap.look', w, m)).toMatchObject({
+            progress: 0.75,
+            lacking: ['moonstone-altar'],
+            message: expect.stringContaining('Art made for another view is not drawn on a grid'),
+          });
+          const fixed = { ...world(), ...kindsOf('iso') };
+          expect(check('battleMap.look', fixed, m)).toEqual({ progress: 1 });
+        }
+      );
+
+      test('an object’s own art follows the same rule', () => {
+        const m = (view) =>
+          drawn({ ...base, objects: [{ ...odd, art: { imageId: 'img_3', link, view } }] });
+        expect(check('battleMap.look', world(), m('three-quarter')).lacking).toEqual([
+          'moonstone-altar',
+        ]);
+        expect(check('battleMap.look', world(), m('iso'))).toEqual({ progress: 1 });
+      });
+
+      test('a kind the set paints is drawn from the set whatever art the world gave it', () => {
+        const w = {
+          ...world(),
+          objectKinds: { chest: { art: { imageId: 'img_4', link, view: 'three-quarter' } } },
+        };
+        const m = drawn({ ...base, objects: [chest] });
+        expect(check('battleMap.look', w, m)).toEqual({ progress: 1 });
+      });
+
+      test('a world’s own ground not made for a grid is drawn as its like, a set’s ground', () => {
+        const own = (view) => ({
+          ...world(),
+          materials: [{ id: 'moss', like: 'stone', art: { link: 'https://x/m', view } }],
+        });
+        const m = drawn({ ground: [{ ...floor(60, 40), material: 'moss' }], walls: walls(60, 40) });
+        const look = require('../functions/loom-canon/look');
+        // Made for a grid (an isometric or floor picture): drawn, and nothing is ignored.
+        for (const view of ['iso', 'floor']) {
+          expect(look.unpainted(own(view), m)).toMatchObject({ painted: 2, ignored: [] });
+        }
+        // Made for another view: not drawn on a grid, which lays its like's ground instead;
+        // it is painted, but its art is named as ignored.
+        expect(look.unpainted(own('top-down'), m)).toMatchObject({
+          painted: 2,
+          ignored: ['ground/moss'],
+        });
+        expect(check('battleMap.look', own('top-down'), m)).toEqual({ progress: 1 });
+      });
+    });
+
+    test('a map with a floor painting is looked at for what stands, not its floors', () => {
       const w = world();
       const odd = { id: 'o', kind: 'moonstone-altar', at: [20, 20], size: [3, 3] };
       const m = drawn({ objects: [odd] }, { image: MAP.image });
@@ -574,6 +653,34 @@ describe('character, battle map, realm and world criteria', () => {
         { image: MAP.image }
       );
       expect(check('battleMap.look', w, flat)).toEqual({ progress: 1 });
+      // Its walls stand from the data, so they are looked at (L-956).
+      const look = require('../functions/loom-canon/look');
+      const standing = drawn(
+        { ground: [floor(60, 40)], walls: walls(60, 40) },
+        { image: MAP.image }
+      );
+      expect(look.unpainted(w, standing, { floorPainting: true })).toMatchObject({ total: 1 });
+      expect(look.unpainted(w, standing)).toMatchObject({ total: 2 });
+    });
+
+    test('a top-down painting counts for nothing on a grid', () => {
+      const w = world();
+      const old = { ...MAP.image, view: 'top-down' };
+      const unmarked = { path: 'art/inn.png', width: 8, height: 8, format: 'png' };
+      for (const image of [old, unmarked, { ...old, view: 'three-quarter' }]) {
+        // Its floors are drawn from the data, so they are looked at; with none, it
+        // is not drawn at all.
+        const flat = drawn({ ground: [{ ...floor(6, 6), material: 'nothing' }] }, { image });
+        expect(check('battleMap.look', w, flat)).toMatchObject({ lacking: ['ground/nothing'] });
+        const bare = drawn({}, { image });
+        expect(check('battleMap.look', w, bare)).toMatchObject({ progress: 0, need: 'drawn' });
+        expect(check('battleMap.art', w, bare)).toMatchObject({
+          progress: 0,
+          message: expect.stringContaining('old view'),
+        });
+      }
+      // A floor painting earns the bonus.
+      expect(check('battleMap.art', w, { ...MAP, image: MAP.image })).toEqual({ progress: 1 });
     });
 
     test('art is a bonus: a map with its own art scores over the same one without', () => {
@@ -591,6 +698,9 @@ describe('character, battle map, realm and world criteria', () => {
       // Short of the top, the art adds its bonus points.
       const short = { ...data, exits: [] };
       const withArt = { ...short, image: MAP.image };
+      // A top-down painting earns none of it (L-956).
+      const topDown = { ...short, image: { ...MAP.image, view: 'top-down' } };
+      expect(gradeBattleMap(w, topDown).score).toBe(gradeBattleMap(w, short).score);
       expect(gradeBattleMap(w, withArt).score - gradeBattleMap(w, short).score).toBeCloseTo(
         WEIGHTS.battleMap.art - WEIGHTS.battleMap.exits * 0 - 0,
         5

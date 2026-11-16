@@ -90,19 +90,22 @@ const HOW_TO = {
     'It is drawn when it has art, or both floors and walls; open country has no walls, so ' +
     'floors with lines or objects (set_lines, set_objects) are drawn. Check it with view_image.',
   look:
-    'Paint what its battle map shows: `lacking` names the materials (wall/stone) and object ' +
-    'kinds that have no painted art in the world’s art set. Give an object kind art with ' +
-    'set_object_art (a studio image), or choose an art set that paints them (list_art_sets, ' +
-    'update_world art.set); a map with its own art is only checked for its doors, windows ' +
-    'and objects.',
+    'Paint what its battle map shows for the isometric view a grid is drawn in: `lacking` ' +
+    'names the materials (wall/stone) and object kinds with no art made for it (the world’s ' +
+    'art set paints the classic ones; art made for another view is not drawn on a grid). Give ' +
+    'an object kind isometric art with set_object_art (a studio image marked iso), or choose ' +
+    'an art set that paints them (list_art_sets, update_world art.set); a map with a floor ' +
+    'painting is only checked for its walls, doors, windows and objects.',
   townArt:
     'Give the town art: a town image from the studio’s library, with studio_assign (target ' +
     'town), or upload it on the Cartographer page. Check it with view_image.',
   mapArt:
     'Give it art: an image from the studio’s library with studio_assign (target battleMap, or ' +
-    'map for the world map), or upload it on the Cartographer page. Line the grid up with ' +
-    'view_image. For a battle map it is a small bonus: a map drawn from data can reach the ' +
-    'top band without it.',
+    'map for the world map), or upload it on the Cartographer page. A battle map’s art is a ' +
+    'floor painting, the only painting a grid draws (studio_generate with floor: true from ' +
+    'the map; view_image floor: true shows its guide); an older top-down painting is not ' +
+    'drawn, and earns nothing. It is a small bonus: a map drawn from data can reach the top ' +
+    'band without it.',
   token:
     'Give them a picture in the circle on a battle map: set_token (a studio image of kind ' +
     'token or portrait, with a crop to frame the face). A character with a stat block shows ' +

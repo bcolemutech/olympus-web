@@ -432,7 +432,7 @@ describe('whole worlds', () => {
     const summary = gradeWorld(w);
     expect(summary).toMatchObject({
       graded: true,
-      rubricVersion: 15,
+      rubricVersion: 16,
       inTown: { total: 2, ...none, playable: 2 },
       places: {
         total: 3,

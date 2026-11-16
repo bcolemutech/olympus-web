@@ -1,6 +1,6 @@
 # The Loom — The Isometric View — Design Document v0.1
 
-**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md)); its checkpoint is answered (§3, 2026-11-15). L-950's stories L-951 to L-957 are filed as #857–#863 (§6); L-954, the props, and L-955, art by view and floor paintings, are built (§4.4); L-960's are filed when it is next.
+**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md)); its checkpoint is answered (§3, 2026-11-15). L-950's stories L-951 to L-957 are filed as #857–#863 (§6); L-954, the props, L-955, art by view and floor paintings (§4.4), and L-956, grading (§4.5), are built; L-960's are filed when it is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epics:** L-950 the isometric view (#852), L-960 reworking the worlds (#853); Phase 10 — Levels and Vehicles (milestone #26).
 **Replaces:** the three-quarter view on grid maps ([`game-art.md`](./game-art.md), L-941). Town and region maps keep it.
@@ -143,6 +143,8 @@ Settled through a questionnaire. AR2 was then refined by a follow-up question.
 ### 4.5 Grading (PL3)
 
 Unchanged in its criteria: a map's look counts (L-947), and a map's own art keeps its bonus. On a grid map, only art made for the isometric view counts toward the look, and a floor painting earns the own-art bonus.
+
+**Built in L-956 (2026-11-16):** the rubric is version 16. `look.js` counts, on a grid, an object painted when `materials.isoFor` finds a picture for it (its own or its kind's art marked `iso`, else its set's `iso`) and a material when its set or a world's own ground made for a grid paints it, so art made for another view paints nothing and is named as ignored in the work list's message. A floor painting skips a map's ground and lines but not its walls, which stand from the data (L-955); the own-art bonus (`battleMap.art`, `place.mapArt`) is earned only by a floor painting (`art.js` `floorPainting`), and a top-down painting counts for nothing. The `drawn` criterion is unchanged: a map with any painting still counts as drawn, which a top-down painting no longer is on a grid (see [`the-loom-grading.md`](./the-loom-grading.md)). Tests: `tests/loom-grading-score.test.js`.
 
 ### 4.6 Unpublishing (WD1)
 
