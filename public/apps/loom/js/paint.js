@@ -88,6 +88,12 @@
   //                                                         preview (TV1; L-942); the
   //                                                         drawer calls it as they move
   //   Loom.mapPaint.fading(key)                             pieces still easing, for tests
+  //   Loom.mapPaint.pick(key, x, y, accept)                 in isometric, the front-most
+  //                                                         standing thing a click there
+  //                                                         picks, by its drawn outline
+  //                                                         (L-953), or null
+  //   Loom.mapPaint.outlineOfHit(key, hit)                  the outline of what a pick
+  //                                                         lights: every piece of it
   //   Loom.mapPaint.shadowTexture()                         a contact shadow, for tokens
   //
   // options: { tile (map units a tile of ground covers; 5 on a grid),
@@ -107,7 +113,8 @@
   //            rise (how far up the screen a foot of height stands, for
   //            riseOf; RISE without it), iso ({ rise }: the isometric view,
   //            below; the drawer lays the root under its 2:1 projection and
-  //            gives `stand` and `standAt`) }
+  //            gives `stand` and `standAt`; `low`: the walls-low button,
+  //            every wall LOW_FT tall at most, L-953) }
   //
   // The isometric view (planning/isometric-view.md §4.2, IS3, IS5, AR1, AR2;
   // L-952 / #858; iso.js): with `iso`, what lies on the floor is drawn as
@@ -133,6 +140,13 @@
   // screen (view's `stand`); dimmed by the drawer's fog (shade). A map's own
   // painting never stands in for its walls or doors (AR2): with `iso` they
   // are drawn from its data, over it.
+  //
+  // Seeing and picking (§4.3, IS4, IN1; L-953 / #859): what fades over a
+  // target is judged on the isometric screen, a piece's drawn outline over
+  // the target and its footprint in front of the target's (iso.js compare);
+  // `pick` finds the front-most piece a click picks by its drawn outline
+  // (a door's leaf and the wall over it, a usable object's picture, a
+  // drawer's token), walls and decor falling through.
 
   var Loom = window.Loom;
   var mat = Loom.materials;
@@ -175,6 +189,9 @@
     fence: 0.4,
   };
   var ISO_DARK = 0.78;
+  // The walls-low button (planning/isometric-view.md §4.3, IS4; L-953): every
+  // wall, and the wall over doors and windows, at most this tall (feet).
+  var LOW_FT = 2;
   // The finish (planning/game-art.md §4.2, EN3–EN5, AR4; L-943 / #797).
   var FADE_FT = 1; // a floor fades over the one under it this far past its edge
   var FADE_STEPS = 5; // strokes the fade is built of
@@ -1065,6 +1082,14 @@
       return slab(a, b, Object.assign({ span: o.fades ? tile * 2 : 0 }, so));
     };
     var thick = o.wall;
+    // A wall's height: its own, else WALL_FT; with the walls-low button
+    // (L-953), LOW_FT at most, the doors and windows in it with it.
+    var low = Boolean(o.iso && o.low);
+    var lowKey = low ? '|low' : '';
+    var wallHeight = function (wall) {
+      var h = heightOf(wall, WALL_FT);
+      return low ? Math.min(h, LOW_FT) : h;
+    };
     // A wall's thickness: in isometric by its material (IS5), else the drawer's.
     var thickOf = function (wall) {
       if (!o.iso) return thick;
@@ -1188,7 +1213,7 @@
         var url = wallArt.key;
         var fUrl = wallArt.face;
         var edges = byWall[item.id] || [];
-        var top = riseFor(heightOf(item, WALL_FT), o);
+        var top = riseFor(wallHeight(item), o);
         var wt = thickOf(item);
         var cut = JSON.stringify(
           edges.map(function (e) {
@@ -1253,10 +1278,10 @@
         var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
         var wUrl = wallArt.key || null;
         var fUrl = wallArt.face || null;
-        var height = heightOf(wall, WALL_FT);
+        var height = wallHeight(wall);
         var sill = Math.min(SILL_FT, height);
         var head = Math.min(heightOf(item, WINDOW_FT), height);
-        var wallKey = wall ? wall.material + '|' + height + '|' + o.feet : '';
+        var wallKey = (wall ? wall.material + '|' + height + '|' + o.feet : '') + lowKey;
         var wt = thickOf(wall);
         add(
           'standing',
@@ -1355,7 +1380,7 @@
       var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
       var wUrl = wallArt.key || null;
       var fUrl = wallArt.face || null;
-      var height = heightOf(wall, WALL_FT);
+      var height = wallHeight(wall);
       var tall = Math.min(heightOf(item, DOOR_FT), height);
       var see = (mat.materialOf('door', item.material) || {}).seeThrough;
       var wt = thickOf(wall);
@@ -1447,7 +1472,7 @@
           }
           return parts;
         },
-        (wall ? wall.material + '|' + height : '') + '|' + o.feet
+        (wall ? wall.material + '|' + height : '') + '|' + o.feet + lowKey
       );
       if ((item.state || 'closed') !== 'open') {
         add(
@@ -1942,6 +1967,12 @@
    */
   function outlineOf(wrap) {
     if (!wrap || !wrap.__loomPrint) return null;
+    if (wrap.__loomOutline) return wrap.__loomOutline;
+    wrap.__loomOutline = outlineMade(wrap);
+    return wrap.__loomOutline;
+  }
+
+  function outlineMade(wrap) {
     if (!wrap.__loomRise) {
       var b = wrap.__loomBox;
       return b
@@ -2115,14 +2146,81 @@
 
   // ── Seeing behind walls (TV1, L-942) ──────────────────────────────────
 
+  // Whether a point is inside a polygon ([{ x, y }]), by the crossings of a ray.
+  function inPoly(poly, x, y) {
+    var hit = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var a = poly[i];
+      var b = poly[j];
+      if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+    }
+    return hit;
+  }
+
+  // Whether a convex polygon and a box overlap: no axis (the box's two, the
+  // polygon's edges' normals) separates them.
+  function polyMeetsBox(poly, box) {
+    var rect = [
+      { x: box.x0, y: box.y0 },
+      { x: box.x1, y: box.y0 },
+      { x: box.x1, y: box.y1 },
+      { x: box.x0, y: box.y1 },
+    ];
+    var axes = [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ];
+    for (var i = 0; i < poly.length; i++) {
+      var a = poly[i];
+      var b = poly[(i + 1) % poly.length];
+      axes.push({ x: a.y - b.y, y: b.x - a.x });
+    }
+    var span = function (pts, n) {
+      var lo = Infinity;
+      var hi = -Infinity;
+      pts.forEach(function (p) {
+        var v = p.x * n.x + p.y * n.y;
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      });
+      return [lo, hi];
+    };
+    for (var k = 0; k < axes.length; k++) {
+      var sp = span(poly, axes[k]);
+      var sr = span(rect, axes[k]);
+      if (sp[1] < sr[0] - 1e-9 || sr[1] < sp[0] - 1e-9) return false;
+    }
+    return true;
+  }
+
   // Whether a standing piece covers any of the targets: its picture overlaps
   // them and it stands in front of them (its foot further down the screen).
-  function covers(wrap, targets) {
+  // In isometric (L-953), judged on that screen: its drawn outline over the
+  // target, and its footprint in front of the target's (`print`) as the
+  // order judges it (iso.js compare), else its middle further down. A
+  // target's `except` (what the pointer picks) never fades for it.
+  function covers(s, wrap, targets) {
     var box = wrap.__loomBox;
     if (!box) return false;
+    var outline = s.iso ? outlineOf(wrap) : null;
     for (var i = 0; i < targets.length; i++) {
       var t = targets[i];
-      if (t.depth < wrap.__loomDepth && overlaps(box, t.box)) return true;
+      if (t.except && wrap.__loomHit === t.except) continue;
+      if (!overlaps(box, t.box)) continue;
+      if (!outline) {
+        if (t.depth < wrap.__loomDepth) return true;
+        continue;
+      }
+      if (!polyMeetsBox(outline, t.box)) continue;
+      var r = t.print
+        ? ISO.compare(
+            { pts: wrap.__loomPrint, depth: wrap.__loomDepth },
+            { pts: t.print, depth: t.depth }
+          )
+        : t.depth < wrap.__loomDepth
+          ? 1
+          : 0;
+      if (r > 0) return true;
     }
     return false;
   }
@@ -2170,7 +2268,10 @@
    * tall object whose picture overlaps one and whose foot is further down
    * the screen fades to 30% over 150 ms; the rest return, the same way. Only
    * the pieces covering fade, not whole walls. Call it as they change: one
-   * with the same targets as the last does nothing.
+   * with the same targets as the last does nothing. In isometric (L-953), a
+   * target also has its footprint on the floor (`print`, in the painter's
+   * units), and may name what the pointer picks (`except`, a hit) so that
+   * doesn't fade.
    */
   function fade(key, targets) {
     var s = maps.get(key);
@@ -2180,11 +2281,13 @@
     });
     var sig = list
       .map(function (t) {
-        return [t.box.x0, t.box.y0, t.box.x1, t.box.y1, t.depth]
-          .map(function (n) {
-            return Math.round(n * 10);
-          })
-          .join(',');
+        return (
+          [t.box.x0, t.box.y0, t.box.x1, t.box.y1, t.depth]
+            .map(function (n) {
+              return Math.round(n * 10);
+            })
+            .join(',') + (t.except ? '|' + t.except : '')
+        );
       })
       .join(';');
     if (sig === s.fadeSig) return;
@@ -2194,7 +2297,7 @@
     var easing = false;
     s.stand.children.forEach(function (wrap) {
       if (!wrap.__loomFades) return;
-      var want = list.length && covers(wrap, list) ? FADE_TO : 1;
+      var want = list.length && covers(s, wrap, list) ? FADE_TO : 1;
       wrap.__loomWant = want;
       if (instant) wrap.alpha = want;
       else if (wrap.alpha !== want) easing = true;
@@ -2263,7 +2366,7 @@
       wrap.__loomBounds = part.box || null;
       culls(s, wrap);
       // Built while something is behind it: faded at once.
-      if (s.fadeTargets && wrap.__loomFades && covers(wrap, s.fadeTargets)) {
+      if (s.fadeTargets && wrap.__loomFades && covers(s, wrap, s.fadeTargets)) {
         wrap.__loomWant = FADE_TO;
         wrap.alpha = FADE_TO;
       }
@@ -2493,8 +2596,75 @@
     return null;
   }
 
+  // A standing node's outline for picking, in the standing layer's units: a
+  // part's (outlineOf), or a drawer's token's from where it was placed.
+  function pickOutline(node) {
+    if (node.__loomDepth !== undefined) return outlineOf(node);
+    var p = node.__loomPlace;
+    if (!p) return null;
+    if (p.outline) return p.outline;
+    var b = p.box;
+    return b
+      ? [
+          { x: b.x0, y: b.y0 },
+          { x: b.x1, y: b.y0 },
+          { x: b.x1, y: b.y1 },
+          { x: b.x0, y: b.y1 },
+        ]
+      : null;
+  }
+
+  /**
+   * In isometric (L-953; IN1): the front-most standing thing at a point (the
+   * standing layer's units) that a click there picks, by its drawn outline,
+   * or null. Only what has a hit is picked: a door's leaf and the wall over
+   * it (`door:<id>`), an object's picture (its id; decor has none) and the
+   * drawer's tokens (their `__loomHit`); walls fall through, as does any hit
+   * `accept` (if given) turns down. Returns { hit, node }.
+   */
+  function pick(key, x, y, accept) {
+    var s = maps.get(key);
+    if (!s) return null;
+    var best = null;
+    var children = s.stand.children;
+    for (var i = 0; i < children.length; i++) {
+      var node = children[i];
+      var hit = node.__loomHit;
+      if (!hit || !node.visible || node.__loomCulled) continue;
+      if (best && node.zIndex < best.node.zIndex) continue;
+      var b =
+        node.__loomDepth !== undefined ? node.__loomBox : node.__loomPlace && node.__loomPlace.box;
+      if (b && (x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1)) continue;
+      var outline = pickOutline(node);
+      if (!outline || !inPoly(outline, x, y)) continue;
+      if (accept && !accept(hit)) continue;
+      best = { hit: hit, node: node };
+    }
+    return best;
+  }
+
+  /**
+   * The outline of everything a pick lights (L-953): the hull of every
+   * standing piece with that hit (a door's leaf and the wall over it), in
+   * the standing layer's units; null with none.
+   */
+  function outlineOfHit(key, hit) {
+    var s = maps.get(key);
+    if (!s || !hit) return null;
+    var pts = [];
+    s.stand.children.forEach(function (node) {
+      if (node.__loomHit !== hit || !node.visible) return;
+      (pickOutline(node) || []).forEach(function (p) {
+        pts.push(p);
+      });
+    });
+    return pts.length >= 3 ? ISO.hull(pts) : null;
+  }
+
   Loom.mapPaint = {
     paint: paint,
+    pick: pick,
+    outlineOfHit: outlineOfHit,
     forget: forget,
     stats: stats,
     describe: describe,

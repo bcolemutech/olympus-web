@@ -167,7 +167,7 @@ async function page() {
   const p = await browser.newPage({ viewport: { width: 960, height: 640 } });
   p.errors = [];
   p.on('pageerror', (e) => p.errors.push(e.message));
-  await p.goto(origin + '/fixtures/paint/drawers.html');
+  await p.goto(origin + '/fixtures/paint/drawers.html?view=tq');
   return p;
 }
 const show = (p, data) => p.evaluate(([d, t]) => window.__show(d, t), [data, TURN]);

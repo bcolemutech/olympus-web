@@ -3,8 +3,8 @@
 /**
  * The grid's isometric view in headless Chrome (public/apps/loom/js/battle.js;
  * planning/isometric-view.md §4.1, IS1, IS2, IN2, C2; L-951 / #857), on the
- * real map engine (fixtures/paint/drawers.html, opened with `?view=iso`, the
- * view's switch until L-953 makes it the default):
+ * real map engine (fixtures/paint/drawers.html, opened with `?view=iso`; the
+ * default since L-953, `?view=tq` the three-quarter view):
  *
  *   - the test dungeon and a generated interior drawn isometric (the floor,
  *     and since L-952 the walls, doors and objects standing on it), against
@@ -495,9 +495,9 @@ describe('the isometric view (L-951)', () => {
       }),
       space: { width: 1000, height: 1000 },
     };
-    // The town drawn the same with the switch as without.
+    // The town drawn the same in either view (isometric the default since L-953).
     const shots = {};
-    for (const query of ['', '?view=iso']) {
+    for (const query of ['?view=tq', '?view=iso']) {
       const page = await isoPage(query);
       await show(page, town, null, 'town');
       shots[query] = {
@@ -507,8 +507,8 @@ describe('the isometric view (L-951)', () => {
       expect(page.errors).toEqual([]);
       await page.close();
     }
-    expect(shots['?view=iso'].drawn).toEqual(shots[''].drawn);
-    const a = shots[''].png;
+    expect(shots['?view=iso'].drawn).toEqual(shots['?view=tq'].drawn);
+    const a = shots['?view=tq'].png;
     const b = shots['?view=iso'].png;
     expect(pixelmatch(a.data, b.data, null, a.width, a.height, { threshold: 0.1 })).toBe(0);
 
@@ -581,8 +581,11 @@ describe('the isometric view (L-951)', () => {
     await page.close();
   });
 
-  withBrowser('without the switch the grid keeps the three-quarter view', async () => {
-    const page = await isoPage('');
+  withBrowser('isometric by default (L-953); `?view=tq` keeps the three-quarter view', async () => {
+    const plain = await isoPage('');
+    expect(await plain.evaluate(() => window.Loom.battle.iso())).toBe(true);
+    await plain.close();
+    const page = await isoPage('?view=tq');
     expect(await page.evaluate(() => window.Loom.battle.iso())).toBe(false);
     await show(page, dungeonData());
     const drawn = await page.evaluate(() => window.Loom.mapPaint.describe('battle:dungeon'));

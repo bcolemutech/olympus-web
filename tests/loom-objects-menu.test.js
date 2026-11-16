@@ -109,7 +109,7 @@ async function shown(sent, prepare) {
   const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(origin + '/fixtures/paint/drawers.html');
+  await page.goto(origin + '/fixtures/paint/drawers.html?view=tq');
   await page.evaluate(() => {
     window.__calls = [];
     const record = (name) =>
