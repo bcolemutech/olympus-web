@@ -55,6 +55,16 @@ function mapArt(map) {
   return fromRef(map && map.image);
 }
 
+/**
+ * Whether a battle map's art is a floor painting (L-955, C4): the only
+ * painting a grid draws, under what stands. An older top-down painting, or one
+ * not marked, is not drawn on a grid.
+ */
+function floorPainting(map) {
+  const art = mapArt(map);
+  return Boolean(art && art.view === 'floor');
+}
+
 /** The world map's art: map.image, else the imported map.imagePath. */
 function worldMapArt(world) {
   const map = (world && world.map) || {};
@@ -95,4 +105,4 @@ function forPlayer(art) {
   };
 }
 
-module.exports = { fromRef, townArt, mapArt, worldMapArt, coverArt, forPlayer };
+module.exports = { fromRef, townArt, mapArt, floorPainting, worldMapArt, coverArt, forPlayer };
