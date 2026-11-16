@@ -2292,12 +2292,30 @@ function writeTools({ writer, systems, studio }) {
       description:
         'Publish a draft to the Loom, where players can then start games in it. It needs an ' +
         'opening hook and a starting location (see get_world’s readyToPublish); set them with ' +
-        'update_world. Publishing can’t be undone, and from then on removals are retirements.',
+        'update_world. From then on removals are retirements; unpublish_world takes it back to draft.',
       inputSchema: { worldId },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       handler: async (ctx, args) => ({
         ...(await writer.publish(ctx.uid, args.worldId)),
         note: 'Published. Players can now start games in this world from the Loom.',
+      }),
+    },
+    {
+      name: 'unpublish_world',
+      title: 'Unpublish world',
+      description:
+        'Take a published world back to draft, kept whole, to rework it (nothing is deleted). ' +
+        'The Loom’s list drops it; a game in it can’t be played and says the world is being ' +
+        'reworked, its data kept. publish_world publishes it again and the same games play on. ' +
+        'While it is a draft, retire_entity deletes outright rather than retires, so a game may ' +
+        'lose what it points at.',
+      inputSchema: { worldId },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      handler: async (ctx, args) => ({
+        ...(await writer.unpublish(ctx.uid, args.worldId)),
+        note:
+          'Unpublished: back to a draft, kept whole. Games in it wait, and play on once ' +
+          'publish_world publishes it again.',
       }),
     },
   ];

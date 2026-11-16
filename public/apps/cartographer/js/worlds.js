@@ -168,6 +168,47 @@
     return form;
   }
 
+  // ── Unpublishing (L-957) ─────────────────────────
+  // A published world back to draft, kept whole: the Loom's list drops it and
+  // games in it wait, until it is published again.
+
+  function unpublishButton(world, card) {
+    var button = el('button', 'app-btn carto-unpublish-btn', 'Unpublish…');
+    button.type = 'button';
+    button.addEventListener('click', function () {
+      if (
+        !window.confirm(
+          'Unpublish "' +
+            world.name +
+            '"? It goes back to a draft, kept whole. The Loom stops listing it and games in it ' +
+            'wait, with a message that it is being reworked, until you publish it again.'
+        )
+      ) {
+        return;
+      }
+      button.disabled = true;
+      var old = card.querySelector('.carto-unpublish-error');
+      if (old) old.remove();
+      state.functions
+        .httpsCallable('cartographerUnpublish')({ worldId: world.id })
+        .then(function () {
+          loadWorlds();
+        })
+        .catch(function (err) {
+          console.error('Unpublish failed:', err);
+          card.appendChild(
+            el(
+              'p',
+              'carto-error carto-unpublish-error',
+              err.message || 'The world could not be unpublished.'
+            )
+          );
+          button.disabled = false;
+        });
+    });
+    return button;
+  }
+
   // ── World list ───────────────────────────────────
 
   function renderWorld(world) {
@@ -225,6 +266,7 @@
       var play = el('a', 'app-btn', 'Play in the Loom');
       play.href = '/apps/loom/';
       actions.appendChild(play);
+      actions.appendChild(unpublishButton(world, card));
     }
     if (status === 'draft' || status === 'published') {
       [

@@ -1,6 +1,6 @@
 # The Loom — The Isometric View — Design Document v0.1
 
-**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md)); its checkpoint is answered (§3, 2026-11-15). L-950's stories L-951 to L-957 are filed as #857–#863 (§6); L-954, the props, L-955, art by view and floor paintings (§4.4), and L-956, grading (§4.5), are built; L-960's are filed when it is next.
+**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md)); its checkpoint is answered (§3, 2026-11-15). L-950's stories L-951 to L-957 are filed as #857–#863 (§6); L-954, the props, L-955, art by view and floor paintings (§4.4), L-956, grading (§4.5), and L-957, unpublishing (§4.6), are built; L-960's are filed when it is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epics:** L-950 the isometric view (#852), L-960 reworking the worlds (#853); Phase 10 — Levels and Vehicles (milestone #26).
 **Replaces:** the three-quarter view on grid maps ([`game-art.md`](./game-art.md), L-941). Town and region maps keep it.
@@ -150,6 +150,8 @@ Unchanged in its criteria: a map's look counts (L-947), and a map's own art keep
 
 - **`unpublish_world`** (MCP) and an Unpublish button on the Cartographer page set a world back to draft, kept whole.
 - The Loom's world list hides it. A save in it says the world is being reworked and can't be played until it is published again. Nothing in the save is lost.
+
+**Built in L-957 (2026-11-16):** `cartographerUnpublish` (`service.js` `unpublishWorld`), behind the MCP tool `unpublish_world` and an Unpublish… button (with a confirm) on a published world's card. It sets `status: 'draft'` and raises `canonVersion`, recording `unpublishedAtMs` and `unpublishedBy`; every entity is kept. The Loom's list and `loomWorldRatings` already read published worlds only, so they drop it. `loomPlayTurn` and `loomGetMap` refuse a save in it with `failed-precondition` and `REWORKED_MESSAGE` (`loom-canon` `isReworked`), the save untouched; the play view shows the message. `publish_world` publishes it again as before, and the same save plays on. While it is a draft, `retire_entity` deletes outright, so a save can lose what it points at: retire before unpublishing. Tests: `tests/loom-unpublish.test.js`.
 
 ---
 

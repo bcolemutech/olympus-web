@@ -239,6 +239,7 @@ test('exposes the write tools with honest hints', async () => {
     'set_world_materials',
     'set_world_tokens',
     'set_zones',
+    'unpublish_world',
     'update_character',
     'update_faction',
     'update_location',
