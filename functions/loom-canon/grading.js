@@ -51,8 +51,9 @@
 // a bonus (L-947). 13: people's token pictures (L-934). 14: a world's brief and
 // its painted land: terrain, shaped regions and realms (L-718). 15: the wilds:
 // a region's danger and events, a generic map for each terrain, and open
-// country drawn without walls (L-368).
-const RUBRIC_VERSION = 15;
+// country drawn without walls (L-368). 16: a grid's look counts art made for
+// the isometric view, and only a floor painting earns the art bonus (L-956).
+const RUBRIC_VERSION = 16;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -342,23 +343,41 @@ function undrawn(map) {
   };
 }
 
-// A map's look (GR1; L-947): the share of its materials and object kinds with
-// painted art, and what lacks it.
+// A grid's own painting counts only as a floor painting (L-955, C4): a grid is
+// drawn in the isometric view, which draws no other (PL3; L-956).
+const floorPainting = (thing) => Boolean(thing && require('./art').floorPainting(thing));
+
+// What a battle map's painting lacks to be a floor painting, said for the
+// criteria that ask for art: none, or an older painting that isn't drawn.
+const paintingNote = (map) =>
+  hasArt(map) && !floorPainting(map)
+    ? ' Its painting was made for the old view and is no longer drawn on a grid: make a floor painting (studio_generate with floor: true from the map).'
+    : '';
+
+// A map's look (GR1; L-947; L-956): the share of its materials and object
+// kinds painted for the isometric view, and what lacks it.
 function lookCheck(world, map) {
-  const look = require('./look').unpainted(world, map, { ownArt: hasArt(map) });
+  const look = require('./look').unpainted(world, map, { floorPainting: floorPainting(map) });
   const lacking = look.materials.concat(look.objects);
   // Nothing drawn, nothing to paint: it earns the look once it is drawn.
-  if (!look.total && !hasArt(map)) {
+  if (!look.total && !floorPainting(map)) {
     return { progress: 0, ...undrawn(map) };
   }
   if (!lacking.length) return met();
   const shown = lacking.slice(0, 6).join(', ') + (lacking.length > 6 ? ', …' : '');
+  const ignored = look.ignored.filter((name) => lacking.includes(name));
   return {
     progress: share(look.painted, look.total),
     have: look.painted,
     want: look.total,
     lacking,
-    message: `${lacking.length} of the ${look.total} materials and objects on its battle map have no painted art: ${shown}. Give them art (set_object_art, or an art set that paints them).`,
+    message:
+      `${lacking.length} of the ${look.total} materials and objects on its battle map have no art ` +
+      `for the isometric view: ${shown}. Give them isometric art (set_object_art with an image ` +
+      'made for the isometric view, or an art set that paints them).' +
+      (ignored.length
+        ? ` Art made for another view is not drawn on a grid: ${ignored.join(', ')}.`
+        : ''),
   };
 }
 
@@ -582,15 +601,17 @@ const CRITERIA = Object.freeze([
     bonus: true,
     weight: WEIGHTS.place.mapArt,
     feature: 'L-351',
-    label: 'Art on its battle map',
+    label: 'A floor painting on its battle map',
     need: 'mapArt',
     tool: 'studio_assign',
     check: (world, entity, { layers }) => {
       const map = ownMap(world, entity, layers);
-      if (hasArt(map)) return met();
+      if (floorPainting(map)) return met();
       return {
         progress: 0,
-        message: map ? 'Its battle map has no art.' : 'It has no battle map of its own to paint.',
+        message: map
+          ? `Its battle map has no floor painting.${paintingNote(map)}`
+          : 'It has no battle map of its own to paint.',
       };
     },
   },
@@ -819,30 +840,35 @@ const CRITERIA = Object.freeze([
     },
   },
   {
-    // Everything on it has painted art (GR1; L-947): in its world's set, or
-    // its own. A map with artwork of its own is drawn from that.
+    // Everything on it has painted art (GR1; L-947), made for the isometric
+    // view a grid is drawn in (L-956): in its world's set, or its own. A map
+    // with a floor painting is drawn from that for its floors.
     id: 'battleMap.look',
     kinds: ['battleMap'],
     weight: WEIGHTS.battleMap.look,
     feature: 'L-947',
-    label: 'Its look: everything on it painted',
+    label: 'Its look: everything on it painted for the isometric view',
     need: 'look',
     tool: 'set_object_art',
     check: (world, map) => lookCheck(world, map),
   },
   {
-    // A small bonus for a map with its own artwork (GR2; L-947): "art-based
-    // maps still look best". Not part of the 100 a map's data can earn, so a
+    // A small bonus for a map with a floor painting (GR2; L-947; L-956):
+    // "art-based maps still look best". Only a floor painting is drawn on a
+    // grid (L-955), so an older top-down painting earns nothing. Not part of the 100 a map's data can earn, so a
     // map drawn from data, large or small, loses nothing for having none.
     id: 'battleMap.art',
     kinds: ['battleMap'],
     bonus: true,
     weight: WEIGHTS.battleMap.art,
     feature: 'L-351',
-    label: 'Art (a bonus)',
+    label: 'A floor painting (a bonus)',
     need: 'mapArt',
     tool: 'studio_assign',
-    check: (world, map) => (hasArt(map) ? met() : { progress: 0, message: 'It has no art.' }),
+    check: (world, map) =>
+      floorPainting(map)
+        ? met()
+        : { progress: 0, message: `It has no floor painting.${paintingNote(map)}` },
   },
   {
     id: 'battleMap.features',
