@@ -193,6 +193,55 @@ function holderOf(world, target, id) {
 }
 
 /**
+ * What a battle map's art must be (L-955, AR2, C4): a floor painting. Art
+ * already held there is refreshed rather than checked again (an edit's new
+ * version, a size change), so a map's older painting keeps working until it
+ * is replaced.
+ */
+function checkView(spec, record, use) {
+  if (!spec.view || record.view === spec.view) return;
+  const held = (record.usedIn || []).some(
+    (u) => u.worldId === use.worldId && u.target === use.target && u.id === use.id
+  );
+  if (held) return;
+  throw new AssignError(
+    'failed-precondition',
+    `"${record.title}" is ${record.view ? `a ${record.view}` : 'not marked as a ' + spec.view} ` +
+      `image; ${spec.label} is a ${spec.view} painting: the grid's floors only, top-down, laid ` +
+      'under its walls, doors and objects, which stand from its data. Make one with ' +
+      'studio_generate (from the battle map, floor: true), or mark an image you have ' +
+      `(studio_update view ${spec.view}).`
+  );
+}
+
+/**
+ * What a grid map draws of art given to an object, an object kind or a
+ * material (L-955, AR3): only art made for the isometric view (a material's
+ * may be a floor picture too), and the set's otherwise. It is still used on
+ * the town and region maps that draw it, which this says.
+ */
+function viewWarnings(target, record) {
+  if (target === 'object' || target === 'objectKind') {
+    if (record.view === 'iso') return [];
+    return [
+      `It is ${record.view ? `a ${record.view}` : 'not marked as an isometric'} image, so a grid ` +
+        'map draws the art set’s isometric picture instead and this one on town and region ' +
+        'maps only. Make it for the isometric view and mark it (studio_update view iso) to ' +
+        'stand on grids.',
+    ];
+  }
+  if (target === 'material') {
+    if (record.view === 'iso' || record.view === 'floor') return [];
+    return [
+      `It is ${record.view ? `a ${record.view}` : 'not marked as a floor or isometric'} image, ` +
+        'so a grid map draws its like ground instead. Mark it floor (studio_update view floor) ' +
+        'to lay it on grids.',
+    ];
+  }
+  return [];
+}
+
+/**
  * Whether art's shape fits what it is drawn on: a battle map's grid, or a
  * town's square (L-356's checks, for every way art arrives).
  */
@@ -307,6 +356,7 @@ function createAssigner({ db, bucket, writer, library }) {
       const copy = await library.addImage({
         title: `${record.title} (${what})`.slice(0, 120),
         kind: record.kind,
+        view: record.view || null,
         labels: record.labels || [],
         file,
         createdBy: uid,
@@ -393,6 +443,7 @@ function createAssigner({ db, bucket, writer, library }) {
         );
       }
     }
+    if (record) checkView(spec, record, { worldId, target, id: at });
     // Fitted to its shape first, if asked (L-396).
     let fitNote = null;
     if (record && fit) {
@@ -509,7 +560,11 @@ function createAssigner({ db, bucket, writer, library }) {
           : { path: result.previous.path }
         : null,
       // Stretched on purpose (fit: stretch) isn't warned about.
-      warnings: ref && fit !== 'stretch' ? shapeWarnings(target, result.entity, ref) : [],
+      warnings: ref
+        ? (fit !== 'stretch' ? shapeWarnings(target, result.entity, ref) : []).concat(
+            viewWarnings(target, record)
+          )
+        : [],
       ...(fitNote ? { fitted: fitNote } : {}),
     };
   }
@@ -528,6 +583,8 @@ function createAssigner({ db, bucket, writer, library }) {
     const record = await library.addImage({
       title: `${holder.name}: ${TARGETS[target].label}`,
       kind: TARGETS[target].kind,
+      // A battle map's art is a floor painting (L-955).
+      view: TARGETS[target].view || null,
       labels,
       file,
       createdBy: uid,
@@ -545,4 +602,11 @@ function createAssigner({ db, bucket, writer, library }) {
   return { assign, addAndAssign };
 }
 
-module.exports = { createAssigner, TARGETS, AssignError, refOf, shapeWarnings };
+module.exports = {
+  createAssigner,
+  TARGETS,
+  AssignError,
+  refOf,
+  shapeWarnings,
+  viewWarnings,
+};

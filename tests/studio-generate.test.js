@@ -136,6 +136,11 @@ const jobs = createJobs({
   placesOf: town.placesOf,
   rasterize,
   load,
+  // A grid's floors as a floor painting's guide (L-955), the real one.
+  floorGuide: async (world, mapId) =>
+    require('../functions/mcp/apps/cartographer/images').floorGuide(world.battleMaps[mapId], {
+      materials: world.materials,
+    }),
 });
 
 const jobDoc = async (id) => (await db.collection('studio_jobs').doc(id).get()).data();
@@ -153,6 +158,9 @@ const CELLAR = {
   exits: [{ id: 'out', name: 'the stairs', x: 0, y: 1, to: 'out' }],
   features: [{ id: 'casks', name: 'the wine casks', x: 3, y: 3 }],
   generic: null,
+  geometry: {
+    ground: [{ id: 'floor', material: 'stone', shape: { rect: { x: 0, y: 0, w: 80, h: 45 } } }],
+  },
 };
 
 const refs = {};
@@ -193,6 +201,51 @@ beforeAll(async () => {
 afterEach(() => {
   model.delay = 0;
   model.respond = () => drawn();
+});
+
+describe('a floor painting (L-955)', () => {
+  test('sends the map’s floors as the last reference, asks for floors only and marks the view', async () => {
+    model.calls = [];
+    const job = await jobs.start(BUILDER, {
+      prompt: 'Worn flagstones, a drain in the middle',
+      floor: true,
+      from: { worldId: WORLD, kind: 'battleMap', id: 'bm_cellar' },
+      references: [refs.style.id],
+    });
+    expect(job.request).toMatchObject({ floor: true, view: 'floor', kind: 'battleMap' });
+    await drain();
+    const call = model.calls.find((c) => c.prompt.includes('Worn flagstones'));
+    // The reference, then the guide: a flat picture of the floors, the map's shape.
+    expect(call.references).toHaveLength(2);
+    const guide = readImage(call.references[1].bytes);
+    expect(guide).toMatchObject({ format: 'png' });
+    expect(guide.width / guide.height).toBeCloseTo(16 / 9, 1);
+    expect(call.prompt).toMatch(/Image 2 is the guide/);
+    expect(call.prompt).toMatch(/Paint only the floors/);
+    // What stands isn't asked for.
+    expect(call.prompt).not.toMatch(/Features: the wine casks/);
+    expect(call.prompt).not.toMatch(/Ways out/);
+    const done = await jobDoc(job.id);
+    expect(done.state).toBe('done');
+    expect(await library.getImage(done.imageId)).toMatchObject({
+      kind: 'battleMap',
+      view: 'floor',
+    });
+  });
+
+  test('is for a battle map, and a view is one of the views', async () => {
+    await expect(jobs.start(BUILDER, { prompt: 'x', kind: 'scene', floor: true })).rejects.toThrow(
+      /battle map/
+    );
+    await expect(
+      jobs.start(BUILDER, { prompt: 'x', kind: 'scene', view: 'sideways' })
+    ).rejects.toThrow(/view is one of/);
+    const marked = await jobs.start(BUILDER, { prompt: 'A chest', kind: 'object', view: 'iso' });
+    await drain();
+    expect(await library.getImage((await jobDoc(marked.id)).imageId)).toMatchObject({
+      view: 'iso',
+    });
+  });
 });
 
 describe('a job', () => {

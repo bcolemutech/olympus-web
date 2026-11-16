@@ -67,6 +67,7 @@
     Studio.say(error, '');
     var files = Array.prototype.slice.call(ref('studio-files').files);
     var kind = ref('studio-kind').value;
+    var view = ref('studio-view').value;
     var title = ref('studio-title').value.trim();
     var labels = ref('studio-labels')
       .value.split(',')
@@ -115,6 +116,7 @@
               uploadId: uploadId,
               title: titleOf(file, title, files.length),
               kind: kind,
+              view: view || undefined,
               labels: labels,
             });
           })
@@ -156,6 +158,7 @@
         kinds.appendChild(new window.Option(k[1], k[0]));
       });
       kinds.value = 'other';
+      Studio.fillViews(ref('studio-view'));
       ref('studio-upload-form').addEventListener('submit', onSubmit);
     },
     typeOf: typeOf,

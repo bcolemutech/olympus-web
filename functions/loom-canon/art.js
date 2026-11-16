@@ -7,7 +7,7 @@ const { screenLinkOf } = require('../studio/screen');
  * town's art, a battle map's art, and its cover. Art is a library image
  * (functions/studio/), held on the world as a reference:
  *
- *   { imageId, link, width, height, format }
+ *   { imageId, link, width, height, format, view? }
  *
  * `link` serves the image's current version and never changes (the library's
  * stable link, §4.6), so reads need no second lookup; `width` and `height`
@@ -31,6 +31,7 @@ function fromRef(ref) {
       width: ref.width || null,
       height: ref.height || null,
       format: ref.format || null,
+      view: ref.view || null,
     };
   }
   if (ref.path) {
@@ -88,6 +89,7 @@ function forPlayer(art) {
     ...(art.url ? { url: art.url } : { path: art.path }),
     ...(screenUrl ? { screenUrl } : {}),
     ...(svg ? { svg: true } : {}),
+    ...(art.view ? { view: art.view } : {}),
     width: art.width,
     height: art.height,
   };

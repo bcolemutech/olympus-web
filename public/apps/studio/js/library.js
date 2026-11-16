@@ -18,6 +18,7 @@
     return {
       words: ref('studio-words').value.toLowerCase().split(/\s+/).filter(Boolean),
       kind: ref('studio-filter-kind').value,
+      view: ref('studio-filter-view').value,
       label: ref('studio-filter-label').value,
       worldId: ref('studio-filter-world').value,
     };
@@ -25,6 +26,7 @@
 
   function matches(record, f) {
     if (f.kind && record.kind !== f.kind) return false;
+    if (f.view && record.view !== f.view) return false;
     if (f.label && (record.labels || []).indexOf(f.label) === -1) return false;
     if (
       f.worldId &&
@@ -63,6 +65,7 @@
     body.appendChild(el('span', 'studio-card-title', record.title));
     var meta = el('span', 'studio-card-meta');
     meta.appendChild(el('span', 'studio-kind', Studio.kindName(record.kind)));
+    if (record.view) meta.appendChild(el('span', 'studio-kind', record.view));
     if (version.width) {
       meta.appendChild(document.createTextNode(' ' + version.width + '×' + version.height));
     }
@@ -227,11 +230,17 @@
       Studio.KINDS.forEach(function (k) {
         kinds.appendChild(new window.Option(k[1], k[0]));
       });
+      Studio.fillViews(ref('studio-filter-view'));
       ref('studio-filters').addEventListener('submit', function (e) {
         e.preventDefault();
       });
       ref('studio-words').addEventListener('input', render);
-      ['studio-filter-kind', 'studio-filter-label', 'studio-filter-world'].forEach(function (id) {
+      [
+        'studio-filter-kind',
+        'studio-filter-view',
+        'studio-filter-label',
+        'studio-filter-world',
+      ].forEach(function (id) {
         ref(id).addEventListener('change', render);
       });
       load();

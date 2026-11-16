@@ -111,10 +111,11 @@ function playerObject(item) {
   });
 }
 
-// A library image as the page draws it: its link only, never its record
-// (A5; L-924).
+// A library image as the page draws it: its link (and the view it was made
+// for) only, never its record (A5; L-924, L-955).
 function artLink(art) {
-  return art && art.link ? { link: art.link } : null;
+  // Its view too (L-955): a grid draws only art made for its view.
+  return art && art.link ? { link: art.link, ...(art.view ? { view: art.view } : {}) } : null;
 }
 
 /**

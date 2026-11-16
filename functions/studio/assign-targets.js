@@ -22,6 +22,11 @@
  *              players for their own   image's own id (L-933)
  *              token                   kind token or portrait
  *
+ * A battle map's art is a floor painting (L-955): its target takes a `floor` view
+ * image. An object's, an object kind's or a material's art shows on a grid only
+ * when it is `iso` (a material's: or `floor`); it is allowed otherwise, for the
+ * town and region maps that draw it, with a warning.
+ *
  * A token keeps its crop beside the reference (../loom-canon/tokens.js).
  */
 
@@ -29,7 +34,8 @@ const TARGETS = Object.freeze({
   map: { kind: 'worldMap', label: 'world map' },
   cover: { kind: 'cover', label: 'cover image' },
   town: { kind: 'town', label: 'town art' },
-  battleMap: { kind: 'battleMap', label: 'battle-map art' },
+  // A grid's painting is a floor painting (L-955, AR2, C4): its floors only.
+  battleMap: { kind: 'battleMap', view: 'floor', label: 'battle-map art' },
   objectKind: { kind: 'object', label: 'object art' },
   object: { kind: 'object', label: 'object art' },
   material: { kind: 'other', label: 'terrain art' },
@@ -45,7 +51,11 @@ const TARGETS = Object.freeze({
   },
 });
 
-/** What a world holds for a library image: its link, and its current size. */
+/**
+ * What a world holds for a library image: its link, its current size, and
+ * the view it was made for (L-955), which a grid map's painter reads: only
+ * art made for the isometric view stands on a grid.
+ */
 function refOf(record) {
   const version = record.versions.find((v) => v.n === record.current);
   return {
@@ -54,6 +64,7 @@ function refOf(record) {
     width: version.width,
     height: version.height,
     format: version.format,
+    ...(record.view ? { view: record.view } : {}),
   };
 }
 

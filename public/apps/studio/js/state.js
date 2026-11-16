@@ -33,6 +33,27 @@
     ['interface', 'Interface'],
     ['other', 'Other'],
   ];
+  // What an image was made to be seen as (functions/studio/library.js VIEWS;
+  // L-955): a grid map draws only a floor painting, and own art for objects
+  // only if isometric.
+  Studio.VIEWS = [
+    ['iso', 'Isometric (props, objects)'],
+    ['floor', 'Floor (a grid’s floors only, top-down)'],
+    ['three-quarter', 'Three-quarter (the old view)'],
+    ['top-down', 'Top-down'],
+  ];
+  Studio.viewName = function (view) {
+    var found = Studio.VIEWS.filter(function (v) {
+      return v[0] === view;
+    })[0];
+    return found ? found[1] : 'Not marked';
+  };
+  // Fills a view select: the first option is left for "not marked" or "any".
+  Studio.fillViews = function (select) {
+    Studio.VIEWS.forEach(function (v) {
+      select.appendChild(new window.Option(v[1], v[0]));
+    });
+  };
   Studio.kindName = function (kind) {
     var found = Studio.KINDS.filter(function (k) {
       return k[0] === kind;

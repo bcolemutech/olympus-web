@@ -615,20 +615,32 @@
   }
 
   /**
+   * Whether a world's own art is drawn on a grid map (L-955, AR3): only art
+   * made for the isometric view (`view` iso; a material's may be floor too),
+   * the set's picture standing in for any other.
+   */
+  function gridArt(art, floorToo) {
+    return Boolean(
+      art && (art.imageId || art.link) && (art.view === 'iso' || (floorToo && art.view === 'floor'))
+    );
+  }
+
+  /**
    * A material's art in a set (L-944): { from: 'set' | 'catalog' | 'world',
    * picture ({ url } or { atlas, frame }), span, variants: [picture], face?:
    * picture }. What the set lacks is the built-in SVG's: its picture, a span
    * of 1, no variants, no face. A world's own ground (`own`, L-713) is drawn
    * with its art (`from: 'world'`), else its `like`'s.
    */
-  function materialArt(kind, id, setName, own) {
+  function materialArt(kind, id, setName, own, grid) {
     var mine = kind === 'ground' ? ownMaterial(own, id) : null;
     if (mine) {
-      // A world's own ground: its art (a link), else its `like`'s (L-713).
-      if (mine.art && mine.art.link) {
+      // A world's own ground: its art (a link), else its `like`'s (L-713); on a
+      // grid only art made for it, an isometric or floor picture (L-955).
+      if (mine.art && mine.art.link && (!grid || gridArt(mine.art, true))) {
         return { from: 'world', picture: { url: mine.art.link }, span: 1, variants: [] };
       }
-      return materialArt('ground', mine.like, setName);
+      return materialArt('ground', mine.like, setName, null, grid);
     }
     var m = materialOf(kind, id);
     var found = entryOf(setName, 'materials', kind + '/' + id);
@@ -680,11 +692,12 @@
    * set's standing picture (L-944), unless the object or its world gives it
    * art of its own (a library image, drawn as it is, flat).
    */
-  function standFor(object, worldKinds, setName) {
+  function standFor(object, worldKinds, setName, grid) {
     var item = object || {};
-    if (item.art && (item.art.imageId || item.art.link)) return null;
+    // On a grid (L-955) a world's own art not made for it is ignored.
+    if (!grid && item.art && (item.art.imageId || item.art.link)) return null;
     var own = worldKinds && has(worldKinds, item.kind) ? worldKinds[item.kind] : null;
-    if (own && own.art && (own.art.imageId || own.art.link)) return null;
+    if (!grid && own && own.art && (own.art.imageId || own.art.link)) return null;
     var found = entryOf(setName, 'objects', item.kind);
     var stand = found && found.entry.stand;
     var picture = stand ? resolve(found.set, stand) : null;
@@ -696,15 +709,27 @@
   /**
    * The pictures an object stands as in the isometric view (planning/
    * isometric-view.md §4.2, §4.4, IS3, AR1; L-952): { facings: [front, back]
-   * (pictures), foot: [x, y], long ('x', 'y' or null) } from its set's `iso`,
-   * else null (it then stands as its three-quarter picture, standFor),
-   * unless the object or its world gives it art of its own.
+   * (pictures), foot: [x, y], long ('x', 'y' or null) } from its own art made
+   * for the isometric view (L-955), else its set's `iso`, else null (it then
+   * stands as its three-quarter picture, standFor(…, true)). Art of its own
+   * made for another view is ignored on a grid.
    */
   function isoFor(object, worldKinds, setName) {
     var item = object || {};
-    if (item.art && (item.art.imageId || item.art.link)) return null;
     var own = worldKinds && has(worldKinds, item.kind) ? worldKinds[item.kind] : null;
-    if (own && own.art && (own.art.imageId || own.art.link)) return null;
+    // Its own art, if it was made for the isometric view (L-955): one picture,
+    // standing on the front corner of its footprint, the same on every side.
+    var mine = gridArt(item.art) ? item.art : own && gridArt(own.art) ? own.art : null;
+    if (mine) {
+      var size = Array.isArray(item.size)
+        ? item.size
+        : typeof item.size === 'number'
+          ? [item.size, item.size]
+          : sizeFor(item.kind, worldKinds) || [5, 5];
+      var span = size[0] + size[1] || 1;
+      var picture = { url: mine.link };
+      return { facings: [picture, picture], foot: [size[0] / span, 1], long: null, own: true };
+    }
     var found = entryOf(setName, 'objects', item.kind);
     var iso = found && found.entry.iso;
     if (!iso || !Array.isArray(iso.facings)) return null;
@@ -766,6 +791,7 @@
     artFor: artFor,
     standFor: standFor,
     isoFor: isoFor,
+    gridArt: gridArt,
     checkManifest: checkManifest,
     registerSet: registerSet,
     setOf: setOf,

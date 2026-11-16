@@ -670,9 +670,11 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'is uploaded on the Cartographer page. Tracing art into data (L-928): look at the ' +
           'map, read where its walls, doors, furniture, streets, houses and water fall on the ' +
           'grid, set them (set_map_layers on a battle map, set_town_ground or set_area_ground on ' +
-          'a town), then look again and move what doesn’t sit on the art. A map keeps its art, ' +
-          'drawn in place of its floors and walls, so tracing it only makes play match what ' +
-          'players see; without art, the data is drawn from its materials.',
+          'a town), then look again and move what doesn’t sit on the art. A town keeps its art, ' +
+          'drawn in place of its ground, so tracing it only makes play match what players ' +
+          'see. A grid (L-955) draws only a floor painting, its floors under walls, doors ' +
+          'and objects standing from its data, and no older top-down painting; floor: true ' +
+          'draws just its floors, the guide a floor painting is made over.',
         inputSchema: {
           worldId,
           of: z
@@ -715,6 +717,14 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
               'A battle map only: a point in feet. Shades what can’t be seen from there, as a ' +
                 'player standing there sees it with doors as the map has them (sightFrom does ' +
                 'the same from an entry).'
+            ),
+          floor: z
+            .boolean()
+            .optional()
+            .describe(
+              'A grid only (L-955): draw just its floors in flat colour, with no grid, walls, ' +
+                'doors or objects: the guide a floor painting is made over (studio_generate ' +
+                'from the battle map with floor: true).'
             ),
           overlay: z
             .enum(['regions', 'realms'])
@@ -763,7 +773,21 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           };
           let rendered;
           try {
-            if (args.of === 'battleMap' || args.of === 'map') {
+            if (args.floor) {
+              // Just a grid's floors (L-955).
+              if (args.of !== 'battleMap' && args.of !== 'map') {
+                throw new ToolError('floor is for a grid (of battleMap or map).');
+              }
+              needId();
+              const grid = entityFor(
+                world,
+                'battleMaps',
+                args.id,
+                'battle map',
+                'Use list_battle_maps to see them.'
+              );
+              rendered = images.renderFloors(grid, { materials: world.materials });
+            } else if (args.of === 'battleMap' || args.of === 'map') {
               needId();
               // Any grid is a battle map; a region or area map is drawn from its
               // geometry, in its own units (L-929).
@@ -949,7 +973,8 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'Give a battle map or a town art you draw yourself, as SVG, so it can be stubbed out ' +
           'without another AI. Battle maps: use viewBox="0 0 <width> <height>", one unit per ' +
           'cell, so cell (x, y) is the square from (x, y) to (x+1, y+1); the art is stretched ' +
-          'to the grid. Towns: use viewBox="0 0 1000 1000", the same space as place positions. ' +
+          'to the grid, and is a floor painting (L-955): draw the floors only, with no walls, ' +
+          'doors or furniture, which stand from the map’s data over it. Towns: use viewBox="0 0 1000 1000", the same space as place positions. ' +
           'Plain drawing is fine: shapes, paths, text, gradients, patterns, filters, and <use> ' +
           'of things in the same SVG. Scripts, event handlers, links or images from elsewhere, ' +
           'foreignObject and DOCTYPE are refused. Up to 1 MB. The game draws names, exits and ' +

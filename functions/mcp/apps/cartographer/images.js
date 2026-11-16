@@ -401,6 +401,57 @@ function countsOf(geometry) {
 }
 
 /**
+ * A grid's floors alone (isometric-view.md §4.4, C4; L-955): its ground and
+ * lines in flat colour by material, filling the image, with no grid, rims,
+ * markers, walls, doors or objects, and what is hidden left out. The guide
+ * `studio_generate` paints a floor painting over, and view_image's `floor`.
+ * Returns { canvas, cell } (pixels a square).
+ */
+function floorCanvas(map, { materials = [] } = {}) {
+  const long = Math.max(map.width, map.height);
+  const cell = Math.max(4, Math.min(64, Math.floor(1024 / long)));
+  const base = canvas(map.width * cell, map.height * cell, COLOURS.plain);
+  const scale = { x: cell / FEET, y: cell / FEET };
+  painter.paintUnder(base, map.geometry || {}, scale, {
+    art: false,
+    heights: false,
+    hidden: false,
+    guide: true,
+    materials,
+  });
+  return { canvas: base, cell };
+}
+
+/** The floor guide as a PNG, for the model to read (a floor painting's reference). */
+function floorGuide(map, options) {
+  const { canvas: c } = floorCanvas(map, options);
+  const png = new PNG({ width: c.width, height: c.height });
+  c.data.copy(png.data);
+  return PNG.sync.write(png);
+}
+
+/** The floors as Claude sees them: view_image of a grid with `floor`. */
+function renderFloors(map, options) {
+  const { canvas: c, cell } = floorCanvas(map, options);
+  return {
+    jpeg: encode(c),
+    legend: {
+      of: 'battleMap',
+      id: map.id,
+      name: map.name,
+      floor: true,
+      grid: { width: map.width, height: map.height },
+      image: { width: c.width, height: c.height },
+      cellSize: { width: cell, height: cell },
+      reading:
+        'Only the floors, in flat colour by material, as the guide a floor painting is made ' +
+        'over (studio_generate from this battle map with floor: true): no grid, walls, doors, ' +
+        'objects or markers. A cell is cellSize pixels across (5 ft).',
+    },
+  };
+}
+
+/**
  * A battle map: its art (stretched to the grid, as the grid view draws it) or
  * a plain background, the grid with every fifth line labelled, its layers
  * (L-623: obstacles shaded by kind, walls in white, doors in amber), and
@@ -1032,6 +1083,8 @@ module.exports = {
   MAX_SIDE,
   tokenPixels,
   renderBattleMap,
+  renderFloors,
+  floorGuide,
   renderMap,
   renderTown,
   renderWorld,

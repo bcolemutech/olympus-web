@@ -219,6 +219,7 @@
 
     var facts = el('dl', 'studio-facts');
     row(facts, 'Kind', Studio.kindName(record.kind));
+    row(facts, 'View', Studio.viewName(record.view));
     var labels = el('span', 'studio-labels');
     (record.labels || []).forEach(function (label) {
       labels.appendChild(el('span', 'studio-label-pill', label));
