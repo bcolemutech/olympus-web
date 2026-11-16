@@ -51,11 +51,13 @@
   // L-951 / #857): the grid turned 45° and drawn 2:1, a square a diamond
   // twice as wide as tall, its north to the top right, and a foot of height
   // rising ISO_RISE floor units up the screen. What lies on the floor (the
-  // painter's ground and, until L-952 stands them up, its walls, doors and
-  // objects lying flat; the reach, areas, hazards, fog, the path and
-  // selections) is drawn on the grid as before, under one transform; tokens,
-  // names and foes' cards are placed on the isometric screen, upright; clicks
-  // are worked back to the floor. The rules stay on the flat grid, in feet.
+  // painter's ground, lines and shadows; the reach, areas, hazards, fog, the
+  // path and selections) is drawn on the grid as before, under one
+  // transform; what stands (the painter's walls, doors, windows and props,
+  // L-952, and the tokens) is built on the isometric screen and drawn back to
+  // front by footprint, the tokens placed in that order as they move; names
+  // and foes' cards are placed there, upright; clicks are worked back to the
+  // floor. The rules stay on the flat grid, in feet.
   // Behind a switch until the view is whole (L-953): `?view=iso` on the page,
   // or Loom.battle.setIso(true).
   var ISO_RISE = 1.22;
@@ -736,6 +738,44 @@
     [n.floor, n.floorDim, n.floorOver].forEach(function (layer) {
       layer.setFromMatrix(m);
     });
+    // In isometric the dimming lies on the floor, under what stands, which is
+    // dimmed by its own squares (standShade); else over all of it.
+    var at = iso ? 1 : 3; // just over the floor, or just over what stands and its mask
+    if (n.scene.getChildIndex(n.floorDim) !== at) n.scene.setChildIndex(n.floorDim, at);
+  }
+
+  // What stands dimmed by the fog in isometric (L-952): a piece out of sight
+  // (none of its footprint's middle and corners on a square in sight) as the
+  // floor's seen-before squares are; never-seen squares are the mask's.
+  function standShade(d) {
+    var key = iso && d.fog ? d.id + '|' + d.fog.inSight : null;
+    if (battle.shadeKey === key) return;
+    battle.shadeKey = key;
+    if (!key) {
+      Loom.mapPaint.shade('battle:' + d.id, null);
+      return;
+    }
+    var inSight = unpacked(d.fog.inSight);
+    var k = Math.round(255 * (1 - FOG_DIM));
+    var dim = (k << 16) | (k << 8) | k;
+    var lit = function (p) {
+      var x = Math.floor(p.x / MP.FEET);
+      var y = Math.floor(p.y / MP.FEET);
+      return x >= 0 && y >= 0 && x < d.width && y < d.height && inSight(y * d.width + x);
+    };
+    Loom.mapPaint.shade('battle:' + d.id, function (print) {
+      var c = { x: 0, y: 0 };
+      print.forEach(function (p) {
+        c.x += p.x / print.length;
+        c.y += p.y / print.length;
+      });
+      var near = [c].concat(
+        print.map(function (p) {
+          return { x: c.x + (p.x - c.x) * 0.9, y: c.y + (p.y - c.y) * 0.9 };
+        })
+      );
+      return near.some(lit) ? 0xffffff : dim;
+    });
   }
 
   // A deterministic grain for the dark (A3): 0–1 from a square.
@@ -784,12 +824,24 @@
   // on the scene, for the token to be placed there.
   function standToken(container, at, radius, standing) {
     var foot = toScene(at);
-    var stand = battle.data && Loom.mapPaint.standOf('battle:' + battle.data.id);
+    var key = battle.data && 'battle:' + battle.data.id;
+    var stand = key && Loom.mapPaint.standOf(key);
     if (!stand) return foot;
     if (container.parent !== stand) stand.addChild(container);
     container.__loomFoot = radius;
     container.__loomStanding = standing !== false;
-    container.zIndex = foot.y;
+    if (iso) {
+      // In isometric (L-952), placed among what stands by its footprint: a
+      // square a little inside its disc, and the disc upright over it.
+      var u = standUnits(foot);
+      var r = radius / standAt().scale;
+      var tall = standing !== false ? r * Loom.draw.standHeight() : r;
+      Loom.mapPaint.place(key, container, {
+        print: Loom.iso.square(feetOf(at), r * 0.8),
+        box: { x0: u.x - r, x1: u.x + r, y0: u.y - tall, y1: u.y + r * 0.5 },
+        depth: u.y,
+      });
+    } else container.zIndex = foot.y;
     if (container.__loomPainted) {
       container.__loomPainted.depth = Math.round(standUnits(foot).y * 100) / 100;
     }
@@ -974,10 +1026,8 @@
       fades: true, // walls over a token fade (L-942), so they're cut along their length
       stand: n.standing,
       standAt: standAt(),
-      // In isometric, nothing stands yet: walls, doors and objects lie on the
-      // floor under the projection until L-952 stands them up.
-      flat: iso,
-      rise: iso ? ISO_RISE : undefined,
+      // In isometric (L-952), what stands is built on the isometric screen.
+      iso: iso ? { rise: ISO_RISE } : null,
       art: Boolean(d.image),
       tint: accent(),
       worldKinds: d.objectKinds || null,
@@ -1010,8 +1060,10 @@
     // The map drawn from its data (L-924), when what's sent of it changes.
     if (battle.paintedFor !== d) {
       battle.paintedFor = d;
+      battle.shadeKey = undefined;
       paintMap(n, d);
     }
+    standShade(d);
     maskStanding(n, d);
 
     // The art is stretched to the grid, as Claude sees it in view_image.
@@ -1403,29 +1455,40 @@
   }
 
   // In isometric (L-951), what lies on the floor culled to the floor the
-  // screen shows: the screen's corners worked back to the floor, in feet.
-  // (What stands is culled on the isometric screen with L-952.)
+  // screen shows: the screen's corners worked back to the floor, in feet;
+  // and what stands culled to the screen in the standing layer's units (L-952).
   function cullFloor(view, shown) {
-    var corners = [
+    var screen = [
       [0, 0],
       [shown.width, 0],
       [0, shown.height],
       [shown.width, shown.height],
     ].map(function (c) {
-      return feetOf(toGrid(M.toMap(view, c[0], c[1])));
+      return M.toMap(view, c[0], c[1]);
     });
-    var xs = corners.map(function (p) {
-      return p.x;
-    });
-    var ys = corners.map(function (p) {
-      return p.y;
-    });
-    Loom.mapPaint.view('battle:' + battle.data.id, {
-      x0: Math.min.apply(null, xs),
-      y0: Math.min.apply(null, ys),
-      x1: Math.max.apply(null, xs),
-      y1: Math.max.apply(null, ys),
-    });
+    var boxOf = function (ps) {
+      var xs = ps.map(function (p) {
+        return p.x;
+      });
+      var ys = ps.map(function (p) {
+        return p.y;
+      });
+      return {
+        x0: Math.min.apply(null, xs),
+        y0: Math.min.apply(null, ys),
+        x1: Math.max.apply(null, xs),
+        y1: Math.max.apply(null, ys),
+      };
+    };
+    Loom.mapPaint.view(
+      'battle:' + battle.data.id,
+      boxOf(
+        screen.map(function (p) {
+          return feetOf(toGrid(p));
+        })
+      ),
+      boxOf(screen.map(standUnits))
+    );
   }
 
   // ── Seeing behind walls (TV1; L-942) ──────────────

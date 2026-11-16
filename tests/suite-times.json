@@ -6,11 +6,13 @@
   "cartographer-mcp-write.test.js": 53,
   "cartographer-mcp-maps.test.js": 48,
   "cartographer-app.test.js": 47,
+  "loom-iso-paint.test.js": 45,
   "loom-battle-maps.test.js": 38,
   "cartographer-mcp-work.test.js": 30,
   "loom-dress.test.js": 28,
   "loom-town.test.js": 25,
   "cartographer-mcp-patch.test.js": 24,
+  "loom-iso-view.test.js": 24,
   "cartographer-load.test.js": 20,
   "loom-tokens-draw.test.js": 19,
   "loom-convert-layers.test.js": 18,
@@ -56,5 +58,5 @@
   "loom-turns-ap-play.test.js": 5,
   "studio-edit.test.js": 5,
   "studio-library.test.js": 5,
-  "loom-iso-view.test.js": 24
+  "loom-iso-order.test.js": 3
 }

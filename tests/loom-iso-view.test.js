@@ -7,9 +7,9 @@
  * view's switch until L-953 makes it the default):
  *
  *   - the test dungeon and a generated interior drawn isometric (the floor,
- *     and the walls, doors and objects lying on it until L-952 stands them
- *     up), against their screenshots; the camera framing the whole diamond,
- *     with room above it for the walls to rise into;
+ *     and since L-952 the walls, doors and objects standing on it), against
+ *     their screenshots; the camera framing the whole diamond, with room
+ *     above it for the walls to rise into;
  *   - a click on the floor lands within half a foot of the point in feet, as
  *     the floor is actually drawn, across the map, at two zooms, and selects
  *     the square under it; the 5 ft diamonds show only while a move or an
@@ -218,11 +218,12 @@ describe('the isometric view (L-951)', () => {
     await painted(page, 'battle:dungeon');
     await show(page, dungeonData()); // drawn again once its set has come
     const drawn = await page.evaluate(() => window.Loom.mapPaint.describe('battle:dungeon'));
-    // Until L-952, nothing of the map stands: walls, doors and objects lie on the floor.
-    expect(drawn.filter((d) => d.layer === 'standing' && d.kind !== 'token')).toEqual([]);
-    expect(drawn.some((d) => d.layer === 'walls' && d.id === 'slant')).toBe(true);
-    expect(drawn.filter((d) => d.layer === 'openings' && d.kind === 'door').length).toBe(4);
-    expect(drawn.some((d) => d.layer === 'objects' && d.id === 'chest')).toBe(true);
+    // Walls, doors and objects stand (L-952); nothing lies flat in their place.
+    const standing = drawn.filter((d) => d.layer === 'standing');
+    expect(standing.some((d) => d.kind === 'wall' && d.id === 'slant')).toBe(true);
+    expect(new Set(standing.filter((d) => d.kind === 'door').map((d) => d.id)).size).toBe(4);
+    expect(standing.some((d) => d.kind === 'object' && d.id === 'chest')).toBe(true);
+    expect(drawn.some((d) => d.layer === 'walls' || d.layer === 'openings')).toBe(false);
     // Framed whole: the diamond's four corners on the screen, with room above
     // the north one for an 8 ft wall at the true 2:1 rise (C2: 78 px at 8 px a foot).
     const frame = await page.evaluate(() => {
@@ -268,7 +269,9 @@ describe('the isometric view (L-951)', () => {
     await painted(page, 'battle:interior');
     await show(page, data);
     const drawn = await page.evaluate(() => window.Loom.mapPaint.describe('battle:interior'));
-    expect(drawn.filter((d) => d.layer === 'walls').length).toBeGreaterThan(0);
+    expect(drawn.filter((d) => d.layer === 'standing' && d.kind === 'wall').length).toBeGreaterThan(
+      0
+    );
     matchesBaseline(PNG.sync.read(await page.screenshot()), 'iso-interior.png');
     expect(page.errors).toEqual([]);
     await page.close();
@@ -325,9 +328,7 @@ describe('the isometric view (L-951)', () => {
         [{ x: Math.round(at.x), y: Math.round(at.y) }]
       );
       await page.waitForSelector('.loom-map-menu', { timeout: 3000 });
-      const title = await page.evaluate(
-        () => document.querySelector('.loom-map-menu').textContent
-      );
+      const title = await page.evaluate(() => document.querySelector('.loom-map-menu').textContent);
       expect(title).toContain('Square (16, 5)');
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
       expect((await page.evaluate(() => window.Loom.battle.drawn())).grid).toBe(true);
@@ -353,10 +354,7 @@ describe('the isometric view (L-951)', () => {
       // The preview to a square: its cost over the square's diamond.
       const target = { x: 82.5, y: 27.5 };
       const s = await screenOf(page, target);
-      await page.evaluate(
-        ([p]) => window.Loom.battle.tap(p, window.Loom.engine.camera.view),
-        [s]
-      );
+      await page.evaluate(([p]) => window.Loom.battle.tap(p, window.Loom.engine.camera.view), [s]);
       await frame();
       const preview = await page.evaluate(() => window.Loom.battle.drawn());
       const cost = preview.labels.find((l) => /AP$/.test(l.text));
@@ -597,8 +595,10 @@ describe('the isometric view (L-951)', () => {
     await page.evaluate(() => window.Loom.battle.setIso(true));
     await show(page, dungeonData());
     const after = await page.evaluate(() => window.Loom.mapPaint.describe('battle:dungeon'));
-    expect(after.filter((d) => d.layer === 'standing' && d.kind !== 'token')).toEqual([]);
-    expect(after.some((d) => d.layer === 'walls' && d.kind === 'wall')).toBe(true);
+    // Standing in isometric (L-952): each wall piece a prism, with its cap.
+    const walls = after.filter((d) => d.layer === 'standing' && d.kind === 'wall');
+    expect(walls.length).toBeGreaterThan(0);
+    walls.forEach((w) => expect(w.shows).toContain('cap'));
     expect(page.errors).toEqual([]);
     await page.close();
   });

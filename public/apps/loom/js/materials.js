@@ -55,6 +55,15 @@
   //                         point of the picture (0–1 across and down) where
   //                         its footprint's south edge meets the ground at
   //                         its middle; [0.5, 1] unless it says
+  //               iso       an object standing in the isometric view
+  //                         (planning/isometric-view.md §4.4, AR1; L-952):
+  //                         { facings: [front, back] (pictures, its front
+  //                         toward the lower left and its back), foot? (the
+  //                         point of each picture where the footprint's
+  //                         front corner meets the ground; [0.5, 1] unless
+  //                         it says), long? ('x' or 'y': the axis it's
+  //                         painted long along, so one long the other way
+  //                         is mirrored) }
   //   picture   { file } (under the set's folder) or { atlas, frame: [x, y,
   //             w, h] } (a frame of one of its atlases, in pixels)
   //
@@ -465,6 +474,16 @@
     );
   }
 
+  function isFoot(foot) {
+    return (
+      Array.isArray(foot) &&
+      foot.length === 2 &&
+      foot.every(function (v) {
+        return typeof v === 'number' && v >= 0 && v <= 1;
+      })
+    );
+  }
+
   /**
    * What's wrong with a manifest, as sentences (none: []): its name, its
    * atlases, and each entry's pictures, span, variants, face and stand.
@@ -521,19 +540,25 @@
           }
         }
         if (e.face !== undefined) picture(where + '’s face', e.face);
+        if (e.iso !== undefined) {
+          var iso = e.iso || {};
+          if (!Array.isArray(iso.facings) || iso.facings.length !== 2) {
+            out.push(where + '’s iso is { facings: [front, back] }.');
+          } else {
+            picture(where + '’s isometric front', iso.facings[0]);
+            picture(where + '’s isometric back', iso.facings[1]);
+          }
+          if (iso.foot !== undefined && !isFoot(iso.foot)) {
+            out.push(where + '’s isometric foot is [x, y], each 0–1.');
+          }
+          if (iso.long !== undefined && iso.long !== 'x' && iso.long !== 'y') {
+            out.push(where + '’s isometric long is "x" or "y".');
+          }
+        }
         if (e.stand !== undefined) {
           picture(where + '’s standing picture', e.stand);
           var foot = e.stand && e.stand.foot;
-          if (
-            foot !== undefined &&
-            !(
-              Array.isArray(foot) &&
-              foot.length === 2 &&
-              foot.every(function (v) {
-                return typeof v === 'number' && v >= 0 && v <= 1;
-              })
-            )
-          ) {
+          if (foot !== undefined && !isFoot(foot)) {
             out.push(where + '’s foot is [x, y], each 0–1.');
           }
         }
@@ -669,6 +694,32 @@
   }
 
   /**
+   * The pictures an object stands as in the isometric view (planning/
+   * isometric-view.md §4.2, §4.4, IS3, AR1; L-952): { facings: [front, back]
+   * (pictures), foot: [x, y], long ('x', 'y' or null) } from its set's `iso`,
+   * else null (it then stands as its three-quarter picture, standFor),
+   * unless the object or its world gives it art of its own.
+   */
+  function isoFor(object, worldKinds, setName) {
+    var item = object || {};
+    if (item.art && (item.art.imageId || item.art.link)) return null;
+    var own = worldKinds && has(worldKinds, item.kind) ? worldKinds[item.kind] : null;
+    if (own && own.art && (own.art.imageId || own.art.link)) return null;
+    var found = entryOf(setName, 'objects', item.kind);
+    var iso = found && found.entry.iso;
+    if (!iso || !Array.isArray(iso.facings)) return null;
+    var facings = iso.facings.map(function (p) {
+      return resolve(found.set, p);
+    });
+    if (!facings[0]) return null;
+    return {
+      facings: [facings[0], facings[1] || facings[0]],
+      foot: Array.isArray(iso.foot) ? iso.foot.slice() : [0.5, 1],
+      long: iso.long === 'x' || iso.long === 'y' ? iso.long : null,
+    };
+  }
+
+  /**
    * An object kind's default size in feet, [width, depth]: the world's own
    * (`worldKinds[kind].size`), else the catalog's, else null.
    */
@@ -714,6 +765,7 @@
     artFiles: artFiles,
     artFor: artFor,
     standFor: standFor,
+    isoFor: isoFor,
     checkManifest: checkManifest,
     registerSet: registerSet,
     setOf: setOf,
