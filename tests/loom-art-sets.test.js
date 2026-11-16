@@ -10,6 +10,8 @@
  *     object's standing picture with its foot, from a file or an atlas
  *     frame; anything it lacks falls back to the built-in SVG;
  *   - an object's own art and its world's still come first;
+ *   - an object's isometric pictures (L-952): its two facings, its foot and
+ *     the axis it's painted long along;
  *   - a manifest that's wrong is refused, saying why;
  *   - a world's set: its own, else classic; one there isn't falls back to
  *     classic with a warning; and loomGetMap's view sends it;
@@ -187,6 +189,43 @@ describe('a manifest, read', () => {
     });
   });
 
+  test('an object’s isometric pictures, front and back, with its foot and long axis (L-952)', () => {
+    expect(
+      catalog.registerSet({
+        name: 'iso-props',
+        objects: {
+          table: {
+            stand: { file: 'table.webp' },
+            iso: {
+              facings: [{ file: 'table-front.webp' }, { file: 'table-back.webp' }],
+              foot: [0.5, 0.98],
+              long: 'y',
+            },
+          },
+          barrel: { iso: { facings: [{ file: 'barrel.webp' }, { file: 'barrel.webp' }] } },
+        },
+      })
+    ).toEqual([]);
+    expect(catalog.isoFor({ kind: 'table' }, null, 'iso-props')).toEqual({
+      facings: [
+        { url: '/apps/loom/art/sets/iso-props/table-front.webp' },
+        { url: '/apps/loom/art/sets/iso-props/table-back.webp' },
+      ],
+      foot: [0.5, 0.98],
+      long: 'y',
+    });
+    expect(catalog.isoFor({ kind: 'barrel' }, null, 'iso-props')).toMatchObject({
+      foot: [0.5, 1],
+      long: null,
+    });
+    // None: it stands as its three-quarter picture; its own art comes first.
+    expect(catalog.isoFor({ kind: 'chest' }, null, 'iso-props')).toBeNull();
+    expect(catalog.isoFor({ kind: 'table' }, null, 'classic')).toBeNull();
+    expect(
+      catalog.isoFor({ kind: 'table', art: { link: 'https://x/t.png' } }, null, 'iso-props')
+    ).toBeNull();
+  });
+
   test('variants are read, up to three', () => {
     expect(
       catalog.registerSet({
@@ -250,6 +289,17 @@ describe('a manifest that’s wrong', () => {
     expect(
       problems({ name: 'x', materials: { 'wall/stone': { face: { nothing: 1 } } } })[0]
     ).toMatch(/picture/);
+    // Isometric pictures (L-952): two facings, a foot in the picture, a long axis.
+    expect(
+      problems({ name: 'x', objects: { chest: { iso: { facings: [{ file: 'a' }] } } } })[0]
+    ).toMatch(/facings: \[front, back\]/);
+    const iso = (extra) => ({
+      name: 'x',
+      objects: { chest: { iso: { facings: [{ file: 'a' }, { file: 'b' }], ...extra } } },
+    });
+    expect(problems(iso({}))).toEqual([]);
+    expect(problems(iso({ foot: [0.5, 3] }))[0]).toMatch(/isometric foot/);
+    expect(problems(iso({ long: 'z' }))[0]).toMatch(/isometric long/);
     // And isn't registered.
     expect(catalog.registerSet({ name: 'broken', objects: { nope: { file: 'x' } } })).not.toEqual(
       []

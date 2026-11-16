@@ -24,6 +24,7 @@
     </script>
     <script src="/apps/loom/js/materials.js"></script>
     <script src="/apps/loom/js/map-geometry.js"></script>
+    <script src="/apps/loom/js/iso.js"></script>
     <script src="/apps/loom/js/paint.js"></script>
     <script>
       window.__progress = [];
@@ -41,10 +42,16 @@
         document.getElementById('stage').appendChild(app.canvas);
         const art = new PIXI.Sprite();
         const host = new PIXI.Container();
-        app.stage.addChild(art, host);
+        // The standing layer for the isometric view (L-952), over the floor.
+        const stand = new PIXI.Container();
+        stand.sortableChildren = true;
+        app.stage.addChild(art, host, stand);
+        window.__stand = stand;
         window.__app = app;
         // Draws a map: its art first (a data URL), then the painter's work,
         // placed at `place` ({ x, y, scale }). Resolves once all of it is built.
+        // With options.iso (L-952), the floor laid under the 2:1 projection, its
+        // north-west corner at `place`, and what stands built on that screen.
         window.__draw = function (key, geometry, options, place, image) {
           return new Promise(async (resolve) => {
             art.visible = false;
@@ -61,25 +68,41 @@
               app.render();
               resolve(Loom.mapPaint.stats());
             };
+            const iso = options && options.iso;
             root = Loom.mapPaint.paint(
               host,
               key,
               geometry,
-              Object.assign({}, options, {
-                onProgress(f) {
-                  window.__progress.push(f);
-                  if (f === null) {
-                    done = true;
-                    if (root) finish();
-                  }
-                },
-                onChange() {
-                  app.render();
-                },
-              })
+              Object.assign(
+                {},
+                options,
+                iso
+                  ? {
+                      stand,
+                      standAt: { x: place.x, y: place.y, scale: place.scale },
+                    }
+                  : {},
+                {
+                  onProgress(f) {
+                    window.__progress.push(f);
+                    if (f === null) {
+                      done = true;
+                      if (root) finish();
+                    }
+                  },
+                  onChange() {
+                    app.render();
+                  },
+                }
+              )
             );
-            root.position.set(place.x, place.y);
-            root.scale.set(place.scale);
+            if (iso) {
+              const k = place.scale;
+              root.setFromMatrix(new PIXI.Matrix(k, k / 2, -k, k / 2, place.x, place.y));
+            } else {
+              root.position.set(place.x, place.y);
+              root.scale.set(place.scale);
+            }
             app.render();
             if (done) finish();
           });

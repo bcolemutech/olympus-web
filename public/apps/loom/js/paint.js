@@ -104,12 +104,35 @@
   //            `stand`'s), fades (true: the drawer fades what stands over its
   //            tokens, L-942, so long walls are cut along their length), set (the world's art set, L-944: its pictures
   //            over the built-in art; its manifest fetched the first time),
-  //            flat (true: nothing stands; walls and windows lie as their
-  //            top's strip, doors as lines by their state, objects as their
-  //            picture from above: the grid's isometric view lays it under
-  //            its projection until its painter stands them up, L-951),
   //            rise (how far up the screen a foot of height stands, for
-  //            riseOf; RISE without it) }
+  //            riseOf; RISE without it), iso ({ rise }: the isometric view,
+  //            below; the drawer lays the root under its 2:1 projection and
+  //            gives `stand` and `standAt`) }
+  //
+  // The isometric view (planning/isometric-view.md §4.2, IS3, IS5, AR1, AR2;
+  // L-952 / #858; iso.js): with `iso`, what lies on the floor is drawn as
+  // above, in the map's units, for the drawer to project; the standing layer
+  // is built on the isometric screen, a point (x, y) at a height h at
+  // (x − y, (x + y) / 2 − h), h a foot of height times `iso.rise` (1.22, C2):
+  //
+  //   walls     prisms: the line given a thickness by material (about a foot,
+  //             ISO_THICK), the face toward the camera and its end there,
+  //             each with the material's face picture laid on by an affine
+  //             map and shaded by the way it faces, its top's picture the
+  //             cap; cut into pieces of at most a tile and a half
+  //   doors     both ways, a shut one a panel in its wall's plane (a locked
+  //             one tinted), an open one a leaf swung on its hinge; windows
+  //             the same, their panes between the wall below and above
+  //   objects   on their footprint by facing: the set's isometric pictures
+  //             (materials.js isoFor) when it has them, else the three-
+  //             quarter one; front south, back mirrored west, back north,
+  //             front mirrored east (iso.js facing)
+  //
+  // drawn back to front by their footprints (iso.js order), once a map is
+  // built and as the drawer's tokens move (place); culled on the isometric
+  // screen (view's `stand`); dimmed by the drawer's fog (shade). A map's own
+  // painting never stands in for its walls or doors (AR2): with `iso` they
+  // are drawn from its data, over it.
 
   var Loom = window.Loom;
   var mat = Loom.materials;
@@ -135,6 +158,23 @@
   var FACE_SHADE = 0x9a9a9a; // a face drawn from its top's picture
   var FACE_LIT = 0xe4e4e4; // a face drawn from its own
   var LEAF = 0.4; // an open door's leaf, as part of the wall's thickness
+  // The isometric view (L-952): a wall's thickness in feet by its material
+  // (IS5: about a foot), the geometry staying a line; a face toward the lower
+  // right this much darker than one toward the lower left (lit from the left).
+  var ISO_THICK = {
+    stone: 1.25,
+    brick: 1,
+    wood: 0.75,
+    rock: 1.5,
+    metal: 0.5,
+    ice: 1.25,
+    hedge: 1.5,
+    palisade: 1,
+    glass: 0.4,
+    bars: 0.4,
+    fence: 0.4,
+  };
+  var ISO_DARK = 0.78;
   // The finish (planning/game-art.md §4.2, EN3–EN5, AR4; L-943 / #797).
   var FADE_FT = 1; // a floor fades over the one under it this far past its edge
   var FADE_STEPS = 5; // strokes the fade is built of
@@ -646,11 +686,252 @@
     return parts;
   }
 
+  // ── The isometric view (L-952) ────────────────────────────────────────
+
+  var ISO = Loom.iso;
+
+  // A tiled picture's scale on a face `len` along and `h` up: `fit` fills the
+  // face with it once (a door's or a pane's front), `face` repeats it at the
+  // face's height (a wall's face picture), else (a top standing in for a
+  // face) at the wall's thickness: [across, down], screen units a pixel.
+  function isoScale(texture, len, h, thick, how) {
+    var th = texture.height || STRIP_PX.h;
+    var tw = texture.width || STRIP_PX.w;
+    if (how === 'fit') return [len / tw, h / th];
+    if (how === 'face') return [h / th, h / th];
+    return [thick / th, thick / th];
+  }
+
+  // A picture with a tint multiplied in, made once (a fill pattern takes no
+  // tint of its own): a wall's face shaded by the way it faces, a locked door.
+  var tintedTextures = {};
+  function tinted(texture, tint) {
+    if (!texture || tint === undefined || tint === 0xffffff) return texture;
+    var source = texture.source;
+    var image = source && source.resource;
+    if (!image) return texture;
+    var id = source.uid + '|' + tint;
+    if (tintedTextures[id]) return tintedTextures[id];
+    var w = texture.width;
+    var h = texture.height;
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, w, h);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = '#' + ('000000' + tint.toString(16)).slice(-6);
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(image, 0, 0, w, h);
+    var out = window.PIXI.Texture.from(canvas);
+    out.source.style.addressMode = 'repeat';
+    if (out.source.style.update) out.source.style.update();
+    tintedTextures[id] = out;
+    return out;
+  }
+
+  // A pattern of a picture repeating, laid by `m` (its pixels to the screen).
+  function patternOf(texture, m) {
+    var pattern = new window.PIXI.FillPattern(texture, 'repeat');
+    pattern.setTransform(m);
+    return pattern;
+  }
+
+  // A picture laid on an upright face from `a` to `b` (floor points), from
+  // `base` to `base + h` up the screen: an affine map, exact for a flat face,
+  // always drawn left to right so a picture is never mirrored. `along` is
+  // where `a` lies along its wall, so a tiled picture runs on across pieces.
+  // { pts (its corners on the screen), pattern }, or null for a face seen
+  // edge-on. Drawn as a fill (isoSlab), so a piece is one Graphics.
+  function isoFace(texture, a, b, base, h, thick, how, along) {
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len || h <= 0) return null;
+    var sd = ISO.V({ x: dx / len, y: dy / len });
+    if (Math.abs(sd.x) < 1e-3) return null;
+    var start = a;
+    var shift = -(along || 0);
+    if (sd.x < 0) {
+      start = b;
+      sd = { x: -sd.x, y: -sd.y };
+      shift = (along || 0) + len;
+    }
+    if (how === 'fit') shift = 0;
+    var o = ISO.P(start, base + h);
+    var k = isoScale(texture, len, h, thick, how);
+    // A pixel (u, v) of the picture: k[0] u + shift along the face, k[1] v down it.
+    var m = new window.PIXI.Matrix(
+      k[0] * sd.x,
+      k[0] * sd.y,
+      0,
+      k[1],
+      o.x + shift * sd.x,
+      o.y + shift * sd.y
+    );
+    return {
+      pts: [
+        o.x,
+        o.y,
+        o.x + len * sd.x,
+        o.y + len * sd.y,
+        o.x + len * sd.x,
+        o.y + len * sd.y + h,
+        o.x,
+        o.y + h,
+      ],
+      pattern: patternOf(texture, m),
+    };
+  }
+
+  // A strip lying at height `h` from `a` to `b`, `thick` across: a wall's cap.
+  function isoCap(texture, a, b, h, thick, along) {
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len) return null;
+    var d = { x: dx / len, y: dy / len };
+    var n = { x: -d.y, y: d.x };
+    var sd = ISO.V(d);
+    var sn = ISO.V(n);
+    var o = ISO.P({ x: a.x - (n.x * thick) / 2, y: a.y - (n.y * thick) / 2 }, h);
+    var th = texture.height || STRIP_PX.h;
+    var k = thick / th;
+    var shift = -(along || 0);
+    var m = new window.PIXI.Matrix(
+      k * sd.x,
+      k * sd.y,
+      k * sn.x,
+      k * sn.y,
+      o.x + shift * sd.x,
+      o.y + shift * sd.y
+    );
+    var u = { x: len * sd.x, y: len * sd.y };
+    var w = { x: thick * sn.x, y: thick * sn.y };
+    return {
+      pts: [o.x, o.y, o.x + u.x, o.y + u.y, o.x + u.x + w.x, o.y + u.y + w.y, o.x + w.x, o.y + w.y],
+      pattern: patternOf(texture, m),
+    };
+  }
+
+  // A face's shade by the way it faces, lit from the left: toward the lower
+  // left as it is, toward the lower right ISO_DARK of it, between by degrees.
+  function shadeFor(tint, normal) {
+    var base = tint === undefined ? 0xffffff : tint;
+    var s = ISO.V(normal);
+    var len = Math.sqrt(s.x * s.x + s.y * s.y) || 1;
+    var k = 1 - (1 - ISO_DARK) * Math.max(0, Math.min(1, (s.x / len + 1) / 2));
+    var r = Math.round(((base >> 16) & 255) * k);
+    var g = Math.round(((base >> 8) & 255) * k);
+    var b = Math.round((base & 255) * k);
+    return (r << 16) | (g << 8) | b;
+  }
+
+  // A segment standing up in isometric, a prism: its face toward the camera
+  // (the side its normal points along (1, 1)), its end where it ends toward
+  // the camera, and its cap at `top`; from `base` to `top` up the screen.
+  // Cut into pieces no longer than `piece`, each with its footprint
+  // (`print`, for the order), its middle's depth, its box on the screen and
+  // its outline: [{ node, depth, box, print, outline, hit }].
+  function isoSlab(a, b, o) {
+    var PIXI = window.PIXI;
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!len) return [];
+    var d = { x: dx / len, y: dy / len };
+    var nrm = { x: -d.y, y: d.x };
+    if (nrm.x + nrm.y < 0) nrm = { x: -nrm.x, y: -nrm.y };
+    var faces = nrm.x + nrm.y > 1e-6; // a wall running north-east shows none
+    var thick = o.thick;
+    var half = { x: (nrm.x * thick) / 2, y: (nrm.y * thick) / 2 };
+    var n = Math.max(1, Math.ceil(len / o.piece - 1e-9));
+    var h = o.top - o.base;
+    var toward = d.x + d.y; // > 0: the end at b faces the camera; < 0: at a
+    var parts = [];
+    for (var k = 0; k < n; k++) {
+      var p = { x: a.x + (dx * k) / n, y: a.y + (dy * k) / n };
+      var q = { x: a.x + (dx * (k + 1)) / n, y: a.y + (dy * (k + 1)) / n };
+      var along = (len * k) / n;
+      var c = new PIXI.Graphics();
+      var shows = []; // what of it is drawn, for describe()
+      var alpha = o.alpha > 0 ? o.alpha : 1;
+      var lay = function (fill, what) {
+        if (!fill) return;
+        c.poly(fill.pts).fill({ fill: fill.pattern, alpha: alpha });
+        shows.push(what);
+      };
+      if (o.front && h > 0) {
+        if (faces) {
+          lay(
+            isoFace(
+              tinted(o.front, shadeFor(o.tint, nrm)),
+              { x: p.x + half.x, y: p.y + half.y },
+              { x: q.x + half.x, y: q.y + half.y },
+              o.base,
+              h,
+              thick,
+              o.how,
+              along
+            ),
+            'face'
+          );
+        }
+        var end = toward > 1e-6 && k === n - 1 ? q : toward < -1e-6 && k === 0 ? p : null;
+        if (end) {
+          lay(
+            isoFace(
+              tinted(o.front, shadeFor(o.tint, toward > 0 ? d : { x: -d.x, y: -d.y })),
+              { x: end.x - half.x, y: end.y - half.y },
+              { x: end.x + half.x, y: end.y + half.y },
+              o.base,
+              h,
+              thick,
+              o.how === 'fit' ? 'top' : o.how
+            ),
+            'end'
+          );
+        }
+      }
+      if (o.cap) {
+        lay(isoCap(tinted(o.cap, o.capTint), p, q, o.top, thick, along), 'cap');
+      }
+      if (!shows.length) {
+        c.destroy();
+        continue;
+      }
+      var print = ISO.segment(p, q, thick);
+      var corners = [];
+      print.forEach(function (e) {
+        corners.push(ISO.P(e, o.base), ISO.P(e, o.top));
+      });
+      parts.push({
+        node: c,
+        depth: ISO.depthOf(print),
+        box: boxOf(corners, 0),
+        print: print,
+        rise: [o.base, o.top], // its outline, for picking: its footprint's hull from base to top
+        hit: o.hit || null,
+        bare: true,
+        info: { shows: shows },
+      });
+    }
+    return parts;
+  }
+
+  // A part seen through (a pane, a glass door). An isometric slab is drawn
+  // with its alpha (`alpha`), its own being its wrap's, which fading eases (L-942).
+  function seeThrough(part, alpha) {
+    if (!part.bare) part.node.alpha = alpha;
+  }
+
   // How far up the screen a height in feet stands, in map units: RISE of a
   // foot for each, or the drawer's own `rise` (the isometric view's 1.22,
   // planning/isometric-view.md C2).
   function riseFor(feet, o) {
-    return feet * (o.rise > 0 ? o.rise : RISE) * (o.feet > 0 ? o.feet : 1);
+    var rise = o.iso && o.iso.rise > 0 ? o.iso.rise : o.rise > 0 ? o.rise : RISE;
+    return feet * rise * (o.feet > 0 ? o.feet : 1);
   }
 
   function heightOf(item, fallback) {
@@ -750,7 +1031,7 @@
           // A world's own ground (L-713) is drawn with its art, which can change.
           kind === 'ground' && o.materials ? JSON.stringify(o.materials) : '',
           extra || '',
-          o.flat ? 'flat' : '',
+          o.iso ? 'iso|' + o.iso.rise : '',
         ].join('|'),
         layer: layer,
         order: i,
@@ -776,16 +1057,28 @@
     // Where the drawer fades what stands over its tokens (L-942), a long wall is
     // cut along its length too, in pieces of two tiles at most, so the stretch
     // over a token fades alone; elsewhere it's whole, as before.
+    // In isometric (L-952), cut into pieces of at most a tile and a half: the
+    // order by footprint needs no shorter (planning/isometric-view.md §4.2).
     var standSlab = function (a, b, so) {
+      if (o.iso)
+        return isoSlab(a, b, Object.assign({}, so, { piece: so.whole ? Infinity : tile * 1.5 }));
       return slab(a, b, Object.assign({ span: o.fades ? tile * 2 : 0 }, so));
     };
     var thick = o.wall;
+    // A wall's thickness: in isometric by its material (IS5), else the drawer's.
+    var thickOf = function (wall) {
+      if (!o.iso) return thick;
+      return (ISO_THICK[wall && wall.material] || 1) * o.feet;
+    };
+    // A map's own painting stands in for its ground and walls, but never in
+    // isometric (AR2): there they stand from its data, over it.
+    var art = Boolean(o.art) && !o.iso;
     var wallsById = {};
     list('walls').forEach(function (w) {
       if (w && w.id) wallsById[w.id] = w;
     });
 
-    if (!o.art) {
+    if (!art) {
       // Each floor (AR4, EN3; L-943): its picture, or one of its variants
       // picked by its id; where it lies over a floor drawn before it, it
       // fades over that one along its edge, a foot or so, in strokes of its
@@ -895,41 +1188,8 @@
         var url = wallArt.key;
         var fUrl = wallArt.face;
         var edges = byWall[item.id] || [];
-        if (o.flat) {
-          // Lying flat (the isometric view until L-952): its top's strip.
-          add(
-            'walls',
-            'wall',
-            item,
-            i,
-            [url],
-            function () {
-              return flatStrips(
-                loadedTiled(url),
-                edges.map(function (e) {
-                  return [pt(e.a), pt(e.b)];
-                }),
-                thick
-              );
-            },
-            JSON.stringify(
-              edges.map(function (e) {
-                return [e.a, e.b];
-              })
-            ),
-            boxOf(
-              [].concat.apply(
-                [],
-                edges.map(function (e) {
-                  return [e.a, e.b];
-                })
-              ),
-              thick
-            )
-          );
-          return;
-        }
         var top = riseFor(heightOf(item, WALL_FT), o);
+        var wt = thickOf(item);
         var cut = JSON.stringify(
           edges.map(function (e) {
             return [e.a, e.b];
@@ -949,7 +1209,7 @@
               parts = parts.concat(
                 standSlab(pt(e.a), pt(e.b), {
                   piece: tile,
-                  thick: thick,
+                  thick: wt,
                   base: 0,
                   top: top,
                   front: own || cap,
@@ -967,7 +1227,7 @@
           var segs = edges.map(function (e) {
             return [e.a, e.b];
           });
-          var reach = thick / 2 + BAND_FT * o.feet;
+          var reach = wt / 2 + BAND_FT * o.feet;
           add(
             'shadows',
             'shadow',
@@ -975,7 +1235,7 @@
             i,
             [],
             function () {
-              return bands(segs, thick, o);
+              return bands(segs, wt, o);
             },
             'wall|' + cut,
             boxOf([].concat.apply([], segs), reach)
@@ -989,24 +1249,6 @@
         var url = paneArt.key;
         // A set's painted pane (its `face`, L-946), stretched over the opening.
         var pFace = paneArt.face;
-        if (o.flat) {
-          // Lying flat: its pane's strip, seen from above.
-          add(
-            'openings',
-            'window',
-            item,
-            i,
-            [url],
-            function () {
-              var strips = flatStrips(loadedTiled(url), [[pt(item.from), pt(item.to)]], thick);
-              strips.alpha = item.state === 'open' ? 0.55 : 0.85;
-              return strips;
-            },
-            '',
-            boxOf([item.from, item.to], thick)
-          );
-          return;
-        }
         var wall = wallsById[item.wall] || null;
         var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
         var wUrl = wallArt.key || null;
@@ -1015,6 +1257,7 @@
         var sill = Math.min(SILL_FT, height);
         var head = Math.min(heightOf(item, WINDOW_FT), height);
         var wallKey = wall ? wall.material + '|' + height + '|' + o.feet : '';
+        var wt = thickOf(wall);
         add(
           'standing',
           'window',
@@ -1029,7 +1272,7 @@
             var cap = loadedTiled(wUrl);
             var own = loadedTiled(fUrl);
             var wallFace = own || cap;
-            var common = { piece: tile, thick: thick, how: own ? 'face' : 'top' };
+            var common = { piece: tile, thick: wt, how: own ? 'face' : 'top' };
             var shade = own ? FACE_LIT : FACE_SHADE;
             var parts = standSlab(a, b, {
               ...common,
@@ -1040,14 +1283,16 @@
             });
             standSlab(a, b, {
               piece: tile,
-              thick: thick * 0.8,
+              thick: wt * 0.8,
+              whole: true,
               base: riseFor(sill, o),
               top: riseFor(head, o),
               front: pane,
               how: 'fit',
               tint: 0xffffff,
+              alpha: item.state === 'open' ? 0.55 : 0.85,
             }).forEach(function (part) {
-              part.node.alpha = item.state === 'open' ? 0.55 : 0.85;
+              seeThrough(part, item.state === 'open' ? 0.55 : 0.85);
               parts.push(part);
             });
             parts = parts.concat(
@@ -1071,19 +1316,20 @@
           i + 2000,
           [],
           function () {
-            return bands([[item.from, item.to]], thick, o);
+            return bands([[item.from, item.to]], wt, o);
           },
           'window',
-          boxOf([item.from, item.to], thick / 2 + BAND_FT * o.feet)
+          boxOf([item.from, item.to], wt / 2 + BAND_FT * o.feet)
         );
       });
     }
 
-    // Doors: over a map's own art or lying flat, lines by their state; else standing
+    // Doors: over a map's own art, lines by their state; else standing
     // (L-941): a closed one an upright panel in its wall, an open one a thin
-    // leaf swung on its hinge (`from`), the wall going on above either.
+    // leaf swung on its hinge (`from`), the wall going on above either; in
+    // isometric (L-952) in walls both ways, their panel's front filling it.
     list('doors').forEach(function (item, i) {
-      if (o.art || o.flat) {
+      if (art) {
         add(
           'openings',
           'door',
@@ -1112,6 +1358,9 @@
       var height = heightOf(wall, WALL_FT);
       var tall = Math.min(heightOf(item, DOOR_FT), height);
       var see = (mat.materialOf('door', item.material) || {}).seeThrough;
+      var wt = thickOf(wall);
+      // In isometric, what a click on it will pick (L-953).
+      var doorHit = o.iso && item.id ? 'door:' + item.id : null;
       add(
         'standing',
         'door',
@@ -1134,7 +1383,8 @@
             var swung = { x: a.x + Math.cos(angle) * len, y: a.y + Math.sin(angle) * len };
             standSlab(a, swung, {
               piece: tile,
-              thick: thick * LEAF,
+              thick: wt * LEAF,
+              whole: true,
               base: 0,
               top: riseFor(tall, o),
               front: leafFront,
@@ -1142,14 +1392,17 @@
               tint: 0xffffff,
               cap: leafArt,
               capTint: FACE_SHADE,
+              hit: doorHit,
+              alpha: see ? 0.8 : 1,
             }).forEach(function (part) {
-              if (see) part.node.alpha = 0.8;
+              if (see) seeThrough(part, 0.8);
               parts.push(part);
             });
           } else {
             standSlab(a, b, {
               piece: tile,
-              thick: thick,
+              whole: true, // one piece, its front filling it
+              thick: wt,
               base: 0,
               top: riseFor(tall, o),
               front: leafFront,
@@ -1157,19 +1410,22 @@
               tint: state === 'locked' ? LOCKED : 0xffffff,
               cap: leafArt,
               capTint: state === 'locked' ? LOCKED : FACE_SHADE,
+              hit: doorHit,
+              alpha: see ? 0.8 : 1,
             }).forEach(function (part) {
-              if (see) part.node.alpha = 0.8;
+              if (see) seeThrough(part, 0.8);
               parts.push(part);
             });
           }
           // The wall over the doorway. In a wall running down the screen, whose
           // face can't be seen, a shut door's own picture is its top strip, so
-          // the door still shows.
-          var across = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) || state === 'open';
+          // the door still shows (in isometric every door shows its panel).
+          var across = o.iso || Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) || state === 'open';
           parts = parts.concat(
             standSlab(a, b, {
               piece: tile,
-              thick: thick,
+              whole: true, // one piece, its front filling it
+              thick: wt,
               base: riseFor(tall, o),
               top: riseFor(height, o),
               front: own || cap,
@@ -1177,9 +1433,10 @@
               tint: own ? FACE_LIT : FACE_SHADE,
               cap: across ? cap : leafArt || cap,
               capTint: across || !leafArt ? undefined : state === 'locked' ? LOCKED : undefined,
+              hit: doorHit,
             })
           );
-          if (!leafArt) {
+          if (!leafArt && !o.iso) {
             // Its art missing: the line by its state, lying flat, as before.
             var line = doorLine(a, b, state, thick);
             parts.push({
@@ -1200,10 +1457,10 @@
           i + 1000,
           [],
           function () {
-            return bands([[item.from, item.to]], thick, o);
+            return bands([[item.from, item.to]], wt, o);
           },
           'door',
-          boxOf([item.from, item.to], thick / 2 + BAND_FT * o.feet)
+          boxOf([item.from, item.to], wt / 2 + BAND_FT * o.feet)
         );
       }
     });
@@ -1214,9 +1471,15 @@
         : typeof item.size === 'number'
           ? [item.size, item.size]
           : mat.sizeFor(item.kind, o.worldKinds) || [tile, tile];
-      // Lying flat (o.flat), every object is its picture seen from above.
-      var stand = o.flat ? null : mat.standFor(item, o.worldKinds, o.set);
+      var stand = mat.standFor(item, o.worldKinds, o.set);
       var standKey = stand ? keyOf(stand.picture) : null;
+      // In isometric (L-952): its set's isometric pictures by facing, else its
+      // three-quarter one, else it lies flat as below.
+      var isoArt = o.iso ? mat.isoFor(item, o.worldKinds, o.set) : null;
+      if (o.iso && (isoArt || stand)) {
+        isoObject(item, i, size, isoArt, stand);
+        return;
+      }
       if (stand) {
         // Standing on the south edge of its footprint (SC1): as wide as the
         // footprint turned by its `turn`, as tall as its picture's shape.
@@ -1303,6 +1566,104 @@
       );
     });
 
+    // An object standing in isometric (IS3): on its footprint, as wide as the
+    // footprint's diamond across the screen and as tall as its picture's
+    // shape, its foot on the footprint's front corner; its picture by its
+    // facing, mirrored for two of the four (iso.js facing).
+    function isoObject(item, i, size, isoArt, stand) {
+      var face = ISO.facing(item.turn, size, isoArt ? isoArt.long : null);
+      var picture = isoArt ? isoArt.facings[face.back ? 1 : 0] : stand.picture;
+      var key = keyOf(picture);
+      var foot = isoArt ? isoArt.foot : stand.foot;
+      var mirror = face.mirror;
+      add(
+        'standing',
+        'object',
+        item,
+        i,
+        [key],
+        function () {
+          var at = pt(item.at);
+          var texture = loaded(key);
+          if (!at || !texture) return [];
+          var print = ISO.rect(at, size[0], size[1], item.turn);
+          var ps = print.map(function (p) {
+            return ISO.P(p, 0);
+          });
+          var x0 = Math.min.apply(
+            null,
+            ps.map(function (p) {
+              return p.x;
+            })
+          );
+          var x1 = Math.max.apply(
+            null,
+            ps.map(function (p) {
+              return p.x;
+            })
+          );
+          var y1 = Math.max.apply(
+            null,
+            ps.map(function (p) {
+              return p.y;
+            })
+          );
+          var across = x1 - x0;
+          var tall = (across * (texture.height || 1)) / (texture.width || 1);
+          // Across the diamond's width, its foot on the front corner's height
+          // (a mirrored picture's foot mirrored with it).
+          var up = new PIXI.Sprite(texture);
+          up.anchor.set(foot[0], foot[1]);
+          up.position.set(x0 + (mirror ? 1 - foot[0] : foot[0]) * across, y1);
+          up.width = across;
+          up.height = tall;
+          if (mirror) up.scale.x = -Math.abs(up.scale.x);
+          var box = {
+            x0: x0,
+            x1: x1,
+            y0: y1 - tall * foot[1],
+            y1: y1 + tall * (1 - foot[1]),
+          };
+          return [
+            {
+              node: up,
+              depth: ISO.depthOf(print),
+              box: box,
+              print: print,
+              info: { facing: face.back ? 'back' : 'front', mirror: mirror },
+              hit: mat.isDecor(item) ? null : item.id || null,
+              fades:
+                typeof item.blocksSight === 'boolean'
+                  ? item.blocksSight
+                  : Boolean((mat.objectKind(item.kind) || {}).blocksSight),
+            },
+          ];
+        },
+        (face.back ? 'back' : 'front') + (mirror ? '|mirror' : '')
+      );
+      // Its contact shadow on the floor under its footprint (EN4), turned as it is.
+      add(
+        'shadows',
+        'shadow',
+        item,
+        i + 3000,
+        [],
+        function () {
+          var at = pt(item.at);
+          if (!at) return new PIXI.Container();
+          var sp = new PIXI.Sprite(shadowTexture());
+          sp.anchor.set(0.5);
+          sp.position.set(at.x, at.y);
+          sp.width = size[0] * 1.3;
+          sp.height = size[1] * 1.3;
+          sp.rotation = ((Number(item.turn) || 0) * Math.PI) / 180;
+          return sp;
+        },
+        'object-iso',
+        boxOf([item.at], Math.max(size[0], size[1]))
+      );
+    }
+
     var lights = list('lights');
     if (lights.length) {
       add('light', 'light', { lights: lights }, 0, [], function () {
@@ -1312,33 +1673,7 @@
     return out;
   }
 
-  // Segments lying flat (`o.flat`): each a strip of a picture, `thick` wide,
-  // its ends capped; a plain dark line where the picture is missing.
-  function flatStrips(texture, segs, thick) {
-    var PIXI = window.PIXI;
-    var c = new PIXI.Container();
-    var plain = null;
-    segs.forEach(function (seg) {
-      var a = seg[0];
-      var b = seg[1];
-      if (!a || !b) return;
-      var s = texture ? strip(texture, a, b, thick, false, true) : null;
-      if (s) {
-        c.addChild(s);
-        return;
-      }
-      if (!plain) plain = new PIXI.Graphics();
-      plain.moveTo(a.x, a.y).lineTo(b.x, b.y);
-    });
-    if (plain) {
-      plain.stroke({ width: thick, color: COLOURS.dark, cap: 'square' });
-      c.addChild(plain);
-    }
-    return c;
-  }
-
-  // A door over a map's own art (EX2), lying flat (`o.flat`), or one whose
-  // art is missing: a line by
+  // A door over a map's own art (EX2), or one whose art is missing: a line by
   // its state, as the grid view drew doors before (closed amber, open dashed,
   // locked red).
   function doorLine(a, b, state, thick) {
@@ -1506,12 +1841,156 @@
   }
 
   // Where a standing part goes: wrapped in the map's units where the standing
-  // layer is the drawer's own, its place in the order its foot's y there.
+  // layer is the drawer's own, its place in the order its foot's y there (in
+  // isometric, its place in the order once made, `__loomZ`, in the same units).
   function placePart(s, wrap) {
     var at = s.standAt;
     wrap.position.set(at.x, at.y);
     wrap.scale.set(at.scale);
-    wrap.zIndex = at.y + wrap.__loomDepth * at.scale;
+    var z = wrap.__loomZ !== undefined ? wrap.__loomZ : wrap.__loomDepth;
+    wrap.zIndex = at.y + z * at.scale;
+  }
+
+  // ── The isometric order (L-952) ───────────────────────────────────────
+
+  var Z_STEP = 1e-3; // between two pieces one after the other in the order
+
+  // The parts of a map's standing layer in the order, back to front by their
+  // footprints (iso.js order), each given its `__loomZ`: its depth, or just
+  // after the one before it where that's further down. With `drawn`, the
+  // drawer's tokens too (when one has no place among the rest).
+  function orderStand(s, drawn) {
+    if (!s.iso) {
+      s.order = null;
+      return;
+    }
+    var began = now();
+    var nodes = s.stand.children.filter(function (w) {
+      if (w.__loomDepth !== undefined) return Boolean(w.__loomPrint);
+      return Boolean(drawn && w.__loomPlace && w.visible);
+    });
+    var items = nodes.map(function (w) {
+      var p = w.__loomDepth !== undefined ? w : w.__loomPlace;
+      var at = w.__loomDepth !== undefined ? w : null;
+      return {
+        pts: at ? w.__loomPrint : p.print,
+        box: at ? w.__loomBox : p.box,
+        depth: at ? w.__loomDepth : p.depth,
+      };
+    });
+    var zs = [];
+    var prev = -Infinity;
+    ISO.order(items).forEach(function (i) {
+      var z = Math.max(items[i].depth, prev + Z_STEP);
+      zs[i] = z;
+      prev = z;
+    });
+    var parts = [];
+    var partItems = [];
+    var partZs = [];
+    nodes.forEach(function (w, i) {
+      if (w.__loomDepth !== undefined) {
+        w.__loomZ = zs[i];
+        placePart(s, w);
+        parts.push(w);
+        partItems.push(items[i]);
+        partZs.push(zs[i]);
+      } else {
+        w.zIndex = s.standAt.y + zs[i] * s.standAt.scale;
+      }
+    });
+    s.order = { items: partItems, zs: partZs, index: ISO.index(partItems) };
+    if (!drawn) placeDrawn(s);
+    counts.orderMs = now() - began;
+  }
+
+  // The drawer's tokens placed again among the parts, after the order is made.
+  function placeDrawn(s) {
+    s.stand.children.forEach(function (w) {
+      if (w.__loomDepth === undefined && w.__loomPlace) placeOne(s, w, w.__loomPlace);
+    });
+  }
+
+  // A token's place: after everything it overlaps and stands in front of, and
+  // before everything it stands behind, as near its depth as that allows;
+  // where nothing fits, the order is made again with it in.
+  function placeOne(s, node, info) {
+    var at = s.standAt;
+    if (!s.order) {
+      node.zIndex = at.y + info.depth * at.scale;
+      return;
+    }
+    var r = ISO.slot(
+      { pts: info.print, box: info.box, depth: info.depth },
+      s.order.index,
+      s.order.zs
+    );
+    if (r.lo >= r.hi) {
+      orderStand(s, true);
+      return;
+    }
+    var z = info.depth;
+    if (z <= r.lo) z = isFinite(r.hi) ? r.lo + (r.hi - r.lo) / 4 : r.lo + Z_STEP / 2;
+    if (z >= r.hi) z = isFinite(r.lo) ? r.hi - (r.hi - r.lo) / 4 : r.hi - Z_STEP / 2;
+    node.zIndex = at.y + z * at.scale;
+  }
+
+  /**
+   * A standing piece's outline on the screen in isometric (L-952), in the
+   * standing layer's units, for picking (L-953): a slab's footprint swept
+   * from its base to its top, a picture's box; null without one.
+   */
+  function outlineOf(wrap) {
+    if (!wrap || !wrap.__loomPrint) return null;
+    if (!wrap.__loomRise) {
+      var b = wrap.__loomBox;
+      return b
+        ? [
+            { x: b.x0, y: b.y0 },
+            { x: b.x1, y: b.y0 },
+            { x: b.x1, y: b.y1 },
+            { x: b.x0, y: b.y1 },
+          ]
+        : null;
+    }
+    var pts = [];
+    wrap.__loomPrint.forEach(function (p) {
+      pts.push(ISO.P(p, wrap.__loomRise[0]), ISO.P(p, wrap.__loomRise[1]));
+    });
+    return ISO.hull(pts);
+  }
+
+  /**
+   * Places a drawer's token in a map's standing layer in isometric (L-952):
+   * `info` { print (its footprint on the floor, [{ x, y }]), box (what it
+   * covers on the screen), depth (its middle's y there) }, all in the
+   * standing layer's units. Call it as it moves; in the three-quarter view
+   * the drawer sets its zIndex itself.
+   */
+  function place(key, node, info) {
+    var s = maps.get(key);
+    if (!s || !node || !info) return;
+    node.__loomPlace = info;
+    placeOne(s, node, info);
+  }
+
+  /**
+   * Dims what stands of a map by the drawer's fog (L-952): `fn(print)` gives
+   * the tint for a piece by its footprint on the floor (white where it's in
+   * sight); null leaves everything as drawn.
+   */
+  function shade(key, fn) {
+    var s = maps.get(key);
+    if (!s) return;
+    s.shade = fn || null;
+    s.stand.children.forEach(function (w) {
+      if (w.__loomDepth !== undefined && w.__loomPrint) shadeOne(s, w);
+    });
+  }
+
+  function shadeOne(s, w) {
+    var t = s.shade ? s.shade(w.__loomPrint) : 0xffffff;
+    w.tint = typeof t === 'number' ? t : 0xffffff;
   }
 
   // The standing layer in the drawer's container, or in the map's own,
@@ -1543,7 +2022,7 @@
   // Whether a node is out of the view (plus its margin): it isn't drawn,
   // but stays built, and shows again once the view comes back to it.
   function culls(s, node) {
-    var v = s.view;
+    var v = node.__loomOnStand && s.standView !== undefined ? s.standView : s.view;
     var b = node.__loomBounds;
     var out = Boolean(v && b) && !overlaps(b, v);
     node.__loomCulled = out;
@@ -1558,31 +2037,40 @@
     });
   }
 
+  // A view grown by its margin, or null (all of it).
+  function grown(s, rect) {
+    if (!rect || !isFinite(rect.x0) || !isFinite(rect.x1) || !isFinite(rect.y0)) return null;
+    if (!isFinite(rect.y1)) return null;
+    var m = Math.max(
+      (s.tile || 5) * 2,
+      CULL_MARGIN * Math.max(rect.x1 - rect.x0, rect.y1 - rect.y0)
+    );
+    return { x0: rect.x0 - m, y0: rect.y0 - m, x1: rect.x1 + m, y1: rect.y1 + m };
+  }
+
+  function sameView(a, b) {
+    if (a === undefined || b === undefined) return a === b;
+    if (a === null || b === null) return a === b;
+    return ['x0', 'y0', 'x1', 'y1'].every(function (k) {
+      return Math.abs(a[k] - b[k]) < 1e-6;
+    });
+  }
+
   /**
    * Culls a map's drawing to a view: `rect` { x0, y0, x1, y1 } in the map's
    * units (what the screen shows of it), grown by a margin; null draws all
-   * of it. Returns how many of its pieces are culled.
+   * of it. `stand`, in isometric (L-952), is the same for the standing layer
+   * in its own units (the isometric screen's); without it, `rect` serves
+   * both. Returns how many of its pieces are culled.
    */
-  function view(key, rect) {
+  function view(key, rect, stand) {
     var s = maps.get(key);
     if (!s) return 0;
-    var v = null;
-    if (rect && isFinite(rect.x0) && isFinite(rect.x1) && isFinite(rect.y0) && isFinite(rect.y1)) {
-      var m = Math.max(
-        (s.tile || 5) * 2,
-        CULL_MARGIN * Math.max(rect.x1 - rect.x0, rect.y1 - rect.y0)
-      );
-      v = { x0: rect.x0 - m, y0: rect.y0 - m, x1: rect.x1 + m, y1: rect.y1 + m };
-    }
-    var same =
-      (v === null && s.view === null) ||
-      (v &&
-        s.view &&
-        ['x0', 'y0', 'x1', 'y1'].every(function (k) {
-          return Math.abs(v[k] - s.view[k]) < 1e-6;
-        }));
-    if (!same) {
+    var v = grown(s, rect);
+    var sv = stand === undefined ? undefined : grown(s, stand);
+    if (!sameView(v, s.view) || !sameView(sv, s.standView)) {
       s.view = v;
+      s.standView = sv;
       cullAll(s);
     }
     return culledOf(s);
@@ -1738,11 +2226,20 @@
     }
     var about = w.about();
     return (w.build() || []).map(function (part, k) {
-      var wrap = new PIXI.Container();
-      wrap.addChild(part.node);
+      // A part already a bare container of its own (an isometric slab's) is
+      // its own wrap: one display object fewer for each piece.
+      var wrap = part.bare ? part.node : new PIXI.Container();
+      if (!part.bare) wrap.addChild(part.node);
       wrap.__loomDepth = part.depth;
       wrap.__loomBox = part.box || null;
       wrap.__loomHit = part.hit || null;
+      wrap.__loomOnStand = true; // culled by the standing layer's view
+      // In isometric (L-952): its footprint, for the order and the fog, and
+      // for a slab how high it stands, so its outline can be had for picking
+      // (outlineOf; L-953).
+      wrap.__loomPrint = part.print || null;
+      wrap.__loomRise = part.rise || null;
+      if (wrap.__loomPrint && s.shade) shadeOne(s, wrap);
       // What fades over what's behind it (L-942): walls, windows and doors
       // (an open door's leaf and the wall over its doorway too), and tall objects.
       wrap.__loomFades =
@@ -1755,6 +2252,12 @@
       });
       info.layer = 'standing';
       info.depth = Math.round(part.depth * 100) / 100;
+      // In isometric, what of a slab shows, and how a prop stands (L-952).
+      if (part.info) {
+        Object.keys(part.info).forEach(function (name) {
+          info[name] = part.info[name];
+        });
+      }
       if (k) info.part = k;
       wrap.__loomPainted = info;
       wrap.__loomBounds = part.box || null;
@@ -1794,6 +2297,7 @@
     var s = stateOf(key);
     s.tile = o.tile;
     s.onChange = o.onChange || null;
+    s.iso = Boolean(o.iso);
     // Only this map in the host.
     host.children.slice().forEach(function (child) {
       if (child !== s.root && child.__loomPaint) host.removeChild(child);
@@ -1807,6 +2311,7 @@
     });
 
     var wanted = itemsOf(geometry, o);
+    var removedBefore = counts.removed;
     var keys = new Set(
       wanted.map(function (w) {
         return w.key;
@@ -1829,7 +2334,10 @@
       return true;
     });
     var job = ++s.job;
+    var dropped = counts.removed !== removedBefore;
     if (!todo.length) {
+      // Only something gone: the order made again without it (isometric).
+      if (dropped || (s.iso && !s.order)) orderStand(s);
       if (o.onProgress) o.onProgress(null);
       return s.root;
     }
@@ -1856,6 +2364,7 @@
     ).then(function () {
       var i = 0;
       var built = now();
+      var work = 0; // the time spent building, not waiting for frames
       counts.texturesMs = built - started;
       var step = function () {
         if (job !== s.job || s.root.destroyed) return;
@@ -1865,10 +2374,16 @@
           s.items.set(w.key, nodesOf(s, w));
           counts.built += 1;
         }
+        work += now() - t0;
         report(0.4 + (0.6 * i) / todo.length);
         if (o.onChange) o.onChange();
         if (i < todo.length) window.requestAnimationFrame(step);
         else {
+          // In isometric, what stands put in order once it's all built.
+          var t1 = now();
+          orderStand(s);
+          counts.buildMs = work + now() - t1;
+          if (o.onChange) o.onChange();
           counts.drawMs = now() - built;
           if (o.onProgress) o.onProgress(null);
         }
@@ -1887,6 +2402,11 @@
       // The last paint: its textures' loading, and its shapes' drawing.
       texturesMs: counts.texturesMs || 0,
       drawMs: counts.drawMs || 0,
+      // The isometric order's making, the last time (L-952).
+      orderMs: counts.orderMs || 0,
+      // The last paint's building alone, its shapes and its order, without
+      // the frames it waited for between (L-952).
+      buildMs: counts.buildMs || 0,
       maps: Array.from(maps.keys()),
       // Pieces culled, by map (L-943).
       culled: Array.from(maps.keys()).reduce(function (acc, k) {
@@ -1924,7 +2444,9 @@
     var push = function (node) {
       if (!node.__loomPainted) return;
       var faded = node.__loomWant !== undefined && node.__loomWant < 1;
-      if (!node.__loomCulled && !faded) {
+      // Dimmed by the fog, in isometric (L-952).
+      var dimmed = Boolean(node.__loomPrint) && node.tint !== 0xffffff;
+      if (!node.__loomCulled && !faded && !dimmed) {
         out.push(node.__loomPainted);
         return;
       }
@@ -1932,6 +2454,7 @@
       var info = Object.assign({}, node.__loomPainted);
       if (node.__loomCulled) info.culled = true;
       if (faded) info.faded = true;
+      if (dimmed) info.dimmed = true;
       out.push(info);
     };
     var standing = function () {
@@ -1984,6 +2507,9 @@
     cull: cull,
     fade: fade,
     fading: fading,
+    place: place,
+    shade: shade,
+    outlineOf: outlineOf,
     shadowTexture: shadowTexture,
     variantOf: variantOf,
     RISE: RISE,
