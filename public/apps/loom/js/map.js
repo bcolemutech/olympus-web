@@ -580,10 +580,23 @@
     Loom.engine.setLevel(map.mode);
     Loom.engine.draw();
     if (Loom.overlay) Loom.overlay.drawMinimap();
+    wallsButton();
     var info = ref('loom-map-info');
     if (map.mode === 'battle') Loom.battle.renderInfo(info);
     else if (map.mode === 'town') Loom.town.renderInfo(info);
     else Loom.world.renderInfo(info);
+  }
+
+  // The walls-low button (L-953): shown on a grid in isometric, pressed
+  // while every wall is a stub.
+  function wallsButton() {
+    var b = document.getElementById('loom-map-walls');
+    if (!b) return;
+    var shown = map.mode === 'battle' && Loom.battle.iso();
+    b.classList.toggle('hidden', !shown);
+    var low = shown && Loom.battle.wallsLow();
+    b.setAttribute('aria-pressed', low ? 'true' : 'false');
+    b.title = low ? 'Walls up: raise the walls again' : 'Walls low: drop every wall to a stub';
   }
 
   // ── Input, from the engine ────────────────────────
@@ -635,6 +648,13 @@
       frame();
       render();
     });
+    var walls = document.getElementById('loom-map-walls');
+    if (walls) {
+      walls.addEventListener('click', function () {
+        Loom.battle.setWallsLow(!Loom.battle.wallsLow());
+        render();
+      });
+    }
     window.addEventListener('resize', render);
   }
 

@@ -10,6 +10,7 @@
   "loom-battle-maps.test.js": 38,
   "cartographer-mcp-work.test.js": 30,
   "loom-dress.test.js": 28,
+  "loom-iso-pick.test.js": 26,
   "loom-town.test.js": 25,
   "cartographer-mcp-patch.test.js": 24,
   "loom-iso-view.test.js": 24,

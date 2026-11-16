@@ -1162,7 +1162,7 @@ describe('seeing behind walls (L-942)', () => {
       const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
       const errors = [];
       page.on('pageerror', (e) => errors.push(e.message));
-      await page.goto(origin + '/fixtures/paint/drawers.html');
+      await page.goto(origin + '/fixtures/paint/drawers.html?view=tq');
       const data = battleData();
       const shown = (d) => page.evaluate(([x, t]) => window.__show(x, t), [d, TURN]);
       const settled = () =>
@@ -1255,7 +1255,7 @@ describe('the grid view', () => {
     const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(origin + '/fixtures/paint/drawers.html');
+    await page.goto(origin + '/fixtures/paint/drawers.html?view=tq');
     const showing = page.evaluate(([d, t]) => window.__show(d, t), [battleData(), TURN]);
     // While the art is held back: the progress effect, filling.
     await page.waitForSelector('.loom-map-progress:not([hidden])', { timeout: 5000 });
@@ -1286,7 +1286,7 @@ describe('the grid view', () => {
     const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(origin + '/fixtures/paint/drawers.html');
+    await page.goto(origin + '/fixtures/paint/drawers.html?view=tq');
     const data = battleData();
     // Someone in the hall, north of its south wall; you stand further north.
     data.people = [
@@ -1330,7 +1330,7 @@ describe('the grid view', () => {
       const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
       const errors = [];
       page.on('pageerror', (e) => errors.push(e.message));
-      await page.goto(origin + '/fixtures/paint/drawers.html');
+      await page.goto(origin + '/fixtures/paint/drawers.html?view=tq');
       const area = geo.normalize({
         ground: [
           { id: 'yard', material: 'cobble', shape: { rect: { x: 100, y: 100, w: 800, h: 800 } } },
@@ -1409,7 +1409,7 @@ describe('the grid view', () => {
       const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
       const errors = [];
       page.on('pageerror', (e) => errors.push(e.message));
-      await page.goto(origin + '/fixtures/paint/drawers.html');
+      await page.goto(origin + '/fixtures/paint/drawers.html?view=tq');
       const ground = require('../functions/loom-canon/ground');
       const rect = (x, y, w, h) => [
         { x, y },

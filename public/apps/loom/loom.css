@@ -869,6 +869,24 @@
   border-color: color-mix(in srgb, var(--loom-accent) 60%, transparent);
 }
 
+/* The walls-low button (L-953): lit while the walls are down. */
+.loom-map-walls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.loom-map-walls.hidden {
+  display: none;
+}
+
+.loom-map-walls[aria-pressed='true'] {
+  color: #0a0e1a;
+  background: var(--loom-accent);
+  border-color: var(--loom-accent);
+}
+
 /* The place card floats over the bottom of the map, so its Travel button is
    always in reach, even on a phone. */
 .loom-map-info {

@@ -58,10 +58,19 @@
   // front by footprint, the tokens placed in that order as they move; names
   // and foes' cards are placed there, upright; clicks are worked back to the
   // floor. The rules stay on the flat grid, in feet.
-  // Behind a switch until the view is whole (L-953): `?view=iso` on the page,
-  // or Loom.battle.setIso(true).
+  // The default since L-953; `?view=tq` on the page (or
+  // Loom.battle.setIso(false)) draws the three-quarter view, to compare.
   var ISO_RISE = 1.22;
-  var iso = /[?&]view=iso(&|#|$)/.test((window.location && window.location.search) || '');
+  var iso = !/[?&]view=tq(&|#|$)/.test((window.location && window.location.search) || '');
+  // Seeing and picking in isometric (planning/isometric-view.md §4.3, IS4,
+  // IN1; L-953 / #859): what stands in front of a token, the pointer or the
+  // path fades (judged on the isometric screen, by footprint); the walls-low
+  // button drops every wall to a 2 ft stub, remembered per player on the
+  // device; a click picks the front-most thing drawn under it (a door's
+  // leaf or the wall over it, a usable object's picture, a token), walls and
+  // decor falling through to the floor; a hover lights what a click picks.
+  var WALLS_LOW_KEY = 'loom.wallsLow.';
+  var LIT = 0xffe082; // the hover's outline
   var STEP_MS = 110; // the token's walk: a square (5 ft) in this long
   var DOOR_HIT = 0.2; // squares from a door's line that a click picks it
 
@@ -112,6 +121,10 @@
     fog: null, // the fog (L-634): { dark: runs, dim: runs }, as reach's runs
     known: null, // whether a square (by y × width + x) has been seen (L-635)
     cursor: null, // where the pointer is over the map, in feet (L-942), for seeing behind walls
+    cursorPick: null, // what the pointer would pick in isometric (L-953), never faded for it
+    lit: null, // what a click would pick, lit (L-953): { hit } or { cell }
+    litKey: '', // what the lit outline was last drawn for
+    wallsLow: null, // the walls-low button (L-953): null until read from the device
     fadeAt: 0, // when the walls last faded for what is behind them
     fadeTimer: 0, // the throttled check waiting, for the pointer
     preview: null, // the move to the selected cell: { path, walked, rest, stop, end, short, cost, feet, turns } or { none }
@@ -403,6 +416,8 @@
       battle.selected = null;
       battle.anim = null;
       battle.cursor = null;
+      battle.cursorPick = null;
+      battle.lit = null;
     }
     walkIfMoved();
     if (battle.selectedDoor && (!battle.data || !doorById(battle.selectedDoor))) {
@@ -720,13 +735,24 @@
       floor: new PIXI.Container(),
       floorDim: new PIXI.Container(),
       floorOver: new PIXI.Container(),
+      lit: new PIXI.Graphics(), // what a click would pick, lit (L-953)
     };
     n.art.alpha = 0.95;
     n.you.container.__loomPainted = { layer: 'standing', kind: 'token', id: 'you' };
+    n.you.container.__loomHit = 'you'; // picked by its picture in isometric (L-953)
     n.floor.addChild(n.ground, n.art, n.painted, n.under, n.fogDark, n.mist);
     n.floorDim.addChild(n.fogDim);
     n.floorOver.addChild(n.over);
-    n.scene.addChild(n.floor, n.standing, n.standMask, n.floorDim, n.labels, n.floorOver, n.cards);
+    n.scene.addChild(
+      n.floor,
+      n.standing,
+      n.standMask,
+      n.floorDim,
+      n.lit,
+      n.labels,
+      n.floorOver,
+      n.cards
+    );
     container.addChild(n.scene);
     battle.nodes = n;
   }
@@ -840,12 +866,31 @@
         print: Loom.iso.square(feetOf(at), r * 0.8),
         box: { x0: u.x - r, x1: u.x + r, y0: u.y - tall, y1: u.y + r * 0.5 },
         depth: u.y,
+        outline: tokenOutline(u, r, standing !== false), // for picking (L-953)
       });
     } else container.zIndex = foot.y;
     if (container.__loomPainted) {
       container.__loomPainted.depth = Math.round(standUnits(foot).y * 100) / 100;
     }
     return foot;
+  }
+
+  // A token's drawn shape in the standing layer's units (L-953), for picking
+  // it by its picture: standing, its disc on its stem over its base; down,
+  // the disc lying squashed on its foot (draw.js token).
+  function tokenOutline(u, r, standing) {
+    var pts = [];
+    var ring = function (cx, cy, rx, ry) {
+      for (var i = 0; i < 16; i++) {
+        var t = (i / 16) * 2 * Math.PI;
+        pts.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) });
+      }
+    };
+    if (standing) {
+      ring(u.x, u.y - (Loom.draw.standHeight() - 1) * r, r, r);
+      ring(u.x, u.y, r * 0.62, r * 0.2);
+    } else ring(u.x, u.y, r, r * 0.55);
+    return Loom.iso.hull(pts);
   }
 
   // A person's token as it is drawn (L-932): their picture, side, size and
@@ -1028,6 +1073,7 @@
       standAt: standAt(),
       // In isometric (L-952), what stands is built on the isometric screen.
       iso: iso ? { rise: ISO_RISE } : null,
+      low: iso && wallsLow(), // the walls-low button (L-953)
       art: Boolean(d.image),
       tint: accent(),
       worldKinds: d.objectKinds || null,
@@ -1240,6 +1286,8 @@
           kind: 'token',
           id: person.id || person.name,
         };
+        // Picked by its picture in isometric (L-953).
+        token.container.__loomHit = 'person:' + (person.id || person.name);
       }
       people[person.id || person.name] = true;
       var c = spot(personFeet(person));
@@ -1451,7 +1499,146 @@
       shadow: true, // standing, with its contact shadow (L-943)
       onLoad: pictureLoaded,
     });
+    drawLit(view);
     fadeBehind();
+  }
+
+  // ── What a click picks (IN1; L-953) ───────────────
+
+  // Whether a pick in isometric is something a click there opens: a door
+  // seen, a usable object, someone in sight, or you.
+  function pickable(hit) {
+    if (hit === 'you') return true;
+    if (hit.indexOf('door:') === 0) return Boolean(doorById(hit.slice(5)));
+    if (hit.indexOf('person:') === 0) return Boolean(personById(hit.slice(7)));
+    return Boolean(usable(hit) && objectItem(hit));
+  }
+
+  function personById(id) {
+    return (
+      (battle.data.people || []).filter(function (p) {
+        return (p.id || p.name) === id && p.x !== undefined;
+      })[0] || null
+    );
+  }
+
+  /**
+   * What a click at a point on the scene picks: in isometric, the front-most
+   * thing drawn there (a door's leaf or the wall over it, a usable object's
+   * picture, someone's token); in the three-quarter view, a standing
+   * object's picture; else a door or an object on the floor point under it,
+   * else the square (null off the grid). { m (the floor point, map
+   * coordinates), hit?, door?, object?, person?, you?, cell }.
+   */
+  function pickAt(raw) {
+    var d = battle.data;
+    var m = toGrid(raw); // on the floor (L-951)
+    var out = { m: m, hit: null, cell: null };
+    if (iso) {
+      var p = standUnits(raw);
+      var got = Loom.mapPaint.pick('battle:' + d.id, p.x, p.y, pickable);
+      if (got) {
+        var h = got.hit;
+        out.hit = h;
+        if (h === 'you') out.you = true;
+        else if (h.indexOf('door:') === 0) out.door = doorById(h.slice(5));
+        else if (h.indexOf('person:') === 0) out.person = personById(h.slice(7));
+        else out.object = { o: usable(h), item: objectItem(h), d2: 0 };
+        out.cell = out.person
+          ? { x: out.person.x, y: out.person.y }
+          : out.you
+            ? { x: d.here.x, y: d.here.y }
+            : null;
+        return out;
+      }
+    } else {
+      var standing = standingObjectAt(raw); // it rises over what's behind it (L-941)
+      if (standing) {
+        out.object = standing;
+        out.hit = standing.o.id;
+        return out;
+      }
+    }
+    var door = doorAt(m);
+    if (door) {
+      out.door = door;
+      out.hit = 'door:' + door.id;
+      return out;
+    }
+    var hit = objectAt(m);
+    if (hit) {
+      out.object = hit;
+      out.hit = hit.o.id;
+      return out;
+    }
+    var cell = { x: Math.floor((m.x - PAD) / CELL), y: Math.floor((m.y - TOP) / CELL) };
+    if (cell.x >= 0 && cell.y >= 0 && cell.x < d.width && cell.y < d.height) out.cell = cell;
+    return out;
+  }
+
+  // What the hover lights (L-953): the pick's outline, or the square's diamond.
+  function lightUp(lit) {
+    var was = battle.lit;
+    var same1 =
+      (!was && !lit) ||
+      (was &&
+        lit &&
+        was.hit === lit.hit &&
+        (was.cell && lit.cell ? same(was.cell, lit.cell) : was.cell === lit.cell));
+    if (same1) return;
+    battle.lit = lit;
+    engine.draw();
+  }
+
+  // The lit outline drawn on the scene, in the standing layer's units (only
+  // in isometric): what a click picks, strong; the square, faint.
+  function drawLit(view) {
+    var n = battle.nodes;
+    var lit = iso ? battle.lit : null;
+    var at = standAt();
+    var key = 'battle:' + battle.data.id;
+    var poly = null;
+    if (lit && lit.hit) poly = Loom.mapPaint.outlineOfHit(key, lit.hit);
+    else if (lit && lit.cell) {
+      var F = MP.FEET;
+      poly = [
+        { x: lit.cell.x * F, y: lit.cell.y * F },
+        { x: (lit.cell.x + 1) * F, y: lit.cell.y * F },
+        { x: (lit.cell.x + 1) * F, y: (lit.cell.y + 1) * F },
+        { x: lit.cell.x * F, y: (lit.cell.y + 1) * F },
+      ].map(function (p) {
+        return Loom.iso.P(p, 0);
+      });
+    }
+    var sig = poly
+      ? [view.scale, at.x, at.y, at.scale]
+          .concat(
+            poly.map(function (p) {
+              return Math.round(p.x * 100) + ',' + Math.round(p.y * 100);
+            })
+          )
+          .join('|') + (lit.hit ? '|hit' : '')
+      : '';
+    if (sig === battle.litKey) return;
+    battle.litKey = sig;
+    var g = n.lit;
+    g.clear();
+    if (!poly) return;
+    g.position.set(at.x, at.y);
+    g.scale.set(at.scale);
+    var px = 1 / (view.scale * at.scale); // a screen pixel, in its units
+    var flat = [];
+    poly.forEach(function (p) {
+      flat.push(p.x, p.y);
+    });
+    g.poly(flat)
+      .fill({ color: LIT, alpha: lit.hit ? 0.12 : 0.08 })
+      .stroke({
+        width: (lit.hit ? 2 : 1.5) * px,
+        color: LIT,
+        alpha: lit.hit ? 0.95 : 0.55,
+        join: 'round',
+      });
   }
 
   // In isometric (L-951), what lies on the floor culled to the floor the
@@ -1499,18 +1686,29 @@
   // What is to be seen behind walls, for the painter's `fade`: the tokens'
   // discs (their foot's y the depth), the pointer's point and the points of
   // the path preview, each a floor point (its y the depth), all in the
-  // standing layer's units (in isometric, as the floor is drawn there).
+  // standing layer's units (in isometric, as the floor is drawn there). In
+  // isometric (L-953) each has its footprint on the floor too, in feet, so
+  // what fades is judged as the order is, by footprint; the pointer's never
+  // fades what it would pick.
   function fadeTargets() {
     var key = 'battle:' + battle.data.id;
     var stand = Loom.mapPaint.standOf(key);
     var out = [];
-    var spot1 = function (feet) {
+    var spot1 = function (feet, except) {
       var p = standUnits(sceneOf(feet));
-      out.push({ box: { x0: p.x, y0: p.y, x1: p.x, y1: p.y }, depth: p.y });
+      var t = { box: { x0: p.x, y0: p.y, x1: p.x, y1: p.y }, depth: p.y };
+      if (iso) t.print = Loom.iso.square(feet, 0.25);
+      if (except) t.except = except;
+      out.push(t);
     };
     if (stand) {
       stand.children.forEach(function (child) {
         if (child.__loomFoot === undefined || !child.visible) return;
+        var placed = iso && child.__loomPlace;
+        if (placed) {
+          out.push({ box: placed.box, depth: placed.depth, print: placed.print });
+          return;
+        }
         var c = standUnits(child.position);
         var r = child.__loomFoot / standAt().scale;
         // A standing disc (L-932) rises from its foot; one lying down covers its spot.
@@ -1524,7 +1722,7 @@
         );
       });
     }
-    if (battle.cursor) spot1(battle.cursor);
+    if (battle.cursor) spot1(battle.cursor, battle.cursorPick);
     var preview = battle.preview;
     if (!battle.anim && preview && preview.path) {
       [preview.walked, preview.rest].forEach(function (line) {
@@ -1868,12 +2066,10 @@
       Loom.map.render();
       return;
     }
-    var d = battle.data;
-    var raw = M.toMap(view, point.x, point.y);
-    var m = toGrid(raw); // on the floor (L-951)
-    // A standing object's picture first (L-941): it rises over what's behind it.
-    var standing = standingObjectAt(raw);
-    var door = standing ? null : doorAt(m);
+    // What's under it (L-953): in isometric, the front-most thing drawn there;
+    // a phone's tap picks the same way.
+    var got = pickAt(M.toMap(view, point.x, point.y));
+    var door = got.door;
     if (door) {
       battle.selectedDoor = door.id;
       battle.selectedObject = null;
@@ -1889,7 +2085,7 @@
     }
     battle.selectedDoor = null;
     // An object there is something to do with (L-926): its menu, with its card.
-    var hit = standing || objectAt(m);
+    var hit = got.object;
     if (hit) {
       battle.selectedObject = hit.o.id;
       battle.selected = null;
@@ -1906,8 +2102,9 @@
       return;
     }
     battle.selectedObject = null;
-    var cell = { x: Math.floor((m.x - PAD) / CELL), y: Math.floor((m.y - TOP) / CELL) };
-    var inside = cell.x >= 0 && cell.y >= 0 && cell.x < d.width && cell.y < d.height;
+    // Someone's token, or the square: the square's menu (on someone, theirs).
+    var cell = got.cell;
+    var inside = Boolean(cell);
     battle.selected = inside ? cell : null;
     computePreview();
     Loom.map.render();
@@ -2278,19 +2475,20 @@
       engine.panelCursor('');
       if (battle.cursor) {
         battle.cursor = null;
+        battle.cursorPick = null;
         fadeSoon();
       }
+      if (battle.data) lightUp(null);
       return;
     }
-    var raw = M.toMap(view, point.x, point.y);
-    var m = toGrid(raw); // on the floor (L-951)
-    battle.cursor = feetOf(m);
+    var got = pickAt(M.toMap(view, point.x, point.y));
+    battle.cursor = feetOf(got.m);
+    // What it would pick never fades for it (L-953): the wall in front does.
+    battle.cursorPick = iso ? got.hit : null;
     fadeSoon();
-    var d = battle.data;
-    var gx = (m.x - PAD) / CELL;
-    var gy = (m.y - TOP) / CELL;
-    var onGrid = gx >= 0 && gy >= 0 && gx < d.width && gy < d.height;
-    engine.panelCursor(standingObjectAt(raw) || doorAt(m) || onGrid ? 'pointer' : '');
+    engine.panelCursor(got.hit || got.cell ? 'pointer' : '');
+    // What a click would pick, lit (L-953).
+    if (iso) lightUp(got.hit ? { hit: got.hit } : got.cell ? { cell: got.cell } : null);
   }
 
   // ── The card ──────────────────────────────────────
@@ -2442,9 +2640,45 @@
     if (on === iso) return;
     iso = on;
     TOP = topOf(battle.data);
+    battle.lit = null;
+    battle.cursorPick = null;
     battle.paintedFor = null;
     battle.standMaskKey = null;
     changed();
+  }
+
+  // ── Walls low (IS4; L-953) ────────────────────────
+
+  // The player's own choice on this device.
+  function wallsKey() {
+    return WALLS_LOW_KEY + ((state && state.uid) || 'anyone');
+  }
+
+  /** Whether every wall is drawn as a low stub (the walls-low button; L-953). */
+  function wallsLow() {
+    if (battle.wallsLow === null) {
+      try {
+        battle.wallsLow = window.localStorage.getItem(wallsKey()) === '1';
+      } catch {
+        battle.wallsLow = false;
+      }
+    }
+    return battle.wallsLow;
+  }
+
+  /** Drops every wall to a stub, or raises them again; remembered on the device. */
+  function setWallsLow(on) {
+    on = Boolean(on);
+    if (on === wallsLow()) return;
+    battle.wallsLow = on;
+    try {
+      window.localStorage.setItem(wallsKey(), on ? '1' : '0');
+    } catch {
+      // Storage off (a private window): it holds for this visit only.
+    }
+    battle.paintedFor = null;
+    changed();
+    engine.draw();
   }
 
   function capitalise(text) {
@@ -2486,14 +2720,35 @@
       return feetOf(toGrid(s));
     },
     setIso: setIso,
+    wallsLow: wallsLow,
+    setWallsLow: setWallsLow,
+    /**
+     * What a click at a screen point would pick (L-953), for tests: { door },
+     * { object }, { person } (an id, or 'you') or { cell }; null off the map.
+     */
+    picks: function (point) {
+      var view = engine.camera && engine.camera.view;
+      if (!battle.data || !view) return null;
+      var got = pickAt(M.toMap(view, point.x, point.y));
+      if (got.door) return { door: got.door.id };
+      if (got.object) return { object: got.object.o.id };
+      if (got.person) return { person: got.person.id || got.person.name };
+      if (got.you) return { person: 'you' };
+      return got.cell ? { cell: got.cell } : null;
+    },
+    /** What the hover lights now (L-953), for tests: { hit } or { cell }, or null. */
+    lit: function () {
+      return battle.lit;
+    },
     /** Whether grid maps are drawn in the isometric view (L-951). */
     iso: function () {
       return iso;
     },
     /**
      * What's drawn upright on the scene, for tests (L-951): your token's
-     * foot, the names and foes' cards ({ text, x, y }), and whether the grid
-     * (in isometric, the 5 ft diamonds) shows.
+     * foot, the names and foes' cards ({ text, x, y }), whether the grid
+     * (in isometric, the 5 ft diamonds) shows, and whether the hover's
+     * outline is drawn (L-953).
      */
     drawn: function () {
       var n = battle.nodes;
@@ -2506,6 +2761,7 @@
         labels: n.labels.children.map(text),
         cards: n.cards.children.map(text),
         grid: Boolean(battle.gridShown),
+        lit: Boolean(battle.litKey), // the hover's outline drawn (L-953)
       };
     },
     selectHere: function () {
