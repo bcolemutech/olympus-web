@@ -90,6 +90,38 @@ describe('classic, the first set (L-946)', () => {
     }
   });
 
+  // Isometric pictures for every object and decor kind (L-954): a front and
+  // a back, the back its own picture only where the prop isn't the same from
+  // behind, a foot from its footprint, and the axis it's painted long along
+  // where its sides differ.
+  const BACKS = ['altar', 'bed', 'bookshelf', 'cart', 'chair', 'chest', 'console', 'desk'].concat([
+    'sarcophagus',
+    'stairs',
+    'tent',
+    'wardrobe',
+  ]);
+  test.each(catalog.OBJECT_KINDS.map((k) => [k.id, k.decor ? 'decor' : 'object']))(
+    '%s (%s) stands in isometric in classic, front and back',
+    (id) => {
+      const kind = catalog.objectKind(id);
+      const iso = catalog.isoFor({ kind: id }, null, 'classic');
+      expect(iso).not.toBeNull();
+      const where = /\/apps\/loom\/art\/sets\/classic\//;
+      iso.facings.forEach((p) => expect(p.atlas || p.url).toMatch(where));
+      const same = JSON.stringify(iso.facings[0]) === JSON.stringify(iso.facings[1]);
+      expect(same).toBe(!BACKS.includes(id));
+      // The foot is across the picture where the footprint's front corner is.
+      const [a, b] = kind.size;
+      expect(iso.foot[1]).toBe(1);
+      if (a === b) expect(iso.foot[0]).toBeCloseTo(0.5, 2);
+      if (kind.onWall) expect(iso.foot[0]).toBeCloseTo(a / (a + b), 2);
+      expect(iso.foot[0]).toBeGreaterThan(0.15);
+      expect(iso.foot[0]).toBeLessThan(0.85);
+      // A prop that isn't square names the axis its picture is long along.
+      if (a !== b) expect(['x', 'y']).toContain(iso.long);
+    }
+  );
+
   test.each(catalog.OBJECT_KINDS.map((k) => [k.id, k.decor ? 'decor' : 'object']))(
     '%s (%s) stands in classic, on its foot',
     (id) => {
@@ -220,7 +252,7 @@ describe('a manifest, read', () => {
     });
     // None: it stands as its three-quarter picture; its own art comes first.
     expect(catalog.isoFor({ kind: 'chest' }, null, 'iso-props')).toBeNull();
-    expect(catalog.isoFor({ kind: 'table' }, null, 'classic')).toBeNull();
+    expect(catalog.isoFor({ kind: 'table' }, null, 'no-such-set')).toBeNull();
     expect(
       catalog.isoFor({ kind: 'table', art: { link: 'https://x/t.png' } }, null, 'iso-props')
     ).toBeNull();

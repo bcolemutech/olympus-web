@@ -331,7 +331,9 @@ describe('seeing and picking in isometric (L-953)', () => {
         name: 'Guard',
         x: 20,
         y: 1,
-        point: { x: 104, y: 9.5 },
+        // (The chest's isometric picture in `classic`, L-954, stands taller than the
+        // three-quarter one it replaced, so they stand a little further back.)
+        point: { x: 103, y: 8.5 },
         side: 'neutral',
       };
       await shown(page, dungeonData({ objects: [CHEST], people: [guard] }));
@@ -384,63 +386,57 @@ describe('seeing and picking in isometric (L-953)', () => {
     }
   );
 
-  withBrowser(
-    'a hover lights what a click picks, which never fades for the pointer',
-    async () => {
-      const page = await isoPage();
-      await shown(page, dungeonData());
-      // Over the shut door's wall: the door lit, not faded.
-      const over = await screenAt(page, DOORS[0].face, 7.5);
-      await page.evaluate(
-        ([p]) => window.Loom.battle.hover(p, window.Loom.engine.camera.view),
-        [over]
-      );
-      await page.waitForTimeout(250);
-      await frame(page);
-      expect(await page.evaluate(() => window.Loom.battle.lit())).toEqual({ hit: 'door:shut' });
-      const shut = await page.evaluate(() =>
-        window.Loom.mapPaint
-          .describe('battle:dungeon')
-          .filter((d) => d.kind === 'door' && d.id === 'shut')
-      );
-      expect(shut.length).toBeGreaterThan(0);
-      shut.forEach((d) => expect(d.faded).toBeFalsy());
-      expect((await page.evaluate(() => window.Loom.battle.drawn())).lit).toBe(true);
-      // Over the west wall's face away from any door: the floor behind it lit
-      // (a square), and the wall piece over the pointer fades.
-      const wall = await screenAt(page, { x: 60.5, y: 7.5 }, 4);
-      await page.evaluate(
-        ([p]) => window.Loom.battle.hover(p, window.Loom.engine.camera.view),
-        [wall]
-      );
-      await page.waitForTimeout(250);
-      const lit = await page.evaluate(() => window.Loom.battle.lit());
-      expect(lit.cell).toBeTruthy();
-      const west = await page.evaluate(() =>
-        window.Loom.mapPaint
-          .describe('battle:dungeon')
-          .filter((d) => d.kind === 'wall' && d.id === 'west')
-      );
-      expect(west.some((d) => d.faded)).toBe(true);
-      // Off the map: nothing lit, nothing faded for the pointer.
-      await page.evaluate(() => window.Loom.battle.hover(null));
-      await page.waitForTimeout(250);
-      expect(await page.evaluate(() => window.Loom.battle.lit())).toBe(null);
-      await frame(page);
-      expect((await page.evaluate(() => window.Loom.battle.drawn())).lit).toBe(false);
-      expect(page.errors).toEqual([]);
-      await page.done();
-    }
-  );
+  withBrowser('a hover lights what a click picks, which never fades for the pointer', async () => {
+    const page = await isoPage();
+    await shown(page, dungeonData());
+    // Over the shut door's wall: the door lit, not faded.
+    const over = await screenAt(page, DOORS[0].face, 7.5);
+    await page.evaluate(
+      ([p]) => window.Loom.battle.hover(p, window.Loom.engine.camera.view),
+      [over]
+    );
+    await page.waitForTimeout(250);
+    await frame(page);
+    expect(await page.evaluate(() => window.Loom.battle.lit())).toEqual({ hit: 'door:shut' });
+    const shut = await page.evaluate(() =>
+      window.Loom.mapPaint
+        .describe('battle:dungeon')
+        .filter((d) => d.kind === 'door' && d.id === 'shut')
+    );
+    expect(shut.length).toBeGreaterThan(0);
+    shut.forEach((d) => expect(d.faded).toBeFalsy());
+    expect((await page.evaluate(() => window.Loom.battle.drawn())).lit).toBe(true);
+    // Over the west wall's face away from any door: the floor behind it lit
+    // (a square), and the wall piece over the pointer fades.
+    const wall = await screenAt(page, { x: 60.5, y: 7.5 }, 4);
+    await page.evaluate(
+      ([p]) => window.Loom.battle.hover(p, window.Loom.engine.camera.view),
+      [wall]
+    );
+    await page.waitForTimeout(250);
+    const lit = await page.evaluate(() => window.Loom.battle.lit());
+    expect(lit.cell).toBeTruthy();
+    const west = await page.evaluate(() =>
+      window.Loom.mapPaint
+        .describe('battle:dungeon')
+        .filter((d) => d.kind === 'wall' && d.id === 'west')
+    );
+    expect(west.some((d) => d.faded)).toBe(true);
+    // Off the map: nothing lit, nothing faded for the pointer.
+    await page.evaluate(() => window.Loom.battle.hover(null));
+    await page.waitForTimeout(250);
+    expect(await page.evaluate(() => window.Loom.battle.lit())).toBe(null);
+    await frame(page);
+    expect((await page.evaluate(() => window.Loom.battle.drawn())).lit).toBe(false);
+    expect(page.errors).toEqual([]);
+    await page.done();
+  });
 
   withBrowser('a wall in front of the player fades, judged by footprint', async () => {
     const page = await isoPage();
     // Standing just north of the brick wall at 45 ft, which stands between
     // you and the camera (to the south-east).
-    await shown(
-      page,
-      dungeonData({}, { cell: { x: 17, y: 8 }, point: { x: 87.5, y: 42.5 } })
-    );
+    await shown(page, dungeonData({}, { cell: { x: 17, y: 8 }, point: { x: 87.5, y: 42.5 } }));
     await page.waitForTimeout(250);
     const drawn = await page.evaluate(() => window.Loom.mapPaint.describe('battle:dungeon'));
     const south = drawn.filter((d) => d.kind === 'wall' && d.id === 'south');
@@ -483,7 +479,10 @@ describe('seeing and picking in isometric (L-953)', () => {
               for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
                 const a = poly[i];
                 const b = poly[j];
-                if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x)
+                if (
+                  a.y > p.y !== b.y > p.y &&
+                  p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x
+                )
                   hit = !hit;
               }
               return hit;
@@ -537,9 +536,9 @@ describe('seeing and picking in isometric (L-953)', () => {
       expect(others).toBeLessThanOrEqual(2 * 1.22 + 1e-6);
       matchesBaseline(PNG.sync.read(await page.screenshot()), 'iso-walls-low.png');
       // Remembered on the device: a new visit opens with the walls low.
-      expect(
-        await page.evaluate(() => window.localStorage.getItem('loom.wallsLow.anyone'))
-      ).toBe('1');
+      expect(await page.evaluate(() => window.localStorage.getItem('loom.wallsLow.anyone'))).toBe(
+        '1'
+      );
       await page.reload();
       expect(await page.evaluate(() => window.Loom.battle.wallsLow())).toBe(true);
       // Raised again: as they were.

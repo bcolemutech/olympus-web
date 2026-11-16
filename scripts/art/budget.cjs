@@ -20,6 +20,9 @@
  *   strip    a wall's, door's, window's or line's top, seen from above
  *   face     a wall's face, standing: 64 px a foot of an 8 ft wall high
  *   object   a prop, standing or from above: 64 px a foot of its width
+ *   iso      a prop standing in the isometric view (L-954): 40 px a foot of
+ *            its footprint's two sides together, the width its picture is
+ *            drawn across (a diamond is as wide as width plus depth)
  *   atlas    a sheet of frames: 2048 px a side
  */
 
@@ -36,6 +39,7 @@ const LIMITS = {
   stripShortPx: 256,
   facePx: { width: 1024, height: PX_PER_FOOT * 8 },
   objectHeightFeet: 16,
+  isoPxPerFoot: 40,
   atlasPx: 2048,
   bytes: {
     ground: 400 * KB,
@@ -67,6 +71,14 @@ function roleLimits(role, o = {}) {
     const feet = (o.size && o.size[0]) || FEET_PER_SQUARE;
     return {
       width: Math.round(feet * PX_PER_FOOT),
+      height: LIMITS.objectHeightFeet * PX_PER_FOOT,
+      bytes: LIMITS.bytes.object,
+    };
+  }
+  if (role === 'iso') {
+    const sides = o.size ? o.size[0] + o.size[1] : 2 * FEET_PER_SQUARE;
+    return {
+      width: Math.round(sides * LIMITS.isoPxPerFoot),
       height: LIMITS.objectHeightFeet * PX_PER_FOOT,
       bytes: LIMITS.bytes.object,
     };
@@ -145,6 +157,16 @@ function picturesOf(manifest) {
     if (e.file || e.atlas) out.push({ where: `objects "${id}"`, picture: e, role: 'object', size });
     if (e.stand) {
       out.push({ where: `objects "${id}" standing`, picture: e.stand, role: 'object', size });
+    }
+    if (e.iso && Array.isArray(e.iso.facings)) {
+      e.iso.facings.forEach((p, i) =>
+        out.push({
+          where: `objects "${id}" isometric ${i ? 'back' : 'front'}`,
+          picture: p,
+          role: 'iso',
+          size,
+        })
+      );
     }
   });
   return out;

@@ -32,6 +32,16 @@
       "file": "atlas/sheet-5.webp",
       "width": 774,
       "height": 201
+    },
+    "sheet-6": {
+      "file": "atlas/sheet-6.webp",
+      "width": 1966,
+      "height": 1908
+    },
+    "sheet-7": {
+      "file": "atlas/sheet-7.webp",
+      "width": 1904,
+      "height": 296
     }
   },
   "materials": {
@@ -200,466 +210,2131 @@
       "file": "walls/bars-top.webp",
       "face": {
         "atlas": "sheet-0",
-        "frame": [2, 2, 1024, 512]
+        "frame": [
+          2,
+          2,
+          1024,
+          512
+        ]
       }
     },
     "wall/brick": {
       "file": "walls/brick-top.webp",
       "face": {
         "atlas": "sheet-0",
-        "frame": [2, 516, 1024, 512]
+        "frame": [
+          2,
+          516,
+          1024,
+          512
+        ]
       }
     },
     "wall/fence": {
       "file": "walls/fence-top.webp",
       "face": {
         "atlas": "sheet-0",
-        "frame": [2, 1030, 1024, 512]
+        "frame": [
+          2,
+          1030,
+          1024,
+          512
+        ]
       }
     },
     "wall/glass": {
       "file": "walls/glass-top.webp",
       "face": {
         "atlas": "sheet-1",
-        "frame": [2, 2, 1024, 512]
+        "frame": [
+          2,
+          2,
+          1024,
+          512
+        ]
       }
     },
     "wall/hedge": {
       "file": "walls/hedge-top.webp",
       "face": {
         "atlas": "sheet-1",
-        "frame": [2, 516, 1024, 512]
+        "frame": [
+          2,
+          516,
+          1024,
+          512
+        ]
       }
     },
     "wall/ice": {
       "file": "walls/ice-top.webp",
       "face": {
         "atlas": "sheet-1",
-        "frame": [2, 1030, 1024, 512]
+        "frame": [
+          2,
+          1030,
+          1024,
+          512
+        ]
       }
     },
     "wall/metal": {
       "file": "walls/metal-top.webp",
       "face": {
         "atlas": "sheet-2",
-        "frame": [2, 2, 1024, 512]
+        "frame": [
+          2,
+          2,
+          1024,
+          512
+        ]
       }
     },
     "wall/palisade": {
       "file": "walls/palisade-top.webp",
       "face": {
         "atlas": "sheet-2",
-        "frame": [2, 516, 1024, 512]
+        "frame": [
+          2,
+          516,
+          1024,
+          512
+        ]
       }
     },
     "wall/rock": {
       "file": "walls/rock-top.webp",
       "face": {
         "atlas": "sheet-2",
-        "frame": [2, 1030, 1024, 512]
+        "frame": [
+          2,
+          1030,
+          1024,
+          512
+        ]
       }
     },
     "wall/stone": {
       "file": "walls/stone-top.webp",
       "face": {
         "atlas": "sheet-3",
-        "frame": [2, 2, 1024, 512]
+        "frame": [
+          2,
+          2,
+          1024,
+          512
+        ]
       }
     },
     "wall/wood": {
       "file": "walls/wood-top.webp",
       "face": {
         "atlas": "sheet-3",
-        "frame": [2, 516, 1024, 512]
+        "frame": [
+          2,
+          516,
+          1024,
+          512
+        ]
       }
     },
     "door/bars": {
       "face": {
         "atlas": "sheet-3",
-        "frame": [1028, 516, 320, 448]
+        "frame": [
+          1028,
+          516,
+          320,
+          448
+        ]
       }
     },
     "door/curtain": {
       "face": {
         "atlas": "sheet-3",
-        "frame": [1350, 516, 320, 448]
+        "frame": [
+          1350,
+          516,
+          320,
+          448
+        ]
       }
     },
     "door/gate": {
       "face": {
         "atlas": "sheet-3",
-        "frame": [1672, 516, 320, 448]
+        "frame": [
+          1672,
+          516,
+          320,
+          448
+        ]
       }
     },
     "door/glass": {
       "face": {
         "atlas": "sheet-3",
-        "frame": [2, 1030, 320, 448]
+        "frame": [
+          2,
+          1030,
+          320,
+          448
+        ]
       }
     },
     "door/iron": {
       "face": {
         "atlas": "sheet-3",
-        "frame": [324, 1030, 320, 448]
+        "frame": [
+          324,
+          1030,
+          320,
+          448
+        ]
       }
     },
     "door/metal": {
       "face": {
         "atlas": "sheet-3",
-        "frame": [646, 1030, 320, 448]
+        "frame": [
+          646,
+          1030,
+          320,
+          448
+        ]
       }
     },
     "door/stone": {
       "face": {
         "atlas": "sheet-3",
-        "frame": [968, 1030, 320, 448]
+        "frame": [
+          968,
+          1030,
+          320,
+          448
+        ]
       }
     },
     "door/wood": {
       "face": {
         "atlas": "sheet-3",
-        "frame": [1290, 1030, 320, 448]
+        "frame": [
+          1290,
+          1030,
+          320,
+          448
+        ]
       }
     },
     "window/bars": {
       "face": {
         "atlas": "sheet-4",
-        "frame": [1655, 2, 320, 224]
+        "frame": [
+          1655,
+          2,
+          320,
+          224
+        ]
       }
     },
     "window/glass": {
       "face": {
         "atlas": "sheet-4",
-        "frame": [2, 303, 320, 224]
+        "frame": [
+          2,
+          303,
+          320,
+          224
+        ]
       }
     },
     "window/opening": {
       "face": {
         "atlas": "sheet-4",
-        "frame": [324, 303, 320, 224]
+        "frame": [
+          324,
+          303,
+          320,
+          224
+        ]
       }
     },
     "window/shutters": {
       "face": {
         "atlas": "sheet-4",
-        "frame": [646, 303, 320, 224]
+        "frame": [
+          646,
+          303,
+          320,
+          224
+        ]
       }
     }
   },
   "objects": {
     "altar": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1614, 303, 284, 203]
+        "frame": [
+          1614,
+          303,
+          284,
+          203
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1314,
+              1406,
+              250,
+              253
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              799,
+              1406,
+              250,
+              254
+            ]
+          }
+        ],
+        "foot": [
+          0.63,
+          1
+        ],
+        "long": "x"
       }
     },
     "anvil": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1547, 733, 128, 109]
+        "frame": [
+          1547,
+          733,
+          128,
+          109
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              475,
+              1406,
+              200,
+              258
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              475,
+              1406,
+              200,
+              258
+            ]
+          }
+        ],
+        "foot": [
+          0.6,
+          1
+        ],
+        "long": "x"
       }
     },
     "banner": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [1221, 1480, 113, 305]
+        "frame": [
+          1221,
+          1480,
+          113,
+          305
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1808,
+              1406,
+              120,
+              238
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1808,
+              1406,
+              120,
+              238
+            ]
+          }
+        ],
+        "foot": [
+          0.67,
+          1
+        ],
+        "long": "x"
       }
     },
     "barrel": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [820, 529, 160, 195]
+        "frame": [
+          820,
+          529,
+          160,
+          195
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1631,
+              1128,
+              192,
+              266
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1631,
+              1128,
+              192,
+              266
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "bed": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [968, 303, 192, 216]
+        "frame": [
+          968,
+          303,
+          192,
+          216
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              583,
+              1128,
+              299,
+              271
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              684,
+              830,
+              300,
+              287
+            ]
+          }
+        ],
+        "foot": [
+          0.33,
+          1
+        ],
+        "long": "y"
       }
     },
     "bench": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [908, 733, 315, 116]
+        "frame": [
+          908,
+          733,
+          315,
+          116
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              456,
+              1670,
+              280,
+              225
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              456,
+              1670,
+              280,
+              225
+            ]
+          }
+        ],
+        "foot": [
+          0.71,
+          1
+        ],
+        "long": "x"
       }
     },
     "bones": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [2, 881, 128, 78]
+        "frame": [
+          2,
+          881,
+          128,
+          78
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              2,
+              202,
+              160,
+              92
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              2,
+              202,
+              160,
+              92
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "books": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1743, 733, 96, 83]
+        "frame": [
+          1743,
+          733,
+          96,
+          83
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              164,
+              202,
+              100,
+              88
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              164,
+              202,
+              100,
+              88
+            ]
+          }
+        ],
+        "foot": [
+          0.6,
+          1
+        ],
+        "long": "x"
       }
     },
     "bookshelf": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [1612, 1030, 257, 327]
+        "frame": [
+          1612,
+          1030,
+          257,
+          327
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1426,
+              2,
+              184,
+              324
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1612,
+              2,
+              184,
+              323
+            ]
+          }
+        ],
+        "foot": [
+          0.71,
+          1
+        ],
+        "long": "x"
       }
     },
     "bottles": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [198, 881, 64, 62]
+        "frame": [
+          198,
+          881,
+          64,
+          62
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              348,
+              202,
+              80,
+              78
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              348,
+              202,
+              80,
+              78
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "boulder": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [645, 1480, 319, 313]
+        "frame": [
+          645,
+          1480,
+          319,
+          313
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1051,
+              1406,
+              261,
+              254
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1051,
+              1406,
+              261,
+              254
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "brazier": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [196, 733, 128, 143]
+        "frame": [
+          196,
+          733,
+          128,
+          143
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              772,
+              2,
+              160,
+              170
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              772,
+              2,
+              160,
+              170
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "campfire": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1370, 529, 192, 163]
+        "frame": [
+          1370,
+          529,
+          192,
+          163
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1566,
+              1406,
+              240,
+              241
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1566,
+              1406,
+              240,
+              241
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "candles": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [132, 881, 64, 76]
+        "frame": [
+          132,
+          881,
+          64,
+          76
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              266,
+              202,
+              80,
+              84
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              266,
+              202,
+              80,
+              84
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "cart": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1225, 733, 320, 115]
+        "frame": [
+          1225,
+          733,
+          320,
+          115
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              1406,
+              309,
+              262
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              710,
+              507,
+              418,
+              311
+            ]
+          }
+        ],
+        "foot": [
+          0.33,
+          1
+        ],
+        "long": "y"
       }
     },
     "cauldron": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [2, 529, 192, 202]
+        "frame": [
+          2,
+          529,
+          192,
+          202
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              884,
+              1128,
+              228,
+              271
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              884,
+              1128,
+              228,
+              271
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "chains": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [330, 2, 114, 297]
+        "frame": [
+          330,
+          2,
+          114,
+          297
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              677,
+              1406,
+              120,
+              257
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              677,
+              1406,
+              120,
+              257
+            ]
+          }
+        ],
+        "foot": [
+          0.67,
+          1
+        ],
+        "long": "x"
       }
     },
     "chair": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1525, 2, 128, 225]
+        "frame": [
+          1525,
+          2,
+          128,
+          225
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              313,
+              1406,
+              160,
+              261
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              294,
+              1670,
+              160,
+              234
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "chest": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [2, 733, 192, 146]
+        "frame": [
+          2,
+          733,
+          192,
+          146
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1233,
+              1670,
+              200,
+              211
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1435,
+              1670,
+              200,
+              211
+            ]
+          }
+        ],
+        "foot": [
+          0.6,
+          1
+        ],
+        "long": "x"
       }
     },
     "cobwebs": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [982, 529, 192, 193]
+        "frame": [
+          982,
+          529,
+          192,
+          193
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              1338,
+              2,
+              240,
+              152
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              1338,
+              2,
+              240,
+              152
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "console": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [446, 2, 251, 268]
+        "frame": [
+          446,
+          2,
+          251,
+          268
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              453,
+              830,
+              229,
+              289
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1379,
+              830,
+              240,
+              279
+            ]
+          }
+        ],
+        "foot": [
+          0.67,
+          1
+        ],
+        "long": "x"
       }
     },
     "crate-pile": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1356, 303, 256, 210]
+        "frame": [
+          1356,
+          303,
+          256,
+          210
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              301,
+              1128,
+              280,
+              275
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              301,
+              1128,
+              280,
+              275
+            ]
+          }
+        ],
+        "foot": [
+          0.57,
+          1
+        ],
+        "long": "x"
       }
     },
     "crate": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1162, 303, 192, 214]
+        "frame": [
+          1162,
+          303,
+          192,
+          214
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1114,
+              1128,
+              233,
+              269
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1114,
+              1128,
+              233,
+              269
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "desk": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [506, 529, 312, 198]
+        "frame": [
+          506,
+          529,
+          312,
+          198
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1103,
+              830,
+              274,
+              282
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              151,
+              830,
+              300,
+              292
+            ]
+          }
+        ],
+        "foot": [
+          0.67,
+          1
+        ],
+        "long": "x"
       }
     },
     "fountain": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1220, 2, 303, 228]
+        "frame": [
+          1220,
+          2,
+          303,
+          228
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              1670,
+              290,
+              236
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              1670,
+              290,
+              236
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "lever": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1677, 733, 64, 108]
+        "frame": [
+          1677,
+          733,
+          64,
+          108
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              1580,
+              2,
+              80,
+              140
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              1580,
+              2,
+              80,
+              140
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "pillar": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [1091, 1480, 128, 306]
+        "frame": [
+          1091,
+          1480,
+          128,
+          306
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              986,
+              830,
+              115,
+              283
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              986,
+              830,
+              115,
+              283
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "plant": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1564, 529, 128, 163]
+        "frame": [
+          1564,
+          529,
+          128,
+          163
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              288,
+              2,
+              160,
+              173
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              288,
+              2,
+              160,
+              173
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "puddle": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1841, 733, 192, 83]
+        "frame": [
+          1841,
+          733,
+          192,
+          83
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              1662,
+              2,
+              240,
+              136
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              1662,
+              2,
+              240,
+              136
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "rubble": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1694, 529, 256, 154]
+        "frame": [
+          1694,
+          529,
+          256,
+          154
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              2,
+              2,
+              284,
+              198
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              2,
+              2,
+              284,
+              198
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "rug": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [699, 2, 325, 268]
+        "frame": [
+          699,
+          2,
+          325,
+          268
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1637,
+              1670,
+              327,
+              202
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1637,
+              1670,
+              327,
+              202
+            ]
+          }
+        ],
+        "foot": [
+          0.57,
+          1
+        ],
+        "long": "x"
       }
     },
     "sacks": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [778, 733, 128, 125]
+        "frame": [
+          778,
+          733,
+          128,
+          125
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              1176,
+              2,
+              160,
+              159
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              1176,
+              2,
+              160,
+              159
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "sarcophagus": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [584, 733, 192, 134]
+        "frame": [
+          584,
+          733,
+          192,
+          134
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              1128,
+              297,
+              276
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1027,
+              2,
+              397,
+              370
+            ]
+          }
+        ],
+        "foot": [
+          0.7,
+          1
+        ],
+        "long": "x"
       }
     },
     "stairs": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [323, 1480, 320, 314]
+        "frame": [
+          323,
+          1480,
+          320,
+          314
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1658,
+              507,
+              283,
+              300
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              2,
+              600,
+              503
+            ]
+          }
+        ],
+        "foot": [
+          0.33,
+          1
+        ],
+        "long": "y"
       }
     },
     "statue": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [966, 1480, 123, 310]
+        "frame": [
+          966,
+          1480,
+          123,
+          310
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              830,
+              147,
+              296
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              830,
+              147,
+              296
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "straw": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [326, 733, 256, 143]
+        "frame": [
+          326,
+          733,
+          256,
+          143
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              450,
+              2,
+              320,
+              173
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              450,
+              2,
+              320,
+              173
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "table": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [196, 529, 308, 200]
+        "frame": [
+          196,
+          529,
+          308,
+          200
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1349,
+              1128,
+              280,
+              269
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1349,
+              1128,
+              280,
+              269
+            ]
+          }
+        ],
+        "foot": [
+          0.63,
+          1
+        ],
+        "long": "x"
       }
     },
     "tapestry": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [1336, 1480, 187, 303]
+        "frame": [
+          1336,
+          1480,
+          187,
+          303
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1031,
+              1670,
+              200,
+              217
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1031,
+              1670,
+              200,
+              217
+            ]
+          }
+        ],
+        "foot": [
+          0.8,
+          1
+        ],
+        "long": "x"
       }
     },
     "tent": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [2, 2, 326, 299]
+        "frame": [
+          2,
+          2,
+          326,
+          299
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1621,
+              830,
+              343,
+              279
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              604,
+              2,
+              421,
+              371
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "trapdoor": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1176, 529, 192, 170]
+        "frame": [
+          1176,
+          529,
+          192,
+          170
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              934,
+              2,
+              240,
+              161
+            ]
+          },
+          {
+            "atlas": "sheet-7",
+            "frame": [
+              934,
+              2,
+              240,
+              161
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "tree": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [2, 1480, 319, 319]
+        "frame": [
+          2,
+          1480,
+          319,
+          319
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              507,
+              318,
+              321
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              2,
+              507,
+              318,
+              321
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "wardrobe": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-4",
-        "frame": [1026, 2, 192, 248]
+        "frame": [
+          1026,
+          2,
+          192,
+          248
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              322,
+              507,
+              194,
+              319
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              518,
+              507,
+              190,
+              319
+            ]
+          }
+        ],
+        "foot": [
+          0.6,
+          1
+        ],
+        "long": "x"
       }
     },
     "well": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-3",
-        "frame": [1525, 1480, 256, 303]
+        "frame": [
+          1525,
+          1480,
+          256,
+          303
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1442,
+              507,
+              214,
+              302
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1442,
+              507,
+              214,
+              302
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "bush": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-5",
-        "frame": [516, 2, 256, 188]
+        "frame": [
+          516,
+          2,
+          256,
+          188
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1130,
+              507,
+              310,
+              311
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              1130,
+              507,
+              310,
+              311
+            ]
+          }
+        ],
+        "foot": [
+          0.5,
+          1
+        ]
       }
     },
     "log": {
       "stand": {
-        "foot": [0.5, 1],
+        "foot": [
+          0.5,
+          1
+        ],
         "atlas": "sheet-5",
-        "frame": [2, 2, 512, 197]
+        "frame": [
+          2,
+          2,
+          512,
+          197
+        ]
+      },
+      "iso": {
+        "facings": [
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              738,
+              1670,
+              291,
+              222
+            ]
+          },
+          {
+            "atlas": "sheet-6",
+            "frame": [
+              738,
+              1670,
+              291,
+              222
+            ]
+          }
+        ],
+        "foot": [
+          0.2,
+          1
+        ],
+        "long": "y"
       }
     }
   }
