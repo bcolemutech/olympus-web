@@ -1,6 +1,6 @@
 # The Loom — The Isometric View — Design Document v0.1
 
-**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md)); its checkpoint is answered (§3, 2026-11-15). L-950's stories L-951 to L-957 are filed as #857–#863 (§6); L-954, the props, and L-955, art by view and floor paintings, are built (§4.4); L-960's are filed when it is next.
+**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md)); its checkpoint is answered (§3, 2026-11-15). L-950's stories L-951 to L-957 are filed as #857–#863, and L-958, the user's play-test, as #870 (§6); L-954, the props, and L-955, art by view and floor paintings, are built (§4.4); L-960's are filed when it is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Epics:** L-950 the isometric view (#852), L-960 reworking the worlds (#853); Phase 10 — Levels and Vehicles (milestone #26).
 **Replaces:** the three-quarter view on grid maps ([`game-art.md`](./game-art.md), L-941). Town and region maps keep it.
@@ -197,17 +197,18 @@ The stories of §6 are then filed, updated for what the spike found.
 
 ### L-950 The isometric view
 
-| ID           | Story                                                                                                                                                                         | Depends on | Model  |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ |
-| L-951 (#857) | **The projection and camera:** isometric grid maps in the engine, floor picking, pan and zoom, the margin, the 5 ft diamonds                                                  | —          | Opus   |
-| L-952 (#858) | **The painter in isometric:** floors laid on the plane, walls as prisms with faces and caps, doors and windows both ways, props by facing, depth order, shadows, culling, fog | L-951      | Opus   |
-| L-953 (#859) | **Seeing and picking:** fading in isometric, the walls-low button, front-most picking with the hover outline, doorway targets                                                 | L-952      | Opus   |
-| L-954 (#860) | **The isometric props:** the style, 45 objects and decor in two facings, boards per batch, the manifest's facings, atlases in the budget                                      | —          | Sonnet |
-| L-955 (#861) | **Art by view, and floor paintings:** images' `view`, a world's own art filtered on grids, top-down grid paintings retired, floor paintings (C4)                              | L-952      | Sonnet |
-| L-956 (#862) | **Grading:** the look and the own-art bonus counting isometric art on grids                                                                                                   | L-955      | Sonnet |
-| L-957 (#863) | **Unpublishing worlds:** `unpublish_world`, the page's button, saves paused                                                                                                   | —          | Sonnet |
+| ID           | Story                                                                                                                                                                                | Depends on     | Model  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ------ |
+| L-951 (#857) | **The projection and camera:** isometric grid maps in the engine, floor picking, pan and zoom, the margin, the 5 ft diamonds                                                         | —              | Opus   |
+| L-952 (#858) | **The painter in isometric:** floors laid on the plane, walls as prisms with faces and caps, doors and windows both ways, props by facing, depth order, shadows, culling, fog        | L-951          | Opus   |
+| L-953 (#859) | **Seeing and picking:** fading in isometric, the walls-low button, front-most picking with the hover outline, doorway targets                                                        | L-952          | Opus   |
+| L-954 (#860) | **The isometric props:** the style, 45 objects and decor in two facings, boards per batch, the manifest's facings, atlases in the budget                                             | —              | Sonnet |
+| L-955 (#861) | **Art by view, and floor paintings:** images' `view`, a world's own art filtered on grids, top-down grid paintings retired, floor paintings (C4)                                     | L-952          | Sonnet |
+| L-956 (#862) | **Grading:** the look and the own-art bonus counting isometric art on grids                                                                                                          | L-955          | Sonnet |
+| L-957 (#863) | **Unpublishing worlds:** `unpublish_world`, the page's button, saves paused                                                                                                          | —              | Sonnet |
+| L-958 (#870) | **Testing the isometric view:** the user's play-test of the whole epic on a phone and a desktop, in twelve groups of scenarios; bugs found filed under the epic and fixed one per PR | L-951 to L-957 | —      |
 
-**Order:** L-951, L-954 and L-957 can start at once. L-952 follows L-951. L-953 and L-955 follow L-952. L-956 follows L-955. When the epic ships, the three worlds are unpublished (WD1).
+**Order:** L-951, L-954 and L-957 can start at once. L-952 follows L-951. L-953 and L-955 follow L-952. L-956 follows L-955. L-958 follows them all: the user plays, bugs are filed under the epic, and when it's ticked with no bug open, the epic closes and the three worlds are unpublished (WD1).
 
 ### L-960 Reworking the worlds
 
