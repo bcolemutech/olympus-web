@@ -455,11 +455,17 @@ export async function atlas(
   for (const e of Object.values(manifest.objects || {})) {
     if (e.file) todo.push({ holder: null, entry: e, file: e.file });
     take(e, 'stand');
+    // Its isometric front and back (L-954): one picture standing for both is
+    // packed once.
+    if (e.iso && Array.isArray(e.iso.facings)) {
+      e.iso.facings.forEach((_, i) => take(e.iso.facings, i));
+    }
   }
   if (!todo.length) return [];
+  const files = [...new Set(todo.map((t) => t.file))];
   const sizes = [];
-  for (const t of todo) {
-    const meta = await sharp(path.join(dir, t.file)).metadata();
+  for (const f of files) {
+    const meta = await sharp(path.join(dir, f)).metadata();
     sizes.push([meta.width, meta.height]);
   }
   const { placed, sheets } = pack(sizes, max, pad);
@@ -469,10 +475,10 @@ export async function atlas(
   fs.mkdirSync(path.join(dir, 'atlas'), { recursive: true });
   const written = [];
   for (const [n, s] of sheets.entries()) {
-    const parts = todo
-      .map((t, i) => ({ t, i }))
+    const parts = files
+      .map((f, i) => ({ f, i }))
       .filter(({ i }) => placed[i].sheet === n)
-      .map(({ t, i }) => ({ input: path.join(dir, t.file), left: placed[i].x, top: placed[i].y }));
+      .map(({ f, i }) => ({ input: path.join(dir, f), left: placed[i].x, top: placed[i].y }));
     const out = path.join('atlas', `${ids[n]}.webp`);
     await sharp({
       create: {
@@ -488,7 +494,8 @@ export async function atlas(
     manifest.atlases[ids[n]] = { file: out, width: s.width, height: s.height };
     written.push({ id: ids[n], file: out, width: s.width, height: s.height, frames: parts.length });
   }
-  todo.forEach((t, i) => {
+  todo.forEach((t) => {
+    const i = files.indexOf(t.file);
     const at = placed[i];
     const frame = { atlas: ids[at.sheet], frame: [at.x, at.y, sizes[i][0], sizes[i][1]] };
     if (t.holder) {
@@ -520,6 +527,15 @@ export async function atlas(
  *   window/<id>.png                            a window's pane, 5 ft × 3.5 ft
  *   object/<id>.png                            an object standing, its foot at
  *                                              the middle of its picture's bottom
+ *   iso/<id>.front.png, iso/<id>.back.png      an object standing in the
+ *                                              isometric view (L-954): the back
+ *                                              is optional (the front stands
+ *                                              for both); iso/meta.json says
+ *                                              { "<id>": { "long": "x" | "y",
+ *                                              "foot": [x, y] } }, the axis
+ *                                              each is painted long along and,
+ *                                              if it needs one other than the
+ *                                              footprint's (isoFootOf)
  *
  * Returns what it wrote, by role.
  */
@@ -536,7 +552,7 @@ export async function buildSet(work, setDir, { quality = 78, span = 5 } = {}) {
           .filter((f) => f.endsWith('.png'))
           .sort()
       : [];
-  const wrote = { ground: 0, line: 0, wall: 0, door: 0, window: 0, object: 0 };
+  const wrote = { ground: 0, line: 0, wall: 0, door: 0, window: 0, object: 0, iso: 0 };
   const exact = async (file, out, w, h, fit) => {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     await sharp(file)
@@ -625,8 +641,79 @@ export async function buildSet(work, setDir, { quality = 78, span = 5 } = {}) {
     manifest.objects[id] = { stand: { file: rel('objects', `${id}.webp`), foot: [0.5, 1] } };
     wrote.object += 1;
   }
+  // Objects standing in the isometric view (L-954).
+  const isoMetaFile = path.join(work, 'iso', 'meta.json');
+  const isoMeta = fs.existsSync(isoMetaFile)
+    ? JSON.parse(fs.readFileSync(isoMetaFile, 'utf8'))
+    : {};
+  const isoNotes = [];
+  for (const f of list('iso').filter((n) => n.endsWith('.front.png'))) {
+    const id = f.replace(/\.front\.png$/, '');
+    const kind = catalog.objectKind(id);
+    if (!kind) throw new Error(`No catalog object "${id}" for ${f}.`);
+    const meta = isoMeta[id] || {};
+    const facings = [];
+    for (const side of ['front', 'back']) {
+      const src = path.join(work, 'iso', `${id}.${side}.png`);
+      if (!fs.existsSync(src)) continue;
+      await isoPicture(src, path.join(setDir, 'objects', `${id}-iso-${side}.webp`), kind, {
+        quality,
+      });
+      facings.push({ file: rel('objects', `${id}-iso-${side}.webp`) });
+    }
+    if (facings.length < 2) facings.push({ ...facings[0] });
+    const foot = meta.foot || [isoFootOf(kind, meta.long), 1];
+    const entry = (manifest.objects[id] = manifest.objects[id] || {});
+    entry.iso = { facings, foot, ...(meta.long ? { long: meta.long } : {}) };
+    isoNotes.push({ id, foot: foot[0], long: meta.long || null });
+    wrote.iso += 1;
+  }
+  if (isoNotes.length) wrote.isoFeet = isoNotes;
   fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
   return wrote;
+}
+
+/**
+ * Where an isometric prop's front corner lies across its picture (0–1): the
+ * footprint's diamond is as wide as its width plus depth and its bottom
+ * vertex stands w / (w + d) of the way across, where w is the side along the
+ * lower left. `long` is the axis the picture is painted long along ('x': the
+ * lower-left side, 'y': the lower-right one), which says which of the
+ * catalog's two sides that is.
+ */
+export function isoFootOf(kind, long) {
+  const [a, b] = kind.size;
+  const hi = Math.max(a, b);
+  const lo = Math.min(a, b);
+  const w = long === 'x' ? hi : long === 'y' ? lo : a;
+  const d = long === 'x' ? lo : long === 'y' ? hi : b;
+  return +(w / (w + d)).toFixed(2);
+}
+
+/**
+ * An isometric prop's picture written as WebP within the iso role's budget.
+ * A thing hung on a wall (`onWall`) is a flat panel along the lower-left
+ * side only, so it's padded on the right until the panel spans that side's
+ * share of the diamond and its front corner is the picture's bottom right;
+ * any other picture is as it is, trimmed. Returns { file, width, height,
+ * bytes }.
+ */
+export async function isoPicture(file, out, kind, { quality = 82 } = {}) {
+  let input = file;
+  if (kind.onWall) {
+    const meta = await sharp(file).metadata();
+    const [w, d] = kind.size;
+    const wide = Math.round((meta.width * (w + d)) / w);
+    input = await sharp(file)
+      .ensureAlpha()
+      .extend({
+        right: wide - meta.width,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer();
+  }
+  return webp(input, out, 'iso', { size: kind.size, quality });
 }
 
 /** A set's folder checked against the size budget (./budget.cjs checkSet). */

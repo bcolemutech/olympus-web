@@ -12,7 +12,8 @@
       pictures (planning/game-art.md; L-946 / #800): each material's, a
       wall's face, a door's or window's painted front and each object's
       standing picture, from a file or an atlas frame, the built-in art
-      where the set lacks one, each said. It holds no data and needs no sign-in.
+      where the set lacks one, each said; and each object's isometric front
+      and back (L-954), where the set paints them. It holds no data and needs no sign-in.
       Headless Chrome loads it in tests/loom-art-swatches.test.js, which reads
       window.__swatches once <html data-ready="true">.
     -->
@@ -330,6 +331,44 @@
               );
             });
           });
+
+          // The set's isometric pictures (L-954): each object's front, and its
+          // back where it isn't the same picture.
+          var isoSeen = setName
+            ? catalog.OBJECT_KINDS.filter(function (item) {
+                return catalog.isoFor({ kind: item.id }, null, setName);
+              })
+            : [];
+          if (isoSeen.length) {
+            var isoGrid = section(
+              'Isometric objects',
+              'Standing in the isometric view, front toward the lower left, and the back where it differs.'
+            );
+            isoSeen.forEach(function (item) {
+              var iso = catalog.isoFor({ kind: item.id }, null, setName);
+              var detail = item.size[0] + ' × ' + item.size[1] + ' ft';
+              figure(
+                isoGrid,
+                'iso:' + item.id,
+                item.name,
+                detail + ', front',
+                iso.facings[0],
+                'set',
+                onFloor(item.name)
+              );
+              if (JSON.stringify(iso.facings[1]) !== JSON.stringify(iso.facings[0])) {
+                figure(
+                  isoGrid,
+                  'iso-back:' + item.id,
+                  item.name,
+                  'back',
+                  iso.facings[1],
+                  'set',
+                  onFloor(item.name)
+                );
+              }
+            });
+          }
 
           var none = section(
             'An object with no art',

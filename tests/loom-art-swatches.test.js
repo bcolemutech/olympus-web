@@ -202,12 +202,22 @@ describe('art that goes missing', () => {
 
 describe('the classic set (L-946)', () => {
   const WALLS = catalog.materialsOf('wall').length;
+  // Each object's isometric front, and its back where it is another picture
+  // (L-954).
+  const isoObjects = JSON.parse(
+    fs.readFileSync(path.join(PUBLIC, 'apps/loom/art/sets/classic/manifest.json'), 'utf8')
+  ).objects;
+  const ISO_FRONTS = Object.values(isoObjects).filter((e) => e.iso).length;
+  const ISO_BACKS = Object.values(isoObjects).filter(
+    (e) => e.iso && JSON.stringify(e.iso.facings[0]) !== JSON.stringify(e.iso.facings[1])
+  ).length;
 
   run('every swatch is the set’s own picture, and all of them load', async () => {
     const { page, errors } = await swatches('?set=classic');
     const result = await page.evaluate(() => window.__swatches);
-    // Each material and object, each wall's face too, and the "?" box.
-    const total = TOTAL + WALLS;
+    // Each material and object, each wall's face too, each object's isometric
+    // front and back, and the "?" box.
+    const total = TOTAL + WALLS + ISO_FRONTS + ISO_BACKS;
     expect(result).toMatchObject({ set: 'classic', total, loaded: total, failed: [] });
     expect(result.builtIn).toEqual([]);
     expect(result.fromSet).toBe(total - 1);
@@ -215,7 +225,14 @@ describe('the classic set (L-946)', () => {
     const froms = await page.$$eval('figure[data-id]', (figs) =>
       Object.fromEntries(figs.map((f) => [f.dataset.id, f.dataset.from]))
     );
-    for (const k of catalog.OBJECT_KINDS) expect(froms[`object:${k.id}`]).toBe('set');
+    for (const k of catalog.OBJECT_KINDS) {
+      expect(froms[`object:${k.id}`]).toBe('set');
+      // Every object kind stands in isometric too (L-954).
+      expect(froms[`iso:${k.id}`]).toBe('set');
+    }
+    expect(ISO_FRONTS).toBe(catalog.OBJECT_KINDS.length);
+    expect(ISO_BACKS).toBeGreaterThan(0);
+    expect(froms['iso-back:chest']).toBe('set');
     expect(froms['door:bars']).toBe('set');
     expect(froms['wall-face:stone']).toBe('set');
     expect(await page.textContent('#summary')).toContain(`${total - 1} from the set, 0 built-in.`);

@@ -36,6 +36,7 @@ const geo = require('../functions/loom-canon/map-geometry');
 const sight = require('../functions/loom-canon/sight');
 const seen = require('../functions/loom-turn/seen');
 const generators = require('../functions/loom-canon/map-generators');
+const catalog = require('../functions/loom-canon/materials');
 const { dungeon } = require('./fixtures/paint/dungeon');
 const { serveFixtures } = require('./helpers/fixture-server');
 
@@ -276,6 +277,62 @@ describe('the isometric view (L-951)', () => {
     expect(page.errors).toEqual([]);
     await page.close();
   });
+
+  withBrowser(
+    'a generated interior with every catalog object standing in isometric art, against its screenshot (L-954)',
+    async () => {
+      const page = await isoPage();
+      // The interior's walls and floors, its own furniture swapped for every
+      // catalog object and decor kind once, in rows across the hall (the 45 of
+      // them, none overlapping: 8 across, 12 ft by 11 ft apiece).
+      const made = generators.generate('interior', { seed: 'three-quarter' });
+      const kinds = catalog.OBJECT_KINDS;
+      expect(kinds).toHaveLength(45);
+      made.geometry.objects = kinds.map((k, i) => ({
+        id: k.id,
+        kind: k.id,
+        at: [18 + (i % 8) * 12, 17 + Math.floor(i / 8) * 11],
+        size: k.size,
+      }));
+      made.geometry.doors = [];
+      made.geometry.windows = [];
+      made.geometry.lights = [];
+      // The hall's inner walls would cut the rows; its outer wall stays.
+      made.geometry.walls = made.geometry.walls.filter((w) => w.id === 'wall-1');
+      const data = battleOf(
+        'hall',
+        made,
+        { cell: { x: 12, y: 13 }, point: { x: 62.5, y: 66.5 } },
+        {},
+        true
+      );
+      await show(page, data);
+      await painted(page, 'battle:hall');
+      await show(page, data);
+      // The art the set paints them with: the isometric atlases (sheets 6 and 7
+      // hold the isometric pictures; sheets 0 to 5 the three-quarter ones).
+      const iso = /sheet-[67]\.webp/;
+      await page.waitForFunction(
+        () => {
+          const drawn = window.Loom.mapPaint.describe('battle:hall') || [];
+          return drawn.filter((d) => d.layer === 'standing' && d.kind === 'object').length >= 45;
+        },
+        null,
+        { timeout: 15000 }
+      );
+      const drawn = await page.evaluate(() => window.Loom.mapPaint.describe('battle:hall'));
+      const stood = drawn.filter((d) => d.layer === 'standing' && d.kind === 'object');
+      expect(stood.map((d) => d.id).sort()).toEqual(kinds.map((k) => k.id).sort());
+      stood.forEach((d) => {
+        expect([d.id, d.facing, iso.test(d.art)]).toEqual([d.id, 'front', true]);
+      });
+      // None lies flat, seen from above, any more.
+      expect(drawn.filter((d) => d.layer === 'objects' && d.kind === 'object')).toEqual([]);
+      matchesBaseline(PNG.sync.read(await page.screenshot()), 'iso-props.png');
+      expect(page.errors).toEqual([]);
+      await page.close();
+    }
+  );
 
   withBrowser(
     'a click on the floor lands within half a foot, across the map, at two zooms',
