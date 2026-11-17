@@ -931,6 +931,9 @@
         depth: ISO.depthOf(print),
         box: boxOf(corners, 0),
         print: print,
+        // Its line, for the order: a prop or token touching the wall overlaps
+        // its drawn thickness, but stands clear of its line on one side (L-958).
+        core: [p, q],
         rise: [o.base, o.top], // its outline, for picking: its footprint's hull from base to top
         hit: o.hit || null,
         bare: true,
@@ -1916,7 +1919,7 @@
       var p = w.__loomDepth !== undefined ? w : w.__loomPlace;
       var at = w.__loomDepth !== undefined ? w : null;
       return {
-        pts: at ? w.__loomPrint : p.print,
+        pts: at ? w.__loomCore || w.__loomPrint : p.print,
         box: at ? w.__loomBox : p.box,
         depth: at ? w.__loomDepth : p.depth,
       };
@@ -2232,7 +2235,7 @@
       if (!polyMeetsBox(outline, t.box)) continue;
       var r = t.print
         ? ISO.compare(
-            { pts: wrap.__loomPrint, depth: wrap.__loomDepth },
+            { pts: wrap.__loomCore || wrap.__loomPrint, depth: wrap.__loomDepth },
             { pts: t.print, depth: t.depth }
           )
         : t.depth < wrap.__loomDepth
@@ -2359,6 +2362,7 @@
       // for a slab how high it stands, so its outline can be had for picking
       // (outlineOf; L-953).
       wrap.__loomPrint = part.print || null;
+      wrap.__loomCore = part.core || null;
       wrap.__loomRise = part.rise || null;
       if (wrap.__loomPrint && s.shade) shadeOne(s, wrap);
       // What fades over what's behind it (L-942): walls, windows and doors

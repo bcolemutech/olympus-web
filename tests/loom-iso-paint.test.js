@@ -427,6 +427,72 @@ describe('the painter in isometric (L-952)', () => {
   );
 
   withBrowser(
+    'props and you touching a wall order by its line, not its drawn thickness (L-958)',
+    async () => {
+      const page = await isoPage();
+      await page.evaluate(() =>
+        window.Loom.materials.registerSet(
+          {
+            name: 'test-iso-touch',
+            objects: {
+              barrel: { stand: { file: 'pillar-stand.svg' } },
+              crate: { stand: { file: 'chest-stand.svg' } },
+            },
+          },
+          '/fixtures/paint/'
+        )
+      );
+      // A wall along y = 20, drawn about a foot thick (19.25–20.75 ft): a barrel
+      // against it from the north reaches 19.9 ft, into its drawn thickness, and
+      // a crate against it from the south reaches back to 20.2 ft.
+      const geometry = {
+        ground: floor(40, 40),
+        walls: [
+          {
+            id: 'wall',
+            material: 'brick',
+            points: [
+              [0, 20],
+              [40, 20],
+            ],
+          },
+        ],
+        objects: [
+          { id: 'barrel', kind: 'barrel', at: [12.5, 18.65], size: [2.5, 2.5] },
+          { id: 'crate', kind: 'crate', at: [27.5, 21.7], size: [3, 3] },
+        ],
+      };
+      const at = (point) =>
+        battleOf(
+          'touch',
+          { width: 8, height: 8, geometry },
+          { cell: { x: Math.floor(point.x / 5), y: Math.floor(point.y / 5) }, point },
+          { artSet: 'test-iso-touch' }
+        );
+      const order = (drawn) => drawn.filter((d) => d.layer === 'standing');
+      // You against the wall's north side, inside its drawn thickness too.
+      let standing = order(await shown(page, at({ x: 20, y: 19.5 })));
+      const rank = (kind, id) => standing.findIndex((d) => d.kind === kind && d.id === id);
+      const walls = standing.filter((d) => d.kind === 'wall');
+      expect(walls.length).toBeGreaterThan(1);
+      // Every wall piece is drawn after the barrel behind it and before the crate in front.
+      const firstWall = standing.findIndex((d) => d.kind === 'wall');
+      const lastWall =
+        standing.length - 1 - [...standing].reverse().findIndex((d) => d.kind === 'wall');
+      expect(rank('object', 'barrel')).toBeLessThan(firstWall);
+      expect(rank('object', 'crate')).toBeGreaterThan(lastWall);
+      expect(rank('token', 'you')).toBeLessThan(lastWall);
+      // Against its south side: in front.
+      standing = order(await shown(page, at({ x: 20, y: 20.5 })));
+      expect(standing.findIndex((d) => d.kind === 'token' && d.id === 'you')).toBeGreaterThan(
+        standing.findIndex((d) => d.kind === 'wall')
+      );
+      expect(page.errors).toEqual([]);
+      await page.close();
+    }
+  );
+
+  withBrowser(
     'a window that names no wall stands in the wall it lies in, its face below and above (L-958)',
     async () => {
       const page = await isoPage();
