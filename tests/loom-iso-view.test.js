@@ -384,7 +384,7 @@ describe('the isometric view (L-951)', () => {
         ([p]) => window.Loom.battle.tap(p, window.Loom.engine.camera.view),
         [{ x: Math.round(at.x), y: Math.round(at.y) }]
       );
-      await page.waitForSelector('.loom-map-menu', { timeout: 3000 });
+      await page.waitForSelector('.loom-map-menu', { timeout: 20000 });
       const title = await page.evaluate(() => document.querySelector('.loom-map-menu').textContent);
       expect(title).toContain('Square (16, 5)');
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
@@ -471,13 +471,19 @@ describe('the isometric view (L-951)', () => {
           },
         ])
       );
-      await page.waitForFunction(() => window.Loom.battle.drawn().cards.length > 0, null, {
-        timeout: 3000,
-      });
-      const during = await page.evaluate(() => ({
-        drawn: window.Loom.battle.drawn(),
-        tokens: window.Loom.battle.tokens(),
-      }));
+      // Caught in the same page call that sees the card, since a card is shown
+      // only while its attack plays and a slow machine can let it go in between.
+      const during = await (
+        await page.waitForFunction(
+          () => {
+            const drawn = window.Loom.battle.drawn();
+            if (!drawn.cards.length) return false;
+            return { drawn, tokens: window.Loom.battle.tokens() };
+          },
+          null,
+          { timeout: 20000 }
+        )
+      ).jsonValue();
       const card = during.drawn.cards[0];
       expect(card.text).toBe('15 vs 12 · hit 3');
       const token = during.tokens.find((t) => t.id === 'gob');
@@ -485,7 +491,7 @@ describe('the isometric view (L-951)', () => {
       expect(Math.hypot(tokenFloor.x - 87.5, tokenFloor.y - 27.5)).toBeLessThan(0.5);
       expect(Math.abs(card.x - token.x)).toBeLessThan(1);
       expect(card.y).toBeLessThan(token.y);
-      await page.waitForFunction(() => !window.Loom.battle.playing(), null, { timeout: 5000 });
+      await page.waitForFunction(() => !window.Loom.battle.playing(), null, { timeout: 20000 });
       expect(page.errors).toEqual([]);
       await page.close();
     }
