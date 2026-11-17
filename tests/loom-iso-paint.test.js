@@ -426,6 +426,41 @@ describe('the painter in isometric (L-952)', () => {
     }
   );
 
+  withBrowser(
+    'a window that names no wall stands in the wall it lies in, its face below and above (L-958)',
+    async () => {
+      const page = await isoPage();
+      const geometry = {
+        ground: floor(40, 40),
+        walls: [
+          {
+            id: 'wall',
+            material: 'brick',
+            points: [
+              [0, 20],
+              [40, 20],
+            ],
+          },
+        ],
+        // No `wall`: found by where it lies, as the rules find it.
+        windows: [{ id: 'pane', material: 'glass', from: [15, 20], to: [20, 20] }],
+      };
+      const data = battleOf(
+        'window',
+        { width: 8, height: 8, geometry },
+        { cell: { x: 3, y: 5 }, point: { x: 17.5, y: 27.5 } }
+      );
+      const drawn = await shown(page, data);
+      const parts = drawn.filter((d) => d.layer === 'standing' && d.kind === 'window');
+      // The wall below the sill and above the pane, each with a face, beside the pane.
+      const faced = parts.filter((p) => (p.shows || []).includes('face'));
+      expect(faced.length).toBeGreaterThanOrEqual(3);
+      expect(parts.some((p) => (p.shows || []).includes('cap'))).toBe(true);
+      expect(page.errors).toEqual([]);
+      await page.close();
+    }
+  );
+
   withBrowser('what stands out of sight is dimmed by the fog, what is in sight not', async () => {
     const page = await isoPage();
     const data = battleOf(

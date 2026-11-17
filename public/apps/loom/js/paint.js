@@ -1106,6 +1106,18 @@
     list('walls').forEach(function (w) {
       if (w && w.id) wallsById[w.id] = w;
     });
+    // The wall a door or window stands in: the one it names, else the one the
+    // geometry finds it lying in (map-geometry.js compile), so one that names
+    // none still has its wall's face below, above and over it (L-958).
+    var hostOf = new Map();
+    if (list('doors').length || list('windows').length) {
+      geo.compile(g).openings.forEach(function (op) {
+        if (op.item && op.wall) hostOf.set(op.item, op.wall);
+      });
+    }
+    var wallOf = function (item) {
+      return wallsById[item.wall] || wallsById[hostOf.get(item)] || null;
+    };
 
     if (!art) {
       // Each floor (AR4, EN3; L-943): its picture, or one of its variants
@@ -1280,7 +1292,7 @@
         var url = paneArt.key;
         // A set's painted pane (its `face`, L-946), stretched over the opening.
         var pFace = paneArt.face;
-        var wall = wallsById[item.wall] || null;
+        var wall = wallOf(item);
         var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
         var wUrl = wallArt.key || null;
         var fUrl = wallArt.face || null;
@@ -1382,7 +1394,7 @@
       var url = doorArt.key;
       // A set's painted front (its `face`, L-946), a portrait over the leaf.
       var dFace = doorArt.face;
-      var wall = wallsById[item.wall] || null;
+      var wall = wallOf(item);
       var wallArt = wall ? materialOf('wall', wall.material, o.set) : {};
       var wUrl = wallArt.key || null;
       var fUrl = wallArt.face || null;
