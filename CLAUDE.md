@@ -254,6 +254,7 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 - `cartographerImport` — `cartographer` claim. Uploaded Azgaar map → draft world
 - `cartographerCreateWorld` / `cartographerSetBrief` — `cartographer` claim. New world from scratch (a name, an optional studio map image, the scale, a brief) and a world's brief (genre, tone, era, art direction; L-711)
 - `cartographerPublish` — `cartographer` claim. Publish a draft world to the Loom
+- `cartographerUnpublish` — `cartographer` claim. Take a published world back to draft, kept whole; its saves wait with a message that it is being reworked (L-957)
 - `cartographerCompletion` — `cartographer` claim. How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, its biggest gaps, and its maps as a tree, each graded by its kind with what it lacks (`maps`; L-905, `grading.js` `gradeMaps`)
 - `cartographerTownImage` — `cartographer` claim. Attach, replace or remove a town's art (an uploaded PNG or SVG drawn behind the town view), through the image studio's library
 - `cartographerMapImage` — `cartographer` claim. Attach, replace or remove a battle map's art through the studio's library; `fit` crops, pads or stretches it to the grid (L-396)

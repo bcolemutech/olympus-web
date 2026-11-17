@@ -104,6 +104,12 @@ A world's brief, from its card on the page (L-711): `{ worldId, brief }`, each f
 
 Publish a draft world to the Loom
 
+## `cartographerUnpublish`
+
+**Who can call:** `cartographer` claim
+
+Take a published world back to draft, kept whole (L-957): `{ worldId }`, the page's Unpublish button and the connector's `unpublish_world`. Nothing is deleted and `canonVersion` goes up; `unpublishedAtMs` and `unpublishedBy` record it. The Loom's list and `loomWorldRatings` leave it out (they read published worlds only). A save in it is refused a turn (`loomPlayTurn`) and a map (`loomGetMap`) with `failed-precondition` and a plain message that the world is being reworked, its game kept as it is (`loomCanon.isReworked`, `REWORKED_MESSAGE`); the save is not touched, and plays on once `cartographerPublish` / `publish_world` publishes the world again. A draft or unknown world is refused. While a world is a draft, removals delete rather than retire
+
 ## `cartographerCompletion`
 
 **Who can call:** `cartographer` claim
