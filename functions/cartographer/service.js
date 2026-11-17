@@ -41,6 +41,10 @@ const UNPLACED_SHOWN = 3;
 //   world is playable (its starting location graded Playable, so players can
 //   enter it), and publishes it — the Loom then lists and plays it.
 //
+// unpublishWorld(uid, { worldId })
+//   A published world back to draft, kept whole (L-957): the Loom's list
+//   drops it and its saves wait, until publishWorld publishes it again.
+//
 // townImage(uid, { worldId, locationId, uploadId } | { worldId, locationId, remove })
 //   A town's art (planning/the-loom-layered-worlds.md §8; L-347 / #416): reads
 //   cartographer/{uid}/{uploadId}/town.png, checks it is a PNG, copies it to
@@ -272,6 +276,35 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
       });
     });
     return { worldId, status: 'published' };
+  }
+
+  // Takes a published world back to draft, kept whole (L-957; isometric view
+  // WD1): nothing is deleted. The Loom's list drops it, and a save in it is
+  // told the world is being reworked until publishWorld publishes it again.
+  async function unpublishWorld(uid, { worldId } = {}) {
+    if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
+      throw new HttpsError('invalid-argument', 'A valid worldId is required.');
+    }
+    const worldRef = db.collection(loomCanon.WORLDS_COLLECTION).doc(worldId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(worldRef);
+      if (!snap.exists) throw new HttpsError('not-found', 'World not found.');
+      const meta = snap.data();
+      if (meta.status !== 'published') {
+        throw new HttpsError(
+          'failed-precondition',
+          `Only a published world can be unpublished (this world is ${meta.status}).`
+        );
+      }
+      tx.update(worldRef, {
+        status: 'draft',
+        canonVersion: (meta.canonVersion || 0) + 1,
+        unpublishedAtMs: now(),
+        unpublishedBy: uid,
+        updatedAtMs: now(),
+      });
+    });
+    return { worldId, status: 'draft' };
   }
 
   // A world's maps as the page shows them (L-905): each map's kind, name,
@@ -546,6 +579,7 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     createWorld,
     setBrief,
     publishWorld,
+    unpublishWorld,
     worldCompletion,
     townImage,
     mapImage,

@@ -27,7 +27,8 @@ const { ToolError } = require('../../registry');
 // import does but with no Azgaar map (L-391): its locations are added after.
 //
 // publish(uid, worldId) publishes a draft through the Cartographer's own
-// publish, with its playability checks.
+// publish, with its playability checks. unpublish(uid, worldId) takes a
+// published world back to draft, kept whole (L-957).
 
 const EDITABLE = ['draft', 'published'];
 const MAX_ATTEMPTS = 5;
@@ -126,6 +127,23 @@ function createFirestoreWorldWriter(getDb, { now = () => Date.now() } = {}) {
     }
   }
 
+  // Unpublishing is the Cartographer's too (L-957): the world back to draft,
+  // kept whole; its refusals are relayed the same way.
+  async function unpublish(uid, worldId) {
+    const { HttpsError } = require('firebase-functions/v2/https');
+    const { createCartographerService } = require('../../../cartographer/service');
+    try {
+      return await createCartographerService({
+        db: getDb(),
+        bucket: null,
+        now,
+      }).unpublishWorld(uid, { worldId });
+    } catch (err) {
+      if (err instanceof HttpsError && err.code !== 'internal') throw new ToolError(err.message);
+      throw err;
+    }
+  }
+
   // A new draft world from scratch (planning/builders-tools.md §4.1; L-391):
   // the world document only, with no entities yet, its id readable and new.
   async function create(uid, { name, systemId, map, brief }) {
@@ -176,7 +194,7 @@ function createFirestoreWorldWriter(getDb, { now = () => Date.now() } = {}) {
     return { worldId: id };
   }
 
-  return { edit, publish, create };
+  return { edit, publish, unpublish, create };
 }
 
 module.exports = { createFirestoreWorldWriter };

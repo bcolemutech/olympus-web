@@ -24,6 +24,7 @@
   "loom-town-walking.test.js": 14,
   "loom-gate.test.js": 12,
   "loom-map.test.js": 12,
+  "loom-unpublish.test.js": 12,
   "loom-foes-ap.test.js": 11,
   "studio-assign.test.js": 11,
   "loom-combat-named.test.js": 10,

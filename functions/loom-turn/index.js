@@ -82,6 +82,11 @@ async function intake(params) {
   // every turn so canon edits (canonVersion) reach the game on its next turn.
   const loaded = await loomCanon.loadWorld(worldId, { db });
   if (!loaded) {
+    // A world taken back to draft (L-957): no turn is played, and the save
+    // stays as it is until the world is published again.
+    if (await loomCanon.isReworked(worldId, { db })) {
+      throw new LoomTurnError('failed-precondition', loomCanon.REWORKED_MESSAGE);
+    }
     throw new LoomTurnError('not-found', 'Unknown world.');
   }
   // The world from where the save stands (L-903; ../loom-canon/frames.js):

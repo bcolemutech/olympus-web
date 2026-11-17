@@ -542,6 +542,11 @@
       .catch(function (err) {
         console.error('Could not load the map:', err);
         setAvailable(false);
+        // A world taken back to draft to be reworked (L-957): the server's
+        // plain message, and no turn can be played until it is published.
+        if (saveId === state.saveId && err && err.code === 'functions/failed-precondition') {
+          Loom.journal.setError(err.message);
+        }
       });
   }
 

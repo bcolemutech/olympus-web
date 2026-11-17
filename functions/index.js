@@ -72,6 +72,12 @@ exports.cartographerPublish = onCall(async (request) => {
   return cartographerService().publishWorld(uid, request.data || {});
 });
 
+// A published world back to draft, kept whole (L-957).
+exports.cartographerUnpublish = onCall(async (request) => {
+  const uid = cartographer.requireCartographer(request);
+  return cartographerService().unpublishWorld(uid, request.data || {});
+});
+
 // How built each world is (Layered Worlds, L-323 / #392), for the page.
 exports.cartographerCompletion = onCall(async (request) => {
   cartographer.requireCartographer(request);
@@ -915,7 +921,13 @@ exports.loomGetMap = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'worldId does not match this save.');
   }
   const loaded = await loomCanon.loadWorld(worldId.trim(), { db });
-  if (!loaded) throw new HttpsError('not-found', 'Unknown world.');
+  if (!loaded) {
+    // A world taken back to draft (L-957) keeps its saves, which wait for it.
+    if (await loomCanon.isReworked(worldId.trim(), { db })) {
+      throw new HttpsError('failed-precondition', loomCanon.REWORKED_MESSAGE);
+    }
+    throw new HttpsError('not-found', 'Unknown world.');
+  }
   // The world from where the save stands (L-903): the map it is on.
   const play = frames.playWorld(loaded);
   const framed = frames.frameOf(play, stored);

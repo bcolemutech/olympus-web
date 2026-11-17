@@ -284,6 +284,23 @@ async function loadWorld(worldId, { db, playableOnly = true } = {}) {
   return withSystem;
 }
 
+// What a save is told when its world has been taken back to draft (L-957):
+// nothing in the save is lost, and it plays again once the world is published.
+const REWORKED_MESSAGE =
+  'This world is being reworked and can’t be played until it is published again. ' +
+  'Your game is kept as it is.';
+
+/**
+ * Whether a world exists but is a draft (L-957): a world a save is in can only
+ * be one if it was unpublished, so a turn or a map for it is refused with
+ * REWORKED_MESSAGE rather than "Unknown world".
+ */
+async function isReworked(worldId, { db } = {}) {
+  if (!db || typeof worldId !== 'string' || !worldId) return false;
+  const snap = await db.collection(WORLDS_COLLECTION).doc(worldId).get();
+  return snap.exists && snap.data().status === 'draft';
+}
+
 /** Test hook: forget every cached Firestore world. */
 function clearWorldCache() {
   worldCache.clear();
@@ -293,6 +310,8 @@ module.exports = {
   findEntity,
   entitySnippet,
   loadWorld,
+  isReworked,
+  REWORKED_MESSAGE,
   clearWorldCache,
   WORLDS_COLLECTION,
   ENTITY_COLLECTIONS,
