@@ -146,16 +146,23 @@
    */
   function front(a, b) {
     var axes = axesOf(a.pts).concat(axesOf(b.pts));
+    var said = 0;
     for (var i = 0; i < axes.length; i++) {
       var n = axes[i];
       var s = n.x + n.y;
       if (Math.abs(s) < EPS) continue;
       var ra = range(a.pts, n);
       var rb = range(b.pts, n);
-      if (ra[0] >= rb[1] - EPS) return s > 0 ? 1 : -1;
-      if (rb[0] >= ra[1] - EPS) return s > 0 ? -1 : 1;
+      var r = 0;
+      if (ra[0] >= rb[1] - EPS) r = s > 0 ? 1 : -1;
+      else if (rb[0] >= ra[1] - EPS) r = s > 0 ? -1 : 1;
+      // Apart on a diagonal (east of it one way, north the other), the axes
+      // disagree: it can't be told, and the first axis tried mustn't decide,
+      // or three pieces at a junction can each be in front of the next (L-958).
+      if (r && said && r !== said) return 0;
+      if (r) said = r;
     }
-    return 0;
+    return said;
   }
 
   // In front by footprint, else by depth.
