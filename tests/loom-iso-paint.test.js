@@ -527,6 +527,77 @@ describe('the painter in isometric (L-952)', () => {
     }
   );
 
+  withBrowser(
+    'the brick below and above a window is the wall’s own, in size and in its courses (L-958)',
+    async () => {
+      const page = await isoPage();
+      const plain = {
+        ground: floor(40, 40),
+        walls: [
+          {
+            id: 'wall',
+            material: 'brick',
+            points: [
+              [0, 20],
+              [40, 20],
+            ],
+          },
+        ],
+      };
+      const viewer = { cell: { x: 3, y: 5 }, point: { x: 17.5, y: 27.5 } };
+      const map = (geometry) => {
+        const data = battleOf('brick', { width: 8, height: 8, geometry }, viewer, {}, true);
+        // Seen the same way both times, so only what's painted differs.
+        data.fog = battleOf(
+          'brick',
+          { width: 8, height: 8, geometry: plain },
+          viewer,
+          {},
+          true
+        ).fog;
+        return data;
+      };
+      const shot = async (geometry) => {
+        await shown(page, map(geometry));
+        await page.waitForTimeout(300);
+        return PNG.sync.read(await page.screenshot());
+      };
+      const withWindow = await shot({
+        ...plain,
+        windows: [{ id: 'pane', material: 'glass', from: [15, 20], to: [20, 20] }],
+      });
+      // The pane, on the screen.
+      const pane = await page.evaluate(() => {
+        const stand = window.Loom.mapPaint.standOf('battle:brick');
+        const node = stand.children.find(
+          (w) => w.__loomPainted && w.__loomPainted.kind === 'window' && w.__loomPainted.part === 1
+        );
+        const b = node.getBounds();
+        return { x0: b.minX - 1, y0: b.minY - 1, x1: b.maxX + 1, y1: b.maxY + 1 };
+      });
+      const without = await shot(plain);
+      // Outside the pane the wall is painted as if it had none: the face
+      // under the sill and over the head neither scaled to its own height
+      // nor its courses started again at the window's sides.
+      let differ = 0;
+      for (let y = 0; y < without.height; y++) {
+        for (let x = 0; x < without.width; x++) {
+          if (x >= pane.x0 && x <= pane.x1 && y >= pane.y0 && y <= pane.y1) continue;
+          const i = (y * without.width + x) * 4;
+          const d =
+            Math.abs(withWindow.data[i] - without.data[i]) +
+            Math.abs(withWindow.data[i + 1] - without.data[i + 1]) +
+            Math.abs(withWindow.data[i + 2] - without.data[i + 2]);
+          if (d > 30) differ += 1;
+        }
+      }
+      // About 200 pixels at the pane's frame and shadow; 6,000 were wrong before.
+      expect(differ).toBeLessThan(1000);
+      expect(page.errors).toEqual([]);
+      await page.close();
+    }
+  );
+
   withBrowser('what stands out of sight is dimmed by the fog, what is in sight not', async () => {
     const page = await isoPage();
     const data = battleOf(

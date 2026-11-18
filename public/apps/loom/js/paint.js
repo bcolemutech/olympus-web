@@ -764,7 +764,11 @@
   // where `a` lies along its wall, so a tiled picture runs on across pieces.
   // { pts (its corners on the screen), pattern }, or null for a face seen
   // edge-on. Drawn as a fill (isoSlab), so a piece is one Graphics.
-  function isoFace(texture, a, b, base, h, thick, how, along) {
+  // `full`: the whole wall's height (screen units) when this face is only part
+  // of it (under a window's sill, over a window or a door): its picture is
+  // scaled and laid from the whole wall's top, so its courses match the rest
+  // of the wall (L-958).
+  function isoFace(texture, a, b, base, h, thick, how, along, full) {
     var dx = b.x - a.x;
     var dy = b.y - a.y;
     var len = Math.sqrt(dx * dx + dy * dy);
@@ -779,8 +783,10 @@
       shift = (along || 0) + len;
     }
     if (how === 'fit') shift = 0;
-    var o = ISO.P(start, base + h);
-    var k = isoScale(texture, len, h, thick, how);
+    var whole = how === 'face' && full > base + h - 1e-9 ? full : 0;
+    var o = ISO.P(start, whole || base + h);
+    var k = isoScale(texture, len, whole || h, thick, how);
+    var top = ISO.P(start, base + h);
     // A pixel (u, v) of the picture: k[0] u + shift along the face, k[1] v down it.
     var m = new window.PIXI.Matrix(
       k[0] * sd.x,
@@ -792,14 +798,14 @@
     );
     return {
       pts: [
-        o.x,
-        o.y,
-        o.x + len * sd.x,
-        o.y + len * sd.y,
-        o.x + len * sd.x,
-        o.y + len * sd.y + h,
-        o.x,
-        o.y + h,
+        top.x,
+        top.y,
+        top.x + len * sd.x,
+        top.y + len * sd.y,
+        top.x + len * sd.x,
+        top.y + len * sd.y + h,
+        top.x,
+        top.y + h,
       ],
       pattern: patternOf(texture, m),
     };
@@ -869,11 +875,14 @@
     var n = Math.max(1, Math.ceil(len / o.piece - 1e-9));
     var h = o.top - o.base;
     var toward = d.x + d.y; // > 0: the end at b faces the camera; < 0: at a
+    // Where `a` lies along its line, measured from the map's origin, so the
+    // pieces either side of a door or window carry on the wall's courses.
+    var from = a.x * d.x + a.y * d.y;
     var parts = [];
     for (var k = 0; k < n; k++) {
       var p = { x: a.x + (dx * k) / n, y: a.y + (dy * k) / n };
       var q = { x: a.x + (dx * (k + 1)) / n, y: a.y + (dy * (k + 1)) / n };
-      var along = (len * k) / n;
+      var along = from + (len * k) / n;
       var c = new PIXI.Graphics();
       var shows = []; // what of it is drawn, for describe()
       var alpha = o.alpha > 0 ? o.alpha : 1;
@@ -893,12 +902,19 @@
               h,
               thick,
               o.how,
-              along
+              along,
+              o.full
             ),
             'face'
           );
         }
-        var end = toward > 1e-6 && k === n - 1 ? q : toward < -1e-6 && k === 0 ? p : null;
+        var end = o.noEnd
+          ? null
+          : toward > 1e-6 && k === n - 1
+            ? q
+            : toward < -1e-6 && k === 0
+              ? p
+              : null;
         if (end) {
           lay(
             isoFace(
@@ -908,7 +924,9 @@
               o.base,
               h,
               thick,
-              o.how === 'fit' ? 'top' : o.how
+              o.how === 'fit' ? 'top' : o.how,
+              0,
+              o.full
             ),
             'end'
           );
@@ -1318,7 +1336,12 @@
             var cap = loadedTiled(wUrl);
             var own = loadedTiled(fUrl);
             var wallFace = own || cap;
-            var common = { piece: tile, thick: wt, how: own ? 'face' : 'top' };
+            var common = {
+              piece: tile,
+              thick: wt,
+              how: own ? 'face' : 'top',
+              full: riseFor(height, o),
+            };
             var shade = own ? FACE_LIT : FACE_SHADE;
             var parts = standSlab(a, b, {
               ...common,
@@ -1335,6 +1358,7 @@
               top: riseFor(head, o),
               front: pane,
               how: 'fit',
+              noEnd: true, // set in the wall: its side never shows
               tint: 0xffffff,
               alpha: item.state === 'open' ? 0.55 : 0.85,
             }).forEach(function (part) {
@@ -1474,6 +1498,7 @@
               thick: wt,
               base: riseFor(tall, o),
               top: riseFor(height, o),
+              full: riseFor(height, o),
               front: own || cap,
               how: own ? 'face' : 'top',
               tint: own ? FACE_LIT : FACE_SHADE,
