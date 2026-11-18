@@ -174,6 +174,9 @@
   var FACE_SHADE = 0x9a9a9a; // a face drawn from its top's picture
   var FACE_LIT = 0xe4e4e4; // a face drawn from its own
   var LEAF = 0.4; // an open door's leaf, as part of the wall's thickness
+  // How wide the strip a wall piece is ordered by, of its drawn thickness:
+  // a tenth of a foot on a wall a foot and a quarter thick (L-958).
+  var ORDER_SHARE = 0.08;
   // The isometric view (L-952): a wall's thickness in feet by its material
   // (IS5: about a foot), the geometry staying a line; a face toward the lower
   // right this much darker than one toward the lower left (lit from the left).
@@ -949,9 +952,11 @@
         depth: ISO.depthOf(print),
         box: boxOf(corners, 0),
         print: print,
-        // Its line, for the order: a prop or token touching the wall overlaps
-        // its drawn thickness, but stands clear of its line on one side (L-958).
-        core: [p, q],
+        // What it's ordered by: a thin strip along its middle. A prop or token
+        // touching the wall overlaps its drawn thickness, but stands clear of
+        // its middle on one side; a strip, not a bare line, so walls meeting
+        // at a corner or a T overlap there as their footprints do (L-958).
+        core: ISO.segment(p, q, thick * ORDER_SHARE),
         rise: [o.base, o.top], // its outline, for picking: its footprint's hull from base to top
         hit: o.hit || null,
         bare: true,

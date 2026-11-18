@@ -472,16 +472,17 @@ describe('the painter in isometric (L-952)', () => {
       const order = (drawn) => drawn.filter((d) => d.layer === 'standing');
       // You against the wall's north side, inside its drawn thickness too.
       let standing = order(await shown(page, at({ x: 20, y: 19.5 })));
-      const rank = (kind, id) => standing.findIndex((d) => d.kind === kind && d.id === id);
+      const rank = (kind, id, part = 0) =>
+        standing.findIndex((d) => d.kind === kind && d.id === id && (d.part || 0) === part);
       const walls = standing.filter((d) => d.kind === 'wall');
-      expect(walls.length).toBeGreaterThan(1);
-      // Every wall piece is drawn after the barrel behind it and before the crate in front.
-      const firstWall = standing.findIndex((d) => d.kind === 'wall');
-      const lastWall =
-        standing.length - 1 - [...standing].reverse().findIndex((d) => d.kind === 'wall');
-      expect(rank('object', 'barrel')).toBeLessThan(firstWall);
-      expect(rank('object', 'crate')).toBeGreaterThan(lastWall);
-      expect(rank('token', 'you')).toBeLessThan(lastWall);
+      // Six pieces of 6⅔ ft: the barrel (11.25–13.75 ft across) stands against
+      // the second and third, the crate (26–29 ft) the fourth and fifth.
+      expect(walls.length).toBe(6);
+      [1, 2].forEach((k) => expect(rank('object', 'barrel')).toBeLessThan(rank('wall', 'wall', k)));
+      [3, 4].forEach((k) =>
+        expect(rank('object', 'crate')).toBeGreaterThan(rank('wall', 'wall', k))
+      );
+      expect(rank('token', 'you')).toBeLessThan(rank('wall', 'wall', 3));
       // Against its south side: in front.
       standing = order(await shown(page, at({ x: 20, y: 20.5 })));
       expect(standing.findIndex((d) => d.kind === 'token' && d.id === 'you')).toBeGreaterThan(
