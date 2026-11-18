@@ -14,7 +14,9 @@
  *   - a token walking past a wall's end, placed among the ordered pieces at
  *     every step;
  *   - on whole maps (the large fixture and 40 generated rooms, interiors,
- *     caves, decks and wilds), every two pieces overlapping on the screen;
+ *     caves, decks and wilds), every two pieces overlapping on the screen,
+ *     with no ring among them (walls ordered by a thin strip along their
+ *     middle, as the painter orders them);
  *
  * and props pick their picture by facing (front, back, mirrored, and long
  * ones mirrored to lie the other way).
@@ -26,6 +28,7 @@ const iso = require('../public/apps/loom/js/iso.js');
 
 const RISE = 1.22; // a foot of height, up the screen (C2)
 const THICK = 1.25;
+const CORE = THICK * 0.08; // the strip a wall is ordered by (paint.js ORDER_SHARE)
 
 // What a piece covers on the screen: its footprint from the floor to `top` ft.
 function boxOf(pts, top) {
@@ -52,7 +55,11 @@ function wall(name, a, b) {
   for (let k = 0; k < n; k++) {
     const p = { x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n };
     const q = { x: a.x + ((b.x - a.x) * (k + 1)) / n, y: a.y + ((b.y - a.y) * (k + 1)) / n };
-    out.push(item(`${name}-${k}`, iso.segment(p, q, THICK), 8));
+    // Ordered by a thin strip along its middle, as the painter orders it (L-958).
+    out.push({
+      ...item(`${name}-${k}`, iso.segment(p, q, THICK), 8),
+      pts: iso.segment(p, q, CORE),
+    });
   }
   return out;
 }
@@ -228,6 +235,40 @@ describe('the depth order on whole maps', () => {
       expect({ name, wrong }).toEqual({ name, wrong: [] });
     });
     expect(pairs).toBeGreaterThan(8000);
+  });
+
+  test('compare() never makes a ring among pieces that overlap on the screen (L-958)', () => {
+    // A ring leaves the order free to put a prop under a wall it stands in
+    // front of, as in the Market Hall: walls ordered by a bare line, and a
+    // prop apart from two walls on a diagonal at a T.
+    const maps = { large: geo.normalize(large()) };
+    ['rooms', 'interior', 'caves', 'deck', 'wilds'].forEach((kind) => {
+      for (let s = 0; s < 8; s++) {
+        maps[`${kind}-${s}`] = geo.normalize(generators.generate(kind, { seed: `s${s}` }).geometry);
+      }
+    });
+    Object.entries(maps).forEach(([name, g]) => {
+      const items = itemsOf(g);
+      const after = items.map(() => []);
+      const waits = items.map(() => 0);
+      for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+          if (!crosses(items[i].box, items[j].box)) continue;
+          const c = iso.compare(items[i], items[j]);
+          if (c > 0) after[j].push(i);
+          else if (c < 0) after[i].push(j);
+        }
+      }
+      after.forEach((list) => list.forEach((j) => (waits[j] += 1)));
+      const ready = [];
+      waits.forEach((w, i) => !w && ready.push(i));
+      let sorted = 0;
+      while (ready.length) {
+        sorted += 1;
+        after[ready.pop()].forEach((j) => !--waits[j] && ready.push(j));
+      }
+      expect({ name, ringed: items.length - sorted }).toEqual({ name, ringed: 0 });
+    });
   });
 });
 
