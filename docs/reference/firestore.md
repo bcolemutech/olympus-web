@@ -104,6 +104,12 @@ The image studio's named styles: a name, prompt text and up to 3 reference image
 
 The image studio's costs: one entry per charged job, and each month's totals by day, model and who (read through `studioCosts`)
 
+## `muse_projects/{projectId}`
+
+**Access:** Owner with `hasApp('muse')`, read and write; the page writes directly, under rules that check each document's shape (M-101)
+
+The Muse's projects (planning/the-muse.md §4): `owner`, `title` (1–200 characters), `short` (the home page's line, up to 300), `summary` (Markdown, up to 200,000), `cover` (a studio image id or null), `createdAt` and `updatedAt` (the server's time, checked by the rules), and, from later stories, `fields`, `lanes` and `calendar`. Listed by `where('owner', '==', uid)` and sorted on the page, so no index. Its subcollections (index, elements, relationships, versions and later) are denied until the stories that add them give them rules; a project's delete removes those named in `Muse.PROJECT_PARTS`.
+
 ## `scriptorium_notes/{id}`
 
 **Access:** Deny (server only)

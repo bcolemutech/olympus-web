@@ -49,6 +49,15 @@ apps:
     enabled: true
     order: 13
 
+  - id: muse
+    name: The Muse
+    description: World bibles for games and stories
+    icon: "\U0001F3AD"
+    type: embedded
+    path: /apps/muse/
+    enabled: true
+    order: 14
+
   # ── MCP connectors (used from Claude; no web UI) ────────
   # `connector` is the URL to add in Claude. The Grand Hall tile copies it.
   - id: scriptorium

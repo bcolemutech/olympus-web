@@ -368,6 +368,52 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ── The Muse ───────────────────────────────────────────
+    // World bibles (planning/the-muse.md §4; M-101 / #889). A project is its
+    // owner's only (MU4). The page writes directly (D1), so each document's
+    // shape is checked here; MCP writes go through the Admin SDK.
+
+    function museOwns(data) {
+      return hasApp('muse') && data.owner == request.auth.uid;
+    }
+
+    match /muse_projects/{projectId} {
+      function museText(value, max) {
+        return value is string && value.size() <= max;
+      }
+
+      function validProject() {
+        let data = request.resource.data;
+        let required = ['owner', 'title', 'short', 'summary', 'createdAt', 'updatedAt'];
+        let allowed = required.concat(['cover', 'fields', 'lanes', 'calendar']);
+        return data.keys().hasAll(required)
+            && data.keys().hasOnly(allowed)
+            && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+            && museText(data.short, 300)
+            && museText(data.summary, 200000)
+            && (!('cover' in data) || data.cover == null
+                || (data.cover is string && data.cover.size() > 0 && data.cover.size() <= 200))
+            && (!('fields' in data) || data.fields is map)
+            && (!('lanes' in data) || data.lanes is list)
+            && (!('calendar' in data) || data.calendar is map);
+      }
+
+      allow read, delete: if museOwns(resource.data);
+      allow create: if museOwns(request.resource.data)
+                    && validProject()
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if museOwns(resource.data)
+                    && museOwns(request.resource.data)
+                    && validProject()
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.updatedAt == request.time;
+
+      // Its subcollections (index, elements, relationships, versions, …) get
+      // their rules, with their shapes, in the stories that add them
+      // (M-102 onwards). Until then the default deny below covers them.
+    }
+
     // ── App registry ──────────────────────────────────────
 
     match /apps/{appId} {
