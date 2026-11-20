@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Muse — Olympus</title>
+
+    <!-- Firebase SDK (compat) -->
+    <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+
+    <!-- Shared Olympus styles -->
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- App-specific styles -->
+    <link rel="stylesheet" href="/apps/muse/muse.css" />
+  </head>
+  <body>
+    <!-- Shared header — rendered by app-header.js -->
+    <div id="appHeader"></div>
+
+    <!-- Auth guard — shown while checking auth state -->
+    <div class="app-loading" id="app-loading">
+      <div class="app-spinner"></div>
+      <p class="app-loading-text">Summoning the Muse&hellip;</p>
+    </div>
+
+    <!-- Main content — hidden until authenticated -->
+    <main class="app-main muse-main hidden" id="app-main">
+      <p class="muse-denied hidden" id="muse-denied">
+        You don't have access to the Muse. Ask an admin to grant it in The Pantheon.
+      </p>
+
+      <!-- ── The home page: your projects ── -->
+      <section class="hidden" id="muse-home">
+        <h1 class="app-title muse-title">The Muse</h1>
+        <p class="app-subtitle">World bibles for games and stories</p>
+        <div class="app-divider muse-divider"></div>
+
+        <div class="muse-bar">
+          <h2 class="muse-heading">Your projects</h2>
+          <button type="button" class="muse-btn" id="muse-new-open">New project</button>
+        </div>
+
+        <form class="muse-card muse-form hidden" id="muse-new-form" novalidate>
+          <label class="muse-label" for="muse-new-title">Title</label>
+          <input
+            class="muse-input"
+            id="muse-new-title"
+            maxlength="200"
+            required
+            autocomplete="off"
+          />
+          <label class="muse-label" for="muse-new-short">Short description</label>
+          <input class="muse-input" id="muse-new-short" maxlength="300" autocomplete="off" />
+          <p class="muse-error hidden" id="muse-new-error" role="alert"></p>
+          <div class="muse-actions">
+            <button type="submit" class="muse-btn" id="muse-new-btn">Make it</button>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-new-cancel">
+              Cancel
+            </button>
+          </div>
+        </form>
+
+        <p class="muse-error hidden" id="muse-home-error" role="alert"></p>
+        <p class="muse-empty hidden" id="muse-projects-empty">
+          No projects yet. A project holds a world's characters, factions, places, objects and
+          ideas.
+        </p>
+        <div class="muse-projects" id="muse-projects"></div>
+      </section>
+
+      <!-- ── A project's home ── -->
+      <section class="hidden" id="muse-project">
+        <a class="muse-back" href="#/">&larr; All projects</a>
+        <p class="muse-error hidden" id="muse-p-error" role="alert"></p>
+
+        <header class="muse-p-head">
+          <div id="muse-p-cover" class="muse-p-cover"></div>
+          <div class="muse-p-head-text">
+            <h1 class="muse-p-title" id="muse-p-title"></h1>
+            <p class="muse-p-short hidden" id="muse-p-short"></p>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-p-head-edit">
+              Edit details
+            </button>
+          </div>
+        </header>
+
+        <form class="muse-card muse-form hidden" id="muse-p-head-form" novalidate>
+          <label class="muse-label" for="muse-p-head-title">Title</label>
+          <input class="muse-input" id="muse-p-head-title" maxlength="200" autocomplete="off" />
+          <label class="muse-label" for="muse-p-head-short">Short description</label>
+          <input class="muse-input" id="muse-p-head-short" maxlength="300" autocomplete="off" />
+          <label class="muse-label" for="muse-p-head-cover">Cover (a studio image id)</label>
+          <input
+            class="muse-input"
+            id="muse-p-head-cover"
+            maxlength="200"
+            autocomplete="off"
+            placeholder="Picked from the studio once photo libraries arrive"
+          />
+          <p class="muse-error hidden" id="muse-p-head-error" role="alert"></p>
+          <div class="muse-actions">
+            <button type="submit" class="muse-btn" id="muse-p-head-save">Save</button>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-p-head-cancel">
+              Cancel
+            </button>
+          </div>
+        </form>
+
+        <section class="muse-card">
+          <div class="muse-bar">
+            <h2 class="muse-heading">Summary</h2>
+          </div>
+          <div id="muse-p-summary-read">
+            <div class="muse-reading" id="muse-p-summary"></div>
+            <p class="muse-empty hidden" id="muse-p-summary-empty">No summary yet.</p>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-p-summary-edit">
+              Edit summary
+            </button>
+          </div>
+          <form class="muse-form hidden" id="muse-p-summary-form" novalidate>
+            <div class="muse-tabs" role="group" aria-label="Write or preview">
+              <button type="button" class="muse-tab" id="muse-p-summary-write" aria-pressed="true">
+                Write
+              </button>
+              <button type="button" class="muse-tab" id="muse-p-summary-show" aria-pressed="false">
+                Preview
+              </button>
+            </div>
+            <textarea
+              class="muse-input muse-textarea"
+              id="muse-p-summary-text"
+              rows="12"
+              aria-label="Summary, in Markdown"
+              placeholder="Markdown: # headings, **bold**, *italic*, - lists, [links](https://…)"
+            ></textarea>
+            <div class="muse-reading muse-preview hidden" id="muse-p-summary-preview"></div>
+            <p class="muse-error hidden" id="muse-p-summary-error" role="alert"></p>
+            <div class="muse-actions">
+              <button type="submit" class="muse-btn" id="muse-p-summary-save">Save</button>
+              <button type="button" class="muse-btn muse-btn-quiet" id="muse-p-summary-cancel">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section class="muse-card">
+          <h2 class="muse-heading">Sections</h2>
+          <div class="muse-sections" id="muse-p-sections"></div>
+        </section>
+
+        <section class="muse-card muse-settings" id="muse-p-settings">
+          <h2 class="muse-heading">Settings</h2>
+          <form class="muse-form muse-rename" id="muse-p-rename-form" novalidate>
+            <label class="muse-label" for="muse-p-rename-title">Rename</label>
+            <div class="muse-inline">
+              <input
+                class="muse-input"
+                id="muse-p-rename-title"
+                maxlength="200"
+                autocomplete="off"
+              />
+              <button type="submit" class="muse-btn" id="muse-p-rename-btn">Rename</button>
+            </div>
+            <p class="muse-error hidden" id="muse-p-rename-error" role="alert"></p>
+            <p class="muse-done hidden" id="muse-p-rename-done" role="status"></p>
+          </form>
+
+          <div class="muse-danger">
+            <button type="button" class="muse-btn muse-btn-danger" id="muse-p-delete">
+              Delete project
+            </button>
+            <div class="muse-confirm hidden" id="muse-p-delete-confirm" role="alertdialog">
+              <p>
+                Delete <strong id="muse-p-delete-name"></strong> and everything in it? This can't be
+                undone.
+              </p>
+              <div class="muse-actions">
+                <button type="button" class="muse-btn muse-btn-danger" id="muse-p-delete-yes">
+                  Delete for good
+                </button>
+                <button type="button" class="muse-btn muse-btn-quiet" id="muse-p-delete-no">
+                  Keep it
+                </button>
+              </div>
+              <p class="muse-error hidden" id="muse-p-delete-error" role="alert"></p>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ── A project that isn't there ── -->
+      <section class="hidden" id="muse-missing">
+        <a class="muse-back" href="#/">&larr; All projects</a>
+        <p class="muse-empty">That project isn't here: it may have been deleted.</p>
+      </section>
+    </main>
+
+    <!-- Shared header component -->
+    <script src="/js/components/app-header.js"></script>
+
+    <!-- App modules -->
+    <script src="/apps/muse/js/state.js"></script>
+    <script src="/apps/muse/js/markdown.js"></script>
+    <script src="/apps/muse/js/projects.js"></script>
+    <script src="/apps/muse/js/home.js"></script>
+    <script src="/apps/muse/js/project.js"></script>
+    <script src="/apps/muse/js/app.js"></script>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        firebase.auth().onAuthStateChanged(function (user) {
+          if (!user) {
+            window.location.href = '/';
+            return;
+          }
+          window.OlympusHeader.render('The Muse');
+          document.getElementById('app-loading').classList.add('hidden');
+          document.getElementById('app-main').classList.remove('hidden');
+          window.Muse.app.init(user);
+        });
+      });
+    </script>
+  </body>
+</html>
