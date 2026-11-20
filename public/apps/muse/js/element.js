@@ -8,8 +8,8 @@
   // retiring, with confirmation, which a retired element's page undoes.
   // Relationships and "mentioned in" (M-103) are drawn by their own files;
   // typing @ in a text offers elements to link, and an element's name or
-  // alias found in a text is shown as a link to it (EL6). Photos come with
-  // M-104.
+  // alias found in a text is shown as a link to it (EL6). Its photos are
+  // drawn by ./gallery.js (M-104).
 
   var Muse = window.Muse;
   var state = Muse.state;
@@ -407,6 +407,7 @@
           edit(false);
           confirmRetire(false);
           draw();
+          Muse.gallery.show();
           // Its relationships, and the elements that link to it.
           return Promise.all([Muse.relationships.show(), Muse.mentioned.show()]).then(function () {
             return true;

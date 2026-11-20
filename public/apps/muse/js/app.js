@@ -75,6 +75,7 @@
         Muse.project.init();
         Muse.fieldEditor.init();
         Muse.typeList.init();
+        Muse.gallery.init();
         Muse.element.init();
         Muse.relationships.init();
         Muse.search.init();

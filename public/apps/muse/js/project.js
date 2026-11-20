@@ -4,10 +4,13 @@
   // A project's home (planning/the-muse.md §5, M-100; M-101 / #889): its
   // title, short description, cover and summary (Markdown, with a reading
   // view), its sections, one per element type with counts, and its settings
-  // (rename, delete with confirmation).
+  // (rename, delete with confirmation). The cover is picked from the Image
+  // Studio, uploaded or from its library (IM1; M-104).
 
   var Muse = window.Muse;
   var state = Muse.state;
+  var pendingCover = null; // the cover the open form would save
+  var coverAdder = null;
 
   function project() {
     return state.project;
@@ -61,9 +64,20 @@
     if (open) {
       Muse.$('muse-p-head-title').value = p.title;
       Muse.$('muse-p-head-short').value = p.short;
-      Muse.$('muse-p-head-cover').value = p.cover || '';
+      coverAdder.reset();
+      setCover(p.cover);
       Muse.$('muse-p-head-title').focus();
     }
+  }
+
+  // The cover the form shows, and would save: a studio image id, or none.
+  function setCover(id) {
+    pendingCover = id || null;
+    Muse.projects.drawCover(Muse.$('muse-p-head-cover'), {
+      title: Muse.$('muse-p-head-title').value || project().title,
+      cover: pendingCover,
+    });
+    Muse.show(Muse.$('muse-p-head-cover-remove'), !!pendingCover);
   }
 
   // ── The summary: a reading view, and an editor with a preview ──
@@ -150,6 +164,24 @@
 
   Muse.project = {
     init: function () {
+      coverAdder = Muse.photos.adder(Muse.$('muse-p-head-cover-add'), {
+        id: 'muse-p-cover',
+        multiple: false,
+        describe: function () {
+          var title = Muse.$('muse-p-head-title').value.trim() || project().title;
+          return { name: title, kind: 'cover', labels: [Muse.photos.labelOf(title)] };
+        },
+        chosen: function () {
+          return pendingCover ? [pendingCover] : [];
+        },
+        onAdd: function (ids) {
+          setCover(ids[0]);
+          return Promise.resolve();
+        },
+      });
+      Muse.$('muse-p-head-cover-remove').addEventListener('click', function () {
+        setCover(null);
+      });
       Muse.$('muse-p-head-edit').addEventListener('click', function () {
         editHead(true);
       });
@@ -162,7 +194,7 @@
           {
             title: Muse.$('muse-p-head-title').value,
             short: Muse.$('muse-p-head-short').value,
-            cover: Muse.$('muse-p-head-cover').value,
+            cover: pendingCover || '',
           },
           Muse.$('muse-p-head-error'),
           Muse.$('muse-p-head-save')

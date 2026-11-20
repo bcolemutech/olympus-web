@@ -44,8 +44,8 @@ npm run format
 - **JSX Runner** — `public/apps/jsx-runner/`: Dynamic React applet executor
 - **The Loom** — `public/apps/loom/`: AI-narrated game system; plays worlds with Gemini
 - **The Cartographer** — `public/apps/cartographer/`: Turns Azgaar maps into Loom worlds; MCP connector at `/mcp/cartographer`
-- **The Muse** — `public/apps/muse/`: World bibles and manuscripts (M-100 in progress: projects from M-101, elements and custom fields from M-102, relationships, @-links and search from M-103); opened by the `muse` claim; MCP connector at `/mcp/muse` _(planned, M-106)_
-- **The Image Studio** — `public/apps/studio/`: The library of art for worlds: browse, search, look at, upload and download images. Opened by the `cartographer` claim (`claim:` in `apps.yaml`); its MCP tools are in the Cartographer connector
+- **The Muse** — `public/apps/muse/`: World bibles and manuscripts (M-100 in progress: projects from M-101, elements and custom fields from M-102, relationships, @-links and search from M-103, photo libraries from M-104); opened by the `muse` claim; MCP connector at `/mcp/muse` _(planned, M-106)_
+- **The Image Studio** — `public/apps/studio/`: The library of art for worlds: browse, search, look at, upload and download images. Opened by the `cartographer` or `muse` claim (`claim:` in `apps.yaml`); its MCP tools are in the Cartographer connector
 - **Scriptorium** — _(MCP connector only)_: Notes managed from Claude at `/mcp/scriptorium`
 
 ---
@@ -169,7 +169,7 @@ firebase.auth().onAuthStateChanged((user) => {
 
 ### App Access Control
 
-Access is controlled via Firebase custom claims. Users have an `apps[]` array and an `admin` boolean in their token. An app in `apps.yaml` may name another app's `claim` that opens it (the Image Studio opens with `cartographer`); the Grand Hall shows it to users with that claim, and The Pantheon doesn't offer it as a grant of its own.
+Access is controlled via Firebase custom claims. Users have an `apps[]` array and an `admin` boolean in their token. An app in `apps.yaml` may name another app's `claim` (or a list of them) that opens it (the Image Studio opens with `cartographer` or `muse`); the Grand Hall shows it to users with that claim, and The Pantheon doesn't offer it as a grant of its own.
 
 - `hasAdmin()` — checks `request.auth.token.admin == true`
 - `hasApp('symposium')` — checks if `'symposium'` is in the user's apps claim
@@ -223,9 +223,9 @@ npm run deploy            # Deploy hosting only (production)
 - `loom_creation_rolls/{rollId}` — Deny (server only). Scores rolled for a new character (L-812): the player, the world and the values, used once by `loomCreateSave`
 - `loom_systems/{systemId}` — Deny (server only). Game systems as data (L-801, `functions/loom-canon/systems.js`), written over MCP; built-ins `d20-fantasy` and `pool-scifi`
 - `loom_softcanon/{entityId}` — `hasApp('loom')`, read only. Play-invented entities
-- `studio_images/{imageId}` — `hasApp('cartographer')`, read only. The image studio's library: one record per image, with its kind, labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`)
-- `studio_jobs/{jobId}` — `hasApp('cartographer')`, read only. The image studio's jobs (make or edit an image): request, state, result, cost or error; busy 429s retried up to 5 tries (L-396)
-- `studio_styles/{styleId}` — `hasApp('cartographer')`, read only. The image studio's named styles: a name, prompt text and up to 3 reference images, named in a generation or edit; a world's default is `world.studio.styleId`
+- `studio_images/{imageId}` — `hasApp('cartographer')` or `hasApp('muse')`, read only. The image studio's library: one record per image, with its kind, labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`)
+- `studio_jobs/{jobId}` — `hasApp('cartographer')` or `hasApp('muse')`, read only. The image studio's jobs (make or edit an image): request, state, result, cost or error; busy 429s retried up to 5 tries (L-396)
+- `studio_styles/{styleId}` — `hasApp('cartographer')` or `hasApp('muse')`, read only. The image studio's named styles: a name, prompt text and up to 3 reference images, named in a generation or edit; a world's default is `world.studio.styleId`
 - `studio_costs/{entryId}`, `studio_costs_month/{yyyy-mm}` — Deny (server only). The image studio's costs: one entry per charged job, and each month's totals by day, model and who (read through `studioCosts`)
 - `muse_projects/{projectId}` — Owner with `hasApp('muse')`, read and write (the page writes directly, shapes checked by the rules; M-101). The Muse's projects: title, short, Markdown summary, cover, custom fields per type; `elements` (characters, factions, locations, objects, concepts) and their `index`, written together in one batch (the rules check each against the other; M-102); later subcollections added by their stories
 - `scriptorium_notes/{id}` — Deny (server only). Scriptorium notes, via MCP (`list_notes` pages titles and dates without bodies by a cursor; `get_note` reads one; L-397)
@@ -261,9 +261,9 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 - `cartographerCompletion` — `cartographer` claim. How built each world is, for the Cartographer page: open places, its score and band, counts by band per kind, its biggest gaps, and its maps as a tree, each graded by its kind with what it lacks (`maps`; L-905, `grading.js` `gradeMaps`)
 - `cartographerTownImage` — `cartographer` claim. Attach, replace or remove a town's art (an uploaded PNG or SVG drawn behind the town view), through the image studio's library
 - `cartographerMapImage` — `cartographer` claim. Attach, replace or remove a battle map's art through the studio's library; `fit` crops, pads or stretches it to the grid (L-396)
-- `studioUpload` — `cartographer` claim. Add an uploaded image (PNG, JPEG, WebP or SVG) to the image studio's library, with its title, kind and labels
-- `studioCosts` — `cartographer` claim. The image studio's spending for a month, for its page: the total against the $50 warning figure, by day, model and who, and the latest charges
-- `studioGenerate` — `cartographer` claim. Start making an image from the studio page's form (prompt, kind, tier, shape, references, title, labels); returns the job at once
+- `studioUpload` — `cartographer` or `muse` claim. Add an uploaded image (PNG, JPEG, WebP or SVG) to the image studio's library, with its title, kind and labels
+- `studioCosts` — `cartographer` or `muse` claim. The image studio's spending for a month, for its page: the total against the $50 warning figure, by day, model and who, and the latest charges
+- `studioGenerate` — `cartographer` or `muse` claim. Start making an image from the studio page's form (prompt, kind, tier, shape, references, title, labels); returns the job at once
 - `studioRunJob` — Cloud Tasks queue only. Runs one studio job, at most 8 at once: a new image, or an edit that becomes an image's next version, made with a Gemini image model on Vertex, its cost recorded; a busy model's 429 queues it again after a wait (L-396)
 - `mcpListConnections` / `mcpRevokeConnection` — Signed-in user (own connections). Grand Hall "Manage connections"
 - `mcpServer` — OAuth bearer token per connector. MCP connectors (Scriptorium, Cartographer) and the OAuth server

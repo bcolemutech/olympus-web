@@ -195,6 +195,54 @@ describe('the owner, through the page’s plans', () => {
     expect(index.entries.el_peter.name).toBe('King Peter');
   });
 
+  test('keeps an element’s photos, with the primary one of them, and its index line (M-104)', async () => {
+    const ann = db('ann');
+    await makePeter(ann);
+    const photos = async (next) => {
+      const now = await current(ann, 'p1', 'el_peter');
+      const checked = model.checkPhotos(next);
+      return commit(ann, model.planUpdate('p1', now, checked.value));
+    };
+    await assertSucceeds(photos(model.addPhotos({ images: [], primary: null }, ['img_a', 'img_b'])));
+    let peter = await current(ann, 'p1', 'el_peter');
+    expect([peter.images, peter.primary]).toEqual([['img_a', 'img_b'], 'img_a']);
+    expect((await readIndex(ann, 'p1')).entries.el_peter.primary).toBe('img_a');
+    await assertSucceeds(photos(model.primaryPhoto(peter, 'img_b')));
+    expect((await readIndex(ann, 'p1')).entries.el_peter.primary).toBe('img_b');
+    peter = await current(ann, 'p1', 'el_peter');
+    await assertSucceeds(photos(model.removePhoto(peter, 'img_b')));
+    expect((await readIndex(ann, 'p1')).entries.el_peter.primary).toBe('img_a');
+    peter = await current(ann, 'p1', 'el_peter');
+    await assertSucceeds(photos(model.removePhoto(peter, 'img_a')));
+    peter = await current(ann, 'p1', 'el_peter');
+    expect([peter.images, peter.primary]).toEqual([[], null]);
+    expect((await readIndex(ann, 'p1')).entries.el_peter.primary).toBe(null);
+  });
+
+  test('refuses a primary photo that is not among the element’s photos (M-104)', async () => {
+    const ann = db('ann');
+    await makePeter(ann);
+    const now = await current(ann, 'p1', 'el_peter');
+    const write = (data, entry) =>
+      commit(ann, [
+        { op: 'update', path: 'muse_projects/p1/elements/el_peter', data: { ...data, updatedAt: model.NOW } },
+        {
+          op: 'merge',
+          path: 'muse_projects/p1/index/0',
+          data: { entries: { el_peter: { ...model.entryOf(now), ...entry } }, last: 'el_peter' },
+        },
+      ]);
+    // A primary with no images, or not among them.
+    await assertFails(write({ images: [], primary: 'img_a' }, { primary: 'img_a' }));
+    await assertFails(write({ images: ['img_b'], primary: 'img_a' }, { primary: 'img_a' }));
+    // Too many photos.
+    await assertFails(
+      write({ images: Array.from({ length: 201 }, (_, i) => `img_${i}`), primary: null }, {})
+    );
+    // One of them is fine.
+    await assertSucceeds(write({ images: ['img_a', 'img_b'], primary: 'img_b' }, { primary: 'img_b' }));
+  });
+
   test('sets the project’s custom fields by type', async () => {
     await assertSucceeds(
       updateDoc(doc(db('ann'), 'muse_projects', 'p1'), {

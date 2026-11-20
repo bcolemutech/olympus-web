@@ -201,6 +201,45 @@ describe("the image studio's library (L-701)", () => {
     );
   });
 
+  test('a Muse writer (the muse claim alone) uploads studio images, and nothing else (M-104)', async () => {
+    const writer = () => storageAs(BUILDER, ['muse']);
+    await assertSucceeds(writer().ref(uploadPath('studio.png')).put(bytes(1024), PNG_TYPE));
+    await assertSucceeds(
+      writer().ref(uploadPath('studio.jpg')).put(bytes(1024), { contentType: 'image/jpeg' })
+    );
+    await assertSucceeds(
+      writer().ref(uploadPath('studio.webp')).put(bytes(1024), { contentType: 'image/webp' })
+    );
+    await assertSucceeds(
+      writer().ref(uploadPath('studio.svg')).put(bytes(1024), { contentType: 'image/svg+xml' })
+    );
+    // The same limits and types as an editor's.
+    await assertFails(writer().ref(uploadPath('studio.jpg')).put(bytes(64), PNG_TYPE));
+    await assertFails(
+      writer()
+        .ref(uploadPath('studio.webp'))
+        .put(bytes(30 * 1024 * 1024 + 1), { contentType: 'image/webp' })
+    );
+    // Their own folder only, and not the Cartographer's uploads.
+    await assertFails(writer().ref(uploadPath('studio.png', 'someone-else')).put(bytes(64), PNG_TYPE));
+    await assertFails(writer().ref(uploadPath('map.json')).put(bytes(64), JSON_TYPE));
+    await assertFails(writer().ref(uploadPath('map.png')).put(bytes(64), PNG_TYPE));
+    await assertFails(writer().ref(uploadPath('town.png')).put(bytes(64), PNG_TYPE));
+    await assertFails(writer().ref(uploadPath('battlemap.png')).put(bytes(64), PNG_TYPE));
+    // And can't read an upload that isn't a studio one.
+    await assertFails(writer().ref(uploadPath('map.json')).getMetadata());
+    await assertSucceeds(writer().ref(uploadPath('studio.png')).getMetadata());
+    // Neither claim, no upload.
+    await assertFails(
+      storageAs(BUILDER, ['symposium']).ref(uploadPath('studio.png')).put(bytes(64), PNG_TYPE)
+    );
+    await assertFails(storageAs(BUILDER, []).ref(uploadPath('studio.png')).put(bytes(64), PNG_TYPE));
+  });
+
+  test('a Muse writer reads the library’s files too (M-104)', async () => {
+    await assertSucceeds(storageAs('writer-001', ['muse']).ref(IMAGE).getMetadata());
+  });
+
   test('editors read the library; players, others and the signed-out cannot', async () => {
     await assertSucceeds(builder().ref(IMAGE).getMetadata());
     await assertFails(storageAs('player-001', ['loom']).ref(IMAGE).getMetadata());

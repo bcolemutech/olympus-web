@@ -118,20 +118,20 @@ function studioService() {
 // Add an uploaded image (PNG, JPEG, WebP or SVG) to the library (L-701). It has
 // room to make a big image's screen-sized copy (L-727), as the art callables do.
 exports.studioUpload = onCall({ memory: '1GiB' }, async (request) => {
-  const uid = cartographer.requireCartographer(request);
+  const uid = cartographer.requireStudio(request);
   return studioService().upload(uid, request.data || {});
 });
 
 // The month's spending, for the studio page's header, panel and banner (L-706).
 exports.studioCosts = onCall(async (request) => {
-  const uid = cartographer.requireCartographer(request);
+  const uid = cartographer.requireStudio(request);
   return studioService().costs(uid, request.data || {});
 });
 
 // Start generating an image from the page's form (L-707): returns the job at
 // once; the page follows it in studio_jobs.
 exports.studioGenerate = onCall(async (request) => {
-  const uid = cartographer.requireCartographer(request);
+  const uid = cartographer.requireStudio(request);
   return studioService().generate(uid, request.data || {});
 });
 

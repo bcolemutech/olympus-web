@@ -8,7 +8,8 @@ const { JobError } = require('./jobs');
 
 /**
  * The image studio's callables (planning/the-image-studio.md §4.1; L-701 /
- * #537). Anyone with the `cartographer` claim uses the studio (S1).
+ * #537). Anyone with the `cartographer` claim uses the studio (S1), and so does
+ * anyone with the `muse` claim (M-104).
  *
  * upload(uid, { uploadId, title, kind, labels, prompt })
  *   Adds an uploaded image to the library (S5). The page puts the file in the

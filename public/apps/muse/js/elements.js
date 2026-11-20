@@ -219,6 +219,14 @@
       return commit(model.planUpdate(projectId, current, checked.value));
     },
 
+    // Saves an element's photo library: its studio image ids in order, and
+    // which is primary (IM1). The index line follows when the primary moves.
+    setPhotos: function (projectId, current, photos) {
+      var checked = model.checkPhotos(photos);
+      if (checked.error) return Promise.reject(new Error(checked.error));
+      return commit(model.planUpdate(projectId, current, checked.value));
+    },
+
     retire: function (projectId, current) {
       return commit(model.planRetire(projectId, current));
     },

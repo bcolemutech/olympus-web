@@ -82,19 +82,19 @@ Play-invented entities
 
 ## `studio_images/{imageId}`
 
-**Access:** `hasApp('cartographer')`, read only
+**Access:** `hasApp('cartographer')` or `hasApp('muse')` (M-104), read only
 
 The image studio's library: one record per image, with its kind, its `view` (L-955: `iso`, `floor`, `three-quarter`, `top-down`, or none when not marked; what it was made to be seen as, fixed while a world uses it, and held on a world's reference to it as `view`), labels, versions and link; a version bigger than a screen also has a copy at most 2048 px long, served by its screen link (files in Storage at `studio/{imageId}/`); `via` says how it came (`page`, `mcp`, `upload`, `backfill`, `fit`, or `import` by `studio_import`, its link without the query at `source.url`)
 
 ## `studio_jobs/{jobId}`
 
-**Access:** `hasApp('cartographer')`, read only
+**Access:** `hasApp('cartographer')` or `hasApp('muse')` (M-104), read only
 
 The image studio's jobs, making an image or editing one: the request, its state (queued, running, done, failed), the image (and version) made, its cost or error; one the model turned away as busy (429) is queued again with backoff, `tries` and `retryAt`, up to 5 tries (L-396)
 
 ## `studio_styles/{styleId}`
 
-**Access:** `hasApp('cartographer')`, read only
+**Access:** `hasApp('cartographer')` or `hasApp('muse')` (M-104), read only
 
 The image studio's named styles: a name, prompt text and up to 3 reference images, named in a generation or edit; a world's default is `world.studio.styleId`
 
@@ -108,13 +108,13 @@ The image studio's costs: one entry per charged job, and each month's totals by 
 
 **Access:** Owner with `hasApp('muse')`, read and write; the page writes directly, under rules that check each document's shape (M-101)
 
-The Muse's projects (planning/the-muse.md §4): `owner`, `title` (1–200 characters), `short` (the home page's line, up to 300), `summary` (Markdown, up to 200,000), `cover` (a studio image id or null), `createdAt` and `updatedAt` (the server's time, checked by the rules), and, from later stories, `fields`, `lanes` and `calendar`. Listed by `where('owner', '==', uid)` and sorted on the page, so no index. `fields` (M-102, EL2) holds the project's own fields per element type, `{ character: [{ key, label, kind, options }], … }`, at most 30 per type; the kinds are text, number, date (`{ year, month?, day? }`), element (an id; `options` may list the types it can link to) and choice (`options`, the list). Definitions and values are checked by `public/apps/muse/js/fields.js`; the rules bound the lists. Subcollections not listed below (relationships, versions and later) are denied until the stories that add them give them rules; a project's delete removes those named in `Muse.PROJECT_PARTS` (`index`, `elements`).
+The Muse's projects (planning/the-muse.md §4): `owner`, `title` (1–200 characters), `short` (the home page's line, up to 300), `summary` (Markdown, up to 200,000), `cover` (a studio image id or null, picked from the studio: uploaded or from its library; M-104), `createdAt` and `updatedAt` (the server's time, checked by the rules), and, from later stories, `fields`, `lanes` and `calendar`. Listed by `where('owner', '==', uid)` and sorted on the page, so no index. `fields` (M-102, EL2) holds the project's own fields per element type, `{ character: [{ key, label, kind, options }], … }`, at most 30 per type; the kinds are text, number, date (`{ year, month?, day? }`), element (an id; `options` may list the types it can link to) and choice (`options`, the list). Definitions and values are checked by `public/apps/muse/js/fields.js`; the rules bound the lists. Subcollections not listed below (relationships, versions and later) are denied until the stories that add them give them rules; a project's delete removes those named in `Muse.PROJECT_PARTS` (`index`, `elements`).
 
 ### `muse_projects/{projectId}/elements/{elementId}`
 
 **Access:** The project's owner with `hasApp('muse')`, read and write; create and update only with the element's index line in the same batch (M-102)
 
-One collection for every type (D2): `type` (character, faction, location, object or concept; fixed), `name` (1–200), `aliases` (at most 20), `bio` (Markdown, up to 200,000), `fields` (custom values by key; values of a removed field stay until the element is next saved), `images` and `primary` (M-104), `mentions` (M-103: the ids its bio and appearance @-link to, `[Name](muse:el/<id>)`, worked out on every save by `links.js`, so "mentioned in" is `where('mentions', 'array-contains', id)`), `shard` (its index document; fixed), `retired` (kept, but out of the index), `createdAt` and `updatedAt`; characters also have `appearance` (Markdown) and `residence` (a location's id). The shapes and plans are in `public/apps/muse/js/model.js`.
+One collection for every type (D2): `type` (character, faction, location, object or concept; fixed), `name` (1–200), `aliases` (at most 20), `bio` (Markdown, up to 200,000), `fields` (custom values by key; values of a removed field stay until the element is next saved), `images` (an ordered list of studio image ids, at most 200) and `primary` (M-104: one of `images`, or null when there are none, which the rules check; the index line carries it for lists; taking an image off leaves it in the studio, and an image deleted from the studio is shown as gone and can be removed), `mentions` (M-103: the ids its bio and appearance @-link to, `[Name](muse:el/<id>)`, worked out on every save by `links.js`, so "mentioned in" is `where('mentions', 'array-contains', id)`), `shard` (its index document; fixed), `retired` (kept, but out of the index), `createdAt` and `updatedAt`; characters also have `appearance` (Markdown) and `residence` (a location's id). The shapes and plans are in `public/apps/muse/js/model.js`.
 
 ### `muse_projects/{projectId}/index/{shard}`
 

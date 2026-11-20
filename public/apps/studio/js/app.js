@@ -11,11 +11,11 @@
       state.storage = firebase.storage();
       state.uid = user.uid;
 
-      // The cartographer claim opens the studio (S1). The rules and callables
-      // enforce it; the page explains it.
+      // The cartographer claim opens the studio (S1), and so does the muse
+      // claim (M-104). The rules and callables enforce it; the page explains it.
       user.getIdTokenResult().then(function (token) {
         var apps = Array.isArray(token.claims.apps) ? token.claims.apps : [];
-        if (apps.indexOf('cartographer') === -1) {
+        if (apps.indexOf('cartographer') === -1 && apps.indexOf('muse') === -1) {
           Studio.show('studio-denied', true);
           return;
         }

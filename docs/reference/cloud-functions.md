@@ -130,19 +130,19 @@ Attach, replace or remove a battle map's art (an uploaded PNG or SVG, a **floor 
 
 ## `studioUpload`
 
-**Who can call:** `cartographer` claim
+**Who can call:** `cartographer` or `muse` claim (M-104)
 
 Add an uploaded image (PNG, JPEG, WebP or SVG) to the image studio's library, with its title, kind, view (L-955) and labels
 
 ## `studioCosts`
 
-**Who can call:** `cartographer` claim
+**Who can call:** `cartographer` or `muse` claim (M-104)
 
 The image studio's spending for a month, for its page: the total against the $50 warning figure, by day, model and who, and the latest charges
 
 ## `studioGenerate`
 
-**Who can call:** `cartographer` claim
+**Who can call:** `cartographer` or `muse` claim (M-104)
 
 Start making an image from the studio page's form (prompt, kind, view, tier, shape, references, title, labels); returns the job at once. With `from` a battle map and `floor: true` (`studio_generate`; L-955) it makes a **floor painting**: the map's floors drawn from its geometry by `images.floorGuide` (`view_image` with `floor: true` shows the same) go to the model as the last reference, it is asked for the floors only, top-down, with nothing that stands, and the image is kept as kind `battleMap`, view `floor`. A `token` or `portrait` is asked for as a head-and-shoulders face, centred, on a plain background, with nothing important near the edge (it is cropped to a circle; L-934), and `from` may be a stat block (drawn as a square token from its name, traits, size and who stands for it) as well as a place, town, battle map or character
 

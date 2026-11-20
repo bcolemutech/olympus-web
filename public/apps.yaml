@@ -38,14 +38,15 @@ apps:
     enabled: true
     order: 12
 
-  # Shown to anyone with the cartographer claim: no claim of its own.
+  # Shown to anyone with the cartographer or the muse claim: no claim of its
+  # own. `claim` is one app id or a list of them.
   - id: studio
     name: The Image Studio
     description: The library of art for worlds
     icon: "\U0001F3A8"
     type: embedded
     path: /apps/studio/
-    claim: cartographer
+    claim: [cartographer, muse]
     enabled: true
     order: 13
 

@@ -317,19 +317,24 @@ service cloud.firestore {
     }
 
     // The image studio's library (L-701; planning/the-image-studio.md §4.2):
-    // one shared library for world builders. Written only by the server.
+    // one shared library for world builders, and for the Muse's writers, who
+    // keep their photos in it (M-104). Written only by the server.
+    function hasStudio() {
+      return hasApp('cartographer') || hasApp('muse');
+    }
+
     match /studio_images/{imageId} {
-      allow read: if hasApp('cartographer');
+      allow read: if hasStudio();
     }
 
     // Its generation jobs (L-707, §4.3): editors follow them on the page.
     match /studio_jobs/{jobId} {
-      allow read: if hasApp('cartographer');
+      allow read: if hasStudio();
     }
 
     // Its named styles (L-709, §4.2): made and changed over MCP.
     match /studio_styles/{styleId} {
-      allow read: if hasApp('cartographer');
+      allow read: if hasStudio();
     }
 
     // The studio's costs (L-706, §4.5): studio_costs and studio_costs_month
@@ -479,7 +484,8 @@ service cloud.firestore {
               && data.retired is bool
               && (!('images' in data) || (data.images is list && data.images.size() <= 200))
               && (!('primary' in data) || data.primary == null
-                  || (data.primary is string && data.primary.size() <= 200))
+                  || (data.primary is string && data.primary.size() <= 200
+                      && 'images' in data && data.primary in data.images))
               && (!('mentions' in data) || (data.mentions is list && data.mentions.size() <= 1000))
               && (!('classes' in data) || data.classes is list)
               && (data.type == 'character'
