@@ -6,6 +6,7 @@
   //   #/p/<id>            a project's home
   //   #/p/<id>/t/<type>   a list of one type's elements
   //   #/p/<id>/e/<el>     an element's page
+  // and, inside a project, the search box in the header (M-103).
 
   var Muse = window.Muse;
   var state = Muse.state;
@@ -46,10 +47,12 @@
               });
       return shown.then(function (name) {
         view(name || 'missing');
+        Muse.search.sync(!!name);
       });
     }
     document.title = 'The Muse — Olympus';
     view('home');
+    Muse.search.sync(false);
     return Muse.home.show();
   }
 
@@ -73,6 +76,8 @@
         Muse.fieldEditor.init();
         Muse.typeList.init();
         Muse.element.init();
+        Muse.relationships.init();
+        Muse.search.init();
         document.addEventListener('click', function (event) {
           // An element link in a text (muse:el/<id>) opens its page.
           var a = event.target.closest && event.target.closest('a.muse-el-link');

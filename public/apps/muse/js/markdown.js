@@ -8,8 +8,13 @@
   // keep http(s), mailto and the Muse's own `muse:el/<id>` (an element);
   // anything else is shown as plain text.
   //
-  //   Muse.markdown.render(text) → an HTML string
-  //   Muse.markdown.into(node, text) → fills a node, marked for styling
+  //   Muse.markdown.render(text, options) → an HTML string
+  //   Muse.markdown.into(node, text, options) → fills a node, marked for styling
+  //
+  // Auto-links (EL6, M-103): when the app has given it a matcher
+  // (Muse.markdown.useMatcher), a name or alias found in the text outside
+  // code and links is shown as a link to its element. `options.except` is an
+  // element id not to link (the element whose own text it is).
 
   var Muse = (window.Muse = window.Muse || {});
 
@@ -46,8 +51,25 @@
     return null;
   }
 
-  // Inline marks on one escaped line: code, links, bold, italic, struck.
-  function inline(escaped) {
+  // The matcher that finds names to link (./links.js buildMatcher), from
+  // `matcherOf()`, or none.
+  var matcherOf = null;
+
+  // Names in `text`, which may hold held placeholders: only what lies between
+  // them is looked at, so code and links are left as they are.
+  function autolink(text, hold, except) {
+    var matcher = matcherOf && matcherOf();
+    if (!matcher || !matcher.size) return text;
+    return text
+      .split(/(\u0000\d+\u0000)/)
+      .map(function (part, i) {
+        return i % 2 ? part : matcher.link(part, hold, except);
+      })
+      .join('');
+  }
+
+  // Inline marks on one escaped line: code, links, names, bold, italic, struck.
+  function inline(escaped, except) {
     var held = [];
     var hold = function (html) {
       held.push(html);
@@ -60,7 +82,8 @@
       .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (whole, label, url) {
         var tag = link(label, url);
         return tag ? hold(tag) : whole;
-      })
+      });
+    out = autolink(out, hold, except)
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^\w])__([^_\s][^_]*?)__(?!\w)/g, '$1<strong>$2</strong>')
       .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>')
@@ -75,7 +98,8 @@
     return out;
   }
 
-  function render(text) {
+  function render(text, options) {
+    var except = options && options.except;
     var lines = String(text || '')
       .replace(/\r\n?/g, '\n')
       .split('\n');
@@ -85,7 +109,17 @@
     var quote = [];
 
     function flushPara() {
-      if (para.length) html.push('<p>' + para.map(inline).join('<br>') + '</p>');
+      if (para.length) {
+        html.push(
+          '<p>' +
+            para
+              .map(function (line) {
+                return inline(line, except);
+              })
+              .join('<br>') +
+            '</p>'
+        );
+      }
       para = [];
     }
     function flushList() {
@@ -96,7 +130,7 @@
             '>' +
             list.items
               .map(function (item) {
-                return '<li>' + inline(item) + '</li>';
+                return '<li>' + inline(item, except) + '</li>';
               })
               .join('') +
             '</' +
@@ -107,7 +141,8 @@
       list = null;
     }
     function flushQuote() {
-      if (quote.length) html.push('<blockquote>' + render(quote.join('\n')) + '</blockquote>');
+      if (quote.length)
+        html.push('<blockquote>' + render(quote.join('\n'), options) + '</blockquote>');
       quote = [];
     }
     function flush() {
@@ -142,7 +177,7 @@
         flush();
       } else if ((m = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line))) {
         flush();
-        html.push('<h' + m[1].length + '>' + inline(m[2]) + '</h' + m[1].length + '>');
+        html.push('<h' + m[1].length + '>' + inline(m[2], except) + '</h' + m[1].length + '>');
       } else if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(raw)) {
         flush();
         html.push('<hr>');
@@ -172,11 +207,18 @@
     return html.join('\n');
   }
 
-  function into(node, text) {
+  function into(node, text, options) {
     node.classList.add('muse-md');
-    node.innerHTML = render(text);
+    node.innerHTML = render(text, options);
     return node;
   }
 
-  Muse.markdown = { render: render, into: into, escape: escape };
+  Muse.markdown = {
+    render: render,
+    into: into,
+    escape: escape,
+    useMatcher: function (fn) {
+      matcherOf = fn;
+    },
+  };
 })();

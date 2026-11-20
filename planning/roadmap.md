@@ -171,7 +171,7 @@ A world bible and manuscript app of its own, in the spirit of Campfire, from ide
 
 | Epic                                            | State                                  |
 | ----------------------------------------------- | -------------------------------------- |
-| **M-100 Projects and elements** (#888)          | 🚧 M-101, M-102 done; next M-103–M-105 |
+| **M-100 Projects and elements** (#888)          | 🚧 M-101 to M-103 done; next M-104, M-105 |
 | **M-200 Classifications and schematics** (#895) | 📋 Planned; stories filed when next    |
 | **M-300 The timeline** (#896)                   | 📋 Planned; stories filed when next    |
 | **M-400 Versions and export** (#897)            | 📋 Planned; stories filed when next    |

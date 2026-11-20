@@ -114,13 +114,19 @@ The Muse's projects (planning/the-muse.md §4): `owner`, `title` (1–200 charac
 
 **Access:** The project's owner with `hasApp('muse')`, read and write; create and update only with the element's index line in the same batch (M-102)
 
-One collection for every type (D2): `type` (character, faction, location, object or concept; fixed), `name` (1–200), `aliases` (at most 20), `bio` (Markdown, up to 200,000), `fields` (custom values by key; values of a removed field stay until the element is next saved), `images` and `primary` (M-104), `mentions` (M-103), `shard` (its index document; fixed), `retired` (kept, but out of the index), `createdAt` and `updatedAt`; characters also have `appearance` (Markdown) and `residence` (a location's id). The shapes and plans are in `public/apps/muse/js/model.js`.
+One collection for every type (D2): `type` (character, faction, location, object or concept; fixed), `name` (1–200), `aliases` (at most 20), `bio` (Markdown, up to 200,000), `fields` (custom values by key; values of a removed field stay until the element is next saved), `images` and `primary` (M-104), `mentions` (M-103: the ids its bio and appearance @-link to, `[Name](muse:el/<id>)`, worked out on every save by `links.js`, so "mentioned in" is `where('mentions', 'array-contains', id)`), `shard` (its index document; fixed), `retired` (kept, but out of the index), `createdAt` and `updatedAt`; characters also have `appearance` (Markdown) and `residence` (a location's id). The shapes and plans are in `public/apps/muse/js/model.js`.
 
 ### `muse_projects/{projectId}/index/{shard}`
 
 **Access:** The project's owner with `hasApp('muse')`, read and write; a write changes one line, named by `last`, which must match that element as it stands after the batch (M-102)
 
-`entries`: `{ <elementId>: { type, name, aliases, primary } }` for every live element, at most 500 per shard (`0`, `1`, …; a new element goes in the first with room). The page reads every shard once per project for lists, counts, links and (M-103) search.
+`entries`: `{ <elementId>: { type, name, aliases, primary } }` for every live element, at most 500 per shard (`0`, `1`, …; a new element goes in the first with room). The page reads every shard once per project for lists, counts, auto-links and search (names and aliases, in memory).
+
+### `muse_projects/{projectId}/relationships/{relationshipId}`
+
+**Access:** The project's owner with `hasApp('muse')`, read and write (M-103)
+
+A relationship between two elements (EL3): `a` and `b` (element ids, fixed once made, both must exist), `aToB` and `bToA` (what each is to the other, 1–100 characters: "mother of" / "daughter of"; the page fills a blank second one with the first), `description` (plain text, up to 1,000), `ends` (`[a, b]`, so `where('ends', 'array-contains', id)` gives every relationship of an element), `createdAt` and `updatedAt`. Read from either side by `links.sideOf`. The time on the timeline (`when`) comes with M-300. Retiring an element keeps its relationships; the other end shows "A retired element".
 
 ## `scriptorium_notes/{id}`
 

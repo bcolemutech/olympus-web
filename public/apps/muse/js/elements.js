@@ -42,12 +42,14 @@
     writes.forEach(function (write) {
       var ref = docAt(write.path);
       var data = toFirestore(write.data);
-      if (write.op === 'set') batch.set(ref, data);
+      if (write.op === 'delete') batch.delete(ref);
+      else if (write.op === 'set') batch.set(ref, data);
       else if (write.op === 'merge') batch.set(ref, data, { merge: true });
       else batch.update(ref, data);
     });
     return batch.commit().then(function () {
       if (state.index) model.applyToIndex(state.index, writes);
+      state.matcher = null;
     });
   }
 
@@ -113,7 +115,50 @@
     return out;
   }
 
+  // The names the text can link to, rebuilt when the index changes (EL6).
+  function matcher() {
+    if (!state.matcher) {
+      state.matcher = Muse.links.buildMatcher(state.index ? state.index.entries : {}, {
+        escape: Muse.markdown.escape,
+      });
+    }
+    return state.matcher;
+  }
+  Muse.markdown.useMatcher(matcher);
+
+  // Names and aliases matching `query`, best first (EL5).
+  function search(query, options) {
+    return Muse.links.search(state.index ? state.index.entries : {}, query, options);
+  }
+
+  // The live elements whose texts link to `id` (EL6), by name. At most 100
+  // are read, which `more` says.
+  var MENTIONS_READ = 100;
+  function mentionedIn(projectId, id) {
+    return projectRef(projectId)
+      .collection('elements')
+      .where('mentions', 'array-contains', id)
+      .limit(MENTIONS_READ)
+      .get()
+      .then(function (snap) {
+        var found = snap.docs
+          .map(fromDoc)
+          .filter(function (e) {
+            return e.id !== id && !e.retired && state.index && state.index.entries[e.id];
+          })
+          .sort(function (a, b) {
+            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+          });
+        return { elements: found, more: snap.docs.length >= MENTIONS_READ };
+      });
+  }
+
   Muse.elements = {
+    commit: commit,
+    matcher: matcher,
+    search: search,
+    mentionedIn: mentionedIn,
+    projectRef: projectRef,
     typeOf: typeOf,
     nameOf: nameOf,
     defsFor: defsFor,
@@ -132,6 +177,7 @@
             })
           );
           state.indexOf = projectId;
+          state.matcher = null;
           return state.index;
         });
     },

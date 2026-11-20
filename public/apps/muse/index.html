@@ -33,6 +33,20 @@
         You don't have access to the Muse. Ask an admin to grant it in The Pantheon.
       </p>
 
+      <!-- Search a project's names and aliases (EL5; M-103). Moved into the
+           shared header when the app starts; shown inside a project. -->
+      <div class="muse-search hidden" id="muse-search" role="search">
+        <label class="muse-sr" for="muse-search-box">Search this project</label>
+        <input
+          class="muse-input muse-search-box"
+          id="muse-search-box"
+          type="search"
+          maxlength="200"
+          autocomplete="off"
+          placeholder="Search names and aliases"
+        />
+      </div>
+
       <!-- ── The home page: your projects ── -->
       <section class="hidden" id="muse-home">
         <h1 class="app-title muse-title">The Muse</h1>
@@ -299,11 +313,66 @@
           </div>
         </form>
 
-        <!-- Filled by later stories: photos (M-104), relationships and
-             "mentioned in" (M-103) -->
+        <!-- Photos come with M-104 -->
         <section class="muse-card hidden" id="muse-e-photos"></section>
-        <section class="muse-card hidden" id="muse-e-relationships"></section>
-        <section class="muse-card hidden" id="muse-e-mentions"></section>
+
+        <!-- Relationships, read from this element's side (EL3; M-103) -->
+        <section class="muse-card hidden" id="muse-e-relationships">
+          <div class="muse-bar">
+            <h2 class="muse-heading">Relationships</h2>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-r-add">Add</button>
+          </div>
+          <p class="muse-error hidden" id="muse-r-error" role="alert"></p>
+          <ul class="muse-rel-list" id="muse-r-list"></ul>
+          <p class="muse-empty hidden" id="muse-r-empty">No relationships yet.</p>
+          <form class="muse-form muse-rel-form hidden" id="muse-r-form" novalidate>
+            <label class="muse-label" id="muse-r-other-label" for="muse-r-other">With</label>
+            <input
+              class="muse-input"
+              id="muse-r-other"
+              maxlength="200"
+              placeholder="Type a name or alias"
+            />
+            <p class="muse-rel-fixed hidden" id="muse-r-fixed"></p>
+            <label class="muse-label" id="muse-r-kind-label" for="muse-r-kind">Is…</label>
+            <input
+              class="muse-input"
+              id="muse-r-kind"
+              maxlength="100"
+              autocomplete="off"
+              placeholder="mother of"
+            />
+            <label class="muse-label" id="muse-r-back-label" for="muse-r-back">Is…</label>
+            <input
+              class="muse-input"
+              id="muse-r-back"
+              maxlength="100"
+              autocomplete="off"
+              placeholder="daughter of"
+            />
+            <label class="muse-label" for="muse-r-desc">Description</label>
+            <textarea
+              class="muse-input muse-textarea muse-textarea-short"
+              id="muse-r-desc"
+              rows="2"
+              maxlength="1000"
+            ></textarea>
+            <p class="muse-error hidden" id="muse-r-form-error" role="alert"></p>
+            <div class="muse-actions">
+              <button type="submit" class="muse-btn" id="muse-r-save">Save</button>
+              <button type="button" class="muse-btn muse-btn-quiet" id="muse-r-cancel">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Where it is linked from (EL6; M-103) -->
+        <section class="muse-card hidden" id="muse-e-mentions">
+          <h2 class="muse-heading">Mentioned in</h2>
+          <div class="muse-el-list" id="muse-m-list"></div>
+          <p class="muse-hint hidden" id="muse-m-more">Showing the first 100; there may be more.</p>
+        </section>
 
         <section class="muse-card muse-danger-card" id="muse-e-danger">
           <button type="button" class="muse-btn muse-btn-danger" id="muse-e-retire">Retire</button>
@@ -338,13 +407,18 @@
     <script src="/apps/muse/js/state.js"></script>
     <script src="/apps/muse/js/markdown.js"></script>
     <script src="/apps/muse/js/fields.js"></script>
+    <script src="/apps/muse/js/links.js"></script>
     <script src="/apps/muse/js/model.js"></script>
     <script src="/apps/muse/js/projects.js"></script>
     <script src="/apps/muse/js/elements.js"></script>
+    <script src="/apps/muse/js/suggest.js"></script>
+    <script src="/apps/muse/js/search.js"></script>
     <script src="/apps/muse/js/home.js"></script>
     <script src="/apps/muse/js/project.js"></script>
     <script src="/apps/muse/js/field-editor.js"></script>
     <script src="/apps/muse/js/type-list.js"></script>
+    <script src="/apps/muse/js/relationships.js"></script>
+    <script src="/apps/muse/js/mentioned.js"></script>
     <script src="/apps/muse/js/element.js"></script>
     <script src="/apps/muse/js/app.js"></script>
 

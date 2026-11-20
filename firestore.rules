@@ -528,9 +528,44 @@ service cloud.firestore {
         allow create, update: if museProjectOwner() && shard.matches('[0-9]{1,6}') && validIndex();
       }
 
-      // Its other subcollections (relationships, versions, …) get their
-      // rules, with their shapes, in the stories that add them (M-103
-      // onwards). Until then the default deny below covers them.
+      // Relationships (M-103; EL3): two elements of the project, each side's
+      // words, and a description. The ends are fixed once made; `ends` lists
+      // both so "every relationship of X" is one query. The time on the
+      // timeline (`when`) comes with M-300. See public/apps/muse/js/links.js.
+      match /relationships/{relationshipId} {
+        function validRelationship() {
+          let data = request.resource.data;
+          let required = ['a', 'b', 'aToB', 'bToA', 'description', 'ends', 'createdAt',
+                          'updatedAt'];
+          return data.keys().hasAll(required)
+              && data.keys().hasOnly(required)
+              && data.a is string && data.a.size() > 0 && data.a.size() <= 128
+              && data.b is string && data.b.size() > 0 && data.b.size() <= 128
+              && data.a != data.b
+              && data.ends == [data.a, data.b]
+              && data.aToB is string && data.aToB.size() > 0 && data.aToB.size() <= 100
+              && data.bToA is string && data.bToA.size() > 0 && data.bToA.size() <= 100
+              && museText(data.description, 1000)
+              && existsAfter(museElementDoc(data.a))
+              && existsAfter(museElementDoc(data.b));
+        }
+
+        allow read, delete: if museProjectOwner();
+        allow create: if museProjectOwner()
+                      && validRelationship()
+                      && request.resource.data.createdAt == request.time
+                      && request.resource.data.updatedAt == request.time;
+        allow update: if museProjectOwner()
+                      && validRelationship()
+                      && request.resource.data.a == resource.data.a
+                      && request.resource.data.b == resource.data.b
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.updatedAt == request.time;
+      }
+
+      // Its other subcollections (versions, …) get their rules, with their
+      // shapes, in the stories that add them (M-105 onwards). Until then the
+      // default deny below covers them.
     }
 
     // ── App registry ──────────────────────────────────────

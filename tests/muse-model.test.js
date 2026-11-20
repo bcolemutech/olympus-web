@@ -197,6 +197,7 @@ describe('an element’s own fields', () => {
       name: 'Peter',
       aliases: [],
       bio: '',
+      mentions: [],
       fields: { temper: 'Calm' },
       appearance: 'Tall',
       residence: 'el_sea',
@@ -208,7 +209,7 @@ describe('an element’s own fields', () => {
 
   test('a concept is like a faction: no appearance or residence', () => {
     expect(model.checkElement('concept', { name: 'Tide-magic', bio: '# Rules' }, {}).value).toEqual(
-      { name: 'Tide-magic', aliases: [], bio: '# Rules', fields: {} }
+      { name: 'Tide-magic', aliases: [], bio: '# Rules', fields: {}, mentions: [] }
     );
     expect(model.checkElement('concept', { name: 'X', residence: 'el_sea' }, {}).error).toMatch(
       /Only characters/
@@ -234,6 +235,7 @@ describe('an element’s own fields', () => {
       name: 'Peter',
       aliases: ['P'],
       bio: 'New',
+      mentions: [],
       fields: { temper: 'Calm' },
       appearance: 'Tall',
       residence: 'el_old_home',

@@ -171,6 +171,9 @@
         });
       });
 
+      // Typing @ in the summary offers elements to link (EL6).
+      Muse.suggest.mention(Muse.$('muse-p-summary-text'));
+
       Muse.$('muse-p-summary-edit').addEventListener('click', function () {
         editSummary(true);
       });
@@ -218,6 +221,7 @@
     // there (or isn't yours). Every view inside a project starts here.
     load: function (id) {
       state.index = null;
+      state.matcher = null;
       return Muse.projects
         .get(id)
         .catch(function () {
