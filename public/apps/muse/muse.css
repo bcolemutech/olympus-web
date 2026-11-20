@@ -718,7 +718,181 @@ a.muse-section-tile:focus-visible {
   border-color: rgba(239, 154, 154, 0.2);
 }
 
+/* ── Links, relationships and search (M-103) ── */
+
+/* A name found in a text, linked for you: fainter than a link you made. */
+.muse-md a.muse-el-link.muse-auto {
+  color: inherit;
+  border-bottom-color: rgba(179, 157, 219, 0.4);
+}
+
+.muse-md a.muse-el-link.muse-auto:hover {
+  border-bottom-color: var(--muse-accent-strong);
+}
+
+.muse-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The search box lives in the shared header, between its two sides. */
+.muse-search {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 28rem;
+  margin: 0 1rem;
+}
+
+.muse-search-box {
+  min-height: 40px;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+
+.app-header.muse-with-search {
+  flex-wrap: wrap;
+  row-gap: 0.75rem;
+}
+
+/* The list of names under a box, or under the @ in a text. */
+.muse-suggest-wrap {
+  position: relative;
+}
+
+.muse-suggest {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 40;
+  width: min(100%, 22rem);
+  max-height: 18rem;
+  overflow-y: auto;
+  margin-top: 4px;
+  background: #151b2e;
+  border: 1px solid rgba(179, 157, 219, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.muse-suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.6rem;
+  min-height: 44px;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.muse-suggest-row + .muse-suggest-row {
+  border-top: 1px solid var(--muse-line);
+}
+
+.muse-suggest-active,
+.muse-suggest-row:hover {
+  background: var(--muse-accent-soft);
+}
+
+.muse-suggest-name {
+  color: #f3e5f5;
+  overflow-wrap: anywhere;
+}
+
+.muse-suggest-type,
+.muse-suggest-alias {
+  color: var(--muse-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+
+.muse-suggest-alias {
+  font-style: italic;
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.muse-rel-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.muse-rel {
+  padding: 0.5rem 0;
+}
+
+.muse-rel + .muse-rel {
+  border-top: 1px solid var(--muse-line);
+}
+
+.muse-rel-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+}
+
+.muse-rel-kind {
+  color: var(--muse-muted);
+  font-style: italic;
+}
+
+.muse-rel-line a.muse-el-link {
+  color: var(--muse-accent-strong);
+  overflow-wrap: anywhere;
+}
+
+.muse-rel-actions {
+  display: inline-flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.muse-rel-desc {
+  margin-top: 0.15rem;
+  color: #cfd8dc;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.muse-rel-confirm {
+  margin-top: 0.5rem;
+}
+
+.muse-rel-fixed {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.muse-rel-fixed a.muse-el-link {
+  color: var(--muse-accent-strong);
+}
+
+.muse-rel-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--muse-line);
+}
+
 /* ── iPad portrait and phones ── */
+
+@media (max-width: 1000px) {
+  /* Too narrow for it between the two sides: it takes a row of its own. */
+  .app-header.muse-with-search .muse-search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+    margin: 0;
+  }
+}
 
 @media (max-width: 820px) {
   .muse-p-cover {
@@ -731,6 +905,11 @@ a.muse-section-tile:focus-visible {
 }
 
 @media (max-width: 600px) {
+  .app-header.muse-with-search .muse-search {
+    flex-basis: auto;
+    width: 100%;
+  }
+
   .muse-main {
     padding: 1.5rem 1rem;
   }

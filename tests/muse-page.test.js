@@ -118,15 +118,21 @@ function stub({ apps, docs }) {
       collection: (name) => collection(path + '/' + name),
     };
   }
-  function collection(base, filters = []) {
+  function collection(base, filters = [], max = Infinity) {
     return {
       doc: (id) => ref(base + '/' + (id || 'auto' + ++next)),
-      where: (field, op, value) => collection(base, filters.concat([[field, value]])),
+      where: (field, op, value) => collection(base, filters.concat([[field, value, op]]), max),
+      limit: (n) => collection(base, filters, n),
       get: () => {
         const depth = base.split('/').length + 1;
+        const match = (p, [f, v, op]) =>
+          op === 'array-contains'
+            ? Array.isArray(store.get(p)[f]) && store.get(p)[f].includes(v)
+            : store.get(p)[f] === v;
         const docs = [...store.keys()]
           .filter((p) => p.startsWith(base + '/') && p.split('/').length === depth)
-          .filter((p) => filters.every(([f, v]) => store.get(p)[f] === v))
+          .filter((p) => filters.every((filter) => match(p, filter)))
+          .slice(0, max)
           .map(snap);
         return Promise.resolve({ empty: !docs.length, docs });
       },
@@ -210,6 +216,71 @@ const PROJECTS = {
     },
     last: 'el_sea',
   },
+  // A court of three, with a relationship and one @-link (M-103).
+  'muse_projects/p_court': {
+    owner: 'ann',
+    title: 'The Court',
+    short: '',
+    summary: 'Marta keeps the court. The Widow is wise.',
+    cover: null,
+    updatedAt: 5,
+  },
+  'muse_projects/p_court/elements/el_peter': {
+    type: 'character',
+    name: 'King Peter',
+    aliases: ['The Drowned King'],
+    bio: 'King Peter rules from [Old Brass](muse:el/el_sea). Son of Marta, or the widow.',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: ['el_sea'],
+    appearance: '',
+    residence: null,
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_court/elements/el_marta': {
+    type: 'character',
+    name: 'Marta',
+    aliases: ['The Widow'],
+    bio: 'Mother of the king.',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: [],
+    appearance: '',
+    residence: null,
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_court/elements/el_sea': {
+    type: 'location',
+    name: 'The Sunken City',
+    aliases: ['Old Brass'],
+    bio: 'The Drowned King holds court here. `Marta` is code; so is\n\n```\nMarta\n```',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: [],
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_court/index/0': {
+    entries: {
+      el_peter: { type: 'character', name: 'King Peter', aliases: ['The Drowned King'], primary: null },
+      el_marta: { type: 'character', name: 'Marta', aliases: ['The Widow'], primary: null },
+      el_sea: { type: 'location', name: 'The Sunken City', aliases: ['Old Brass'], primary: null },
+    },
+    last: 'el_sea',
+  },
+  'muse_projects/p_court/relationships/r1': {
+    a: 'el_marta',
+    b: 'el_peter',
+    aToB: 'mother of',
+    bToA: 'son of',
+    description: 'Raised him alone.',
+    ends: ['el_marta', 'el_peter'],
+  },
 };
 
 async function open(options, { apps = ['muse'], hash = '' } = {}) {
@@ -265,7 +336,7 @@ describe('the home page', () => {
   each('lists your projects only, last changed first, as cards', async (page) => {
     await page.waitForSelector('.muse-project-card');
     const titles = await page.locator('.muse-project-card-title').allInnerTexts();
-    expect(titles).toEqual(['The Drowned Kingdom', 'The Isles', 'Older']);
+    expect(titles).toEqual(['The Drowned Kingdom', 'The Isles', 'The Court', 'Older']);
     await expect(page.locator('.muse-project-card-short').first().innerText()).resolves.toBe(
       'A sea that took a crown'
     );
@@ -395,6 +466,7 @@ describe('a project’s home', () => {
     expect(Object.keys(await stored(page))).not.toContain('muse_projects/p_sea');
     await expect(page.locator('.muse-project-card-title').allInnerTexts()).resolves.toEqual([
       'The Isles',
+      'The Court',
       'Older',
     ]);
   });
@@ -599,6 +671,307 @@ describe('elements (M-102)', () => {
   });
 });
 
+describe('links, relationships and search (M-103)', () => {
+  const openCourt = async (page) => {
+    await page.click('.muse-project-card[data-id="p_court"]');
+    await page.waitForSelector('#muse-project:not(.hidden)');
+  };
+  // Opens an element by its route and waits for its name.
+  const openElement = async (page, id, name) => {
+    await page.evaluate((hash) => (window.location.hash = hash), `#/p/p_court/e/${id}`);
+    await page.waitForFunction(
+      (n) =>
+        !document.getElementById('muse-element').classList.contains('hidden') &&
+        document.getElementById('muse-e-name').textContent === n,
+      name
+    );
+    // Its relationships and mentions are drawn with it.
+    await page.waitForFunction(
+      () => !document.getElementById('muse-e-relationships').classList.contains('hidden')
+    );
+  };
+  const inViewport = (page, selector) =>
+    page.evaluate((sel) => {
+      const box = document.querySelector(sel + ':not(.hidden)').getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        box.left >= 0 &&
+        box.top >= 0 &&
+        box.right <= window.innerWidth &&
+        box.bottom <= window.innerHeight
+      );
+    }, selector);
+
+  each('finds an element by an alias as you type, and opens it', async (page) => {
+    // No search on the home page; it is in the header inside a project.
+    await expect(page.locator('#muse-search').isVisible()).resolves.toBe(false);
+    await openCourt(page);
+    await expect(page.locator('.app-header #muse-search-box').isVisible()).resolves.toBe(true);
+
+    await page.fill('#muse-search-box', 'drowned');
+    const row = page.locator('.muse-suggest-row');
+    await expect(row.count()).resolves.toBe(1);
+    await expect(row.locator('.muse-suggest-name').innerText()).resolves.toBe('King Peter');
+    await expect(row.locator('.muse-suggest-alias').innerText()).resolves.toMatch(/The Drowned King/);
+    await expect(inViewport(page, '.muse-suggest')).resolves.toBe(true);
+
+    // Names too, and each keystroke narrows it.
+    await page.fill('#muse-search-box', 'm');
+    await expect(page.locator('#muse-search .muse-suggest-name').allInnerTexts()).resolves.toEqual([
+      'Marta',
+    ]);
+    await page.fill('#muse-search-box', 'old br');
+    await expect(page.locator('.muse-suggest-name').allInnerTexts()).resolves.toEqual([
+      'The Sunken City',
+    ]);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.muse-suggest-row').count()).resolves.toBe(0);
+
+    // Enter opens the best match.
+    await page.fill('#muse-search-box', 'widow');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => document.getElementById('muse-e-name').textContent === 'Marta'
+    );
+    await expect(page.locator('#muse-search-box').inputValue()).resolves.toBe('');
+
+    // A tap picks too.
+    await page.fill('#muse-search-box', 'sunken');
+    await page.click('.muse-suggest-row');
+    await page.waitForFunction(
+      () => document.getElementById('muse-e-name').textContent === 'The Sunken City'
+    );
+
+    // Back home, the box goes.
+    await page.evaluate(() => (window.location.hash = '#/'));
+    await page.waitForSelector('#muse-home:not(.hidden)');
+    await expect(page.locator('#muse-search').isVisible()).resolves.toBe(false);
+  });
+
+  each('a name or alias in a text is a link, though it was not @-linked', async (page) => {
+    await openCourt(page);
+    // The sea's bio says "The Drowned King" without linking it; code is left alone.
+    await openElement(page, 'el_sea', 'The Sunken City');
+    const auto = page.locator('#muse-e-bio a.muse-auto');
+    await expect(auto.allInnerTexts()).resolves.toEqual(['The Drowned King']);
+    await expect(auto.getAttribute('data-el')).resolves.toBe('el_peter');
+    await expect(page.locator('#muse-e-bio code').allInnerTexts()).resolves.toEqual([
+      'Marta',
+      'Marta',
+    ]);
+    await expect(page.locator('#muse-e-bio code a, #muse-e-bio pre a').count()).resolves.toBe(0);
+
+    // On King Peter's page: his own name is plain, the alias "the widow" and
+    // "Marta" link to Marta, and the @-link to the sea is the explicit kind.
+    await auto.click();
+    await page.waitForFunction(
+      () => document.getElementById('muse-e-name').textContent === 'King Peter'
+    );
+    const bio = page.locator('#muse-e-bio');
+    await expect(bio.locator('a.muse-auto').allInnerTexts()).resolves.toEqual(['Marta', 'the widow']);
+    await expect(bio.locator('a.muse-auto').first().getAttribute('data-el')).resolves.toBe('el_marta');
+    await expect(bio.locator('a:not(.muse-auto)').allInnerTexts()).resolves.toEqual(['Old Brass']);
+    await expect(bio.innerText()).resolves.toMatch(/^King Peter rules/);
+    // Nothing was stored for any of it.
+    const peter = (await stored(page))['muse_projects/p_court/elements/el_peter'];
+    expect(peter.mentions).toEqual(['el_sea']);
+    expect(peter.bio).not.toMatch(/muse:el\/el_marta/);
+
+    // The project's own summary links names too.
+    await page.evaluate(() => (window.location.hash = '#/p/p_court'));
+    await page.waitForSelector('#muse-project:not(.hidden)');
+    await expect(page.locator('#muse-p-summary a.muse-auto').allInnerTexts()).resolves.toEqual([
+      'Marta',
+      'The Widow',
+    ]);
+  });
+
+  each('typing @ links an element, and "Mentioned in" lists it on the target', async (page) => {
+    await openCourt(page);
+    // Nothing links to Peter yet.
+    await openElement(page, 'el_peter', 'King Peter');
+    await expect(page.locator('#muse-e-mentions').isVisible()).resolves.toBe(false);
+
+    await openElement(page, 'el_marta', 'Marta');
+    await page.click('#muse-e-edit');
+    await page.fill('#muse-e-bio-input', 'Mother of ');
+    await page.focus('#muse-e-bio-input');
+    await page.keyboard.press('End');
+    await page.keyboard.type('@pet');
+    const rows = page.locator('.muse-suggest-row');
+    await expect(rows.count()).resolves.toBe(1);
+    await expect(rows.first().innerText()).resolves.toMatch(/King Peter/);
+    // It sits on the page, under the line being written.
+    await expect(inViewport(page, '.muse-suggest')).resolves.toBe(true);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#muse-e-bio-input').inputValue()).resolves.toBe(
+      'Mother of [King Peter](muse:el/el_peter)'
+    );
+    await expect(page.locator('.muse-suggest-row').count()).resolves.toBe(0);
+    // Written on, then a second link by tapping, in the appearance too.
+    await page.keyboard.type(' and @the sunk');
+    await page.click('.muse-suggest-row');
+    await expect(page.locator('#muse-e-bio-input').inputValue()).resolves.toBe(
+      'Mother of [King Peter](muse:el/el_peter) and [The Sunken City](muse:el/el_sea)'
+    );
+    // An @ in the middle of a word (an email) offers nothing.
+    await page.keyboard.type(' write to ann@pe');
+    await expect(page.locator('.muse-suggest-row').count()).resolves.toBe(0);
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+
+    const marta = (await stored(page))['muse_projects/p_court/elements/el_marta'];
+    expect(marta.mentions).toEqual(['el_peter', 'el_sea']);
+    await expect(page.locator('#muse-e-bio a.muse-el-link:not(.muse-auto)').allInnerTexts()).resolves
+      .toEqual(['King Peter', 'The Sunken City']);
+
+    // The target lists where it is mentioned: Peter, and the sea (which
+    // Peter's bio also links).
+    await page.click('#muse-e-bio a[data-el="el_peter"]');
+    await page.waitForFunction(
+      () => document.getElementById('muse-e-name').textContent === 'King Peter'
+    );
+    await page.waitForSelector('#muse-e-mentions:not(.hidden)');
+    await expect(page.locator('#muse-m-list .muse-el-row-name').allInnerTexts()).resolves.toEqual([
+      'Marta',
+    ]);
+    await page.click('#muse-m-list .muse-el-row');
+    await page.waitForFunction(
+      () => document.getElementById('muse-e-name').textContent === 'Marta'
+    );
+    await openElement(page, 'el_sea', 'The Sunken City');
+    await page.waitForSelector('#muse-e-mentions:not(.hidden)');
+    await expect(page.locator('#muse-m-list .muse-el-row-name').allInnerTexts()).resolves.toEqual([
+      'King Peter',
+      'Marta',
+    ]);
+
+    // Taking the link out of Marta's bio takes her out of its list.
+    await openElement(page, 'el_marta', 'Marta');
+    await page.click('#muse-e-edit');
+    await page.fill('#muse-e-bio-input', 'Mother of the king.');
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+    expect((await stored(page))['muse_projects/p_court/elements/el_marta'].mentions).toEqual([]);
+    await openElement(page, 'el_sea', 'The Sunken City');
+    await expect(page.locator('#muse-m-list .muse-el-row-name').allInnerTexts()).resolves.toEqual([
+      'King Peter',
+    ]);
+  });
+
+  each('a relationship reads right from both sides, and is made, edited and removed', async (page) => {
+    await openCourt(page);
+    const rows = (selector = '.muse-rel') => page.locator(selector);
+    const text = async () =>
+      (await page.locator('.muse-rel').allInnerTexts()).map((t) =>
+        t.replace(/\s+/g, ' ').trim().toLowerCase()
+      );
+
+    // The one that's there, from each end.
+    await openElement(page, 'el_marta', 'Marta');
+    await expect(text()).resolves.toEqual(['mother of king peter edit remove raised him alone.']);
+    await openElement(page, 'el_peter', 'King Peter');
+    await expect(text()).resolves.toEqual(['son of marta edit remove raised him alone.']);
+
+    // Made from Peter's page: the other end is found by typing its alias.
+    await page.click('#muse-r-add');
+    await page.click('#muse-r-save');
+    await expect(page.locator('#muse-r-form-error').innerText()).resolves.toMatch(/Pick/);
+    await page.fill('#muse-r-other', 'old br');
+    await expect(page.locator('#muse-r-form .muse-suggest-name').allInnerTexts()).resolves.toEqual([
+      'The Sunken City',
+    ]);
+    await page.click('#muse-r-form .muse-suggest-row');
+    await expect(page.locator('#muse-r-other').inputValue()).resolves.toBe('The Sunken City');
+    await expect(page.locator('#muse-r-kind-label').textContent()).resolves.toBe('King Peter is…');
+    await expect(page.locator('#muse-r-back-label').textContent()).resolves.toMatch(
+      /^The Sunken City is/
+    );
+    // Words are needed.
+    await page.click('#muse-r-save');
+    await expect(page.locator('#muse-r-form-error').innerText()).resolves.toMatch(/what the first is/);
+    await page.fill('#muse-r-kind', 'ruler of');
+    await page.fill('#muse-r-back', 'ruled by');
+    await page.fill('#muse-r-desc', 'Since the flood.');
+    await page.click('#muse-r-save');
+    await page.waitForSelector('#muse-r-form.hidden', { state: 'attached' });
+    await expect(text()).resolves.toEqual([
+      'son of marta edit remove raised him alone.',
+      'ruler of the sunken city edit remove since the flood.',
+    ]);
+    const made = Object.entries(await stored(page)).filter(([p]) =>
+      /relationships\/auto/.test(p)
+    );
+    expect(made.map(([, d]) => d)).toEqual([
+      {
+        a: 'el_peter',
+        b: 'el_sea',
+        aToB: 'ruler of',
+        bToA: 'ruled by',
+        description: 'Since the flood.',
+        ends: ['el_peter', 'el_sea'],
+      },
+    ]);
+
+    // Read from the other end, and edited from it: the sea's words are bToA.
+    await openElement(page, 'el_sea', 'The Sunken City');
+    await expect(text()).resolves.toEqual(['ruled by king peter edit remove since the flood.']);
+    await page.click('.muse-rel .muse-btn:has-text("Edit")');
+    await expect(page.locator('#muse-r-other').isVisible()).resolves.toBe(false);
+    await expect(page.locator('#muse-r-fixed').innerText()).resolves.toBe('King Peter');
+    await expect(page.locator('#muse-r-kind').inputValue()).resolves.toBe('ruled by');
+    await expect(page.locator('#muse-r-back').inputValue()).resolves.toBe('ruler of');
+    await page.fill('#muse-r-kind', 'governed by');
+    await page.fill('#muse-r-back', '');
+    await page.click('#muse-r-save');
+    await page.waitForSelector('#muse-r-form.hidden', { state: 'attached' });
+    await expect(text()).resolves.toEqual(['governed by king peter edit remove since the flood.']);
+    const edited = Object.entries(await stored(page)).filter(([p]) =>
+      /relationships\/auto/.test(p)
+    )[0][1];
+    // Blank on the other side means the same words from both.
+    expect([edited.a, edited.b, edited.aToB, edited.bToA]).toEqual([
+      'el_peter',
+      'el_sea',
+      'governed by',
+      'governed by',
+    ]);
+
+    // Removed only once confirmed, and from both ends.
+    await page.click('.muse-rel .muse-btn:has-text("Remove")');
+    await page.click('.muse-rel-confirm .muse-btn-quiet');
+    await expect(rows().count()).resolves.toBe(1);
+    await page.click('.muse-rel .muse-btn:has-text("Remove")');
+    await page.click('.muse-rel-confirm .muse-btn-danger');
+    await page.waitForSelector('#muse-r-empty:not(.hidden)');
+    await expect(
+      Object.keys(await stored(page)).filter((p) => /relationships\/auto/.test(p))
+    ).toEqual([]);
+    await openElement(page, 'el_peter', 'King Peter');
+    await expect(text()).resolves.toEqual(['son of marta edit remove raised him alone.']);
+  });
+
+  each('a relationship to a retired element is kept, and can still be removed', async (page) => {
+    await openCourt(page);
+    await openElement(page, 'el_marta', 'Marta');
+    await page.click('#muse-e-retire');
+    await page.click('#muse-e-retire-yes');
+    await page.waitForSelector('#muse-e-retired:not(.hidden)');
+    await openElement(page, 'el_peter', 'King Peter');
+    await expect(page.locator('.muse-rel .muse-gone').innerText()).resolves.toBe(
+      'A retired element'
+    );
+    // Not offered as a new end, by name or alias.
+    await page.click('#muse-r-add');
+    await page.fill('#muse-r-other', 'widow');
+    await expect(page.locator('#muse-r-form .muse-suggest-row').count()).resolves.toBe(0);
+    await page.click('#muse-r-cancel');
+    await page.click('.muse-rel .muse-btn:has-text("Remove")');
+    await page.click('.muse-rel-confirm .muse-btn-danger');
+    await page.waitForSelector('#muse-r-empty:not(.hidden)');
+  });
+});
+
 describe('around the edges', () => {
   const run = (name, options, setup, fn) =>
     test(name, async () => {
@@ -659,6 +1032,23 @@ describe('around the edges', () => {
     await page.waitForSelector('#muse-denied:not(.hidden)');
     await expect(page.locator('#muse-home').isVisible()).resolves.toBe(false);
   });
+
+  run(
+    'a phone reads an element’s relationships, and searches',
+    PHONE,
+    { hash: '#/p/p_court/e/el_peter' },
+    async (page) => {
+      await page.waitForSelector('#muse-e-relationships:not(.hidden) .muse-rel');
+      await expect(page.locator('.muse-rel').innerText()).resolves.toMatch(/son of\s+Marta/);
+      await page.fill('#muse-search-box', 'widow');
+      await expect(page.locator('.muse-suggest-row').count()).resolves.toBe(1);
+      await page.click('#muse-r-add');
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    }
+  );
 
   run('a phone reads a project and its summary', PHONE, { hash: '#/p/p_sea' }, async (page) => {
     await page.waitForSelector('#muse-project:not(.hidden)');

@@ -14,6 +14,7 @@
     project: null, // the open project
     index: null, // its index: { entries: { id: entry }, shards } (M-102)
     element: null, // the open element (M-102)
+    matcher: null, // the names text can link to, from the index (M-103)
   };
 
   // The element types (§5, M-100), in the order a project lists them.
@@ -30,7 +31,7 @@
 
   // A project's subcollections, deleted with it. Each story that adds one
   // adds it here (M-102 onwards: index, elements, relationships, versions…).
-  Muse.PROJECT_PARTS = ['index', 'elements'];
+  Muse.PROJECT_PARTS = ['index', 'elements', 'relationships'];
 
   // ── Helpers ─────────────────────────────────────
   Muse.$ = function (id) {

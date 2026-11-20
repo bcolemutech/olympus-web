@@ -6,7 +6,10 @@
   // fields for its type), a character's appearance and the bio, read as
   // Markdown; one form edits them all (a change of name is a rename); and
   // retiring, with confirmation, which a retired element's page undoes.
-  // Photos, relationships and "mentioned in" come with M-103 and M-104.
+  // Relationships and "mentioned in" (M-103) are drawn by their own files;
+  // typing @ in a text offers elements to link, and an element's name or
+  // alias found in a text is shown as a link to it (EL6). Photos come with
+  // M-104.
 
   var Muse = window.Muse;
   var state = Muse.state;
@@ -76,9 +79,11 @@
     drawFacts();
     var hasLooks = e.type === 'character' && !!e.appearance.trim();
     Muse.show(Muse.$('muse-e-appearance-card'), hasLooks);
-    if (hasLooks) Muse.markdown.into(Muse.$('muse-e-appearance'), e.appearance);
+    // Its own name isn't linked in its own text.
+    var own = { except: e.id };
+    if (hasLooks) Muse.markdown.into(Muse.$('muse-e-appearance'), e.appearance, own);
     var bio = Muse.$('muse-e-bio');
-    Muse.markdown.into(bio, e.bio);
+    Muse.markdown.into(bio, e.bio, own);
     Muse.show(bio, !!e.bio.trim());
     Muse.show(Muse.$('muse-e-bio-empty'), !e.bio.trim());
   }
@@ -151,13 +156,14 @@
     area.id = id;
     area.rows = rows;
     area.value = value || '';
-    area.placeholder = 'Markdown: # headings, **bold**, *italic*, - lists';
+    area.placeholder = 'Markdown: # headings, **bold**, *italic*, - lists; @ links an element';
     body.appendChild(area);
+    Muse.suggest.mention(area);
     var preview = Muse.el('div', 'muse-reading muse-preview hidden');
     preview.id = id + '-preview';
     body.appendChild(preview);
     function mode(on) {
-      if (on) Muse.markdown.into(preview, area.value);
+      if (on) Muse.markdown.into(preview, area.value, { except: element().id });
       Muse.show(area, !on);
       Muse.show(preview, on);
       write.setAttribute('aria-pressed', String(!on));
@@ -401,7 +407,10 @@
           edit(false);
           confirmRetire(false);
           draw();
-          return true;
+          // Its relationships, and the elements that link to it.
+          return Promise.all([Muse.relationships.show(), Muse.mentioned.show()]).then(function () {
+            return true;
+          });
         });
     },
   };

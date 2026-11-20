@@ -9,7 +9,9 @@
   //   muse_projects/{p}/elements/{id}
   //     type       character, faction, location, object or concept (fixed)
   //     name, aliases, bio (Markdown), fields (EL2, by key; ./fields.js)
-  //     images, primary (M-104), mentions (M-103)
+  //     images, primary (M-104)
+  //     mentions   the ids its bio and appearance link to ([Name](muse:el/id)),
+  //                worked out on every save (M-103, ./links.js)
   //     appearance (Markdown), residence (a location's id): characters only
   //     shard      the index document that lists it (fixed)
   //     retired    a retired element keeps its page but leaves the index
@@ -25,6 +27,7 @@
   //
   // A plan is a list of writes, { op, path, data }, done in one batch:
   //   set     the whole document
+  //   delete  the document
   //   update  these fields
   //   merge   set, merged into what is there (maps merged, lists replaced)
   // with NOW for the server's time and DELETE to take a map's key away. The
@@ -38,10 +41,15 @@
       ? window.Muse.fields
       : require('./fields.js');
 
+  var links =
+    typeof window !== 'undefined' && window.Muse && window.Muse.links
+      ? window.Muse.links
+      : require('./links.js');
+
   var TYPES = fields.TYPES;
   var LIMITS = { name: 200, aliases: 20, alias: 100, bio: 200000, appearance: 50000 };
   var SHARD_SIZE = 500;
-  var NOW = { __muse: 'now' };
+  var NOW = links.NOW;
   var DELETE = { __muse: 'delete' };
 
   function projectPath(projectId) {
@@ -155,6 +163,8 @@
     } else if (has('appearance') || has('residence')) {
       return { error: 'Only characters have an appearance and a residence.' };
     }
+    // The elements its texts link to (EL6), kept in step with every save.
+    out.mentions = links.mentionsOf(out.bio, out.appearance || '');
     return { value: out };
   }
 
@@ -235,7 +245,7 @@
       fields: checked.fields,
       images: [],
       primary: null,
-      mentions: [],
+      mentions: checked.mentions || [],
       shard: shard,
       retired: false,
       createdAt: NOW,
