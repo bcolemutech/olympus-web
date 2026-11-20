@@ -44,7 +44,7 @@ npm run format
 - **JSX Runner** — `public/apps/jsx-runner/`: Dynamic React applet executor
 - **The Loom** — `public/apps/loom/`: AI-narrated game system; plays worlds with Gemini
 - **The Cartographer** — `public/apps/cartographer/`: Turns Azgaar maps into Loom worlds; MCP connector at `/mcp/cartographer`
-- **The Muse** — `public/apps/muse/`: World bibles and manuscripts (M-100 in progress: projects from M-101); opened by the `muse` claim; MCP connector at `/mcp/muse` _(planned, M-106)_
+- **The Muse** — `public/apps/muse/`: World bibles and manuscripts (M-100 in progress: projects from M-101, elements and custom fields from M-102); opened by the `muse` claim; MCP connector at `/mcp/muse` _(planned, M-106)_
 - **The Image Studio** — `public/apps/studio/`: The library of art for worlds: browse, search, look at, upload and download images. Opened by the `cartographer` claim (`claim:` in `apps.yaml`); its MCP tools are in the Cartographer connector
 - **Scriptorium** — _(MCP connector only)_: Notes managed from Claude at `/mcp/scriptorium`
 
@@ -227,7 +227,7 @@ npm run deploy            # Deploy hosting only (production)
 - `studio_jobs/{jobId}` — `hasApp('cartographer')`, read only. The image studio's jobs (make or edit an image): request, state, result, cost or error; busy 429s retried up to 5 tries (L-396)
 - `studio_styles/{styleId}` — `hasApp('cartographer')`, read only. The image studio's named styles: a name, prompt text and up to 3 reference images, named in a generation or edit; a world's default is `world.studio.styleId`
 - `studio_costs/{entryId}`, `studio_costs_month/{yyyy-mm}` — Deny (server only). The image studio's costs: one entry per charged job, and each month's totals by day, model and who (read through `studioCosts`)
-- `muse_projects/{projectId}` — Owner with `hasApp('muse')`, read and write (the page writes directly, shapes checked by the rules; M-101). The Muse's projects: title, short, Markdown summary, cover; subcollections added by later stories
+- `muse_projects/{projectId}` — Owner with `hasApp('muse')`, read and write (the page writes directly, shapes checked by the rules; M-101). The Muse's projects: title, short, Markdown summary, cover, custom fields per type; `elements` (characters, factions, locations, objects, concepts) and their `index`, written together in one batch (the rules check each against the other; M-102); later subcollections added by their stories
 - `scriptorium_notes/{id}` — Deny (server only). Scriptorium notes, via MCP (`list_notes` pages titles and dates without bodies by a cursor; `get_note` reads one; L-397)
 - `mcp_*` (`oauth_clients`, `oauth_codes`, `oauth_tokens`, `oauth_grants`, `audit`, `rate_limits`) — Deny (server only). MCP OAuth state, audit log, rate limits
 

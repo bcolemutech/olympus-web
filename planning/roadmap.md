@@ -169,13 +169,13 @@ The other gaps, each designed when next: a **dungeon epic** (light, traps, secre
 
 A world bible and manuscript app of its own, in the spirit of Campfire, from idea #873. No AI is built in: Claude works on projects over its own MCP connector. Design: [`the-muse.md`](./the-muse.md). Its order puts manuscripts last; no bridge to Loom worlds is built, since Claude reads a project over MCP when building a world.
 
-| Epic                                            | State                                     |
-| ----------------------------------------------- | ----------------------------------------- |
-| **M-100 Projects and elements** (#888)          | 📋 Next: M-101 to M-106 filed (#889–#894) |
-| **M-200 Classifications and schematics** (#895) | 📋 Planned; stories filed when next       |
-| **M-300 The timeline** (#896)                   | 📋 Planned; stories filed when next       |
-| **M-400 Versions and export** (#897)            | 📋 Planned; stories filed when next       |
-| **M-500 Manuscripts** (#898)                    | 📋 Planned; stories filed when next       |
+| Epic                                            | State                                  |
+| ----------------------------------------------- | -------------------------------------- |
+| **M-100 Projects and elements** (#888)          | 🚧 M-101, M-102 done; next M-103–M-105 |
+| **M-200 Classifications and schematics** (#895) | 📋 Planned; stories filed when next    |
+| **M-300 The timeline** (#896)                   | 📋 Planned; stories filed when next    |
+| **M-400 Versions and export** (#897)            | 📋 Planned; stories filed when next    |
+| **M-500 Manuscripts** (#898)                    | 📋 Planned; stories filed when next    |
 
 ### Not yet placed
 

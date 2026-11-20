@@ -74,6 +74,19 @@ function stub({ apps, docs }) {
   let clock = 1000;
   let next = 0;
   const SERVER_TIME = { __serverTime: true };
+  const DELETE = { __delete: true };
+  const plain = (v) => v && typeof v === 'object' && !Array.isArray(v) && !v.toMillis;
+  // set(…, { merge: true }): maps merged, lists replaced, DELETE takes a key away.
+  const merge = (into, data) => {
+    const out = { ...(into || {}) };
+    Object.keys(data).forEach((k) => {
+      if (data[k] === DELETE) delete out[k];
+      else if (plain(data[k]) && plain(out[k])) out[k] = merge(out[k], data[k]);
+      else if (plain(data[k])) out[k] = merge({}, data[k]);
+      else out[k] = data[k];
+    });
+    return out;
+  };
   const stamp = (data) => {
     const out = {};
     Object.keys(data).forEach((k) => {
@@ -92,7 +105,10 @@ function stub({ apps, docs }) {
     return {
       id: path.split('/').pop(),
       get: () => Promise.resolve(snap(path)),
-      set: (data) => Promise.resolve(store.set(path, stamp(data))),
+      set: (data, options) =>
+        Promise.resolve(
+          store.set(path, options && options.merge ? merge(store.get(path), stamp(data)) : stamp(data))
+        ),
       update: (data) => {
         if (!store.has(path)) return Promise.reject(new Error('No document to update'));
         store.set(path, { ...store.get(path), ...stamp(data) });
@@ -122,8 +138,22 @@ function stub({ apps, docs }) {
     email: 'ann@example.com',
     getIdTokenResult: () => Promise.resolve({ claims: { apps } }),
   };
-  const firestore = () => ({ collection: (name) => collection(name) });
-  firestore.FieldValue = { serverTimestamp: () => SERVER_TIME };
+  // A batch does its writes in order once committed (all or none is not
+  // needed here: the stub never refuses a write that the page checked).
+  const batch = () => {
+    const writes = [];
+    return {
+      set: (r, data, options) => writes.push(() => r.set(data, options)),
+      update: (r, data) => writes.push(() => r.update(data)),
+      delete: (r) => writes.push(() => r.delete()),
+      commit: () => {
+        window.__batches = (window.__batches || 0) + 1;
+        return writes.reduce((p, w) => p.then(w), Promise.resolve());
+      },
+    };
+  };
+  const firestore = () => ({ collection: (name) => collection(name), batch });
+  firestore.FieldValue = { serverTimestamp: () => SERVER_TIME, delete: () => DELETE };
   window.firebase = {
     auth: () => ({ onAuthStateChanged: (cb) => cb(user), signOut: () => Promise.resolve() }),
     firestore,
@@ -147,6 +177,39 @@ const PROJECTS = {
     updatedAt: 50, // a time in ms: the page reads either
   },
   'muse_projects/p_bob': { owner: 'bob', title: 'Bob’s', short: '', summary: '', cover: null },
+  // A project with a location already in it, and fields of its own (M-102).
+  'muse_projects/p_isle': {
+    owner: 'ann',
+    title: 'The Isles',
+    short: '',
+    summary: '',
+    cover: null,
+    updatedAt: 10,
+    fields: {
+      character: [
+        { key: 'born_ab', label: 'Born', kind: 'date' },
+        { key: 'temper_cd', label: 'Temper', kind: 'choice', options: ['Calm', 'Fiery'] },
+      ],
+    },
+  },
+  'muse_projects/p_isle/elements/el_sea': {
+    type: 'location',
+    name: 'The Sunken City',
+    aliases: ['Old Brass'],
+    bio: '',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: [],
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_isle/index/0': {
+    entries: {
+      el_sea: { type: 'location', name: 'The Sunken City', aliases: ['Old Brass'], primary: null },
+    },
+    last: 'el_sea',
+  },
 };
 
 async function open(options, { apps = ['muse'], hash = '' } = {}) {
@@ -202,7 +265,7 @@ describe('the home page', () => {
   each('lists your projects only, last changed first, as cards', async (page) => {
     await page.waitForSelector('.muse-project-card');
     const titles = await page.locator('.muse-project-card-title').allInnerTexts();
-    expect(titles).toEqual(['The Drowned Kingdom', 'Older']);
+    expect(titles).toEqual(['The Drowned Kingdom', 'The Isles', 'Older']);
     await expect(page.locator('.muse-project-card-short').first().innerText()).resolves.toBe(
       'A sea that took a crown'
     );
@@ -241,9 +304,10 @@ describe('the home page', () => {
 
   each('asks for a title before making anything', async (page) => {
     await page.click('#muse-new-open');
+    const before = Object.keys(await stored(page)).length;
     await page.click('#muse-new-btn');
     await expect(page.locator('#muse-new-error').innerText()).resolves.toMatch(/title/);
-    expect(Object.keys(await stored(page))).toHaveLength(3);
+    expect(Object.keys(await stored(page))).toHaveLength(before);
   });
 });
 
@@ -330,8 +394,208 @@ describe('a project’s home', () => {
     await page.waitForSelector('#muse-home:not(.hidden)');
     expect(Object.keys(await stored(page))).not.toContain('muse_projects/p_sea');
     await expect(page.locator('.muse-project-card-title').allInnerTexts()).resolves.toEqual([
+      'The Isles',
       'Older',
     ]);
+  });
+});
+
+describe('elements (M-102)', () => {
+  const openIsles = async (page) => {
+    await page.click('.muse-project-card[data-id="p_isle"]');
+    await page.waitForSelector('#muse-project:not(.hidden)');
+  };
+  const elementsIn = async (page, projectId) =>
+    Object.entries(await stored(page))
+      .filter(([p]) => p.startsWith(`muse_projects/${projectId}/elements/`))
+      .map(([p, d]) => ({ id: p.split('/').pop(), ...d }));
+  const indexOf = async (page, projectId) =>
+    (await stored(page))[`muse_projects/${projectId}/index/0`] || { entries: {} };
+
+  each('a character with a residence and two custom fields, made and shown', async (page) => {
+    await openIsles(page);
+    // The sections open each type's list, with counts from the index.
+    const tiles = await page.locator('.muse-section-tile').allInnerTexts();
+    expect(tiles.map((t) => t.replace(/\s+/g, ' ').trim())).toContain('Locations 1');
+    await page.click('.muse-section-tile[data-type="character"]');
+    await page.waitForSelector('#muse-type:not(.hidden)');
+    await expect(page.locator('#muse-t-empty').innerText()).resolves.toMatch(/No characters/);
+
+    // New: a name, then its page.
+    await page.click('#muse-t-new-open');
+    await page.fill('#muse-t-new-name', '  Peter  ');
+    await page.click('#muse-t-new-btn');
+    await page.waitForSelector('#muse-element:not(.hidden)');
+    await expect(page.locator('#muse-e-name').innerText()).resolves.toBe('Peter');
+    await expect(page.locator('#muse-e-type').innerText()).resolves.toMatch(/character/i);
+
+    // Edited: aliases, a residence, the two fields, an appearance and a bio.
+    await page.click('#muse-e-edit');
+    await page.fill('#muse-e-name-input', 'King Peter');
+    await page.fill('#muse-e-aliases-input', 'Peter\nThe Drowned King');
+    await page.selectOption('#muse-e-residence', 'el_sea');
+    await page.fill('[data-field="born_ab"] .muse-date-year', '312');
+    await page.fill('[data-field="born_ab"] .muse-date-month', '3');
+    await page.selectOption('[data-field="temper_cd"]', 'Fiery');
+    await page.fill('#muse-e-appearance-input', 'A crown of *barnacles*.');
+    await page.fill('#muse-e-bio-input', '# The king\n\nHe rules the tides.');
+    await page.click('#muse-e-bio-input-show');
+    await expect(page.locator('#muse-e-bio-input-preview h1').innerText()).resolves.toBe('The king');
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+
+    // Shown.
+    await expect(page.locator('#muse-e-name').innerText()).resolves.toBe('King Peter');
+    await expect(page.locator('#muse-e-aliases').innerText()).resolves.toMatch(
+      /Peter · The Drowned King/
+    );
+    const fact = (key) => page.locator(`.muse-fact[data-key="${key}"] dd`).innerText();
+    await expect(fact('residence')).resolves.toBe('The Sunken City');
+    await expect(fact('born_ab')).resolves.toBe('Year 312, month 3');
+    await expect(fact('temper_cd')).resolves.toBe('Fiery');
+    await expect(page.locator('#muse-e-appearance em').innerText()).resolves.toBe('barnacles');
+    await expect(page.locator('#muse-e-bio h1').innerText()).resolves.toBe('The king');
+
+    // Saved, with its index line, each in one batch.
+    const [peter] = (await elementsIn(page, 'p_isle')).filter((e) => e.type === 'character');
+    expect(peter).toMatchObject({
+      name: 'King Peter',
+      aliases: ['Peter', 'The Drowned King'],
+      residence: 'el_sea',
+      appearance: 'A crown of *barnacles*.',
+      fields: { born_ab: { year: 312, month: 3 }, temper_cd: 'Fiery' },
+      shard: '0',
+      retired: false,
+    });
+    expect((await indexOf(page, 'p_isle')).entries[peter.id]).toEqual({
+      type: 'character',
+      name: 'King Peter',
+      aliases: ['Peter', 'The Drowned King'],
+      primary: null,
+    });
+    await expect(page.evaluate(() => window.__batches)).resolves.toBe(2);
+
+    // The residence opens its location's page.
+    await page.click('.muse-fact[data-key="residence"] a');
+    await page.waitForFunction(
+      () => document.getElementById('muse-e-name').textContent === 'The Sunken City'
+    );
+    await expect(page.locator('#muse-e-residence').count()).resolves.toBe(0);
+  });
+
+  each('custom fields are added in the project’s settings and filled in', async (page) => {
+    await openIsles(page);
+    await page.click('#muse-f-types [data-type="faction"]');
+    await expect(page.locator('#muse-f-empty').isVisible()).resolves.toBe(true);
+    await page.fill('#muse-f-new-label', 'Motto');
+    await page.selectOption('#muse-f-new-kind', 'text');
+    await page.click('#muse-f-add');
+    await page.fill('#muse-f-new-label', 'Founded by');
+    await page.selectOption('#muse-f-new-kind', 'element');
+    await page.click('#muse-f-add');
+    await page.check('.muse-f-row:last-child input[value="character"]');
+    await page.fill('#muse-f-new-label', 'Members');
+    await page.selectOption('#muse-f-new-kind', 'number');
+    await page.click('#muse-f-add');
+    // Moved up, then saved.
+    await page.click('.muse-f-row:last-child button[aria-label^="Move Members up"]');
+    await page.click('#muse-f-save');
+    await page.waitForSelector('#muse-f-done:not(.hidden)');
+    const defs = (await stored(page))['muse_projects/p_isle'].fields;
+    expect(defs.character.map((d) => d.key)).toEqual(['born_ab', 'temper_cd']);
+    expect(defs.faction.map((d) => [d.label, d.kind, d.options])).toEqual([
+      ['Motto', 'text', undefined],
+      ['Members', 'number', undefined],
+      ['Founded by', 'element', ['character']],
+    ]);
+    defs.faction.forEach((d) => expect(d.key).toMatch(/^[a-z][a-z0-9_]+$/));
+
+    // A faction with them filled in; a bad number is refused first.
+    await page.click('.muse-section-tile[data-type="faction"]');
+    await page.click('#muse-t-new-open');
+    await page.fill('#muse-t-new-name', 'The Tide Guild');
+    await page.click('#muse-t-new-btn');
+    await page.waitForSelector('#muse-element:not(.hidden)');
+    await page.click('#muse-e-edit');
+    const [motto, members] = defs.faction;
+    await page.fill(`[data-field="${motto.key}"]`, 'We rise');
+    await page.fill(`[data-field="${members.key}"]`, 'many');
+    await page.click('#muse-e-save');
+    await expect(page.locator('#muse-e-form-error').innerText()).resolves.toMatch(/Members/);
+    await page.fill(`[data-field="${members.key}"]`, '1,200');
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+    await expect(
+      page.locator(`.muse-fact[data-key="${members.key}"] dd`).innerText()
+    ).resolves.toBe((1200).toLocaleString());
+    const [guild] = await elementsIn(page, 'p_isle').then((all) =>
+      all.filter((e) => e.type === 'faction')
+    );
+    expect(guild.fields).toEqual({ [motto.key]: 'We rise', [members.key]: 1200 });
+    expect(guild).not.toHaveProperty('residence');
+  });
+
+  each('a concept is made, listed by name, renamed and retired', async (page) => {
+    await openIsles(page);
+    await page.click('.muse-section-tile[data-type="concept"]');
+    for (const name of ['Tide-magic', 'Bell-lore']) {
+      await page.click('#muse-t-new-open');
+      await page.fill('#muse-t-new-name', name);
+      await page.click('#muse-t-new-btn');
+      await page.waitForSelector('#muse-element:not(.hidden)');
+      await expect(page.locator('#muse-e-type').innerText()).resolves.toMatch(/concept/i);
+      await expect(page.locator('#muse-e-residence-input, #muse-e-appearance-card:not(.hidden)').count()).resolves.toBe(0);
+      await page.click('#muse-e-back');
+      await page.waitForSelector('#muse-type:not(.hidden)');
+    }
+    await expect(page.locator('.muse-el-row-name').allInnerTexts()).resolves.toEqual([
+      'Bell-lore',
+      'Tide-magic',
+    ]);
+
+    // Renamed, with an alias: the list follows.
+    await page.click('.muse-el-row:has-text("Tide-magic")');
+    await page.waitForSelector('#muse-element:not(.hidden)');
+    await page.click('#muse-e-edit');
+    await expect(page.locator('#muse-e-residence').count()).resolves.toBe(0);
+    await page.fill('#muse-e-name-input', 'Abyssal Rite');
+    await page.fill('#muse-e-aliases-input', 'Tide-magic');
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+    await page.click('#muse-e-back');
+    await page.waitForSelector('#muse-type:not(.hidden)');
+    await expect(page.locator('.muse-el-row-name').allInnerTexts()).resolves.toEqual([
+      'Abyssal Rite',
+      'Bell-lore',
+    ]);
+    await expect(page.locator('.muse-el-row-aliases').allInnerTexts()).resolves.toEqual([
+      'Tide-magic',
+    ]);
+
+    // Retired only once confirmed; it leaves the list and the index.
+    await page.click('.muse-el-row:has-text("Bell-lore")');
+    await page.waitForSelector('#muse-element:not(.hidden)');
+    await page.click('#muse-e-retire');
+    await page.click('#muse-e-retire-no');
+    await expect(page.locator('#muse-e-retired').isVisible()).resolves.toBe(false);
+    await page.click('#muse-e-retire');
+    await page.click('#muse-e-retire-yes');
+    await page.waitForSelector('#muse-e-retired:not(.hidden)');
+    const bell = (await elementsIn(page, 'p_isle')).find((e) => e.name === 'Bell-lore');
+    expect(bell.retired).toBe(true);
+    expect((await indexOf(page, 'p_isle')).entries[bell.id]).toBeUndefined();
+    await page.click('#muse-e-back');
+    await page.waitForSelector('#muse-type:not(.hidden)');
+    await expect(page.locator('.muse-el-row-name').allInnerTexts()).resolves.toEqual([
+      'Abyssal Rite',
+    ]);
+
+    // Brought back from its page.
+    await page.goBack();
+    await page.waitForSelector('#muse-e-retired:not(.hidden)');
+    await page.click('#muse-e-restore');
+    await page.waitForSelector('#muse-e-retired.hidden', { state: 'attached' });
+    expect((await indexOf(page, 'p_isle')).entries[bell.id].name).toBe('Bell-lore');
   });
 });
 
@@ -353,6 +617,42 @@ describe('around the edges', () => {
 
   run('a project that isn’t there says so', SCREENS.desktop, { hash: '#/p/nope' }, async (page) => {
     await page.waitForSelector('#muse-missing:not(.hidden)');
+  });
+
+  run(
+    'an element or a type that isn’t there says so',
+    SCREENS.desktop,
+    { hash: '#/p/p_isle/e/nope' },
+    async (page) => {
+      await page.waitForSelector('#muse-missing:not(.hidden)');
+      await page.evaluate(() => (window.location.hash = '#/p/p_isle/t/dragon'));
+      await page.waitForSelector('#muse-missing:not(.hidden)');
+      await page.evaluate(() => (window.location.hash = '#/p/p_isle/e/el_sea'));
+      await page.waitForSelector('#muse-element:not(.hidden)');
+    }
+  );
+
+  run(
+    'deleting a project deletes its elements and index',
+    SCREENS.desktop,
+    { hash: '#/p/p_isle' },
+    async (page) => {
+      await page.waitForSelector('#muse-project:not(.hidden)');
+      await page.click('#muse-p-delete');
+      await page.click('#muse-p-delete-yes');
+      await page.waitForSelector('#muse-home:not(.hidden)');
+      const left = Object.keys(await stored(page)).filter((p) => p.includes('p_isle'));
+      expect(left).toEqual([]);
+    }
+  );
+
+  run('a phone reads an element', PHONE, { hash: '#/p/p_isle/e/el_sea' }, async (page) => {
+    await page.waitForSelector('#muse-element:not(.hidden)');
+    await expect(page.locator('#muse-e-aliases').innerText()).resolves.toMatch(/Old Brass/);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 
   run('without the muse claim, it explains', SCREENS.desktop, { apps: ['loom'] }, async (page) => {

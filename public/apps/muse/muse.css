@@ -460,6 +460,264 @@
   border-top: 1px solid var(--muse-line);
 }
 
+/* ── Sections as links (M-102) ── */
+
+a.muse-section-tile {
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+a.muse-section-tile:hover,
+a.muse-section-tile:focus-visible {
+  border-color: rgba(179, 157, 219, 0.45);
+  background: var(--muse-accent-soft);
+}
+
+.muse-subheading {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #e0e0e0;
+  margin-bottom: 0.25rem;
+}
+
+.muse-hint {
+  color: var(--muse-muted);
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.muse-select {
+  appearance: auto;
+}
+
+.muse-btn-small {
+  min-height: 44px;
+  padding: 0.4rem 0.8rem;
+}
+
+/* ── Custom fields in a project's settings (M-102) ── */
+
+.muse-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--muse-line);
+}
+
+.muse-type-tabs {
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.muse-f-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--muse-line);
+  border-radius: 10px;
+  background: rgba(10, 14, 26, 0.5);
+}
+
+.muse-f-row .muse-inline {
+  align-items: center;
+}
+
+.muse-f-kind {
+  color: var(--muse-accent);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.muse-f-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  align-items: center;
+}
+
+.muse-f-types .muse-hint {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.muse-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  color: #e0e0e0;
+}
+
+.muse-check input {
+  accent-color: var(--muse-accent);
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.muse-f-add {
+  margin-top: 0.5rem;
+}
+
+.muse-f-add .muse-select {
+  flex: 0 1 14rem;
+}
+
+/* ── A list of one type (M-102) ── */
+
+.muse-t-title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #f3e5f5;
+}
+
+.muse-el-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--muse-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.muse-el-list:empty {
+  display: none;
+}
+
+.muse-el-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  background: rgba(17, 24, 39, 0.7);
+}
+
+.muse-el-row + .muse-el-row {
+  border-top: 1px solid var(--muse-line);
+}
+
+.muse-el-row:hover,
+.muse-el-row:focus-visible {
+  background: var(--muse-accent-soft);
+}
+
+.muse-el-row-name {
+  color: #f3e5f5;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.muse-el-row-aliases {
+  color: var(--muse-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+/* ── An element's page (M-102) ── */
+
+.muse-e-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+}
+
+.muse-e-type {
+  color: var(--muse-accent);
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.muse-e-aliases {
+  color: #b0bec5;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.muse-retired {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba(255, 213, 79, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 213, 79, 0.06);
+  color: #ffe082;
+}
+
+.muse-facts {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: 0.5rem 1.5rem;
+}
+
+.muse-fact {
+  display: contents;
+}
+
+.muse-fact dt {
+  color: var(--muse-muted);
+  font-size: 0.9rem;
+}
+
+.muse-fact dd {
+  margin: 0;
+  color: #e0e0e0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.muse-fact a.muse-el-link,
+.muse-gone {
+  color: var(--muse-accent-strong);
+}
+
+.muse-gone {
+  font-style: italic;
+  color: var(--muse-muted);
+}
+
+.muse-e-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.25rem;
+  padding: 0.75rem 1rem 1rem;
+  border: 1px solid var(--muse-line);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.muse-date .muse-input {
+  flex: 1 1 6rem;
+}
+
+.muse-date .muse-date-year {
+  flex-grow: 2;
+}
+
+.muse-textarea-short {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.muse-danger-card {
+  border-color: rgba(239, 154, 154, 0.2);
+}
+
 /* ── iPad portrait and phones ── */
 
 @media (max-width: 820px) {
@@ -493,5 +751,14 @@
 
   .muse-projects {
     grid-template-columns: 1fr;
+  }
+
+  .muse-facts {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .muse-fact dd {
+    margin-bottom: 0.5rem;
   }
 }

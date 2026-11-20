@@ -1,6 +1,6 @@
 # The Muse — Design Document v0.1
 
-**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed; M-100's sub-issues M-101 to M-106 filed as #889–#894 (§7); the later epics are filed with their stories planned here, and their sub-issues filed when each is next.
+**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed; M-100's sub-issues M-101 to M-106 filed as #889–#894 (§7), M-101 and M-102 built; the later epics are filed with their stories planned here, and their sub-issues filed when each is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** The Muse, its own app and phase (milestone #27), prefix **M-**, label `muse`. From idea #873.
 **Depends on:** the Image Studio (L-700, [`the-image-studio.md`](./the-image-studio.md)), the MCP host (MCP Initiative 1, [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)).
