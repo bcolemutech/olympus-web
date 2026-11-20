@@ -97,13 +97,14 @@
     Muse.$('muse-p-summary-show').setAttribute('aria-pressed', String(on));
   }
 
-  // ── Sections: one per element type, with counts (elements come in M-102) ──
+  // ── Sections: one per element type, with counts, each opening its list ──
   function drawSections() {
     var list = Muse.$('muse-p-sections');
     list.textContent = '';
-    var counts = state.counts || {};
+    var counts = Muse.elements.counts();
     Muse.TYPES.forEach(function (type) {
-      var tile = Muse.el('div', 'muse-section-tile');
+      var tile = Muse.el('a', 'muse-section-tile');
+      tile.href = '#/p/' + encodeURIComponent(project().id) + '/t/' + type.id;
       tile.dataset.type = type.id;
       tile.appendChild(Muse.el('span', 'muse-section-name', type.name));
       tile.appendChild(Muse.el('span', 'muse-section-count', String(counts[type.id] || 0)));
@@ -213,10 +214,10 @@
       Muse.$('muse-p-delete-yes').addEventListener('click', remove);
     },
 
-    // Opens a project by id; false when it isn't there (or isn't yours).
-    show: function (id) {
-      state.counts = {};
-      Muse.say(Muse.$('muse-p-error'), '');
+    // Reads a project and its index into the state; false when it isn't
+    // there (or isn't yours). Every view inside a project starts here.
+    load: function (id) {
+      state.index = null;
       return Muse.projects
         .get(id)
         .catch(function () {
@@ -225,14 +226,29 @@
         .then(function (p) {
           state.project = p;
           if (!p) return false;
-          editHead(false);
-          editSummary(false);
-          confirmDelete(false);
-          Muse.say(Muse.$('muse-p-rename-done'), '');
-          Muse.say(Muse.$('muse-p-rename-error'), '');
-          draw();
-          return true;
+          return Muse.elements.loadIndex(id).then(function () {
+            return true;
+          });
+        })
+        .catch(function () {
+          return false;
         });
+    },
+
+    // Opens a project's home by id; false when it isn't there.
+    show: function (id) {
+      Muse.say(Muse.$('muse-p-error'), '');
+      return Muse.project.load(id).then(function (found) {
+        if (!found) return false;
+        Muse.fieldEditor.reset();
+        editHead(false);
+        editSummary(false);
+        confirmDelete(false);
+        Muse.say(Muse.$('muse-p-rename-done'), '');
+        Muse.say(Muse.$('muse-p-rename-error'), '');
+        draw();
+        return true;
+      });
     },
   };
 })();

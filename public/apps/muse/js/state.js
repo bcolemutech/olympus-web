@@ -12,6 +12,8 @@
     uid: null,
     projects: [], // the owner's projects, last changed first
     project: null, // the open project
+    index: null, // its index: { entries: { id: entry }, shards } (M-102)
+    element: null, // the open element (M-102)
   };
 
   // The element types (§5, M-100), in the order a project lists them.
@@ -28,7 +30,7 @@
 
   // A project's subcollections, deleted with it. Each story that adds one
   // adds it here (M-102 onwards: index, elements, relationships, versions…).
-  Muse.PROJECT_PARTS = [];
+  Muse.PROJECT_PARTS = ['index', 'elements'];
 
   // ── Helpers ─────────────────────────────────────
   Muse.$ = function (id) {
@@ -69,6 +71,11 @@
         })
       : '';
   };
+
+  Muse.TYPE = {};
+  Muse.TYPES.forEach(function (type) {
+    Muse.TYPE[type.id] = type;
+  });
 
   Muse.go = function (hash) {
     if (window.location.hash === hash) Muse.app.route();

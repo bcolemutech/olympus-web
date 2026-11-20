@@ -108,7 +108,19 @@ The image studio's costs: one entry per charged job, and each month's totals by 
 
 **Access:** Owner with `hasApp('muse')`, read and write; the page writes directly, under rules that check each document's shape (M-101)
 
-The Muse's projects (planning/the-muse.md §4): `owner`, `title` (1–200 characters), `short` (the home page's line, up to 300), `summary` (Markdown, up to 200,000), `cover` (a studio image id or null), `createdAt` and `updatedAt` (the server's time, checked by the rules), and, from later stories, `fields`, `lanes` and `calendar`. Listed by `where('owner', '==', uid)` and sorted on the page, so no index. Its subcollections (index, elements, relationships, versions and later) are denied until the stories that add them give them rules; a project's delete removes those named in `Muse.PROJECT_PARTS`.
+The Muse's projects (planning/the-muse.md §4): `owner`, `title` (1–200 characters), `short` (the home page's line, up to 300), `summary` (Markdown, up to 200,000), `cover` (a studio image id or null), `createdAt` and `updatedAt` (the server's time, checked by the rules), and, from later stories, `fields`, `lanes` and `calendar`. Listed by `where('owner', '==', uid)` and sorted on the page, so no index. `fields` (M-102, EL2) holds the project's own fields per element type, `{ character: [{ key, label, kind, options }], … }`, at most 30 per type; the kinds are text, number, date (`{ year, month?, day? }`), element (an id; `options` may list the types it can link to) and choice (`options`, the list). Definitions and values are checked by `public/apps/muse/js/fields.js`; the rules bound the lists. Subcollections not listed below (relationships, versions and later) are denied until the stories that add them give them rules; a project's delete removes those named in `Muse.PROJECT_PARTS` (`index`, `elements`).
+
+### `muse_projects/{projectId}/elements/{elementId}`
+
+**Access:** The project's owner with `hasApp('muse')`, read and write; create and update only with the element's index line in the same batch (M-102)
+
+One collection for every type (D2): `type` (character, faction, location, object or concept; fixed), `name` (1–200), `aliases` (at most 20), `bio` (Markdown, up to 200,000), `fields` (custom values by key; values of a removed field stay until the element is next saved), `images` and `primary` (M-104), `mentions` (M-103), `shard` (its index document; fixed), `retired` (kept, but out of the index), `createdAt` and `updatedAt`; characters also have `appearance` (Markdown) and `residence` (a location's id). The shapes and plans are in `public/apps/muse/js/model.js`.
+
+### `muse_projects/{projectId}/index/{shard}`
+
+**Access:** The project's owner with `hasApp('muse')`, read and write; a write changes one line, named by `last`, which must match that element as it stands after the batch (M-102)
+
+`entries`: `{ <elementId>: { type, name, aliases, primary } }` for every live element, at most 500 per shard (`0`, `1`, …; a new element goes in the first with room). The page reads every shard once per project for lists, counts, links and (M-103) search.
 
 ## `scriptorium_notes/{id}`
 

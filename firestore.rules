@@ -382,6 +382,19 @@ service cloud.firestore {
         return value is string && value.size() <= max;
       }
 
+      // The project's own fields per element type (EL2; M-102): a list per
+      // type, at most 30. Each definition's shape is checked by the page
+      // (public/apps/muse/js/fields.js); the rules bound the lists.
+      function validFieldDefs(f) {
+        return f is map
+            && f.keys().hasOnly(['character', 'faction', 'location', 'object', 'concept'])
+            && f.get('character', []) is list && f.get('character', []).size() <= 30
+            && f.get('faction', []) is list && f.get('faction', []).size() <= 30
+            && f.get('location', []) is list && f.get('location', []).size() <= 30
+            && f.get('object', []) is list && f.get('object', []).size() <= 30
+            && f.get('concept', []) is list && f.get('concept', []).size() <= 30;
+      }
+
       function validProject() {
         let data = request.resource.data;
         let required = ['owner', 'title', 'short', 'summary', 'createdAt', 'updatedAt'];
@@ -393,7 +406,7 @@ service cloud.firestore {
             && museText(data.summary, 200000)
             && (!('cover' in data) || data.cover == null
                 || (data.cover is string && data.cover.size() > 0 && data.cover.size() <= 200))
-            && (!('fields' in data) || data.fields is map)
+            && (!('fields' in data) || validFieldDefs(data.fields))
             && (!('lanes' in data) || data.lanes is list)
             && (!('calendar' in data) || data.calendar is map);
       }
@@ -409,9 +422,115 @@ service cloud.firestore {
                     && request.resource.data.createdAt == resource.data.createdAt
                     && request.resource.data.updatedAt == request.time;
 
-      // Its subcollections (index, elements, relationships, versions, …) get
-      // their rules, with their shapes, in the stories that add them
-      // (M-102 onwards). Until then the default deny below covers them.
+      // The project's owner, with the muse claim, for its subcollections.
+      function museProjectOwner() {
+        return hasApp('muse')
+            && get(/databases/$(database)/documents/muse_projects/$(projectId)).data.owner
+               == request.auth.uid;
+      }
+
+      function museIndexDoc(shard) {
+        return /databases/$(database)/documents/muse_projects/$(projectId)/index/$(shard);
+      }
+
+      function museElementDoc(id) {
+        return /databases/$(database)/documents/muse_projects/$(projectId)/elements/$(id);
+      }
+
+      // An element's line in the index: its type, name, aliases and primary.
+      function museEntry(el) {
+        return {
+          'type': el.type,
+          'name': el.name,
+          'aliases': el.aliases,
+          'primary': el.get('primary', null)
+        };
+      }
+
+      // An element and its index line agree, as they stand after this write
+      // (or batch): a live element is listed exactly, a retired one not at
+      // all. Checked from both sides, so neither is written alone (M-102).
+      function museInStep(id, el) {
+        let shard = museIndexDoc(el.shard);
+        return el.retired == true
+            ? (!existsAfter(shard) || !(id in getAfter(shard).data.entries))
+            : (existsAfter(shard)
+               && id in getAfter(shard).data.entries
+               && getAfter(shard).data.entries[id] == museEntry(el));
+      }
+
+      // Elements (M-102): characters, factions, locations, objects and
+      // concepts in one collection (D2). See public/apps/muse/js/model.js.
+      match /elements/{elementId} {
+        function validElement() {
+          let data = request.resource.data;
+          let required = ['type', 'name', 'aliases', 'bio', 'fields', 'shard', 'retired',
+                          'createdAt', 'updatedAt'];
+          let allowed = required.concat(['images', 'primary', 'mentions', 'appearance',
+                                         'residence', 'classes']);
+          return data.keys().hasAll(required)
+              && data.keys().hasOnly(allowed)
+              && data.type in ['character', 'faction', 'location', 'object', 'concept']
+              && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+              && data.aliases is list && data.aliases.size() <= 20
+              && museText(data.bio, 200000)
+              && data.fields is map && data.fields.size() <= 60
+              && data.shard is string && data.shard.matches('[0-9]{1,6}')
+              && data.retired is bool
+              && (!('images' in data) || (data.images is list && data.images.size() <= 200))
+              && (!('primary' in data) || data.primary == null
+                  || (data.primary is string && data.primary.size() <= 200))
+              && (!('mentions' in data) || (data.mentions is list && data.mentions.size() <= 1000))
+              && (!('classes' in data) || data.classes is list)
+              && (data.type == 'character'
+                  || (!('appearance' in data) && !('residence' in data)))
+              && (!('appearance' in data) || museText(data.appearance, 50000))
+              && (!('residence' in data) || data.residence == null
+                  || (data.residence is string && data.residence.size() > 0
+                      && data.residence.size() <= 128));
+        }
+
+        allow read, delete: if museProjectOwner();
+        allow create: if museProjectOwner()
+                      && validElement()
+                      && request.resource.data.retired == false
+                      && request.resource.data.createdAt == request.time
+                      && request.resource.data.updatedAt == request.time
+                      && museInStep(elementId, request.resource.data);
+        allow update: if museProjectOwner()
+                      && validElement()
+                      && request.resource.data.type == resource.data.type
+                      && request.resource.data.shard == resource.data.shard
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.updatedAt == request.time
+                      && museInStep(elementId, request.resource.data);
+      }
+
+      // The index (M-102): every live element's line, in shards of at most
+      // 500. A write changes one line, named by `last`, and that line must
+      // agree with the element as it stands after the batch.
+      match /index/{shard} {
+        function validIndex() {
+          let data = request.resource.data;
+          let before = resource == null ? {} : resource.data.entries;
+          let id = data.last;
+          let el = getAfter(museElementDoc(id)).data;
+          return data.keys().hasOnly(['entries', 'last'])
+              && data.entries is map && data.entries.size() <= 500
+              && id is string
+              && data.entries.diff(before).affectedKeys().hasOnly([id])
+              && existsAfter(museElementDoc(id))
+              && el.shard == shard
+              && museInStep(id, el);
+        }
+
+        allow read, delete: if museProjectOwner();
+        allow create, update: if museProjectOwner() && shard.matches('[0-9]{1,6}') && validIndex();
+      }
+
+      // Its other subcollections (relationships, versions, …) get their
+      // rules, with their shapes, in the stories that add them (M-103
+      // onwards). Until then the default deny below covers them.
     }
 
     // ── App registry ──────────────────────────────────────

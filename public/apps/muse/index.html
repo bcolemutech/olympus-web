@@ -155,6 +155,42 @@
 
         <section class="muse-card muse-settings" id="muse-p-settings">
           <h2 class="muse-heading">Settings</h2>
+
+          <!-- The project's own fields per element type (EL2; M-102) -->
+          <div class="muse-fields" id="muse-f">
+            <h3 class="muse-subheading">Custom fields</h3>
+            <p class="muse-hint">
+              Fields of your own for each type, shown on every element of that type.
+            </p>
+            <div class="muse-tabs muse-type-tabs" id="muse-f-types" role="group"></div>
+            <div class="muse-f-list" id="muse-f-list"></div>
+            <p class="muse-empty hidden" id="muse-f-empty">No custom fields for this type.</p>
+            <div class="muse-inline muse-f-add">
+              <input
+                class="muse-input"
+                id="muse-f-new-label"
+                maxlength="60"
+                autocomplete="off"
+                placeholder="New field's label"
+                aria-label="New field's label"
+              />
+              <select
+                class="muse-input muse-select"
+                id="muse-f-new-kind"
+                aria-label="Its kind"
+              ></select>
+              <button type="button" class="muse-btn muse-btn-quiet" id="muse-f-add">Add</button>
+            </div>
+            <p class="muse-error hidden" id="muse-f-error" role="alert"></p>
+            <p class="muse-done hidden" id="muse-f-done" role="status"></p>
+            <div class="muse-actions">
+              <button type="button" class="muse-btn" id="muse-f-save" disabled>Save fields</button>
+              <button type="button" class="muse-btn muse-btn-quiet" id="muse-f-reset" disabled>
+                Undo changes
+              </button>
+            </div>
+          </div>
+
           <form class="muse-form muse-rename" id="muse-p-rename-form" novalidate>
             <label class="muse-label" for="muse-p-rename-title">Rename</label>
             <div class="muse-inline">
@@ -193,10 +229,105 @@
         </section>
       </section>
 
-      <!-- ── A project that isn't there ── -->
+      <!-- ── A list of one type's elements (M-102) ── -->
+      <section class="hidden" id="muse-type">
+        <a class="muse-back" id="muse-t-back" href="#/">&larr; Project</a>
+        <div class="muse-bar">
+          <h1 class="muse-t-title" id="muse-t-title"></h1>
+          <button type="button" class="muse-btn" id="muse-t-new-open"></button>
+        </div>
+        <form class="muse-card muse-form hidden" id="muse-t-new-form" novalidate>
+          <label class="muse-label" for="muse-t-new-name">Name</label>
+          <input class="muse-input" id="muse-t-new-name" maxlength="200" autocomplete="off" />
+          <p class="muse-error hidden" id="muse-t-new-error" role="alert"></p>
+          <div class="muse-actions">
+            <button type="submit" class="muse-btn" id="muse-t-new-btn">Make it</button>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-t-new-cancel">
+              Cancel
+            </button>
+          </div>
+        </form>
+        <p class="muse-error hidden" id="muse-t-error" role="alert"></p>
+        <p class="muse-empty hidden" id="muse-t-empty"></p>
+        <div class="muse-el-list" id="muse-t-list"></div>
+      </section>
+
+      <!-- ── An element's page (M-102) ── -->
+      <section class="hidden" id="muse-element">
+        <a class="muse-back" id="muse-e-back" href="#/">&larr; Back</a>
+        <p class="muse-error hidden" id="muse-e-error" role="alert"></p>
+
+        <div class="muse-retired hidden" id="muse-e-retired" role="status">
+          <p>This element is retired: it is kept, but left out of lists and links.</p>
+          <button type="button" class="muse-btn muse-btn-quiet" id="muse-e-restore">
+            Bring it back
+          </button>
+        </div>
+
+        <header class="muse-e-head">
+          <p class="muse-e-type" id="muse-e-type"></p>
+          <h1 class="muse-p-title" id="muse-e-name"></h1>
+          <p class="muse-e-aliases hidden" id="muse-e-aliases"></p>
+          <button type="button" class="muse-btn muse-btn-quiet" id="muse-e-edit">Edit</button>
+        </header>
+
+        <!-- Reading -->
+        <div id="muse-e-read">
+          <section class="muse-card" id="muse-e-facts-card">
+            <h2 class="muse-heading">Details</h2>
+            <dl class="muse-facts" id="muse-e-facts"></dl>
+            <p class="muse-empty hidden" id="muse-e-facts-empty">Nothing filled in yet.</p>
+          </section>
+          <section class="muse-card hidden" id="muse-e-appearance-card">
+            <h2 class="muse-heading">Appearance</h2>
+            <div class="muse-reading" id="muse-e-appearance"></div>
+          </section>
+          <section class="muse-card">
+            <h2 class="muse-heading">Bio</h2>
+            <div class="muse-reading" id="muse-e-bio"></div>
+            <p class="muse-empty hidden" id="muse-e-bio-empty">No bio yet.</p>
+          </section>
+        </div>
+
+        <!-- Editing: built for the element's type and the project's fields -->
+        <form class="muse-card muse-form hidden" id="muse-e-form" novalidate>
+          <div id="muse-e-form-body"></div>
+          <p class="muse-error hidden" id="muse-e-form-error" role="alert"></p>
+          <div class="muse-actions">
+            <button type="submit" class="muse-btn" id="muse-e-save">Save</button>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-e-cancel">Cancel</button>
+          </div>
+        </form>
+
+        <!-- Filled by later stories: photos (M-104), relationships and
+             "mentioned in" (M-103) -->
+        <section class="muse-card hidden" id="muse-e-photos"></section>
+        <section class="muse-card hidden" id="muse-e-relationships"></section>
+        <section class="muse-card hidden" id="muse-e-mentions"></section>
+
+        <section class="muse-card muse-danger-card" id="muse-e-danger">
+          <button type="button" class="muse-btn muse-btn-danger" id="muse-e-retire">Retire</button>
+          <div class="muse-confirm hidden" id="muse-e-retire-confirm" role="alertdialog">
+            <p>
+              Retire <strong id="muse-e-retire-name"></strong>? It leaves the lists and links, and
+              can be brought back from its page.
+            </p>
+            <div class="muse-actions">
+              <button type="button" class="muse-btn muse-btn-danger" id="muse-e-retire-yes">
+                Retire it
+              </button>
+              <button type="button" class="muse-btn muse-btn-quiet" id="muse-e-retire-no">
+                Keep it
+              </button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ── A project or element that isn't there ── -->
       <section class="hidden" id="muse-missing">
         <a class="muse-back" href="#/">&larr; All projects</a>
-        <p class="muse-empty">That project isn't here: it may have been deleted.</p>
+        <p class="muse-empty">That isn't here: it may have been deleted.</p>
       </section>
     </main>
 
@@ -206,9 +337,15 @@
     <!-- App modules -->
     <script src="/apps/muse/js/state.js"></script>
     <script src="/apps/muse/js/markdown.js"></script>
+    <script src="/apps/muse/js/fields.js"></script>
+    <script src="/apps/muse/js/model.js"></script>
     <script src="/apps/muse/js/projects.js"></script>
+    <script src="/apps/muse/js/elements.js"></script>
     <script src="/apps/muse/js/home.js"></script>
     <script src="/apps/muse/js/project.js"></script>
+    <script src="/apps/muse/js/field-editor.js"></script>
+    <script src="/apps/muse/js/type-list.js"></script>
+    <script src="/apps/muse/js/element.js"></script>
     <script src="/apps/muse/js/app.js"></script>
 
     <script>

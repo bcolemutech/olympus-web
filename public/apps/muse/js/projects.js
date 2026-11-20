@@ -23,6 +23,7 @@
       short: data.short || '',
       summary: data.summary || '',
       cover: data.cover || null,
+      fields: data.fields && typeof data.fields === 'object' ? data.fields : {},
       createdAt: data.createdAt || null,
       updatedAt: data.updatedAt || null,
     };
@@ -47,6 +48,11 @@
     if ('summary' in fields) {
       fields.summary = String(fields.summary || '');
       if (fields.summary.length > Muse.LIMITS.summary) return 'The summary is too long.';
+    }
+    if ('fields' in fields) {
+      var defs = Muse.fields.checkAll(fields.fields);
+      if (defs.error) return defs.error;
+      fields.fields = defs.value;
     }
     if ('cover' in fields) {
       fields.cover = String(fields.cover || '').trim() || null;
@@ -103,10 +109,10 @@
         });
     },
 
-    // Changes some of title, short, summary and cover.
+    // Changes some of title, short, summary, cover and fields (EL2).
     update: function (id, changes) {
       var data = {};
-      ['title', 'short', 'summary', 'cover'].forEach(function (key) {
+      ['title', 'short', 'summary', 'cover', 'fields'].forEach(function (key) {
         if (key in changes) data[key] = changes[key];
       });
       var error = check(data);

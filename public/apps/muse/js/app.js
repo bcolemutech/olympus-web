@@ -1,27 +1,51 @@
 (function () {
   'use strict';
 
-  // The Muse's start and its routes (M-101 / #889):
-  //   #/          the home page: your projects
-  //   #/p/<id>    a project's home
+  // The Muse's start and its routes (M-101 / #889; M-102 / #890):
+  //   #/                  the home page: your projects
+  //   #/p/<id>            a project's home
+  //   #/p/<id>/t/<type>   a list of one type's elements
+  //   #/p/<id>/e/<el>     an element's page
 
   var Muse = window.Muse;
   var state = Muse.state;
+  var VIEWS = ['home', 'project', 'type', 'element', 'missing'];
 
   function view(name) {
-    Muse.show(Muse.$('muse-home'), name === 'home');
-    Muse.show(Muse.$('muse-project'), name === 'project');
-    Muse.show(Muse.$('muse-missing'), name === 'missing');
+    VIEWS.forEach(function (v) {
+      Muse.show(Muse.$('muse-' + v), v === name);
+    });
     window.scrollTo(0, 0);
   }
 
+  // Routes run one after another, so one finishing late never draws over
+  // (or swaps the open project or element under) the one after it.
+  var routing = Promise.resolve();
+
   function route() {
+    routing = routing.then(go, go);
+    return routing;
+  }
+
+  function go() {
     var hash = window.location.hash || '#/';
-    var m = /^#\/p\/([^/]+)\/?$/.exec(hash);
+    var m = /^#\/p\/([^/]+)(?:\/(t|e)\/([^/]+))?\/?$/.exec(hash);
     if (m) {
       var id = decodeURIComponent(m[1]);
-      return Muse.project.show(id).then(function (found) {
-        view(found ? 'project' : 'missing');
+      var shown =
+        m[2] === 't'
+          ? Muse.typeList.show(id, decodeURIComponent(m[3])).then(function (ok) {
+              return ok && 'type';
+            })
+          : m[2] === 'e'
+            ? Muse.element.show(id, decodeURIComponent(m[3])).then(function (ok) {
+                return ok && 'element';
+              })
+            : Muse.project.show(id).then(function (ok) {
+                return ok && 'project';
+              });
+      return shown.then(function (name) {
+        view(name || 'missing');
       });
     }
     document.title = 'The Muse — Olympus';
@@ -46,10 +70,23 @@
         }
         Muse.home.init();
         Muse.project.init();
+        Muse.fieldEditor.init();
+        Muse.typeList.init();
+        Muse.element.init();
         document.addEventListener('click', function (event) {
-          // An element link in a text (muse:el/<id>); elements come in M-102.
+          // An element link in a text (muse:el/<id>) opens its page.
           var a = event.target.closest && event.target.closest('a.muse-el-link');
-          if (a) event.preventDefault();
+          if (a) {
+            event.preventDefault();
+            if (state.project && a.dataset.el) {
+              Muse.go(
+                '#/p/' +
+                  encodeURIComponent(state.project.id) +
+                  '/e/' +
+                  encodeURIComponent(a.dataset.el)
+              );
+            }
+          }
         });
         window.addEventListener('hashchange', route);
         return route();

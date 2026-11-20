@@ -186,7 +186,7 @@ describe('everyone else is refused', () => {
   test('its subcollections are closed until their stories give them rules', async () => {
     await seed('p1', 'ann');
     await assertFails(
-      setDoc(doc(db('ann'), 'muse_projects', 'p1', 'elements', 'e1'), { name: 'Peter' })
+      setDoc(doc(db('ann'), 'muse_projects', 'p1', 'relationships', 'r1'), { a: 'e1', b: 'e2' })
     );
   });
 });
