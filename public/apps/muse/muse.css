@@ -621,6 +621,38 @@ a.muse-section-tile:focus-visible {
   overflow-wrap: anywhere;
 }
 
+/* ── Searching all text (M-106) ── */
+
+.muse-suggest-more .muse-suggest-name {
+  color: var(--muse-accent-strong);
+}
+
+.muse-s-form {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.muse-s-form .muse-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.muse-s-snippet {
+  flex-basis: 100%;
+  color: #cfd8dc;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.muse-s-snippet mark {
+  background: var(--muse-accent-soft);
+  color: var(--muse-accent-strong);
+  border-radius: 3px;
+  padding: 0 0.1em;
+}
+
 /* ── An element's page (M-102) ── */
 
 .muse-e-head {

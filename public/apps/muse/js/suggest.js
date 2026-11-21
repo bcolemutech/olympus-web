@@ -77,7 +77,14 @@
           row.setAttribute('role', 'option');
           row.dataset.id = result.id;
           row.appendChild(Muse.el('span', 'muse-suggest-name', result.name));
-          row.appendChild(Muse.el('span', 'muse-suggest-type', Muse.TYPE[result.type].one));
+          row.appendChild(
+            Muse.el(
+              'span',
+              'muse-suggest-type',
+              result.more ? 'All text' : Muse.TYPE[result.type].one
+            )
+          );
+          if (result.more) row.classList.add('muse-suggest-more');
           if (result.matched) {
             row.appendChild(Muse.el('span', 'muse-suggest-alias', 'also ' + result.matched));
           }
@@ -138,12 +145,15 @@
   //   except()         the id of an element to leave out
   //   limit            at most this many (8)
   //   empty            true to list some with nothing typed (else it waits)
+  //   more(text)       when given, a last row "Search all text for …" does it
+  //                    (the header's box; M-106)
   function input(box, options) {
     options = options || {};
     var wrap = wrapAround(box);
     var list = popup(wrap, box, function (result) {
       list.hide();
-      options.choose(result);
+      if (result.more) options.more(result.text);
+      else options.choose(result);
     });
     box.setAttribute('role', 'combobox');
     box.autocomplete = 'off';
@@ -154,13 +164,17 @@
         list.hide();
         return;
       }
-      list.show(
-        Muse.elements.search(text, {
-          limit: options.limit || 8,
-          types: options.types,
-          except: options.except && options.except(),
-        })
-      );
+      var found = Muse.elements.search(text, {
+        limit: options.limit || 8,
+        types: options.types,
+        except: options.except && options.except(),
+      });
+      if (options.more && text) {
+        found = found.concat([
+          { more: true, id: '', text: text, name: 'Search all text for “' + text + '”' },
+        ]);
+      }
+      list.show(found);
     }
 
     box.addEventListener('input', update);

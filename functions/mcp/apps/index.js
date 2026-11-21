@@ -7,4 +7,5 @@
 module.exports = function registerApps(registry) {
   require('./scriptorium').register(registry);
   require('./cartographer').register(registry);
+  require('./muse').register(registry);
 };

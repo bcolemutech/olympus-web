@@ -1,6 +1,6 @@
 # The Muse — Design Document v0.1
 
-**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed; M-100's sub-issues M-101 to M-106 filed as #889–#894 (§7), M-101 to M-105 built; the later epics are filed with their stories planned here, and their sub-issues filed when each is next.
+**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed; M-100's sub-issues M-101 to M-106 filed as #889–#894 (§7), all six built (the exit criterion's check by hand, over the connector, is next); the later epics are filed with their stories planned here, and their sub-issues filed when each is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** The Muse, its own app and phase (milestone #27), prefix **M-**, label `muse`. From idea #873.
 **Depends on:** the Image Studio (L-700, [`the-image-studio.md`](./the-image-studio.md)), the MCP host (MCP Initiative 1, [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)).
@@ -234,6 +234,14 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 - **The page keeps what is stored,** not what a form shows: it reads the document just before, so unsaved edits are not in a version.
 - **The page may create only `by: 'page'` versions.** The rules refuse `mcp` from a client, so the mark means what it says; the Admin SDK writes the connector's.
 - **The 51st deletes the oldest in its own batch,** so a thing never has more than 50 except where two tabs save at once, and the next save brings it back to 50.
+
+**Decided while building M-106 (2026-11-21):**
+
+- **The page's plans run on the server.** `fields.js`, `links.js` and `model.js` are copied to `functions/muse/` byte for byte, as `versions.js` was (a test fails if they differ), and `functions/muse/store.js` does their plans through the Admin SDK. So the connector writes exactly what the page would, and the rules' checks (an element and its index line agree) hold for what it writes.
+- **A version goes in the same batch as the change it is before** (`prepare`), for every change to a project (its details or its fields) or an element (its texts, fields, photos, retiring). Making something new keeps none, and relationships keep none: they aren't versioned things (§4).
+- **Elements can be named by a name.** Where a tool takes another element (a relationship's ends, a residence, an element field), a name or alias that only one element has does as well as its id; fields are named by key or by label.
+- **The studio's tools come from the Cartographer's code without worlds** (`studioTools({ worlds: false })`): find, get, import, labels, costs, generate, edit, jobs and styles, with no world in a search, a generation or a style's default. Assigning, and changing or deleting an image a world may use, stay the Cartographer's. `studio_generate` takes `element` instead of `from`: the element's appearance (or bio) is added to the prompt, and the title, kind and project label are those the page gives a photo; Claude then adds the finished image with `add_photos`.
+- **Full-text search reads the project's live elements** (up to 5,000) and scans them on the server: every word must be found, "a phrase" in quotes, accents and case set aside, Markdown read as shown. The page reaches it from the header box's last row, "Search all text", through the `museSearch` callable, which runs the same code.
 
 ### Later epics (planned; filed when next)
 

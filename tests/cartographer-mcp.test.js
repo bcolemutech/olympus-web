@@ -280,10 +280,10 @@ describe('connector surface', () => {
     expect(JSON.parse(contents[0].text).worlds.map((w) => w.id)).toContain(LIVE);
   });
 
-  test('the production registration mounts the Cartographer beside Scriptorium', () => {
+  test('the production registration mounts the Cartographer beside Scriptorium and the Muse', () => {
     const prod = createRegistry();
     registerApps(prod);
-    expect(prod.appIds()).toEqual(['scriptorium', 'cartographer']);
+    expect(prod.appIds()).toEqual(['scriptorium', 'cartographer', 'muse']);
   });
 });
 
