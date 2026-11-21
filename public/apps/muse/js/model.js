@@ -47,7 +47,15 @@
       : require('./links.js');
 
   var TYPES = fields.TYPES;
-  var LIMITS = { name: 200, aliases: 20, alias: 100, bio: 200000, appearance: 50000 };
+  var LIMITS = {
+    name: 200,
+    aliases: 20,
+    alias: 100,
+    bio: 200000,
+    appearance: 50000,
+    images: 200,
+    imageId: 200,
+  };
   var SHARD_SIZE = 500;
   var NOW = links.NOW;
   var DELETE = { __muse: 'delete' };
@@ -166,6 +174,88 @@
     // The elements its texts link to (EL6), kept in step with every save.
     out.mentions = links.mentionsOf(out.bio, out.appearance || '');
     return { value: out };
+  }
+
+  // ── Photo libraries (IM1; M-104) ────────────────
+  // An element keeps which studio images are its own, in order, and which
+  // one is primary: { images: [studio image ids], primary: an id in images,
+  // or null when there are none }. The images themselves live in the studio;
+  // taking one off an element leaves it there. Each operation gives back a
+  // new { images, primary }; checkPhotos is what a write is checked by.
+
+  function copyPhotos(photos) {
+    var images = Array.isArray(photos && photos.images) ? photos.images.slice() : [];
+    var primary = photos && photos.primary !== undefined ? photos.primary : null;
+    return { images: images, primary: primary };
+  }
+
+  // Adds images to the end (those already there stay where they are). The
+  // first image an element gets is its primary.
+  function addPhotos(photos, ids) {
+    var out = copyPhotos(photos);
+    (ids || []).forEach(function (id) {
+      if (out.images.indexOf(id) === -1) out.images.push(id);
+    });
+    if (out.primary === null && out.images.length) out.primary = out.images[0];
+    return out;
+  }
+
+  // Takes one off. When it was the primary, the one that takes its place in
+  // the order is (the one before, if it was last), and none when it was alone.
+  function removePhoto(photos, id) {
+    var out = copyPhotos(photos);
+    var at = out.images.indexOf(id);
+    if (at === -1) return out;
+    out.images.splice(at, 1);
+    if (out.primary === id)
+      out.primary = out.images.length ? out.images[at] || out.images[at - 1] : null;
+    return out;
+  }
+
+  // Moves one earlier (delta -1) or later (+1); the ends stay where they are.
+  function movePhoto(photos, id, delta) {
+    var out = copyPhotos(photos);
+    var at = out.images.indexOf(id);
+    var to = at + delta;
+    if (at === -1 || to < 0 || to >= out.images.length) return out;
+    out.images.splice(at, 1);
+    out.images.splice(to, 0, id);
+    return out;
+  }
+
+  function primaryPhoto(photos, id) {
+    var out = copyPhotos(photos);
+    if (out.images.indexOf(id) !== -1) out.primary = id;
+    return out;
+  }
+
+  // Checks what a write would leave: at most LIMITS.images distinct ids, and
+  // a primary that is one of them (the first, if none is named). Gives back
+  // { value: { images, primary } } or { error }.
+  function checkPhotos(photos) {
+    var images = photos && photos.images;
+    if (images === undefined || images === null) images = [];
+    if (!Array.isArray(images)) return { error: 'Images must be a list.' };
+    var seen = {};
+    var out = [];
+    for (var i = 0; i < images.length; i++) {
+      var id = typeof images[i] === 'string' ? images[i].trim() : '';
+      if (!id) return { error: 'Each image is named by its id.' };
+      if (id.length > LIMITS.imageId) return { error: 'An image id is at most 200 characters.' };
+      if (seen[id]) continue;
+      seen[id] = true;
+      out.push(id);
+    }
+    if (out.length > LIMITS.images) {
+      return { error: 'At most ' + LIMITS.images + ' images.' };
+    }
+    var primary = photos ? photos.primary : null;
+    if (primary === undefined || primary === null || primary === '') {
+      primary = out.length ? out[0] : null;
+    } else if (!seen[primary]) {
+      return { error: 'The primary image must be one of the element’s images.' };
+    }
+    return { value: { images: out, primary: primary } };
   }
 
   // ── The index in memory ─────────────────────────
@@ -314,6 +404,11 @@
     entryOf: entryOf,
     checkNames: checkNames,
     checkElement: checkElement,
+    addPhotos: addPhotos,
+    removePhoto: removePhoto,
+    movePhoto: movePhoto,
+    primaryPhoto: primaryPhoto,
+    checkPhotos: checkPhotos,
     readIndex: readIndex,
     pickShard: pickShard,
     applyToIndex: applyToIndex,

@@ -599,4 +599,24 @@ function requireCartographer(request) {
   return request.auth.uid;
 }
 
-module.exports = { createCartographerService, requireCartographer, pngDimensions, whyClosed };
+// The image studio opens for the `cartographer` claim and the `muse` claim
+// (M-104, planning/the-muse.md IM1): a world builder and a world-bible writer
+// share one library of images.
+function requireStudio(request) {
+  if (!request.auth || !request.auth.uid) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+  const apps = request.auth.token && request.auth.token.apps;
+  if (!Array.isArray(apps) || !(apps.includes('cartographer') || apps.includes('muse'))) {
+    throw new HttpsError('permission-denied', 'You do not have access to the Image Studio.');
+  }
+  return request.auth.uid;
+}
+
+module.exports = {
+  createCartographerService,
+  requireCartographer,
+  requireStudio,
+  pngDimensions,
+  whyClosed,
+};

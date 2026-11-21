@@ -143,26 +143,12 @@
     },
   };
 
-  // A studio image's picture for a cover (IM1). Until the studio opens for
-  // the muse claim (M-104), a muse-only user can't read the library, and a
-  // cover shows its monogram instead.
-  var covers = {};
+  // A studio image's picture for a cover (IM1): from the studio's record of
+  // it (./photos.js), which a muse-only user reads since M-104.
   projects.coverLink = function (imageId) {
-    if (!imageId) return Promise.resolve(null);
-    if (!covers[imageId]) {
-      covers[imageId] = state.db
-        .collection('studio_images')
-        .doc(imageId)
-        .get()
-        .then(function (doc) {
-          var record = doc.exists ? doc.data() : null;
-          return (record && record.link) || null;
-        })
-        .catch(function () {
-          return null;
-        });
-    }
-    return covers[imageId];
+    return Muse.photos.info(imageId).then(function (picture) {
+      return picture ? picture.link : null;
+    });
   };
 
   // Fills a cover box: the image when it can be shown, else the title's
@@ -172,18 +158,26 @@
     box.classList.add('muse-cover');
     var letter = Muse.el('span', 'muse-cover-letter', (project.title || '?').charAt(0));
     box.appendChild(letter);
-    projects.coverLink(project.cover).then(function (link) {
-      if (!link) return;
+    var wanted = project.cover || null;
+    box.dataset.cover = wanted || '';
+    Muse.photos.info(wanted).then(function (picture) {
+      // The box may have been drawn again for another cover meanwhile.
+      if (!picture || box.dataset.cover !== (wanted || '')) return;
       var img = Muse.el('img', 'muse-cover-img');
       img.alt = '';
       img.loading = 'lazy';
       img.addEventListener('load', function () {
         letter.classList.add('hidden');
       });
+      // The screen-sized copy may be missing, and the whole image is tried
+      // (./photos.js thumb); only when that fails too is the picture dropped.
+      var failures = 0;
+      var tries = picture.screenLink && picture.screenLink !== picture.link ? 2 : 1;
       img.addEventListener('error', function () {
-        img.remove();
+        failures += 1;
+        if (failures >= tries) img.remove();
       });
-      img.src = link;
+      Muse.photos.thumb(img, picture);
       box.appendChild(img);
     });
   };

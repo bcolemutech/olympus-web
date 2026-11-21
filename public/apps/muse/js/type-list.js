@@ -13,6 +13,24 @@
     return '#/p/' + encodeURIComponent(state.project.id);
   }
 
+  // The element's primary photo from the index (M-104), or its first letter.
+  function thumbOf(entry) {
+    var box = Muse.el('span', 'muse-el-thumb');
+    box.appendChild(Muse.el('span', 'muse-el-thumb-letter', entry.name.charAt(0)));
+    if (entry.primary) {
+      Muse.photos.info(entry.primary).then(function (picture) {
+        if (!picture) return;
+        var img = Muse.el('img', 'muse-el-thumb-img');
+        img.alt = '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        Muse.photos.thumb(img, picture);
+        box.appendChild(img);
+      });
+    }
+    return box;
+  }
+
   function draw() {
     var t = Muse.TYPE[type];
     var box = Muse.$('muse-t-list');
@@ -22,6 +40,7 @@
       var a = Muse.el('a', 'muse-el-row');
       a.href = projectHash() + '/e/' + encodeURIComponent(entry.id);
       a.dataset.id = entry.id;
+      a.appendChild(thumbOf(entry));
       a.appendChild(Muse.el('span', 'muse-el-row-name', entry.name));
       if (entry.aliases.length) {
         a.appendChild(Muse.el('span', 'muse-el-row-aliases', entry.aliases.join(' · ')));

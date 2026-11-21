@@ -9,6 +9,8 @@
     <script defer src="/__/firebase/12.9.0/firebase-app-compat.js"></script>
     <script defer src="/__/firebase/12.9.0/firebase-auth-compat.js"></script>
     <script defer src="/__/firebase/12.9.0/firebase-firestore-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-functions-compat.js"></script>
+    <script defer src="/__/firebase/12.9.0/firebase-storage-compat.js"></script>
     <script defer src="/__/firebase/init.js?useEmulator=true"></script>
 
     <!-- Shared Olympus styles -->
@@ -107,14 +109,20 @@
           <input class="muse-input" id="muse-p-head-title" maxlength="200" autocomplete="off" />
           <label class="muse-label" for="muse-p-head-short">Short description</label>
           <input class="muse-input" id="muse-p-head-short" maxlength="300" autocomplete="off" />
-          <label class="muse-label" for="muse-p-head-cover">Cover (a studio image id)</label>
-          <input
-            class="muse-input"
-            id="muse-p-head-cover"
-            maxlength="200"
-            autocomplete="off"
-            placeholder="Picked from the studio once photo libraries arrive"
-          />
+          <span class="muse-label" id="muse-p-head-cover-label">Cover</span>
+          <div class="muse-cover-picker" role="group" aria-labelledby="muse-p-head-cover-label">
+            <div class="muse-p-cover" id="muse-p-head-cover"></div>
+            <div class="muse-cover-picker-side">
+              <div id="muse-p-head-cover-add"></div>
+              <button
+                type="button"
+                class="muse-btn muse-btn-quiet hidden"
+                id="muse-p-head-cover-remove"
+              >
+                Remove the cover
+              </button>
+            </div>
+          </div>
           <p class="muse-error hidden" id="muse-p-head-error" role="alert"></p>
           <div class="muse-actions">
             <button type="submit" class="muse-btn" id="muse-p-head-save">Save</button>
@@ -285,6 +293,20 @@
           <button type="button" class="muse-btn muse-btn-quiet" id="muse-e-edit">Edit</button>
         </header>
 
+        <!-- Photos (IM1; M-104): the primary large, the rest in a strip -->
+        <section class="muse-card" id="muse-e-photos" aria-labelledby="muse-e-photos-heading">
+          <div class="muse-bar">
+            <h2 class="muse-heading" id="muse-e-photos-heading">
+              Photos <span class="muse-count" id="muse-e-photos-count"></span>
+            </h2>
+          </div>
+          <div class="muse-photo-main hidden" id="muse-e-photo-main"></div>
+          <ul class="muse-photo-strip hidden" id="muse-e-photo-strip"></ul>
+          <p class="muse-empty" id="muse-e-photos-empty">No photos yet.</p>
+          <p class="muse-error hidden" id="muse-e-photos-error" role="alert"></p>
+          <div id="muse-e-photos-add"></div>
+        </section>
+
         <!-- Reading -->
         <div id="muse-e-read">
           <section class="muse-card" id="muse-e-facts-card">
@@ -312,9 +334,6 @@
             <button type="button" class="muse-btn muse-btn-quiet" id="muse-e-cancel">Cancel</button>
           </div>
         </form>
-
-        <!-- Photos come with M-104 -->
-        <section class="muse-card hidden" id="muse-e-photos"></section>
 
         <!-- Relationships, read from this element's side (EL3; M-103) -->
         <section class="muse-card hidden" id="muse-e-relationships">
@@ -409,6 +428,7 @@
     <script src="/apps/muse/js/fields.js"></script>
     <script src="/apps/muse/js/links.js"></script>
     <script src="/apps/muse/js/model.js"></script>
+    <script src="/apps/muse/js/photos.js"></script>
     <script src="/apps/muse/js/projects.js"></script>
     <script src="/apps/muse/js/elements.js"></script>
     <script src="/apps/muse/js/suggest.js"></script>
@@ -419,6 +439,7 @@
     <script src="/apps/muse/js/type-list.js"></script>
     <script src="/apps/muse/js/relationships.js"></script>
     <script src="/apps/muse/js/mentioned.js"></script>
+    <script src="/apps/muse/js/gallery.js"></script>
     <script src="/apps/muse/js/element.js"></script>
     <script src="/apps/muse/js/app.js"></script>
 

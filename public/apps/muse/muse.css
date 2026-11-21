@@ -882,6 +882,234 @@ a.muse-section-tile:focus-visible {
   border-top: 1px solid var(--muse-line);
 }
 
+/* ── Photos (M-104): an element's strip, the cover picker, the picker ── */
+
+.muse-count {
+  margin-left: 0.4rem;
+  color: var(--muse-muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.muse-photo-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 460px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--muse-line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.muse-photo-main-img {
+  display: block;
+  max-width: 100%;
+  max-height: 460px;
+  object-fit: contain;
+}
+
+.muse-photo-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.muse-photo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--muse-line);
+  border-radius: 10px;
+  background: rgba(17, 24, 39, 0.6);
+  overflow: hidden;
+}
+
+.muse-photo-primary {
+  border-color: var(--muse-accent);
+}
+
+.muse-photo-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.muse-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.muse-photo-missing {
+  padding: 0.5rem;
+  color: var(--muse-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+  text-align: center;
+}
+
+.muse-photo-badge {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--muse-accent);
+  color: #1b1233;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.muse-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.4rem;
+}
+
+.muse-photo-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.muse-photo-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.muse-photo-add + .muse-done,
+.muse-photo-add + .muse-done + .muse-error,
+.muse-photo-add + .muse-error {
+  margin-top: 0.6rem;
+}
+
+.muse-picker {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--muse-line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.muse-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.6rem;
+  max-height: 340px;
+  margin-top: 0.75rem;
+  overflow-y: auto;
+}
+
+.muse-picker-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.3rem;
+  font: inherit;
+  text-align: left;
+  color: #cfd8dc;
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid var(--muse-line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.muse-picker-tile:hover,
+.muse-picker-tile:focus-visible {
+  border-color: var(--muse-accent);
+}
+
+.muse-picker-used {
+  opacity: 0.55;
+}
+
+.muse-picker-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.muse-picker-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.muse-picker-title {
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muse-cover-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.muse-cover-picker .muse-p-cover {
+  width: 220px;
+}
+
+.muse-cover-picker-side {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.muse-cover-picker-side .muse-btn {
+  margin-top: 0.5rem;
+}
+
+/* A small picture in a list's row: the primary photo, or the first letter. */
+.muse-el-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1e1636, #111827);
+  border: 1px solid var(--muse-line);
+  overflow: hidden;
+}
+
+.muse-el-thumb-letter {
+  color: var(--muse-accent);
+  font-family: Georgia, 'Times New Roman', serif;
+  text-transform: uppercase;
+}
+
+.muse-el-thumb-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* ── iPad portrait and phones ── */
 
 @media (max-width: 1000px) {
@@ -926,6 +1154,14 @@ a.muse-section-tile:focus-visible {
 
   .muse-card {
     padding: 1rem;
+  }
+
+  .muse-photo-strip {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .muse-cover-picker .muse-p-cover {
+    width: 100%;
   }
 
   .muse-projects {

@@ -1966,6 +1966,23 @@ describe('studio_images — Firestore Security Rules (L-701)', function () {
     await assertSucceeds(getDoc(doc(dbAs(['cartographer']), 'studio_images', 'img_0001')));
   });
 
+  it('lets a Muse writer (the muse claim alone) read the library, its jobs and its styles (M-104)', async function () {
+    await testEnv.withSecurityRulesDisabled(async function (ctx) {
+      var admin = ctx.firestore();
+      await setDoc(doc(admin, 'studio_jobs', 'job_0001'), { state: 'queued' });
+      await setDoc(doc(admin, 'studio_styles', 'sty_0001'), { name: 'Ink' });
+    });
+    var writer = dbAs(['muse']);
+    await assertSucceeds(getDoc(doc(writer, 'studio_images', 'img_0001')));
+    await assertSucceeds(getDoc(doc(writer, 'studio_jobs', 'job_0001')));
+    await assertSucceeds(getDoc(doc(writer, 'studio_styles', 'sty_0001')));
+    // Reading only: the server writes.
+    await assertFails(setDoc(doc(writer, 'studio_images', 'img_0002'), { title: 'New' }));
+    await assertFails(deleteDoc(doc(writer, 'studio_images', 'img_0001')));
+    // The costs stay the server's.
+    await assertFails(getDoc(doc(writer, 'studio_costs_month', '2026-10')));
+  });
+
   it('keeps it from players, anyone else, and the signed-out', async function () {
     await assertFails(getDoc(doc(dbAs(['loom']), 'studio_images', 'img_0001')));
     await assertFails(getDoc(doc(dbAs([]), 'studio_images', 'img_0001')));

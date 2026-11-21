@@ -383,3 +383,102 @@ describe('the index kept in step', () => {
     expect(model.pickShard({ shards: { 0: 3 } })).toBe('0');
   });
 });
+
+// ── Photo libraries (M-104) ───────────────────────
+
+describe('an element’s photos', () => {
+  const none = { images: [], primary: null };
+
+  test('the first photo added is the primary, and later ones go to the end', () => {
+    let photos = model.addPhotos(none, ['a']);
+    expect(photos).toEqual({ images: ['a'], primary: 'a' });
+    photos = model.addPhotos(photos, ['b', 'c', 'a']);
+    expect(photos).toEqual({ images: ['a', 'b', 'c'], primary: 'a' });
+    // Nothing is changed in place.
+    expect(none).toEqual({ images: [], primary: null });
+  });
+
+  test('moving earlier and later stops at the ends, and never changes the primary', () => {
+    const photos = { images: ['a', 'b', 'c'], primary: 'b' };
+    expect(model.movePhoto(photos, 'c', -1)).toEqual({ images: ['a', 'c', 'b'], primary: 'b' });
+    expect(model.movePhoto(photos, 'a', 1)).toEqual({ images: ['b', 'a', 'c'], primary: 'b' });
+    expect(model.movePhoto(photos, 'a', -1)).toEqual(photos);
+    expect(model.movePhoto(photos, 'c', 1)).toEqual(photos);
+    expect(model.movePhoto(photos, 'zzz', 1)).toEqual(photos);
+  });
+
+  test('a primary is one of the photos', () => {
+    const photos = { images: ['a', 'b'], primary: 'a' };
+    expect(model.primaryPhoto(photos, 'b')).toEqual({ images: ['a', 'b'], primary: 'b' });
+    expect(model.primaryPhoto(photos, 'zzz')).toEqual(photos);
+  });
+
+  test('removing the primary hands it to the next one, or the one before the last', () => {
+    expect(model.removePhoto({ images: ['a', 'b', 'c'], primary: 'a' }, 'a')).toEqual({
+      images: ['b', 'c'],
+      primary: 'b',
+    });
+    expect(model.removePhoto({ images: ['a', 'b', 'c'], primary: 'c' }, 'c')).toEqual({
+      images: ['a', 'b'],
+      primary: 'b',
+    });
+    expect(model.removePhoto({ images: ['a', 'b', 'c'], primary: 'b' }, 'a')).toEqual({
+      images: ['b', 'c'],
+      primary: 'b',
+    });
+    expect(model.removePhoto({ images: ['a'], primary: 'a' }, 'a')).toEqual(none);
+    expect(model.removePhoto({ images: ['a'], primary: 'a' }, 'zzz')).toEqual({
+      images: ['a'],
+      primary: 'a',
+    });
+  });
+
+  test('a write is checked: distinct ids, a limit, and a primary among them', () => {
+    expect(model.checkPhotos({ images: [' a ', 'b', 'a'], primary: 'b' }).value).toEqual({
+      images: ['a', 'b'],
+      primary: 'b',
+    });
+    // No primary named: the first.
+    expect(model.checkPhotos({ images: ['a', 'b'] }).value).toEqual({
+      images: ['a', 'b'],
+      primary: 'a',
+    });
+    expect(model.checkPhotos({}).value).toEqual(none);
+    expect(model.checkPhotos({ images: ['a'], primary: 'b' }).error).toMatch(/primary/);
+    expect(model.checkPhotos({ images: 'a' }).error).toMatch(/list/);
+    expect(model.checkPhotos({ images: ['a', ''] }).error).toMatch(/id/);
+    expect(model.checkPhotos({ images: [7] }).error).toMatch(/id/);
+    expect(model.checkPhotos({ images: ['x'.repeat(201)] }).error).toMatch(/200/);
+    const many = Array.from({ length: 201 }, (_, i) => `img_${i}`);
+    expect(model.checkPhotos({ images: many }).error).toMatch(/200/);
+    expect(model.checkPhotos({ images: many.slice(0, 200) }).error).toBeUndefined();
+  });
+
+  test('a change of primary writes the index line; moving the order does not', () => {
+    const current = {
+      id: 'el_x',
+      type: 'faction',
+      name: 'Guild',
+      aliases: [],
+      shard: '0',
+      retired: false,
+      images: ['a', 'b'],
+      primary: 'a',
+    };
+    const moved = model.planUpdate('p1', current, model.checkPhotos(model.movePhoto(current, 'b', -1)).value);
+    expect(moved.map((w) => w.path)).toEqual(['muse_projects/p1/elements/el_x']);
+    const primary = model.planUpdate('p1', current, model.checkPhotos(model.primaryPhoto(current, 'b')).value);
+    expect(primary.map((w) => w.path)).toEqual([
+      'muse_projects/p1/elements/el_x',
+      'muse_projects/p1/index/0',
+    ]);
+    expect(primary[1].data.entries.el_x.primary).toBe('b');
+    // A retired element has no index line to keep.
+    const retired = model.planUpdate(
+      'p1',
+      { ...current, retired: true },
+      model.checkPhotos(model.primaryPhoto(current, 'b')).value
+    );
+    expect(retired).toHaveLength(1);
+  });
+});

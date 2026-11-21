@@ -1361,8 +1361,12 @@
           const all = await fetchAllApps();
           return (
             all
-              // An app may be opened by another app's claim (apps.yaml `claim`).
-              .filter((a) => a.enabled && appIds.includes(a.claim || a.id))
+              // An app may be opened by another app's claim, or any of a list
+              // of them (apps.yaml `claim`).
+              .filter(
+                (a) =>
+                  a.enabled && [].concat(a.claim || a.id).some((claim) => appIds.includes(claim))
+              )
               .sort((a, b) => (a.order || 0) - (b.order || 0))
           );
         };

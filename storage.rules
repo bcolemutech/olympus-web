@@ -23,11 +23,21 @@ service firebase.storage {
     // and a battle map's (battlemap.png; L-355) are uploaded the same way, for
     // cartographerTownImage and cartographerMapImage to attach.
 
+    //
+    // The Muse's writers (the `muse` claim) share the image studio (M-104):
+    // they upload studio.png, studio.jpg, studio.webp and studio.svg here and
+    // nothing else.
+
+    function isStudioUpload(file) {
+      return file.matches('studio[.](png|jpg|webp|svg)');
+    }
+
     match /cartographer/{uid}/{uploadId}/{file} {
-      allow read, delete: if isOwner(uid) && hasApp('cartographer');
+      allow read, delete: if isOwner(uid)
+          && (hasApp('cartographer') || (hasApp('muse') && isStudioUpload(file)));
 
       allow create, update: if isOwner(uid)
-          && hasApp('cartographer')
+          && (hasApp('cartographer') || (hasApp('muse') && isStudioUpload(file)))
           && uploadId.matches('^[A-Za-z0-9_-]{8,64}$')
           && (
             (file == 'map.json'
@@ -55,10 +65,11 @@ service firebase.storage {
     // ── The image studio's library (L-701) ────────────────
     // studio/{imageId}/v{n}.{ext}, one file per version, and
     // studio/{imageId}/current, the copy its link serves (with a download
-    // token, which needs no rule). Editors read; only the server writes.
+    // token, which needs no rule). Editors, and the Muse's writers, read; only
+    // the server writes.
 
     match /studio/{imageId}/{file} {
-      allow read: if hasApp('cartographer');
+      allow read: if hasApp('cartographer') || hasApp('muse');
     }
 
     // ── Players' own tokens (L-933) ───────────────────────

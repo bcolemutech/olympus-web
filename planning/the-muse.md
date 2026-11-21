@@ -1,6 +1,6 @@
 # The Muse — Design Document v0.1
 
-**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed; M-100's sub-issues M-101 to M-106 filed as #889–#894 (§7), M-101, M-102 and M-103 built; the later epics are filed with their stories planned here, and their sub-issues filed when each is next.
+**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed; M-100's sub-issues M-101 to M-106 filed as #889–#894 (§7), M-101 to M-104 built; the later epics are filed with their stories planned here, and their sub-issues filed when each is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** The Muse, its own app and phase (milestone #27), prefix **M-**, label `muse`. From idea #873.
 **Depends on:** the Image Studio (L-700, [`the-image-studio.md`](./the-image-studio.md)), the MCP host (MCP Initiative 1, [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)).
@@ -219,6 +219,13 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 | M-104 | Photo libraries from the studio | #892  | M-102       | Sonnet |
 | M-105 | Versions in storage             | #893  | M-102       | Sonnet |
 | M-106 | The Muse connector              | #894  | M-103–M-105 | Opus   |
+
+**Decided while building M-104 (2026-11-20):**
+
+- **The studio's claims.** `claim` in `apps.yaml` may be a list (the Image Studio's is `[cartographer, muse]`). The studio's callables, `studio_*` rules and Storage rules take either claim; a `muse` user's uploads are limited to the `studio.*` files in their own upload folder, not the Cartographer's map files.
+- **What a photo is called in the studio.** The element's name is the title (`Name: file` when several are uploaded at once), the project's title as a studio label (lower-cased, cleaned to a label's characters), and the kind from the element's type: `portrait` for a character, `scene` for a location, `item` for an object, `other` for a faction or concept, `cover` for a project's cover.
+- **A primary is always one of the photos.** The first photo added is the primary; removing the primary hands it to the next; a primary not among `images` is refused by the rules. Order and primary are changed with buttons (earlier, later, make primary), not dragging, so they work on an iPad.
+- **A cover is picked in the project's details form** and saved with it, so cancelling leaves the cover as it was (an image uploaded meanwhile stays in the studio).
 
 ### Later epics (planned; filed when next)
 

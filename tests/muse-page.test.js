@@ -5,7 +5,9 @@
  * Chrome, on the real page and scripts with Firebase stubbed by an in-memory
  * Firestore: making, renaming and deleting a project, and a project's home
  * rendering its summary (sanitised Markdown), at desktop and iPad sizes; a
- * phone reads it too (MU5).
+ * phone reads it too (MU5). Photo libraries (M-104 / #892) go through a stubbed
+ * Storage and studioUpload: a photo uploaded or picked, made primary,
+ * reordered and removed, and a project's cover.
  *
  * It needs Playwright and its Chromium; where the browser is missing the
  * suite is skipped, with a note.
@@ -50,6 +52,12 @@ const SCREENS = {
   iPad: devices['iPad (gen 7)'] || { viewport: { width: 810, height: 1080 }, hasTouch: true },
 };
 const PHONE = devices['iPhone 13'] || { viewport: { width: 390, height: 844 }, hasTouch: true };
+
+// The smallest PNG there is, for a file to upload.
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+  'base64'
+);
 
 const SUMMARY = [
   '# The Drowned Kingdom',
@@ -118,11 +126,14 @@ function stub({ apps, docs }) {
       collection: (name) => collection(path + '/' + name),
     };
   }
-  function collection(base, filters = [], max = Infinity) {
+  const millis = (v) => (v && v.toMillis ? v.toMillis() : typeof v === 'number' ? v : 0);
+  function collection(base, filters = [], max = Infinity, order = null) {
     return {
       doc: (id) => ref(base + '/' + (id || 'auto' + ++next)),
-      where: (field, op, value) => collection(base, filters.concat([[field, value, op]]), max),
-      limit: (n) => collection(base, filters, n),
+      where: (field, op, value) =>
+        collection(base, filters.concat([[field, value, op]]), max, order),
+      limit: (n) => collection(base, filters, n, order),
+      orderBy: (field, dir) => collection(base, filters, max, [field, dir]),
       get: () => {
         const depth = base.split('/').length + 1;
         const match = (p, [f, v, op]) =>
@@ -132,6 +143,12 @@ function stub({ apps, docs }) {
         const docs = [...store.keys()]
           .filter((p) => p.startsWith(base + '/') && p.split('/').length === depth)
           .filter((p) => filters.every((filter) => match(p, filter)))
+          .sort((a, b) =>
+            order
+              ? (millis(store.get(b)[order[0]]) - millis(store.get(a)[order[0]])) *
+                (order[1] === 'asc' ? -1 : 1)
+              : 0
+          )
           .slice(0, max)
           .map(snap);
         return Promise.resolve({ empty: !docs.length, docs });
@@ -160,13 +177,72 @@ function stub({ apps, docs }) {
   };
   const firestore = () => ({ collection: (name) => collection(name), batch });
   firestore.FieldValue = { serverTimestamp: () => SERVER_TIME, delete: () => DELETE };
+  // Storage and the studioUpload callable (M-104): a file put in the upload
+  // folder, then an image in the studio's library for the caller to use. As
+  // the real callable does, it refuses a caller with neither claim.
+  window.__puts = [];
+  window.__calls = [];
+  let uploaded = 0;
+  const storage = () => ({
+    ref: (path) => ({
+      put: (file, meta) => {
+        window.__puts.push({ path, type: meta && meta.contentType, name: file.name });
+        return Promise.resolve({});
+      },
+    }),
+  });
+  const functions = () => ({
+    httpsCallable: (name) => (data) => {
+      window.__calls.push({ name, data });
+      if (name !== 'studioUpload') return Promise.reject(new Error('No such callable'));
+      if (!apps.includes('cartographer') && !apps.includes('muse')) {
+        return Promise.reject(new Error('You do not have access to the Image Studio.'));
+      }
+      const put = window.__puts.find((p) => p.path.split('/')[2] === data.uploadId);
+      if (!put) return Promise.reject(new Error('Upload the image first.'));
+      uploaded += 1;
+      const id = 'img_up' + uploaded;
+      const link =
+        'data:image/svg+xml,' +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="40" height="30" fill="hsl(' +
+            uploaded * 60 +
+            ',60%,50%)"/></svg>'
+        );
+      const record = {
+        id,
+        title: data.title,
+        kind: data.kind,
+        labels: data.labels,
+        link,
+        createdAt: 100 + uploaded,
+      };
+      store.set('studio_images/' + id, record);
+      return Promise.resolve({ data: { image: record } });
+    },
+  });
   window.firebase = {
     auth: () => ({ onAuthStateChanged: (cb) => cb(user), signOut: () => Promise.resolve() }),
     firestore,
+    storage,
+    functions,
   };
 }
 
 const PROJECTS = {
+  // An image already in the studio's library, to pick (M-104).
+  'studio_images/img_old': {
+    id: 'img_old',
+    title: 'Old Brass at dusk',
+    kind: 'scene',
+    labels: ['the court'],
+    link:
+      'data:image/svg+xml,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="40" height="30" fill="#c60"/></svg>'
+      ),
+    createdAt: 50,
+  },
   'muse_projects/p_old': {
     owner: 'ann',
     title: 'Older',
@@ -426,16 +502,57 @@ describe('a project’s home', () => {
     expect((await stored(page))['muse_projects/p_old'].summary).toBe('## Ages\n\nThe *first* age.');
   });
 
-  each('edits its details: short description and cover id', async (page) => {
+  each('edits its details: short description and a cover picked from the studio', async (page) => {
     await openSea(page);
     await page.click('#muse-p-head-edit');
     await page.fill('#muse-p-head-short', 'Bells under the sea');
-    await page.fill('#muse-p-head-cover', 'img_sea');
+    await page.click('#muse-p-cover-pick');
+    await page.click('.muse-picker-tile[data-id="img_old"]');
+    // The picker closes, and the form shows the cover it would save.
+    await page.waitForSelector('#muse-p-head-cover .muse-cover-img');
+    await expect(page.locator('#muse-p-cover-picker').isVisible()).resolves.toBe(false);
+    await expect(page.locator('#muse-p-head-cover-remove').isVisible()).resolves.toBe(true);
     await page.click('#muse-p-head-save');
     await page.waitForSelector('#muse-p-head-form.hidden', { state: 'attached' });
     await expect(page.locator('#muse-p-short').innerText()).resolves.toBe('Bells under the sea');
+    await page.waitForSelector('#muse-p-cover .muse-cover-img');
     const saved = (await stored(page))['muse_projects/p_sea'];
-    expect([saved.short, saved.cover]).toEqual(['Bells under the sea', 'img_sea']);
+    expect([saved.short, saved.cover]).toEqual(['Bells under the sea', 'img_old']);
+  });
+
+  each('a cover is uploaded into the studio, and taken off again', async (page) => {
+    await openSea(page);
+    await page.click('#muse-p-head-edit');
+    await page.setInputFiles('#muse-p-cover-file', {
+      name: 'sea.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    await page.waitForSelector('#muse-p-head-cover .muse-cover-img');
+    // Put in the editor's upload folder, then added to the library.
+    const puts = await page.evaluate(() => window.__puts);
+    expect(puts).toHaveLength(1);
+    expect(puts[0].path).toMatch(/^cartographer\/ann\/[A-Za-z0-9_-]{8,64}\/studio\.png$/);
+    expect(puts[0].type).toBe('image/png');
+    const made = (await stored(page))['studio_images/img_up1'];
+    expect([made.title, made.kind, made.labels]).toEqual([
+      'The Drowned Kingdom',
+      'cover',
+      ['the drowned kingdom'],
+    ]);
+    await page.click('#muse-p-head-save');
+    await page.waitForSelector('#muse-p-head-form.hidden', { state: 'attached' });
+    expect((await stored(page))['muse_projects/p_sea'].cover).toBe('img_up1');
+    await page.waitForSelector('#muse-p-cover .muse-cover-img');
+
+    await page.click('#muse-p-head-edit');
+    await page.click('#muse-p-head-cover-remove');
+    await page.click('#muse-p-head-save');
+    await page.waitForSelector('#muse-p-head-form.hidden', { state: 'attached' });
+    expect((await stored(page))['muse_projects/p_sea'].cover).toBe(null);
+    // Taken off the project, the image stays in the studio.
+    expect(Object.keys(await stored(page))).toContain('studio_images/img_up1');
+    await expect(page.locator('#muse-p-cover .muse-cover-img').count()).resolves.toBe(0);
   });
 
   each('is renamed in its settings', async (page) => {
@@ -972,6 +1089,181 @@ describe('links, relationships and search (M-103)', () => {
   });
 });
 
+describe('photo libraries (M-104)', () => {
+  const png = (name) => ({ name, mimeType: 'image/png', buffer: PNG });
+  const openPeter = async (page) => {
+    await page.waitForSelector('#muse-home:not(.hidden)');
+    await page.evaluate(() => (window.location.hash = '#/p/p_court/e/el_peter'));
+    await page.waitForFunction(
+      () =>
+        !document.getElementById('muse-element').classList.contains('hidden') &&
+        document.getElementById('muse-e-name').textContent === 'King Peter'
+    );
+  };
+  const peter = async (page) => (await stored(page))['muse_projects/p_court/elements/el_peter'];
+  const line = async (page) =>
+    (await stored(page))['muse_projects/p_court/index/0'].entries.el_peter;
+  const shown = (page) => page.locator('.muse-photo').evaluateAll((n) => n.map((x) => x.dataset.id));
+  const tile = (id, what) => `.muse-photo[data-id="${id}"] .muse-photo-${what}`;
+  const settled = (page, count) =>
+    page.waitForFunction((n) => document.querySelectorAll('.muse-photo').length === n, count);
+
+  each(
+    'a photo uploaded to a character lands in the studio, is primary, and is reordered and removed',
+    async (page) => {
+      await openPeter(page);
+      await expect(page.locator('#muse-e-photos-empty').isVisible()).resolves.toBe(true);
+
+      // One file: into the editor's upload folder, then the studio's library,
+      // titled by the element, labelled by the project.
+      await page.setInputFiles('#muse-e-photo-file', png('crowned.png'));
+      await settled(page, 1);
+      const puts = await page.evaluate(() => window.__puts);
+      expect(puts.map((p) => p.path)).toEqual([
+        expect.stringMatching(/^cartographer\/ann\/[A-Za-z0-9_-]{8,64}\/studio\.png$/),
+      ]);
+      const first = (await stored(page))['studio_images/img_up1'];
+      expect([first.title, first.kind, first.labels]).toEqual([
+        'King Peter',
+        'portrait',
+        ['the court'],
+      ]);
+      // The first photo is the primary: large at the top, and in the index.
+      expect((await peter(page)).images).toEqual(['img_up1']);
+      expect((await peter(page)).primary).toBe('img_up1');
+      expect((await line(page)).primary).toBe('img_up1');
+      await page.waitForSelector('#muse-e-photo-main img');
+      await expect(
+        page.locator('.muse-photo-badge').evaluateAll((n) => n.map((x) => x.textContent))
+      ).resolves.toEqual(['Primary']);
+      await expect(page.locator('#muse-e-photos-empty').isVisible()).resolves.toBe(false);
+
+      // Two more at once, named after their files; the primary stays.
+      await page.setInputFiles('#muse-e-photo-file', [png('a.png'), png('b.png')]);
+      await settled(page, 3);
+      await expect(shown(page)).resolves.toEqual(['img_up1', 'img_up2', 'img_up3']);
+      const titles = ['img_up2', 'img_up3'].map(async (id) => (await stored(page))['studio_images/' + id].title);
+      await expect(Promise.all(titles)).resolves.toEqual(['King Peter: a', 'King Peter: b']);
+      expect((await peter(page)).primary).toBe('img_up1');
+      await expect(page.locator('#muse-e-photos-count').innerText()).resolves.toBe('3');
+
+      // Another becomes the primary; the index follows.
+      await page.click(tile('img_up3', 'make-primary'));
+      await page.waitForSelector(`${tile('img_up3', 'make-primary')}`, { state: 'detached' });
+      expect((await peter(page)).primary).toBe('img_up3');
+      expect((await line(page)).primary).toBe('img_up3');
+      await expect(page.locator('.muse-photo-primary').getAttribute('data-id')).resolves.toBe(
+        'img_up3'
+      );
+
+      // Moved earlier twice, the ends can go no further.
+      await page.click(tile('img_up3', 'earlier'));
+      await page.waitForFunction(
+        () => document.querySelector('.muse-photo:nth-child(2)').dataset.id === 'img_up3'
+      );
+      await page.click(tile('img_up3', 'earlier'));
+      await page.waitForFunction(
+        () => document.querySelector('.muse-photo:first-child').dataset.id === 'img_up3'
+      );
+      expect((await peter(page)).images).toEqual(['img_up3', 'img_up1', 'img_up2']);
+      expect((await peter(page)).primary).toBe('img_up3');
+      await expect(page.locator(tile('img_up3', 'earlier')).isDisabled()).resolves.toBe(true);
+      await expect(page.locator(tile('img_up2', 'later')).isDisabled()).resolves.toBe(true);
+
+      // It shows in the list, by its primary photo.
+      await page.click('#muse-e-back');
+      await page.waitForSelector('#muse-type:not(.hidden)');
+      await page.waitForSelector('.muse-el-row[data-id="el_peter"] .muse-el-thumb-img');
+      await expect(
+        page.locator('.muse-el-row[data-id="el_marta"] .muse-el-thumb-img').count()
+      ).resolves.toBe(0);
+      await expect(
+        page.locator('.muse-el-row[data-id="el_marta"] .muse-el-thumb-letter').innerText()
+      ).resolves.toBe('M');
+      await page.click('.muse-el-row[data-id="el_peter"]');
+      await page.waitForSelector('#muse-element:not(.hidden) .muse-photo');
+
+      // Removing the primary hands it to the next; the image stays in the studio.
+      await page.click(tile('img_up3', 'remove'));
+      await settled(page, 2);
+      expect((await peter(page)).images).toEqual(['img_up1', 'img_up2']);
+      expect((await peter(page)).primary).toBe('img_up1');
+      expect((await line(page)).primary).toBe('img_up1');
+      expect(Object.keys(await stored(page))).toContain('studio_images/img_up3');
+      await page.click(tile('img_up1', 'remove'));
+      await page.click(tile('img_up2', 'remove'));
+      await settled(page, 0);
+      expect((await peter(page)).images).toEqual([]);
+      expect((await peter(page)).primary).toBe(null);
+      expect((await line(page)).primary).toBe(null);
+      await expect(page.locator('#muse-e-photos-empty').isVisible()).resolves.toBe(true);
+      await expect(page.locator('#muse-e-photo-main').isVisible()).resolves.toBe(false);
+      expect(
+        Object.keys(await stored(page)).filter((p) => p.startsWith('studio_images/img_up'))
+      ).toHaveLength(3);
+    }
+  );
+
+  each('a photo is picked from the studio’s library, and searched for', async (page) => {
+    await openPeter(page);
+    await page.click('#muse-e-photo-pick');
+    await page.waitForSelector('.muse-picker-tile[data-id="img_old"]');
+    await page.fill('#muse-e-photo-search', 'nothing like it');
+    await expect(page.locator('.muse-picker-tile').count()).resolves.toBe(0);
+    await page.fill('#muse-e-photo-search', 'dusk');
+    await page.click('.muse-picker-tile[data-id="img_old"]');
+    await settled(page, 1);
+    expect((await peter(page)).images).toEqual(['img_old']);
+    expect((await peter(page)).primary).toBe('img_old');
+    expect((await line(page)).primary).toBe('img_old');
+    // Nothing was uploaded: it was already in the studio.
+    await expect(page.evaluate(() => window.__puts.length)).resolves.toBe(0);
+    // Picked once, it is marked and not added twice.
+    await expect(
+      page.locator('.muse-picker-tile[data-id="img_old"]').getAttribute('class')
+    ).resolves.toMatch(/muse-picker-used/);
+    await page.click('.muse-picker-tile[data-id="img_old"]');
+    await settled(page, 1);
+    expect((await peter(page)).images).toEqual(['img_old']);
+  });
+
+  each('a photo the studio no longer has is shown as gone, and can be taken off', async (page) => {
+    await openPeter(page);
+    await page.evaluate(async () => {
+      // An element that kept an image id the studio has since deleted.
+      const path = 'muse_projects/p_court/elements/el_peter';
+      window.__store.set(path, {
+        ...window.__store.get(path),
+        images: ['img_gone', 'img_old'],
+        primary: 'img_gone',
+      });
+      window.location.hash = '#/p/p_court/t/character';
+    });
+    await page.waitForSelector('#muse-type:not(.hidden)');
+    await page.evaluate(() => (window.location.hash = '#/p/p_court/e/el_peter'));
+    await settled(page, 2);
+    await expect(page.locator('.muse-photo-missing').count()).resolves.toBeGreaterThan(0);
+    await page.click(tile('img_gone', 'remove'));
+    await settled(page, 1);
+    expect((await peter(page)).images).toEqual(['img_old']);
+    expect((await peter(page)).primary).toBe('img_old');
+  });
+
+  each('a file that is not an image is refused before anything is sent', async (page) => {
+    await openPeter(page);
+    await page.setInputFiles('#muse-e-photo-file', {
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('hello'),
+    });
+    await expect(page.locator('#muse-e-photo-error').innerText()).resolves.toMatch(
+      /isn’t a PNG, JPEG, WebP or SVG/
+    );
+    await expect(page.evaluate(() => window.__puts.length)).resolves.toBe(0);
+    expect((await peter(page)).images).toEqual([]);
+  });
+});
+
 describe('around the edges', () => {
   const run = (name, options, setup, fn) =>
     test(name, async () => {
@@ -1047,6 +1339,48 @@ describe('around the edges', () => {
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth
       );
       expect(overflow).toBeLessThanOrEqual(0);
+    }
+  );
+
+  run('a phone reads and adds photos', PHONE, { hash: '#/p/p_court/e/el_peter' }, async (page) => {
+    await page.waitForSelector('#muse-element:not(.hidden)');
+    await page.setInputFiles('#muse-e-photo-file', {
+      name: 'peter.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    await page.waitForSelector('.muse-photo');
+    await page.waitForSelector('#muse-e-photo-main img');
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  run(
+    'a refusal from the studio is shown, and nothing is saved on the element',
+    SCREENS.desktop,
+    { hash: '#/p/p_court/e/el_peter' },
+    async (page) => {
+      await page.waitForSelector('#muse-element:not(.hidden)');
+      // The studio's callable refusing the caller, as it does without a claim.
+      await page.evaluate(() => {
+        window.firebase.functions = () => ({
+          httpsCallable: () => () =>
+            Promise.reject(new Error('You do not have access to the Image Studio.')),
+        });
+      });
+      await page.setInputFiles('#muse-e-photo-file', {
+        name: 'peter.png',
+        mimeType: 'image/png',
+        buffer: PNG,
+      });
+      await page.waitForSelector('#muse-e-photo-error:not(.hidden)');
+      await expect(page.locator('#muse-e-photo-error').innerText()).resolves.toMatch(
+        /do not have access to the Image Studio/
+      );
+      const saved = (await stored(page))['muse_projects/p_court/elements/el_peter'];
+      expect(saved.images).toEqual([]);
     }
   );
 
