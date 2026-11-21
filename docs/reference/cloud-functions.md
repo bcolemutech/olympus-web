@@ -146,6 +146,12 @@ The image studio's spending for a month, for its page: the total against the $50
 
 Start making an image from the studio page's form (prompt, kind, view, tier, shape, references, title, labels); returns the job at once. With `from` a battle map and `floor: true` (`studio_generate`; L-955) it makes a **floor painting**: the map's floors drawn from its geometry by `images.floorGuide` (`view_image` with `floor: true` shows the same) go to the model as the last reference, it is asked for the floors only, top-down, with nothing that stands, and the image is kept as kind `battleMap`, view `floor`. A `token` or `portrait` is asked for as a head-and-shoulders face, centred, on a plain background, with nothing important near the edge (it is cropped to a circle; L-934), and `from` may be a stat block (drawn as a square token from its name, traits, size and who stands for it) as well as a place, town, battle map or character
 
+## `museSearch`
+
+**Who can call:** `muse` claim (own projects; M-106)
+
+The Muse page's "Search all text" (the header box's last row, `#/p/<id>/s/<words>`): `{ projectId, query, types?, limit? }` (query up to 200 characters, limit 1–50, default 30). Searches the names, aliases, bios, appearances and text fields of a project's live elements: every word must be found, "words in quotes" are a phrase, case and accents are set aside, and Markdown is read as shown (a link by its words). Gives `{ terms, total, results }`, each result `{ id, type, name, aliases, primary, where, snippet }`, the snippet `{ in, text, marks }` around the first match in a longer text. The same code as the connector's `search` (`functions/muse/store.js`, `functions/muse/search.js`). Someone else's project is `not-found`
+
 ## `studioRunJob`
 
 **Who can call:** Cloud Tasks queue only
@@ -162,4 +168,12 @@ Grand Hall "Manage connections"
 
 **Who can call:** OAuth bearer token per connector
 
-MCP connectors (Scriptorium, Cartographer) and the OAuth server
+MCP connectors (Scriptorium, Cartographer, Muse) and the OAuth server
+
+**The Muse connector** (`/mcp/muse`, scope `mcp:muse` with the `muse` claim; M-106, `functions/mcp/apps/muse/`): the caller's own projects only, through `functions/muse/store.js`, which does the page's own plans (`model.js`, `links.js`, `fields.js`, shared with the page) through the Admin SDK in one batch per write, so the index line and `mentions` always move with an element, and keeps a version (by `mcp`) in the same batch before every change to a project or an element. Tools:
+
+- projects: `list_projects`, `get_project` (with counts per type and custom fields), `create_project`, `update_project`; `set_fields` (a type's custom fields, whole: kept by key, new ones keyed, a kind can't change)
+- elements: `list_elements` (from the index, or the retired ones), `find_elements` (names and aliases, ranked as the page's box), `get_element` (fields by label, photos, relationships from its side, mentions and mentioned-in, its page link), `create_element`, `update_element` (fields merged, null clears), `retire_element` (or `restore`), `add_photos`, `remove_photo`, `set_primary` (studio images, checked to exist)
+- relationships: `list_relationships`, `set_relationship` (make, or change the words; elements by id or a name only they have), `remove_relationship`
+- reading: `outline` (by type, with each bio's first line), `search` (full text, as `museSearch`), `lookup` (the element a name or alias best names, in full, and the others it might mean), `save_version` (a named version)
+- the studio's tools from the Cartographer's code without worlds (`studioTools({ worlds: false })`): `studio_find`, `studio_get`, `studio_import`, `studio_labels`, `studio_costs`, `studio_generate` (no `from` or `floor`; `element` draws one of the caller's elements: its appearance or bio added to the prompt, the title, the kind by type and the project's label filled in, as the page names photos), `studio_edit`, `studio_jobs`, `studio_styles`, `studio_set_style` (no world defaults). Not `studio_assign`, `studio_unassign`, `studio_update` or `studio_delete`, which change worlds

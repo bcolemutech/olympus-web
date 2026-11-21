@@ -34,6 +34,11 @@ const { MAX_NAME, MAX_STYLE_PROMPT, MAX_STYLE_REFERENCES } = require('../../../s
 // - Importing: studio_import brings images already made elsewhere (a Craft
 //   document, a web page) into the library by their link or their data
 //   (functions/studio/fetch.js holds the link to the public web).
+//
+// The Muse connector (M-106) has these tools too, from this same code, with
+// `worlds: false`: no assigning, no changing or deleting an image a world may
+// use (studio_update, studio_delete), and no world in a search, a generation
+// (`from`, `floor`) or a style's default. Its own tools put images on elements.
 
 const TARGET = z
   .enum(['map', 'cover', 'town', 'battleMap', 'playerToken'])
@@ -139,13 +144,18 @@ async function relay(run) {
   }
 }
 
-function studioTools({ studio, reader, writer }) {
+// A tool's input without the keys a connector with no worlds leaves out.
+function withoutKeys(shape, keys) {
+  return Object.fromEntries(Object.entries(shape).filter(([key]) => !keys.includes(key)));
+}
+
+function studioTools({ studio, reader, writer, worlds = true }) {
   const tools = [
-    ...assignTools({ studio }),
-    ...(studio.library ? libraryTools({ studio }) : []),
+    ...(worlds ? assignTools({ studio }) : []),
+    ...(studio.library ? libraryTools({ studio, worlds }) : []),
     ...(studio.costs ? costTools({ studio }) : []),
-    ...(studio.jobs ? generateTools({ studio }) : []),
-    ...(studio.styles ? styleTools({ studio, reader, writer }) : []),
+    ...(studio.jobs ? generateTools({ studio, worlds }) : []),
+    ...(studio.styles ? styleTools({ studio, reader, writer, worlds }) : []),
   ];
   return studio.costs ? tools.map((tool) => withCost(tool, studio.costs)) : tools;
 }
@@ -276,7 +286,7 @@ function assignTools({ studio }) {
   ];
 }
 
-function libraryTools({ studio }) {
+function libraryTools({ studio, worlds = true }) {
   const library = () => studio.library();
   const fetchImage = studio.fetchImage || fetcher.fetchImage;
 
@@ -329,21 +339,25 @@ function libraryTools({ studio }) {
       throw err;
     }
   }
-  return [
+  const tools = [
     {
       name: 'studio_find',
       title: 'Find library images',
       description:
         'Search the image studio’s library, newest first. Every word must appear in an image’s ' +
-        'title, prompt or labels; the filters narrow it further (kind, labels it carries, a ' +
-        'world it is used in, style, who made it, made after or before a date). Returns short ' +
-        'records with each image’s link, not the images: look at one with studio_get.',
+        'title, prompt or labels; the filters narrow it further (kind, labels it carries, ' +
+        (worlds ? 'a world it is used in, ' : '') +
+        'style, who made it, made after or before a date). Returns short ' +
+        'records with each image’s link, not the images: look at one with studio_get.' +
+        (worlds ? '' : ' A Muse project’s photos carry its title as a label.'),
       inputSchema: {
         words: z.string().max(200).optional().describe('Words to match, e.g. "harbour night".'),
         kind: KIND.optional(),
         view: VIEW.optional(),
         labels: LABELS.optional().describe('Only images carrying every one of these labels.'),
-        worldId: worldId.optional().describe('Only images a world uses, from list_worlds.'),
+        ...(worlds
+          ? { worldId: worldId.optional().describe('Only images a world uses, from list_worlds.') }
+          : {}),
         styleId: z.string().max(80).optional().describe('Only images made in this style.'),
         createdBy: z.string().max(128).optional().describe('Only images this editor made.'),
         after: DATE.optional().describe('Only images made on or after this date.'),
@@ -495,7 +509,9 @@ function libraryTools({ studio }) {
         'up to 30 MB. A small image can be sent as base64 `data` instead of a link. A link ' +
         'imported before returns that image (existing: true) unless skipExisting is false. ' +
         'Each image succeeds or fails on its own: the result lists every one, with its id to ' +
-        'use with studio_assign, set_token, set_object_art and the rest. Costs nothing.',
+        (worlds
+          ? 'use with studio_assign, set_token, set_object_art and the rest. Costs nothing.'
+          : 'put on an element with add_photos. Costs nothing.'),
       inputSchema: {
         images: z
           .array(
@@ -545,8 +561,9 @@ function libraryTools({ studio }) {
             images: results,
           };
           if (body.imported || body.existing) {
-            body.next =
-              'Look with studio_get; use with studio_assign, set_token or set_object_art.';
+            body.next = worlds
+              ? 'Look with studio_get; use with studio_assign, set_token or set_object_art.'
+              : 'Look with studio_get; put on an element with add_photos.';
           }
           return body;
         }),
@@ -573,6 +590,11 @@ function libraryTools({ studio }) {
         relay(async () => ({ deleted: await library().deleteImage(args.imageId) })),
     },
   ];
+  // Changing an image's current version re-assigns it in every world using
+  // it, and deleting one is for an unused image: both are the Cartographer's.
+  return worlds
+    ? tools
+    : tools.filter((tool) => tool.name !== 'studio_update' && tool.name !== 'studio_delete');
 }
 
 const MAX_SHOWN = 4; // finished images shown in one studio_jobs result
@@ -626,9 +648,9 @@ function jobView(job, image) {
   };
 }
 
-function generateTools({ studio }) {
+function generateTools({ studio, worlds = true }) {
   const jobs = () => studio.jobs();
-  return [
+  const tools = [
     {
       name: 'studio_generate',
       title: 'Make an image',
@@ -639,10 +661,15 @@ function generateTools({ studio }) {
         'charged (draft about $0.07, final about $0.13; see studio_costs), and kept in the ' +
         'library with its prompt. Give the kind; the tier (draft, the default, or final) or a ' +
         'model; optionally a size and shape; library images as references (style, layout or ' +
-        'subject to follow); and `from`, a place, town, battle map, character or stat block in a world, ' +
-        'whose data is added to the prompt (a town is drawn square from above, a battle map ' +
-        'in its grid’s shape, a stat block as a square token; a token or portrait is asked ' +
-        'for as a head-and-shoulders face centred on a plain background, to crop to a circle). Then label it, and assign it with studio_assign.',
+        'subject to follow)' +
+        (worlds
+          ? '; and `from`, a place, town, battle map, character or stat block in a world, ' +
+            'whose data is added to the prompt (a town is drawn square from above, a battle map ' +
+            'in its grid’s shape, a stat block as a square token; a token or portrait is asked ' +
+            'for as a head-and-shoulders face centred on a plain background, to crop to a circle). ' +
+            'Then label it, and assign it with studio_assign.'
+          : '. A token or portrait is asked for as a head-and-shoulders face centred on a ' +
+            'plain background.'),
       inputSchema: {
         prompt: z.string().min(1).max(4000).describe('What to draw, in words.'),
         kind: KIND.optional().describe(
@@ -693,9 +720,11 @@ function generateTools({ studio }) {
         title: z.string().min(1).max(120).optional().describe('Its title in the library.'),
         labels: LABELS.optional(),
         styleId: STYLE_CHOICE.describe(
-          'A style from studio_styles: its text and reference images are added. With `from`, ' +
-            'the world’s default style is used unless another is named, or "none"; with none, the art ' +
-            'direction in its brief (update_world) stands in for one.'
+          worlds
+            ? 'A style from studio_styles: its text and reference images are added. With `from`, ' +
+                'the world’s default style is used unless another is named, or "none"; with none, the art ' +
+                'direction in its brief (update_world) stands in for one.'
+            : 'A style from studio_styles: its text and reference images are added.'
         ),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -844,6 +873,13 @@ function generateTools({ studio }) {
         }),
     },
   ];
+  if (worlds) return tools;
+  // Without worlds, nothing is drawn from a world (`from`) or its battle map (`floor`).
+  return tools.map((tool) =>
+    tool.name === 'studio_generate'
+      ? { ...tool, inputSchema: withoutKeys(tool.inputSchema, ['from', 'floor']) }
+      : tool
+  );
 }
 
 // A style for Claude: what it is, and its images' links.
@@ -868,7 +904,7 @@ async function styleView(style, library) {
   };
 }
 
-function styleTools({ studio, reader, writer }) {
+function styleTools({ studio, reader, writer, worlds = true }) {
   const styles = () => studio.styles();
   // Sets or clears a world's default style (world.studio.styleId).
   const setDefault = (uid, worldId, styleId) =>
@@ -879,7 +915,7 @@ function styleTools({ studio, reader, writer }) {
       updateWorld({ 'studio.styleId': styleId || FieldValue.delete() });
       return { defaultStyle: styleId, previous: was };
     });
-  return [
+  const tools = [
     {
       name: 'studio_styles',
       title: 'Styles',
@@ -973,6 +1009,26 @@ function styleTools({ studio, reader, writer }) {
         }),
     },
   ];
+  if (worlds) return tools;
+  // Without worlds there is no world's default style to show or set.
+  const DESCRIPTIONS = {
+    studio_styles:
+      'The image studio’s named styles: each is prompt text plus up to ' +
+      `${MAX_STYLE_REFERENCES} reference images, so a project’s art keeps one look. Name one ` +
+      'in studio_generate or studio_edit (styleId). Find the images made in a style with ' +
+      'studio_find (styleId).',
+    studio_set_style:
+      'Make a style (name and prompt, optionally reference images), or change one ' +
+      '(styleId, and the name, prompt or references to replace). The prompt says how ' +
+      'images in the style look ("ink and watercolour on parchment, muted earth tones"); the ' +
+      'references show it. Changing a style changes what later images get, not images ' +
+      'already made.',
+  };
+  return tools.map((tool) => ({
+    ...tool,
+    description: DESCRIPTIONS[tool.name],
+    inputSchema: withoutKeys(tool.inputSchema, ['worldId', 'clearDefault']),
+  }));
 }
 
 module.exports = { studioTools, relay };

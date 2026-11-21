@@ -424,6 +424,27 @@
         </section>
       </section>
 
+      <!-- ── Every element whose text holds some words (M-106) ── -->
+      <section class="hidden" id="muse-text">
+        <a class="muse-back" id="muse-s-back" href="#/">&larr; Project</a>
+        <h1 class="muse-t-title" id="muse-s-title"></h1>
+        <form class="muse-s-form" id="muse-s-form" role="search" novalidate>
+          <label class="muse-sr" for="muse-s-box">Search all text</label>
+          <input
+            class="muse-input"
+            id="muse-s-box"
+            type="search"
+            maxlength="200"
+            autocomplete="off"
+            placeholder="Words in bios, appearances and fields"
+          />
+          <button type="submit" class="muse-btn">Search</button>
+        </form>
+        <p class="muse-hint" id="muse-s-status" role="status"></p>
+        <p class="muse-error hidden" id="muse-s-error" role="alert"></p>
+        <div class="muse-el-list" id="muse-s-list"></div>
+      </section>
+
       <!-- ── A project or element that isn't there ── -->
       <section class="hidden" id="muse-missing">
         <a class="muse-back" href="#/">&larr; All projects</a>
@@ -448,6 +469,7 @@
     <script src="/apps/muse/js/version-form.js"></script>
     <script src="/apps/muse/js/suggest.js"></script>
     <script src="/apps/muse/js/search.js"></script>
+    <script src="/apps/muse/js/text-search.js"></script>
     <script src="/apps/muse/js/home.js"></script>
     <script src="/apps/muse/js/project.js"></script>
     <script src="/apps/muse/js/field-editor.js"></script>

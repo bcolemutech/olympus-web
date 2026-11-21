@@ -128,6 +128,38 @@ exports.studioCosts = onCall(async (request) => {
   return studioService().costs(uid, request.data || {});
 });
 
+// The Muse's full-text search (M-106): a project's bios, appearances and text
+// fields, for the page's "Search all text" box, by the code the connector's
+// `search` tool uses (functions/muse/store.js, functions/muse/search.js).
+let _museStore;
+exports.museSearch = onCall(async (request) => {
+  if (!request.auth || !request.auth.uid) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+  const apps = (request.auth.token && request.auth.token.apps) || [];
+  if (!Array.isArray(apps) || !apps.includes('muse')) {
+    throw new HttpsError('permission-denied', 'You do not have access to the Muse.');
+  }
+  const { projectId, query, types, limit } = request.data || {};
+  if (typeof query !== 'string' || !query.trim() || query.length > 200) {
+    throw new HttpsError('invalid-argument', 'Say what to search for (up to 200 characters).');
+  }
+  if (!_museStore) {
+    const { createMuseStore, studioImages } = require('./muse/store');
+    const db = getFirestore();
+    _museStore = createMuseStore({ db, FieldValue, images: studioImages(db) });
+  }
+  try {
+    return await _museStore.search(request.auth.uid, projectId, query, {
+      types: Array.isArray(types) ? types.filter((t) => typeof t === 'string') : undefined,
+      limit: Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 50) : 30,
+    });
+  } catch (err) {
+    if (err && err.name === 'MuseError') throw new HttpsError(err.code, err.message);
+    throw err;
+  }
+});
+
 // Start generating an image from the page's form (L-707): returns the job at
 // once; the page follows it in studio_jobs.
 exports.studioGenerate = onCall(async (request) => {

@@ -6,11 +6,12 @@
   //   #/p/<id>            a project's home
   //   #/p/<id>/t/<type>   a list of one type's elements
   //   #/p/<id>/e/<el>     an element's page
+  //   #/p/<id>/s/<words>  every element whose text holds the words (M-106)
   // and, inside a project, the search box in the header (M-103).
 
   var Muse = window.Muse;
   var state = Muse.state;
-  var VIEWS = ['home', 'project', 'type', 'element', 'missing'];
+  var VIEWS = ['home', 'project', 'type', 'element', 'text', 'missing'];
 
   function view(name) {
     VIEWS.forEach(function (v) {
@@ -30,7 +31,7 @@
 
   function go() {
     var hash = window.location.hash || '#/';
-    var m = /^#\/p\/([^/]+)(?:\/(t|e)\/([^/]+))?\/?$/.exec(hash);
+    var m = /^#\/p\/([^/]+)(?:\/(t|e|s)\/([^/]+))?\/?$/.exec(hash);
     if (m) {
       var id = decodeURIComponent(m[1]);
       var shown =
@@ -42,9 +43,13 @@
             ? Muse.element.show(id, decodeURIComponent(m[3])).then(function (ok) {
                 return ok && 'element';
               })
-            : Muse.project.show(id).then(function (ok) {
-                return ok && 'project';
-              });
+            : m[2] === 's'
+              ? Muse.textSearch.show(id, decodeURIComponent(m[3])).then(function (ok) {
+                  return ok && 'text';
+                })
+              : Muse.project.show(id).then(function (ok) {
+                  return ok && 'project';
+                });
       return shown.then(function (name) {
         view(name || 'missing');
         Muse.search.sync(!!name);
@@ -79,6 +84,7 @@
         Muse.element.init();
         Muse.relationships.init();
         Muse.search.init();
+        Muse.textSearch.init();
         document.addEventListener('click', function (event) {
           // An element link in a text (muse:el/<id>) opens its page.
           var a = event.target.closest && event.target.closest('a.muse-el-link');

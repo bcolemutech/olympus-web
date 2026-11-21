@@ -64,5 +64,7 @@
   "loom-turns-ap-play.test.js": 5,
   "studio-edit.test.js": 5,
   "studio-library.test.js": 5,
-  "loom-iso-order.test.js": 3
+  "loom-iso-order.test.js": 3,
+  "muse-mcp.test.js": 12,
+  "muse-shared.test.js": 1
 }

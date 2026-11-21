@@ -194,6 +194,31 @@ function stub({ apps, docs }) {
   const functions = () => ({
     httpsCallable: (name) => (data) => {
       window.__calls.push({ name, data });
+      // The full-text search (M-106): what the server would find for "bells".
+      if (name === 'museSearch') {
+        if (data.query === 'fail') return Promise.reject(new Error('The server is away.'));
+        const text = 'The Drowned King holds court here, under the bells.';
+        return Promise.resolve({
+          data:
+            data.query === 'bells'
+              ? {
+                  terms: ['bells'],
+                  total: 1,
+                  results: [
+                    {
+                      id: 'el_sea',
+                      type: 'location',
+                      name: 'The Sunken City',
+                      aliases: ['Old Brass'],
+                      primary: null,
+                      where: ['bio'],
+                      snippet: { in: 'bio', text, marks: [[text.indexOf('bells'), text.length - 1]] },
+                    },
+                  ],
+                }
+              : { terms: [data.query], total: 0, results: [] },
+        });
+      }
       if (name !== 'studioUpload') return Promise.reject(new Error('No such callable'));
       if (!apps.includes('cartographer') && !apps.includes('muse')) {
         return Promise.reject(new Error('You do not have access to the Image Studio.'));
@@ -819,6 +844,43 @@ describe('links, relationships and search (M-103)', () => {
       );
     }, selector);
 
+  each('searches all text from the header, and opens a result (M-106)', async (page) => {
+    await openCourt(page);
+    await page.fill('#muse-search-box', 'bells');
+    await page.click('.muse-suggest-more');
+    await page.waitForSelector('#muse-text:not(.hidden) .muse-s-row');
+    await expect(page.locator('#muse-s-title').innerText()).resolves.toBe('“bells”');
+    const call = await page.evaluate(() => window.__calls.find((c) => c.name === 'museSearch'));
+    expect(call.data).toMatchObject({ projectId: 'p_court', query: 'bells' });
+    const row = page.locator('.muse-s-row');
+    await expect(row.locator('.muse-el-row-name').innerText()).resolves.toBe('The Sunken City');
+    await expect(row.locator('.muse-el-row-aliases').innerText()).resolves.toBe('Location · in bio');
+    await expect(row.locator('mark').innerText()).resolves.toBe('bells');
+    await expect(page.locator('#muse-s-status').innerText()).resolves.toBe('One element.');
+    await expect(page.locator('#muse-s-back').innerText()).resolves.toMatch(/The Court/);
+
+    // Searching again from its own box; nothing found says so.
+    await page.fill('#muse-s-box', 'nothing');
+    await page.press('#muse-s-box', 'Enter');
+    await page.waitForFunction(
+      () => document.getElementById('muse-s-status').textContent === 'Nothing holds those words.'
+    );
+    await expect(page.locator('.muse-s-row').count()).resolves.toBe(0);
+    // A failure is said plainly.
+    await page.fill('#muse-s-box', 'fail');
+    await page.press('#muse-s-box', 'Enter');
+    await page.waitForSelector('#muse-s-error:not(.hidden)');
+    await expect(page.locator('#muse-s-error').innerText()).resolves.toMatch(/The server is away/);
+
+    // A result opens its element.
+    await page.evaluate(() => (window.location.hash = '#/p/p_court/s/bells'));
+    await page.waitForSelector('#muse-text:not(.hidden) .muse-s-row');
+    await page.click('.muse-s-row');
+    await page.waitForFunction(
+      () => document.getElementById('muse-e-name').textContent === 'The Sunken City'
+    );
+  });
+
   each('finds an element by an alias as you type, and opens it', async (page) => {
     // No search on the home page; it is in the header inside a project.
     await expect(page.locator('#muse-search').isVisible()).resolves.toBe(false);
@@ -826,21 +888,22 @@ describe('links, relationships and search (M-103)', () => {
     await expect(page.locator('.app-header #muse-search-box').isVisible()).resolves.toBe(true);
 
     await page.fill('#muse-search-box', 'drowned');
-    const row = page.locator('.muse-suggest-row');
+    // The elements, then the last row: search all text (M-106).
+    const row = page.locator('.muse-suggest-row:not(.muse-suggest-more)');
     await expect(row.count()).resolves.toBe(1);
+    await expect(page.locator('.muse-suggest-more').innerText()).resolves.toMatch(
+      /Search all text for “drowned”/
+    );
     await expect(row.locator('.muse-suggest-name').innerText()).resolves.toBe('King Peter');
     await expect(row.locator('.muse-suggest-alias').innerText()).resolves.toMatch(/The Drowned King/);
     await expect(inViewport(page, '.muse-suggest')).resolves.toBe(true);
 
     // Names too, and each keystroke narrows it.
     await page.fill('#muse-search-box', 'm');
-    await expect(page.locator('#muse-search .muse-suggest-name').allInnerTexts()).resolves.toEqual([
-      'Marta',
-    ]);
+    const names = '#muse-search .muse-suggest-row:not(.muse-suggest-more) .muse-suggest-name';
+    await expect(page.locator(names).allInnerTexts()).resolves.toEqual(['Marta']);
     await page.fill('#muse-search-box', 'old br');
-    await expect(page.locator('.muse-suggest-name').allInnerTexts()).resolves.toEqual([
-      'The Sunken City',
-    ]);
+    await expect(page.locator(names).allInnerTexts()).resolves.toEqual(['The Sunken City']);
     await page.keyboard.press('Escape');
     await expect(page.locator('.muse-suggest-row').count()).resolves.toBe(0);
 
@@ -1519,7 +1582,9 @@ describe('around the edges', () => {
       await page.waitForSelector('#muse-e-relationships:not(.hidden) .muse-rel');
       await expect(page.locator('.muse-rel').innerText()).resolves.toMatch(/son of\s+Marta/);
       await page.fill('#muse-search-box', 'widow');
-      await expect(page.locator('.muse-suggest-row').count()).resolves.toBe(1);
+      await expect(
+        page.locator('.muse-suggest-row:not(.muse-suggest-more)').count()
+      ).resolves.toBe(1);
       await page.click('#muse-r-add');
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth

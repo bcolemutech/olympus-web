@@ -44,8 +44,8 @@ npm run format
 - **JSX Runner** — `public/apps/jsx-runner/`: Dynamic React applet executor
 - **The Loom** — `public/apps/loom/`: AI-narrated game system; plays worlds with Gemini
 - **The Cartographer** — `public/apps/cartographer/`: Turns Azgaar maps into Loom worlds; MCP connector at `/mcp/cartographer`
-- **The Muse** — `public/apps/muse/`: World bibles and manuscripts (M-100 in progress: projects from M-101, elements and custom fields from M-102, relationships, @-links and search from M-103, photo libraries from M-104, versions from M-105); opened by the `muse` claim; MCP connector at `/mcp/muse` _(planned, M-106)_
-- **The Image Studio** — `public/apps/studio/`: The library of art for worlds: browse, search, look at, upload and download images. Opened by the `cartographer` or `muse` claim (`claim:` in `apps.yaml`); its MCP tools are in the Cartographer connector
+- **The Muse** — `public/apps/muse/`: World bibles and manuscripts (M-100 in progress: projects from M-101, elements and custom fields from M-102, relationships, @-links and search from M-103, photo libraries from M-104, versions from M-105, the connector and full-text search from M-106); opened by the `muse` claim; MCP connector at `/mcp/muse`
+- **The Image Studio** — `public/apps/studio/`: The library of art for worlds: browse, search, look at, upload and download images. Opened by the `cartographer` or `muse` claim (`claim:` in `apps.yaml`); its MCP tools are in the Cartographer connector, and without worlds in the Muse's
 - **Scriptorium** — _(MCP connector only)_: Notes managed from Claude at `/mcp/scriptorium`
 
 ---
@@ -108,8 +108,8 @@ olympus-web/
 │   ├── loom-models.js             # Loom save and turn document shapes
 │   ├── loom-modules/              # Game-system modules (Phase 9): combat/ (settings, fights, attacks, strikes, play), wilds/ (off-road travel's settings, navigation, events)
 │   ├── cartographer/              # Azgaar parse → map → load, import and publish service
-│   ├── muse/                      # The Muse's versions: the plan (shared with the page) and its server store (M-105)
-│   └── mcp/                       # MCP host, OAuth server, registry, apps/ (scriptorium, cartographer)
+│   ├── muse/                      # The Muse on the server: the page's plans (shared), versions, store and search (M-105, M-106)
+│   └── mcp/                       # MCP host, OAuth server, registry, apps/ (scriptorium, cartographer, muse)
 ├── tests/                         # Jest suites (rules, Loom, Cartographer, MCP) + fixtures/
 ├── scripts/                       # Admin scripts the workflows run (set-admin, seed-categories, studio-generate, migrate-map-levels, convert-map-layers), build-art (the Loom's built-in art, run by hand), azgaar/ (an Azgaar full JSON export → a world's terrain, rivers and province zones, run by Claude; L-717) and art/ (the game art pipeline: fetch, slice, key, seamless, fit, check, and for art sets webp, atlas and budget, with the size budget in art/budget.cjs; L-944)
 ├── planning/                      # Design docs per phase; roadmap.md orders the work
@@ -228,7 +228,7 @@ npm run deploy            # Deploy hosting only (production)
 - `studio_jobs/{jobId}` — `hasApp('cartographer')` or `hasApp('muse')`, read only. The image studio's jobs (make or edit an image): request, state, result, cost or error; busy 429s retried up to 5 tries (L-396)
 - `studio_styles/{styleId}` — `hasApp('cartographer')` or `hasApp('muse')`, read only. The image studio's named styles: a name, prompt text and up to 3 reference images, named in a generation or edit; a world's default is `world.studio.styleId`
 - `studio_costs/{entryId}`, `studio_costs_month/{yyyy-mm}` — Deny (server only). The image studio's costs: one entry per charged job, and each month's totals by day, model and who (read through `studioCosts`)
-- `muse_projects/{projectId}` — Owner with `hasApp('muse')`, read and write (the page writes directly, shapes checked by the rules; M-101). The Muse's projects: title, short, Markdown summary, cover, custom fields per type; `elements` (characters, factions, locations, objects, concepts) and their `index`, written together in one batch (the rules check each against the other; M-102); `relationships`, `versions` (the last 50 of a project or element, never updated; M-105); later subcollections added by their stories
+- `muse_projects/{projectId}` — Owner with `hasApp('muse')`, read and write (the page writes directly, shapes checked by the rules; M-101). The Muse's projects: title, short, Markdown summary, cover, custom fields per type; `elements` (characters, factions, locations, objects, concepts) and their `index`, written together in one batch (the rules check each against the other; M-102); `relationships`, `versions` (the last 50 of a project or element, never updated; M-105; the connector keeps one, by `mcp`, before each of its writes, M-106); later subcollections added by their stories
 - `scriptorium_notes/{id}` — Deny (server only). Scriptorium notes, via MCP (`list_notes` pages titles and dates without bodies by a cursor; `get_note` reads one; L-397)
 - `mcp_*` (`oauth_clients`, `oauth_codes`, `oauth_tokens`, `oauth_grants`, `audit`, `rate_limits`) — Deny (server only). MCP OAuth state, audit log, rate limits
 
@@ -267,7 +267,8 @@ Functions v2, all exported from `functions/index.js`. Everything is a Callable e
 - `studioGenerate` — `cartographer` or `muse` claim. Start making an image from the studio page's form (prompt, kind, tier, shape, references, title, labels); returns the job at once
 - `studioRunJob` — Cloud Tasks queue only. Runs one studio job, at most 8 at once: a new image, or an edit that becomes an image's next version, made with a Gemini image model on Vertex, its cost recorded; a busy model's 429 queues it again after a wait (L-396)
 - `mcpListConnections` / `mcpRevokeConnection` — Signed-in user (own connections). Grand Hall "Manage connections"
-- `mcpServer` — OAuth bearer token per connector. MCP connectors (Scriptorium, Cartographer) and the OAuth server
+- `museSearch` — `muse` claim (own projects). Full-text search of a project, for the page's "Search all text"; the connector's `search` code (M-106)
+- `mcpServer` — OAuth bearer token per connector. MCP connectors (Scriptorium, Cartographer, Muse) and the OAuth server
 
 Full descriptions: [`docs/reference/cloud-functions.md`](docs/reference/cloud-functions.md).
 
