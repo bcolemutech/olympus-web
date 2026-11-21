@@ -4,7 +4,8 @@
   // The search box in the app's header (planning/the-muse.md §3 EL5; M-103 /
   // #891): every name and alias of the open project, from its index in
   // memory, so it answers as you type; a pick opens that element's page.
-  // Full text (bios, chapters) is searched through the connector (M-106).
+  // Its last row, "Search all text", searches bios, appearances and text
+  // fields on the server (M-106; ./text-search.js).
   //
   // The page's own markup holds the box; it is moved into the shared header
   // when the app starts, and shown only inside a project.
@@ -29,6 +30,11 @@
           Muse.go(
             '#/p/' + encodeURIComponent(state.project.id) + '/e/' + encodeURIComponent(result.id)
           );
+        },
+        more: function (text) {
+          box.value = '';
+          box.blur();
+          Muse.go('#/p/' + encodeURIComponent(state.project.id) + '/s/' + encodeURIComponent(text));
         },
       });
       box.addEventListener('keydown', function (event) {
