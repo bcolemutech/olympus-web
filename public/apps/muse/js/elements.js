@@ -14,9 +14,10 @@
     return state.db.collection('muse_projects').doc(projectId);
   }
 
-  // A plan's sentinels as Firestore's.
+  // A plan's sentinels as Firestore's. The server's time is told by its shape
+  // (./versions.js isNow), as plans from ./versions.js carry their own.
   function toFirestore(value) {
-    if (value === model.NOW) return firebase.firestore.FieldValue.serverTimestamp();
+    if (Muse.versions.isNow(value)) return firebase.firestore.FieldValue.serverTimestamp();
     if (value === model.DELETE) return firebase.firestore.FieldValue.delete();
     if (Array.isArray(value)) return value.map(toFirestore);
     if (value && typeof value === 'object' && value.constructor === Object) {

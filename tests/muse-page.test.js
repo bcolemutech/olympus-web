@@ -1264,6 +1264,192 @@ describe('photo libraries (M-104)', () => {
   });
 });
 
+describe('versions (M-105)', () => {
+  const goTo = async (page, hash, ready) => {
+    await page.waitForSelector('#muse-home:not(.hidden)');
+    await page.evaluate((h) => (window.location.hash = h), hash);
+    await page.waitForFunction(ready);
+  };
+  const openPeter = (page) =>
+    goTo(
+      page,
+      '#/p/p_court/e/el_peter',
+      () =>
+        !document.getElementById('muse-element').classList.contains('hidden') &&
+        document.getElementById('muse-e-name').textContent === 'King Peter'
+    );
+  const versionsOf = async (page, projectId = 'p_court') =>
+    Object.entries(await stored(page))
+      .filter(([p]) => p.startsWith(`muse_projects/${projectId}/versions/`))
+      .map(([p, d]) => ({ id: p.split('/').pop(), ...d }));
+  const saved = (page) =>
+    page.waitForSelector('#muse-e-versions-box-done:not(.hidden), #muse-p-versions-box-done:not(.hidden)');
+
+  each('an element’s version is kept, named or not, as it is stored', async (page) => {
+    await openPeter(page);
+    // What is typed and not saved is not what is kept.
+    await page.click('#muse-e-edit');
+    await page.fill('#muse-e-name-input', 'Not yet');
+    await page.click('#muse-e-cancel');
+
+    await page.fill('#muse-e-versions-box-name', '  Before the war  ');
+    await page.click('#muse-e-versions-box-save');
+    await saved(page);
+    await expect(page.locator('#muse-e-versions-box-done').innerText()).resolves.toBe(
+      'Version saved.'
+    );
+    // The name is cleared, ready for the next.
+    await expect(page.locator('#muse-e-versions-box-name').inputValue()).resolves.toBe('');
+    const [first] = await versionsOf(page);
+    expect(first).toMatchObject({
+      of: 'muse_projects/p_court/elements/el_peter',
+      name: 'Before the war',
+      by: 'page',
+    });
+    expect(first.snapshot).toMatchObject({
+      type: 'character',
+      name: 'King Peter',
+      aliases: ['The Drowned King'],
+      mentions: ['el_sea'],
+      shard: '0',
+    });
+    expect(first.snapshot.id).toBeUndefined();
+    await expect(page.evaluate(() => window.__batches)).resolves.toBe(1);
+
+    // Another, without a name.
+    await page.click('#muse-e-versions-box-save');
+    await page.waitForFunction(() => window.__batches === 2);
+    await saved(page);
+    const all = await versionsOf(page);
+    expect(all.map((v) => v.name).sort()).toEqual(['Before the war', null].sort());
+  });
+
+  each('the 51st version deletes the oldest of that thing, and no other', async (page) => {
+    await page.waitForSelector('#muse-home:not(.hidden)');
+    // Fifty already kept for King Peter, and one for Marta.
+    await page.evaluate(() => {
+      for (let i = 1; i <= 50; i++) {
+        const id = 'v' + String(i).padStart(2, '0');
+        window.__store.set('muse_projects/p_court/versions/' + id, {
+          of: 'muse_projects/p_court/elements/el_peter',
+          snapshot: { name: 'King Peter' },
+          name: null,
+          by: 'page',
+          at: i * 10,
+        });
+      }
+      window.__store.set('muse_projects/p_court/versions/marta', {
+        of: 'muse_projects/p_court/elements/el_marta',
+        snapshot: { name: 'Marta' },
+        name: null,
+        by: 'mcp',
+        at: 1,
+      });
+    });
+    await openPeter(page);
+    await page.fill('#muse-e-versions-box-name', 'The 51st');
+    await page.click('#muse-e-versions-box-save');
+    await saved(page);
+    await expect(page.locator('#muse-e-versions-box-done').innerText()).resolves.toMatch(
+      /Version saved\. The oldest was deleted: the last 50 are kept\./
+    );
+    const all = await versionsOf(page);
+    const peters = all.filter((v) => v.of.endsWith('/el_peter'));
+    expect(peters).toHaveLength(50);
+    expect(peters.map((v) => v.id)).not.toContain('v01');
+    expect(peters.map((v) => v.id)).toContain('v02');
+    expect(peters.map((v) => v.name)).toContain('The 51st');
+    // Marta's one is another thing's, and stays.
+    expect(all.filter((v) => v.of.endsWith('/el_marta'))).toHaveLength(1);
+  });
+
+  each('the project’s version is kept from its settings', async (page) => {
+    await goTo(
+      page,
+      '#/p/p_court',
+      () =>
+        !document.getElementById('muse-project').classList.contains('hidden') &&
+        document.getElementById('muse-p-title').textContent === 'The Court'
+    );
+    await page.fill('#muse-p-versions-box-name', 'Draft one');
+    await page.press('#muse-p-versions-box-name', 'Enter');
+    await saved(page);
+    const [version] = await versionsOf(page);
+    expect(version).toMatchObject({
+      of: 'muse_projects/p_court',
+      name: 'Draft one',
+      by: 'page',
+    });
+    expect(version.snapshot).toMatchObject({
+      owner: 'ann',
+      title: 'The Court',
+      summary: 'Marta keeps the court. The Widow is wise.',
+    });
+  });
+
+  each('a name that is too long is refused before anything is written', async (page) => {
+    await openPeter(page);
+    await page.evaluate(() => {
+      const box = document.getElementById('muse-e-versions-box-name');
+      box.removeAttribute('maxlength');
+      box.value = 'x'.repeat(101);
+    });
+    await page.click('#muse-e-versions-box-save');
+    await expect(page.locator('#muse-e-versions-box-error').innerText()).resolves.toMatch(
+      /at most 100 characters/
+    );
+    await expect(versionsOf(page)).resolves.toEqual([]);
+  });
+
+  each('a version’s notice does not follow the page to another element', async (page) => {
+    await openPeter(page);
+    await page.click('#muse-e-versions-box-save');
+    await saved(page);
+    await page.evaluate(() => (window.location.hash = '#/p/p_court/e/el_marta'));
+    await page.waitForFunction(
+      () => document.getElementById('muse-e-name').textContent === 'Marta'
+    );
+    await expect(page.locator('#muse-e-versions-box-done').isVisible()).resolves.toBe(false);
+  });
+
+  test('deleting a project deletes its versions', async () => {
+    if (!browser) return;
+    const { context, page, errors } = await open(SCREENS.desktop, { hash: '#/p/p_isle' });
+    try {
+      await page.waitForSelector('#muse-project:not(.hidden)');
+      await page.click('#muse-p-versions-box-save');
+      await saved(page);
+      expect(await versionsOf(page, 'p_isle')).toHaveLength(1);
+      await page.click('#muse-p-delete');
+      await page.click('#muse-p-delete-yes');
+      await page.waitForSelector('#muse-home:not(.hidden)');
+      const left = Object.keys(await stored(page)).filter((p) => p.includes('p_isle'));
+      expect(left).toEqual([]);
+      expect(errors).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('a phone keeps a version too', async () => {
+    if (!browser) return;
+    const { context, page, errors } = await open(PHONE, { hash: '#/p/p_isle/e/el_sea' });
+    try {
+      await page.waitForSelector('#muse-element:not(.hidden)');
+      await page.tap('#muse-e-versions-box-save');
+      await saved(page);
+      expect(await versionsOf(page, 'p_isle')).toHaveLength(1);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+      expect(errors).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
 describe('around the edges', () => {
   const run = (name, options, setup, fn) =>
     test(name, async () => {

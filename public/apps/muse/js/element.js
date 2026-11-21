@@ -9,11 +9,13 @@
   // Relationships and "mentioned in" (M-103) are drawn by their own files;
   // typing @ in a text offers elements to link, and an element's name or
   // alias found in a text is shown as a link to it (EL6). Its photos are
-  // drawn by ./gallery.js (M-104).
+  // drawn by ./gallery.js (M-104). "Save version" (./version-form.js, M-105)
+  // keeps a copy of it as stored.
 
   var Muse = window.Muse;
   var state = Muse.state;
   var F = Muse.fields;
+  var versionBox = null;
 
   function element() {
     return state.element;
@@ -388,6 +390,9 @@
       Muse.$('muse-e-restore').addEventListener('click', function () {
         act(Muse.elements.restore(state.project.id, element()));
       });
+      versionBox = Muse.versionForm.mount(Muse.$('muse-e-versions-box'), function () {
+        return { projectId: state.project.id, collection: 'elements', id: element().id };
+      });
     },
 
     // Opens an element by id; false when it or its project isn't there.
@@ -406,6 +411,7 @@
           if (!e || !Muse.TYPE[e.type]) return false;
           edit(false);
           confirmRetire(false);
+          versionBox.reset();
           draw();
           Muse.gallery.show();
           // Its relationships, and the elements that link to it.

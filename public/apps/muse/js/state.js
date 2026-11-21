@@ -31,7 +31,7 @@
 
   // A project's subcollections, deleted with it. Each story that adds one
   // adds it here (M-102 onwards: index, elements, relationships, versions…).
-  Muse.PROJECT_PARTS = ['index', 'elements', 'relationships'];
+  Muse.PROJECT_PARTS = ['index', 'elements', 'relationships', 'versions'];
 
   // ── Helpers ─────────────────────────────────────
   Muse.$ = function (id) {
