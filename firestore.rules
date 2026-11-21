@@ -569,9 +569,40 @@ service cloud.firestore {
                       && request.resource.data.updatedAt == request.time;
       }
 
-      // Its other subcollections (versions, …) get their rules, with their
-      // shapes, in the stories that add them (M-105 onwards). Until then the
-      // default deny below covers them.
+      // Versions (M-105; VR1, VR2): a copy of the project or of one of its
+      // elements as it was, kept when the owner saves one by hand (`page`).
+      // Those kept before an MCP write (`mcp`) come through the Admin SDK, so
+      // the page may not claim to be one. Once kept a version is never
+      // changed, only deleted: by its owner, or as the 51st is saved (the
+      // page deletes the oldest in the same batch). See
+      // public/apps/muse/js/versions.js.
+      match /versions/{versionId} {
+        function validVersion() {
+          let data = request.resource.data;
+          let required = ['of', 'snapshot', 'name', 'by', 'at'];
+          let parts = data.of is string ? data.of.split('/') : [];
+          return data.keys().hasAll(required)
+              && data.keys().hasOnly(required)
+              && parts.size() >= 2
+              && parts[0] == 'muse_projects'
+              && parts[1] == projectId
+              && (parts.size() == 2
+                  || (parts.size() == 4 && parts[2] == 'elements' && parts[3].size() > 0))
+              && data.snapshot is map
+              && (data.name == null
+                  || (data.name is string && data.name.size() > 0 && data.name.size() <= 100))
+              && data.by == 'page'
+              && data.at == request.time;
+        }
+
+        allow read, delete: if museProjectOwner();
+        allow create: if museProjectOwner() && validVersion();
+        allow update: if false;
+      }
+
+      // Its other subcollections get their rules, with their shapes, in the
+      // stories that add them (M-200 onwards). Until then the default deny
+      // below covers them.
     }
 
     // ── App registry ──────────────────────────────────────

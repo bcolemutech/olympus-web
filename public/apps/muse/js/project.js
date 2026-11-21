@@ -11,6 +11,7 @@
   var state = Muse.state;
   var pendingCover = null; // the cover the open form would save
   var coverAdder = null;
+  var versionBox = null;
 
   function project() {
     return state.project;
@@ -247,6 +248,10 @@
         confirmDelete(false);
       });
       Muse.$('muse-p-delete-yes').addEventListener('click', remove);
+
+      versionBox = Muse.versionForm.mount(Muse.$('muse-p-versions-box'), function () {
+        return { projectId: project().id, collection: null, id: null };
+      });
     },
 
     // Reads a project and its index into the state; false when it isn't
@@ -280,6 +285,7 @@
         editHead(false);
         editSummary(false);
         confirmDelete(false);
+        versionBox.reset();
         Muse.say(Muse.$('muse-p-rename-done'), '');
         Muse.say(Muse.$('muse-p-rename-error'), '');
         draw();
