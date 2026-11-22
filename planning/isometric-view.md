@@ -1,6 +1,6 @@
 # The Loom — The Isometric View — Design Document v0.1
 
-**Status:** Decided (2026-11-15). The gap sheet (§3) is answered. The spike (§5) is built and reported ([`isometric-spike-report.md`](./isometric-spike-report.md)); its checkpoint is answered (§3, 2026-11-15). L-950's stories L-951 to L-957 are filed as #857–#863, and L-958, the user's play-test, as #870 (§6); L-954, the props, L-955, art by view and floor paintings (§4.4), L-956, grading (§4.5), and L-957, unpublishing (§4.6), are built; L-960's are filed when it is next.
+**Status:** L-950 shipped (2026-11-22): L-951 to L-957 built, L-958 played by the user, and the bugs it found fixed (#874, #875, #879, #880). Decided 2026-11-15; the spike (§5) is reported in [`isometric-spike-report.md`](./isometric-spike-report.md) and its checkpoint answered (§3). **Revised 2026-11-22 (AW1–AW3):** artwork battle maps are shown flat until there are more assets, L-960 gives the worlds artwork maps, and the worlds stay published. L-960's stories are filed as #908–#911 (§6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epics:** L-950 the isometric view (#852), L-960 reworking the worlds (#853); Phase 10 — Levels and Vehicles (milestone #26).
 **Replaces:** the three-quarter view on grid maps ([`game-art.md`](./game-art.md), L-941). Town and region maps keep it.
@@ -79,7 +79,7 @@ Settled through a questionnaire. AR2 was then refined by a follow-up question.
 
 | ID      | Question                       | Decision                                                                                                                                                                                                                                                               |
 | ------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **WD1** | Publishing during the overhaul | **All three worlds are unpublished when the new view lands,** with no compatibility work; L-960 republishes each as it's done. A small unpublish tool (MCP and the page) is added                                                                                      |
+| **WD1** | Publishing during the overhaul | **All three worlds are unpublished when the new view lands,** with no compatibility work; L-960 republishes each as it's done. A small unpublish tool (MCP and the page) is added _(Revised 2026-11-22, AW3: the worlds stay published.)_                              |
 | **WD2** | The rework's order             | **The Border March first** (small, the test bed), **then The Corpse Tide, then Nisia** (the largest)                                                                                                                                                                   |
 | **PL1** | A spike first                  | **Yes:** a prototype on a branch, with isometric props from the studio, on a preview the user plays before the epic is filed (§5). The user: "with the spike we should be able to identify any issues with the rendering art"                                          |
 | **PL2** | Where it goes                  | **L-950 next, then L-960 reworking the worlds, then the dungeon epic**                                                                                                                                                                                                 |
@@ -95,6 +95,16 @@ Settled through a questionnaire. AR2 was then refined by a follow-up question.
 | **C3** | The props' look                  | **Approved** for the whole set                                                                                                                                                                                                                                                                |
 | **C4** | Isometric paintings of grid maps | **Floor only:** a grid's own painting is its floor, under walls, doors and props standing from its data                                                                                                                                                                                       |
 | **C5** | Anything wrong in play           | **Props looked small and rooms empty.** Scaling floors, doors or props didn't help (tried on the preview); the user: "we probably just need to fill the rooms more so they don't seem so empty. Not a problem I want to deal with now." Left to the rework (L-960), with `dress_room` (L-945) |
+
+### After the play-test (the user, 2026-11-22)
+
+With L-950 shipped, the user found the art set covers only very basic buildings: many more assets are needed for the range of maps worlds call for, and a "scenes" alternative to battle maps is to be proposed as an idea. Until then, a good-looking battle map needs artwork.
+
+| ID      | Question             | Decision                                                                                                                                                                                                                 |
+| ------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **AW1** | Artwork battle maps  | **Top-down art, shown flat:** a grid whose own art is a whole top-down painting is shown from above as that painting, its geometry ruling play but not drawn (§4.7). Revises AR2 and C4, which retired such art on grids |
+| **AW2** | What L-960 does      | **Artwork maps:** each world's battle maps get artwork and are played through; dressing grids from data waits for the asset library and the dungeon epic                                                                 |
+| **AW3** | The worlds meanwhile | **They stay published** (revises WD1)                                                                                                                                                                                    |
 
 ---
 
@@ -155,6 +165,17 @@ Unchanged in its criteria: a map's look counts (L-947), and a map's own art keep
 
 ---
 
+### 4.7 Artwork battle maps (AW1; L-961)
+
+- **Which maps:** a grid whose own art is `view: 'top-down'`, or not marked (today's paintings, such as Nisia's 43). A `floor` painting stays the isometric floor (C4).
+- **The view:** the grid view switches the isometric projection off for that map when it's entered (the three-quarter engine's flat mode, as `?view=tq`), and back on for a map that isn't artwork. The art is stretched to the grid, as `view_image` shows it.
+- **Not drawn:** walls, windows, props and decor, since the art shows them. Their geometry still rules movement, sight and cover.
+- **Drawn over the art:** fog and the dimming of what isn't in sight, tokens, reach and the path, the grid while choosing, labels and foes' cards.
+- **Doors and usable objects:** picked by their doorway or footprint with the hover outline. A door shows its state by a small marker, since the art can't change.
+- **Assigning:** a battle map takes `top-down` art again as well as `floor`; an unmarked image assigned there is marked `top-down`. `get_battle_map` and `list_battle_maps` say which (`artwork`).
+- **Making it:** `studio_generate` from a battle map, without `floor: true`, sends the top-down guide and asks for every wall, door and object kept in place.
+- **Grading:** top-down artwork counts as a map's own art, as a floor painting does.
+
 ## 5. The spike (PL1)
 
 ### 5.1 What it answers
@@ -214,13 +235,19 @@ The stories of §6 are then filed, updated for what the spike found.
 
 **Order:** L-951, L-954 and L-957 can start at once. L-952 follows L-951. L-953 and L-955 follow L-952. L-956 follows L-955. L-958 follows them all: the user plays, bugs are filed under the epic, and when it's ticked with no bug open, the epic closes and the three worlds are unpublished (WD1).
 
-### L-960 Reworking the worlds
+### L-960 Reworking the worlds (revised 2026-11-22)
 
-| ID    | Story                                                                                                                                                                                                     | Depends on | Model |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----- |
-| L-961 | **The Border March:** every grid dressed from data (materials, props, and rooms filled with decor by `dress_room`, so they don't read empty, C5), its own art made isometric, played through, republished | L-950      | Opus  |
-| L-962 | **The Corpse Tide:** the same                                                                                                                                                                             | L-961      | Opus  |
-| L-963 | **Nisia:** the same, its 43 painted battle maps first, split by region as the work list shows                                                                                                             | L-962      | Opus  |
+| ID           | Story                                                                                                                                                                          | Depends on | Model |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ----- |
+| L-961 (#908) | **Artwork battle maps shown flat** (§4.7, AW1)                                                                                                                                 | L-950      | Opus  |
+| L-962 (#909) | **The Border March:** every battle map given artwork (its painting checked against its geometry, or a new one from its guide), played through; published throughout (AW2, AW3) | L-961      | Opus  |
+| L-963 (#910) | **The Corpse Tide:** the same                                                                                                                                                  | L-962      | Opus  |
+| L-964 (#911) | **Nisia:** the same, its 43 paintings first, marked and checked, then the rest by region as the work list shows                                                                | L-963      | Opus  |
+
+----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----- |
+| L-961 | **The Border March:** every grid dressed from data (materials, props, and rooms filled with decor by `dress_room`, so they don't read empty, C5), its own art made isometric, played through, republished | L-950 | Opus |
+| L-962 | **The Corpse Tide:** the same | L-961 | Opus |
+| L-963 | **Nisia:** the same, its 43 painted battle maps first, split by region as the work list shows | L-962 | Opus |
 
 ---
 
@@ -235,4 +262,4 @@ On a phone and a desktop, the test dungeon and a generated interior play in isom
 - clicks picking the right thing;
 - drawn in under 2 s on a slow phone.
 
-After L-960, all three worlds are republished.
+After L-960, every battle map in the three worlds shows artwork, shown flat, and each world has been played through.
