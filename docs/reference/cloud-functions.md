@@ -126,7 +126,7 @@ Attach, replace or remove a town's art (an uploaded PNG or SVG drawn behind the 
 
 **Who can call:** `cartographer` claim
 
-Attach, replace or remove a battle map's art (an uploaded PNG or SVG, a **floor painting** since L-955: its floors only, top-down, marked `view: floor`, drawn under its grid and under the walls, doors and objects that stand from its data), through the image studio's library; `fit` (crop, pad or stretch) fits it to the grid's shape as a new version, the original kept (L-396; `functions/studio/fit.js`), as `studio_assign` and `cartographerTownImage` do
+Attach, replace or remove a battle map's art (an uploaded PNG or SVG: **artwork** by default since L-961, the whole map from above, marked `view: top-down` and shown flat in play with its walls and objects painted in; or, with `view: 'floor'`, a **floor painting** (L-955): its floors only, drawn under the walls, doors and objects that stand from its data), through the image studio's library; `fit` (crop, pad or stretch) fits it to the grid's shape as a new version, the original kept (L-396; `functions/studio/fit.js`), as `studio_assign` and `cartographerTownImage` do
 
 ## `studioUpload`
 
@@ -144,7 +144,7 @@ The image studio's spending for a month, for its page: the total against the $50
 
 **Who can call:** `cartographer` or `muse` claim (M-104)
 
-Start making an image from the studio page's form (prompt, kind, view, tier, shape, references, title, labels); returns the job at once. With `from` a battle map and `floor: true` (`studio_generate`; L-955) it makes a **floor painting**: the map's floors drawn from its geometry by `images.floorGuide` (`view_image` with `floor: true` shows the same) go to the model as the last reference, it is asked for the floors only, top-down, with nothing that stands, and the image is kept as kind `battleMap`, view `floor`. A `token` or `portrait` is asked for as a head-and-shoulders face, centred, on a plain background, with nothing important near the edge (it is cropped to a circle; L-934), and `from` may be a stat block (drawn as a square token from its name, traits, size and who stands for it) as well as a place, town, battle map or character
+Start making an image from the studio page's form (prompt, kind, view, tier, shape, references, title, labels); returns the job at once. With `from` a battle map and `floor: true` (`studio_generate`; L-955) it makes a **floor painting**: the map's floors drawn from its geometry by `images.floorGuide` (`view_image` with `floor: true` shows the same) go to the model as the last reference, it is asked for the floors only, top-down, with nothing that stands, and the image is kept as kind `battleMap`, view `floor`. Without `floor` (L-961), an image of kind `battleMap` from a battle map, not asked for in another view, is its **artwork**: the map's layout drawn from its geometry by `images.layoutGuide` (floors, walls, doors, windows and objects in flat colour, as players see it, with no grid or markers) goes as the last reference, it is asked for the whole map from above with everything where the guide has it, and the image is marked `top-down`. A `token` or `portrait` is asked for as a head-and-shoulders face, centred, on a plain background, with nothing important near the edge (it is cropped to a circle; L-934), and `from` may be a stat block (drawn as a square token from its name, traits, size and who stands for it) as well as a place, town, battle map or character
 
 ## `museSearch`
 

@@ -53,7 +53,9 @@
 // a region's danger and events, a generic map for each terrain, and open
 // country drawn without walls (L-368). 16: a grid's look counts art made for
 // the isometric view, and only a floor painting earns the art bonus (L-956).
-const RUBRIC_VERSION = 16;
+// 17: a battle map's top-down artwork, shown flat, earns the art bonus and its
+// look in full (L-961).
+const RUBRIC_VERSION = 17;
 // The gate. Above it, the score's band.
 const GRADES = ['unbuilt', 'stub', 'playable'];
 const BANDS = ['unbuilt', 'stub', 'playable', 'rich', 'vivid', 'legendary'];
@@ -343,20 +345,27 @@ function undrawn(map) {
   };
 }
 
-// A grid's own painting counts only as a floor painting (L-955, C4): a grid is
-// drawn in the isometric view, which draws no other (PL3; L-956).
+// A grid's own painting counts as a floor painting (L-955, C4), under what
+// stands in the isometric view (PL3; L-956), or as artwork (L-961, AW1), the
+// whole map painted from above and shown flat; art made for another view
+// isn't drawn and counts for nothing.
 const floorPainting = (thing) => Boolean(thing && require('./art').floorPainting(thing));
+const topDownArtwork = (thing) =>
+  Boolean(thing && require('./art').artworkOf(thing) === 'top-down');
+const ownArt = (thing) => Boolean(thing && require('./art').artworkOf(thing));
 
-// What a battle map's painting lacks to be a floor painting, said for the
-// criteria that ask for art: none, or an older painting that isn't drawn.
+// What a battle map's painting lacks to count, said for the criteria that ask
+// for art: none, or a painting made for another view, which isn't drawn.
 const paintingNote = (map) =>
-  hasArt(map) && !floorPainting(map)
-    ? ' Its painting was made for the old view and is no longer drawn on a grid: make a floor painting (studio_generate with floor: true from the map).'
+  hasArt(map) && !ownArt(map)
+    ? ' Its painting was made for another view and is not drawn on a grid: make artwork (studio_generate from the map).'
     : '';
 
 // A map's look (GR1; L-947; L-956): the share of its materials and object
-// kinds painted for the isometric view, and what lacks it.
+// kinds painted for the isometric view, and what lacks it. Artwork (L-961)
+// shows them all as painted: nothing is drawn from the set over it.
 function lookCheck(world, map) {
+  if (topDownArtwork(map)) return met();
   const look = require('./look').unpainted(world, map, { floorPainting: floorPainting(map) });
   const lacking = look.materials.concat(look.objects);
   // Nothing drawn, nothing to paint: it earns the look once it is drawn.
@@ -601,16 +610,16 @@ const CRITERIA = Object.freeze([
     bonus: true,
     weight: WEIGHTS.place.mapArt,
     feature: 'L-351',
-    label: 'A floor painting on its battle map',
+    label: 'Art on its battle map',
     need: 'mapArt',
     tool: 'studio_assign',
     check: (world, entity, { layers }) => {
       const map = ownMap(world, entity, layers);
-      if (floorPainting(map)) return met();
+      if (ownArt(map)) return met();
       return {
         progress: 0,
         message: map
-          ? `Its battle map has no floor painting.${paintingNote(map)}`
+          ? `Its battle map has no artwork or floor painting.${paintingNote(map)}`
           : 'It has no battle map of its own to paint.',
       };
     },
@@ -853,22 +862,26 @@ const CRITERIA = Object.freeze([
     check: (world, map) => lookCheck(world, map),
   },
   {
-    // A small bonus for a map with a floor painting (GR2; L-947; L-956):
-    // "art-based maps still look best". Only a floor painting is drawn on a
-    // grid (L-955), so an older top-down painting earns nothing. Not part of the 100 a map's data can earn, so a
+    // A small bonus for a map with its own art (GR2; L-947; L-956; L-961):
+    // "art-based maps still look best". Artwork, shown flat, or a floor
+    // painting, under what stands; art made for another view isn't drawn on a
+    // grid and earns nothing. Not part of the 100 a map's data can earn, so a
     // map drawn from data, large or small, loses nothing for having none.
     id: 'battleMap.art',
     kinds: ['battleMap'],
     bonus: true,
     weight: WEIGHTS.battleMap.art,
     feature: 'L-351',
-    label: 'A floor painting (a bonus)',
+    label: 'Its own art (a bonus)',
     need: 'mapArt',
     tool: 'studio_assign',
     check: (world, map) =>
-      floorPainting(map)
+      ownArt(map)
         ? met()
-        : { progress: 0, message: `It has no floor painting.${paintingNote(map)}` },
+        : {
+            progress: 0,
+            message: `It has no artwork or floor painting.${paintingNote(map)}`,
+          },
   },
   {
     id: 'battleMap.features',

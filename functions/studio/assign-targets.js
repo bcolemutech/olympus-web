@@ -22,8 +22,10 @@
  *              players for their own   image's own id (L-933)
  *              token                   kind token or portrait
  *
- * A battle map's art is a floor painting (L-955): its target takes a `floor` view
- * image. An object's, an object kind's or a material's art shows on a grid only
+ * A battle map's art is a floor painting (L-955), its floors under what stands
+ * from its data, or artwork (L-961, AW1), a whole top-down painting shown flat:
+ * its target takes a `floor` or `top-down` image, and marks one not marked
+ * `top-down` (`views`, `mark`). An object's, an object kind's or a material's art shows on a grid only
  * when it is `iso` (a material's: or `floor`); it is allowed otherwise, for the
  * town and region maps that draw it, with a warning.
  *
@@ -34,8 +36,14 @@ const TARGETS = Object.freeze({
   map: { kind: 'worldMap', label: 'world map' },
   cover: { kind: 'cover', label: 'cover image' },
   town: { kind: 'town', label: 'town art' },
-  // A grid's painting is a floor painting (L-955, AR2, C4): its floors only.
-  battleMap: { kind: 'battleMap', view: 'floor', label: 'battle-map art' },
+  // A grid's painting is a floor painting (L-955, AR2, C4): its floors only;
+  // or artwork (L-961, AW1): the whole map from above, shown flat.
+  battleMap: {
+    kind: 'battleMap',
+    views: ['floor', 'top-down'],
+    mark: 'top-down',
+    label: 'battle-map art',
+  },
   objectKind: { kind: 'object', label: 'object art' },
   object: { kind: 'object', label: 'object art' },
   material: { kind: 'other', label: 'terrain art' },

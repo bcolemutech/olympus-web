@@ -57,6 +57,11 @@ function studio() {
       require('../mcp/apps/cartographer/images').floorGuide(world.battleMaps[mapId], {
         materials: world.materials,
       }),
+    // A grid's layout as the guide of its artwork (L-961).
+    layoutGuide: async (world, mapId) =>
+      require('../mcp/apps/cartographer/images').layoutGuide(world.battleMaps[mapId], {
+        materials: world.materials,
+      }),
     styles,
     load: async (path) => (await bucket.file(path).download())[0],
     // An edit's new version (L-708): each world using the image is assigned it

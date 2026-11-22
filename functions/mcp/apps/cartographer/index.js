@@ -672,9 +672,11 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'grid, set them (set_map_layers on a battle map, set_town_ground or set_area_ground on ' +
           'a town), then look again and move what doesn’t sit on the art. A town keeps its art, ' +
           'drawn in place of its ground, so tracing it only makes play match what players ' +
-          'see. A grid (L-955) draws only a floor painting, its floors under walls, doors ' +
-          'and objects standing from its data, and no older top-down painting; floor: true ' +
-          'draws just its floors, the guide a floor painting is made over.',
+          'see. A grid with artwork (L-961), a top-down painting of the whole map, is shown ' +
+          'flat in play as that painting, its walls, doors and objects not drawn over it, so ' +
+          'trace them where the art shows them; one with a floor painting (L-955) draws its ' +
+          'walls, doors and objects standing over it. floor: true draws just a grid’s floors, ' +
+          'the guide a floor painting is made over.',
         inputSchema: {
           worldId,
           of: z
@@ -973,8 +975,12 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
           'Give a battle map or a town art you draw yourself, as SVG, so it can be stubbed out ' +
           'without another AI. Battle maps: use viewBox="0 0 <width> <height>", one unit per ' +
           'cell, so cell (x, y) is the square from (x, y) to (x+1, y+1); the art is stretched ' +
-          'to the grid, and is a floor painting (L-955): draw the floors only, with no walls, ' +
-          'doors or furniture, which stand from the map’s data over it. Towns: use viewBox="0 0 1000 1000", the same space as place positions. ' +
+          'to the grid. It is artwork (L-961) by default: the whole map from above, its walls, ' +
+          'doors and furniture painted where its data has them, shown flat in play with ' +
+          'only tokens, fog and door marks over it; or, with view floor, a floor painting ' +
+          '(L-955): the floors only, with walls, doors and furniture standing from the map’s ' +
+          'data over it in the isometric view. Towns: use viewBox="0 0 1000 1000", the same ' +
+          'space as place positions. ' +
           'Plain drawing is fine: shapes, paths, text, gradients, patterns, filters, and <use> ' +
           'of things in the same SVG. Scripts, event handlers, links or images from elsewhere, ' +
           'foreignObject and DOCTYPE are refused. Up to 1 MB. The game draws names, exits and ' +
@@ -989,6 +995,13 @@ function cartographerApp({ reader, writer, art, studio, systems }) {
             .max(MAX_SVG_BYTES)
             .nullable()
             .describe('The SVG, or null to take the art away.'),
+          view: z
+            .enum(['top-down', 'floor'])
+            .optional()
+            .describe(
+              'A battle map only (L-961): top-down (the default), artwork shown flat; or ' +
+                'floor, a floor painting under what stands from the data.'
+            ),
         },
         annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
         handler: async (ctx, args) => {

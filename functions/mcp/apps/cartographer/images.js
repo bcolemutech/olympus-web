@@ -430,6 +430,30 @@ function floorGuide(map, options) {
   return PNG.sync.write(png);
 }
 
+/**
+ * Artwork's guide (isometric-view.md §4.7, AW1; L-961): a grid drawn from its
+ * data as view_image shows it, without the grid, numbers or markers: its
+ * floors in flat colour by material, then its walls, doors (closed, as the
+ * map has them) and windows as edges and its objects as their footprints, as
+ * players see it (what is hidden left out, a hidden door drawn as its wall).
+ * The guide `studio_generate` paints a battle map's artwork over. PNG bytes.
+ */
+function layoutGuide(map, { materials = [] } = {}) {
+  const { canvas: c, cell } = floorCanvas(map, { materials });
+  painter.paintOver(
+    c,
+    map.geometry || {},
+    { x: cell / FEET, y: cell / FEET },
+    {
+      hidden: false,
+      layout: true,
+    }
+  );
+  const png = new PNG({ width: c.width, height: c.height });
+  c.data.copy(png.data);
+  return PNG.sync.write(png);
+}
+
 /** The floors as Claude sees them: view_image of a grid with `floor`. */
 function renderFloors(map, options) {
   const { canvas: c, cell } = floorCanvas(map, options);
@@ -1085,6 +1109,7 @@ module.exports = {
   renderBattleMap,
   renderFloors,
   floorGuide,
+  layoutGuide,
   renderMap,
   renderTown,
   renderWorld,
