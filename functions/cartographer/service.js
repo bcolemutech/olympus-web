@@ -54,11 +54,13 @@ const UNPLACED_SHOWN = 3;
 //   layer (games see it on their next turn); then deletes the replaced image
 //   and the upload. `remove` takes the art away.
 //
-// mapImage(uid, { worldId, mapId, uploadId } | { worldId, mapId, remove })
+// mapImage(uid, { worldId, mapId, uploadId, view? } | { worldId, mapId, remove })
 //   A battle map's art (L-355 / #417), the same way, from battlemap.png, as
 //   the map's `image: { path, width, height }` (stretched to its grid).
+//   `view` (L-961): 'top-down', artwork shown flat (the default), or
+//   'floor', a floor painting.
 //
-// drawArt(uid, { worldId, of: 'battleMap' | 'town', id, svg })
+// drawArt(uid, { worldId, of: 'battleMap' | 'town', id, svg, view? })
 //   SVG art Claude draws over MCP (set_art; L-356 / #431); svg null removes
 //   it. Uploads may be SVG too (battlemap.svg, town.svg). SVG is checked
 //   (./svg.js) and stored as image/svg+xml, with `format: 'svg'` on the image.
@@ -400,9 +402,22 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     return err;
   };
 
-  async function attachArt(uid, { worldId, uploadId, remove, svg, fit }, id, kind, via = 'page') {
+  async function attachArt(
+    uid,
+    { worldId, uploadId, remove, svg, fit, view },
+    id,
+    kind,
+    via = 'page'
+  ) {
     if (typeof worldId !== 'string' || !WORLD_ID.test(worldId)) {
       throw new HttpsError('invalid-argument', 'worldId is required.');
+    }
+    // A battle map's art is artwork unless a floor painting is said (L-961).
+    if (view !== undefined && view !== null && (!kind.views || !kind.views.includes(view))) {
+      throw new HttpsError(
+        'invalid-argument',
+        kind.views ? `view is ${kind.views.join(' or ')}.` : `A ${kind.label} takes no view.`
+      );
     }
     if (typeof id !== 'string' || !ENTITY_ID.test(id)) {
       throw new HttpsError('invalid-argument', `${kind.idField} is required.`);
@@ -450,6 +465,7 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
             via: drawn ? 'mcp' : via,
             // Cropped or padded to the grid's or town's shape (L-396).
             ...(fit ? { fit } : {}),
+            ...(view ? { view } : {}),
           })
         : await studio().assign(uid, { worldId, target: kind.target, id, imageId: null });
     } catch (err) {
@@ -489,16 +505,17 @@ function createCartographerService({ db, bucket, writer, now = () => Date.now() 
     label: 'battle-map image',
     target: 'battleMap',
     idField: 'mapId',
+    views: ['top-down', 'floor'], // artwork (the default) or a floor painting (L-961)
   };
 
   const townImage = (uid, data = {}) => attachArt(uid, data, data.locationId, TOWN_ART);
   const mapImage = (uid, data = {}) => attachArt(uid, data, data.mapId, MAP_ART);
 
   // SVG art drawn over MCP (set_art, L-356): `svg` text, or null to remove.
-  const drawArt = (uid, { worldId, of, id, svg }) =>
+  const drawArt = (uid, { worldId, of, id, svg, view }) =>
     attachArt(
       uid,
-      { worldId, svg: svg === null ? undefined : svg, remove: svg === null },
+      { worldId, svg: svg === null ? undefined : svg, remove: svg === null, view },
       id,
       of === 'town' ? TOWN_ART : MAP_ART
     );

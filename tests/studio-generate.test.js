@@ -141,6 +141,11 @@ const jobs = createJobs({
     require('../functions/mcp/apps/cartographer/images').floorGuide(world.battleMaps[mapId], {
       materials: world.materials,
     }),
+  // Its layout as its artwork's guide (L-961), the real one.
+  layoutGuide: async (world, mapId) =>
+    require('../functions/mcp/apps/cartographer/images').layoutGuide(world.battleMaps[mapId], {
+      materials: world.materials,
+    }),
 });
 
 const jobDoc = async (id) => (await db.collection('studio_jobs').doc(id).get()).data();
@@ -158,9 +163,13 @@ const CELLAR = {
   exits: [{ id: 'out', name: 'the stairs', x: 0, y: 1, to: 'out' }],
   features: [{ id: 'casks', name: 'the wine casks', x: 3, y: 3 }],
   generic: null,
-  geometry: {
+  // Stored as the tools store it: a wall down its middle with a door, and a cask.
+  geometry: require('../functions/loom-canon/map-geometry').normalize({
     ground: [{ id: 'floor', material: 'stone', shape: { rect: { x: 0, y: 0, w: 80, h: 45 } } }],
-  },
+    walls: [{ id: 'w1', material: 'stone', points: [[40, 0], [40, 45]] }],
+    doors: [{ id: 'd1', wall: 'w1', from: [40, 20], to: [40, 25] }],
+    objects: [{ id: 'cask', kind: 'barrel', at: [15, 15] }],
+  }),
 };
 
 const refs = {};
@@ -245,6 +254,60 @@ describe('a floor painting (L-955)', () => {
     expect(await library.getImage((await jobDoc(marked.id)).imageId)).toMatchObject({
       view: 'iso',
     });
+  });
+});
+
+describe('artwork (L-961)', () => {
+  test('from a battle map: its layout as the last reference, everything kept, marked top-down', async () => {
+    model.calls = [];
+    const job = await jobs.start(BUILDER, {
+      prompt: 'A damp cellar, lamplit',
+      from: { worldId: WORLD, kind: 'battleMap', id: 'bm_cellar' },
+      references: [refs.style.id],
+    });
+    expect(job.request).toMatchObject({ artwork: true, view: 'top-down', kind: 'battleMap' });
+    expect(job.request.floor).toBeUndefined();
+    await drain();
+    const call = model.calls.find((c) => c.prompt.includes('A damp cellar'));
+    expect(call.references).toHaveLength(2);
+    const guide = readImage(call.references[1].bytes);
+    expect(guide).toMatchObject({ format: 'png' });
+    expect(guide.width / guide.height).toBeCloseTo(16 / 9, 1);
+    // Not the floors alone: the wall down its middle is drawn in it.
+    const floors = require('../functions/mcp/apps/cartographer/images').floorGuide(CELLAR, {});
+    expect(Buffer.from(call.references[1].bytes).equals(floors)).toBe(false);
+    expect(call.prompt).toMatch(/Image 2 is the guide: the map's layout/);
+    expect(call.prompt).toMatch(/every wall, door, window, piece of furniture and object/);
+    expect(call.prompt).not.toMatch(/Paint only the floors/);
+    // What's in it is named.
+    expect(call.prompt).toMatch(/Features: the wine casks/);
+    const done = await jobDoc(job.id);
+    expect(await library.getImage(done.imageId)).toMatchObject({
+      kind: 'battleMap',
+      view: 'top-down',
+    });
+  });
+
+  test('another kind of image from a battle map, or another view, gets no guide', async () => {
+    model.calls = [];
+    const scene = await jobs.start(BUILDER, {
+      prompt: 'The cellar by lamplight, a scene',
+      kind: 'scene',
+      from: { worldId: WORLD, kind: 'battleMap', id: 'bm_cellar' },
+    });
+    expect(scene.request.artwork).toBeUndefined();
+    const tq = await jobs.start(BUILDER, {
+      prompt: 'The cellar in three-quarter view',
+      view: 'three-quarter',
+      from: { worldId: WORLD, kind: 'battleMap', id: 'bm_cellar' },
+    });
+    expect(tq.request).toMatchObject({ view: 'three-quarter' });
+    expect(tq.request.artwork).toBeUndefined();
+    await drain();
+    for (const c of model.calls) {
+      expect(c.references).toHaveLength(0);
+      expect(c.prompt).not.toMatch(/is the guide/);
+    }
   });
 });
 

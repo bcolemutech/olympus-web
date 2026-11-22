@@ -1,6 +1,6 @@
 # The Loom — Grading That Asks for More — Design Document v0.1
 
-**Status:** Shipped (decided 2026-10-10; built 2026-10-11 to 2026-10-12): L-691 to L-694. The score was calibrated on Nisia at rubric version 4 (§4.3) and is now version 16. New content epics add their criteria (§4.6).
+**Status:** Shipped (decided 2026-10-10; built 2026-10-11 to 2026-10-12): L-691 to L-694. The score was calibrated on Nisia at rubric version 4 (§4.3) and is now version 17. New content epics add their criteria (§4.6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epic:** L-690 (#551)
 **Runs:** right after Phase 3c, before L-700 and L-720, so every new content feature adds to it from the start (Build order in [`roadmap.md`](./roadmap.md))
@@ -149,6 +149,7 @@ Criteria that today's content can meet go in with this epic. The rest are listed
     - a **floor painting** (`view` floor) is drawn for the floors, so a map with one skips its ground and lines, but its **walls** now stand from the data and are looked at (they were skipped under any painting before); a **top-down painting** isn't drawn and counts for nothing, so the map is looked at as if it had none.
     - The unmet look names what lacks art and, in its message, which have art of their own made for another view (`look.js` `ignored`), so the work list and the Cartographer page say which art is missing for the isometric view.
   - **Art** (`battleMap.art`, `place.mapArt`) now asks for a **floor painting** and earns its bonus only with one (`art.js` `floorPainting`); an older painting's message says it is no longer drawn and how to make a floor painting. It is `bonus: true` in the registry: not in the total the score divides by, but its weight (5) added to the score in points, capped at 100. So a map drawn from data earns 100 with no art, and a map short of the top gets 5 points more for having it.
+  - **Artwork (L-961; [`isometric-view.md`](./isometric-view.md) §4.7, AW1; rubric version 17):** a battle map whose own art is a whole top-down painting (`view` top-down, or not marked) is shown flat in play as that painting, so it is the map's own art as a floor painting is: it earns the art bonus (`battleMap.art`, `place.mapArt`, `art.js` `artworkOf`), and its **look** is met in full, since nothing is drawn from the art set over it. Art made for another view (`iso`, `three-quarter`) still counts for nothing, and its message asks for artwork.
   - **Large maps:** nothing in the score depends on size or art, so a map of 64 × 64 squares or more drawn from data reaches Legendary on its data alone (a test checks one).
 - **The painted land (L-718; [`worlds-without-azgaar.md`](./worlds-without-azgaar.md) §4.8, GR1; rubric version 14):**
   - **`world.brief`** (weight 20): the share of its four fields (genre, tone, era, art direction) written.

@@ -26,6 +26,7 @@ const {
   cartographerImport,
   cartographerPublish,
   cartographerTownImage,
+  cartographerMapImage,
   loomCreateSave,
   loomGetMap,
 } = require('../functions/index');
@@ -351,50 +352,69 @@ describe('players and view_image see the assigned image', () => {
   });
 });
 
-describe('art by view (L-955)', () => {
+describe('art by view (L-955), and artwork (L-961)', () => {
   const rows = async () => (await call('list_battle_maps', { worldId })).maps;
   const mapRow = async () => (await rows()).find((m) => m.id === BATTLE_MAP.id);
+  const assignMap = (record) =>
+    call('studio_assign', { worldId, imageId: record.id, target: 'battleMap', id: BATTLE_MAP.id });
 
-  test('a grid’s art is a floor painting: another view is refused, with its reason', async () => {
+  test('a grid’s art is artwork or a floor painting: another view is refused', async () => {
     await call('studio_unassign', { worldId, target: 'battleMap', id: BATTLE_MAP.id });
-    const walls = await addImage('battleMap', { view: 'top-down' });
-    const unmarked = await addImage('battleMap', { view: null });
-    for (const record of [walls, unmarked]) {
-      await expect(
-        call('studio_assign', {
-          worldId,
-          imageId: record.id,
-          target: 'battleMap',
-          id: BATTLE_MAP.id,
-        })
-      ).rejects.toThrow(/floor painting: the grid's floors only/);
+    for (const view of ['iso', 'three-quarter']) {
+      const record = await addImage('battleMap', { view });
+      await expect(assignMap(record)).rejects.toThrow(
+        new RegExp(`is a ${view} image; battle-map art is a top-down painting`)
+      );
     }
     expect((await entity(worldId, 'battleMaps', BATTLE_MAP.id)).image).toBeFalsy();
   });
 
-  test('a floor painting is held with its view, and the reads say so', async () => {
-    const floor = await addImage('battleMap', { view: 'floor' });
-    await call('studio_assign', {
-      worldId,
-      imageId: floor.id,
-      target: 'battleMap',
-      id: BATTLE_MAP.id,
+  test('top-down artwork is held with its view, and the reads say artwork', async () => {
+    const artwork = await addImage('battleMap', { view: 'top-down' });
+    await assignMap(artwork);
+    expect((await entity(worldId, 'battleMaps', BATTLE_MAP.id)).image).toMatchObject({
+      imageId: artwork.id,
+      view: 'top-down',
     });
+    expect(await mapRow()).toMatchObject({ hasImage: true, artwork: 'top-down' });
+    const detail = await call('get_battle_map', { worldId, mapId: BATTLE_MAP.id });
+    expect(detail.artwork).toBe('top-down');
+    expect(detail.image.note).toBeUndefined();
+    const art = require('../functions/loom-canon/art');
+    const { image: held } = await entity(worldId, 'battleMaps', BATTLE_MAP.id);
+    expect(art.forPlayer(art.fromRef(held))).toMatchObject({ view: 'top-down' });
+  });
+
+  test('an image not marked is marked top-down as it is assigned', async () => {
+    const unmarked = await addImage('battleMap', { view: null });
+    await assignMap(unmarked);
+    expect((await image(unmarked.id)).view).toBe('top-down');
+    expect((await entity(worldId, 'battleMaps', BATTLE_MAP.id)).image).toMatchObject({
+      imageId: unmarked.id,
+      view: 'top-down',
+    });
+    expect(await mapRow()).toMatchObject({ artwork: 'top-down' });
+  });
+
+  test('a floor painting is held with its view, and the reads say floor', async () => {
+    const floor = await addImage('battleMap', { view: 'floor' });
+    await assignMap(floor);
     expect((await entity(worldId, 'battleMaps', BATTLE_MAP.id)).image).toMatchObject({
       imageId: floor.id,
       view: 'floor',
     });
-    expect(await mapRow()).toMatchObject({ hasImage: true, floorPainting: true });
+    expect(await mapRow()).toMatchObject({ hasImage: true, artwork: 'floor' });
     const detail = await call('get_battle_map', { worldId, mapId: BATTLE_MAP.id });
-    expect(detail.image).toMatchObject({ floorPainting: true });
-    expect(detail.image.note).toBeUndefined();
+    expect(detail.artwork).toBe('floor');
     // What players are sent carries the view, for the grid's painter.
     const art = require('../functions/loom-canon/art');
-    const { image } = await entity(worldId, 'battleMaps', BATTLE_MAP.id);
-    expect(art.forPlayer(art.fromRef(image))).toMatchObject({ view: 'floor' });
+    const { image: held } = await entity(worldId, 'battleMaps', BATTLE_MAP.id);
+    expect(art.forPlayer(art.fromRef(held))).toMatchObject({ view: 'floor' });
+    await call('studio_unassign', { worldId, target: 'battleMap', id: BATTLE_MAP.id });
+    expect(await mapRow()).toMatchObject({ hasImage: false, artwork: null });
   });
 
-  test('an older painting held already is kept, not drawn, and says how to replace it', async () => {
+  test('an older painting held already is artwork, and marked when assigned again', async () => {
     const old = await addImage('battleMap', { view: null });
     // As it was held before there were views: a reference with no view.
     const ref = {
@@ -417,17 +437,58 @@ describe('art by view (L-955)', () => {
       .update({ usedIn: [{ worldId, target: 'battleMap', id: BATTLE_MAP.id }] });
     await bump(worldId);
     loomCanon.clearWorldCache();
-    expect(await mapRow()).toMatchObject({ hasImage: true, floorPainting: false });
+    expect(await mapRow()).toMatchObject({ hasImage: true, artwork: 'top-down' });
     const detail = await call('get_battle_map', { worldId, mapId: BATTLE_MAP.id });
-    expect(detail.image.note).toMatch(/does not draw it/);
-    // Assigned again to the same place (an edit refreshing its size), it is kept.
+    expect(detail.image.note).toBeUndefined();
+    // Assigned again to the same place (an edit refreshing its size), it is marked.
     await service.assignImage(BUILDER.uid, {
       worldId,
       target: 'battleMap',
       id: BATTLE_MAP.id,
       imageId: old.id,
     });
+    expect((await image(old.id)).view).toBe('top-down');
+    expect((await entity(worldId, 'battleMaps', BATTLE_MAP.id)).image).toMatchObject({
+      view: 'top-down',
+    });
     await call('studio_unassign', { worldId, target: 'battleMap', id: BATTLE_MAP.id });
+  });
+
+  test('cartographerMapImage uploads artwork, or a floor painting when it says so', async () => {
+    const send = async (extra) => {
+      const uploadId = await upload({ 'battlemap.png': solidPng(80, 60, 40) });
+      return cartographerMapImage.run({
+        data: { worldId, mapId: BATTLE_MAP.id, uploadId, ...extra },
+        auth: BUILDER,
+      });
+    };
+    const plain = await send({});
+    expect((await image(plain.image.imageId)).view).toBe('top-down');
+    expect(await mapRow()).toMatchObject({ artwork: 'top-down' });
+    const floor = await send({ view: 'floor' });
+    expect((await image(floor.image.imageId)).view).toBe('floor');
+    expect(await mapRow()).toMatchObject({ artwork: 'floor' });
+    await expect(send({ view: 'iso' })).rejects.toThrow(/view is top-down or floor/);
+    await call('studio_unassign', { worldId, target: 'battleMap', id: BATTLE_MAP.id });
+  });
+
+  test('set_art draws artwork by default, a floor painting with view floor', async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 6"><rect width="8" height="6"/></svg>';
+    const drawn = await call('set_art', { worldId, of: 'battleMap', id: BATTLE_MAP.id, svg });
+    expect((await image(drawn.art.imageId)).view).toBe('top-down');
+    const floor = await call('set_art', {
+      worldId,
+      of: 'battleMap',
+      id: BATTLE_MAP.id,
+      svg,
+      view: 'floor',
+    });
+    expect((await image(floor.art.imageId)).view).toBe('floor');
+    await expect(
+      call('set_art', { worldId, of: 'town', id: 'loc_1', svg, view: 'floor' })
+    ).rejects.toThrow(/takes no view/);
+    await call('set_art', { worldId, of: 'battleMap', id: BATTLE_MAP.id, svg: null });
   });
 
   test('an object kind’s art is marked: not iso, it works with a warning', async () => {

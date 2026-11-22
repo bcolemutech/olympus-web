@@ -62,10 +62,12 @@ const VIEW = z
   .enum(VIEWS)
   .describe(
     'What it was made to be seen as (L-955): iso (isometric art for standing things: ' +
-      'props, objects), floor (a grid’s floors only, top-down: a battle map’s painting, or ' +
-      'ground texture), three-quarter (the old view) or top-down. A grid map draws only a ' +
-      'floor painting as its art, and an object’s, kind’s or material’s own art only if iso ' +
-      '(a material’s: or floor); left out, it is not marked and grids draw nothing of it.'
+      'props, objects), floor (a grid’s floors only, top-down: a floor painting, or ' +
+      'ground texture), three-quarter (the old view) or top-down (a battle map’s artwork, ' +
+      'the whole map from above, shown flat; L-961). A grid map draws artwork or a floor ' +
+      'painting as its art, and an object’s, kind’s or material’s own art only if iso (a ' +
+      'material’s: or floor); left out, it is not marked: assigned to a battle map it is ' +
+      'marked top-down, and elsewhere grids draw nothing of it.'
   );
 const LABELS = z
   .array(z.string().max(40))
@@ -232,9 +234,11 @@ function assignTools({ studio }) {
       description:
         'Use an image from the studio’s library for a world’s map, its cover (shown to players ' +
         'on the Loom’s world list), a town’s art or a battle map’s art. The image’s kind must ' +
-        'fit: worldMap, cover, town or battleMap; a battle map’s must also be a floor ' +
-        'painting (view floor, L-955): a grid draws only that, under its walls, doors and ' +
-        'objects, which stand from its data. The world refers to the image, so a new ' +
+        'fit: worldMap, cover, town or battleMap. A battle map’s is artwork (view top-down, ' +
+        'L-961; an image not marked is marked so): the whole map from above, shown flat in ' +
+        'play with its walls, doors and objects painted in; or a floor painting (view ' +
+        'floor, L-955): its floors, under walls, doors and objects standing from its data. ' +
+        'The world refers to the image, so a new ' +
         'version of it shows wherever it is used. Replaces any art there. Warns when its shape ' +
         'doesn’t fit a battle map’s grid or a town’s square, unless fit says what to do; check ' +
         'it with view_image.',
@@ -714,7 +718,10 @@ function generateTools({ studio, worlds = true }) {
             'A floor painting of the battle map in `from` (L-955): the map’s floors drawn from ' +
               'its geometry (view_image with floor: true shows it) go to the model as a guide, ' +
               'and it paints the floors only, top-down, with no walls, doors or objects, which ' +
-              'stand from the data over it. Marked view floor; assign it to the map.'
+              'stand from the data over it. Marked view floor; assign it to the map. Without ' +
+              'it, from a battle map makes artwork (L-961): the map drawn from its data (as ' +
+              'view_image shows it) is the guide, and the model paints the whole map from ' +
+              'above with every wall, door and object where the guide has it; marked top-down.'
           ),
         view: VIEW.optional(),
         title: z.string().min(1).max(120).optional().describe('Its title in the library.'),

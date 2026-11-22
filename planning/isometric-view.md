@@ -1,6 +1,6 @@
 # The Loom — The Isometric View — Design Document v0.1
 
-**Status:** L-950 shipped (2026-11-22): L-951 to L-957 built, L-958 played by the user, and the bugs it found fixed (#874, #875, #879, #880). Decided 2026-11-15; the spike (§5) is reported in [`isometric-spike-report.md`](./isometric-spike-report.md) and its checkpoint answered (§3). **Revised 2026-11-22 (AW1–AW3):** artwork battle maps are shown flat until there are more assets, L-960 gives the worlds artwork maps, and the worlds stay published. L-960's stories are filed as #908–#911 (§6).
+**Status:** L-950 shipped (2026-11-22): L-951 to L-957 built, L-958 played by the user, and the bugs it found fixed (#874, #875, #879, #880). Decided 2026-11-15; the spike (§5) is reported in [`isometric-spike-report.md`](./isometric-spike-report.md) and its checkpoint answered (§3). **Revised 2026-11-22 (AW1–AW3):** artwork battle maps are shown flat until there are more assets, L-960 gives the worlds artwork maps, and the worlds stay published. L-960's stories are filed as #908–#911 (§6); L-961 shipped 2026-11-22 (§4.7).
 **Project:** Olympus (`olympus-dfa00`)
 **Epics:** L-950 the isometric view (#852), L-960 reworking the worlds (#853); Phase 10 — Levels and Vehicles (milestone #26).
 **Replaces:** the three-quarter view on grid maps ([`game-art.md`](./game-art.md), L-941). Town and region maps keep it.
@@ -176,6 +176,8 @@ Unchanged in its criteria: a map's look counts (L-947), and a map's own art keep
 - **Making it:** `studio_generate` from a battle map, without `floor: true`, sends the top-down guide and asks for every wall, door and object kept in place.
 - **Grading:** top-down artwork counts as a map's own art, as a floor painting does.
 
+**Built in L-961 (2026-11-22):** `battle.js` keeps the view asked for apart from the one a map is drawn in, and turns the projection off for artwork on entering it (`artwork`, `applyView`). The painter draws only its light and each door's mark by its state (a disc, a ring, a red disc with a bar), standing so it shows over the fog's edge; a door is picked within 0.3 of a square of its line, an object by its footprint, each lit on hover. `art.js artworkOf` says `top-down`, `floor` or null, reported as `artwork` by `get_battle_map` and `list_battle_maps` (in place of `floorPainting`). A battle map takes `floor` or `top-down` art, marking an unmarked image `top-down`; uploads and `set_art` make artwork unless `view: 'floor'`. `studio_generate`'s guide is the map's layout (`images.layoutGuide`: floors, walls, doors, windows and objects in flat colour, as players see it, no grid or markers). Grading (rubric 17) gives artwork the art bonus and its look in full. See [`docs/reference/loom-client.md`](../docs/reference/loom-client.md). Tests: `tests/loom-artwork.test.js`.
+
 ## 5. The spike (PL1)
 
 ### 5.1 What it answers
@@ -244,10 +246,6 @@ The stories of §6 are then filed, updated for what the spike found.
 | L-963 (#910) | **The Corpse Tide:** the same                                                                                                                                                  | L-962      | Opus  |
 | L-964 (#911) | **Nisia:** the same, its 43 paintings first, marked and checked, then the rest by region as the work list shows                                                                | L-963      | Opus  |
 
------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----- |
-| L-961 | **The Border March:** every grid dressed from data (materials, props, and rooms filled with decor by `dress_room`, so they don't read empty, C5), its own art made isometric, played through, republished | L-950 | Opus |
-| L-962 | **The Corpse Tide:** the same | L-961 | Opus |
-| L-963 | **Nisia:** the same, its 43 painted battle maps first, split by region as the work list shows | L-962 | Opus |
 
 ---
 

@@ -94,18 +94,19 @@ const HOW_TO = {
     'names the materials (wall/stone) and object kinds with no art made for it (the world’s ' +
     'art set paints the classic ones; art made for another view is not drawn on a grid). Give ' +
     'an object kind isometric art with set_object_art (a studio image marked iso), or choose ' +
-    'an art set that paints them (list_art_sets, update_world art.set); a map with a floor ' +
+    'an art set that paints them (list_art_sets, update_world art.set); a map with artwork ' +
+    '(a top-down painting, shown flat) isn’t checked, and one with a floor ' +
     'painting is only checked for its walls, doors, windows and objects.',
   townArt:
     'Give the town art: a town image from the studio’s library, with studio_assign (target ' +
     'town), or upload it on the Cartographer page. Check it with view_image.',
   mapArt:
     'Give it art: an image from the studio’s library with studio_assign (target battleMap, or ' +
-    'map for the world map), or upload it on the Cartographer page. A battle map’s art is a ' +
-    'floor painting, the only painting a grid draws (studio_generate with floor: true from ' +
-    'the map; view_image floor: true shows its guide); an older top-down painting is not ' +
-    'drawn, and earns nothing. It is a small bonus: a map drawn from data can reach the top ' +
-    'band without it.',
+    'map for the world map), or upload it on the Cartographer page. A battle map’s art is ' +
+    'artwork, the whole map painted from above and shown flat (studio_generate from the ' +
+    'map; L-961), or a floor painting under what stands from its data (studio_generate ' +
+    'with floor: true; view_image floor: true shows its guide). It is a small bonus: a map ' +
+    'drawn from data can reach the top band without it.',
   token:
     'Give them a picture in the circle on a battle map: set_token (a studio image of kind ' +
     'token or portrait, with a crop to frame the face). A character with a stat block shows ' +
