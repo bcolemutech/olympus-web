@@ -2210,7 +2210,10 @@ describe('schematics (M-202)', () => {
       await expect(page.locator('.muse-sc-text strong').innerText()).resolves.toBe('iron-bound');
       await page.click('.muse-sc-link-a');
       await page.waitForFunction(() => window.location.hash === '#/p/p_keep/e/el_hall');
-      await page.waitForSelector('#muse-e-name');
+      // The route draws a moment after the hash changes.
+      await page.waitForFunction(
+        () => document.getElementById('muse-e-name').textContent === 'Great Hall'
+      );
       await expect(page.locator('#muse-e-name').innerText()).resolves.toBe('Great Hall');
     });
   });
@@ -2343,6 +2346,9 @@ describe('schematics (M-202)', () => {
       await expect(page.locator('#muse-sc-stage').getAttribute('data-scale')).resolves.toBe('2.5');
       // The chest, linked from nowhere yet, says nothing.
       await goTo(page, '#/p/p_keep/e/el_chest', shown('muse-e-schematics'));
+      await page.waitForFunction(
+        () => document.getElementById('muse-e-name').textContent === 'Iron chest'
+      );
       await expect(page.locator('#muse-e-marked').isVisible()).resolves.toBe(false);
     });
   });
