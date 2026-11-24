@@ -175,6 +175,47 @@
           <div class="muse-sections" id="muse-p-sections"></div>
         </section>
 
+        <!-- Classifications (M-201; CL1–CL9): trees of classes per type -->
+        <section class="muse-card" id="muse-p-classes" aria-labelledby="muse-cf-heading">
+          <div class="muse-bar">
+            <h2 class="muse-heading" id="muse-cf-heading">Classifications</h2>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-cf-new-open">
+              New classification
+            </button>
+          </div>
+          <p class="muse-hint">
+            Trees of classes for a type, like Weapons › Sword › Longsword for objects. An element
+            can be put in a class at any level, and a list filtered by a class shows everything
+            beneath it.
+          </p>
+          <form class="muse-form muse-cf-new hidden" id="muse-cf-new-form" novalidate>
+            <label class="muse-label" for="muse-cf-new-name">Name</label>
+            <input
+              class="muse-input"
+              id="muse-cf-new-name"
+              maxlength="100"
+              autocomplete="off"
+              placeholder="Weapons"
+            />
+            <label class="muse-label" for="muse-cf-new-type">For</label>
+            <select class="muse-input muse-select" id="muse-cf-new-type"></select>
+            <label class="muse-check">
+              <input type="checkbox" id="muse-cf-new-multiple" />
+              An element may hold several of its classes
+            </label>
+            <p class="muse-error hidden" id="muse-cf-new-error" role="alert"></p>
+            <div class="muse-actions">
+              <button type="submit" class="muse-btn" id="muse-cf-new-btn">Make it</button>
+              <button type="button" class="muse-btn muse-btn-quiet" id="muse-cf-new-cancel">
+                Cancel
+              </button>
+            </div>
+          </form>
+          <p class="muse-error hidden" id="muse-cf-error" role="alert"></p>
+          <div class="muse-cf-list" id="muse-cf-list"></div>
+          <p class="muse-empty hidden" id="muse-cf-empty">No classifications yet.</p>
+        </section>
+
         <section class="muse-card muse-settings" id="muse-p-settings">
           <h2 class="muse-heading">Settings</h2>
 
@@ -275,6 +316,11 @@
             </button>
           </div>
         </form>
+        <!-- Filter by a class, with everything beneath it (M-201; CL5) -->
+        <div class="muse-t-filter hidden" id="muse-t-filter-wrap">
+          <label class="muse-label" for="muse-t-filter">Class</label>
+          <select class="muse-input muse-select" id="muse-t-filter"></select>
+        </div>
         <p class="muse-error hidden" id="muse-t-error" role="alert"></p>
         <p class="muse-empty hidden" id="muse-t-empty"></p>
         <div class="muse-el-list" id="muse-t-list"></div>
@@ -296,6 +342,8 @@
           <p class="muse-e-type" id="muse-e-type"></p>
           <h1 class="muse-p-title" id="muse-e-name"></h1>
           <p class="muse-e-aliases hidden" id="muse-e-aliases"></p>
+          <!-- Its classes, as paths (M-201; CL9) -->
+          <p class="muse-e-classes hidden" id="muse-e-classes"></p>
           <button type="button" class="muse-btn muse-btn-quiet" id="muse-e-edit">Edit</button>
         </header>
 
@@ -424,6 +472,128 @@
         </section>
       </section>
 
+      <!-- ── A class's page (M-201; CL6) ── -->
+      <section class="hidden" id="muse-class">
+        <a class="muse-back" id="muse-c-back" href="#/">&larr; Project</a>
+        <p class="muse-error hidden" id="muse-c-error" role="alert"></p>
+
+        <header class="muse-e-head">
+          <p class="muse-e-type" id="muse-c-kind">Class</p>
+          <nav class="muse-c-path" id="muse-c-path" aria-label="Where it sits"></nav>
+          <h1 class="muse-p-title" id="muse-c-name"></h1>
+          <button type="button" class="muse-btn muse-btn-quiet" id="muse-c-edit">Edit</button>
+        </header>
+
+        <section class="muse-card" id="muse-c-photos" aria-labelledby="muse-c-photos-heading">
+          <div class="muse-bar">
+            <h2 class="muse-heading" id="muse-c-photos-heading">
+              Photos <span class="muse-count" id="muse-c-photos-count"></span>
+            </h2>
+          </div>
+          <div class="muse-photo-main hidden" id="muse-c-photo-main"></div>
+          <ul class="muse-photo-strip hidden" id="muse-c-photo-strip"></ul>
+          <p class="muse-empty" id="muse-c-photos-empty">No photos yet.</p>
+          <p class="muse-error hidden" id="muse-c-photos-error" role="alert"></p>
+          <div id="muse-c-photos-add"></div>
+        </section>
+
+        <section class="muse-card" id="muse-c-read">
+          <h2 class="muse-heading">Description</h2>
+          <div class="muse-reading" id="muse-c-description"></div>
+          <p class="muse-empty hidden" id="muse-c-description-empty">No description yet.</p>
+        </section>
+
+        <form class="muse-card muse-form hidden" id="muse-c-form" novalidate>
+          <label class="muse-label" for="muse-c-name-input">Name</label>
+          <input class="muse-input" id="muse-c-name-input" maxlength="100" autocomplete="off" />
+          <span class="muse-label">Description</span>
+          <div class="muse-tabs" role="group" aria-label="Description: write or preview">
+            <button type="button" class="muse-tab" id="muse-c-write" aria-pressed="true">
+              Write
+            </button>
+            <button type="button" class="muse-tab" id="muse-c-show" aria-pressed="false">
+              Preview
+            </button>
+          </div>
+          <textarea
+            class="muse-input muse-textarea"
+            id="muse-c-text"
+            rows="10"
+            aria-label="Description, in Markdown"
+            placeholder="Markdown: # headings, **bold**, *italic*, - lists; @ links an element"
+          ></textarea>
+          <div class="muse-reading muse-preview hidden" id="muse-c-preview"></div>
+          <p class="muse-error hidden" id="muse-c-form-error" role="alert"></p>
+          <div class="muse-actions">
+            <button type="submit" class="muse-btn" id="muse-c-save">Save</button>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-c-cancel">Cancel</button>
+          </div>
+        </form>
+
+        <section class="muse-card" id="muse-c-subclasses">
+          <div class="muse-bar">
+            <h2 class="muse-heading">Subclasses</h2>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-c-sub-open">
+              New subclass
+            </button>
+          </div>
+          <form class="muse-form hidden" id="muse-c-sub-form" novalidate>
+            <label class="muse-label" for="muse-c-sub-name">Name</label>
+            <div class="muse-inline">
+              <input class="muse-input" id="muse-c-sub-name" maxlength="100" autocomplete="off" />
+              <button type="submit" class="muse-btn" id="muse-c-sub-btn">Add</button>
+              <button type="button" class="muse-btn muse-btn-quiet" id="muse-c-sub-cancel">
+                Cancel
+              </button>
+            </div>
+            <p class="muse-error hidden" id="muse-c-sub-error" role="alert"></p>
+          </form>
+          <div class="muse-el-list" id="muse-c-subs"></div>
+          <p class="muse-empty hidden" id="muse-c-subs-empty">No subclasses.</p>
+        </section>
+
+        <section class="muse-card" id="muse-c-members">
+          <h2 class="muse-heading">In this class</h2>
+          <div class="muse-el-list" id="muse-c-in"></div>
+          <div class="hidden" id="muse-c-below-wrap">
+            <h3 class="muse-subheading">Beneath it</h3>
+            <div class="muse-el-list" id="muse-c-below"></div>
+          </div>
+          <p class="muse-empty hidden" id="muse-c-in-empty">Nothing is in this class yet.</p>
+        </section>
+
+        <section class="muse-card hidden" id="muse-c-mentions">
+          <h2 class="muse-heading">Mentioned in</h2>
+          <div class="muse-el-list" id="muse-c-m-list"></div>
+        </section>
+
+        <section class="muse-card muse-versions" id="muse-c-versions">
+          <h2 class="muse-heading">Versions</h2>
+          <div id="muse-c-versions-box"></div>
+        </section>
+
+        <section class="muse-card muse-danger-card">
+          <button type="button" class="muse-btn muse-btn-danger" id="muse-c-delete">
+            Delete class
+          </button>
+          <div class="muse-confirm hidden" id="muse-c-delete-confirm" role="alertdialog">
+            <p>
+              Delete <strong id="muse-c-delete-name"></strong>? Only a class with nothing in it, and
+              no subclasses, can be deleted.
+            </p>
+            <div class="muse-actions">
+              <button type="button" class="muse-btn muse-btn-danger" id="muse-c-delete-yes">
+                Delete it
+              </button>
+              <button type="button" class="muse-btn muse-btn-quiet" id="muse-c-delete-no">
+                Keep it
+              </button>
+            </div>
+            <p class="muse-error hidden" id="muse-c-delete-error" role="alert"></p>
+          </div>
+        </section>
+      </section>
+
       <!-- ── Every element whose text holds some words (M-106) ── -->
       <section class="hidden" id="muse-text">
         <a class="muse-back" id="muse-s-back" href="#/">&larr; Project</a>
@@ -460,11 +630,13 @@
     <script src="/apps/muse/js/markdown.js"></script>
     <script src="/apps/muse/js/fields.js"></script>
     <script src="/apps/muse/js/links.js"></script>
+    <script src="/apps/muse/js/classes.js"></script>
     <script src="/apps/muse/js/model.js"></script>
     <script src="/apps/muse/js/versions.js"></script>
     <script src="/apps/muse/js/photos.js"></script>
     <script src="/apps/muse/js/projects.js"></script>
     <script src="/apps/muse/js/elements.js"></script>
+    <script src="/apps/muse/js/class-store.js"></script>
     <script src="/apps/muse/js/version-store.js"></script>
     <script src="/apps/muse/js/version-form.js"></script>
     <script src="/apps/muse/js/suggest.js"></script>
@@ -478,6 +650,8 @@
     <script src="/apps/muse/js/mentioned.js"></script>
     <script src="/apps/muse/js/gallery.js"></script>
     <script src="/apps/muse/js/element.js"></script>
+    <script src="/apps/muse/js/classifications.js"></script>
+    <script src="/apps/muse/js/class-page.js"></script>
     <script src="/apps/muse/js/app.js"></script>
 
     <script>

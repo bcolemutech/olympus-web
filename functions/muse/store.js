@@ -3,6 +3,7 @@
 const fields = require('./fields');
 const links = require('./links');
 const model = require('./model');
+const classes = require('./classes');
 const { createVersionStore } = require('./version-store');
 const { searchText, plainText } = require('./search');
 
@@ -18,7 +19,8 @@ const { searchText, plainText } = require('./search');
  * `mentions`, are always written together. A change to a project or an element
  * keeps a version of it first, in the same batch (./version-store.js `prepare`,
  * by `mcp`; VR1, MS5). Making something new keeps none: there was nothing
- * before. Relationships aren't versioned things (§4).
+ * before. Relationships and classifications aren't versioned things (§4);
+ * classes are (D9; M-201 / #914), as are an element's classes.
  *
  *   const store = createMuseStore({ db, FieldValue, images });
  *     images.get(id) → { id, title, kind, link } of a studio image, or null
@@ -104,6 +106,23 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     const snap = await projectRef(projectId).collection('index').get();
     return model.readIndex(snap.docs.map((doc) => ({ id: doc.id, data: doc.data() })));
   }
+
+  // A project's classifications and classes, as one tree (D4).
+  async function loadTree(projectId) {
+    const [kinds, all] = await Promise.all([
+      projectRef(projectId).collection('classifications').get(),
+      projectRef(projectId).collection('classes').get(),
+    ]);
+    const docs = (snap) => snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+    return classes.readTree(docs(kinds), docs(all));
+  }
+
+  // A class's path, as the page shows it.
+  const classRow = (tree, id) => ({
+    id,
+    path: classes.pathText(tree, id) || null,
+    ...(tree.classes[id] ? {} : { missing: 'That class is no longer there.' }),
+  });
 
   async function element(projectId, id) {
     if (typeof id !== 'string' || !ID.test(id)) {
@@ -285,19 +304,44 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
 
   // ── Elements ────────────────────────────────────
 
-  function entryRow(id, entry) {
+  function entryRow(id, entry, tree) {
     return {
       id,
       type: entry.type,
       name: entry.name,
       aliases: entry.aliases || [],
       primary: entry.primary === undefined ? null : entry.primary,
+      ...(tree && (entry.classes || []).length
+        ? { classes: entry.classes.map((c) => classes.pathText(tree, c) || c) }
+        : {}),
     };
   }
 
-  async function listElements(uid, projectId, { type, retired } = {}) {
+  // A class named by its id or path, as an id; refused when it isn't one.
+  function classIn(tree, ref, type) {
+    const found = classes.findClass(tree, ref, type);
+    if (found.error) throw invalid(found.error);
+    return found.value;
+  }
+
+  // The ids of the live elements in a class or beneath it (CL5).
+  function inClass(tree, index, ref) {
+    const id = classIn(tree, ref);
+    return new Set(classes.membersOf(tree, index.entries, id));
+  }
+
+  async function listElements(uid, projectId, { type, retired, class: cls } = {}) {
     await project(uid, projectId);
     if (type && !fields.TYPES.includes(type)) throw invalid(`There is no element type "${type}".`);
+    if (cls) {
+      if (retired) throw invalid('A class lists live elements only.');
+      const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
+      const members = inClass(tree, index, cls);
+      return [...members]
+        .map((id) => entryRow(id, index.entries[id], tree))
+        .filter((row) => !type || row.type === type)
+        .sort(byName);
+    }
     if (retired) {
       let query = projectRef(projectId).collection('elements').where('retired', '==', true);
       if (type) query = query.where('type', '==', type);
@@ -306,21 +350,31 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
         .map((doc) => ({ ...entryRow(doc.id, doc.data()), retired: true }))
         .sort(byName);
     }
-    const index = await loadIndex(projectId);
+    const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
     return Object.keys(index.entries)
-      .map((id) => entryRow(id, index.entries[id]))
+      .map((id) => entryRow(id, index.entries[id], tree))
       .filter((row) => !type || row.type === type)
       .sort(byName);
   }
 
-  async function findElements(uid, projectId, query, { types, limit } = {}) {
+  // Names and aliases, as the page's box finds them; with `class`, only the
+  // elements in it or beneath it (and with no query, all of them by name).
+  async function findElements(uid, projectId, query, { types, limit, class: cls } = {}) {
     await project(uid, projectId);
-    const index = await loadIndex(projectId);
+    const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
+    let entries = index.entries;
+    if (cls) {
+      const members = inClass(tree, index, cls);
+      entries = Object.fromEntries([...members].map((id) => [id, index.entries[id]]));
+    }
     return links
-      .search(index.entries, query, { limit: limit || 10, types })
+      .search(entries, query || '', { limit: limit || 10, types })
       .map(({ score, ...row }) => {
         void score;
-        return row;
+        const classed = index.entries[row.id].classes || [];
+        return classed.length
+          ? { ...row, classes: classed.map((c) => classes.pathText(tree, c) || c) }
+          : row;
       });
   }
 
@@ -362,21 +416,35 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     };
   }
 
+  // The live elements, and the classes (D5), whose texts link to `id`.
   async function mentionedIn(projectId, index, id) {
-    const snap = await projectRef(projectId)
-      .collection('elements')
-      .where('mentions', 'array-contains', id)
-      .limit(MENTIONS_READ)
-      .get();
-    return snap.docs
+    const [els, cls] = await Promise.all(
+      ['elements', 'classes'].map((collection) =>
+        projectRef(projectId)
+          .collection(collection)
+          .where('mentions', 'array-contains', id)
+          .limit(MENTIONS_READ)
+          .get()
+      )
+    );
+    return els.docs
       .filter((doc) => doc.id !== id && index.entries[doc.id])
       .map((doc) => ({ id: doc.id, name: doc.get('name'), type: doc.get('type') }))
+      .concat(
+        cls.docs
+          .filter((doc) => doc.id !== id)
+          .map((doc) => ({ id: doc.id, name: doc.get('name'), type: 'class' }))
+      )
       .sort(byName);
   }
 
+  // What a text's links name: an element's or a class's name.
+  const linkedName = (index, tree) => (id) =>
+    index.entries[id] ? index.entries[id].name : tree.classes[id] ? tree.classes[id].name : null;
+
   // An element in full: its texts, its fields by label, its photos, its
   // relationships from its side, what it links to and what links to it.
-  async function detail(p, index, el) {
+  async function detail(p, index, el, tree) {
     const name = nameIn(index);
     const defs = p.fields[el.type] || [];
     const rels = await relationshipsOf(p.id, el.id);
@@ -405,12 +473,13 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
             residence: el.residence ? { id: el.residence, name: name(el.residence) || null } : null,
           }
         : {}),
+      classes: (el.classes || []).map((id) => classRow(tree, id)),
       photos: await photosOf(el),
       primary: el.primary || null,
       relationships: rels
         .map((rel) => sideRow(index, rel, el.id))
         .sort((a, b) => (a.other.name || '').localeCompare(b.other.name || '')),
-      mentions: (el.mentions || []).map((id) => ({ id, name: name(id) })),
+      mentions: (el.mentions || []).map((id) => ({ id, name: linkedName(index, tree)(id) })),
       mentionedIn: await mentionedIn(p.id, index, el.id),
       createdAt: iso(el.createdAt),
       updatedAt: iso(el.updatedAt),
@@ -419,8 +488,12 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
 
   async function getElement(uid, projectId, id) {
     const p = await project(uid, projectId);
-    const [index, el] = await Promise.all([loadIndex(projectId), element(projectId, id)]);
-    return detail(p, index, el);
+    const [index, el, tree] = await Promise.all([
+      loadIndex(projectId),
+      element(projectId, id),
+      loadTree(projectId),
+    ]);
+    return detail(p, index, el, tree);
   }
 
   // Raw field values for a type, named by key or by label, as one map by key.
@@ -484,6 +557,20 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     }
     const id = projectRef(projectId).collection('elements').doc().id;
     const writes = model.planCreate(projectId, id, type, checked.value, index);
+    if (input.classes && input.classes.length) {
+      // Its classes go in the same document and index line as it is made.
+      const tree = await loadTree(projectId);
+      const held = classes.classify(
+        tree,
+        [],
+        input.classes.map((ref) => classIn(tree, ref, type)),
+        []
+      );
+      const ok = classes.checkClasses(tree, type, held);
+      if (ok.error) throw invalid(ok.error);
+      writes[0].data = { ...writes[0].data, classes: ok.value };
+      writes[1].data.entries[id] = model.entryOf(writes[0].data);
+    }
     if (value !== checked.value) {
       // The photos go in the same document and index line as it is made.
       writes[0].data = { ...writes[0].data, images: value.images, primary: value.primary };
@@ -535,8 +622,40 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     });
   }
 
-  // Changes an element's photo library: `change(photos)` gives the new one.
+  // Adds an element's classes and takes some off (CL2, D6): `add` and
+  // `remove` name classes by id or path. A class added replaces one in its
+  // line, and the other of a single classification.
+  function classify(uid, projectId, id, { add = [], remove = [] } = {}) {
+    if (!add.length && !remove.length) throw invalid('Say which classes to add or remove.');
+    return changeElement(uid, projectId, id, async (current) => {
+      const tree = await loadTree(projectId);
+      const held = current.classes || [];
+      const adding = add.map((ref) => classIn(tree, ref, current.type));
+      const removing = remove.map((ref) => {
+        const found = held.includes(String(ref)) ? String(ref) : classIn(tree, ref, current.type);
+        if (!held.includes(found)) {
+          throw invalid(`It isn’t in ${classes.pathText(tree, found) || found}.`);
+        }
+        return found;
+      });
+      const next = classes.classify(tree, held, adding, removing);
+      const checked = classes.checkClasses(tree, current.type, next, held);
+      if (checked.error) throw invalid(checked.error);
+      return model.planUpdate(projectId, current, { classes: checked.value });
+    });
+  }
+
+  // Changes the photo library of an element (`id`) or a class (`{ classId }`):
+  // `change(photos)` gives the new one.
   function changePhotos(uid, projectId, id, change) {
+    if (id && typeof id === 'object') {
+      return changeClass(uid, projectId, id.classId, async (current, tree) => {
+        const next = await change({ images: current.images, primary: current.primary });
+        const checked = model.checkPhotos(next);
+        if (checked.error) throw invalid(checked.error);
+        return classes.planUpdateClass(projectId, tree, current.id, {}, checked.value);
+      });
+    }
     return changeElement(uid, projectId, id, async (current) => {
       const next = await change({ images: current.images || [], primary: current.primary || null });
       const checked = model.checkPhotos(next);
@@ -568,6 +687,248 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
       }
       return model.primaryPhoto(photos, imageId);
     });
+  }
+
+  // ── Classifications and classes (M-201) ─────────
+
+  // The elements of a type, live and retired, with their classes: those
+  // making a classification single must leave none holding two (D6).
+  async function holdersOf(projectId, index, type) {
+    const retired = await projectRef(projectId)
+      .collection('elements')
+      .where('retired', '==', true)
+      .where('type', '==', type)
+      .limit(ELEMENTS_READ)
+      .get();
+    return Object.keys(index.entries)
+      .filter((id) => index.entries[id].type === type)
+      .map((id) => ({ id, name: index.entries[id].name, classes: index.entries[id].classes }))
+      .concat(retired.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+  }
+
+  // Whether any element, live or retired, is in a class (CL7).
+  async function classHeld(projectId, id) {
+    const snap = await projectRef(projectId)
+      .collection('elements')
+      .where('classes', 'array-contains', id)
+      .limit(1)
+      .get();
+    return !snap.empty;
+  }
+
+  // A classification named by its id, or by a name only one has (of `type`).
+  function classificationIn(tree, ref, type) {
+    const text = String(ref || '').trim();
+    if (tree.classifications[text]) return text;
+    const found = classes
+      .classificationsOf(tree, type)
+      .filter((c) => links.fold(c.name) === links.fold(text));
+    if (found.length === 1) return found[0].id;
+    throw invalid(
+      found.length
+        ? `More than one classification is called "${text}": give its id.`
+        : `No classification "${text}".`
+    );
+  }
+
+  // A classification's classes, nested, each with how many live elements are
+  // in it (`in`) and in it or beneath it (`all`).
+  function nested(tree, index, classificationId) {
+    const holders = Object.values(index.entries);
+    const direct = (id) => holders.filter((e) => (e.classes || []).includes(id)).length;
+    const walk = (key) =>
+      (tree.kids[key] || []).map((id) => {
+        const c = tree.classes[id];
+        return {
+          id,
+          name: c.name,
+          in: direct(id),
+          all: classes.membersOf(tree, index.entries, id).length,
+          ...(tree.kids[id] ? { classes: walk(id) } : {}),
+        };
+      });
+    return walk(classificationId);
+  }
+
+  function classificationRow(tree, index, c) {
+    return {
+      id: c.id,
+      type: c.type,
+      name: c.name,
+      multiple: c.multiple,
+      classes: nested(tree, index, c.id),
+    };
+  }
+
+  async function listClassifications(uid, projectId, { type } = {}) {
+    await project(uid, projectId);
+    if (type && !fields.TYPES.includes(type)) throw invalid(`There is no element type "${type}".`);
+    const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
+    const out = {};
+    fields.TYPES.filter((t) => !type || t === type).forEach((t) => {
+      out[t] = classes.classificationsOf(tree, t).map((c) => classificationRow(tree, index, c));
+    });
+    return { types: out, classes: Object.keys(tree.classes).length };
+  }
+
+  async function createClassification(uid, projectId, input) {
+    await project(uid, projectId);
+    const tree = await loadTree(projectId);
+    const id = projectRef(projectId).collection('classifications').doc().id;
+    const plan = classes.planCreateClassification(projectId, id, input, tree);
+    if (plan.error) throw invalid(plan.error);
+    await commit(plan.value);
+    classes.applyToTree(tree, plan.value);
+    return classificationRow(tree, { entries: {} }, tree.classifications[id]);
+  }
+
+  async function updateClassification(uid, projectId, ref, input) {
+    await project(uid, projectId);
+    const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
+    const id = classificationIn(tree, ref);
+    const c = tree.classifications[id];
+    const holders =
+      input.multiple === false && c.multiple ? await holdersOf(projectId, index, c.type) : [];
+    const plan = classes.planUpdateClassification(projectId, tree, id, input, holders);
+    if (plan.error) throw invalid(plan.error);
+    await commit(plan.value);
+    classes.applyToTree(tree, plan.value);
+    return classificationRow(tree, index, tree.classifications[id]);
+  }
+
+  async function deleteClassification(uid, projectId, ref) {
+    await project(uid, projectId);
+    const tree = await loadTree(projectId);
+    const id = classificationIn(tree, ref);
+    const plan = classes.planDeleteClassification(projectId, tree, id);
+    if (plan.error) throw invalid(plan.error);
+    await commit(plan.value);
+    return { deleted: id };
+  }
+
+  // A class in full: its path, description, photos, subclasses, the live
+  // elements in it and beneath it, and what links to it.
+  async function classDetail(p, index, tree, id) {
+    const c = tree.classes[id];
+    const classification = tree.classifications[c.classification];
+    const row = (eid) => ({
+      id: eid,
+      type: index.entries[eid].type,
+      name: index.entries[eid].name,
+      classes: (index.entries[eid].classes || []).map((x) => classes.pathText(tree, x) || x),
+    });
+    const all = classes.membersOf(tree, index.entries, id);
+    const direct = all.filter((eid) => (index.entries[eid].classes || []).includes(id));
+    const snap = await projectRef(p.id).collection('classes').doc(id).get();
+    const stored = snap.exists ? snap.data() : {};
+    return {
+      id,
+      name: c.name,
+      classification: {
+        id: classification.id,
+        name: classification.name,
+        type: classification.type,
+        multiple: classification.multiple,
+      },
+      path: classes.pathText(tree, id),
+      parents: classes
+        .chain(tree, id)
+        .slice(0, -1)
+        .map((a) => ({ id: a.id, name: a.name })),
+      depth: c.depth,
+      description: c.description,
+      photos: await photosOf(c),
+      primary: c.primary,
+      subclasses: classes.children(tree, c.classification, id).map((k) => ({
+        id: k.id,
+        name: k.name,
+        all: classes.membersOf(tree, index.entries, k.id).length,
+      })),
+      elements: direct.map(row).sort(byName),
+      beneath: all
+        .filter((eid) => !direct.includes(eid))
+        .map(row)
+        .sort(byName),
+      mentions: c.mentions.map((m) => ({ id: m, name: linkedName(index, tree)(m) })),
+      mentionedIn: await mentionedIn(p.id, index, id),
+      createdAt: iso(stored.createdAt),
+      updatedAt: iso(stored.updatedAt),
+    };
+  }
+
+  async function getClass(uid, projectId, ref) {
+    const p = await project(uid, projectId);
+    const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
+    return classDetail(p, index, tree, classIn(tree, ref));
+  }
+
+  // Makes a class at the top of a classification, or beneath a class
+  // (`parent`, by id or path).
+  async function createClass(uid, projectId, input) {
+    const p = await project(uid, projectId);
+    const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
+    const parent = input.parent ? classIn(tree, input.parent) : null;
+    let classification = null;
+    if (input.classification) {
+      classification = classificationIn(tree, input.classification);
+    } else if (!parent) {
+      throw invalid('Say which classification it is in, or its parent class.');
+    }
+    const id = projectRef(projectId).collection('classes').doc().id;
+    const plan = classes.planCreateClass(
+      projectId,
+      id,
+      {
+        classification: classification || undefined,
+        parent,
+        name: input.name,
+        description: input.description,
+      },
+      tree
+    );
+    if (plan.error) throw invalid(plan.error);
+    await commit(plan.value);
+    classes.applyToTree(tree, plan.value);
+    return classDetail(p, index, tree, id);
+  }
+
+  // A change to a class, as `plan(current, tree)` makes it, with a version
+  // of it first (D9).
+  async function changeClass(uid, projectId, ref, plan) {
+    const p = await project(uid, projectId);
+    const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
+    const id = classIn(tree, ref);
+    const made = await plan(tree.classes[id], tree);
+    if (made.error) throw invalid(made.error);
+    const version = await versionStore.prepare(projectId, 'classes', id, { by: 'mcp' });
+    await commit(version.writes.concat(made.value));
+    classes.applyToTree(tree, made.value);
+    return {
+      class: await classDetail(p, index, tree, id),
+      version: { id: version.id, dropped: version.dropped },
+    };
+  }
+
+  function updateClass(uid, projectId, ref, input) {
+    const changes = {};
+    ['name', 'description'].forEach((key) => {
+      if (input[key] !== undefined) changes[key] = input[key];
+    });
+    if (!Object.keys(changes).length) throw invalid('Say what to change: name or description.');
+    return changeClass(uid, projectId, ref, async (current, tree) =>
+      classes.planUpdateClass(projectId, tree, current.id, changes)
+    );
+  }
+
+  async function deleteClass(uid, projectId, ref) {
+    await project(uid, projectId);
+    const tree = await loadTree(projectId);
+    const id = classIn(tree, ref);
+    const path = classes.pathText(tree, id);
+    const plan = classes.planDeleteClass(projectId, tree, id, await classHeld(projectId, id));
+    if (plan.error) throw invalid(plan.error);
+    await commit(plan.value);
+    return { deleted: id, path };
   }
 
   // ── Relationships ───────────────────────────────
@@ -649,7 +1010,7 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
   async function outline(uid, projectId, { type } = {}) {
     const p = await project(uid, projectId);
     if (type && !fields.TYPES.includes(type)) throw invalid(`There is no element type "${type}".`);
-    const live = await liveElements(projectId);
+    const [live, tree] = await Promise.all([liveElements(projectId), loadTree(projectId)]);
     const types = {};
     fields.TYPES.filter((t) => !type || t === type).forEach((t) => {
       types[t] = live
@@ -658,37 +1019,74 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
           id: el.id,
           name: el.name,
           aliases: el.aliases || [],
+          ...((el.classes || []).length
+            ? { classes: el.classes.map((c) => classes.pathText(tree, c) || c) }
+            : {}),
           line: firstLine(el.bio),
         }))
         .sort(byName);
     });
+    const classifications = {};
+    fields.TYPES.filter((t) => !type || t === type).forEach((t) => {
+      const list = classes.classificationsOf(tree, t).map((c) => ({
+        id: c.id,
+        name: c.name,
+        multiple: c.multiple,
+        classes: classes.flatten(tree, c.id).map((k) => classes.pathText(tree, k.id, true)),
+      }));
+      if (list.length) classifications[t] = list;
+    });
     return {
       project: { id: p.id, title: p.title, short: p.short || '', summary: firstLine(p.summary) },
       types,
+      ...(Object.keys(classifications).length ? { classifications } : {}),
       ...(live.length >= ELEMENTS_READ ? { more: true } : {}),
     };
   }
 
   async function search(uid, projectId, query, { types, limit } = {}) {
     const p = await project(uid, projectId);
-    const live = await liveElements(projectId);
-    const found = searchText(live, query, { fields: p.fields, types, limit });
+    const [live, tree] = await Promise.all([liveElements(projectId), loadTree(projectId)]);
+    // Classes are searched too, by name and description (M-201), unless
+    // only some element types are asked for.
+    const things =
+      types && types.length
+        ? live
+        : live.concat(
+            Object.values(tree.classes).map((c) => ({
+              id: c.id,
+              type: 'class',
+              name: c.name,
+              aliases: [],
+              bio: c.description,
+              primary: c.primary,
+            }))
+          );
+    const found = searchText(things, query, { fields: p.fields, types, limit });
+    found.results = found.results.map((row) =>
+      row.type === 'class' ? { ...row, path: classes.pathText(tree, row.id) } : row
+    );
     return { ...found, ...(live.length >= ELEMENTS_READ ? { more: true } : {}) };
   }
 
   // What the bible says about a name: the element it best names, in full.
   async function lookup(uid, projectId, name) {
     const p = await project(uid, projectId);
-    const index = await loadIndex(projectId);
-    const found = links.search(index.entries, name, { limit: 6 });
+    const [index, tree] = await Promise.all([loadIndex(projectId), loadTree(projectId)]);
+    const found = links.search({ ...classes.entriesOf(tree), ...index.entries }, name, {
+      limit: 6,
+    });
     if (!found.length || !String(name || '').trim()) {
       throw new MuseError('not-found', `Nothing is called "${name}".`);
     }
     const [best, ...rest] = found;
-    const el = await element(projectId, best.id);
+    const about =
+      best.type === 'class'
+        ? { class: await classDetail(p, index, tree, best.id) }
+        : { element: await detail(p, index, await element(projectId, best.id), tree) };
     return {
       ...(best.matched ? { matched: best.matched } : {}),
-      element: await detail(p, index, el),
+      ...about,
       ...(rest.length
         ? {
             others: rest.map((row) => ({
@@ -702,8 +1100,14 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     };
   }
 
+  // A version of an element, a class (`{ classId }`), or the project.
   async function saveVersion(uid, projectId, elementId, name) {
     await project(uid, projectId);
+    if (elementId && typeof elementId === 'object') {
+      const tree = await loadTree(projectId);
+      const id = classIn(tree, elementId.classId);
+      return versionStore.save(projectId, 'classes', id, { by: 'mcp', name });
+    }
     if (elementId) await element(projectId, elementId);
     const kept = await versionStore.save(
       projectId,
@@ -729,6 +1133,15 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     addPhotos,
     removePhoto,
     setPrimary,
+    classify,
+    listClassifications,
+    createClassification,
+    updateClassification,
+    deleteClassification,
+    getClass,
+    createClass,
+    updateClass,
+    deleteClass,
     listRelationships,
     setRelationship,
     removeRelationship,

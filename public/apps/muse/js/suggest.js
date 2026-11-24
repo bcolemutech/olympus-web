@@ -7,7 +7,8 @@
   //   Muse.suggest.input(input, options)   under a one-line box: the search
   //     in the header, and the other end of a relationship
   //   Muse.suggest.mention(textarea)       typing @ in a Markdown text offers
-  //     elements and inserts [Name](muse:el/<id>) where the @ was
+  //     elements and inserts [Name](muse:el/<id>) where the @ was; classes
+  //     too, as [Name](muse:cl/<id>) (M-201, D5)
   //
   // The list is the index's, in memory, so it answers as you type. Arrow keys
   // move, Enter or Tab picks, Escape closes; a tap picks too.
@@ -81,7 +82,11 @@
             Muse.el(
               'span',
               'muse-suggest-type',
-              result.more ? 'All text' : Muse.TYPE[result.type].one
+              result.more
+                ? 'All text'
+                : result.type === 'class'
+                  ? 'Class'
+                  : Muse.TYPE[result.type].one
             )
           );
           if (result.more) row.classList.add('muse-suggest-more');
@@ -144,6 +149,7 @@
   //   types            only these element types
   //   except()         the id of an element to leave out
   //   limit            at most this many (8)
+  //   classes          true to offer classes too (M-201)
   //   empty            true to list some with nothing typed (else it waits)
   //   more(text)       when given, a last row "Search all text for …" does it
   //                    (the header's box; M-106)
@@ -167,6 +173,7 @@
       var found = Muse.elements.search(text, {
         limit: options.limit || 8,
         types: options.types,
+        classes: options.classes,
         except: options.except && options.except(),
       });
       if (options.more && text) {
@@ -260,7 +267,7 @@
       list.hide();
       open = null;
       if (!t) return;
-      var link = Muse.links.linkMarkdown(result.name, result.id);
+      var link = Muse.links.linkMarkdown(result.name, result.id, result.type === 'class');
       area.value = area.value.slice(0, t.start) + link + area.value.slice(t.end);
       var caret = t.start + link.length;
       area.setSelectionRange(caret, caret);
@@ -275,7 +282,7 @@
         list.hide();
         return;
       }
-      var found = Muse.elements.search(t.query, { limit: 8 });
+      var found = Muse.elements.search(t.query, { limit: 8, classes: true });
       if (!found.length) {
         list.hide();
         return;

@@ -10,12 +10,16 @@
   // typing @ in a text offers elements to link, and an element's name or
   // alias found in a text is shown as a link to it (EL6). Its photos are
   // drawn by ./gallery.js (M-104). "Save version" (./version-form.js, M-105)
-  // keeps a copy of it as stored.
+  // keeps a copy of it as stored. Its classes (M-201, CL9) show as a row of
+  // paths, each step a link, and its form picks them by classification, at
+  // any level (CL2).
 
   var Muse = window.Muse;
   var state = Muse.state;
   var F = Muse.fields;
+  var C = Muse.classes;
   var versionBox = null;
+  var picked = null; // the classes the open form would save
 
   function element() {
     return state.element;
@@ -63,6 +67,36 @@
     Muse.show(Muse.$('muse-e-facts-empty'), list.children.length === 0);
   }
 
+  // A class's path, each class a link to its page.
+  function classPath(id) {
+    var wrap = Muse.el('span', 'muse-class-path');
+    wrap.dataset.id = id;
+    var steps = C.chain(state.tree, id);
+    if (!steps.length) {
+      wrap.appendChild(Muse.el('span', 'muse-gone', 'A deleted class'));
+      return wrap;
+    }
+    var classification = state.tree.classifications[steps[0].classification];
+    if (classification) wrap.appendChild(Muse.el('span', 'muse-c-root', classification.name));
+    steps.forEach(function (step) {
+      if (wrap.children.length) wrap.appendChild(Muse.el('span', 'muse-c-sep', ' › '));
+      var a = Muse.el('a', 'muse-c-step', step.name);
+      a.href = projectHash() + '/c/' + encodeURIComponent(step.id);
+      wrap.appendChild(a);
+    });
+    return wrap;
+  }
+
+  function drawClasses() {
+    var e = element();
+    var row = Muse.$('muse-e-classes');
+    row.textContent = '';
+    (e.classes || []).forEach(function (id) {
+      row.appendChild(classPath(id));
+    });
+    Muse.show(row, (e.classes || []).length > 0);
+  }
+
   function draw() {
     var e = element();
     var t = Muse.TYPE[e.type];
@@ -78,6 +112,7 @@
     );
     Muse.show(Muse.$('muse-e-retired'), e.retired);
     Muse.show(Muse.$('muse-e-danger'), !e.retired);
+    drawClasses();
     drawFacts();
     var hasLooks = e.type === 'character' && !!e.appearance.trim();
     Muse.show(Muse.$('muse-e-appearance-card'), hasLooks);
@@ -258,6 +293,89 @@
     return node.value;
   }
 
+  // The classes the form holds, per classification of the element's type:
+  // each picked one with a button to take it off, and a list to add one at
+  // any level. Adding follows the classification's rule (./classes.js
+  // classify): a single one keeps one class, and a class replaces one above
+  // or below it in its line.
+  function drawPicker() {
+    var e = element();
+    var box = Muse.$('muse-e-classes-input');
+    if (!box) return;
+    box.textContent = '';
+    C.classificationsOf(state.tree, e.type).forEach(function (cf) {
+      var group = Muse.el('div', 'muse-pick');
+      group.dataset.classification = cf.id;
+      var id = 'muse-e-pick-' + cf.id;
+      var label = Muse.el('label', 'muse-label', cf.name);
+      label.htmlFor = id;
+      group.appendChild(label);
+      var chips = Muse.el('div', 'muse-chips');
+      picked
+        .filter(function (c) {
+          return state.tree.classes[c] && state.tree.classes[c].classification === cf.id;
+        })
+        .forEach(function (c) {
+          var chip = Muse.el('span', 'muse-chip');
+          chip.dataset.id = c;
+          chip.appendChild(Muse.el('span', '', C.pathText(state.tree, c, true)));
+          var off = Muse.el('button', 'muse-chip-off', '×');
+          off.type = 'button';
+          off.setAttribute('aria-label', 'Take off ' + C.pathText(state.tree, c, true));
+          off.addEventListener('click', function () {
+            picked = C.classify(state.tree, picked, [], [c]);
+            drawPicker();
+          });
+          chip.appendChild(off);
+          chips.appendChild(chip);
+        });
+      group.appendChild(chips);
+      var select = Muse.el('select', 'muse-input muse-select');
+      select.id = id;
+      var none = Muse.el(
+        'option',
+        '',
+        cf.multiple || !chips.children.length ? '— Add a class —' : '— Change its class —'
+      );
+      none.value = '';
+      select.appendChild(none);
+      C.flatten(state.tree, cf.id).forEach(function (c) {
+        var option = Muse.el('option', '', new Array(c.depth).join('— ') + c.name);
+        option.value = c.id;
+        option.disabled = picked.indexOf(c.id) !== -1;
+        select.appendChild(option);
+      });
+      select.addEventListener('change', function () {
+        if (!select.value) return;
+        picked = C.classify(state.tree, picked, [select.value], []);
+        drawPicker();
+        var again = Muse.$(id);
+        if (again) again.focus();
+      });
+      group.appendChild(select);
+      box.appendChild(group);
+    });
+    // A class no longer in the tree stays until it is taken off.
+    picked
+      .filter(function (c) {
+        return !state.tree.classes[c];
+      })
+      .forEach(function (c) {
+        var chip = Muse.el('span', 'muse-chip muse-gone', 'A deleted class');
+        var off = Muse.el('button', 'muse-chip-off', '×');
+        off.type = 'button';
+        off.setAttribute('aria-label', 'Take off the deleted class');
+        off.addEventListener('click', function () {
+          picked = picked.filter(function (x) {
+            return x !== c;
+          });
+          drawPicker();
+        });
+        chip.appendChild(off);
+        box.appendChild(chip);
+      });
+  }
+
   function buildForm() {
     var e = element();
     var body = Muse.$('muse-e-form-body');
@@ -286,6 +404,17 @@
       body.appendChild(group);
     }
 
+    picked = (e.classes || []).slice();
+    if (C.classificationsOf(state.tree, e.type).length || picked.length) {
+      var classGroup = Muse.el('fieldset', 'muse-e-fields muse-e-classes-field');
+      classGroup.appendChild(Muse.el('legend', 'muse-subheading', 'Classes'));
+      var pickers = Muse.el('div', 'muse-picks');
+      pickers.id = 'muse-e-classes-input';
+      classGroup.appendChild(pickers);
+      body.appendChild(classGroup);
+      drawPicker();
+    }
+
     if (e.type === 'character') {
       markdownField(body, 'Appearance', e.appearance, 'muse-e-appearance-input', 5);
     }
@@ -308,6 +437,7 @@
       input.appearance = Muse.$('muse-e-appearance-input').value;
       input.residence = Muse.$('muse-e-residence').value || null;
     }
+    if (Muse.$('muse-e-classes-input')) input.classes = picked.slice();
     return input;
   }
 

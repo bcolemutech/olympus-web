@@ -50,6 +50,8 @@
     });
     return batch.commit().then(function () {
       if (state.index) model.applyToIndex(state.index, writes);
+      // Classifications and classes (M-201) follow the same way.
+      if (state.tree) Muse.classes.applyToTree(state.tree, writes);
       state.matcher = null;
     });
   }
@@ -66,6 +68,7 @@
       images: Array.isArray(data.images) ? data.images : [],
       primary: data.primary === undefined ? null : data.primary,
       mentions: Array.isArray(data.mentions) ? data.mentions : [],
+      classes: Array.isArray(data.classes) ? data.classes : [],
       appearance: data.appearance || '',
       residence: data.residence || null,
       shard: data.shard,
@@ -116,10 +119,21 @@
     return out;
   }
 
-  // The names the text can link to, rebuilt when the index changes (EL6).
+  // The index's lines and the classes' (M-201), as one map: the names the
+  // text links and the instant search finds.
+  function withClasses() {
+    return Object.assign(
+      {},
+      Muse.classes.entriesOf(state.tree),
+      state.index ? state.index.entries : {}
+    );
+  }
+
+  // The names the text can link to, rebuilt when the index changes (EL6),
+  // classes' among them (D5).
   function matcher() {
     if (!state.matcher) {
-      state.matcher = Muse.links.buildMatcher(state.index ? state.index.entries : {}, {
+      state.matcher = Muse.links.buildMatcher(withClasses(), {
         escape: Muse.markdown.escape,
       });
     }
@@ -127,31 +141,49 @@
   }
   Muse.markdown.useMatcher(matcher);
 
-  // Names and aliases matching `query`, best first (EL5).
+  // Names and aliases matching `query`, best first (EL5); with `classes`,
+  // classes by name too (M-201: the header's box and @-links).
   function search(query, options) {
-    return Muse.links.search(state.index ? state.index.entries : {}, query, options);
+    var entries =
+      options && options.classes ? withClasses() : state.index ? state.index.entries : {};
+    return Muse.links.search(entries, query, options);
   }
 
-  // The live elements whose texts link to `id` (EL6), by name. At most 100
-  // are read, which `more` says.
+  // The live elements whose texts link to `id` (EL6), and the classes whose
+  // descriptions do (M-201, D5; with type 'class'), by name. At most 100 of
+  // each are read, which `more` says.
   var MENTIONS_READ = 100;
   function mentionedIn(projectId, id) {
-    return projectRef(projectId)
-      .collection('elements')
-      .where('mentions', 'array-contains', id)
-      .limit(MENTIONS_READ)
-      .get()
-      .then(function (snap) {
-        var found = snap.docs
-          .map(fromDoc)
-          .filter(function (e) {
-            return e.id !== id && !e.retired && state.index && state.index.entries[e.id];
-          })
-          .sort(function (a, b) {
-            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-          });
-        return { elements: found, more: snap.docs.length >= MENTIONS_READ };
-      });
+    var read = function (collection) {
+      return projectRef(projectId)
+        .collection(collection)
+        .where('mentions', 'array-contains', id)
+        .limit(MENTIONS_READ)
+        .get();
+    };
+    return Promise.all([read('elements'), read('classes')]).then(function (got) {
+      var found = got[0].docs
+        .map(fromDoc)
+        .filter(function (e) {
+          return e.id !== id && !e.retired && state.index && state.index.entries[e.id];
+        })
+        .concat(
+          got[1].docs
+            .filter(function (doc) {
+              return doc.id !== id;
+            })
+            .map(function (doc) {
+              return { id: doc.id, type: 'class', name: doc.data().name || '' };
+            })
+        )
+        .sort(function (a, b) {
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        });
+      return {
+        elements: found,
+        more: got[0].docs.length >= MENTIONS_READ || got[1].docs.length >= MENTIONS_READ,
+      };
+    });
   }
 
   Muse.elements = {
@@ -208,13 +240,14 @@
       );
     },
 
-    // Saves changes to an element (its name, aliases, bio, fields and, for
-    // a character, appearance and residence).
+    // Saves changes to an element (its name, aliases, bio, fields, classes
+    // and, for a character, appearance and residence).
     update: function (projectId, current, input) {
       var checked = model.checkElement(current.type, input, {
         defs: defsFor(current.type),
         elementType: typeOf,
         current: current,
+        tree: state.tree,
       });
       if (checked.error) return Promise.reject(new Error(checked.error));
       return commit(model.planUpdate(projectId, current, checked.value));

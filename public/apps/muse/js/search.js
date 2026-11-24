@@ -3,7 +3,8 @@
 
   // The search box in the app's header (planning/the-muse.md §3 EL5; M-103 /
   // #891): every name and alias of the open project, from its index in
-  // memory, so it answers as you type; a pick opens that element's page.
+  // memory, so it answers as you type, and its classes' names (M-201); a
+  // pick opens that element's or class's page.
   // Its last row, "Search all text", searches bios, appearances and text
   // fields on the server (M-106; ./text-search.js).
   //
@@ -24,11 +25,15 @@
       }
       Muse.suggest.input(box, {
         limit: 8,
+        classes: true,
         choose: function (result) {
           box.value = '';
           box.blur();
           Muse.go(
-            '#/p/' + encodeURIComponent(state.project.id) + '/e/' + encodeURIComponent(result.id)
+            '#/p/' +
+              encodeURIComponent(state.project.id) +
+              (result.type === 'class' ? '/c/' : '/e/') +
+              encodeURIComponent(result.id)
           );
         },
         more: function (text) {

@@ -13,9 +13,11 @@
   //     createdAt, updatedAt
   //   The time on the timeline (`when`) comes with M-300.
   //
-  //   @-links        [Name](muse:el/<id>) in a Markdown text. An element keeps
+  //   @-links        [Name](muse:el/<id>) in a Markdown text, or a class's
+  //                  [Name](muse:cl/<id>) (M-201, D5). An element keeps
   //                  `mentions`, the ids its bio and appearance link to, so
-  //                  "mentioned in" is a query (array-contains).
+  //                  "mentioned in" is a query (array-contains); a class keeps
+  //                  those its description links to.
   //   auto-links     a name or alias found elsewhere in a shown text is made a
   //                  link when the text is drawn; nothing is stored.
   //   search         names and aliases, ranked, over the index.
@@ -158,11 +160,11 @@
 
   // ── @-links (EL6) ───────────────────────────────
 
-  // The Markdown for a link to an element. Brackets in a name would end the
-  // label early, so they are left out of it.
-  function linkMarkdown(name, id) {
+  // The Markdown for a link to an element, or to a class when `isClass`.
+  // Brackets in a name would end the label early, so they are left out of it.
+  function linkMarkdown(name, id, isClass) {
     var label = String(name || '').replace(/[[\]]/g, '') || 'link';
-    return '[' + label + '](muse:el/' + id + ')';
+    return '[' + label + '](muse:' + (isClass ? 'cl' : 'el') + '/' + id + ')';
   }
 
   // The ids a Markdown text links to, as the page would show them: once
@@ -175,7 +177,7 @@
         .replace(/\r\n?/g, '\n')
         .replace(/^[ \t]*```[\s\S]*?(?:^[ \t]*```|$(?![\s\S]))/gm, '')
         .replace(/`[^`\n]+`/g, '');
-      var re = /\[[^\]\n]+\]\(muse:el\/([A-Za-z0-9_-]{1,128})\)/g;
+      var re = /\[[^\]\n]+\]\(muse:(?:el|cl)\/([A-Za-z0-9_-]{1,128})\)/g;
       var m;
       while ((m = re.exec(text))) {
         if (!seen[m[1]]) {
@@ -201,7 +203,8 @@
     return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
   }
 
-  // Auto-links (EL6). `entries`: { id: { name, aliases } } (the index).
+  // Auto-links (EL6). `entries`: { id: { name, aliases, type } } (the index,
+  // and a project's classes as ./classes.js entriesOf gives them, M-201).
   // A name or alias is linked only when it is at least two characters with a
   // letter in it, and belongs to one element: when two share it, neither
   // links. The longest wins ("King Peter" over "Peter"), and a match is a
@@ -218,7 +221,7 @@
 
   function buildMatcher(entries, options) {
     var escape = (options && options.escape) || String;
-    var owners = {}; // folded term → { id, term } | null when two elements share it
+    var owners = {}; // folded term → { id, term, kind } | null when two share it
     Object.keys(entries || {}).forEach(function (id) {
       var entry = entries[id];
       [entry.name].concat(entry.aliases || []).forEach(function (term) {
@@ -226,7 +229,7 @@
         if (term.length < 2 || !LETTER.test(term)) return;
         var key = fold(escape(term));
         if (!Object.prototype.hasOwnProperty.call(owners, key)) {
-          owners[key] = { id: id, term: escape(term) };
+          owners[key] = { id: id, term: escape(term), kind: entry.type === 'class' ? 'cl' : 'el' };
         } else if (owners[key] && owners[key].id !== id) {
           owners[key] = null;
         }
@@ -262,7 +265,9 @@
           return (
             before +
             hold(
-              '<a class="muse-el-link muse-auto" href="#" data-el="' +
+              '<a class="muse-el-link muse-auto" href="#" data-' +
+                owner.kind +
+                '="' +
                 owner.id +
                 '">' +
                 match +

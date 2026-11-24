@@ -6,12 +6,13 @@
   //   #/p/<id>            a project's home
   //   #/p/<id>/t/<type>   a list of one type's elements
   //   #/p/<id>/e/<el>     an element's page
+  //   #/p/<id>/c/<class>  a class's page (M-201)
   //   #/p/<id>/s/<words>  every element whose text holds the words (M-106)
   // and, inside a project, the search box in the header (M-103).
 
   var Muse = window.Muse;
   var state = Muse.state;
-  var VIEWS = ['home', 'project', 'type', 'element', 'text', 'missing'];
+  var VIEWS = ['home', 'project', 'type', 'element', 'class', 'text', 'missing'];
 
   function view(name) {
     VIEWS.forEach(function (v) {
@@ -31,7 +32,7 @@
 
   function go() {
     var hash = window.location.hash || '#/';
-    var m = /^#\/p\/([^/]+)(?:\/(t|e|s)\/([^/]+))?\/?$/.exec(hash);
+    var m = /^#\/p\/([^/]+)(?:\/(t|e|c|s)\/([^/]+))?\/?$/.exec(hash);
     if (m) {
       var id = decodeURIComponent(m[1]);
       var shown =
@@ -43,13 +44,17 @@
             ? Muse.element.show(id, decodeURIComponent(m[3])).then(function (ok) {
                 return ok && 'element';
               })
-            : m[2] === 's'
-              ? Muse.textSearch.show(id, decodeURIComponent(m[3])).then(function (ok) {
-                  return ok && 'text';
+            : m[2] === 'c'
+              ? Muse.classPage.show(id, decodeURIComponent(m[3])).then(function (ok) {
+                  return ok && 'class';
                 })
-              : Muse.project.show(id).then(function (ok) {
-                  return ok && 'project';
-                });
+              : m[2] === 's'
+                ? Muse.textSearch.show(id, decodeURIComponent(m[3])).then(function (ok) {
+                    return ok && 'text';
+                  })
+                : Muse.project.show(id).then(function (ok) {
+                    return ok && 'project';
+                  });
       return shown.then(function (name) {
         view(name || 'missing');
         Muse.search.sync(!!name);
@@ -82,20 +87,24 @@
         Muse.typeList.init();
         Muse.gallery.init();
         Muse.element.init();
+        Muse.classifications.init();
+        Muse.classPage.init();
         Muse.relationships.init();
         Muse.search.init();
         Muse.textSearch.init();
         document.addEventListener('click', function (event) {
-          // An element link in a text (muse:el/<id>) opens its page.
+          // An element link in a text (muse:el/<id>) opens its page, and a
+          // class link (muse:cl/<id>, M-201) the class's.
           var a = event.target.closest && event.target.closest('a.muse-el-link');
           if (a) {
             event.preventDefault();
-            if (state.project && a.dataset.el) {
+            var id = a.dataset.cl || a.dataset.el;
+            if (state.project && id) {
               Muse.go(
                 '#/p/' +
                   encodeURIComponent(state.project.id) +
-                  '/e/' +
-                  encodeURIComponent(a.dataset.el)
+                  (a.dataset.cl ? '/c/' : '/e/') +
+                  encodeURIComponent(id)
               );
             }
           }

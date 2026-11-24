@@ -7,7 +7,10 @@
  * rendering its summary (sanitised Markdown), at desktop and iPad sizes; a
  * phone reads it too (MU5). Photo libraries (M-104 / #892) go through a stubbed
  * Storage and studioUpload: a photo uploaded or picked, made primary,
- * reordered and removed, and a project's cover.
+ * reordered and removed, and a project's cover. Classifications (M-201 /
+ * #914): a tree made on a project's home, an object classified as a
+ * Longsword shown by its path, the Objects list filtered by Sword, and a
+ * class's page.
  *
  * It needs Playwright and its Chromium; where the browser is missing the
  * suite is skipped, with a note.
@@ -374,6 +377,159 @@ const PROJECTS = {
     },
     last: 'el_sea',
   },
+  // An armoury with two objects and no classifications yet; their index
+  // lines are from before M-201, without classes (D3).
+  'muse_projects/p_arms': {
+    owner: 'ann',
+    title: 'The Armoury',
+    short: '',
+    summary: '',
+    cover: null,
+    updatedAt: 3,
+  },
+  'muse_projects/p_arms/elements/el_brand': {
+    type: 'object',
+    name: 'Kingsbrand',
+    aliases: ['The Old Blade'],
+    bio: '',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: [],
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_arms/elements/el_rock': {
+    type: 'object',
+    name: 'A rock',
+    aliases: [],
+    bio: '',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: [],
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_arms/index/0': {
+    entries: {
+      el_brand: { type: 'object', name: 'Kingsbrand', aliases: ['The Old Blade'], primary: null },
+      el_rock: { type: 'object', name: 'A rock', aliases: [], primary: null },
+    },
+    last: 'el_rock',
+  },
+  // A kit already classified (M-201): Weapons (single) › Sword › Double Edge
+  // › Longsword, and Axe; a blade in Sword, an axe in Axe, and a smith whose
+  // bio links the Longsword.
+  'muse_projects/p_kit': {
+    owner: 'ann',
+    title: 'The Kit',
+    short: '',
+    summary: '',
+    cover: null,
+    updatedAt: 2,
+  },
+  'muse_projects/p_kit/classifications/cf_w': { type: 'object', name: 'Weapons', multiple: false },
+  'muse_projects/p_kit/classes/cl_sword': {
+    classification: 'cf_w',
+    parent: null,
+    depth: 1,
+    name: 'Sword',
+    description: 'A blade longer than a knife.',
+    images: [],
+    primary: null,
+    mentions: [],
+  },
+  'muse_projects/p_kit/classes/cl_edge': {
+    classification: 'cf_w',
+    parent: 'cl_sword',
+    depth: 2,
+    name: 'Double Edge',
+    description: '',
+    images: [],
+    primary: null,
+    mentions: [],
+  },
+  'muse_projects/p_kit/classes/cl_long': {
+    classification: 'cf_w',
+    parent: 'cl_edge',
+    depth: 3,
+    name: 'Longsword',
+    description: '',
+    images: [],
+    primary: null,
+    mentions: [],
+  },
+  'muse_projects/p_kit/classes/cl_axe': {
+    classification: 'cf_w',
+    parent: null,
+    depth: 1,
+    name: 'Axe',
+    description: '',
+    images: [],
+    primary: null,
+    mentions: [],
+  },
+  'muse_projects/p_kit/elements/el_blade': {
+    type: 'object',
+    name: 'A rusted blade',
+    aliases: [],
+    bio: '',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: [],
+    classes: ['cl_sword'],
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_kit/elements/el_axe': {
+    type: 'object',
+    name: 'The Cleaver',
+    aliases: [],
+    bio: '',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: [],
+    classes: ['cl_axe'],
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_kit/elements/el_smith': {
+    type: 'character',
+    name: 'Hild',
+    aliases: [],
+    bio: 'Forges the [Longsword](muse:cl/cl_long). Every Axe is hers too.',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: ['cl_long'],
+    appearance: '',
+    residence: null,
+    shard: '0',
+    retired: false,
+  },
+  'muse_projects/p_kit/index/0': {
+    entries: {
+      el_blade: {
+        type: 'object',
+        name: 'A rusted blade',
+        aliases: [],
+        primary: null,
+        classes: ['cl_sword'],
+      },
+      el_axe: {
+        type: 'object',
+        name: 'The Cleaver',
+        aliases: [],
+        primary: null,
+        classes: ['cl_axe'],
+      },
+      el_smith: { type: 'character', name: 'Hild', aliases: [], primary: null, classes: [] },
+    },
+    last: 'el_smith',
+  },
   'muse_projects/p_court/relationships/r1': {
     a: 'el_marta',
     b: 'el_peter',
@@ -437,7 +593,14 @@ describe('the home page', () => {
   each('lists your projects only, last changed first, as cards', async (page) => {
     await page.waitForSelector('.muse-project-card');
     const titles = await page.locator('.muse-project-card-title').allInnerTexts();
-    expect(titles).toEqual(['The Drowned Kingdom', 'The Isles', 'The Court', 'Older']);
+    expect(titles).toEqual([
+      'The Drowned Kingdom',
+      'The Isles',
+      'The Court',
+      'The Armoury',
+      'The Kit',
+      'Older',
+    ]);
     await expect(page.locator('.muse-project-card-short').first().innerText()).resolves.toBe(
       'A sea that took a crown'
     );
@@ -609,6 +772,8 @@ describe('a project’s home', () => {
     await expect(page.locator('.muse-project-card-title').allInnerTexts()).resolves.toEqual([
       'The Isles',
       'The Court',
+      'The Armoury',
+      'The Kit',
       'Older',
     ]);
   });
@@ -686,6 +851,7 @@ describe('elements (M-102)', () => {
       name: 'King Peter',
       aliases: ['Peter', 'The Drowned King'],
       primary: null,
+      classes: [],
     });
     await expect(page.evaluate(() => window.__batches)).resolves.toBe(2);
 
@@ -1502,6 +1668,319 @@ describe('versions (M-105)', () => {
       await page.tap('#muse-e-versions-box-save');
       await saved(page);
       expect(await versionsOf(page, 'p_isle')).toHaveLength(1);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+      expect(errors).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+describe('classifications (M-201)', () => {
+  const goTo = async (page, hash, ready) => {
+    // Once the app has started; then any page of it.
+    await page.waitForFunction(() => window.Muse && window.Muse.state && window.Muse.state.uid);
+    await page.evaluate((h) => (window.location.hash = h), hash);
+    await page.waitForSelector(ready);
+  };
+  const shown = (id) => `#${id}:not(.hidden)`;
+  const docsIn = async (page, projectId, collection) =>
+    Object.entries(await stored(page))
+      .filter(([p]) => p.startsWith(`muse_projects/${projectId}/${collection}/`))
+      .map(([p, d]) => ({ id: p.split('/').pop(), ...d }));
+  // The inline form under a row: type a name and add it.
+  const addInline = async (page, button, name) => {
+    await page.click(button);
+    await page.fill('.muse-cf-inline-name', name);
+    await page.press('.muse-cf-inline-name', 'Enter');
+    await page.waitForFunction(() => !document.querySelector('.muse-cf-inline'));
+  };
+  const row = (name) =>
+    `.muse-tree-item:has(> .muse-tree-row > a:text-is("${name}")) > .muse-tree-row`;
+
+  each(
+    'a tree made on the home, an object classified as Longsword, the list filtered by Sword',
+    async (page) => {
+      await goTo(page, '#/p/p_arms', shown('muse-project'));
+      await expect(page.locator('#muse-cf-empty').isVisible()).resolves.toBe(true);
+
+      // A classification for objects.
+      await page.click('#muse-cf-new-open');
+      await page.fill('#muse-cf-new-name', 'Weapon');
+      await page.selectOption('#muse-cf-new-type', 'object');
+      await page.click('#muse-cf-new-btn');
+      await page.waitForSelector('.muse-cf');
+      await expect(page.locator('.muse-cf-type[data-type="object"] h3').textContent()).resolves.toBe(
+        'Objects'
+      );
+
+      // Three levels: Sword › Double Edge › Longsword, and an Axe beside it.
+      await addInline(page, '.muse-cf-add', 'Sword');
+      await addInline(page, '.muse-cf-add', 'Axe');
+      await addInline(page, `${row('Sword')} .muse-tree-add`, 'Double Edge');
+      await addInline(page, `${row('Double Edge')} .muse-tree-add`, 'Longsword');
+      await expect(page.locator('.muse-tree-name').allInnerTexts()).resolves.toEqual([
+        'Axe',
+        'Sword',
+        'Double Edge',
+        'Longsword',
+      ]);
+      // Siblings are named once each.
+      await page.click('.muse-cf-add');
+      await page.fill('.muse-cf-inline-name', 'sword');
+      await page.press('.muse-cf-inline-name', 'Enter');
+      await expect(page.locator('.muse-cf-inline .muse-error').innerText()).resolves.toMatch(
+        /already a class called that/
+      );
+      await page.click('.muse-cf-inline-cancel');
+
+      const classes = await docsIn(page, 'p_arms', 'classes');
+      const byName = Object.fromEntries(classes.map((c) => [c.name, c]));
+      expect(byName.Longsword).toMatchObject({
+        parent: byName['Double Edge'].id,
+        depth: 3,
+        classification: byName.Sword.classification,
+      });
+
+      // Kingsbrand is a Longsword.
+      await goTo(page, '#/p/p_arms/e/el_brand', shown('muse-element'));
+      await expect(page.locator('#muse-e-classes').isVisible()).resolves.toBe(false);
+      await page.click('#muse-e-edit');
+      const picker = `#muse-e-pick-${byName.Sword.classification}`;
+      await page.selectOption(picker, byName.Longsword.id);
+      await expect(page.locator('.muse-chip span').first().innerText()).resolves.toBe(
+        'Sword › Double Edge › Longsword'
+      );
+      await page.click('#muse-e-save');
+      await page.waitForSelector('#muse-e-read:not(.hidden)');
+      await expect(page.locator('#muse-e-classes').innerText()).resolves.toBe(
+        'Weapon › Sword › Double Edge › Longsword'
+      );
+      const saved = await stored(page);
+      expect(saved['muse_projects/p_arms/elements/el_brand'].classes).toEqual([
+        byName.Longsword.id,
+      ]);
+      // Its line gains its classes; the rock's, never saved, is as it was (D3).
+      expect(saved['muse_projects/p_arms/index/0'].entries.el_brand.classes).toEqual([
+        byName.Longsword.id,
+      ]);
+      expect(saved['muse_projects/p_arms/index/0'].entries.el_rock.classes).toBeUndefined();
+
+      // The Objects list, filtered by Sword, shows it, with its own class.
+      await goTo(page, '#/p/p_arms/t/object', shown('muse-type'));
+      await expect(page.locator('.muse-el-row-name').allInnerTexts()).resolves.toEqual([
+        'A rock',
+        'Kingsbrand',
+      ]);
+      await page.selectOption('#muse-t-filter', byName.Sword.id);
+      await expect(page.locator('.muse-el-row-name').allInnerTexts()).resolves.toEqual([
+        'Kingsbrand',
+      ]);
+      await expect(page.locator('.muse-el-row-classes').innerText()).resolves.toBe(
+        'Sword › Double Edge › Longsword'
+      );
+      await page.selectOption('#muse-t-filter', byName.Axe.id);
+      await expect(page.locator('#muse-t-empty').innerText()).resolves.toBe(
+        'No objects in Weapon › Axe.'
+      );
+
+      // The class's page: its path, each step a link, and what is in it.
+      await page.selectOption('#muse-t-filter', '');
+      await goTo(page, '#/p/p_arms/e/el_brand', shown('muse-element'));
+      await page.click('#muse-e-classes a:text-is("Longsword")');
+      await page.waitForSelector(shown('muse-class'));
+      await expect(page.locator('#muse-c-name').innerText()).resolves.toBe('Longsword');
+      await expect(page.locator('#muse-c-path').innerText()).resolves.toBe(
+        'Weapon › Sword › Double Edge › Longsword'
+      );
+      await expect(page.locator('#muse-c-in .muse-el-row-name').allInnerTexts()).resolves.toEqual([
+        'Kingsbrand',
+      ]);
+      await page.click('#muse-c-path a:text-is("Sword")');
+      await page.waitForFunction(
+        () => document.getElementById('muse-c-name').textContent === 'Sword'
+      );
+      await expect(page.locator('#muse-c-in-empty').isVisible()).resolves.toBe(false);
+      await expect(page.locator('#muse-c-below .muse-el-row').innerText()).resolves.toMatch(
+        /Kingsbrand\s+Sword › Double Edge › Longsword/
+      );
+      await expect(page.locator('#muse-c-subs .muse-el-row-name').allInnerTexts()).resolves.toEqual(
+        ['Double Edge']
+      );
+    }
+  );
+
+  each(
+    'a single classification keeps one class; a class refined replaces the one above',
+    async (page) => {
+      await goTo(page, '#/p/p_kit/e/el_blade', shown('muse-element'));
+      await expect(page.locator('#muse-e-classes').innerText()).resolves.toBe('Weapons › Sword');
+      await page.click('#muse-e-edit');
+      await expect(page.locator('#muse-e-pick-cf_w option').allInnerTexts()).resolves.toEqual([
+        '— Change its class —',
+        'Axe',
+        'Sword',
+        '— Double Edge',
+        '— — Longsword',
+      ]);
+      await page.selectOption('#muse-e-pick-cf_w', 'cl_long');
+      await expect(page.locator('.muse-chip span').allInnerTexts()).resolves.toEqual([
+        'Sword › Double Edge › Longsword',
+      ]);
+      await page.selectOption('#muse-e-pick-cf_w', 'cl_axe');
+      await expect(page.locator('.muse-chip span').allInnerTexts()).resolves.toEqual(['Axe']);
+      await page.click('.muse-chip-off');
+      await expect(page.locator('.muse-chip').count()).resolves.toBe(0);
+      await page.selectOption('#muse-e-pick-cf_w', 'cl_edge');
+      await page.click('#muse-e-save');
+      await page.waitForSelector('#muse-e-read:not(.hidden)');
+      await expect(page.locator('#muse-e-classes').innerText()).resolves.toBe(
+        'Weapons › Sword › Double Edge'
+      );
+      expect((await stored(page))['muse_projects/p_kit/elements/el_blade'].classes).toEqual([
+        'cl_edge',
+      ]);
+    }
+  );
+
+  each('classes are found by the search box and by @, and their links open them', async (page) => {
+    await goTo(page, '#/p/p_kit/e/el_smith', shown('muse-element'));
+    // An @-link to a class, and its name found in the text, both link to it.
+    await expect(page.locator('#muse-e-bio a[data-cl="cl_long"]').innerText()).resolves.toBe(
+      'Longsword'
+    );
+    await expect(
+      page.locator('#muse-e-bio a.muse-auto[data-cl="cl_axe"]').innerText()
+    ).resolves.toBe('Axe');
+    // @ offers classes, and writes a class link.
+    await page.click('#muse-e-edit');
+    await page.fill('#muse-e-bio-input', 'Mends every @Doub');
+    await page.press('#muse-e-bio-input', 'End');
+    await page.waitForSelector('.muse-suggest:not(.hidden) .muse-suggest-row');
+    await expect(
+      page.locator('.muse-suggest-row .muse-suggest-type').first().innerText()
+    ).resolves.toBe('Class');
+    await page.press('#muse-e-bio-input', 'Enter');
+    await expect(page.inputValue('#muse-e-bio-input')).resolves.toBe(
+      'Mends every [Double Edge](muse:cl/cl_edge)'
+    );
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+    expect((await stored(page))['muse_projects/p_kit/elements/el_smith'].mentions).toEqual([
+      'cl_edge',
+    ]);
+    await page.click('#muse-e-bio a[data-cl="cl_edge"]');
+    await page.waitForSelector(shown('muse-class'));
+    await expect(page.locator('#muse-c-name').innerText()).resolves.toBe('Double Edge');
+    // Where it is mentioned.
+    await expect(
+      page.locator('#muse-c-mentions .muse-el-row-name').allInnerTexts()
+    ).resolves.toEqual(['Hild']);
+
+    // The header's box finds a class by name and opens its page.
+    await page.fill('#muse-search-box', 'longs');
+    await page.waitForSelector('.muse-suggest:not(.hidden) .muse-suggest-row');
+    await page.press('#muse-search-box', 'Enter');
+    await page.waitForFunction(
+      () => document.getElementById('muse-c-name').textContent === 'Longsword'
+    );
+  });
+
+  each('a class is described, versioned, and deleted only when empty', async (page) => {
+    await goTo(page, '#/p/p_kit/c/cl_axe', shown('muse-class'));
+    await expect(page.locator('#muse-c-kind').textContent()).resolves.toBe('Class of objects');
+    await page.click('#muse-c-edit');
+    await page.fill('#muse-c-name-input', 'Axes');
+    await page.fill('#muse-c-text', 'Heavy, for [Hild](muse:el/el_smith).');
+    await page.click('#muse-c-save');
+    await page.waitForSelector('#muse-c-read:not(.hidden)');
+    await expect(page.locator('#muse-c-name').innerText()).resolves.toBe('Axes');
+    await expect(page.locator('#muse-c-description a').innerText()).resolves.toBe('Hild');
+    expect((await stored(page))['muse_projects/p_kit/classes/cl_axe']).toMatchObject({
+      name: 'Axes',
+      mentions: ['el_smith'],
+      parent: null,
+      depth: 1,
+    });
+
+    // A version of it, as stored.
+    await page.fill('#muse-c-versions-box-name', 'Before the purge');
+    await page.click('#muse-c-versions-box-save');
+    await page.waitForSelector('#muse-c-versions-box-done:not(.hidden)');
+    const [kept] = await docsIn(page, 'p_kit', 'versions');
+    expect(kept).toMatchObject({
+      of: 'muse_projects/p_kit/classes/cl_axe',
+      name: 'Before the purge',
+      by: 'page',
+      snapshot: { name: 'Axes', classification: 'cf_w' },
+    });
+
+    // The Cleaver is in it: deleting is refused.
+    await page.click('#muse-c-delete');
+    await page.click('#muse-c-delete-yes');
+    await expect(page.locator('#muse-c-delete-error').innerText()).resolves.toMatch(
+      /Elements are in it/
+    );
+    // A subclass is new and empty: it goes, back to its parent.
+    await page.click('#muse-c-delete-no');
+    await page.click('#muse-c-sub-open');
+    await page.fill('#muse-c-sub-name', 'Hatchet');
+    await page.click('#muse-c-sub-btn');
+    await page.waitForSelector('#muse-c-subs .muse-el-row');
+    await page.click('#muse-c-subs .muse-el-row');
+    await page.waitForFunction(
+      () => document.getElementById('muse-c-name').textContent === 'Hatchet'
+    );
+    await page.click('#muse-c-delete');
+    await page.click('#muse-c-delete-yes');
+    await page.waitForFunction(() => document.getElementById('muse-c-name').textContent === 'Axes');
+    expect((await docsIn(page, 'p_kit', 'classes')).map((c) => c.name).sort()).toEqual([
+      'Axes',
+      'Double Edge',
+      'Longsword',
+      'Sword',
+    ]);
+  });
+
+  each('a classification is made single only when no element holds two', async (page) => {
+    await goTo(page, '#/p/p_kit', shown('muse-project'));
+    await page.click('.muse-cf-mode-btn');
+    await page.waitForFunction(
+      () => document.querySelector('.muse-cf-mode-btn').textContent === 'Make single'
+    );
+    await goTo(page, '#/p/p_kit/e/el_blade', shown('muse-element'));
+    await page.click('#muse-e-edit');
+    await page.selectOption('#muse-e-pick-cf_w', 'cl_axe');
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+    await expect(page.locator('#muse-e-classes .muse-class-path').count()).resolves.toBe(2);
+    await goTo(page, '#/p/p_kit', shown('muse-project'));
+    await page.waitForSelector('.muse-cf-mode-btn');
+    await page.click('.muse-cf-mode-btn');
+    await expect(page.locator('#muse-cf-error').innerText()).resolves.toMatch(
+      /A rusted blade holds two of its classes/
+    );
+    // A classification with classes can't be deleted.
+    await page.click('.muse-cf-delete');
+    await page.click('.muse-cf-confirm .muse-btn-danger');
+    await expect(page.locator('.muse-cf-confirm .muse-error').innerText()).resolves.toMatch(
+      /still has classes/
+    );
+  });
+
+  test('a phone reads a class and its tree', async () => {
+    if (!browser) return;
+    const { context, page, errors } = await open(PHONE);
+    try {
+      await goTo(page, '#/p/p_kit/c/cl_long', shown('muse-class'));
+      await expect(page.locator('#muse-c-path').innerText()).resolves.toBe(
+        'Weapons › Sword › Double Edge › Longsword'
+      );
+      await goTo(page, '#/p/p_kit', shown('muse-project'));
+      await expect(page.locator('.muse-tree-name').count()).resolves.toBe(4);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth
       );

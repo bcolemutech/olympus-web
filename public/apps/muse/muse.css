@@ -1209,3 +1209,180 @@ a.muse-section-tile:focus-visible {
     margin-bottom: 0.5rem;
   }
 }
+
+/* ── Classifications and classes (M-201) ── */
+
+.muse-cf-new {
+  margin-bottom: 1rem;
+}
+
+.muse-cf-type + .muse-cf-type {
+  margin-top: 1.25rem;
+}
+
+.muse-cf {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--muse-line);
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.5);
+}
+
+.muse-cf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.muse-cf-name {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.2rem;
+  font-weight: normal;
+  color: #f3e5f5;
+  overflow-wrap: anywhere;
+}
+
+.muse-cf-mode {
+  color: var(--muse-muted);
+  font-size: 0.85rem;
+}
+
+.muse-cf-head .muse-tree-actions {
+  margin-left: auto;
+}
+
+.muse-cf-inline,
+.muse-cf-confirm {
+  margin: 0.5rem 0;
+}
+
+.muse-cf-inline .muse-input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.muse-tree {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+
+.muse-tree .muse-tree {
+  margin-left: 1.25rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--muse-line);
+}
+
+.muse-tree-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  min-height: 44px;
+}
+
+.muse-tree-name {
+  color: #f3e5f5;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.muse-tree-name:hover,
+.muse-tree-name:focus-visible {
+  color: var(--muse-accent-strong);
+  text-decoration: underline;
+}
+
+.muse-tree-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+/* A class's path: each step a link (CL6, CL9) */
+
+.muse-c-path {
+  color: var(--muse-muted);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.muse-c-step {
+  color: var(--muse-accent);
+}
+
+.muse-c-here {
+  color: #e0e0e0;
+}
+
+.muse-c-sep,
+.muse-c-root {
+  color: var(--muse-muted);
+}
+
+.muse-e-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.muse-class-path {
+  overflow-wrap: anywhere;
+}
+
+.muse-el-row-classes {
+  flex-basis: 100%;
+  color: var(--muse-accent);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+/* Picking classes in an element's form */
+
+.muse-pick + .muse-pick {
+  margin-top: 0.75rem;
+}
+
+.muse-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0.4rem;
+}
+
+.muse-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.25rem 0.15rem 0.65rem;
+  border-radius: 999px;
+  background: var(--muse-accent-soft);
+  color: #f3e5f5;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.muse-chip-off {
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muse-accent-strong);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.muse-chip-off:hover,
+.muse-chip-off:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.muse-t-filter {
+  max-width: 24rem;
+  margin-bottom: 0.75rem;
+}

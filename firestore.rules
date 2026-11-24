@@ -442,13 +442,23 @@ service cloud.firestore {
         return /databases/$(database)/documents/muse_projects/$(projectId)/elements/$(id);
       }
 
-      // An element's line in the index: its type, name, aliases and primary.
+      function museClassDoc(id) {
+        return /databases/$(database)/documents/muse_projects/$(projectId)/classes/$(id);
+      }
+
+      function museClassificationDoc(id) {
+        return /databases/$(database)/documents/muse_projects/$(projectId)/classifications/$(id);
+      }
+
+      // An element's line in the index: its type, name, aliases, primary and
+      // classes (M-201, D3: so a list filtered by a class needs the index only).
       function museEntry(el) {
         return {
           'type': el.type,
           'name': el.name,
           'aliases': el.aliases,
-          'primary': el.get('primary', null)
+          'primary': el.get('primary', null),
+          'classes': el.get('classes', [])
         };
       }
 
@@ -487,7 +497,7 @@ service cloud.firestore {
                   || (data.primary is string && data.primary.size() <= 200
                       && 'images' in data && data.primary in data.images))
               && (!('mentions' in data) || (data.mentions is list && data.mentions.size() <= 1000))
-              && (!('classes' in data) || data.classes is list)
+              && (!('classes' in data) || (data.classes is list && data.classes.size() <= 50))
               && (data.type == 'character'
                   || (!('appearance' in data) && !('residence' in data)))
               && (!('appearance' in data) || museText(data.appearance, 50000))
@@ -569,8 +579,89 @@ service cloud.firestore {
                       && request.resource.data.updatedAt == request.time;
       }
 
+      // Classifications (M-201; CL1, CL3, D6): trees of classes for one element
+      // type, each marked single or multiple (the page and the connector keep
+      // an element to one class of a single one). The type never changes.
+      // See public/apps/muse/js/classes.js.
+      match /classifications/{classificationId} {
+        function validClassification() {
+          let data = request.resource.data;
+          let required = ['type', 'name', 'multiple', 'createdAt', 'updatedAt'];
+          return data.keys().hasAll(required)
+              && data.keys().hasOnly(required)
+              && data.type in ['character', 'faction', 'location', 'object', 'concept']
+              && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+              && data.multiple is bool;
+        }
+
+        allow read, delete: if museProjectOwner();
+        allow create: if museProjectOwner()
+                      && validClassification()
+                      && request.resource.data.createdAt == request.time
+                      && request.resource.data.updatedAt == request.time;
+        allow update: if museProjectOwner()
+                      && validClassification()
+                      && request.resource.data.type == resource.data.type
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.updatedAt == request.time;
+      }
+
+      // Classes (M-201; CL2, CL4, CL6, CL8): a node of a classification's
+      // tree, with a page of its own (a description, photos as an element's,
+      // what its description links to). A class at the top has no parent and
+      // depth 1; one beneath is one level below its parent, in the same
+      // classification, at most 6 deep. Where it sits never changes: a class
+      // is renamed, never moved. Deleting one while anything is in it is
+      // refused by the page and the connector (CL7), as rules can't count.
+      match /classes/{classId} {
+        function validClass() {
+          let data = request.resource.data;
+          let required = ['classification', 'parent', 'depth', 'name', 'description', 'images',
+                          'primary', 'mentions', 'createdAt', 'updatedAt'];
+          return data.keys().hasAll(required)
+              && data.keys().hasOnly(required)
+              && data.classification is string && data.classification.size() > 0
+              && data.classification.size() <= 128
+              && data.depth is int && data.depth >= 1 && data.depth <= 6
+              && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+              && museText(data.description, 200000)
+              && data.images is list && data.images.size() <= 200
+              && (data.primary == null
+                  || (data.primary is string && data.primary in data.images))
+              && data.mentions is list && data.mentions.size() <= 1000;
+        }
+
+        // Where it sits: under its classification at the top, or one level
+        // below a parent of the same classification.
+        function validPlace() {
+          let data = request.resource.data;
+          return existsAfter(museClassificationDoc(data.classification))
+              && (data.parent == null
+                  ? data.depth == 1
+                  : (data.parent is string && data.parent != classId
+                     && existsAfter(museClassDoc(data.parent))
+                     && getAfter(museClassDoc(data.parent)).data.classification
+                        == data.classification
+                     && getAfter(museClassDoc(data.parent)).data.depth + 1 == data.depth));
+        }
+
+        allow read, delete: if museProjectOwner();
+        allow create: if museProjectOwner()
+                      && validClass()
+                      && validPlace()
+                      && request.resource.data.createdAt == request.time
+                      && request.resource.data.updatedAt == request.time;
+        allow update: if museProjectOwner()
+                      && validClass()
+                      && request.resource.data.classification == resource.data.classification
+                      && request.resource.data.parent == resource.data.parent
+                      && request.resource.data.depth == resource.data.depth
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.updatedAt == request.time;
+      }
+
       // Versions (M-105; VR1, VR2): a copy of the project or of one of its
-      // elements as it was, kept when the owner saves one by hand (`page`).
+      // elements or classes (M-201, D9) as it was, kept when the owner saves one by hand (`page`).
       // Those kept before an MCP write (`mcp`) come through the Admin SDK, so
       // the page may not claim to be one. Once kept a version is never
       // changed, only deleted: by its owner, or as the 51st is saved (the
@@ -587,7 +678,8 @@ service cloud.firestore {
               && parts[0] == 'muse_projects'
               && parts[1] == projectId
               && (parts.size() == 2
-                  || (parts.size() == 4 && parts[2] == 'elements' && parts[3].size() > 0))
+                  || (parts.size() == 4 && parts[2] in ['elements', 'classes']
+                      && parts[3].size() > 0))
               && data.snapshot is map
               && (data.name == null
                   || (data.name is string && data.name.size() > 0 && data.name.size() <= 100))
@@ -601,7 +693,7 @@ service cloud.firestore {
       }
 
       // Its other subcollections get their rules, with their shapes, in the
-      // stories that add them (M-200 onwards). Until then the default deny
+      // stories that add them (M-202 onwards). Until then the default deny
       // below covers them.
     }
 

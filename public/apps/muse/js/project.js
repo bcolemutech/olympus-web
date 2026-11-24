@@ -258,6 +258,7 @@
     // there (or isn't yours). Every view inside a project starts here.
     load: function (id) {
       state.index = null;
+      state.tree = null;
       state.matcher = null;
       return Muse.projects
         .get(id)
@@ -267,9 +268,12 @@
         .then(function (p) {
           state.project = p;
           if (!p) return false;
-          return Muse.elements.loadIndex(id).then(function () {
-            return true;
-          });
+          // Its index, and its classifications and classes (D4), once.
+          return Promise.all([Muse.elements.loadIndex(id), Muse.classStore.load(id)]).then(
+            function () {
+              return true;
+            }
+          );
         })
         .catch(function () {
           return false;
@@ -289,6 +293,7 @@
         Muse.say(Muse.$('muse-p-rename-done'), '');
         Muse.say(Muse.$('muse-p-rename-error'), '');
         draw();
+        Muse.classifications.show();
         return true;
       });
     },
