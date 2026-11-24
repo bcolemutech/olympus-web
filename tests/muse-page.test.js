@@ -10,7 +10,9 @@
  * reordered and removed, and a project's cover. Classifications (M-201 /
  * #914): a tree made on a project's home, an object classified as a
  * Longsword shown by its path, the Objects list filtered by Sword, and a
- * class's page.
+ * class's page. Schematics (M-202 / #915): a floor plan's points added by a
+ * tap and moved by a drag, a pin and its row lit together, zoom and pan, and
+ * a linked room's page opening the plan at its pin.
  *
  * It needs Playwright and its Chromium; where the browser is missing the
  * suite is skipped, with a note.
@@ -118,7 +120,10 @@ function stub({ apps, docs }) {
       get: () => Promise.resolve(snap(path)),
       set: (data, options) =>
         Promise.resolve(
-          store.set(path, options && options.merge ? merge(store.get(path), stamp(data)) : stamp(data))
+          store.set(
+            path,
+            options && options.merge ? merge(store.get(path), stamp(data)) : stamp(data)
+          )
         ),
       update: (data) => {
         if (!store.has(path)) return Promise.reject(new Error('No document to update'));
@@ -215,7 +220,11 @@ function stub({ apps, docs }) {
                       aliases: ['Old Brass'],
                       primary: null,
                       where: ['bio'],
-                      snippet: { in: 'bio', text, marks: [[text.indexOf('bells'), text.length - 1]] },
+                      snippet: {
+                        in: 'bio',
+                        text,
+                        marks: [[text.indexOf('bells'), text.length - 1]],
+                      },
                     },
                   ],
                 }
@@ -371,7 +380,12 @@ const PROJECTS = {
   },
   'muse_projects/p_court/index/0': {
     entries: {
-      el_peter: { type: 'character', name: 'King Peter', aliases: ['The Drowned King'], primary: null },
+      el_peter: {
+        type: 'character',
+        name: 'King Peter',
+        aliases: ['The Drowned King'],
+        primary: null,
+      },
       el_marta: { type: 'character', name: 'Marta', aliases: ['The Widow'], primary: null },
       el_sea: { type: 'location', name: 'The Sunken City', aliases: ['Old Brass'], primary: null },
     },
@@ -540,7 +554,7 @@ const PROJECTS = {
   },
 };
 
-async function open(options, { apps = ['muse'], hash = '' } = {}) {
+async function open(options, { apps = ['muse'], hash = '', extra = {} } = {}) {
   const context = await browser.newContext(options);
   const page = await context.newPage();
   const errors = [];
@@ -549,7 +563,7 @@ async function open(options, { apps = ['muse'], hash = '' } = {}) {
   await page.route('**/__/firebase/**', (route) =>
     route.fulfill({ contentType: 'text/javascript', body: '' })
   );
-  await page.addInitScript(stub, { apps, docs: PROJECTS });
+  await page.addInitScript(stub, { apps, docs: { ...PROJECTS, ...extra } });
   await page.goto(`${origin}/apps/muse/index.html${hash}`);
   return { context, page, errors };
 }
@@ -819,7 +833,9 @@ describe('elements (M-102)', () => {
     await page.fill('#muse-e-appearance-input', 'A crown of *barnacles*.');
     await page.fill('#muse-e-bio-input', '# The king\n\nHe rules the tides.');
     await page.click('#muse-e-bio-input-show');
-    await expect(page.locator('#muse-e-bio-input-preview h1').innerText()).resolves.toBe('The king');
+    await expect(page.locator('#muse-e-bio-input-preview h1').innerText()).resolves.toBe(
+      'The king'
+    );
     await page.click('#muse-e-save');
     await page.waitForSelector('#muse-e-read:not(.hidden)');
 
@@ -924,7 +940,9 @@ describe('elements (M-102)', () => {
       await page.click('#muse-t-new-btn');
       await page.waitForSelector('#muse-element:not(.hidden)');
       await expect(page.locator('#muse-e-type').innerText()).resolves.toMatch(/concept/i);
-      await expect(page.locator('#muse-e-residence-input, #muse-e-appearance-card:not(.hidden)').count()).resolves.toBe(0);
+      await expect(
+        page.locator('#muse-e-residence-input, #muse-e-appearance-card:not(.hidden)').count()
+      ).resolves.toBe(0);
       await page.click('#muse-e-back');
       await page.waitForSelector('#muse-type:not(.hidden)');
     }
@@ -1020,7 +1038,9 @@ describe('links, relationships and search (M-103)', () => {
     expect(call.data).toMatchObject({ projectId: 'p_court', query: 'bells' });
     const row = page.locator('.muse-s-row');
     await expect(row.locator('.muse-el-row-name').innerText()).resolves.toBe('The Sunken City');
-    await expect(row.locator('.muse-el-row-aliases').innerText()).resolves.toBe('Location · in bio');
+    await expect(row.locator('.muse-el-row-aliases').innerText()).resolves.toBe(
+      'Location · in bio'
+    );
     await expect(row.locator('mark').innerText()).resolves.toBe('bells');
     await expect(page.locator('#muse-s-status').innerText()).resolves.toBe('One element.');
     await expect(page.locator('#muse-s-back').innerText()).resolves.toMatch(/The Court/);
@@ -1061,7 +1081,9 @@ describe('links, relationships and search (M-103)', () => {
       /Search all text for “drowned”/
     );
     await expect(row.locator('.muse-suggest-name').innerText()).resolves.toBe('King Peter');
-    await expect(row.locator('.muse-suggest-alias').innerText()).resolves.toMatch(/The Drowned King/);
+    await expect(row.locator('.muse-suggest-alias').innerText()).resolves.toMatch(
+      /The Drowned King/
+    );
     await expect(inViewport(page, '.muse-suggest')).resolves.toBe(true);
 
     // Names too, and each keystroke narrows it.
@@ -1114,8 +1136,13 @@ describe('links, relationships and search (M-103)', () => {
       () => document.getElementById('muse-e-name').textContent === 'King Peter'
     );
     const bio = page.locator('#muse-e-bio');
-    await expect(bio.locator('a.muse-auto').allInnerTexts()).resolves.toEqual(['Marta', 'the widow']);
-    await expect(bio.locator('a.muse-auto').first().getAttribute('data-el')).resolves.toBe('el_marta');
+    await expect(bio.locator('a.muse-auto').allInnerTexts()).resolves.toEqual([
+      'Marta',
+      'the widow',
+    ]);
+    await expect(bio.locator('a.muse-auto').first().getAttribute('data-el')).resolves.toBe(
+      'el_marta'
+    );
     await expect(bio.locator('a:not(.muse-auto)').allInnerTexts()).resolves.toEqual(['Old Brass']);
     await expect(bio.innerText()).resolves.toMatch(/^King Peter rules/);
     // Nothing was stored for any of it.
@@ -1168,8 +1195,9 @@ describe('links, relationships and search (M-103)', () => {
 
     const marta = (await stored(page))['muse_projects/p_court/elements/el_marta'];
     expect(marta.mentions).toEqual(['el_peter', 'el_sea']);
-    await expect(page.locator('#muse-e-bio a.muse-el-link:not(.muse-auto)').allInnerTexts()).resolves
-      .toEqual(['King Peter', 'The Sunken City']);
+    await expect(
+      page.locator('#muse-e-bio a.muse-el-link:not(.muse-auto)').allInnerTexts()
+    ).resolves.toEqual(['King Peter', 'The Sunken City']);
 
     // The target lists where it is mentioned: Peter, and the sea (which
     // Peter's bio also links).
@@ -1205,97 +1233,106 @@ describe('links, relationships and search (M-103)', () => {
     ]);
   });
 
-  each('a relationship reads right from both sides, and is made, edited and removed', async (page) => {
-    await openCourt(page);
-    const rows = (selector = '.muse-rel') => page.locator(selector);
-    const text = async () =>
-      (await page.locator('.muse-rel').allInnerTexts()).map((t) =>
-        t.replace(/\s+/g, ' ').trim().toLowerCase()
+  each(
+    'a relationship reads right from both sides, and is made, edited and removed',
+    async (page) => {
+      await openCourt(page);
+      const rows = (selector = '.muse-rel') => page.locator(selector);
+      const text = async () =>
+        (await page.locator('.muse-rel').allInnerTexts()).map((t) =>
+          t.replace(/\s+/g, ' ').trim().toLowerCase()
+        );
+
+      // The one that's there, from each end.
+      await openElement(page, 'el_marta', 'Marta');
+      await expect(text()).resolves.toEqual(['mother of king peter edit remove raised him alone.']);
+      await openElement(page, 'el_peter', 'King Peter');
+      await expect(text()).resolves.toEqual(['son of marta edit remove raised him alone.']);
+
+      // Made from Peter's page: the other end is found by typing its alias.
+      await page.click('#muse-r-add');
+      await page.click('#muse-r-save');
+      await expect(page.locator('#muse-r-form-error').innerText()).resolves.toMatch(/Pick/);
+      await page.fill('#muse-r-other', 'old br');
+      await expect(
+        page.locator('#muse-r-form .muse-suggest-name').allInnerTexts()
+      ).resolves.toEqual(['The Sunken City']);
+      await page.click('#muse-r-form .muse-suggest-row');
+      await expect(page.locator('#muse-r-other').inputValue()).resolves.toBe('The Sunken City');
+      await expect(page.locator('#muse-r-kind-label').textContent()).resolves.toBe(
+        'King Peter is…'
       );
+      await expect(page.locator('#muse-r-back-label').textContent()).resolves.toMatch(
+        /^The Sunken City is/
+      );
+      // Words are needed.
+      await page.click('#muse-r-save');
+      await expect(page.locator('#muse-r-form-error').innerText()).resolves.toMatch(
+        /what the first is/
+      );
+      await page.fill('#muse-r-kind', 'ruler of');
+      await page.fill('#muse-r-back', 'ruled by');
+      await page.fill('#muse-r-desc', 'Since the flood.');
+      await page.click('#muse-r-save');
+      await page.waitForSelector('#muse-r-form.hidden', { state: 'attached' });
+      await expect(text()).resolves.toEqual([
+        'son of marta edit remove raised him alone.',
+        'ruler of the sunken city edit remove since the flood.',
+      ]);
+      const made = Object.entries(await stored(page)).filter(([p]) =>
+        /relationships\/auto/.test(p)
+      );
+      expect(made.map(([, d]) => d)).toEqual([
+        {
+          a: 'el_peter',
+          b: 'el_sea',
+          aToB: 'ruler of',
+          bToA: 'ruled by',
+          description: 'Since the flood.',
+          ends: ['el_peter', 'el_sea'],
+        },
+      ]);
 
-    // The one that's there, from each end.
-    await openElement(page, 'el_marta', 'Marta');
-    await expect(text()).resolves.toEqual(['mother of king peter edit remove raised him alone.']);
-    await openElement(page, 'el_peter', 'King Peter');
-    await expect(text()).resolves.toEqual(['son of marta edit remove raised him alone.']);
+      // Read from the other end, and edited from it: the sea's words are bToA.
+      await openElement(page, 'el_sea', 'The Sunken City');
+      await expect(text()).resolves.toEqual(['ruled by king peter edit remove since the flood.']);
+      await page.click('.muse-rel .muse-btn:has-text("Edit")');
+      await expect(page.locator('#muse-r-other').isVisible()).resolves.toBe(false);
+      await expect(page.locator('#muse-r-fixed').innerText()).resolves.toBe('King Peter');
+      await expect(page.locator('#muse-r-kind').inputValue()).resolves.toBe('ruled by');
+      await expect(page.locator('#muse-r-back').inputValue()).resolves.toBe('ruler of');
+      await page.fill('#muse-r-kind', 'governed by');
+      await page.fill('#muse-r-back', '');
+      await page.click('#muse-r-save');
+      await page.waitForSelector('#muse-r-form.hidden', { state: 'attached' });
+      await expect(text()).resolves.toEqual([
+        'governed by king peter edit remove since the flood.',
+      ]);
+      const edited = Object.entries(await stored(page)).filter(([p]) =>
+        /relationships\/auto/.test(p)
+      )[0][1];
+      // Blank on the other side means the same words from both.
+      expect([edited.a, edited.b, edited.aToB, edited.bToA]).toEqual([
+        'el_peter',
+        'el_sea',
+        'governed by',
+        'governed by',
+      ]);
 
-    // Made from Peter's page: the other end is found by typing its alias.
-    await page.click('#muse-r-add');
-    await page.click('#muse-r-save');
-    await expect(page.locator('#muse-r-form-error').innerText()).resolves.toMatch(/Pick/);
-    await page.fill('#muse-r-other', 'old br');
-    await expect(page.locator('#muse-r-form .muse-suggest-name').allInnerTexts()).resolves.toEqual([
-      'The Sunken City',
-    ]);
-    await page.click('#muse-r-form .muse-suggest-row');
-    await expect(page.locator('#muse-r-other').inputValue()).resolves.toBe('The Sunken City');
-    await expect(page.locator('#muse-r-kind-label').textContent()).resolves.toBe('King Peter is…');
-    await expect(page.locator('#muse-r-back-label').textContent()).resolves.toMatch(
-      /^The Sunken City is/
-    );
-    // Words are needed.
-    await page.click('#muse-r-save');
-    await expect(page.locator('#muse-r-form-error').innerText()).resolves.toMatch(/what the first is/);
-    await page.fill('#muse-r-kind', 'ruler of');
-    await page.fill('#muse-r-back', 'ruled by');
-    await page.fill('#muse-r-desc', 'Since the flood.');
-    await page.click('#muse-r-save');
-    await page.waitForSelector('#muse-r-form.hidden', { state: 'attached' });
-    await expect(text()).resolves.toEqual([
-      'son of marta edit remove raised him alone.',
-      'ruler of the sunken city edit remove since the flood.',
-    ]);
-    const made = Object.entries(await stored(page)).filter(([p]) =>
-      /relationships\/auto/.test(p)
-    );
-    expect(made.map(([, d]) => d)).toEqual([
-      {
-        a: 'el_peter',
-        b: 'el_sea',
-        aToB: 'ruler of',
-        bToA: 'ruled by',
-        description: 'Since the flood.',
-        ends: ['el_peter', 'el_sea'],
-      },
-    ]);
-
-    // Read from the other end, and edited from it: the sea's words are bToA.
-    await openElement(page, 'el_sea', 'The Sunken City');
-    await expect(text()).resolves.toEqual(['ruled by king peter edit remove since the flood.']);
-    await page.click('.muse-rel .muse-btn:has-text("Edit")');
-    await expect(page.locator('#muse-r-other').isVisible()).resolves.toBe(false);
-    await expect(page.locator('#muse-r-fixed').innerText()).resolves.toBe('King Peter');
-    await expect(page.locator('#muse-r-kind').inputValue()).resolves.toBe('ruled by');
-    await expect(page.locator('#muse-r-back').inputValue()).resolves.toBe('ruler of');
-    await page.fill('#muse-r-kind', 'governed by');
-    await page.fill('#muse-r-back', '');
-    await page.click('#muse-r-save');
-    await page.waitForSelector('#muse-r-form.hidden', { state: 'attached' });
-    await expect(text()).resolves.toEqual(['governed by king peter edit remove since the flood.']);
-    const edited = Object.entries(await stored(page)).filter(([p]) =>
-      /relationships\/auto/.test(p)
-    )[0][1];
-    // Blank on the other side means the same words from both.
-    expect([edited.a, edited.b, edited.aToB, edited.bToA]).toEqual([
-      'el_peter',
-      'el_sea',
-      'governed by',
-      'governed by',
-    ]);
-
-    // Removed only once confirmed, and from both ends.
-    await page.click('.muse-rel .muse-btn:has-text("Remove")');
-    await page.click('.muse-rel-confirm .muse-btn-quiet');
-    await expect(rows().count()).resolves.toBe(1);
-    await page.click('.muse-rel .muse-btn:has-text("Remove")');
-    await page.click('.muse-rel-confirm .muse-btn-danger');
-    await page.waitForSelector('#muse-r-empty:not(.hidden)');
-    await expect(
-      Object.keys(await stored(page)).filter((p) => /relationships\/auto/.test(p))
-    ).toEqual([]);
-    await openElement(page, 'el_peter', 'King Peter');
-    await expect(text()).resolves.toEqual(['son of marta edit remove raised him alone.']);
-  });
+      // Removed only once confirmed, and from both ends.
+      await page.click('.muse-rel .muse-btn:has-text("Remove")');
+      await page.click('.muse-rel-confirm .muse-btn-quiet');
+      await expect(rows().count()).resolves.toBe(1);
+      await page.click('.muse-rel .muse-btn:has-text("Remove")');
+      await page.click('.muse-rel-confirm .muse-btn-danger');
+      await page.waitForSelector('#muse-r-empty:not(.hidden)');
+      await expect(
+        Object.keys(await stored(page)).filter((p) => /relationships\/auto/.test(p))
+      ).toEqual([]);
+      await openElement(page, 'el_peter', 'King Peter');
+      await expect(text()).resolves.toEqual(['son of marta edit remove raised him alone.']);
+    }
+  );
 
   each('a relationship to a retired element is kept, and can still be removed', async (page) => {
     await openCourt(page);
@@ -1332,7 +1369,8 @@ describe('photo libraries (M-104)', () => {
   const peter = async (page) => (await stored(page))['muse_projects/p_court/elements/el_peter'];
   const line = async (page) =>
     (await stored(page))['muse_projects/p_court/index/0'].entries.el_peter;
-  const shown = (page) => page.locator('.muse-photo').evaluateAll((n) => n.map((x) => x.dataset.id));
+  const shown = (page) =>
+    page.locator('.muse-photo').evaluateAll((n) => n.map((x) => x.dataset.id));
   const tile = (id, what) => `.muse-photo[data-id="${id}"] .muse-photo-${what}`;
   const settled = (page, count) =>
     page.waitForFunction((n) => document.querySelectorAll('.muse-photo').length === n, count);
@@ -1371,7 +1409,9 @@ describe('photo libraries (M-104)', () => {
       await page.setInputFiles('#muse-e-photo-file', [png('a.png'), png('b.png')]);
       await settled(page, 3);
       await expect(shown(page)).resolves.toEqual(['img_up1', 'img_up2', 'img_up3']);
-      const titles = ['img_up2', 'img_up3'].map(async (id) => (await stored(page))['studio_images/' + id].title);
+      const titles = ['img_up2', 'img_up3'].map(
+        async (id) => (await stored(page))['studio_images/' + id].title
+      );
       await expect(Promise.all(titles)).resolves.toEqual(['King Peter: a', 'King Peter: b']);
       expect((await peter(page)).primary).toBe('img_up1');
       await expect(page.locator('#muse-e-photos-count').innerText()).resolves.toBe('3');
@@ -1512,7 +1552,9 @@ describe('versions (M-105)', () => {
       .filter(([p]) => p.startsWith(`muse_projects/${projectId}/versions/`))
       .map(([p, d]) => ({ id: p.split('/').pop(), ...d }));
   const saved = (page) =>
-    page.waitForSelector('#muse-e-versions-box-done:not(.hidden), #muse-p-versions-box-done:not(.hidden)');
+    page.waitForSelector(
+      '#muse-e-versions-box-done:not(.hidden), #muse-p-versions-box-done:not(.hidden)'
+    );
 
   each('an element’s version is kept, named or not, as it is stored', async (page) => {
     await openPeter(page);
@@ -1713,9 +1755,9 @@ describe('classifications (M-201)', () => {
       await page.selectOption('#muse-cf-new-type', 'object');
       await page.click('#muse-cf-new-btn');
       await page.waitForSelector('.muse-cf');
-      await expect(page.locator('.muse-cf-type[data-type="object"] h3').textContent()).resolves.toBe(
-        'Objects'
-      );
+      await expect(
+        page.locator('.muse-cf-type[data-type="object"] h3').textContent()
+      ).resolves.toBe('Objects');
 
       // Three levels: Sword › Double Edge › Longsword, and an Axe beside it.
       await addInline(page, '.muse-cf-add', 'Sword');
@@ -1992,6 +2034,434 @@ describe('classifications (M-201)', () => {
   });
 });
 
+describe('schematics (M-202)', () => {
+  // A plan's picture, 400 × 300, as the studio would serve it.
+  const PLAN =
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#456"/></svg>'
+    );
+  const el = (type, name, extra = {}) => ({
+    type,
+    name,
+    aliases: [],
+    bio: '',
+    fields: {},
+    images: [],
+    primary: null,
+    mentions: [],
+    classes: [],
+    shard: '0',
+    retired: false,
+    ...(type === 'character' ? { appearance: '', residence: null } : {}),
+    ...extra,
+  });
+  const KEEP = {
+    'studio_images/img_plan': {
+      id: 'img_plan',
+      title: 'Ground floor',
+      kind: 'schematic',
+      labels: [],
+      link: PLAN,
+      createdAt: 60,
+    },
+    'muse_projects/p_keep': {
+      owner: 'ann',
+      title: 'The Keep',
+      short: '',
+      summary: '',
+      cover: null,
+      updatedAt: 1,
+    },
+    'muse_projects/p_keep/elements/el_keep': el('location', 'The Keep'),
+    'muse_projects/p_keep/elements/el_hall': el('location', 'Great Hall'),
+    'muse_projects/p_keep/elements/el_chest': el('object', 'Iron chest'),
+    'muse_projects/p_keep/elements/el_guard': el('character', 'Captain Vey'),
+    'muse_projects/p_keep/index/0': {
+      entries: {
+        el_keep: { type: 'location', name: 'The Keep', aliases: [], primary: null, classes: [] },
+        el_hall: { type: 'location', name: 'Great Hall', aliases: [], primary: null, classes: [] },
+        el_chest: { type: 'object', name: 'Iron chest', aliases: [], primary: null, classes: [] },
+        el_guard: {
+          type: 'character',
+          name: 'Captain Vey',
+          aliases: [],
+          primary: null,
+          classes: [],
+        },
+      },
+      last: 'el_guard',
+    },
+    // The Keep's two floors; the first marks the Great Hall at its door.
+    'muse_projects/p_keep/schematics/sc_ground': {
+      element: 'el_keep',
+      name: 'Ground floor',
+      order: 0,
+      image: 'img_plan',
+      points: [
+        {
+          id: 'p1',
+          name: 'Hall door',
+          description: 'Oak, **iron-bound**.',
+          x: 0.25,
+          y: 0.5,
+          link: 'el_hall',
+        },
+        { id: 'p2', name: 'Stair', description: '', x: 0.8, y: 0.2, link: null },
+      ],
+      links: ['el_hall'],
+    },
+    'muse_projects/p_keep/schematics/sc_upper': {
+      element: 'el_keep',
+      name: 'Upper floor',
+      order: 1,
+      image: 'img_plan',
+      points: [],
+      links: [],
+    },
+  };
+  const goTo = async (page, hash, ready) => {
+    await page.waitForFunction(() => window.Muse && window.Muse.state && window.Muse.state.uid);
+    await page.evaluate((h) => (window.location.hash = h), hash);
+    await page.waitForSelector(ready);
+  };
+  const shown = (id) => `#${id}:not(.hidden)`;
+  const schematic = async (page, id) =>
+    page.evaluate((path) => window.__store.get(path), `muse_projects/p_keep/schematics/${id}`);
+  const lit = (page, selector) =>
+    page
+      .locator(selector)
+      .evaluateAll((nodes) => nodes.map((n) => n.classList.contains('muse-sc-on')));
+  const withKeep = async (screen, hash, fn) => {
+    if (!browser) {
+      console.warn("Skipped a schematics check: Playwright's Chromium isn't installed here.");
+      return;
+    }
+    const { context, page, errors } = await open(screen, { hash, extra: KEEP });
+    try {
+      await page.waitForSelector(shown('muse-element'));
+      await fn(page);
+      expect(errors).toEqual([]);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    } finally {
+      await context.close();
+    }
+  };
+  // A pin's centre, and the canvas's box, in page pixels.
+  const centre = async (page, selector) => {
+    await page.locator('#muse-sc-stage').scrollIntoViewIfNeeded();
+    const box = await page.locator(selector).boundingBox();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const near = (value, expected) => expect(Math.abs(value - expected)).toBeLessThan(0.02);
+
+  test('a location lists its schematics in order, with numbered pins and its points beside them', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      await expect(page.locator('.muse-sc-tab').allInnerTexts()).resolves.toEqual([
+        'Ground floor',
+        'Upper floor',
+      ]);
+      await expect(page.locator('.muse-sc-pin').allInnerTexts()).resolves.toEqual(['1', '2']);
+      await expect(page.locator('.muse-sc-row-name').allInnerTexts()).resolves.toEqual([
+        'Hall door',
+        'Stair',
+      ]);
+      // A pin sits at its fraction of the picture.
+      const pin = await centre(page, '.muse-sc-pin[data-id="p1"]');
+      const canvas = await page.locator('#muse-sc-canvas').boundingBox();
+      near((pin.x - canvas.x) / canvas.width, 0.25);
+      near((pin.y - canvas.y) / canvas.height, 0.5);
+      // The picture is the studio's.
+      await page.waitForFunction(() =>
+        document.querySelector('.muse-sc-img').getAttribute('src').startsWith('data:image/svg')
+      );
+      // The second schematic has none yet.
+      await page.click('.muse-sc-tab[data-id="sc_upper"]');
+      await expect(page.locator('.muse-sc-pin').count()).resolves.toBe(0);
+      await expect(page.locator('#muse-sc-points .muse-sc-row').count()).resolves.toBe(0);
+    });
+  });
+
+  test('a character has none, an object may', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_guard', async (page) => {
+      await expect(page.locator('#muse-e-schematics').isVisible()).resolves.toBe(false);
+      await goTo(page, '#/p/p_keep/e/el_chest', shown('muse-e-schematics'));
+      await expect(page.locator('#muse-e-sc-empty').isVisible()).resolves.toBe(true);
+    });
+  });
+
+  test('picking a pin lights its row, and picking a row lights its pin (SC6)', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      await page.click('.muse-sc-row[data-id="p2"]');
+      await expect(lit(page, '.muse-sc-pin')).resolves.toEqual([false, true]);
+      await expect(lit(page, '.muse-sc-row')).resolves.toEqual([false, true]);
+      // A pin picked with a tap: no drag.
+      const pin = await centre(page, '.muse-sc-pin[data-id="p1"]');
+      await page.mouse.click(pin.x, pin.y);
+      await expect(lit(page, '.muse-sc-pin')).resolves.toEqual([true, false]);
+      await expect(lit(page, '.muse-sc-row')).resolves.toEqual([true, false]);
+      // Its card: name, Markdown description, and its link to the Great Hall.
+      await expect(page.locator('.muse-sc-card-name').innerText()).resolves.toContain('Hall door');
+      await expect(page.locator('.muse-sc-text strong').innerText()).resolves.toBe('iron-bound');
+      await page.click('.muse-sc-link-a');
+      await page.waitForFunction(() => window.location.hash === '#/p/p_keep/e/el_hall');
+      await page.waitForSelector('#muse-e-name');
+      await expect(page.locator('#muse-e-name').innerText()).resolves.toBe('Great Hall');
+    });
+  });
+
+  test('"Add point", then a tap places one at the right fraction; it is named and linked (SC7)', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      await page.click('#muse-sc-add-point');
+      await expect(page.locator('#muse-sc-hint').isVisible()).resolves.toBe(true);
+      await page.locator('#muse-sc-stage').scrollIntoViewIfNeeded();
+      const canvas = await page.locator('#muse-sc-canvas').boundingBox();
+      await page.mouse.click(canvas.x + canvas.width * 0.6, canvas.y + canvas.height * 0.4);
+      await page.waitForSelector('#muse-sc-p-name');
+      const stored = await schematic(page, 'sc_ground');
+      expect(stored.points).toHaveLength(3);
+      expect(stored.points[2]).toMatchObject({ id: 'p3', name: 'Point 3', link: null });
+      near(stored.points[2].x, 0.6);
+      near(stored.points[2].y, 0.4);
+      // Its card opens to name it, and its new pin and row are lit.
+      await expect(lit(page, '.muse-sc-pin')).resolves.toEqual([false, false, true]);
+      await page.fill('#muse-sc-p-name', 'Armoury');
+      await page.fill('#muse-sc-p-description', 'Racks of spears.');
+      await page.selectOption('#muse-sc-p-link', 'el_chest');
+      await page.click('#muse-sc-p-save');
+      await page.waitForFunction(() =>
+        document.querySelector('.muse-sc-card-name')?.textContent.includes('Armoury')
+      );
+      const saved = await schematic(page, 'sc_ground');
+      expect(saved.points[2]).toMatchObject({
+        name: 'Armoury',
+        description: 'Racks of spears.',
+        link: 'el_chest',
+      });
+      expect(saved.links).toEqual(['el_hall', 'el_chest']);
+      // The mode ended with the tap: a second tap places nothing.
+      await page.mouse.click(canvas.x + 20, canvas.y + 20);
+      expect((await schematic(page, 'sc_ground')).points).toHaveLength(3);
+    });
+  });
+
+  test('dragging a pin moves it, by mouse (SC7); a drag is not a pick', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      const from = await centre(page, '.muse-sc-pin[data-id="p2"]');
+      const canvas = await page.locator('#muse-sc-canvas').boundingBox();
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x - 60, from.y + 30, { steps: 6 });
+      await page.mouse.move(canvas.x + canvas.width * 0.3, canvas.y + canvas.height * 0.7, {
+        steps: 6,
+      });
+      await page.mouse.up();
+      await page.waitForFunction(
+        () => window.__store.get('muse_projects/p_keep/schematics/sc_ground').points[1].x < 0.5
+      );
+      const moved = (await schematic(page, 'sc_ground')).points[1];
+      near(moved.x, 0.3);
+      near(moved.y, 0.7);
+      expect(moved.name).toBe('Stair');
+      // The other point stayed; the pin and its row are lit together.
+      expect((await schematic(page, 'sc_ground')).points[0]).toMatchObject({ x: 0.25, y: 0.5 });
+      await expect(lit(page, '.muse-sc-pin')).resolves.toEqual([false, true]);
+      await expect(lit(page, '.muse-sc-row')).resolves.toEqual([false, true]);
+    });
+  });
+
+  test('the picture zooms by + and −, by the wheel, and pans; a drag after zooming lands true (SC8)', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      const scale = () => page.locator('#muse-sc-stage').getAttribute('data-scale');
+      await expect(scale()).resolves.toBe('1');
+      await page.click('#muse-sc-in');
+      await page.click('#muse-sc-in');
+      await expect(scale()).resolves.toBe('1.56');
+      await page.click('#muse-sc-out');
+      await expect(scale()).resolves.toBe('1.25');
+      await page.click('#muse-sc-fit');
+      await expect(scale()).resolves.toBe('1');
+      // The wheel zooms about the pointer.
+      await page.locator('#muse-sc-stage').scrollIntoViewIfNeeded();
+      const stage = await page.locator('#muse-sc-stage').boundingBox();
+      await page.mouse.move(stage.x + stage.width / 2, stage.y + stage.height / 2);
+      await page.mouse.wheel(0, -300);
+      await expect(page.locator('#muse-sc-stage').getAttribute('data-scale')).resolves.not.toBe(
+        '1'
+      );
+      // Zoomed in, a pin keeps its size, and dragging the background pans.
+      for (let i = 0; i < 4; i++) await page.click('#muse-sc-in');
+      const before = await page.locator('#muse-sc-canvas').boundingBox();
+      await page.mouse.move(stage.x + 30, stage.y + 30);
+      await page.mouse.down();
+      await page.mouse.move(stage.x + 90, stage.y + 70, { steps: 5 });
+      await page.mouse.up();
+      const after = await page.locator('#muse-sc-canvas').boundingBox();
+      expect(Math.abs(after.x - before.x) + Math.abs(after.y - before.y)).toBeGreaterThan(20);
+      // The picture still covers the stage.
+      expect(after.x).toBeLessThanOrEqual(stage.x + 1);
+      expect(after.x + after.width).toBeGreaterThanOrEqual(stage.x + stage.width - 1);
+      const pin = await page.locator('.muse-sc-pin[data-id="p1"]').boundingBox();
+      expect(Math.round(pin.width)).toBe(30);
+      // Adding a point while zoomed lands where it was tapped.
+      await page.click('#muse-sc-add-point');
+      const view = await page.locator('#muse-sc-stage').boundingBox();
+      const tap = { x: view.x + view.width * 0.5, y: view.y + view.height * 0.5 };
+      const canvas = await page.locator('#muse-sc-canvas').boundingBox();
+      await page.mouse.click(tap.x, tap.y);
+      await page.waitForSelector('#muse-sc-p-name');
+      const placed = (await schematic(page, 'sc_ground')).points[2];
+      near(placed.x, (tap.x - canvas.x) / canvas.width);
+      near(placed.y, (tap.y - canvas.y) / canvas.height);
+    });
+  });
+
+  test('where a point links, that element’s page says so, and opens the plan at its pin (SC9)', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_hall', async (page) => {
+      await page.waitForSelector(shown('muse-e-marked'));
+      await expect(page.locator('.muse-mk-row .muse-el-row-name').allInnerTexts()).resolves.toEqual(
+        ['On The Keep’s Ground floor']
+      );
+      await expect(page.locator('.muse-mk-row .muse-el-row-aliases').innerText()).resolves.toBe(
+        '#1 Hall door'
+      );
+      // The Hall has no schematics of its own to draw there (it is a location, so
+      // it may have some), and the Keep's plan opens at its pin.
+      await page.click('.muse-mk-row');
+      await page.waitForFunction(() => window.location.hash.includes('/m/sc_ground/p1'));
+      await page.waitForSelector('.muse-sc-pin');
+      await expect(page.locator('#muse-e-name').innerText()).resolves.toBe('The Keep');
+      await expect(lit(page, '.muse-sc-pin')).resolves.toEqual([true, false]);
+      await expect(page.locator('#muse-sc-stage').getAttribute('data-scale')).resolves.toBe('2.5');
+      // The chest, linked from nowhere yet, says nothing.
+      await goTo(page, '#/p/p_keep/e/el_chest', shown('muse-e-schematics'));
+      await expect(page.locator('#muse-e-marked').isVisible()).resolves.toBe(false);
+    });
+  });
+
+  test('a schematic is added with a picture, renamed, reordered and removed (SC4)', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      await page.fill('#muse-e-sc-new-name', 'Cellars');
+      await page.click('#muse-e-sc-photo-pick');
+      await page.click('#muse-e-sc-photo-grid .muse-picker-tile[data-id="img_plan"]');
+      await page.waitForFunction(() => document.querySelectorAll('.muse-sc-tab').length === 3);
+      await expect(page.locator('.muse-sc-tab').allInnerTexts()).resolves.toEqual([
+        'Ground floor',
+        'Upper floor',
+        'Cellars',
+      ]);
+      // The new one is open, empty, and last.
+      await expect(page.locator('#muse-sc-name').inputValue()).resolves.toBe('Cellars');
+      await expect(page.locator('#muse-sc-later').isDisabled()).resolves.toBe(true);
+      const made = await page.evaluate(() =>
+        [...window.__store.entries()].filter(([p]) => /p_keep\/schematics\/auto/.test(p))
+      );
+      expect(made).toHaveLength(1);
+      expect(made[0][1]).toMatchObject({
+        element: 'el_keep',
+        name: 'Cellars',
+        order: 2,
+        image: 'img_plan',
+        points: [],
+        links: [],
+      });
+      // Earlier, then rename.
+      await page.click('#muse-sc-earlier');
+      await page.waitForFunction(
+        () => document.querySelectorAll('.muse-sc-tab')[1].textContent === 'Cellars'
+      );
+      await page.fill('#muse-sc-name', 'Cellars and crypt');
+      await page.click('#muse-sc-rename');
+      await page.waitForFunction(
+        () => document.querySelectorAll('.muse-sc-tab')[1].textContent === 'Cellars and crypt'
+      );
+      expect((await schematic(page, 'sc_upper')).order).toBe(2);
+      // Removing asks first, and leaves the others.
+      await page.click('#muse-sc-remove');
+      await page.click('#muse-sc-remove-no');
+      await expect(page.locator('.muse-sc-tab').count()).resolves.toBe(3);
+      await page.click('#muse-sc-remove');
+      await page.click('#muse-sc-remove-yes');
+      await page.waitForFunction(() => document.querySelectorAll('.muse-sc-tab').length === 2);
+      await expect(page.locator('.muse-sc-tab').allInnerTexts()).resolves.toEqual([
+        'Ground floor',
+        'Upper floor',
+      ]);
+    });
+  });
+
+  test('a point is removed, and a version of the schematic is kept by hand (D9)', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      await page.fill('#muse-e-sc-versions-box-name', 'Before the siege');
+      await page.click('#muse-e-sc-versions-box-save');
+      await page.waitForSelector('#muse-e-sc-versions-box-done:not(.hidden)');
+      const versions = await page.evaluate(() =>
+        [...window.__store.entries()]
+          .filter(([p]) => /p_keep\/versions\//.test(p))
+          .map(([, d]) => d)
+      );
+      expect(versions).toHaveLength(1);
+      expect(versions[0]).toMatchObject({
+        of: 'muse_projects/p_keep/schematics/sc_ground',
+        name: 'Before the siege',
+        by: 'page',
+      });
+      expect(versions[0].snapshot.points).toHaveLength(2);
+      // Removing the linked point takes the link off the schematic.
+      await page.click('.muse-sc-row[data-id="p1"]');
+      await page.click('#muse-sc-remove-point');
+      await page.waitForFunction(
+        () => window.__store.get('muse_projects/p_keep/schematics/sc_ground').points.length === 1
+      );
+      const left = await schematic(page, 'sc_ground');
+      expect(left.points.map((p) => p.id)).toEqual(['p2']);
+      expect(left.links).toEqual([]);
+      await expect(page.locator('.muse-sc-pin').allInnerTexts()).resolves.toEqual(['1']);
+    });
+  });
+
+  test('a phone puts the points below the picture, and pinch zooms it', async () => {
+    await withKeep(PHONE, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      const stage = await page.locator('#muse-sc-stage').boundingBox();
+      const list = await page.locator('#muse-sc-points').boundingBox();
+      expect(list.y).toBeGreaterThan(stage.y + stage.height - 1);
+      // A pinch, as two touches spreading, through the page's own handlers.
+      await page.evaluate(() => {
+        const stageNode = document.getElementById('muse-sc-stage');
+        const rect = stageNode.getBoundingClientRect();
+        const at = (dx) => ({
+          clientX: rect.left + rect.width / 2 + dx,
+          clientY: rect.top + rect.height / 2,
+          pointerType: 'touch',
+          bubbles: true,
+        });
+        const fire = (type, id, dx) =>
+          stageNode.dispatchEvent(new PointerEvent(type, { ...at(dx), pointerId: id }));
+        fire('pointerdown', 1, -20);
+        fire('pointerdown', 2, 20);
+        fire('pointermove', 1, -60);
+        fire('pointermove', 2, 60);
+        fire('pointerup', 1, -60);
+        fire('pointerup', 2, 60);
+      });
+      await expect(
+        page.locator('#muse-sc-stage').getAttribute('data-scale').then(Number)
+      ).resolves.toBeGreaterThan(2);
+    });
+  });
+});
+
 describe('around the edges', () => {
   const run = (name, options, setup, fn) =>
     test(name, async () => {
@@ -2061,9 +2531,9 @@ describe('around the edges', () => {
       await page.waitForSelector('#muse-e-relationships:not(.hidden) .muse-rel');
       await expect(page.locator('.muse-rel').innerText()).resolves.toMatch(/son of\s+Marta/);
       await page.fill('#muse-search-box', 'widow');
-      await expect(
-        page.locator('.muse-suggest-row:not(.muse-suggest-more)').count()
-      ).resolves.toBe(1);
+      await expect(page.locator('.muse-suggest-row:not(.muse-suggest-more)').count()).resolves.toBe(
+        1
+      );
       await page.click('#muse-r-add');
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth

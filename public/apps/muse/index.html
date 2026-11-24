@@ -361,6 +361,41 @@
           <div id="muse-e-photos-add"></div>
         </section>
 
+        <!-- Schematics (SC3–SC9; M-202): a location's or object's pictures with numbered points -->
+        <section
+          class="muse-card hidden"
+          id="muse-e-schematics"
+          aria-labelledby="muse-e-sc-heading"
+        >
+          <div class="muse-bar">
+            <h2 class="muse-heading" id="muse-e-sc-heading">
+              Schematics <span class="muse-count" id="muse-e-sc-count"></span>
+            </h2>
+          </div>
+          <p class="muse-error hidden" id="muse-e-sc-error" role="alert"></p>
+          <div class="muse-sc-tabs hidden" id="muse-e-sc-tabs"></div>
+          <p class="muse-empty" id="muse-e-sc-empty">
+            No schematics yet. Add a floor plan, a map of the decks, a machine’s parts.
+          </p>
+          <div class="hidden" id="muse-e-sc-open"></div>
+          <div class="muse-sc-new">
+            <label class="muse-label" for="muse-e-sc-new-name">Add a schematic</label>
+            <input
+              class="muse-input"
+              id="muse-e-sc-new-name"
+              maxlength="100"
+              autocomplete="off"
+              placeholder="Name it (“Ground floor”), then upload or pick its picture"
+            />
+            <div id="muse-e-sc-add"></div>
+          </div>
+        </section>
+
+        <section class="muse-card muse-versions hidden" id="muse-e-sc-versions">
+          <h2 class="muse-heading">Schematic versions</h2>
+          <div id="muse-e-sc-versions-box"></div>
+        </section>
+
         <!-- Reading -->
         <div id="muse-e-read">
           <section class="muse-card" id="muse-e-facts-card">
@@ -445,6 +480,12 @@
           <h2 class="muse-heading">Mentioned in</h2>
           <div class="muse-el-list" id="muse-m-list"></div>
           <p class="muse-hint hidden" id="muse-m-more">Showing the first 100; there may be more.</p>
+        </section>
+
+        <!-- Where it is marked on a schematic (SC9; M-202) -->
+        <section class="muse-card hidden" id="muse-e-marked">
+          <h2 class="muse-heading">Marked on</h2>
+          <div class="muse-el-list" id="muse-mk-list"></div>
         </section>
 
         <!-- Versions (VR1; M-105) -->
@@ -631,12 +672,14 @@
     <script src="/apps/muse/js/fields.js"></script>
     <script src="/apps/muse/js/links.js"></script>
     <script src="/apps/muse/js/classes.js"></script>
+    <script src="/apps/muse/js/schematics.js"></script>
     <script src="/apps/muse/js/model.js"></script>
     <script src="/apps/muse/js/versions.js"></script>
     <script src="/apps/muse/js/photos.js"></script>
     <script src="/apps/muse/js/projects.js"></script>
     <script src="/apps/muse/js/elements.js"></script>
     <script src="/apps/muse/js/class-store.js"></script>
+    <script src="/apps/muse/js/schematic-store.js"></script>
     <script src="/apps/muse/js/version-store.js"></script>
     <script src="/apps/muse/js/version-form.js"></script>
     <script src="/apps/muse/js/suggest.js"></script>
@@ -649,6 +692,7 @@
     <script src="/apps/muse/js/relationships.js"></script>
     <script src="/apps/muse/js/mentioned.js"></script>
     <script src="/apps/muse/js/gallery.js"></script>
+    <script src="/apps/muse/js/schematic-page.js"></script>
     <script src="/apps/muse/js/element.js"></script>
     <script src="/apps/muse/js/classifications.js"></script>
     <script src="/apps/muse/js/class-page.js"></script>

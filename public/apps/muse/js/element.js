@@ -12,7 +12,8 @@
   // drawn by ./gallery.js (M-104). "Save version" (./version-form.js, M-105)
   // keeps a copy of it as stored. Its classes (M-201, CL9) show as a row of
   // paths, each step a link, and its form picks them by classification, at
-  // any level (CL2).
+  // any level (CL2). A location's or object's schematics, and where an element
+  // is marked on one, are drawn by ./schematic-page.js (M-202).
 
   var Muse = window.Muse;
   var state = Muse.state;
@@ -526,7 +527,7 @@
     },
 
     // Opens an element by id; false when it or its project isn't there.
-    show: function (projectId, id) {
+    show: function (projectId, id, opts) {
       Muse.say(Muse.$('muse-e-error'), '');
       return Muse.project
         .load(projectId)
@@ -545,7 +546,12 @@
           draw();
           Muse.gallery.show();
           // Its relationships, and the elements that link to it.
-          return Promise.all([Muse.relationships.show(), Muse.mentioned.show()]).then(function () {
+          // Its schematics and where it is marked (M-202).
+          return Promise.all([
+            Muse.relationships.show(),
+            Muse.mentioned.show(),
+            Muse.schematicPage.show(opts),
+          ]).then(function () {
             return true;
           });
         });
