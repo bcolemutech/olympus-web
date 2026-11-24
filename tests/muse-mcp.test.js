@@ -232,6 +232,7 @@ describe('elements', () => {
       name: 'King Peter',
       aliases: ['The Drowned King'],
       primary: IMG,
+      classes: [],
     });
     // Its page, as Claude reads it.
     expect(peter).toMatchObject({

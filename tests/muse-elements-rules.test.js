@@ -138,6 +138,7 @@ describe('the owner, through the page’s plans', () => {
       name: 'concept',
       aliases: [],
       primary: null,
+      classes: [],
       shard: '0',
     });
   });

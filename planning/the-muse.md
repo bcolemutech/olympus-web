@@ -1,6 +1,6 @@
 # The Muse — Design Document v0.1
 
-**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200's details decided 2026-11-24** (§3, "M-200 details"), its sub-issues M-201 to M-203 filed as #914–#916 (§7), M-201 and M-202 buildable at once. The later epics' sub-issues are filed when each is next.
+**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200's details decided 2026-11-24** (§3, "M-200 details"), its sub-issues M-201 to M-203 filed as #914–#916 (§7), M-201 and M-202 buildable at once; M-201 built 2026-11-24. The later epics' sub-issues are filed when each is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** The Muse, its own app and phase (milestone #27), prefix **M-**, label `muse`. From idea #873.
 **Depends on:** the Image Studio (L-700, [`the-image-studio.md`](./the-image-studio.md)), the MCP host (MCP Initiative 1, [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)).
@@ -296,6 +296,17 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 | M-201 | Classifications          | #914  | M-100       | Opus   |
 | M-202 | Schematics               | #915  | M-100       | Sonnet |
 | M-203 | Testing the epic by hand | #916  | M-201–M-202 | Sonnet |
+
+**Decided while building M-201 (2026-11-24):**
+
+- **The plans are `classes.js`,** the same file in `public/apps/muse/js/` and `functions/muse/` (a test fails if they differ), as `model.js` is. It builds the tree (D4), its paths and what lies beneath a class, and the writes for classifications, classes and an element's classes; `model.js` checks an element's `classes` with it.
+- **Every save of a live element writes its index line** (D3), changed or not. The rules compare the line's `classes`, so a line from before M-201 is brought up to date by the element's next save, and until then it reads as none.
+- **The classification's name is the first step of a path:** "Weapons › Sword › Double Edge › Longsword". Lists and pickers, already inside a classification, show the path from its top class ("Sword › Double Edge › Longsword").
+- **Names are unique where they'd be confused:** a classification's among its type's, a class's among its siblings, whatever the case. A class can then be named by its path, or the end of it, as well as by its id (the connector's tools; "Sword › Longsword", with › > or / between), or by a name only one class has.
+- **A class added takes the place of one in its line:** classifying a Sword as a Longsword replaces Sword (and a Longsword made a Sword again replaces Longsword), even in a multiple classification, so an element never holds a class and its own ancestor. In a single classification it replaces the other class too (D6).
+- **The element's form picks classes,** per classification, from a list indented by depth, with each picked one shown as a chip to take off: no dragging, so it works on an iPad. The list on each type's page filters by one class at a time, kept while you come back to it.
+- **Making a classification single reads its type's retired elements** as well as the index, so one brought back never holds two classes of it. Deleting a class asks whether any element, live or retired, holds it (one query).
+- **Classes are found by full-text search** (name and description, `type: 'class'`) unless only element types are asked for, and `lookup` reads a class in full when a name best names one.
 
 ### Later epics (planned; filed when next)
 

@@ -172,7 +172,7 @@ A world bible and manuscript app of its own, in the spirit of Campfire, from ide
 | Epic                                            | State                                                                 |
 | ----------------------------------------------- | --------------------------------------------------------------------- |
 | **M-100 Projects and elements** (#888)          | ✅ Shipped 2026-11-23                                                 |
-| **M-200 Classifications and schematics** (#895) | 🚧 Next: details decided 2026-11-24; M-201 to M-203 filed (#914–#916) |
+| **M-200 Classifications and schematics** (#895) | 🚧 M-201 built 2026-11-24; next M-202 (#915), then M-203 by hand |
 | **M-300 The timeline** (#896)                   | 📋 Planned; stories filed when next                                   |
 | **M-400 Versions and export** (#897)            | 📋 Planned; stories filed when next                                   |
 | **M-500 Manuscripts** (#898)                    | 📋 Planned; stories filed when next                                   |

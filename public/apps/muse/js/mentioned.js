@@ -23,11 +23,21 @@
           if (state.element.id !== id) return;
           found.elements.forEach(function (e) {
             var a = Muse.el('a', 'muse-el-row');
+            // A class's description may link here too (M-201).
             a.href =
-              '#/p/' + encodeURIComponent(state.project.id) + '/e/' + encodeURIComponent(e.id);
+              '#/p/' +
+              encodeURIComponent(state.project.id) +
+              (e.type === 'class' ? '/c/' : '/e/') +
+              encodeURIComponent(e.id);
             a.dataset.id = e.id;
             a.appendChild(Muse.el('span', 'muse-el-row-name', e.name));
-            a.appendChild(Muse.el('span', 'muse-el-row-aliases', Muse.TYPE[e.type].one));
+            a.appendChild(
+              Muse.el(
+                'span',
+                'muse-el-row-aliases',
+                e.type === 'class' ? 'Class' : Muse.TYPE[e.type].one
+              )
+            );
             list.appendChild(a);
           });
           Muse.show(Muse.$('muse-m-more'), found.more);

@@ -13,14 +13,16 @@
   //     mentions   the ids its bio and appearance link to ([Name](muse:el/id)),
   //                worked out on every save (M-103, ./links.js)
   //     appearance (Markdown), residence (a location's id): characters only
+  //     classes    the ids of its classes, at most 50 (M-201, ./classes.js)
   //     shard      the index document that lists it (fixed)
   //     retired    a retired element keeps its page but leaves the index
   //     createdAt, updatedAt
   //
   //   muse_projects/{p}/index/{shard}
-  //     entries    { <id>: { type, name, aliases, primary } }, at most
+  //     entries    { <id>: { type, name, aliases, primary, classes } }, at most
   //                SHARD_SIZE; the page loads every shard once, for lists,
-  //                search and links
+  //                search and links; `classes` (M-201, D3) lets a list be
+  //                filtered by a class from the index alone
   //     last       the id this write changed: the rules check that entry
   //                against the element written in the same batch, and the
   //                element against its entry, so neither moves alone
@@ -45,6 +47,11 @@
     typeof window !== 'undefined' && window.Muse && window.Muse.links
       ? window.Muse.links
       : require('./links.js');
+
+  var classes =
+    typeof window !== 'undefined' && window.Muse && window.Muse.classes
+      ? window.Muse.classes
+      : require('./classes.js');
 
   var TYPES = fields.TYPES;
   var LIMITS = {
@@ -71,11 +78,8 @@
       name: element.name,
       aliases: (element.aliases || []).slice(),
       primary: element.primary === undefined ? null : element.primary,
+      classes: (element.classes || []).slice(),
     };
-  }
-
-  function sameEntry(a, b) {
-    return JSON.stringify(a) === JSON.stringify(b);
   }
 
   // A name and its aliases, trimmed; aliases without repeats or the name.
@@ -117,12 +121,15 @@
   }
 
   // Checks what an element of `type` is to hold. `input` may have any of
-  // name, aliases, bio, fields (raw, by key), appearance and residence;
-  // what it leaves out is taken from `context.current` (the element now).
+  // name, aliases, bio, fields (raw, by key), appearance, residence and
+  // classes; what it leaves out is taken from `context.current` (the element
+  // now), except classes, which are checked only when given.
   // `context`:
   //   defs              the type's field definitions (the project's)
   //   elementType(id)   the type of a live element, or null
   //   current           the element as stored, when changing one
+  //   tree              the project's classifications (./classes.js), when
+  //                     classes are given
   // Gives back { value } (the element's own fields, cleaned) or { error }.
   function checkElement(type, input, context) {
     context = context || {};
@@ -170,6 +177,17 @@
       out.residence = residence || null;
     } else if (has('appearance') || has('residence')) {
       return { error: 'Only characters have an appearance and a residence.' };
+    }
+    // Its classes (M-201), at any level (CL2).
+    if (has('classes')) {
+      var held = classes.checkClasses(
+        context.tree || classes.emptyTree(),
+        type,
+        input.classes,
+        current.classes
+      );
+      if (held.error) return held;
+      out.classes = held.value;
     }
     // The elements its texts link to (EL6), kept in step with every save.
     out.mentions = links.mentionsOf(out.bio, out.appearance || '');
@@ -336,6 +354,7 @@
       images: [],
       primary: null,
       mentions: checked.mentions || [],
+      classes: checked.classes || [],
       shard: shard,
       retired: false,
       createdAt: NOW,
@@ -352,8 +371,9 @@
   }
 
   // A change to an element: `current` is it as stored (with its id), and
-  // `checked` checkElement's value. The index is written only when its line
-  // changes, and never for a retired element.
+  // `checked` checkElement's value. Every save of a live element writes its
+  // index line, so a line written before M-201 gains its classes (D3); a
+  // retired element has none.
   function planUpdate(projectId, current, checked) {
     var data = { updatedAt: NOW };
     Object.keys(checked).forEach(function (key) {
@@ -362,11 +382,8 @@
     var writes = [
       { op: 'update', path: projectPath(projectId) + '/elements/' + current.id, data: data },
     ];
-    var before = entryOf(current);
     var after = entryOf(Object.assign({}, current, checked));
-    if (!current.retired && !sameEntry(before, after)) {
-      writes.push(indexWrite(projectId, current.shard, current.id, after));
-    }
+    if (!current.retired) writes.push(indexWrite(projectId, current.shard, current.id, after));
     return writes;
   }
 

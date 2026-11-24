@@ -5,8 +5,8 @@
   // Markdown"; M-101 / #889), used for every text in the app. It is safe by
   // construction: the source is HTML-escaped first, and only the tags written
   // here are made, so no markup or script in a text reaches the page. Links
-  // keep http(s), mailto and the Muse's own `muse:el/<id>` (an element);
-  // anything else is shown as plain text.
+  // keep http(s), mailto and the Muse's own `muse:el/<id>` (an element) and
+  // `muse:cl/<id>` (a class, M-201); anything else is shown as plain text.
   //
   //   Muse.markdown.render(text, options) → an HTML string
   //   Muse.markdown.into(node, text, options) → fills a node, marked for styling
@@ -33,7 +33,7 @@
       .replace(/&amp;/g, '&');
   }
 
-  var ELEMENT_LINK = /^muse:el\/([A-Za-z0-9_-]{1,128})$/;
+  var ELEMENT_LINK = /^muse:(el|cl)\/([A-Za-z0-9_-]{1,128})$/;
   var SAFE_URL = /^(https?:\/\/|mailto:)[^\s<>"']+$/i;
 
   // A link's tag, or null when its target isn't one we allow.
@@ -41,7 +41,15 @@
     var url = unescape(rawUrl);
     var el = ELEMENT_LINK.exec(url);
     if (el) {
-      return '<a class="muse-el-link" href="#" data-el="' + escape(el[1]) + '">' + label + '</a>';
+      return (
+        '<a class="muse-el-link" href="#" data-' +
+        el[1] +
+        '="' +
+        escape(el[2]) +
+        '">' +
+        label +
+        '</a>'
+      );
     }
     if (SAFE_URL.test(url)) {
       return (

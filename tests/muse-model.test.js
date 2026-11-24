@@ -348,9 +348,11 @@ describe('the index kept in step', () => {
     change('el_peter', { aliases: ['The Drowned King'] });
     expect(index.entries.el_peter.aliases).toEqual(['The Drowned King']);
 
-    // A bio alone leaves the index alone.
+    // A bio alone writes the line too, unchanged (D3: every save writes it,
+    // so a line from before M-201 gains its classes).
     writes = change('el_peter', { bio: 'A king under the sea.' });
-    expect(writes.map((w) => w.op)).toEqual(['update']);
+    expect(writes.map((w) => w.op)).toEqual(['update', 'merge']);
+    expect(writes[1].data.entries.el_peter).toEqual(model.entryOf(elementOf(store, 'el_peter')));
 
     // Retired: out of the index, kept in its collection.
     run(model.planRetire(P, elementOf(store, 'el_peter')));
@@ -454,7 +456,7 @@ describe('an element’s photos', () => {
     expect(model.checkPhotos({ images: many.slice(0, 200) }).error).toBeUndefined();
   });
 
-  test('a change of primary writes the index line; moving the order does not', () => {
+  test('every change writes the index line, with the primary', () => {
     const current = {
       id: 'el_x',
       type: 'faction',
@@ -466,7 +468,10 @@ describe('an element’s photos', () => {
       primary: 'a',
     };
     const moved = model.planUpdate('p1', current, model.checkPhotos(model.movePhoto(current, 'b', -1)).value);
-    expect(moved.map((w) => w.path)).toEqual(['muse_projects/p1/elements/el_x']);
+    expect(moved.map((w) => w.path)).toEqual([
+      'muse_projects/p1/elements/el_x',
+      'muse_projects/p1/index/0',
+    ]);
     const primary = model.planUpdate('p1', current, model.checkPhotos(model.primaryPhoto(current, 'b')).value);
     expect(primary.map((w) => w.path)).toEqual([
       'muse_projects/p1/elements/el_x',

@@ -37,13 +37,19 @@
     list.textContent = '';
     found.results.forEach(function (result) {
       var a = Muse.el('a', 'muse-el-row muse-s-row');
-      a.href = projectHash() + '/e/' + encodeURIComponent(result.id);
+      // A class is found by its name and description too (M-201).
+      var isClass = result.type === 'class';
+      a.href = projectHash() + (isClass ? '/c/' : '/e/') + encodeURIComponent(result.id);
       a.dataset.id = result.id;
       a.appendChild(Muse.el('span', 'muse-el-row-name', result.name));
-      var type = Muse.TYPE[result.type] ? Muse.TYPE[result.type].one : result.type;
+      var type = isClass
+        ? 'Class'
+        : Muse.TYPE[result.type]
+          ? Muse.TYPE[result.type].one
+          : result.type;
       var where = (result.where || [])
         .map(function (w) {
-          return WHERE[w] || w;
+          return isClass && w === 'bio' ? 'description' : WHERE[w] || w;
         })
         .join(', ');
       a.appendChild(Muse.el('span', 'muse-el-row-aliases', type + ' · in ' + where));

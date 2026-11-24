@@ -3,7 +3,7 @@
 const { z } = require('zod');
 const { PRIMARY_ORIGIN } = require('../../config');
 const { studioTools, relay } = require('../cartographer/studio-tools');
-const { createMuseStore, studioImages } = require('../../../muse/store');
+const { createMuseStore, studioImages, MuseError } = require('../../../muse/store');
 const { plainText } = require('../../../muse/search');
 const fields = require('../../../muse/fields');
 const model = require('../../../muse/model');
@@ -12,7 +12,8 @@ const links = require('../../../muse/links');
 // The Muse's MCP connector (planning/the-muse.md §3 MC1, MC2, EL5, MS5, §5
 // M-100; M-106 / #894). Mounted at /mcp/muse and gated by the `muse` claim
 // (scope mcp:muse), it does what the Muse's page does — projects, custom
-// fields, elements, photos, relationships, versions — plus an outline, full
+// fields, elements, photos, relationships, versions, classifications and
+// classes (M-201 / #914) — plus an outline, full
 // text search and lookups across a bible, with the image studio's tools
 // (functions/mcp/apps/cartographer/studio-tools.js, without worlds) so Claude
 // can fill a project and illustrate it.
@@ -34,6 +35,19 @@ const elementId = z
   .string()
   .regex(ID, 'an element id, from list_elements or find_elements')
   .describe('The element, from list_elements, find_elements or lookup.');
+const CLASS = z
+  .string()
+  .min(1)
+  .max(600)
+  .describe(
+    'A class: its id, or its path ("Weapons › Sword › Longsword", or the end of it, ' +
+      '"Sword › Longsword", with › > or / between), or a name only one class has.'
+  );
+const CLASSIFICATION = z
+  .string()
+  .min(1)
+  .max(200)
+  .describe('A classification: its id (list_classifications), or a name only one has.');
 const imageId = z
   .string()
   .regex(/^[A-Za-z0-9_-]{1,200}$/, 'a studio image id, like img_0123456789abcdef')
@@ -47,8 +61,8 @@ const ALIASES = z
   .max(model.LIMITS.aliases)
   .describe('Other names it goes by. Searched as its name is.');
 const MARKDOWN_NOTE =
-  'Markdown. Link another element as [Its Name](muse:el/<its id>): it then lists this one ' +
-  'under “mentioned in”.';
+  'Markdown. Link another element as [Its Name](muse:el/<its id>), or a class as ' +
+  '[Its Name](muse:cl/<its id>): it then lists this one under “mentioned in”.';
 const VALUE = z.union([
   z.string().max(fields.LIMITS.text),
   z.number(),
@@ -90,9 +104,17 @@ function labelOf(title) {
   return label || 'muse';
 }
 
-const pageOf = (pid, eid) =>
+const pageOf = (pid, eid, kind = 'e') =>
   `${PRIMARY_ORIGIN}/apps/muse/#/p/${encodeURIComponent(pid)}` +
-  (eid ? `/e/${encodeURIComponent(eid)}` : '');
+  (eid ? `/${kind}/${encodeURIComponent(eid)}` : '');
+
+// What a photo tool acts on: an element, or a class (`classId`), not both.
+function photoTarget(args) {
+  if (!args.elementId === !args.classId) {
+    throw new MuseError('invalid-argument', 'Give an elementId or a classId, one of them.');
+  }
+  return args.classId ? { classId: args.classId } : args.elementId;
+}
 
 // The studio's tools, without worlds, and studio_generate able to draw an element.
 function museStudioTools({ studio, store }) {
@@ -140,6 +162,12 @@ function museStudioTools({ studio, store }) {
 function museApp({ store, studio }) {
   const run = (fn) => (ctx, args) => relay(() => fn(ctx, args));
   const withPage = (pid, element) => ({ ...element, page: pageOf(pid, element.id) });
+  const classPage = (pid, cls) => ({ ...cls, page: pageOf(pid, cls.id, 'c') });
+  // A photo tool's result: the element or the class it changed.
+  const photoResult = (pid, done) =>
+    done.class
+      ? { class: classPage(pid, done.class), version: done.version }
+      : { element: withPage(pid, done.element), version: done.version };
 
   return {
     tools: [
@@ -239,11 +267,15 @@ function museApp({ store, studio }) {
         name: 'list_elements',
         title: 'List elements',
         description:
-          'A project’s elements by name: each one’s id, type, name, aliases and primary image. ' +
-          'Narrow by type; retired: true lists the retired ones instead.',
+          'A project’s elements by name: each one’s id, type, name, aliases, primary image ' +
+          'and classes (as paths). Narrow by type, or by a class (with everything beneath it: ' +
+          '"Sword" lists the Longswords); retired: true lists the retired ones instead.',
         inputSchema: {
           projectId,
           type: TYPE.optional(),
+          class: CLASS.optional().describe(
+            'Only elements in this class or beneath it (its id or path).'
+          ),
           retired: z.boolean().optional().describe('List retired elements instead.'),
         },
         annotations: readOnly,
@@ -258,25 +290,33 @@ function museApp({ store, studio }) {
         description:
           'Elements whose name or an alias matches, best first (an exact name, then one that ' +
           'starts with it, then a word that does, then any that holds it), as the page’s ' +
-          'search box finds them. `matched` is the alias that matched. For words in bios, use ' +
-          'search.',
+          'search box finds them. `matched` is the alias that matched. With `class`, only ' +
+          'elements in that class or beneath it ("Sword" finds a Longsword), and the query ' +
+          'may be left out. For words in bios, use search.',
         inputSchema: {
           projectId,
-          query: z.string().min(1).max(200),
+          query: z.string().max(200).optional().describe('A name or alias, or part of one.'),
+          class: CLASS.optional().describe('Only elements in this class or beneath it.'),
           types: z.array(z.enum(TYPES)).max(5).optional().describe('Only these types.'),
           limit: z.number().int().min(1).max(50).optional().describe('At most this many (10).'),
         },
         annotations: readOnly,
-        handler: run(async (ctx, args) => ({
-          elements: await store.findElements(ctx.uid, args.projectId, args.query, args),
-        })),
+        handler: run(async (ctx, args) => {
+          if (!args.query && !args.class) {
+            throw new MuseError('invalid-argument', 'Give a query, or a class to list.');
+          }
+          return {
+            elements: await store.findElements(ctx.uid, args.projectId, args.query, args),
+          };
+        }),
       },
       {
         name: 'get_element',
         title: 'Get an element',
         description:
           'One element in full: name, aliases, bio (Markdown), custom fields by label, a ' +
-          'character’s appearance and residence, its photos (studio images, with the primary), ' +
+          'character’s appearance and residence, its classes (as paths), its photos (studio ' +
+          'images, with the primary), ' +
           'its relationships as it sees them ("mother of Anne"), the elements it links to and ' +
           'those that link to it (mentioned in), and its page’s link.',
         inputSchema: { projectId, elementId },
@@ -292,7 +332,7 @@ function museApp({ store, studio }) {
           'Make a character, faction, location, object or concept: its name, and optionally ' +
           'aliases, a bio, custom field values, photos (studio images; the first is primary ' +
           'unless primary says) and, for a character, an appearance and a residence (a ' +
-          'location). ' +
+          'location), and classes (by id or path; see list_classifications). ' +
           MARKDOWN_NOTE +
           ' Relate it to others with set_relationship.',
         inputSchema: {
@@ -314,6 +354,11 @@ function museApp({ store, studio }) {
             .describe('A character’s home: a location’s id, or a name only it has.'),
           photos: z.array(imageId).max(model.LIMITS.images).optional().describe('Studio images.'),
           primary: imageId.optional().describe('Which of the photos is primary (the first).'),
+          classes: z
+            .array(CLASS)
+            .max(50)
+            .optional()
+            .describe('Its classes, at any level, by id or path.'),
         },
         annotations: { ...writes, idempotentHint: false },
         handler: run(async (ctx, { projectId: pid, ...input }) =>
@@ -369,64 +414,209 @@ function museApp({ store, studio }) {
       },
       {
         name: 'add_photos',
-        title: 'Add photos to an element',
+        title: 'Add photos to an element or a class',
         description:
-          'Add studio images to an element’s photos, after those it has. The first photo an ' +
-          'element gets is its primary, shown in lists; primary: true makes the first added ' +
-          'the primary. Make or find images with the studio tools (studio_generate, ' +
-          'studio_find, studio_import). A version is kept first.',
+          'Add studio images to an element’s photos (or a class’s, with classId), after those ' +
+          'it has. The first photo it gets is its primary, shown in lists; primary: true makes ' +
+          'the first added the primary. Make or find images with the studio tools ' +
+          '(studio_generate, studio_find, studio_import). A version is kept first.',
         inputSchema: {
           projectId,
-          elementId,
+          elementId: elementId.optional(),
+          classId: CLASS.optional().describe('A class instead of an element.'),
           imageIds: z.array(imageId).min(1).max(50),
           primary: z.boolean().optional().describe('Make the first image added the primary.'),
         },
         annotations: { ...writes, idempotentHint: true },
-        handler: run(async (ctx, args) => {
-          const done = await store.addPhotos(
-            ctx.uid,
+        handler: run(async (ctx, args) =>
+          photoResult(
             args.projectId,
-            args.elementId,
-            args.imageIds,
-            args
-          );
-          return { element: withPage(args.projectId, done.element), version: done.version };
-        }),
+            await store.addPhotos(ctx.uid, args.projectId, photoTarget(args), args.imageIds, args)
+          )
+        ),
       },
       {
         name: 'remove_photo',
-        title: 'Take a photo off an element',
+        title: 'Take a photo off an element or a class',
         description:
-          'Take an image off an element’s photos; it stays in the studio. If it was the ' +
-          'primary, the next takes its place. A version is kept first.',
-        inputSchema: { projectId, elementId, imageId },
+          'Take an image off an element’s photos (or a class’s, with classId); it stays in ' +
+          'the studio. If it was the primary, the next takes its place. A version is kept first.',
+        inputSchema: {
+          projectId,
+          elementId: elementId.optional(),
+          classId: CLASS.optional().describe('A class instead of an element.'),
+          imageId,
+        },
         annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-        handler: run(async (ctx, args) => {
-          const done = await store.removePhoto(
-            ctx.uid,
+        handler: run(async (ctx, args) =>
+          photoResult(
             args.projectId,
-            args.elementId,
-            args.imageId
-          );
-          return { element: withPage(args.projectId, done.element), version: done.version };
-        }),
+            await store.removePhoto(ctx.uid, args.projectId, photoTarget(args), args.imageId)
+          )
+        ),
       },
       {
         name: 'set_primary',
-        title: 'Choose an element’s primary photo',
+        title: 'Choose a primary photo',
         description:
-          'Make one of an element’s photos its primary, the one shown in lists and links. A ' +
-          'version is kept first.',
-        inputSchema: { projectId, elementId, imageId },
+          'Make one of an element’s photos (or a class’s, with classId) its primary, the one ' +
+          'shown in lists and links. A version is kept first.',
+        inputSchema: {
+          projectId,
+          elementId: elementId.optional(),
+          classId: CLASS.optional().describe('A class instead of an element.'),
+          imageId,
+        },
         annotations: { ...writes, idempotentHint: true },
-        handler: run(async (ctx, args) => {
-          const done = await store.setPrimary(
-            ctx.uid,
+        handler: run(async (ctx, args) =>
+          photoResult(
             args.projectId,
-            args.elementId,
-            args.imageId
-          );
-          return { element: withPage(args.projectId, done.element), version: done.version };
+            await store.setPrimary(ctx.uid, args.projectId, photoTarget(args), args.imageId)
+          )
+        ),
+      },
+
+      // ── Classifications and classes (M-201) ──
+      {
+        name: 'list_classifications',
+        title: 'List classifications',
+        description:
+          'A project’s classifications, by element type: trees of classes such as Weapons › ' +
+          'Sword › Double Edge › Longsword for objects. Each is single (an element holds one ' +
+          'of its classes) or multiple. Each class has its id, name, how many live elements ' +
+          'are in it (`in`) and in it or beneath it (`all`), and its subclasses.',
+        inputSchema: { projectId, type: TYPE.optional().describe('Only this type.') },
+        annotations: readOnly,
+        handler: run(async (ctx, args) => store.listClassifications(ctx.uid, args.projectId, args)),
+      },
+      {
+        name: 'get_class',
+        title: 'Get a class',
+        description:
+          'One class in full: its path, classification, description (Markdown), photos, ' +
+          'subclasses, the live elements in it and those beneath it, and what links to it.',
+        inputSchema: { projectId, classId: CLASS },
+        annotations: readOnly,
+        handler: run(async (ctx, args) =>
+          classPage(args.projectId, await store.getClass(ctx.uid, args.projectId, args.classId))
+        ),
+      },
+      {
+        name: 'create_classification',
+        title: 'Make a classification',
+        description:
+          'Make a classification for one element type (Weapons, Materials or Rarity for ' +
+          'objects): a tree of classes to sort its elements by. multiple: true lets an ' +
+          'element hold several of its classes; otherwise one, and a second replaces it. ' +
+          'Then add classes with create_class.',
+        inputSchema: {
+          projectId,
+          type: TYPE,
+          name: z.string().min(1).max(100).describe('Its name, unique among the type’s.'),
+          multiple: z.boolean().optional().describe('An element may hold several (false).'),
+        },
+        annotations: { ...writes, idempotentHint: false },
+        handler: run(async (ctx, { projectId: pid, ...input }) => ({
+          classification: await store.createClassification(ctx.uid, pid, input),
+        })),
+      },
+      {
+        name: 'update_classification',
+        title: 'Change a classification',
+        description:
+          'Rename a classification, or make it single or multiple. It can’t be made single ' +
+          'while an element holds two of its classes. Its type never changes.',
+        inputSchema: {
+          projectId,
+          classificationId: CLASSIFICATION,
+          name: z.string().min(1).max(100).optional(),
+          multiple: z.boolean().optional(),
+        },
+        annotations: { ...writes, idempotentHint: true },
+        handler: run(async (ctx, { projectId: pid, classificationId, ...input }) => ({
+          classification: await store.updateClassification(ctx.uid, pid, classificationId, input),
+        })),
+      },
+      {
+        name: 'delete_classification',
+        title: 'Delete a classification',
+        description: 'Delete a classification. Refused while it has classes: delete those first.',
+        inputSchema: { projectId, classificationId: CLASSIFICATION },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+        handler: run(async (ctx, args) =>
+          store.deleteClassification(ctx.uid, args.projectId, args.classificationId)
+        ),
+      },
+      {
+        name: 'create_class',
+        title: 'Make a class',
+        description:
+          'Make a class: at the top of a classification (give classificationId), or beneath ' +
+          'another class (give parent, by id or path), at most 6 levels deep. Its name is ' +
+          'unique among its siblings. A class stays where it is made: to restructure, make the ' +
+          'new class, move the elements (classify), and delete the empty one. ' +
+          MARKDOWN_NOTE.replace('Markdown.', 'Its description is Markdown.'),
+        inputSchema: {
+          projectId,
+          classificationId: CLASSIFICATION.optional(),
+          parent: CLASS.optional().describe('The class to put it beneath.'),
+          name: z.string().min(1).max(100),
+          description: z.string().max(200000).optional(),
+        },
+        annotations: { ...writes, idempotentHint: false },
+        handler: run(async (ctx, { projectId: pid, classificationId, ...input }) =>
+          classPage(
+            pid,
+            await store.createClass(ctx.uid, pid, { ...input, classification: classificationId })
+          )
+        ),
+      },
+      {
+        name: 'update_class',
+        title: 'Change a class',
+        description:
+          'Rename a class or replace its description (Markdown). It is never moved. A version ' +
+          'of it is kept first.',
+        inputSchema: {
+          projectId,
+          classId: CLASS,
+          name: z.string().min(1).max(100).optional(),
+          description: z.string().max(200000).optional(),
+        },
+        annotations: { ...writes, idempotentHint: true },
+        handler: run(async (ctx, { projectId: pid, classId, ...input }) => {
+          const done = await store.updateClass(ctx.uid, pid, classId, input);
+          return { class: classPage(pid, done.class), version: done.version };
+        }),
+      },
+      {
+        name: 'delete_class',
+        title: 'Delete a class',
+        description:
+          'Delete a class. Refused while anything is in it: a subclass, or an element (live ' +
+          'or retired).',
+        inputSchema: { projectId, classId: CLASS },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+        handler: run(async (ctx, args) => store.deleteClass(ctx.uid, args.projectId, args.classId)),
+      },
+      {
+        name: 'classify',
+        title: 'Classify an element',
+        description:
+          'Put an element in classes, or take it out, naming them by id or path. A class can ' +
+          'be at any level: "Sword" until it is decided it is a Longsword. A class added ' +
+          'replaces one in its own line (Sword, when Longsword is added), and in a single ' +
+          'classification the one it held. A version of the element is kept first.',
+        inputSchema: {
+          projectId,
+          elementId,
+          add: z.array(CLASS).max(50).optional().describe('Classes to put it in.'),
+          remove: z.array(CLASS).max(50).optional().describe('Classes to take it out of.'),
+        },
+        annotations: { ...writes, idempotentHint: true },
+        handler: run(async (ctx, { projectId: pid, elementId: eid, ...input }) => {
+          const done = await store.classify(ctx.uid, pid, eid, input);
+          return { element: withPage(pid, done.element), version: done.version };
         }),
       },
 
@@ -494,7 +684,8 @@ function museApp({ store, studio }) {
         title: 'Search a project’s text',
         description:
           'Search the names, aliases, bios, appearances and text fields of a project’s ' +
-          'elements. Every word must be found in an element; "words in quotes" are a phrase; ' +
+          'elements, and its classes’ names and descriptions (type "class", unless types is ' +
+          'given). Every word must be found in an element; "words in quotes" are a phrase; ' +
           'case and accents don’t matter. Each result says where it was found, with a snippet ' +
           '(marks are the matches, by character).',
         inputSchema: {
@@ -510,31 +701,40 @@ function museApp({ store, studio }) {
         name: 'lookup',
         title: 'What the bible says',
         description:
-          'What the bible says about a name: the element it best names (by name or alias) in ' +
-          'full, with its relationships and where it is mentioned, and the other elements the ' +
-          'name might mean.',
+          'What the bible says about a name: the element (or class) it best names, by name or ' +
+          'alias, in full, with its relationships (or its elements) and where it is mentioned, ' +
+          'and the others the name might mean.',
         inputSchema: { projectId, name: z.string().min(1).max(200) },
         annotations: readOnly,
         handler: run(async (ctx, args) => {
           const found = await store.lookup(ctx.uid, args.projectId, args.name);
-          return { ...found, element: withPage(args.projectId, found.element) };
+          return found.class
+            ? { ...found, class: classPage(args.projectId, found.class) }
+            : { ...found, element: withPage(args.projectId, found.element) };
         }),
       },
       {
         name: 'save_version',
         title: 'Keep a version',
         description:
-          'Keep a named version of an element (or, with no element, of the project) as it is ' +
+          'Keep a named version of an element, a class (classId) or, with neither, the ' +
+          'project, as it is ' +
           'now. Changes made here keep one by themselves; this is for a point worth naming ' +
           '("before the rewrite"). The last 50 of each are kept.',
         inputSchema: {
           projectId,
           elementId: elementId.optional(),
+          classId: CLASS.optional().describe('A class instead of an element.'),
           name: z.string().max(100).optional().describe('What to call it.'),
         },
         annotations: { ...writes, idempotentHint: false },
         handler: run(async (ctx, args) => ({
-          version: await store.saveVersion(ctx.uid, args.projectId, args.elementId, args.name),
+          version: await store.saveVersion(
+            ctx.uid,
+            args.projectId,
+            args.classId ? { classId: args.classId } : args.elementId,
+            args.name
+          ),
         })),
       },
 

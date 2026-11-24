@@ -3,11 +3,15 @@
 
   // A list of one type's elements (M-102 / #890), from the index, sorted by
   // name, with each one's aliases; and New, which makes one by its name and
-  // opens its page.
+  // opens its page. When the type has classifications (M-201, CL5, CL9), a
+  // filter keeps the elements in a class or beneath it, from the index alone
+  // (D3), and each row shows its own classes.
 
   var Muse = window.Muse;
   var state = Muse.state;
+  var C = Muse.classes;
   var type = null;
+  var filter = ''; // a class id, or none
 
   function projectHash() {
     return '#/p/' + encodeURIComponent(state.project.id);
@@ -36,6 +40,12 @@
     var box = Muse.$('muse-t-list');
     box.textContent = '';
     var items = Muse.elements.listOf(type);
+    if (filter && state.tree.classes[filter]) {
+      var members = C.membersOf(state.tree, state.index.entries, filter);
+      items = items.filter(function (entry) {
+        return members.indexOf(entry.id) !== -1;
+      });
+    }
     items.forEach(function (entry) {
       var a = Muse.el('a', 'muse-el-row');
       a.href = projectHash() + '/e/' + encodeURIComponent(entry.id);
@@ -45,9 +55,56 @@
       if (entry.aliases.length) {
         a.appendChild(Muse.el('span', 'muse-el-row-aliases', entry.aliases.join(' · ')));
       }
+      var classes = (entry.classes || []).filter(function (id) {
+        return state.tree.classes[id];
+      });
+      if (classes.length) {
+        a.appendChild(
+          Muse.el(
+            'span',
+            'muse-el-row-classes',
+            classes
+              .map(function (id) {
+                return C.pathText(state.tree, id, true);
+              })
+              .join(' · ')
+          )
+        );
+      }
       box.appendChild(a);
     });
-    Muse.say(Muse.$('muse-t-empty'), items.length ? '' : 'No ' + t.name.toLowerCase() + ' yet.');
+    Muse.say(
+      Muse.$('muse-t-empty'),
+      items.length
+        ? ''
+        : filter
+          ? 'No ' + t.name.toLowerCase() + ' in ' + C.pathText(state.tree, filter) + '.'
+          : 'No ' + t.name.toLowerCase() + ' yet.'
+    );
+  }
+
+  // The class filter: every class of the type's classifications, indented,
+  // grouped by classification. Hidden when the type has none.
+  function drawFilter() {
+    var select = Muse.$('muse-t-filter');
+    select.textContent = '';
+    var all = Muse.el('option', '', 'All ' + Muse.TYPE[type].name.toLowerCase());
+    all.value = '';
+    select.appendChild(all);
+    var mine = C.classificationsOf(state.tree, type);
+    mine.forEach(function (cf) {
+      var group = Muse.el('optgroup');
+      group.label = cf.name;
+      C.flatten(state.tree, cf.id).forEach(function (c) {
+        var option = Muse.el('option', '', new Array(c.depth).join('— ') + c.name);
+        option.value = c.id;
+        group.appendChild(option);
+      });
+      if (group.children.length) select.appendChild(group);
+    });
+    if (filter && !state.tree.classes[filter]) filter = '';
+    select.value = filter;
+    Muse.show(Muse.$('muse-t-filter-wrap'), mine.length > 0);
   }
 
   function openForm(open) {
@@ -84,6 +141,10 @@
 
   Muse.typeList = {
     init: function () {
+      Muse.$('muse-t-filter').addEventListener('change', function (event) {
+        filter = event.target.value;
+        draw();
+      });
       Muse.$('muse-t-new-open').addEventListener('click', function () {
         openForm(true);
       });
@@ -97,6 +158,8 @@
     // Opens a project's list of a type; false when either isn't there.
     show: function (projectId, typeId) {
       if (!Muse.TYPE[typeId]) return Promise.resolve(false);
+      // The filter is kept while you come back to the same list.
+      if (type !== typeId) filter = '';
       type = typeId;
       Muse.say(Muse.$('muse-t-error'), '');
       return Muse.project.load(projectId).then(function (found) {
@@ -110,6 +173,7 @@
         document.title = t.name + ' — ' + state.project.title;
         Muse.$('muse-t-new-form').reset();
         openForm(false);
+        drawFilter();
         draw();
         return true;
       });
