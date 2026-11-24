@@ -1,6 +1,6 @@
 # The Muse — Design Document v0.1
 
-**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed; M-100's sub-issues M-101 to M-106 filed as #889–#894 (§7), all six built; M-107, the exit criterion checked by hand, filed as #906 and next; the later epics are filed with their stories planned here, and their sub-issues filed when each is next.
+**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200's details decided 2026-11-24** (§3, "M-200 details"), its sub-issues M-201 to M-203 filed as #914–#916 (§7), M-201 and M-202 buildable at once. The later epics' sub-issues are filed when each is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** The Muse, its own app and phase (milestone #27), prefix **M-**, label `muse`. From idea #873.
 **Depends on:** the Image Studio (L-700, [`the-image-studio.md`](./the-image-studio.md)), the MCP host (MCP Initiative 1, [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)).
@@ -94,6 +94,28 @@ Answered 2026-11-20.
 - **PL3** — Built alongside the Loom's work; it shares only the studio and the MCP host.
 - **PL4** — M-100's exit criterion as proposed (§6).
 
+### M-200 details (answered 2026-11-24)
+
+Every question as recommended except CL7 and CL8, where the answers keep a tree's shape fixed.
+
+- **CL3** — A type can have several classifications, each its own tree (Objects: Weapons, Materials, Rarity).
+- **CL4** — A tree is at most 6 levels deep.
+- **CL5** — Filtering a list by a class includes everything beneath it: "Sword" shows Longswords, and each row shows its own class.
+- **CL6** — A class has a page: a name, a Markdown description and photos; its path, its subclasses and the elements in it. It can be @-linked, is found by the instant search, and can have versions saved. No relationships or custom fields.
+- **CL7** — Deleting a class is refused while anything is in it: an element (live or retired) or a subclass. _(Departed from the recommended "move them up to its parent".)_
+- **CL8** — A class can be renamed, and not moved: it stays under the parent it was made under. Siblings are listed by name. _(Departed from the recommended "move and order with buttons".)_ To restructure, make the new class, move the elements to it, and delete the empty one.
+- **CL9** — Classifications are made and kept in a "Classifications" section on the project's home, grouped by type. Each type's list has a class filter. An element's page shows its classes as a row of paths, and its edit form picks them.
+- **CL10** — No starting trees are built in; Claude builds one over MCP when asked.
+- **SC3** — Locations and objects have schematics, as designed.
+- **SC4** — Several per element, in order, each one picture with its own points ("Ground floor", "Upper floor", "Cellars").
+- **SC5** — A point can link to any element: a room, a chest, the character who sleeps there.
+- **SC6** — Numbered pins, with the list of points beside the picture (below it on a phone); picking either lights up the other.
+- **SC7** — "Add point", then tap the picture; drag a pin to move it, by finger or mouse.
+- **SC8** — The picture zooms and pans: pinch, wheel, or + and − buttons.
+- **SC9** — A linked element's page says where it is marked ("On The Keep's Ground floor"), a link that opens the plan at its pin.
+- **PL5** — Three stories: M-201 classifications (Opus), M-202 schematics (Sonnet), each with its connector tools; M-203 testing the epic by hand, as M-107 was.
+- **PL6** — The exit criterion as proposed (§6).
+
 ### Decided in design (not asked)
 
 - **D1 — The page writes to Firestore itself,** under owner-only rules that check each document's shape, as the Symposium does.
@@ -101,6 +123,14 @@ Answered 2026-11-20.
   - MCP writes go through the Admin SDK, as the Cartographer's do.
   - This differs from the Loom and Cartographer, whose data only the server writes.
 - **D2 — One `elements` collection** with a `type`, not one collection per type. The common features (images, classifications, relationships, versions, search) are written once, and a project's index covers every type.
+- **D3 — An element's classes are on its index line** (M-201), so a list filtered by a class is instant, from the index alone. The rules' `museEntry` gains `classes`; an index line written before M-201 is rewritten on the element's next save, as every save writes its line.
+- **D4 — The page loads a project's classifications and classes once,** as it loads the index: they are few (at most 2,000 classes a project). A class's path, its subclasses and the instant search come from them, so no class needs its ancestors stored.
+- **D5 — A class has an id from the same space as elements,** so an element's `mentions` can hold both, and a class's "mentioned in" is the same query as an element's. A link to a class is written `[Longsword](muse:cl/<id>)`.
+- **D6 — The single-or-multiple mark is kept by the page and the connector,** not the rules: a single classification's second class replaces the first. A classification can't be made single while an element holds two of its classes.
+- **D7 — A schematic's points are in its own document,** an ordered list (the pin's number is its place), so a plan is one read and its version is one snapshot. Its `links` list the elements its points link to, for SC9's query.
+- **D8 — Schematic pictures are a studio kind of their own,** `schematic`, so the studio can find plans apart from scenes.
+- **D9 — Classes and schematics are versioned things** (§4), each with "Save version", and a version before each MCP write, as elements are.
+- **D10 — Claude places points by eye:** the connector's `get_schematic` returns the picture with its numbered pins and a light grid of tenths drawn on it, so Claude can place a point and check it.
 
 ---
 
@@ -116,17 +146,27 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
   - `images` (an ordered list of studio image ids) and `primary`;
   - `mentions`: the ids its text links to, so "mentioned in" is a query (EL6);
   - for a character, `appearance` (Markdown) and `residence` (a location's id);
-  - `classes` (M-200).
+  - `classes` (M-200): the ids of its classes, at most 50.
+- **`classifications/{id}`** (M-201): `type` (the element type it belongs to), `name`, `multiple` (true: an element may hold several of its classes), `createdAt`, `updatedAt`.
+- **`classes/{id}`** (M-201):
+  - `classification`, `parent` (a class id, or null at the top), `depth` (1 to 6);
+  - `name`, `description` (Markdown), `images` and `primary` (as an element's), `mentions`;
+  - `createdAt`, `updatedAt`.
+  - `classification`, `parent` and `depth` never change (CL8).
+- **`schematics/{id}`** (M-202):
+  - `element` (a location or object), `name`, `order`, `image` (a studio image id);
+  - `points`: an ordered list, at most 200, of `{ id, name, description, x, y, link }`, with `x` and `y` fractions of the picture from its top left and `link` an element's id or null;
+  - `links`: the linked ids, for "marked on" (SC9);
+  - `createdAt`, `updatedAt`.
 - **`relationships/{id}`:** `a`, `b`, `aToB` ("mother of"), `bToA` ("daughter of"), `description`, `when` (M-300), and `ends`, the two ids, for queries.
 - **`versions/{id}`:** `of` (the path of the thing), `snapshot`, `name`, `by` (`page` or `mcp`), `at`.
   - The last 50 per thing are kept (VR2); the oldest is deleted when a 51st is saved.
   - Versions cover elements, classes, events, chapters and the project itself.
 - **Later epics add:**
-  - `classifications/{id}` and `classes/{id}`, and `schematics/{id}` (M-200);
   - `events/{id}` (M-300);
   - `manuscripts/{id}`, `chapters/{id}`, `bookmarks/{id}` and `days/{yyyy-mm-dd}` (M-500).
 
-**Text in Markdown.** A link to an element is written `[King Peter](muse:el/<id>)`. The page shows it as a link, and its name and aliases found elsewhere in the text are shown as links too, on the page only (EL6).
+**Text in Markdown.** A link to an element is written `[King Peter](muse:el/<id>)`, and to a class `[Longsword](muse:cl/<id>)` (M-201). The page shows it as a link, and its name and aliases found elsewhere in the text are shown as links too, on the page only (EL6).
 
 ---
 
@@ -156,15 +196,20 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 
 ### M-200 Classifications and schematics
 
-- **Classifications per element type** (CL1), each marked single or multiple:
-  - a tree of classes, each with a page (name, description, images);
-  - assigned at any level (CL2), showing the full path ("Sword › Double Edge › Longsword");
-  - lists filtered by class.
-- **Schematics** on locations and objects:
-  - pages of studio art with points placed by fraction (SC1);
-  - each point has a name, a description and an optional link;
-  - a click on a point opens its card or the linked element.
-- **The connector** gains their tools.
+- **Classifications per element type** (CL1, CL3), each marked single or multiple (D6), made in a "Classifications" section on the project's home (CL9):
+  - a tree of classes at most 6 deep (CL4), each with a page (CL6): its path, description, photos, subclasses, the elements in it and "mentioned in";
+  - a class is renamed, never moved (CL8), and deleted only when empty (CL7);
+  - assigned at any level (CL2) in an element's edit form, shown on its page as full paths ("Sword › Double Edge › Longsword");
+  - each type's list filtered by class, including everything beneath it (CL5, D3);
+  - classes found by the instant search and linked with @ (CL6, D5).
+- **Schematics** on locations and objects (SC3), several per element in order (SC4):
+  - a studio picture (kind `schematic`, D8) with numbered pins and their list beside it (SC6), zoomed and panned (SC8);
+  - "Add point" and a tap places one; dragging moves it (SC7);
+  - each point has a name, a description and an optional link to any element (SC5); picking it opens its card, and from there the element;
+  - a linked element's page lists where it is marked, opening the plan at its pin (SC9).
+- **The connector** gains their tools:
+  - classifications and classes: list (as trees), get, create, update, delete, and `classify` an element; `find_elements` filters by class; the photo tools take a class as well as an element; `outline` and `lookup` show classes;
+  - schematics: list, get (the picture with its pins and a grid, D10), add, update, remove; and points: set (add or change) and remove.
 
 ### M-300 The timeline
 
@@ -200,7 +245,7 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
   - you make a project with a cover, and add characters, factions, locations, objects and concepts with bios, aliases, custom fields, relationships and studio images;
   - finding one by an alias is instant;
   - Claude, over the Muse connector, adds a character with a generated portrait that appears on its page.
-- **M-200:** a weapon classification three levels deep assigned to objects, and a location's floor plan with points linking to rooms, each made on the page and over MCP.
+- **M-200:** a weapon classification three levels deep assigned to objects, and a location's floor plan with points linking to rooms, each made on the page and over MCP. Filtering Objects by "Sword" finds a Longsword.
 - **M-300:** a project's own calendar, with a war as an epoch and its battles as events in two lanes. Zooming out shows only the major events.
 - **M-400:** an element reverted to a version saved before an MCP write, a PDF of a character, and the project's Markdown export opened in another tool with its links working.
 - **M-500:** a chapter written on the iPad and continued on the desktop at its bookmark, the day's words counted, and Claude reading and editing a chapter over MCP, with the edit revertable.
@@ -244,9 +289,16 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 - **The studio's tools come from the Cartographer's code without worlds** (`studioTools({ worlds: false })`): find, get, import, labels, costs, generate, edit, jobs and styles, with no world in a search, a generation or a style's default. Assigning, and changing or deleting an image a world may use, stay the Cartographer's. `studio_generate` takes `element` instead of `from`: the element's appearance (or bio) is added to the prompt, and the title, kind and project label are those the page gives a photo; Claude then adds the finished image with `add_photos`.
 - **Full-text search reads the project's live elements** (up to 5,000) and scans them on the server: every word must be found, "a phrase" in quotes, accents and case set aside, Markdown read as shown. The page reaches it from the header box's last row, "Search all text", through the `museSearch` callable, which runs the same code.
 
+### M-200 (filed 2026-11-24)
+
+| ID    | Story                    | Issue | Depends on  | Model  |
+| ----- | ------------------------ | ----- | ----------- | ------ |
+| M-201 | Classifications          | #914  | M-100       | Opus   |
+| M-202 | Schematics               | #915  | M-100       | Sonnet |
+| M-203 | Testing the epic by hand | #916  | M-201–M-202 | Sonnet |
+
 ### Later epics (planned; filed when next)
 
-- **M-200:** M-201 classifications, M-202 schematics.
 - **M-300:** M-301 the calendar, M-302 events and epochs, M-303 the timeline view.
 - **M-400:** M-401 browsing and reverting, M-402 PDF layouts, M-403 the Markdown export.
 - **M-500:** M-501 manuscripts and chapters, M-502 the editor, M-503 bookmarks and stats, M-504 the book layout and connector.
