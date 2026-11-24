@@ -1386,3 +1386,270 @@ a.muse-section-tile:focus-visible {
   max-width: 24rem;
   margin-bottom: 0.75rem;
 }
+
+/* ── Schematics (M-202): a picture with numbered pins, and its points ── */
+
+.muse-sc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.muse-sc-tab {
+  min-height: 44px;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid rgba(179, 157, 219, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: #e0e0e0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.muse-sc-tab-on {
+  background: var(--muse-accent-soft);
+  color: #f3e5f5;
+  border-color: var(--muse-accent);
+}
+
+.muse-sc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.muse-sc-rename {
+  flex: 1 1 18rem;
+}
+
+.muse-sc-more {
+  margin-bottom: 0.75rem;
+}
+
+.muse-sc-more summary {
+  cursor: pointer;
+  color: var(--muse-muted);
+  min-height: 32px;
+}
+
+.muse-sc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(14rem, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.muse-sc-stage {
+  --w: 4;
+  --h: 3;
+  --inv: 1;
+  position: relative;
+  /* As wide as it can be without being taller than 70% of the screen. */
+  width: min(100%, calc(70vh * var(--w) / var(--h)));
+  aspect-ratio: var(--w) / var(--h);
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--muse-line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  /* Pinch, pan and drag are ours, not the page's. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.muse-sc-stage.muse-sc-adding {
+  cursor: crosshair;
+}
+
+.muse-sc-canvas {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+.muse-sc-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.muse-sc-pins {
+  position: absolute;
+  inset: 0;
+}
+
+/* A pin stays one size however far the picture is zoomed. */
+.muse-sc-pin {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid #111827;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #111827;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transform: translate(-50%, -50%) scale(var(--inv));
+  touch-action: none;
+}
+
+.muse-sc-pin.muse-sc-on,
+.muse-sc-pin:focus-visible {
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--muse-accent);
+  z-index: 2;
+}
+
+.muse-sc-pin.muse-sc-dragging {
+  cursor: grabbing;
+  z-index: 3;
+}
+
+.muse-sc-zoom {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  cursor: default;
+}
+
+.muse-sc-zoom .muse-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.2rem 0.5rem;
+  background: rgba(10, 14, 26, 0.85);
+}
+
+.muse-sc-missing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: var(--muse-muted);
+  font-style: italic;
+}
+
+.muse-sc-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.muse-sc-points {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.muse-sc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--muse-line);
+  border-radius: 10px;
+  background: transparent;
+  color: #e0e0e0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.muse-sc-row.muse-sc-on {
+  background: var(--muse-accent-soft);
+  border-color: var(--muse-accent);
+}
+
+.muse-sc-num {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #111827;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.muse-sc-row-name {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.muse-sc-row-link {
+  color: var(--muse-muted);
+  font-size: 0.85rem;
+}
+
+.muse-sc-card {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--muse-accent);
+  border-radius: 12px;
+  background: var(--muse-accent-soft);
+}
+
+.muse-sc-card-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.muse-sc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.muse-sc-danger,
+.muse-sc-new {
+  margin-top: 1rem;
+}
+
+.muse-sc-new {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--muse-line);
+}
+
+@media (max-width: 760px) {
+  /* The list goes below the picture on a phone. */
+  .muse-sc-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .muse-sc-points {
+    max-height: none;
+  }
+}

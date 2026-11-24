@@ -5,6 +5,8 @@ const { PRIMARY_ORIGIN } = require('../../config');
 const { studioTools, relay } = require('../cartographer/studio-tools');
 const { createMuseStore, studioImages, MuseError } = require('../../../muse/store');
 const { plainText } = require('../../../muse/search');
+const { viewSchematic } = require('../../../muse/schematic-view');
+const schematics = require('../../../muse/schematics');
 const fields = require('../../../muse/fields');
 const model = require('../../../muse/model');
 const links = require('../../../muse/links');
@@ -13,7 +15,7 @@ const links = require('../../../muse/links');
 // M-100; M-106 / #894). Mounted at /mcp/muse and gated by the `muse` claim
 // (scope mcp:muse), it does what the Muse's page does — projects, custom
 // fields, elements, photos, relationships, versions, classifications and
-// classes (M-201 / #914) — plus an outline, full
+// classes (M-201 / #914), schematics and their points (M-202 / #915) — plus an outline, full
 // text search and lookups across a bible, with the image studio's tools
 // (functions/mcp/apps/cartographer/studio-tools.js, without worlds) so Claude
 // can fill a project and illustrate it.
@@ -48,6 +50,36 @@ const CLASSIFICATION = z
   .min(1)
   .max(200)
   .describe('A classification: its id (list_classifications), or a name only one has.');
+const schematicId = z
+  .string()
+  .min(1)
+  .max(200)
+  .describe('A schematic: its id (list_schematics), or its name when elementId says whose it is.');
+const schematicOwner = z
+  .string()
+  .min(1)
+  .max(200)
+  .describe('The location or object: its id (list_elements, find_elements) or a name only it has.');
+const schematicElement = z
+  .string()
+  .min(1)
+  .max(200)
+  .optional()
+  .describe('The location or object it is on: needed only to name a schematic by its name.');
+const POINT = z
+  .string()
+  .min(1)
+  .max(200)
+  .describe('A point: its id, its number (3 or #3), or a name only one point has.');
+const FRACTION = (axis, hint) =>
+  z
+    .number()
+    .min(0)
+    .max(1)
+    .describe(
+      `${axis}: a fraction of the picture's ${hint}, from 0 to 1 (0.5 is the middle). ` +
+        'get_schematic draws a grid of tenths to read it from.'
+    );
 const imageId = z
   .string()
   .regex(/^[A-Za-z0-9_-]{1,200}$/, 'a studio image id, like img_0123456789abcdef')
@@ -108,6 +140,11 @@ const pageOf = (pid, eid, kind = 'e') =>
   `${PRIMARY_ORIGIN}/apps/muse/#/p/${encodeURIComponent(pid)}` +
   (eid ? `/${kind}/${encodeURIComponent(eid)}` : '');
 
+// A schematic's page: its element's, open at the schematic (and a point).
+const schematicPage = (pid, eid, sid, point) =>
+  `${pageOf(pid, eid)}/m/${encodeURIComponent(sid)}` +
+  (point ? `/${encodeURIComponent(point)}` : '');
+
 // What a photo tool acts on: an element, or a class (`classId`), not both.
 function photoTarget(args) {
   if (!args.elementId === !args.classId) {
@@ -161,8 +198,33 @@ function museStudioTools({ studio, store }) {
 
 function museApp({ store, studio }) {
   const run = (fn) => (ctx, args) => relay(() => fn(ctx, args));
-  const withPage = (pid, element) => ({ ...element, page: pageOf(pid, element.id) });
+  const withPage = (pid, element) => ({
+    ...element,
+    page: pageOf(pid, element.id),
+    // Where it is marked: each plan's page opens at the first point linking to it.
+    ...(element.markedOn
+      ? {
+          markedOn: element.markedOn.map((m) => ({
+            ...m,
+            page: schematicPage(pid, m.schematic.element.id, m.schematic.id, m.points[0].id),
+          })),
+        }
+      : {}),
+  });
   const classPage = (pid, cls) => ({ ...cls, page: pageOf(pid, cls.id, 'c') });
+  // A schematic with the page that opens it, and each point's.
+  const withSchematicPage = (pid, s) => ({
+    ...s,
+    page: schematicPage(pid, s.element.id, s.id),
+    ...(s.points
+      ? {
+          points: s.points.map((pt) => ({
+            ...pt,
+            page: schematicPage(pid, s.element.id, s.id, pt.id),
+          })),
+        }
+      : {}),
+  });
   // A photo tool's result: the element or the class it changed.
   const photoResult = (pid, done) =>
     done.class
@@ -318,7 +380,8 @@ function museApp({ store, studio }) {
           'character’s appearance and residence, its classes (as paths), its photos (studio ' +
           'images, with the primary), ' +
           'its relationships as it sees them ("mother of Anne"), the elements it links to and ' +
-          'those that link to it (mentioned in), and its page’s link.',
+          'those that link to it (mentioned in), the schematics that mark it (marked on: ' +
+          'each with its points’ numbers), and its page’s link.',
         inputSchema: { projectId, elementId },
         annotations: readOnly,
         handler: run(async (ctx, args) =>
@@ -620,6 +683,218 @@ function museApp({ store, studio }) {
         }),
       },
 
+      // ── Schematics (M-202) ──
+      {
+        name: 'list_schematics',
+        title: 'List an element’s schematics',
+        description:
+          'The schematics of a location or an object, in order: each one’s id, name, picture ' +
+          'and how many points it has. A schematic is a studio picture (a floor plan, a ship’s ' +
+          'decks, a machine’s parts) with numbered points on it. get_schematic shows one.',
+        inputSchema: { projectId, elementId: schematicOwner },
+        annotations: readOnly,
+        handler: run(async (ctx, args) => ({
+          schematics: (await store.listSchematics(ctx.uid, args.projectId, args.elementId)).map(
+            (s) => ({ ...s, page: schematicPage(args.projectId, s.element.id, s.id) })
+          ),
+        })),
+      },
+      {
+        name: 'get_schematic',
+        title: 'Look at a schematic',
+        description:
+          'A schematic in full: its points (number, name, description, x and y as fractions of ' +
+          'the picture from its top left, and the element each links to), and the picture to ' +
+          'look at with the numbered pins drawn on it and a light grid of tenths (the lines are ' +
+          'marked 1 to 9, along the top for x and down the left for y). Use the grid to place ' +
+          'a point with set_point, then look again to check it. grid: false draws the pins only.',
+        inputSchema: {
+          projectId,
+          schematicId,
+          elementId: schematicElement,
+          grid: z.boolean().optional().describe('Draw the grid of tenths (true).'),
+        },
+        annotations: readOnly,
+        handler: (ctx, args) =>
+          relay(async () => {
+            const { schematic, image } = await store.schematicForView(
+              ctx.uid,
+              args.projectId,
+              args.schematicId,
+              args.elementId
+            );
+            const body = withSchematicPage(args.projectId, schematic);
+            let view = null;
+            try {
+              if (!studio) throw new Error('the studio is not connected');
+              if (!image) throw new Error('its picture is no longer in the studio');
+              const record = await studio.library().getImage(schematic.picture.id);
+              const version = record.versions.find((v) => v.n === record.current);
+              view = await viewSchematic(await studio.load(version.path), schematic.points, {
+                grid: args.grid !== false,
+              });
+            } catch (err) {
+              body.view = err.tooLarge
+                ? `It can't be shown here (${err.message}); open its link to see it.`
+                : `It can't be shown: ${err.message}.`;
+            }
+            return {
+              content: [
+                ...(view
+                  ? [{ type: 'image', data: view.data.toString('base64'), mimeType: view.mimeType }]
+                  : []),
+                { type: 'text', text: JSON.stringify(body, null, 2) },
+              ],
+              structuredContent: body,
+            };
+          }),
+      },
+      {
+        name: 'add_schematic',
+        title: 'Add a schematic to a location or object',
+        description:
+          'Put a studio picture on a location or an object as a schematic (after any it has), ' +
+          'with a name ("Ground floor"). Make or find the picture with the studio tools ' +
+          '(studio_generate with kind "schematic", studio_find, studio_import). It starts with ' +
+          'no points: place them with set_point.',
+        inputSchema: {
+          projectId,
+          elementId: schematicOwner,
+          name: z.string().min(1).max(schematics.LIMITS.name),
+          imageId,
+        },
+        annotations: writes,
+        handler: run(async (ctx, args) => {
+          const done = await store.addSchematic(ctx.uid, args.projectId, {
+            element: args.elementId,
+            name: args.name,
+            image: args.imageId,
+          });
+          return {
+            schematic: withSchematicPage(args.projectId, done.schematic),
+            next: 'Look at it with get_schematic, then place points with set_point.',
+          };
+        }),
+      },
+      {
+        name: 'update_schematic',
+        title: 'Change a schematic',
+        description:
+          'Rename a schematic, change its picture (the points stay where they are, so check ' +
+          'them with get_schematic) or move it to a place among its element’s schematics ' +
+          '(position, from 1). A version is kept first.',
+        inputSchema: {
+          projectId,
+          schematicId,
+          elementId: schematicElement,
+          name: z.string().min(1).max(schematics.LIMITS.name).optional(),
+          imageId: imageId.optional(),
+          position: z.number().int().min(1).max(100).optional().describe('Its place, from 1.'),
+        },
+        annotations: { ...writes, idempotentHint: true },
+        handler: run(async (ctx, args) => {
+          const done = await store.updateSchematic(
+            ctx.uid,
+            args.projectId,
+            args.schematicId,
+            { name: args.name, image: args.imageId, position: args.position },
+            args.elementId
+          );
+          return {
+            schematic: withSchematicPage(args.projectId, done.schematic),
+            version: done.version,
+          };
+        }),
+      },
+      {
+        name: 'remove_schematic',
+        title: 'Remove a schematic',
+        description:
+          'Delete a schematic and its points; the picture stays in the studio. A version is ' +
+          'kept first.',
+        inputSchema: { projectId, schematicId, elementId: schematicElement },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+        handler: run(async (ctx, args) =>
+          store.removeSchematic(ctx.uid, args.projectId, args.schematicId, args.elementId)
+        ),
+      },
+      {
+        name: 'set_point',
+        title: 'Place or change a point',
+        description:
+          'Add a point to a schematic (leave `point` out: it takes the next number) or change ' +
+          'one (point: its id, number or name). A point has a name, a description (Markdown), ' +
+          'a place on the picture (x across and y down, fractions from 0 to 1 from the top ' +
+          'left) and optionally a link to an element (by id or a name only it has; null takes ' +
+          'the link off): that element’s page then says where it is marked. A new point needs ' +
+          'a name, x and y. Read the place off get_schematic’s grid, and look again to check. ' +
+          'A version is kept first.',
+        inputSchema: {
+          projectId,
+          schematicId,
+          elementId: schematicElement,
+          point: POINT.optional().describe('The point to change; none adds one.'),
+          name: z.string().min(1).max(schematics.LIMITS.name).optional(),
+          description: z
+            .string()
+            .max(schematics.LIMITS.description)
+            .optional()
+            .describe(MARKDOWN_NOTE),
+          x: FRACTION('x', 'width, from its left edge').optional(),
+          y: FRACTION('y', 'height, from its top edge').optional(),
+          link: z
+            .string()
+            .max(200)
+            .nullable()
+            .optional()
+            .describe('The element it links to: its id or a name only it has; null for none.'),
+        },
+        annotations: { ...writes, idempotentHint: false },
+        handler: run(async (ctx, args) => {
+          const done = await store.setPoint(
+            ctx.uid,
+            args.projectId,
+            args.schematicId,
+            {
+              point: args.point,
+              name: args.name,
+              description: args.description,
+              x: args.x,
+              y: args.y,
+              link: args.link,
+            },
+            args.elementId
+          );
+          return {
+            schematic: withSchematicPage(args.projectId, done.schematic),
+            version: done.version,
+            next: 'Check where it landed with get_schematic.',
+          };
+        }),
+      },
+      {
+        name: 'remove_point',
+        title: 'Take a point off a schematic',
+        description:
+          'Remove a point from a schematic; the points after it are numbered one less. A ' +
+          'version is kept first.',
+        inputSchema: { projectId, schematicId, elementId: schematicElement, point: POINT },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+        handler: run(async (ctx, args) => {
+          const done = await store.removePoint(
+            ctx.uid,
+            args.projectId,
+            args.schematicId,
+            args.point,
+            args.elementId
+          );
+          return {
+            schematic: withSchematicPage(args.projectId, done.schematic),
+            version: done.version,
+          };
+        }),
+      },
+
       // ── Relationships ──
       {
         name: 'list_relationships',
@@ -717,14 +992,15 @@ function museApp({ store, studio }) {
         name: 'save_version',
         title: 'Keep a version',
         description:
-          'Keep a named version of an element, a class (classId) or, with neither, the ' +
-          'project, as it is ' +
+          'Keep a named version of an element, a class (classId), a schematic (schematicId) ' +
+          'or, with none of them, the project, as it is ' +
           'now. Changes made here keep one by themselves; this is for a point worth naming ' +
           '("before the rewrite"). The last 50 of each are kept.',
         inputSchema: {
           projectId,
           elementId: elementId.optional(),
           classId: CLASS.optional().describe('A class instead of an element.'),
+          schematicId: schematicId.optional().describe('A schematic instead of an element.'),
           name: z.string().max(100).optional().describe('What to call it.'),
         },
         annotations: { ...writes, idempotentHint: false },
@@ -732,7 +1008,11 @@ function museApp({ store, studio }) {
           version: await store.saveVersion(
             ctx.uid,
             args.projectId,
-            args.classId ? { classId: args.classId } : args.elementId,
+            args.schematicId
+              ? { schematicId: args.schematicId, element: args.elementId }
+              : args.classId
+                ? { classId: args.classId }
+                : args.elementId,
             args.name
           ),
         })),

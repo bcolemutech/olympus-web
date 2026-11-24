@@ -4,6 +4,7 @@ const fields = require('./fields');
 const links = require('./links');
 const model = require('./model');
 const classes = require('./classes');
+const schematics = require('./schematics');
 const { createVersionStore } = require('./version-store');
 const { searchText, plainText } = require('./search');
 
@@ -481,6 +482,7 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
         .sort((a, b) => (a.other.name || '').localeCompare(b.other.name || '')),
       mentions: (el.mentions || []).map((id) => ({ id, name: linkedName(index, tree)(id) })),
       mentionedIn: await mentionedIn(p.id, index, el.id),
+      markedOn: await markedOn(p.id, index, el.id),
       createdAt: iso(el.createdAt),
       updatedAt: iso(el.updatedAt),
     };
@@ -931,6 +933,260 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     return { deleted: id, path };
   }
 
+  // ── Schematics (M-202) ──────────────────────────
+
+  async function schematicsOfElement(projectId, elementId) {
+    const snap = await projectRef(projectId)
+      .collection('schematics')
+      .where('element', '==', elementId)
+      .limit(schematics.LIMITS.perElement + 5)
+      .get();
+    return schematics.inOrder(snap.docs.map((doc) => schematics.read(doc.id, doc.data())));
+  }
+
+  async function schematic(projectId, id) {
+    if (typeof id !== 'string' || !ID.test(id)) {
+      throw new MuseError('not-found', 'Schematic not found.');
+    }
+    const snap = await projectRef(projectId).collection('schematics').doc(id).get();
+    if (!snap.exists) throw new MuseError('not-found', 'Schematic not found.');
+    return schematics.read(snap.id, snap.data());
+  }
+
+  // A schematic named by its id, or by a name only one of `elementId`'s has.
+  async function schematicIn(projectId, ref, elementId) {
+    const text = String(ref === undefined || ref === null ? '' : ref).trim();
+    if (!text) throw invalid('Name a schematic.');
+    if (ID.test(text)) {
+      try {
+        return await schematic(projectId, text);
+      } catch (err) {
+        if (!elementId || !(err instanceof MuseError) || err.code !== 'not-found') throw err;
+      }
+    }
+    if (!elementId) throw new MuseError('not-found', 'Schematic not found.');
+    const found = (await schematicsOfElement(projectId, elementId)).filter(
+      (s) => links.fold(s.name) === links.fold(text)
+    );
+    if (found.length === 1) return found[0];
+    if (found.length > 1) throw invalid(`More than one schematic is called "${text}": use its id.`);
+    throw new MuseError('not-found', 'Schematic not found.');
+  }
+
+  // The schematics with a point linking to an element, and which points (SC9).
+  async function markedOn(projectId, index, id) {
+    const snap = await projectRef(projectId)
+      .collection('schematics')
+      .where('links', 'array-contains', id)
+      .limit(MENTIONS_READ)
+      .get();
+    return schematics
+      .markedOn(
+        snap.docs.map((doc) => schematics.read(doc.id, doc.data())),
+        id
+      )
+      .map(({ schematic: s, points }) => ({
+        schematic: {
+          id: s.id,
+          name: s.name,
+          element: {
+            id: s.element,
+            name: nameIn(index)(s.element) || null,
+            ...(index.entries[s.element] ? {} : { retired: true }),
+          },
+        },
+        points,
+      }));
+  }
+
+  function schematicRow(index, s) {
+    return {
+      id: s.id,
+      name: s.name,
+      order: s.order + 1,
+      element: { id: s.element, name: nameIn(index)(s.element) || null },
+      image: s.image,
+      points: s.points.length,
+      updatedAt: iso(s.updatedAt),
+    };
+  }
+
+  // A schematic in full: its picture (the studio's link) and its points,
+  // numbered, with what each links to.
+  async function schematicDetail(index, s) {
+    const image = await images.get(s.image);
+    return {
+      ...schematicRow(index, s),
+      picture: {
+        id: s.image,
+        title: image ? image.title : null,
+        link: image ? image.link : null,
+        ...(image ? {} : { missing: 'It is no longer in the studio.' }),
+      },
+      points: s.points.map((p, i) => ({
+        number: i + 1,
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        x: p.x,
+        y: p.y,
+        link: p.link
+          ? {
+              id: p.link,
+              name: nameIn(index)(p.link) || null,
+              ...(index.entries[p.link] ? {} : { retired: true }),
+            }
+          : null,
+      })),
+    };
+  }
+
+  // The element a schematic is on: a live location or object.
+  async function schematicElement(projectId, index, ref) {
+    const id = refIn(index, ref);
+    const entry = index.entries[id];
+    if (!entry) throw new MuseError('not-found', 'Element not found.');
+    if (!schematics.TYPES.includes(entry.type)) {
+      throw invalid('Only locations and objects have schematics.');
+    }
+    return id;
+  }
+
+  async function listSchematics(uid, projectId, elementRef) {
+    await project(uid, projectId);
+    const index = await loadIndex(projectId);
+    const id = await schematicElement(projectId, index, elementRef);
+    return (await schematicsOfElement(projectId, id)).map((s) => schematicRow(index, s));
+  }
+
+  async function getSchematic(uid, projectId, ref, elementRef) {
+    await project(uid, projectId);
+    const index = await loadIndex(projectId);
+    const at = elementRef ? await schematicElement(projectId, index, elementRef) : null;
+    return schematicDetail(index, await schematicIn(projectId, ref, at));
+  }
+
+  // The schematic itself, as stored (for drawing its picture with pins).
+  async function schematicForView(uid, projectId, ref, elementRef) {
+    await project(uid, projectId);
+    const index = await loadIndex(projectId);
+    const at = elementRef ? await schematicElement(projectId, index, elementRef) : null;
+    const s = await schematicIn(projectId, ref, at);
+    return { schematic: await schematicDetail(index, s), image: await images.get(s.image) };
+  }
+
+  async function addSchematic(uid, projectId, input) {
+    await project(uid, projectId);
+    const index = await loadIndex(projectId);
+    const element = await schematicElement(projectId, index, input.element);
+    await checkImages([input.image]);
+    const siblings = await schematicsOfElement(projectId, element);
+    const id = projectRef(projectId).collection('schematics').doc().id;
+    const plan = schematics.planCreate(
+      projectId,
+      id,
+      { element, name: input.name, image: input.image },
+      { elementType: index.entries[element].type, siblings }
+    );
+    if (plan.error) throw invalid(plan.error);
+    await commit(plan.value);
+    return { schematic: await schematicDetail(index, await schematic(projectId, id)) };
+  }
+
+  // A change to a schematic, as `plan(current, index)` makes it, with a
+  // version of it first (D9) in the same batch.
+  async function changeSchematic(uid, projectId, ref, elementRef, plan, { removing } = {}) {
+    await project(uid, projectId);
+    const index = await loadIndex(projectId);
+    const at = elementRef ? await schematicElement(projectId, index, elementRef) : null;
+    const current = await schematicIn(projectId, ref, at);
+    const made = await plan(current, index);
+    if (made.error) throw invalid(made.error);
+    const version = await versionStore.prepare(projectId, 'schematics', current.id, {
+      by: 'mcp',
+    });
+    await commit(version.writes.concat(made.value));
+    return {
+      // What is left, or for one removed, what it was.
+      schematic: await schematicDetail(
+        index,
+        removing ? current : await schematic(projectId, current.id)
+      ),
+      version: { id: version.id, dropped: version.dropped },
+    };
+  }
+
+  async function updateSchematic(uid, projectId, ref, input, elementRef) {
+    const keys = ['name', 'image', 'position'];
+    if (!keys.some((key) => input[key] !== undefined)) {
+      throw invalid(`Say what to change: ${keys.join(', ')}.`);
+    }
+    if (input.image !== undefined) await checkImages([input.image]);
+    return changeSchematic(uid, projectId, ref, elementRef, async (current) => {
+      const writes = [];
+      const changes = {};
+      if (input.name !== undefined) changes.name = input.name;
+      if (input.image !== undefined) changes.image = input.image;
+      if (Object.keys(changes).length) {
+        const plan = schematics.planUpdate(projectId, current, changes);
+        if (plan.error) return plan;
+        writes.push(...plan.value);
+      }
+      if (input.position !== undefined) {
+        const siblings = await schematicsOfElement(projectId, current.element);
+        const plan = schematics.planPlace(projectId, siblings, current.id, input.position);
+        if (plan.error) return plan;
+        writes.push(...plan.value);
+      }
+      return { value: writes };
+    });
+  }
+
+  async function removeSchematic(uid, projectId, ref, elementRef) {
+    const done = await changeSchematic(
+      uid,
+      projectId,
+      ref,
+      elementRef,
+      async (current) => schematics.planDelete(projectId, current.id),
+      { removing: true }
+    );
+    return { removed: done.schematic.id, name: done.schematic.name, version: done.version };
+  }
+
+  // Adds a point (no `point`), or changes one (by id, number or name): its
+  // name, description, x and y (fractions of the picture), and the element
+  // it links to (by id or a name only it has; null takes the link off).
+  function setPoint(uid, projectId, ref, input, elementRef) {
+    return changeSchematic(uid, projectId, ref, elementRef, async (current, index) => {
+      const fields = {};
+      ['name', 'description', 'x', 'y'].forEach((key) => {
+        if (input[key] !== undefined) fields[key] = input[key];
+      });
+      if (input.link !== undefined) {
+        fields.link = input.link === null ? null : refIn(index, input.link);
+      }
+      const options = { elementType: typeIn(index) };
+      if (input.point === undefined || input.point === null || input.point === '') {
+        return schematics.planAddPoint(projectId, current, fields, options);
+      }
+      const found = schematics.findPoint(current.points, input.point);
+      if (found.error) return found;
+      if (!Object.keys(fields).length) {
+        return { error: 'Say what to change: name, description, x, y or link.' };
+      }
+      return schematics.planChangePoint(projectId, current, found.value.id, fields, options);
+    });
+  }
+
+  function removePoint(uid, projectId, ref, pointRef, elementRef) {
+    return changeSchematic(uid, projectId, ref, elementRef, async (current) => {
+      const found = schematics.findPoint(current.points, pointRef);
+      if (found.error) return found;
+      return schematics.planRemovePoint(projectId, current, found.value.id);
+    });
+  }
+
   // ── Relationships ───────────────────────────────
 
   async function listRelationships(uid, projectId, elementId) {
@@ -1103,6 +1359,10 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
   // A version of an element, a class (`{ classId }`), or the project.
   async function saveVersion(uid, projectId, elementId, name) {
     await project(uid, projectId);
+    if (elementId && typeof elementId === 'object' && elementId.schematicId) {
+      const found = await schematicIn(projectId, elementId.schematicId, elementId.element);
+      return versionStore.save(projectId, 'schematics', found.id, { by: 'mcp', name });
+    }
     if (elementId && typeof elementId === 'object') {
       const tree = await loadTree(projectId);
       const id = classIn(tree, elementId.classId);
@@ -1142,6 +1402,14 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     createClass,
     updateClass,
     deleteClass,
+    listSchematics,
+    getSchematic,
+    schematicForView,
+    addSchematic,
+    updateSchematic,
+    removeSchematic,
+    setPoint,
+    removePoint,
     listRelationships,
     setRelationship,
     removeRelationship,

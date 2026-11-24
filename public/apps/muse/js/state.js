@@ -39,6 +39,7 @@
     'versions',
     'classifications',
     'classes',
+    'schematics',
   ];
 
   // ── Helpers ─────────────────────────────────────

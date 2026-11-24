@@ -31,6 +31,7 @@
     ['item', 'Item'],
     ['scene', 'Scene'],
     ['interface', 'Interface'],
+    ['schematic', 'Schematic'],
     ['other', 'Other'],
   ];
   // What an image was made to be seen as (functions/studio/library.js VIEWS;

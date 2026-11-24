@@ -51,6 +51,7 @@ const KINDS = Object.freeze([
   'scene',
   'interface',
   'object',
+  'schematic',
   'other',
 ]);
 // What an image was made to be seen as (isometric-view.md §4.4, AR3; L-955):

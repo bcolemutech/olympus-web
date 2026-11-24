@@ -6,6 +6,7 @@
   //   #/p/<id>            a project's home
   //   #/p/<id>/t/<type>   a list of one type's elements
   //   #/p/<id>/e/<el>     an element's page
+  //   #/p/<id>/e/<el>/m/<schematic>[/<point>]  its page, open at a schematic (M-202)
   //   #/p/<id>/c/<class>  a class's page (M-201)
   //   #/p/<id>/s/<words>  every element whose text holds the words (M-106)
   // and, inside a project, the search box in the header (M-103).
@@ -32,7 +33,7 @@
 
   function go() {
     var hash = window.location.hash || '#/';
-    var m = /^#\/p\/([^/]+)(?:\/(t|e|c|s)\/([^/]+))?\/?$/.exec(hash);
+    var m = /^#\/p\/([^/]+)(?:\/(t|e|c|s)\/([^/]+)(?:\/m\/([^/]+)(?:\/([^/]+))?)?)?\/?$/.exec(hash);
     if (m) {
       var id = decodeURIComponent(m[1]);
       var shown =
@@ -41,9 +42,14 @@
               return ok && 'type';
             })
           : m[2] === 'e'
-            ? Muse.element.show(id, decodeURIComponent(m[3])).then(function (ok) {
-                return ok && 'element';
-              })
+            ? Muse.element
+                .show(id, decodeURIComponent(m[3]), {
+                  schematic: m[4] && decodeURIComponent(m[4]),
+                  point: m[5] && decodeURIComponent(m[5]),
+                })
+                .then(function (ok) {
+                  return ok && 'element';
+                })
             : m[2] === 'c'
               ? Muse.classPage.show(id, decodeURIComponent(m[3])).then(function (ok) {
                   return ok && 'class';
@@ -86,6 +92,7 @@
         Muse.fieldEditor.init();
         Muse.typeList.init();
         Muse.gallery.init();
+        Muse.schematicPage.init();
         Muse.element.init();
         Muse.classifications.init();
         Muse.classPage.init();

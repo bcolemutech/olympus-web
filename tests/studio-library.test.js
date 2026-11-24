@@ -212,6 +212,7 @@ describe('studioUpload', () => {
       'scene',
       'interface',
       'object',
+      'schematic',
       'other',
     ]);
   });

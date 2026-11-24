@@ -660,9 +660,75 @@ service cloud.firestore {
                       && request.resource.data.updatedAt == request.time;
       }
 
+      // Schematics (M-202; SC3–SC5, D7): a studio picture of a location or an
+      // object with numbered points on it, in the schematic's own document
+      // (the pin's number is its place in `points`). The element is fixed
+      // once made. Rules can't walk a list, and Firestore stops evaluating a
+      // request at 1,000 expressions, so they check the list's size and that
+      // each of its first 16 points lies on the picture (0 to 1 each way); the
+      // page and the connector check every point, its fields too, and keep
+      // `links` to the ids the points link to. See
+      // public/apps/muse/js/schematics.js.
+      match /schematics/{schematicId} {
+        // One point's place on the picture, kept lean: Firestore stops evaluating a
+        // request at 1,000 expressions, and each point checked costs about 40 of them
+        // (a 22-point plan fits, a 25-point one does not).
+        function onPicture(p) {
+          return p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1;
+        }
+
+        function validPoints(list) {
+          return list is list && list.size() <= 200
+              && (list.size() <= 0 || onPicture(list[0]))
+              && (list.size() <= 1 || onPicture(list[1]))
+              && (list.size() <= 2 || onPicture(list[2]))
+              && (list.size() <= 3 || onPicture(list[3]))
+              && (list.size() <= 4 || onPicture(list[4]))
+              && (list.size() <= 5 || onPicture(list[5]))
+              && (list.size() <= 6 || onPicture(list[6]))
+              && (list.size() <= 7 || onPicture(list[7]))
+              && (list.size() <= 8 || onPicture(list[8]))
+              && (list.size() <= 9 || onPicture(list[9]))
+              && (list.size() <= 10 || onPicture(list[10]))
+              && (list.size() <= 11 || onPicture(list[11]))
+              && (list.size() <= 12 || onPicture(list[12]))
+              && (list.size() <= 13 || onPicture(list[13]))
+              && (list.size() <= 14 || onPicture(list[14]))
+              && (list.size() <= 15 || onPicture(list[15]));
+        }
+
+        function validSchematic() {
+          let data = request.resource.data;
+          let required = ['element', 'name', 'order', 'image', 'points', 'links', 'createdAt',
+                          'updatedAt'];
+          return data.keys().hasAll(required)
+              && data.keys().hasOnly(required)
+              && data.element is string && data.element.size() > 0 && data.element.size() <= 128
+              && existsAfter(museElementDoc(data.element))
+              && getAfter(museElementDoc(data.element)).data.type in ['location', 'object']
+              && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+              && data.order is int && data.order >= 0 && data.order <= 1000
+              && data.image is string && data.image.size() > 0 && data.image.size() <= 200
+              && validPoints(data.points)
+              && data.links is list && data.links.size() <= 200;
+        }
+
+        allow read, delete: if museProjectOwner();
+        allow create: if museProjectOwner()
+                      && validSchematic()
+                      && request.resource.data.createdAt == request.time
+                      && request.resource.data.updatedAt == request.time;
+        allow update: if museProjectOwner()
+                      && validSchematic()
+                      && request.resource.data.element == resource.data.element
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && request.resource.data.updatedAt == request.time;
+      }
+
       // Versions (M-105; VR1, VR2): a copy of the project or of one of its
-      // elements or classes (M-201, D9) as it was, kept when the owner saves one by hand (`page`).
-      // Those kept before an MCP write (`mcp`) come through the Admin SDK, so
+      // elements, classes (M-201, D9) or schematics (M-202, D9) as it was,
+      // kept when the owner saves one by hand (`page`). Those kept before an
+      // MCP write (`mcp`) come through the Admin SDK, so
       // the page may not claim to be one. Once kept a version is never
       // changed, only deleted: by its owner, or as the 51st is saved (the
       // page deletes the oldest in the same batch). See
@@ -678,7 +744,7 @@ service cloud.firestore {
               && parts[0] == 'muse_projects'
               && parts[1] == projectId
               && (parts.size() == 2
-                  || (parts.size() == 4 && parts[2] in ['elements', 'classes']
+                  || (parts.size() == 4 && parts[2] in ['elements', 'classes', 'schematics']
                       && parts[3].size() > 0))
               && data.snapshot is map
               && (data.name == null
@@ -693,7 +759,7 @@ service cloud.firestore {
       }
 
       // Its other subcollections get their rules, with their shapes, in the
-      // stories that add them (M-202 onwards). Until then the default deny
+      // stories that add them (M-300 onwards). Until then the default deny
       // below covers them.
     }
 

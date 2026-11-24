@@ -1,6 +1,6 @@
 # The Muse — Design Document v0.1
 
-**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200's details decided 2026-11-24** (§3, "M-200 details"), its sub-issues M-201 to M-203 filed as #914–#916 (§7), M-201 and M-202 buildable at once; M-201 built 2026-11-24. The later epics' sub-issues are filed when each is next.
+**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200's details decided 2026-11-24** (§3, "M-200 details"), its sub-issues M-201 to M-203 filed as #914–#916 (§7), M-201 and M-202 buildable at once; M-201 and M-202 built 2026-11-24. The later epics' sub-issues are filed when each is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** The Muse, its own app and phase (milestone #27), prefix **M-**, label `muse`. From idea #873.
 **Depends on:** the Image Studio (L-700, [`the-image-studio.md`](./the-image-studio.md)), the MCP host (MCP Initiative 1, [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)).
@@ -307,6 +307,19 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 - **The element's form picks classes,** per classification, from a list indented by depth, with each picked one shown as a chip to take off: no dragging, so it works on an iPad. The list on each type's page filters by one class at a time, kept while you come back to it.
 - **Making a classification single reads its type's retired elements** as well as the index, so one brought back never holds two classes of it. Deleting a class asks whether any element, live or retired, holds it (one query).
 - **Classes are found by full-text search** (name and description, `type: 'class'`) unless only element types are asked for, and `lookup` reads a class in full when a name best names one.
+
+**Decided while building M-202 (2026-11-24):**
+
+- **The plans are `schematics.js`,** the same file in `public/apps/muse/js/` and `functions/muse/` (a test fails if they differ). It checks a schematic, its points and their links, and builds the writes to make, change, order and delete them and to add, change and remove a point; `markedOn` answers SC9 from the schematics a query reads.
+- **The rules check little of a point.** Firestore stops evaluating a request at 1,000 expressions and the rules can't walk a list, so they check the list's size (at most 200), that the element is a location or an object, and that each of the first 16 points lies on the picture (0 to 1 each way, at about 40 expressions a point: a 22-point plan fits, a 25-point one doesn't). The plans check every point's fields, so the page and the connector are what keep the rest (D6 and CL7 are kept the same way).
+- **A point's id is `p` and a number,** the next one above any in the list, so it is never reused while a higher one stands; its number on the pin is its place in the list, and taking one off renumbers those after it. A point can be named by its id, its number or a name only it has.
+- **A point needs a name,** so a point placed by a tap starts as "Point 3" with its card open to rename it.
+- **A link must be to a live element when it is made or changed,** and a point whose element is retired later keeps it (the page and `get_schematic` say it is retired). Descriptions are Markdown with @-links but record no `mentions`: they don't show in an element's "mentioned in".
+- **A schematic's order is its place among its element's,** from 0, and a move renumbers the others it has to, so ties and gaps mend themselves. At most 30 to an element.
+- **"Marked on" is on every element's page,** not only locations and objects: any element can be linked. It opens the element that owns the plan at `#/p/<id>/e/<element>/m/<schematic>/<point>`, with that pin picked and the picture zoomed in on it.
+- **`get_schematic` draws the pins and the grid on a copy of the studio picture** (at most 1568 px, as a JPEG) with sharp. The numbers are drawn as strokes, so no font is needed; the grid's lines are marked 1 to 9 along the top (x) and down the left (y).
+- **A schematic can be named by its name** in the connector's tools when `elementId` says whose it is; `list_schematics` and `add_schematic` take an element by id or by a name only it has.
+- **The studio gains the kind `schematic`** (D8): in the library's kinds, the studio page's filter and upload, and `studio_generate`'s `kind`.
 
 ### Later epics (planned; filed when next)
 
