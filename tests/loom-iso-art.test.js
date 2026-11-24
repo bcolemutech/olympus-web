@@ -5,8 +5,9 @@
  * paint.js, materials.js; planning/isometric-view.md §4.4, AR2, AR3, C4;
  * L-955 / #861), on the real map engine (fixtures/paint/drawers.html):
  *
- *   - a grid with an old top-down painting draws from its data alone: the
- *     painting isn't drawn, its floors are;
+ *   - a grid with a painting made for another view draws from its data
+ *     alone: the painting isn't drawn, its floors are (a top-down one is
+ *     artwork, shown flat since L-961: loom-artwork.test.js);
  *   - a grid with a floor painting draws it as its floor, aligned with the
  *     grid, with its floors not drawn and its walls, doors and objects still
  *     standing from the data;
@@ -149,16 +150,16 @@ const painting = (view) => ({
 });
 
 describe('a grid’s own painting (AR2, C4)', () => {
-  withBrowser('an old top-down painting isn’t drawn: the map draws from its data', async () => {
+  withBrowser('a painting made for another view isn’t drawn: the map draws from its data', async () => {
     const page = await gridPage();
-    await shown(page, dungeonData({ image: painting(null) }));
-    expect(await page.evaluate(() => window.Loom.battle.drawn().art)).toBeNull();
-    const drawn = await describeOf(page);
-    expect(drawn.some((d) => d.kind === 'ground')).toBe(true);
-    expect(drawn.some((d) => d.kind === 'wall')).toBe(true);
-    // One marked top-down is no more a floor painting.
-    await shown(page, dungeonData({ image: painting('top-down') }));
-    expect(await page.evaluate(() => window.Loom.battle.drawn().art)).toBeNull();
+    for (const view of ['three-quarter', 'iso']) {
+      await shown(page, dungeonData({ image: painting(view) }));
+      expect(await page.evaluate(() => window.Loom.battle.iso())).toBe(true);
+      expect(await page.evaluate(() => window.Loom.battle.drawn().art)).toBeNull();
+      const drawn = await describeOf(page);
+      expect(drawn.some((d) => d.kind === 'ground')).toBe(true);
+      expect(drawn.some((d) => d.kind === 'wall')).toBe(true);
+    }
     expect(page.errors).toEqual([]);
     await page.close();
   });

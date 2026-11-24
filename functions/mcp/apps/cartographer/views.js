@@ -763,14 +763,6 @@ function usersOf(world, mapId) {
   ];
 }
 
-// Whether a battle map's art is a floor painting (L-955): the only art a grid
-// map draws, under its walls, doors and objects. Older top-down paintings
-// aren't, and are not drawn on a grid.
-function floorPainting(map) {
-  const art = artOf.mapArt(map);
-  return Boolean(art && art.view === 'floor');
-}
-
 function battleMapRow(world, map) {
   return {
     id: map.id,
@@ -778,8 +770,9 @@ function battleMapRow(world, map) {
     size: { width: map.width, height: map.height },
     generic: map.generic || null,
     hasImage: Boolean(map.image),
-    // Whether that is a floor painting, the only art a grid draws (L-955).
-    ...(map.image ? { floorPainting: floorPainting(map) } : {}),
+    // What its art is (L-961): 'top-down', artwork shown flat; 'floor', a floor
+    // painting under what stands (L-955); null, none drawn.
+    artwork: artOf.artworkOf(map),
     // Walls, doors or obstacles (L-622), in its geometry since L-928: what a
     // place's own map needs to count in full toward its score.
     hasLayers: layerGeometry.hasShapes(map),
@@ -869,17 +862,18 @@ function battleMapDetail(world, map) {
           width,
           height,
           format,
-          floorPainting: floorPainting(map),
-          ...(floorPainting(map)
+          ...(artOf.artworkOf(map)
             ? {}
             : {
                 note:
-                  'Not a floor painting, so the grid does not draw it. Make one: view_image ' +
-                  'this map with floor: true, then studio_generate from it with floor: true, ' +
-                  'and studio_assign it.',
+                  'Made for another view, so the grid does not draw it. Give it artwork: ' +
+                  'studio_generate from this map, then studio_assign it.',
               }),
         }))(artOf.mapArt(map))
       : null,
+    // What its art is (L-961): 'top-down', artwork shown flat in play; 'floor', a
+    // floor painting under what stands from its data (L-955); null, none drawn.
+    artwork: artOf.artworkOf(map),
     generic: map.generic || null,
     entries: map.entries || [],
     exits: (map.exits || []).map((exit) => ({ ...exit, to: exitTo(exit) })),

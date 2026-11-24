@@ -72,6 +72,18 @@ const FLOOR_PROMPT =
   'Do not paint walls, doors, windows, furniture, objects, people, shadows of things standing, ' +
   'text or a grid: they are drawn separately over the painting, so leave the floor bare ' +
   'where they will stand.';
+// What a battle map's artwork is asked for (isometric-view.md §4.7, AW1;
+// L-961): the whole map from straight above, over a guide of its layout, with
+// everything where the guide has it, since play follows the data and draws
+// none of it over the painting.
+const ARTWORK_PROMPT =
+  'Paint this whole map seen from straight above, as a finished painting: its floors, and ' +
+  'every wall, door, window, piece of furniture and object exactly where the guide has it, ' +
+  'the same size and shape, filling the whole image. In the guide, walls are the solid ' +
+  'lines, doors (red when locked) and windows (pale blue) the short stretches of another ' +
+  'colour in them, and objects the outlined shapes. Add no walls, doors or large objects the ' +
+  'guide doesn’t have, and leave out none it has: play follows the guide. Do not paint ' +
+  'people, text, labels or a grid.';
 // Reference formats the model reads; SVG is drawn to PNG first.
 const READABLE = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
 
@@ -289,6 +301,9 @@ function createJobs({
   // A grid's floors drawn as a guide for a floor painting (L-955): (world,
   // mapId) → PNG bytes. Not given, a floor painting can't be made here.
   floorGuide = null,
+  // A grid's layout drawn as a guide for its artwork (L-961): (world, mapId) →
+  // PNG bytes. Not given, artwork is made from the map's text alone.
+  layoutGuide = null,
   // Named styles (L-709, functions/studio/styles.js); none when not given.
   styles = null,
   // Refreshes the worlds using an image after its current version changes
@@ -364,11 +379,22 @@ function createJobs({
     if (input.view !== undefined && input.view !== null && !VIEWS.includes(input.view)) {
       throw invalid(`The view is one of: ${VIEWS.join(', ')}.`);
     }
+    // Artwork (L-961): a battle map's image from it that isn't a floor
+    // painting is the whole map from above, over a guide of its layout.
+    const kind = input.kind || (fromInfo && fromInfo.kind) || null;
+    const artwork =
+      !floor &&
+      Boolean(layoutGuide) &&
+      Boolean(from) &&
+      from.kind === 'battleMap' &&
+      kind === 'battleMap' &&
+      (!input.view || input.view === 'top-down');
     // The style named, else the world's default (L-709).
     const style = await styleFor(input.styleId, world);
 
     const references = input.references || [];
-    const room = MAX_REFERENCES - (floor ? 1 : 0) - (style ? style.references.length : 0);
+    const guides = floor || artwork ? 1 : 0;
+    const room = MAX_REFERENCES - guides - (style ? style.references.length : 0);
     if (!Array.isArray(references) || references.length > room) {
       throw invalid(
         `At most ${room} reference images` +
@@ -379,7 +405,6 @@ function createJobs({
     }
     for (const id of references) await library.getImage(id); // each must exist
 
-    const kind = input.kind || (fromInfo && fromInfo.kind) || null;
     if (!KINDS.includes(kind)) throw invalid(`Say what kind of image it is: ${KINDS.join(', ')}.`);
     const title =
       typeof input.title === 'string' && input.title.trim()
@@ -398,7 +423,8 @@ function createJobs({
       references,
       from,
       ...(floor ? { floor: true } : {}),
-      view: floor ? 'floor' : input.view || null,
+      ...(artwork ? { artwork: true } : {}),
+      view: floor ? 'floor' : artwork ? 'top-down' : input.view || null,
       title,
       labels: normalizeLabels(input.labels),
       style,
@@ -579,13 +605,17 @@ function createJobs({
           const world = await loadWorld(request.from.worldId);
           if (!world) throw new JobError('not-found', 'Its world is gone.');
           from = fromData(world, request.from, { placesOf, floor: request.floor });
-          // The floors as a guide, the last reference (L-955).
-          if (request.floor) guide = { world };
+          // The floors as a guide, the last reference (L-955); or its layout,
+          // for its artwork (L-961).
+          if (request.floor) guide = { world, make: floorGuide };
+          else if (request.artwork) guide = { world, make: layoutGuide };
         }
         prompt = buildPrompt(request.prompt, from, style, request.kind);
         if (guide) {
           const at = (style ? style.references.length : 0) + request.references.length + 1;
-          prompt += `\n\nImage ${at} is the guide: the map's floors, in flat colours.\n${FLOOR_PROMPT}`;
+          prompt += request.floor
+            ? `\n\nImage ${at} is the guide: the map's floors, in flat colours.\n${FLOOR_PROMPT}`
+            : `\n\nImage ${at} is the guide: the map's layout, in flat colours.\n${ARTWORK_PROMPT}`;
         }
       }
       // The style's images, then the request's own.
@@ -593,7 +623,7 @@ function createJobs({
       for (const id of request.references) references.push(await referenceOf(id));
       if (guide) {
         references.push({
-          bytes: await floorGuide(guide.world, request.from.id),
+          bytes: await guide.make(guide.world, request.from.id),
           mimeType: 'image/png',
         });
       }

@@ -193,25 +193,34 @@ function holderOf(world, target, id) {
 }
 
 /**
- * What a battle map's art must be (L-955, AR2, C4): a floor painting. Art
- * already held there is refreshed rather than checked again (an edit's new
- * version, a size change), so a map's older painting keeps working until it
- * is replaced.
+ * What a battle map's art must be (L-955, L-961; AR2, C4, AW1): a floor
+ * painting, or artwork, the whole map painted from above; an image not marked
+ * is taken as artwork (`spec.mark`). Art already held there is refreshed
+ * rather than checked again (an edit's new version, a size change), so a
+ * map's older painting keeps working until it is replaced.
  */
 function checkView(spec, record, use) {
-  if (!spec.view || record.view === spec.view) return;
+  if (!spec.views || spec.views.includes(record.view) || (!record.view && spec.mark)) return;
   const held = (record.usedIn || []).some(
     (u) => u.worldId === use.worldId && u.target === use.target && u.id === use.id
   );
   if (held) return;
   throw new AssignError(
     'failed-precondition',
-    `"${record.title}" is ${record.view ? `a ${record.view}` : 'not marked as a ' + spec.view} ` +
-      `image; ${spec.label} is a ${spec.view} painting: the grid's floors only, top-down, laid ` +
-      'under its walls, doors and objects, which stand from its data. Make one with ' +
-      'studio_generate (from the battle map, floor: true), or mark an image you have ' +
-      `(studio_update view ${spec.view}).`
+    `"${record.title}" is a ${record.view} image; ${spec.label} is a top-down painting: ` +
+      'either artwork, the whole map from above with its walls, doors and objects painted ' +
+      'in place, shown flat (studio_generate from the battle map); or a floor painting, its ' +
+      'floors alone, laid under its walls, doors and objects standing from its data ' +
+      '(studio_generate from the battle map, floor: true).'
   );
+}
+
+/**
+ * The view an image not marked takes when assigned to a target that marks it
+ * (L-961: a battle map's, `top-down`), or null when it keeps its own.
+ */
+function markOf(spec, record) {
+  return record && !record.view && spec.mark ? spec.mark : null;
 }
 
 /**
@@ -451,6 +460,10 @@ function createAssigner({ db, bucket, writer, library }) {
       record = done.record;
       fitNote = done.note || null;
     }
+    // An image not marked is marked as it is used (L-961): a battle map's
+    // art, artwork. The world's reference holds the view too.
+    const mark = markOf(spec, record);
+    if (mark) record = { ...record, view: mark };
     const plain = record ? refOf(record) : null;
     const use = { worldId, target, id: at };
 
@@ -470,7 +483,15 @@ function createAssigner({ db, bucket, writer, library }) {
         if (previous && previous.imageId) {
           e.update(imageRef(previous.imageId), { usedIn: FieldValue.arrayRemove(use) });
         }
-        if (ref) e.update(imageRef(ref.imageId), { usedIn: FieldValue.arrayUnion(use) });
+        if (ref) {
+          e.update(imageRef(ref.imageId), {
+            usedIn: FieldValue.arrayUnion(use),
+            ...(mark ? { view: mark } : {}),
+          });
+        }
+      }
+      if (mark && ref && previous && previous.imageId === ref.imageId) {
+        e.update(imageRef(ref.imageId), { view: mark });
       }
       const value = ref || FieldValue.delete();
       if (target === 'map') {
@@ -574,8 +595,18 @@ function createAssigner({ db, bucket, writer, library }) {
    * Cartographer page's uploads and set_art. If assigning fails, the new
    * image is deleted again.
    */
-  async function addAndAssign(uid, { worldId, target, id, file, via, labels, source, fit }) {
+  async function addAndAssign(uid, { worldId, target, id, file, via, labels, source, fit, view }) {
     if (!TARGETS[target]) throw new AssignError('invalid-argument', `Unknown target ${target}.`);
+    // A battle map's (L-961): artwork, unless a floor painting is said.
+    const views = TARGETS[target].views;
+    if (view && (!views || !views.includes(view))) {
+      throw new AssignError(
+        'invalid-argument',
+        views
+          ? `${TARGETS[target].label} is ${views.join(' or ')}.`
+          : `${TARGETS[target].label} takes no view.`
+      );
+    }
     // Check the target first, and name the image after it.
     const world = await loomCanon.loadWorld(worldId, { db, playableOnly: false });
     if (!world) throw new AssignError('not-found', 'No such world, or it is still importing.');
@@ -583,8 +614,8 @@ function createAssigner({ db, bucket, writer, library }) {
     const record = await library.addImage({
       title: `${holder.name}: ${TARGETS[target].label}`,
       kind: TARGETS[target].kind,
-      // A battle map's art is a floor painting (L-955).
-      view: TARGETS[target].view || null,
+      // A battle map's art is artwork or a floor painting (L-955, L-961).
+      view: view || TARGETS[target].mark || null,
       labels,
       file,
       createdBy: uid,

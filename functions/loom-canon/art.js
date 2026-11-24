@@ -56,13 +56,25 @@ function mapArt(map) {
 }
 
 /**
- * Whether a battle map's art is a floor painting (L-955, C4): the only
- * painting a grid draws, under what stands. An older top-down painting, or one
- * not marked, is not drawn on a grid.
+ * Whether a battle map's art is a floor painting (L-955, C4): its floors,
+ * drawn under what stands from its data.
  */
 function floorPainting(map) {
+  return artworkOf(map) === 'floor';
+}
+
+/**
+ * What a battle map's own art is, as a grid draws it (L-961, AW1): 'floor', a
+ * floor painting under what stands; 'top-down', artwork, the whole map
+ * painted from above and shown flat (an image not marked is taken as one,
+ * as today's paintings are); or null, none, or art made for another view,
+ * which isn't drawn.
+ */
+function artworkOf(map) {
   const art = mapArt(map);
-  return Boolean(art && art.view === 'floor');
+  if (!art) return null;
+  if (art.view === 'floor') return 'floor';
+  return !art.view || art.view === 'top-down' ? 'top-down' : null;
 }
 
 /** The world map's art: map.image, else the imported map.imagePath. */
@@ -105,4 +117,13 @@ function forPlayer(art) {
   };
 }
 
-module.exports = { fromRef, townArt, mapArt, floorPainting, worldMapArt, coverArt, forPlayer };
+module.exports = {
+  fromRef,
+  townArt,
+  mapArt,
+  floorPainting,
+  artworkOf,
+  worldMapArt,
+  coverArt,
+  forPlayer,
+};

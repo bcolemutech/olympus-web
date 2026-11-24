@@ -98,7 +98,9 @@
   //
   // options: { tile (map units a tile of ground covers; 5 on a grid),
   //            wall (a wall's thickness in map units; 1 on a grid),
-  //            art (true: the map has its own art), floorArt (true: a grid has a
+  //            art (true: the map has its own art), doorMarks (with art: its
+  //            doors as small marks by their state, not lines; a grid's
+  //            artwork, L-961), floorArt (true: a grid has a
   //            floor painting, drawn by the grid view under what stands, so its
   //            floors and lines aren't drawn, L-955), tint (the world's accent,
   //            0xRRGGBB, or null), worldKinds (the world's object kinds),
@@ -211,6 +213,7 @@
   var FADE_MS = 150;
   var LIGHT_RGB = '255,214,150';
   var COLOURS = { door: 0xffb74d, doorLocked: 0xe57373, dark: 0x05070d, ledge: 0x05070d };
+  var MARK_FT = 0.9; // a door's mark on a grid's artwork: its radius in feet (L-961)
 
   var counts = { built: 0, kept: 0, removed: 0 };
   var maps = new Map(); // key → { root, layers, items, job }
@@ -1399,11 +1402,34 @@
       });
     }
 
-    // Doors: over a map's own art, lines by their state; else standing
+    // Doors: over a map's own art, lines by their state (on a grid's artwork,
+    // L-961, small marks by their state, `doorMarks`); else standing
     // (L-941): a closed one an upright panel in its wall, an open one a thin
     // leaf swung on its hinge (`from`), the wall going on above either; in
     // isometric (L-952) in walls both ways, their panel's front filling it.
     list('doors').forEach(function (item, i) {
+      if (art && o.doorMarks) {
+        // Standing, so its mark shows over the fog's dark at the edge of
+        // sight, where a shut door always is.
+        add('standing', 'door', item, i + 1000, [], function () {
+          var a = pt(item.from);
+          var b = pt(item.to);
+          if (!a || !b) return [];
+          var r = (MARK_FT + 0.25) * o.feet;
+          var x = (a.x + b.x) / 2;
+          var y = (a.y + b.y) / 2;
+          return [
+            {
+              node: doorMark(a, b, item.state || 'closed', o.feet),
+              depth: y,
+              box: { x0: x - r, y0: y - r, x1: x + r, y1: y + r },
+              hit: null, // picked by its doorway (the drawer's doorAt)
+              fades: false,
+            },
+          ];
+        });
+        return;
+      }
       if (art) {
         add(
           'openings',
@@ -1771,6 +1797,29 @@
         .moveTo(a.x, a.y)
         .lineTo(b.x, b.y)
         .stroke({ width: thick * 0.9, color: colour });
+    }
+    return gfx;
+  }
+
+  // A door on a grid's artwork (planning/isometric-view.md §4.7, AW1; L-961):
+  // the art shows the door as painted, so its state is a small mark in the
+  // middle of its doorway: a closed one a full amber disc, an open one an
+  // amber ring, a locked one a red disc with a dark bar; each edged dark to
+  // read on any painting.
+  function doorMark(a, b, state, feet) {
+    var gfx = new window.PIXI.Graphics();
+    var r = MARK_FT * feet;
+    var x = (a.x + b.x) / 2;
+    var y = (a.y + b.y) / 2;
+    var colour = state === 'locked' ? COLOURS.doorLocked : COLOURS.door;
+    gfx.circle(x, y, r + 0.25 * feet).fill({ color: COLOURS.dark, alpha: 0.7 });
+    if (state === 'open') {
+      gfx.circle(x, y, r * 0.75).stroke({ width: r * 0.45, color: colour });
+    } else {
+      gfx.circle(x, y, r).fill({ color: colour });
+      if (state === 'locked') {
+        gfx.rect(x - r * 0.55, y - r * 0.15, r * 1.1, r * 0.3).fill({ color: COLOURS.dark });
+      }
     }
     return gfx;
   }

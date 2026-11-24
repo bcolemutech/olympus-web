@@ -22,8 +22,10 @@ const catalog = require('../../../loom-canon/materials');
 // not filled, so it shows), heights (shade floors by height, default true),
 // hidden (draw what is hidden, marked; false draws the map as players see
 // it), guide (floors and lines in flat colour only, for a floor painting,
-// L-955), doors (a save's door states), skipDoors and skipObjects (ids another
-// marker already numbers) }.
+// L-955), layout (paintOver: walls, doors, windows and objects only, with no
+// zones, lights, spawns or notes, for artwork's guide, L-961), doors (a save's
+// door states), skipDoors and skipObjects (ids another marker already
+// numbers) }.
 
 const GROUND = {
   stone: [110, 112, 120],
@@ -239,8 +241,22 @@ function makePainter(h) {
    */
   function paintOver(c, geometry, scale, options = {}, mark = () => 0) {
     const K = typeof scale === 'number' ? { x: scale, y: scale } : scale;
-    const { hidden = true, sizes = false, doors = {}, skipDoors = [], skipObjects = [] } = options;
+    const {
+      hidden = true,
+      sizes = false,
+      doors = {},
+      skipDoors = [],
+      skipObjects = [],
+      layout = false,
+    } = options;
     const g = geo.compile(geometry || {});
+    // Artwork's guide (L-961): only what the painting is to show where it stands.
+    if (layout) {
+      g.zones = [];
+      g.lights = [];
+      g.spawns = [];
+      g.notes = [];
+    }
     const shown = (item) => hidden || !g.hidden[item.id];
     const ls = labelScale(c);
     const drawn = {};

@@ -222,7 +222,7 @@ describe('the registry', () => {
       const [table, key] = c.id.split('.');
       expect(c.weight).toBe(WEIGHTS[table][key]);
     }
-    expect(RUBRIC_VERSION).toBe(16);
+    expect(RUBRIC_VERSION).toBe(17);
   });
 
   test('the weights in the table are the criteria’s, kind by kind', () => {
@@ -350,7 +350,7 @@ describe('point of interest and place criteria', () => {
     const plain = without(w, 'battleMaps', 'bm_inn', { image: null });
     expect(check('place.mapArt', plain, plain.places.plc_inn, 'place')).toMatchObject({
       progress: 0,
-      message: 'Its battle map has no floor painting.',
+      message: 'Its battle map has no artwork or floor painting.',
     });
     const generic = without(w, 'battleMaps', 'bm_inn', { generic: { kind: 'tavern' } });
     expect(check('place.mapArt', generic, generic.places.plc_inn, 'place').progress).toBe(0);
@@ -663,24 +663,43 @@ describe('character, battle map, realm and world criteria', () => {
       expect(look.unpainted(w, standing)).toMatchObject({ total: 2 });
     });
 
-    test('a top-down painting counts for nothing on a grid', () => {
+    test('top-down artwork, marked or not, is its own art, shown as painted (L-961)', () => {
       const w = world();
-      const old = { ...MAP.image, view: 'top-down' };
+      const artwork = { ...MAP.image, view: 'top-down' };
       const unmarked = { path: 'art/inn.png', width: 8, height: 8, format: 'png' };
-      for (const image of [old, unmarked, { ...old, view: 'three-quarter' }]) {
-        // Its floors are drawn from the data, so they are looked at; with none, it
-        // is not drawn at all.
-        const flat = drawn({ ground: [{ ...floor(6, 6), material: 'nothing' }] }, { image });
-        expect(check('battleMap.look', w, flat)).toMatchObject({ lacking: ['ground/nothing'] });
-        const bare = drawn({}, { image });
-        expect(check('battleMap.look', w, bare)).toMatchObject({ progress: 0, need: 'drawn' });
-        expect(check('battleMap.art', w, bare)).toMatchObject({
-          progress: 0,
-          message: expect.stringContaining('old view'),
+      const odd = { id: 'o', kind: 'moonstone-altar', at: [20, 20], size: [3, 3] };
+      for (const image of [artwork, unmarked]) {
+        // It earns the bonus, and its look in full: nothing is drawn from the
+        // set over it, even what the set has no art for.
+        expect(check('battleMap.art', w, drawn({}, { image }))).toEqual({ progress: 1 });
+        const m = drawn(
+          { ground: [{ ...floor(6, 6), material: 'nothing' }], objects: [odd] },
+          { image }
+        );
+        expect(check('battleMap.look', w, m)).toEqual({ progress: 1 });
+        // A place whose own map it is has art on it.
+        const placed = without(world(), 'battleMaps', 'bm_inn', { image });
+        expect(check('place.mapArt', placed, placed.places.plc_inn, 'place')).toEqual({
+          progress: 1,
         });
       }
-      // A floor painting earns the bonus.
+      // A floor painting earns the bonus too.
       expect(check('battleMap.art', w, { ...MAP, image: MAP.image })).toEqual({ progress: 1 });
+    });
+
+    test('art made for another view counts for nothing on a grid', () => {
+      const w = world();
+      const image = { ...MAP.image, view: 'three-quarter' };
+      // Its floors are drawn from the data, so they are looked at; with none, it
+      // is not drawn at all.
+      const flat = drawn({ ground: [{ ...floor(6, 6), material: 'nothing' }] }, { image });
+      expect(check('battleMap.look', w, flat)).toMatchObject({ lacking: ['ground/nothing'] });
+      const bare = drawn({}, { image });
+      expect(check('battleMap.look', w, bare)).toMatchObject({ progress: 0, need: 'drawn' });
+      expect(check('battleMap.art', w, bare)).toMatchObject({
+        progress: 0,
+        message: expect.stringContaining('another view'),
+      });
     });
 
     test('art is a bonus: a map with its own art scores over the same one without', () => {
@@ -698,9 +717,11 @@ describe('character, battle map, realm and world criteria', () => {
       // Short of the top, the art adds its bonus points.
       const short = { ...data, exits: [] };
       const withArt = { ...short, image: MAP.image };
-      // A top-down painting earns none of it (L-956).
+      // Top-down artwork earns it as well (L-961); art for another view doesn't.
       const topDown = { ...short, image: { ...MAP.image, view: 'top-down' } };
-      expect(gradeBattleMap(w, topDown).score).toBe(gradeBattleMap(w, short).score);
+      expect(gradeBattleMap(w, topDown).score).toBe(gradeBattleMap(w, withArt).score);
+      const other = { ...short, image: { ...MAP.image, view: 'iso' } };
+      expect(gradeBattleMap(w, other).score).toBe(gradeBattleMap(w, short).score);
       expect(gradeBattleMap(w, withArt).score - gradeBattleMap(w, short).score).toBeCloseTo(
         WEIGHTS.battleMap.art - WEIGHTS.battleMap.exits * 0 - 0,
         5

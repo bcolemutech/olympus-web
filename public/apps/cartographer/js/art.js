@@ -45,12 +45,13 @@
     battleMap: {
       title: 'Battle-map art',
       hint:
-        "A battle map's art is its floor painting: the floors only, top-down, stretched to " +
-        'the grid and drawn under its walls, doors and objects, which stand from its data ' +
-        '(a painting with walls or furniture painted in would show them twice). Draw the map ' +
-        'with Claude first (set_battle_map). Upload a PNG or an SVG, or ask Claude to make ' +
-        'one (studio_generate from the map with floor: true, or set_art); Claude can check ' +
-        'that it lines up, with view_image.',
+        "A battle map's art is its artwork: the whole map from above, its walls, doors and " +
+        'furniture painted where its data has them, stretched to the grid and shown flat in ' +
+        'the Loom, with tokens, the fog and door marks over it. Draw the map with Claude ' +
+        'first (set_battle_map). Upload a PNG or an SVG, or ask Claude to make one ' +
+        '(studio_generate from the map, or set_art); Claude can check that it lines up, with ' +
+        'view_image. Claude can make a floor painting instead (floor: true), for the ' +
+        'isometric view.',
       pick: 'Battle map',
       of: 'battle maps',
       file: 'battlemap.png',
