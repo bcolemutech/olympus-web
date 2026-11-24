@@ -152,12 +152,6 @@ Start making an image from the studio page's form (prompt, kind, view, tier, sha
 
 The Muse page's "Search all text" (the header box's last row, `#/p/<id>/s/<words>`): `{ projectId, query, types?, limit? }` (query up to 200 characters, limit 1–50, default 30). Searches the names, aliases, bios, appearances and text fields of a project's live elements: every word must be found, "words in quotes" are a phrase, case and accents are set aside, and Markdown is read as shown (a link by its words). Gives `{ terms, total, results }`, each result `{ id, type, name, aliases, primary, where, snippet }`, the snippet `{ in, text, marks }` around the first match in a longer text. The same code as the connector's `search` (`functions/muse/store.js`, `functions/muse/search.js`). Someone else's project is `not-found`
 
-## `museSearch`
-
-**Who can call:** `muse` claim (own projects; M-106)
-
-The Muse page's "Search all text" (the header box's last row, `#/p/<id>/s/<words>`): `{ projectId, query, types?, limit? }` (query up to 200 characters, limit 1–50, default 30). Searches the names, aliases, bios, appearances and text fields of a project's live elements: every word must be found, "words in quotes" are a phrase, case and accents are set aside, and Markdown is read as shown (a link by its words). Gives `{ terms, total, results }`, each result `{ id, type, name, aliases, primary, where, snippet }`, the snippet `{ in, text, marks }` around the first match in a longer text. The same code as the connector's `search` (`functions/muse/store.js`, `functions/muse/search.js`). Someone else's project is `not-found`
-
 ## `studioRunJob`
 
 **Who can call:** Cloud Tasks queue only
