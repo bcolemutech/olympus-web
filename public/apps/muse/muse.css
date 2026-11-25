@@ -904,7 +904,8 @@ a.muse-section-tile:focus-visible {
   align-items: center;
 }
 
-.muse-rel-fixed a.muse-el-link {
+.muse-rel-fixed a.muse-el-link,
+.muse-sc-link a.muse-el-link {
   color: var(--muse-accent-strong);
 }
 
@@ -1435,9 +1436,10 @@ a.muse-section-tile:focus-visible {
   min-height: 32px;
 }
 
+/* The picture the card's full width, its points below it (M-203's testing). */
 .muse-sc-body {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(14rem, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -1466,9 +1468,13 @@ a.muse-section-tile:focus-visible {
   cursor: crosshair;
 }
 
+/* Sized by the page (its base size, see base() in schematic-page.js). */
 .muse-sc-canvas {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   transform-origin: 0 0;
 }
 
@@ -1554,10 +1560,15 @@ a.muse-section-tile:focus-visible {
   gap: 0.75rem;
 }
 
+.muse-sc-add {
+  justify-self: start;
+  align-self: flex-start;
+}
+
 .muse-sc-points {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: 0.25rem 0.5rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1644,12 +1655,133 @@ a.muse-section-tile:focus-visible {
 }
 
 @media (max-width: 760px) {
-  /* The list goes below the picture on a phone. */
-  .muse-sc-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .muse-sc-points {
     max-height: none;
+  }
+}
+
+/* ── A schematic over the whole screen: its bar on top, the picture filling
+   the rest, the points in a panel at the right (over the picture when
+   narrow), and the picked point's card by its pin. ── */
+
+html.muse-sc-locked,
+html.muse-sc-locked body {
+  overflow: hidden;
+}
+
+.muse-sc-body.muse-sc-full {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
+  background: #0a0e1a;
+}
+
+.muse-sc-full-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--muse-line);
+  background: #111827;
+}
+
+.muse-sc-full-title {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muse-sc-full > .muse-sc-main {
+  position: relative;
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 0;
+}
+
+.muse-sc-full .muse-sc-stage {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  aspect-ratio: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: #05070d;
+}
+
+.muse-sc-full .muse-sc-main > .muse-hint {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  z-index: 5;
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.9);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.muse-sc-full > .muse-sc-side {
+  display: none;
+  grid-column: 2;
+  grid-row: 2;
+  width: 22rem;
+  min-height: 0;
+  padding: 0.75rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--muse-line);
+  background: #111827;
+}
+
+.muse-sc-full.muse-sc-drawer-open > .muse-sc-side {
+  display: flex;
+}
+
+/* Its own bar has "Add point" and the card is by the pin. */
+.muse-sc-full .muse-sc-side > .muse-sc-add,
+.muse-sc-full .muse-sc-side > .muse-sc-card {
+  display: none;
+}
+
+.muse-sc-full .muse-sc-points {
+  grid-template-columns: minmax(0, 1fr);
+  max-height: none;
+  overflow: visible;
+}
+
+.muse-sc-pop {
+  position: absolute;
+  z-index: 6;
+  width: min(19rem, calc(100% - 16px));
+  max-height: 60%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #1a1530;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+@media (max-width: 760px) {
+  /* Narrow, the points cover the picture's right side. */
+  .muse-sc-full > .muse-sc-main,
+  .muse-sc-full > .muse-sc-side {
+    grid-column: 1 / -1;
+  }
+
+  .muse-sc-full > .muse-sc-side {
+    z-index: 7;
+    justify-self: end;
+    width: min(22rem, 85vw);
   }
 }

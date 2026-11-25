@@ -371,6 +371,14 @@
             <h2 class="muse-heading" id="muse-e-sc-heading">
               Schematics <span class="muse-count" id="muse-e-sc-count"></span>
             </h2>
+            <button
+              type="button"
+              class="muse-btn muse-btn-quiet hidden"
+              id="muse-e-sc-edit"
+              aria-pressed="false"
+            >
+              Edit schematics
+            </button>
           </div>
           <p class="muse-error hidden" id="muse-e-sc-error" role="alert"></p>
           <div class="muse-sc-tabs hidden" id="muse-e-sc-tabs"></div>
@@ -378,7 +386,7 @@
             No schematics yet. Add a floor plan, a map of the decks, a machine’s parts.
           </p>
           <div class="hidden" id="muse-e-sc-open"></div>
-          <div class="muse-sc-new">
+          <div class="muse-sc-new" id="muse-e-sc-new">
             <label class="muse-label" for="muse-e-sc-new-name">Add a schematic</label>
             <input
               class="muse-input"

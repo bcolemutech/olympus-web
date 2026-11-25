@@ -2157,8 +2157,13 @@ describe('schematics (M-202)', () => {
     return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   };
   const near = (value, expected) => expect(Math.abs(value - expected)).toBeLessThan(0.02);
+  // Turns on "Edit schematics", which shows what changes them.
+  const editing = async (page) => {
+    await page.click('#muse-e-sc-edit');
+    await page.waitForSelector('#muse-sc-add-point:not(.hidden)');
+  };
 
-  test('a location lists its schematics in order, with numbered pins and its points beside them', async () => {
+  test('a location lists its schematics in order, with numbered pins and its points below them', async () => {
     await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
       await page.waitForSelector('.muse-sc-pin');
       await expect(page.locator('.muse-sc-tab').allInnerTexts()).resolves.toEqual([
@@ -2221,6 +2226,7 @@ describe('schematics (M-202)', () => {
   test('"Add point", then a tap places one at the right fraction; it is named and linked (SC7)', async () => {
     await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
       await page.waitForSelector('.muse-sc-pin');
+      await editing(page);
       await page.click('#muse-sc-add-point');
       await expect(page.locator('#muse-sc-hint').isVisible()).resolves.toBe(true);
       await page.locator('#muse-sc-stage').scrollIntoViewIfNeeded();
@@ -2257,6 +2263,7 @@ describe('schematics (M-202)', () => {
   test('dragging a pin moves it, by mouse (SC7); a drag is not a pick', async () => {
     await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
       await page.waitForSelector('.muse-sc-pin');
+      await editing(page);
       const from = await centre(page, '.muse-sc-pin[data-id="p2"]');
       const canvas = await page.locator('#muse-sc-canvas').boundingBox();
       await page.mouse.move(from.x, from.y);
@@ -2315,6 +2322,7 @@ describe('schematics (M-202)', () => {
       const pin = await page.locator('.muse-sc-pin[data-id="p1"]').boundingBox();
       expect(Math.round(pin.width)).toBe(30);
       // Adding a point while zoomed lands where it was tapped.
+      await page.click('#muse-e-sc-edit');
       await page.click('#muse-sc-add-point');
       const view = await page.locator('#muse-sc-stage').boundingBox();
       const tap = { x: view.x + view.width * 0.5, y: view.y + view.height * 0.5 };
@@ -2356,6 +2364,7 @@ describe('schematics (M-202)', () => {
   test('a schematic is added with a picture, renamed, reordered and removed (SC4)', async () => {
     await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
       await page.waitForSelector('.muse-sc-pin');
+      await editing(page);
       await page.fill('#muse-e-sc-new-name', 'Cellars');
       await page.click('#muse-e-sc-photo-pick');
       await page.click('#muse-e-sc-photo-grid .muse-picker-tile[data-id="img_plan"]');
@@ -2408,6 +2417,7 @@ describe('schematics (M-202)', () => {
   test('a point is removed, and a version of the schematic is kept by hand (D9)', async () => {
     await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
       await page.waitForSelector('.muse-sc-pin');
+      await editing(page);
       await page.fill('#muse-e-sc-versions-box-name', 'Before the siege');
       await page.click('#muse-e-sc-versions-box-save');
       await page.waitForSelector('#muse-e-sc-versions-box-done:not(.hidden)');
@@ -2433,6 +2443,146 @@ describe('schematics (M-202)', () => {
       expect(left.points.map((p) => p.id)).toEqual(['p2']);
       expect(left.links).toEqual([]);
       await expect(page.locator('.muse-sc-pin').allInnerTexts()).resolves.toEqual(['1']);
+    });
+  });
+
+  test('a schematic opens for reading: what changes it shows only while editing, and a pin moves only then', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      const visible = (selector) => page.locator(selector).isVisible();
+      const editOnly = [
+        '#muse-sc-name',
+        '#muse-sc-earlier',
+        '#muse-sc-remove',
+        '#muse-sc-add-point',
+        '#muse-e-sc-new',
+        '#muse-e-sc-versions',
+      ];
+      for (const selector of editOnly) await expect(visible(selector)).resolves.toBe(false);
+      await expect(page.locator('#muse-e-sc-edit').innerText()).resolves.toMatch(/edit schematics/i);
+      // The picture has the card's width, unless that would make it taller
+      // than 70% of the screen; the points are below it.
+      const open = await page.locator('#muse-e-sc-open').boundingBox();
+      const stage = await page.locator('#muse-sc-stage').boundingBox();
+      const list = await page.locator('#muse-sc-points').boundingBox();
+      expect(stage.width).toBeGreaterThan(Math.min(open.width, (900 * 0.7 * 4) / 3) - 1);
+      expect(list.y).toBeGreaterThan(stage.y + stage.height - 1);
+      // A point's card is read only.
+      await page.click('.muse-sc-row[data-id="p1"]');
+      await expect(page.locator('.muse-sc-card-name').innerText()).resolves.toContain('Hall door');
+      await expect(page.locator('#muse-sc-edit').count()).resolves.toBe(0);
+      // Dragging a pin while reading leaves it where it is.
+      const from = await centre(page, '.muse-sc-pin[data-id="p2"]');
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x - 80, from.y + 60, { steps: 6 });
+      await page.mouse.up();
+      expect((await schematic(page, 'sc_ground')).points[1]).toMatchObject({ x: 0.8, y: 0.2 });
+      // Editing shows them all, and the card's Edit and Remove; Done hides them.
+      await editing(page);
+      for (const selector of editOnly) await expect(visible(selector)).resolves.toBe(true);
+      await expect(page.locator('#muse-sc-edit').isVisible()).resolves.toBe(true);
+      await page.click('#muse-e-sc-edit');
+      for (const selector of editOnly) await expect(visible(selector)).resolves.toBe(false);
+      await expect(page.locator('#muse-sc-edit').count()).resolves.toBe(0);
+    });
+  });
+
+  test('with no schematics, adding one needs no Edit, and the new one opens for editing', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_chest', async (page) => {
+      await page.waitForSelector(shown('muse-e-schematics'));
+      await page.waitForSelector('#muse-e-sc-empty', { state: 'visible' });
+      await expect(page.locator('#muse-e-sc-edit').isVisible()).resolves.toBe(false);
+      await expect(page.locator('#muse-e-sc-new').isVisible()).resolves.toBe(true);
+      await page.fill('#muse-e-sc-new-name', 'Lid');
+      await page.click('#muse-e-sc-photo-pick');
+      await page.click('#muse-e-sc-photo-grid .muse-picker-tile[data-id="img_plan"]');
+      await page.waitForSelector('#muse-sc-add-point:not(.hidden)');
+      await expect(page.locator('#muse-e-sc-edit').textContent()).resolves.toBe('Done');
+    });
+  });
+
+  test('full screen: the picture fills it, a point is added there at the right fraction, its card is by its pin', async () => {
+    await withKeep(SCREENS.desktop, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      await page.locator('#muse-sc-stage').scrollIntoViewIfNeeded();
+      await page.click('#muse-sc-full');
+      await page.waitForSelector('.muse-sc-full');
+      await expect(
+        page.evaluate(() => document.documentElement.classList.contains('muse-sc-locked'))
+      ).resolves.toBe(true);
+      // The bar on top; the points beside the picture on a wide screen.
+      const bar = await page.locator('.muse-sc-full-bar').boundingBox();
+      const stage = await page.locator('#muse-sc-stage').boundingBox();
+      const side = await page.locator('#muse-sc-side').boundingBox();
+      expect(bar.y).toBeLessThanOrEqual(1);
+      expect(stage.y).toBeGreaterThanOrEqual(bar.y + bar.height - 1);
+      expect(stage.y + stage.height).toBeGreaterThanOrEqual(899);
+      expect(side.x).toBeGreaterThanOrEqual(stage.x + stage.width - 1);
+      await expect(page.locator('.muse-sc-full-title').innerText()).resolves.toBe('Ground floor');
+      // The picture fits the stage whole, in its own shape, centred.
+      const canvas = await page.locator('#muse-sc-canvas').boundingBox();
+      near(canvas.width / canvas.height, 4 / 3);
+      const fitsWidth = Math.abs(canvas.width - stage.width) < 2;
+      const fitsHeight = Math.abs(canvas.height - stage.height) < 2;
+      expect(fitsWidth || fitsHeight).toBe(true);
+      near((canvas.x + canvas.width / 2 - stage.x) / stage.width, 0.5);
+      near((canvas.y + canvas.height / 2 - stage.y) / stage.height, 0.5);
+      // A pin's card opens beside it, not over it.
+      const pin = await page.locator('.muse-sc-pin[data-id="p1"]').boundingBox();
+      await page.mouse.click(pin.x + pin.width / 2, pin.y + pin.height / 2);
+      await page.waitForSelector('#muse-sc-pop:not(.hidden)');
+      await expect(page.locator('#muse-sc-pop .muse-sc-card-name').innerText()).resolves.toContain(
+        'Hall door'
+      );
+      const pop = await page.locator('#muse-sc-pop').boundingBox();
+      expect(pop.x).toBeGreaterThanOrEqual(pin.x + pin.width - 1);
+      await expect(page.locator('#muse-sc-card').isVisible()).resolves.toBe(false);
+      // Editing there: "Add point" and a tap places one where it was tapped.
+      await page.click('#muse-sc-full-edit');
+      await page.click('#muse-sc-full-add');
+      await expect(page.locator('#muse-sc-hint').isVisible()).resolves.toBe(true);
+      // (Up and left, clear of the card beside the first pin.)
+      await page.mouse.click(canvas.x + canvas.width * 0.1, canvas.y + canvas.height * 0.15);
+      await page.waitForSelector('#muse-sc-pop #muse-sc-p-name');
+      const placed = (await schematic(page, 'sc_ground')).points[2];
+      near(placed.x, 0.1);
+      near(placed.y, 0.15);
+      await page.fill('#muse-sc-p-name', 'Well');
+      await page.click('#muse-sc-p-save');
+      await page.waitForFunction(() =>
+        document.querySelector('#muse-sc-pop .muse-sc-card-name')?.textContent.includes('Well')
+      );
+      expect((await schematic(page, 'sc_ground')).points[2].name).toBe('Well');
+      // Escape leaves it, and the page scrolls again.
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.muse-sc-full', { state: 'detached' });
+      await expect(
+        page.evaluate(() => document.documentElement.classList.contains('muse-sc-locked'))
+      ).resolves.toBe(false);
+      await expect(page.locator('#muse-sc-card').isVisible()).resolves.toBe(true);
+    });
+  });
+
+  test('full screen on a phone: the points are a panel over the picture, and Close leaves it', async () => {
+    await withKeep(PHONE, '#/p/p_keep/e/el_keep', async (page) => {
+      await page.waitForSelector('.muse-sc-pin');
+      await page.locator('#muse-sc-stage').scrollIntoViewIfNeeded();
+      await page.tap('#muse-sc-full');
+      await page.waitForSelector('.muse-sc-full');
+      // Closed at first, so the picture has the whole width.
+      await expect(page.locator('#muse-sc-side').isVisible()).resolves.toBe(false);
+      const stage = await page.locator('#muse-sc-stage').boundingBox();
+      expect(stage.width).toBeGreaterThan(385);
+      await page.tap('#muse-sc-full-points');
+      await expect(page.locator('#muse-sc-side').isVisible()).resolves.toBe(true);
+      // Picking a row puts the panel away and shows the card.
+      await page.tap('.muse-sc-row[data-id="p2"]');
+      await expect(page.locator('#muse-sc-side').isVisible()).resolves.toBe(false);
+      await expect(page.locator('#muse-sc-pop').isVisible()).resolves.toBe(true);
+      await page.tap('#muse-sc-full-close');
+      await page.waitForSelector('.muse-sc-full', { state: 'detached' });
+      await expect(lit(page, '.muse-sc-row')).resolves.toEqual([false, true]);
     });
   });
 

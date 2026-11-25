@@ -11,6 +11,13 @@
   // (Markdown) and link to any element (SC5). Every element's page also says
   // where it is marked, a link that opens the plan at its pin (SC9).
   //
+  // Seen from M-203's testing (2026-11-25): the section opens for reading,
+  // the picture the card's full width and its points below it; "Edit
+  // schematics" shows what changes them (rename, order, picture, removal,
+  // adding, versions, and a point's Edit and Remove), and only then can a pin
+  // be dragged. "⤢" opens the picture over the whole screen, its points in a
+  // panel beside it and a point's card by its pin.
+  //
   // The writes are ./schematics.js's plans through ./schematic-store.js; this
   // file draws them and holds the view (zoom, pan, what is picked).
 
@@ -20,6 +27,8 @@
   var MAX_SCALE = 8;
   var DRAG = 4; // pixels a pointer moves before a tap is a drag
   var ZOOM_STEP = 1.25;
+  var NARROW = 760; // at most this wide, the full screen's points cover the picture
+  var LOCKED = 'muse-sc-locked'; // on <html> while the full screen is open
 
   var sc = null; // the open page's state, see reset()
   var ui = null; // the open schematic's nodes
@@ -32,6 +41,9 @@
       list: [],
       openId: null,
       selected: null,
+      edit: false, // "Edit schematics" is on
+      full: false, // the picture fills the screen
+      drawer: false, // the full screen's list of points is open
       adding: false,
       editing: false,
       confirming: false,
@@ -41,8 +53,13 @@
       busy: false,
     };
     ui = null;
+    document.documentElement.classList.remove(LOCKED);
   }
   reset();
+
+  function narrow() {
+    return window.innerWidth <= NARROW;
+  }
 
   function node(id) {
     return Muse.$(id);
@@ -154,15 +171,84 @@
     draw();
   }
 
+  // ── Reading and editing ─────────────────────────
+  // What only "Edit schematics" shows. With none yet, adding one is all there
+  // is to do, so it shows without asking.
+  function refreshEdit() {
+    var s = current();
+    var section = node('muse-e-schematics');
+    var toggle = node('muse-e-sc-edit');
+    section.classList.toggle('muse-sc-editing', sc.edit);
+    Muse.show(toggle, sc.list.length > 0);
+    toggle.textContent = sc.edit ? 'Done' : 'Edit schematics';
+    toggle.setAttribute('aria-pressed', String(sc.edit));
+    Muse.show(node('muse-e-sc-new'), sc.edit || sc.list.length === 0);
+    Muse.show(node('muse-e-sc-versions'), !!s && sc.edit);
+    if (!ui) return;
+    [ui.bar, ui.more, ui.danger, ui.add, ui.fullAdd].forEach(function (n) {
+      Muse.show(n, sc.edit);
+    });
+    ui.fullEdit.textContent = sc.edit ? 'Done editing' : 'Edit';
+    ui.fullEdit.setAttribute('aria-pressed', String(sc.edit));
+    ui.empty.textContent = sc.edit
+      ? 'No points yet. Choose “Add point”, then tap the picture.'
+      : 'No points yet. Choose “Edit” to add some.';
+  }
+
+  function setEdit(on) {
+    sc.edit = on;
+    if (!on) {
+      sc.adding = false;
+      sc.editing = false;
+      sc.confirming = false;
+    }
+    refreshEdit();
+    var s = current();
+    if (!ui || !s) return;
+    refreshAdding();
+    refreshDanger();
+    drawCard(s);
+  }
+
+  // ── The full screen ─────────────────────────────
+  function setFull(on) {
+    if (!ui) return;
+    sc.full = on;
+    sc.drawer = on && !narrow();
+    refreshFull();
+    if (on) ui.fullClose.focus();
+    else ui.full.focus();
+  }
+
+  function refreshFull() {
+    var s = current();
+    document.documentElement.classList.toggle(LOCKED, sc.full);
+    ui.body.classList.toggle('muse-sc-full', sc.full);
+    ui.body.classList.toggle('muse-sc-drawer-open', sc.drawer);
+    ui.body.setAttribute('role', sc.full ? 'dialog' : 'group');
+    ui.body.setAttribute('aria-label', s ? s.name : 'Schematic');
+    Muse.show(ui.fullBar, sc.full);
+    Muse.show(ui.full, !sc.full);
+    ui.fullPoints.setAttribute('aria-pressed', String(sc.drawer));
+    if (s) {
+      ui.fullTitle.textContent = s.name;
+      ui.fullPoints.textContent = 'Points' + (s.points.length ? ' (' + s.points.length + ')' : '');
+      drawCard(s);
+    }
+    applyView();
+  }
+
   // ── Drawing ─────────────────────────────────────
   function draw() {
     drawTabs();
     var s = current();
     Muse.show(node('muse-e-sc-open'), !!s);
-    Muse.show(node('muse-e-sc-versions'), !!s);
     if (!s) {
       node('muse-e-sc-open').textContent = '';
       ui = null;
+      document.documentElement.classList.remove(LOCKED);
+      sc.full = false;
+      refreshEdit();
       return;
     }
     if (!ui || ui.id !== s.id) build(s);
@@ -179,8 +265,9 @@
     open.textContent = '';
     ui = { id: s.id, image: s.image };
 
-    // Its name, order, picture and removal.
+    // Its name, order, picture and removal (shown while editing).
     var bar = Muse.el('div', 'muse-sc-bar');
+    ui.bar = bar;
     var rename = Muse.el('form', 'muse-inline muse-sc-rename');
     ui.name = Muse.el('input', 'muse-input');
     ui.name.id = 'muse-sc-name';
@@ -212,6 +299,7 @@
     open.appendChild(bar);
 
     var more = Muse.el('details', 'muse-sc-more');
+    ui.more = more;
     more.appendChild(Muse.el('summary', '', 'Change the picture'));
     var pic = Muse.el('div');
     pic.id = 'muse-sc-pic-add';
@@ -233,12 +321,19 @@
       },
     });
 
+    // The picture and its points; the same nodes fill the screen in full.
     var body = Muse.el('div', 'muse-sc-body');
+    ui.body = body;
+    body.appendChild(buildFullBar());
     body.appendChild(buildStage(s));
     body.appendChild(buildSide());
+    ui.pop = Muse.el('div', 'muse-sc-card muse-sc-pop hidden');
+    ui.pop.id = 'muse-sc-pop';
+    body.appendChild(ui.pop);
     open.appendChild(body);
 
     var danger = Muse.el('div', 'muse-sc-danger');
+    ui.danger = danger;
     ui.remove = button('Remove this schematic', '', 'muse-btn-danger');
     ui.remove.id = 'muse-sc-remove';
     ui.remove.classList.remove('muse-btn-quiet');
@@ -284,6 +379,42 @@
     };
   }
 
+  // The full screen's bar: its name, closing it, the points, and editing.
+  function buildFullBar() {
+    var bar = Muse.el('div', 'muse-sc-full-bar hidden');
+    ui.fullBar = bar;
+    ui.fullClose = button('Close', 'Leave full screen', 'muse-sc-full-close');
+    ui.fullClose.id = 'muse-sc-full-close';
+    ui.fullClose.addEventListener('click', function () {
+      setFull(false);
+    });
+    ui.fullTitle = Muse.el('span', 'muse-sc-full-title');
+    ui.fullPoints = button('Points', 'Show or hide the list of points');
+    ui.fullPoints.id = 'muse-sc-full-points';
+    ui.fullPoints.addEventListener('click', function () {
+      sc.drawer = !sc.drawer;
+      refreshFull();
+    });
+    ui.fullEdit = button('Edit', '');
+    ui.fullEdit.id = 'muse-sc-full-edit';
+    ui.fullEdit.addEventListener('click', function () {
+      setEdit(!sc.edit);
+    });
+    ui.fullAdd = Muse.el('button', 'muse-btn hidden', 'Add point');
+    ui.fullAdd.type = 'button';
+    ui.fullAdd.id = 'muse-sc-full-add';
+    ui.fullAdd.addEventListener('click', toggleAdding);
+    [ui.fullClose, ui.fullTitle, ui.fullPoints, ui.fullEdit, ui.fullAdd].forEach(function (n) {
+      bar.appendChild(n);
+    });
+    return bar;
+  }
+
+  function toggleAdding() {
+    sc.adding = !sc.adding;
+    refreshAdding();
+  }
+
   function buildStage(s) {
     var wrap = Muse.el('div', 'muse-sc-main');
     ui.stage = Muse.el('div', 'muse-sc-stage');
@@ -303,6 +434,12 @@
     ui.stage.appendChild(ui.missing);
 
     var zoom = Muse.el('div', 'muse-sc-zoom');
+    ui.full = button('⤢', 'Full screen', 'muse-sc-full-open');
+    ui.full.id = 'muse-sc-full';
+    ui.full.addEventListener('click', function () {
+      setFull(true);
+    });
+    zoom.appendChild(ui.full);
     [
       ['+', 'Zoom in', 'muse-sc-in', ZOOM_STEP],
       ['−', 'Zoom out', 'muse-sc-out', 1 / ZOOM_STEP],
@@ -333,27 +470,22 @@
 
   function buildSide() {
     var side = Muse.el('div', 'muse-sc-side');
-    ui.add = Muse.el('button', 'muse-btn', 'Add point');
+    side.id = 'muse-sc-side';
+    ui.add = Muse.el('button', 'muse-btn muse-sc-add hidden', 'Add point');
     ui.add.type = 'button';
     ui.add.id = 'muse-sc-add-point';
     ui.add.setAttribute('aria-pressed', 'false');
-    ui.add.addEventListener('click', function () {
-      sc.adding = !sc.adding;
-      refreshAdding();
-    });
+    ui.add.addEventListener('click', toggleAdding);
     side.appendChild(ui.add);
-    ui.list = Muse.el('ol', 'muse-sc-points');
-    ui.list.id = 'muse-sc-points';
-    side.appendChild(ui.list);
-    ui.empty = Muse.el(
-      'p',
-      'muse-empty',
-      'No points yet. Choose “Add point”, then tap the picture.'
-    );
-    side.appendChild(ui.empty);
+    // The picked point's card, just under the picture (by its pin in full).
     ui.card = Muse.el('div', 'muse-sc-card hidden');
     ui.card.id = 'muse-sc-card';
     side.appendChild(ui.card);
+    ui.list = Muse.el('ol', 'muse-sc-points');
+    ui.list.id = 'muse-sc-points';
+    side.appendChild(ui.list);
+    ui.empty = Muse.el('p', 'muse-empty');
+    side.appendChild(ui.empty);
     return side;
   }
 
@@ -368,8 +500,11 @@
       }
       ui.img.alt = s.name;
       ui.img.addEventListener('load', function () {
-        ui.stage.style.setProperty('--w', ui.img.naturalWidth || 4);
-        ui.stage.style.setProperty('--h', ui.img.naturalHeight || 3);
+        var w = ui.img.naturalWidth || 4;
+        var h = ui.img.naturalHeight || 3;
+        ui.ratio = w / h;
+        ui.stage.style.setProperty('--w', w);
+        ui.stage.style.setProperty('--h', h);
         applyView();
       });
       Muse.photos.thumb(ui.img, found);
@@ -393,15 +528,17 @@
     if (sc.selected && !pointAt(s, sc.selected)) sc.selected = null;
     drawPins(s);
     drawList(s);
-    drawCard(s);
+    refreshEdit();
     refreshAdding();
     refreshDanger();
-    applyView();
+    refreshFull(); // draws the card where it goes, and the view
   }
 
   function refreshAdding() {
-    ui.add.setAttribute('aria-pressed', String(sc.adding));
-    ui.add.textContent = sc.adding ? 'Cancel adding' : 'Add point';
+    [ui.add, ui.fullAdd].forEach(function (b) {
+      b.setAttribute('aria-pressed', String(sc.adding));
+      b.textContent = sc.adding ? 'Cancel adding' : 'Add point';
+    });
     ui.stage.classList.toggle('muse-sc-adding', sc.adding);
     Muse.show(ui.hint, sc.adding);
   }
@@ -463,7 +600,7 @@
         );
       }
       row.addEventListener('click', function () {
-        pick(p.id);
+        pick(p.id, true);
       });
       li.appendChild(row);
       ui.list.appendChild(li);
@@ -472,13 +609,21 @@
   }
 
   // Picks a point, or puts it down when it is the one picked: the pin and its
-  // row light up together.
-  function pick(id) {
+  // row light up together. Picked from the full screen's list, the picture
+  // comes round to its pin, and on a narrow screen the list gets out of the way.
+  function pick(id, fromList) {
     sc.selected = sc.selected === id ? null : id;
     sc.editing = false;
     var s = current();
     drawPins(s);
     drawList(s);
+    if (sc.full && fromList && sc.selected) {
+      if (narrow()) {
+        sc.drawer = false;
+        refreshFull();
+      }
+      if (sc.scale > 1) centerOn(pointAt(s, sc.selected), sc.scale);
+    }
     drawCard(s);
   }
 
@@ -502,14 +647,21 @@
     return select;
   }
 
+  // The picked point's card: under the picture, or by its pin in full.
   function drawCard(s) {
-    var card = ui.card;
-    card.textContent = '';
+    var card = sc.full ? ui.pop : ui.card;
+    ui.card.textContent = '';
+    ui.pop.textContent = '';
     var p = sc.selected && pointAt(s, sc.selected);
-    Muse.show(card, !!p);
+    Muse.show(ui.card, !!p && !sc.full);
+    Muse.show(ui.pop, !!p && sc.full);
     if (!p) return;
     var number = numberOf(s, p.id);
-    if (sc.editing) return drawEdit(s, p, number);
+    if (sc.editing && sc.edit) {
+      drawEdit(card, p, number);
+      placePop();
+      return;
+    }
     var head = Muse.el('h3', 'muse-sc-card-name');
     head.appendChild(Muse.el('span', 'muse-sc-num', String(number)));
     head.appendChild(Muse.el('span', '', p.name));
@@ -533,6 +685,12 @@
       }
       card.appendChild(row);
     }
+    if (sc.edit) card.appendChild(cardActions(p));
+    placePop();
+  }
+
+  // A point's Edit and Remove, while editing.
+  function cardActions(p) {
     var actions = Muse.el('div', 'muse-sc-actions');
     var edit = button('Edit', '');
     edit.id = 'muse-sc-edit';
@@ -549,11 +707,34 @@
     });
     actions.appendChild(edit);
     actions.appendChild(remove);
-    card.appendChild(actions);
+    return actions;
   }
 
-  function drawEdit(s, p, number) {
-    var card = ui.card;
+  // In full, the card sits beside its pin: to the right, or to the left when
+  // the pin is in the right half, and kept on the screen.
+  function placePop() {
+    if (!ui || !sc.full || ui.pop.classList.contains('hidden')) return;
+    var s = current();
+    var p = s && sc.selected && pointAt(s, sc.selected);
+    if (!p) return;
+    var body = ui.body.getBoundingClientRect();
+    var stage = ui.stage.getBoundingClientRect();
+    var b = base();
+    var x = stage.left - body.left + sc.tx + p.x * b.w * sc.scale;
+    var y = stage.top - body.top + sc.ty + p.y * b.h * sc.scale;
+    var w = ui.pop.offsetWidth;
+    var h = ui.pop.offsetHeight;
+    var gap = 24;
+    var left = x - (stage.left - body.left) > stage.width / 2 ? x - gap - w : x + gap;
+    var top = y - 30;
+    var margin = 8;
+    left = Math.max(margin, Math.min(body.width - w - margin, left));
+    top = Math.max(stage.top - body.top + margin, Math.min(body.height - h - margin, top));
+    ui.pop.style.left = left + 'px';
+    ui.pop.style.top = top + 'px';
+  }
+
+  function drawEdit(card, p, number) {
     var form = Muse.el('form', 'muse-form muse-sc-form');
     form.noValidate = true;
     form.appendChild(Muse.el('h3', 'muse-sc-card-name', 'Point ' + number));
@@ -607,18 +788,43 @@
   }
 
   // ── Zoom and pan (SC8) ──────────────────────────
-  function applyView() {
-    if (!ui || !ui.stage) return;
+  // The picture's size at scale 1. On the page the stage has the picture's
+  // shape, so it is the stage; in full it is the largest that fits the screen.
+  function base() {
     var w = ui.stage.clientWidth;
     var h = ui.stage.clientHeight;
+    if (!sc.full || !ui.ratio || !w || !h) return { w: w, h: h };
+    return w / h > ui.ratio ? { w: h * ui.ratio, h: h } : { w: w, h: w / ui.ratio };
+  }
+
+  // Bigger than the stage, the picture covers it; smaller, it is centred.
+  function clampAxis(t, view, size) {
+    if (size <= view) return (view - size) / 2;
+    return Math.max(view - size, Math.min(0, t));
+  }
+
+  function applyView() {
+    if (!ui || !ui.stage) return;
+    var b = base();
     sc.scale = Math.max(1, Math.min(MAX_SCALE, sc.scale));
-    // The picture always covers the stage.
-    sc.tx = Math.max(w * (1 - sc.scale), Math.min(0, sc.tx));
-    sc.ty = Math.max(h * (1 - sc.scale), Math.min(0, sc.ty));
+    sc.tx = clampAxis(sc.tx, ui.stage.clientWidth, b.w * sc.scale);
+    sc.ty = clampAxis(sc.ty, ui.stage.clientHeight, b.h * sc.scale);
+    ui.canvas.style.width = b.w + 'px';
+    ui.canvas.style.height = b.h + 'px';
     ui.canvas.style.transform =
       'translate(' + sc.tx + 'px, ' + sc.ty + 'px) scale(' + sc.scale + ')';
     ui.stage.style.setProperty('--inv', String(1 / sc.scale));
     ui.stage.dataset.scale = String(Math.round(sc.scale * 100) / 100);
+    placePop();
+  }
+
+  // Zooms to `scale` with a point in the middle of the stage.
+  function centerOn(p, scale) {
+    var b = base();
+    sc.scale = scale;
+    sc.tx = ui.stage.clientWidth / 2 - p.x * b.w * scale;
+    sc.ty = ui.stage.clientHeight / 2 - p.y * b.h * scale;
+    applyView();
   }
 
   // Zooms by `factor` about a point of the stage (cx, cy in its pixels).
@@ -699,8 +905,10 @@
       }
       if (count() > 2) return;
       var pin = event.target.closest('.muse-sc-pin');
+      // A pin moves only while editing; otherwise a drag from it pans.
+      var drags = pin && !sc.adding && sc.edit;
       gesture = {
-        type: pin && !sc.adding ? 'drag' : 'pan',
+        type: drags ? 'drag' : 'pan',
         pin: pin,
         id: pin ? pin.dataset.id : null,
         x: event.clientX,
@@ -710,7 +918,7 @@
         moved: false,
         at: null,
       };
-      if (pin && !sc.adding) event.preventDefault();
+      if (drags) event.preventDefault();
     });
 
     stage.addEventListener('pointermove', function (event) {
@@ -770,6 +978,8 @@
       // A tap.
       if (done.pin) return pick(done.id);
       if (sc.adding) return place(fractionAt(event.clientX, event.clientY));
+      // A tap on the picture, off any pin, puts the picked point down.
+      if (sc.selected && !sc.editing) pick(sc.selected);
     }
     stage.addEventListener('pointerup', end);
     stage.addEventListener('pointercancel', end);
@@ -845,6 +1055,22 @@
 
   Muse.schematicPage = {
     init: function () {
+      node('muse-e-sc-edit').addEventListener('click', function () {
+        setEdit(!sc.edit);
+      });
+      // Escape leaves the full screen, unless it is closing what is typed in.
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape' || !sc.full || !ui) return;
+        if (event.target.closest && event.target.closest('input, textarea, select')) return;
+        setFull(false);
+      });
+      // Going anywhere else leaves it too, so the page is never left locked.
+      window.addEventListener('hashchange', function () {
+        if (sc.full && ui) setFull(false);
+      });
+      window.addEventListener('resize', function () {
+        if (ui) applyView();
+      });
       versionBox = Muse.versionForm.mount(node('muse-e-sc-versions-box'), function () {
         return { projectId: state.project.id, collection: 'schematics', id: sc.openId };
       });
@@ -867,6 +1093,8 @@
               node('muse-e-sc-new-name').value = '';
               return Muse.schematicStore.forElement(e.id).then(function (list) {
                 sc.list = list;
+                // A new schematic is for adding points to.
+                sc.edit = true;
                 openSchematic(id);
               });
             });
@@ -888,7 +1116,7 @@
       if (addControls) addControls.reset();
       var has = S.TYPES.indexOf(e.type) !== -1;
       Muse.show(node('muse-e-schematics'), has);
-      Muse.show(node('muse-e-sc-versions'), false);
+      refreshEdit();
       Muse.show(node('muse-e-marked'), false);
       var marked = Muse.schematicStore
         .markedOn(e.id)
@@ -912,13 +1140,8 @@
           draw();
           var s = current();
           var p = s && sc.selected && pointAt(s, sc.selected);
-          if (wanted && p && ui && ui.stage) {
-            // Opens the plan at its pin: zoomed in, the pin in the middle.
-            sc.scale = 2.5;
-            sc.tx = ui.stage.clientWidth / 2 - p.x * ui.stage.clientWidth * sc.scale;
-            sc.ty = ui.stage.clientHeight / 2 - p.y * ui.stage.clientHeight * sc.scale;
-            applyView();
-          }
+          // Opens the plan at its pin: zoomed in, the pin in the middle.
+          if (wanted && p && ui && ui.stage) centerOn(p, 2.5);
           if (wanted) node('muse-e-schematics').scrollIntoView({ block: 'start' });
         })
         .catch(function (err) {
