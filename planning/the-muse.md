@@ -1,6 +1,6 @@
 # The Muse — Design Document v0.1
 
-**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200's details decided 2026-11-24** (§3, "M-200 details"), its sub-issues M-201 to M-203 filed as #914–#916 (§7), M-201 and M-202 buildable at once; M-201 and M-202 built 2026-11-24. The later epics' sub-issues are filed when each is next.
+**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200 shipped 2026-11-25** (M-201 to M-203, #914–#916). **M-300's details decided 2026-11-25** (§3, "M-300 details"), its sub-issues M-301 to M-304 filed as #922–#925 (§7). The later epics' sub-issues are filed when each is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** The Muse, its own app and phase (milestone #27), prefix **M-**, label `muse`. From idea #873.
 **Depends on:** the Image Studio (L-700, [`the-image-studio.md`](./the-image-studio.md)), the MCP host (MCP Initiative 1, [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)).
@@ -116,6 +116,34 @@ Every question as recommended except CL7 and CL8, where the answers keep a tree'
 - **PL5** — Three stories: M-201 classifications (Opus), M-202 schematics (Sonnet), each with its connector tools; M-203 testing the epic by hand, as M-107 was.
 - **PL6** — The exit criterion as proposed (§6).
 
+### M-300 details (answered 2026-11-25)
+
+Every question as recommended except CA2 (no leap years) and TV5 (zoom and pan only), with a note on TV4.
+
+- **CA1** — One running count of years underneath, which every date stores, so any two dates compare. Each era starts at a running year and counts its own years from 1, forward, or backward like BC: "3019 T.A.", "200 B.F.".
+- **CA2** — No leap years: every year is the same length. _(Departed from the recommended leap rule.)_ So the ready-made Gregorian calendar has 365 days and no 29 February; a world that needs one can add a festival day (CA3).
+- **CA3** — A "month" can be a festival day or a few days, and can stand outside the week (Midwinter, Shieldmeet).
+- **CA4** — Weekdays run on without a break across months and years. A calendar may have no week.
+- **CA5** — No moons now; they come later if wanted.
+- **CA6** — A date can carry an hour and minute, from the calendar's hours in a day and minutes in an hour.
+- **CA7** — A new calendar starts as the Gregorian one (without leap days, CA2) or blank; Claude builds any other over MCP.
+- **CA8** — Dates are written by a pattern chosen from a few ("3 Hammer 1492 T.A.", "the 3rd of Hammer, 1492", "1492-03-03") or made of tokens, everywhere a date shows. They are entered by picking the era, year, month and day.
+- **CA9** — Changing the calendar keeps every date's numbers. A date that no longer fits (the 31st of a month now 30 long) is flagged where it shows, and listed on the calendar's page to fix.
+- **EV1** — Events and epochs are two new element types, Event and Epoch, in the elements collection, so photos, classifications, relationships, @-links, mentions, search, custom fields, versions and the connector's tools work on them unchanged. _(Replaces the `events/{id}` first planned in §4.)_
+- **EV2** — An event is a date or a short range (a siege of six days); an epoch is a range, and may be open at its end ("ongoing"). Events draw as points, or bars when zoomed in on a range; epochs as bars.
+- **EV3** — An event or an epoch can name the epoch it is part of. The epoch's page lists its parts in order, and the timeline draws them under it.
+- **EV4** — Lanes are rows the project names and orders (a kingdom, a character, the war), each optionally linked to an element. An event or epoch sits in one lane or in none.
+- **EV5** — A custom date field can be marked "on the timeline" with a significance (Born, Died, Founded), and a field can be marked as ending another, so a Born and Died pair shows a life as a bar.
+- **EV6** — A relationship has a time: a date or a range ("married in 1201", "allies 1190–1210"), shown with it on both elements, and not drawn on the timeline.
+- **EV7** — Any date can be marked approximate: shown "c. 1200", and drawn softer.
+- **TV1** — The project has a Timeline page, and each element's page lists its events in date order (those related to it, or in a lane linked to it), each opening the timeline there.
+- **TV2** — On a desktop and an iPad, time runs across and lanes are rows. On a phone the timeline is a list by date, with the era and year as headings.
+- **TV3** — Lanes can be shown and hidden, and the timeline filtered by class ("Battles" only) and to what concerns one element.
+- **TV4** — With "Edit" on, tapping an empty place in a lane adds an event there, at that date. Dates are changed in the form, never by dragging. _(The note: "Adding and moving events should first require clicking or tapping an edit button", as schematics and photos open for reading since M-203.)_
+- **TV5** — Zoom and pan only: no jumping to a date and no remembered place. _(Departed from the recommended jump and memory.)_
+- **PL8** — Four stories: M-301 the calendar (Opus), M-302 events and epochs, with relationships' times and marked date fields (Sonnet), M-303 the timeline view (Opus), each with its connector tools; M-304 testing the epic by hand.
+- **PL9** — The exit criterion as proposed (§6).
+
 ### Decided in design (not asked)
 
 - **D1 — The page writes to Firestore itself,** under owner-only rules that check each document's shape, as the Symposium does.
@@ -131,6 +159,11 @@ Every question as recommended except CL7 and CL8, where the answers keep a tree'
 - **D8 — Schematic pictures are a studio kind of their own,** `schematic`, so the studio can find plans apart from scenes.
 - **D9 — Classes and schematics are versioned things** (§4), each with "Save version", and a version before each MCP write, as elements are.
 - **D10 — Claude places points by eye:** the connector's `get_schematic` returns the picture with its numbered pins and a light grid of tenths drawn on it, so Claude can place a point and check it.
+- **D11 — The calendar's arithmetic is one plan, `calendar.js`,** the same file on the page and in `functions/muse/` (a test fails if they differ): days in a year and month, a date's day count from the start of year 1, its weekday and season, its era and era year, writing it by the pattern and reading it back from text, comparing, and whether it fits (CA9). The connector takes dates as text in the project's own form ("3 Hammer 1492 T.A.") or as numbers, and writes them in that form.
+- **D12 — A date is the existing date field's shape, grown:** `{ year, month?, day?, hour?, minute?, circa? }`, `year` the running year (CA1). A date field written before M-301 is already in it, the running count starting at year 1. A range is `{ from, to }`, `to` a date, or null for an epoch still going.
+- **D13 — Each element carries its `timeline`** (an event's or epoch's date, significance, lane and part-of, and the dates of its fields marked on the timeline), worked out by the plans and copied onto its index line, as its classes are (D3). The timeline is then drawn from the index alone, as lists are, and the rules check the line agrees with the element.
+- **D14 — Significance by zoom:** the wider the view, the higher the significance shown: 5 only beyond about 500 years across the screen, 4 and up beyond about 50 years, 3 and up beyond about 5, 2 and up beyond about six months, and everything closer in. Epochs always show as bars in their lanes, thinner when below the zoom's significance. The figures are tuned in M-303.
+- **D15 — The timeline opens for reading,** as schematics and photos do since M-203: "Edit" shows tap-to-add and each item's edit. It must pan and zoom smoothly on an iPad with 2,000 items.
 
 ---
 
@@ -138,15 +171,19 @@ Every question as recommended except CL7 and CL8, where the answers keep a tree'
 
 All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.owner == request.auth.uid` and `hasApp('muse')`.
 
-- **The project:** `owner`, `title`, `short` (the line on the home page), `summary` (Markdown), `cover` (a studio image id), `fields` (EL2: per element type, a list of `{ key, label, kind, options }`), `lanes` and `calendar` (M-300), `createdAt`, `updatedAt`.
+- **The project:** `owner`, `title`, `short` (the line on the home page), `summary` (Markdown), `cover` (a studio image id), `fields` (EL2: per element type, a list of `{ key, label, kind, options }`; a date field may add `timeline: { significance, ends }`, EV5), `lanes` and `calendar` (M-300), `createdAt`, `updatedAt`.
+  - **`calendar`** (M-301): `months` (each `{ name, short, days, outsideWeek }`, CA3), `weekdays` (names; may be empty), `firstWeekday` (the weekday of year 1's first day), `seasons` (each `{ name, month, day }`, where it starts), `hoursPerDay`, `minutesPerHour`, `eras` (each `{ name, short, start, backward }`, `start` a running year), `format` (the pattern, CA8).
+  - **`lanes`** (M-302): an ordered list of `{ id, name, element }`, `element` an id or null (EV4).
 - **`index/{n}`:** every element's id, type, name, aliases and primary image, in one or a few documents. The page loads it once for lists, search (EL5) and @-links (EL6). It is kept in step on every write, by the page in the same batch, and by MCP the same way.
 - **`elements/{id}`:**
-  - `type`: character, faction, location, object or concept;
+  - `type`: character, faction, location, object or concept; event or epoch from M-302 (EV1);
   - `name`, `aliases`, `bio` (Markdown), `fields` (EL2);
   - `images` (an ordered list of studio image ids) and `primary`;
   - `mentions`: the ids its text links to, so "mentioned in" is a query (EL6);
   - for a character, `appearance` (Markdown) and `residence` (a location's id);
-  - `classes` (M-200): the ids of its classes, at most 50.
+  - `classes` (M-200): the ids of its classes, at most 50;
+  - for an event or an epoch (M-302): `when` (a date or a range, D12), `significance` (1–5), `lane` (a lane's id or null) and `partOf` (an epoch's id or null);
+  - `timeline` (M-302, D13): what it puts on the timeline, copied to its index line.
 - **`classifications/{id}`** (M-201): `type` (the element type it belongs to), `name`, `multiple` (true: an element may hold several of its classes), `createdAt`, `updatedAt`.
 - **`classes/{id}`** (M-201):
   - `classification`, `parent` (a class id, or null at the top), `depth` (1 to 6);
@@ -158,12 +195,11 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
   - `points`: an ordered list, at most 200, of `{ id, name, description, x, y, link }`, with `x` and `y` fractions of the picture from its top left and `link` an element's id or null;
   - `links`: the linked ids, for "marked on" (SC9);
   - `createdAt`, `updatedAt`.
-- **`relationships/{id}`:** `a`, `b`, `aToB` ("mother of"), `bToA` ("daughter of"), `description`, `when` (M-300), and `ends`, the two ids, for queries.
+- **`relationships/{id}`:** `a`, `b`, `aToB` ("mother of"), `bToA` ("daughter of"), `description`, `when` (a date or a range, M-302), and `ends`, the two ids, for queries.
 - **`versions/{id}`:** `of` (the path of the thing), `snapshot`, `name`, `by` (`page` or `mcp`), `at`.
   - The last 50 per thing are kept (VR2); the oldest is deleted when a 51st is saved.
   - Versions cover elements, classes, events, chapters and the project itself.
 - **Later epics add:**
-  - `events/{id}` (M-300);
   - `manuscripts/{id}`, `chapters/{id}`, `bookmarks/{id}` and `days/{yyyy-mm-dd}` (M-500).
 
 **Text in Markdown.** A link to an element is written `[King Peter](muse:el/<id>)`, and to a class `[Longsword](muse:cl/<id>)` (M-201). The page shows it as a link, and its name and aliases found elsewhere in the text are shown as links too, on the page only (EL6).
@@ -213,14 +249,18 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 
 ### M-300 The timeline
 
-- **The project's calendar** (TL1), with dates at any precision and a date format.
-- **Events and epochs**, each with an element-like page:
-  - name, aliases, bio, relationships, images;
-  - a date or a range;
-  - significance 1–5 (TL2), and a lane (TL3).
-- **The timeline view:** zoom and pan from eras to days, showing what's significant at each zoom, with epochs as bars in their lanes.
-- **Relationships get their time** (EL3). Custom date fields use the calendar.
-- **The connector** gains the calendar, events and epochs.
+- **The project's calendar** (TL1, CA1–CA9; M-301):
+  - a calendar page: months and festival days, weekdays, seasons, hours and minutes, eras, the date pattern; a ready-made Gregorian start (without leap days) or a blank one;
+  - dates at any precision, with a time of day and "circa", written by the pattern everywhere and picked by era, year, month and day;
+  - dates that no longer fit flagged and listed (CA9);
+  - the arithmetic in one shared plan (D11); the connector reads and sets the calendar and takes dates as text.
+- **Events and epochs** (EV1–EV5, EV7; M-302): two new element types, with everything an element has, plus a date or range (an epoch's may be open), significance 1–5, a lane and the epoch they are part of.
+  - The project's lanes, named and ordered, each optionally linked to an element.
+  - An epoch's page lists its parts in order; each element's page lists its events (TV1).
+  - Date fields marked "on the timeline", and a field ending another to make a bar (EV5).
+  - Relationships get their time (EV6).
+  - Each element's `timeline` on its index line (D13); the connector's element tools take the new fields, and `timeline` lists what falls in a range at a significance.
+- **The timeline view** (TV1–TV5; M-303): time across and lanes as rows, zoomed and panned from eras to days, showing what's significant at each zoom (D14), epochs as bars with their parts under them; lanes shown or hidden, filtered by class or by an element; opened for reading, with "Edit" for tap-to-add (D15); a list by date on a phone.
 
 ### M-400 Versions and export
 
@@ -246,7 +286,7 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
   - finding one by an alias is instant;
   - Claude, over the Muse connector, adds a character with a generated portrait that appears on its page.
 - **M-200:** a weapon classification three levels deep assigned to objects, and a location's floor plan with points linking to rooms, each made on the page and over MCP. Filtering Objects by "Sword" finds a Longsword.
-- **M-300:** a project's own calendar, with a war as an epoch and its battles as events in two lanes. Zooming out shows only the major events.
+- **M-300:** a project's own calendar, with a war as an epoch and its battles as events in two lanes. Zooming out shows only the major events. A character's birth, from a date field marked on the timeline, shows beside them; the same is built by Claude over MCP.
 - **M-400:** an element reverted to a version saved before an MCP write, a PDF of a character, and the project's Markdown export opened in another tool with its links working.
 - **M-500:** a chapter written on the iPad and continued on the desktop at its bookmark, the day's words counted, and Claude reading and editing a chapter over MCP, with the edit revertable.
 
@@ -328,8 +368,16 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 - **"⤢" puts it over the whole screen:** a bar with Close, its name, Points and Edit (and "Add point" while editing), the picture fitted whole and centred, the points in a panel beside it (over it on a phone, closed at first), and a point's card by its pin. Escape, Close or going to another page leaves it.
 - **Photos open for looking at too** (an element's and a class's): the primary large, and with more than one a row of small pictures, each shown large when tapped (the primary stays). "Edit photos" shows uploading and picking, and each photo's Make primary, ← → and Remove; with none yet, adding shows unasked, and photos just added open for editing.
 
+### M-300 (filed 2026-11-25)
+
+| ID    | Story                    | Issue | Depends on  | Model  |
+| ----- | ------------------------ | ----- | ----------- | ------ |
+| M-301 | The calendar             | #922  | M-200       | Opus   |
+| M-302 | Events and epochs        | #923  | M-301       | Sonnet |
+| M-303 | The timeline view        | #924  | M-302       | Opus   |
+| M-304 | Testing the epic by hand | #925  | M-301–M-303 | Sonnet |
+
 ### Later epics (planned; filed when next)
 
-- **M-300:** M-301 the calendar, M-302 events and epochs, M-303 the timeline view.
 - **M-400:** M-401 browsing and reverting, M-402 PDF layouts, M-403 the Markdown export.
 - **M-500:** M-501 manuscripts and chapters, M-502 the editor, M-503 bookmarks and stats, M-504 the book layout and connector.
