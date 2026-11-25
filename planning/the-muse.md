@@ -109,7 +109,7 @@ Every question as recommended except CL7 and CL8, where the answers keep a tree'
 - **SC3** — Locations and objects have schematics, as designed.
 - **SC4** — Several per element, in order, each one picture with its own points ("Ground floor", "Upper floor", "Cellars").
 - **SC5** — A point can link to any element: a room, a chest, the character who sleeps there.
-- **SC6** — Numbered pins, with the list of points beside the picture (below it on a phone); picking either lights up the other.
+- **SC6** — Numbered pins, with the list of points beside the picture (below it on a phone); picking either lights up the other. _(Changed 2026-11-25 in M-203's testing: the list is below the picture on every screen, and beside it in full screen; see "Changed in testing M-203".)_
 - **SC7** — "Add point", then tap the picture; drag a pin to move it, by finger or mouse.
 - **SC8** — The picture zooms and pans: pinch, wheel, or + and − buttons.
 - **SC9** — A linked element's page says where it is marked ("On The Keep's Ground floor"), a link that opens the plan at its pin.
@@ -320,6 +320,13 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 - **`get_schematic` draws the pins and the grid on a copy of the studio picture** (at most 1568 px, as a JPEG) with sharp. The numbers are drawn as strokes, so no font is needed; the grid's lines are marked 1 to 9 along the top (x) and down the left (y).
 - **A schematic can be named by its name** in the connector's tools when `elementId` says whose it is; `list_schematics` and `add_schematic` take an element by id or by a name only it has.
 - **The studio gains the kind `schematic`** (D8): in the library's kinds, the studio page's filter and upload, and `studio_generate`'s `kind`.
+
+**Changed in testing M-203 (2026-11-25):** on an iPad the picture was too small and the controls around it crowded it out.
+
+- **A schematic opens for reading.** "Edit schematics" in the section's bar shows what changes them: rename and order, change the picture, remove, add a schematic, versions, "Add point", and a point's Edit and Remove. "Done" hides them again. A pin can be dragged only while editing, so panning can't move one by mistake. An element with no schematics shows "Add a schematic" without asking, and a new one opens for editing.
+- **The picture is the card's full width** (no taller than 70% of the screen), with the picked point's card and then the points below it, in as many columns as fit.
+- **"⤢" puts it over the whole screen:** a bar with Close, its name, Points and Edit (and "Add point" while editing), the picture fitted whole and centred, the points in a panel beside it (over it on a phone, closed at first), and a point's card by its pin. Escape, Close or going to another page leaves it.
+- **Photos open for looking at too** (an element's and a class's): the primary large, and with more than one a row of small pictures, each shown large when tapped (the primary stays). "Edit photos" shows uploading and picking, and each photo's Make primary, ← → and Remove; with none yet, adding shows unasked, and photos just added open for editing.
 
 ### Later epics (planned; filed when next)
 
