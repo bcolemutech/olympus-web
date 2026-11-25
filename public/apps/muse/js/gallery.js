@@ -8,6 +8,11 @@
   // primary, or taken off, which leaves it in the studio. Every change saves
   // at once, with the index line when the primary moves (./model.js).
   //
+  // Seen from M-203's testing (2026-11-25), as schematics are: the photos open
+  // for looking at, the strip a row of small pictures that show one large when
+  // tapped (the primary stays as it is). "Edit photos" shows adding, ordering,
+  // making the primary and taking off; with none yet, adding shows unasked.
+  //
   // A class's page has photos too (M-201, CL6): `create(options)` makes a
   // gallery for anything with { images, primary }, in the page's markup with
   // ids starting `options.prefix` (muse-e for an element, muse-c for a class):
@@ -24,6 +29,8 @@
     var prefix = options.prefix;
     var busy = false;
     var adding = null; // the add controls, made once
+    var editing = false; // "Edit photos" is on
+    var viewing = null; // the photo shown large while reading, if not the primary
     var element = options.thing;
     var node = function (suffix) {
       return Muse.$(prefix + suffix);
@@ -100,15 +107,35 @@
       return b;
     }
 
+    // The one shown large: the primary, or the one tapped while reading.
+    function large() {
+      var e = element();
+      return !editing && viewing && e.images.indexOf(viewing) !== -1 ? viewing : e.primary;
+    }
+
     function tile(id, index, total) {
       var e = element();
       var isPrimary = e.primary === id;
       var li = Muse.el('li', 'muse-photo' + (isPrimary ? ' muse-photo-primary' : ''));
       li.dataset.id = id;
-      var frame = Muse.el('div', 'muse-photo-frame');
+      var frame = Muse.el(editing ? 'div' : 'button', 'muse-photo-frame');
       picture(frame, id, 'muse-photo-img');
       li.appendChild(frame);
       if (isPrimary) li.appendChild(Muse.el('span', 'muse-photo-badge', 'Primary'));
+      if (!editing) {
+        // Reading: a tap shows it large.
+        frame.type = 'button';
+        frame.classList.add('muse-photo-view');
+        var on = large() === id;
+        li.classList.toggle('muse-photo-viewing', on);
+        frame.setAttribute('aria-pressed', String(on));
+        frame.setAttribute('aria-label', 'Show photo ' + (index + 1) + ' of ' + total + ' large');
+        frame.addEventListener('click', function () {
+          viewing = id;
+          draw();
+        });
+        return li;
+      }
       var actions = Muse.el('div', 'muse-photo-actions');
       if (!isPrimary) {
         var primary = button('Make primary', 'Make this photo the primary one', function () {
@@ -155,17 +182,32 @@
       if (!e) return;
       var main = node('-photo-main');
       var strip = node('-photo-strip');
+      var count = e.images.length;
       strip.textContent = '';
       main.textContent = '';
-      Muse.show(main, !!e.primary);
-      if (e.primary) picture(main, e.primary, 'muse-photo-main-img');
+      var shown = large();
+      Muse.show(main, !!shown);
+      if (shown) picture(main, shown, 'muse-photo-main-img');
       e.images.forEach(function (id, index) {
-        strip.appendChild(tile(id, index, e.images.length));
+        strip.appendChild(tile(id, index, count));
       });
-      Muse.show(strip, e.images.length > 0);
-      Muse.show(node('-photos-empty'), e.images.length === 0);
-      node('-photos-count').textContent = e.images.length ? String(e.images.length) : '';
+      strip.classList.toggle('muse-photo-strip-read', !editing);
+      // Reading one photo, the strip would only show it again.
+      Muse.show(strip, count > (editing ? 0 : 1));
+      Muse.show(node('-photos-empty'), count === 0);
+      node('-photos-count').textContent = count ? String(count) : '';
+      var toggle = node('-photos-edit');
+      Muse.show(toggle, count > 0);
+      toggle.textContent = editing ? 'Done' : 'Edit photos';
+      toggle.setAttribute('aria-pressed', String(editing));
+      Muse.show(node('-photos-add'), editing || count === 0);
     }
+
+    node('-photos-edit').addEventListener('click', function () {
+      editing = !editing;
+      viewing = null;
+      draw();
+    });
 
     adding = Muse.photos.adder(node('-photos-add'), {
       id: prefix + '-photo',
@@ -178,6 +220,8 @@
         // Read it again first, so an add after a slow upload doesn't
         // overwrite what changed meanwhile.
         return options.reread(element().id).then(function () {
+          // Photos just added are for ordering and choosing the primary.
+          editing = true;
           return save(model.addPhotos(photos(), ids));
         });
       },
@@ -187,6 +231,8 @@
       // Draws its photos; called as its page opens.
       show: function () {
         busy = false;
+        editing = false;
+        viewing = null;
         say('');
         adding.reset();
         draw();

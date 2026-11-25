@@ -326,6 +326,7 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 - **A schematic opens for reading.** "Edit schematics" in the section's bar shows what changes them: rename and order, change the picture, remove, add a schematic, versions, "Add point", and a point's Edit and Remove. "Done" hides them again. A pin can be dragged only while editing, so panning can't move one by mistake. An element with no schematics shows "Add a schematic" without asking, and a new one opens for editing.
 - **The picture is the card's full width** (no taller than 70% of the screen), with the picked point's card and then the points below it, in as many columns as fit.
 - **"⤢" puts it over the whole screen:** a bar with Close, its name, Points and Edit (and "Add point" while editing), the picture fitted whole and centred, the points in a panel beside it (over it on a phone, closed at first), and a point's card by its pin. Escape, Close or going to another page leaves it.
+- **Photos open for looking at too** (an element's and a class's): the primary large, and with more than one a row of small pictures, each shown large when tapped (the primary stays). "Edit photos" shows uploading and picking, and each photo's Make primary, ← → and Remove; with none yet, adding shows unasked, and photos just added open for editing.
 
 ### Later epics (planned; filed when next)
 

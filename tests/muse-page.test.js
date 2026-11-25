@@ -1452,6 +1452,10 @@ describe('photo libraries (M-104)', () => {
       await page.click('.muse-el-row[data-id="el_peter"]');
       await page.waitForSelector('#muse-element:not(.hidden) .muse-photo');
 
+      // Opened again, it is for looking at until "Edit photos".
+      await expect(page.locator(tile('img_up3', 'remove')).count()).resolves.toBe(0);
+      await page.click('#muse-e-photos-edit');
+
       // Removing the primary hands it to the next; the image stays in the studio.
       await page.click(tile('img_up3', 'remove'));
       await settled(page, 2);
@@ -1512,10 +1516,65 @@ describe('photo libraries (M-104)', () => {
     await page.evaluate(() => (window.location.hash = '#/p/p_court/e/el_peter'));
     await settled(page, 2);
     await expect(page.locator('.muse-photo-missing').count()).resolves.toBeGreaterThan(0);
+    await page.click('#muse-e-photos-edit');
     await page.click(tile('img_gone', 'remove'));
     await settled(page, 1);
     expect((await peter(page)).images).toEqual(['img_old']);
     expect((await peter(page)).primary).toBe('img_old');
+  });
+
+  each('photos open for looking at: a tap shows one large, and Edit photos shows the rest', async (page) => {
+    await openPeter(page);
+    await page.evaluate(() => {
+      const path = 'muse_projects/p_court/elements/el_peter';
+      window.__store.set('studio_images/img_two', {
+        ...window.__store.get('studio_images/img_old'),
+        id: 'img_two',
+        title: 'Peter at court',
+      });
+      window.__store.set(path, {
+        ...window.__store.get(path),
+        images: ['img_old', 'img_two'],
+        primary: 'img_old',
+      });
+      window.location.hash = '#/p/p_court/t/character';
+    });
+    await page.waitForSelector('#muse-type:not(.hidden)');
+    await page.evaluate(() => (window.location.hash = '#/p/p_court/e/el_peter'));
+    await settled(page, 2);
+    const visible = (selector) => page.locator(selector).isVisible();
+    // No buttons on the photos, and nothing to add with.
+    await expect(page.locator('.muse-photo-btn').count()).resolves.toBe(0);
+    await expect(visible('#muse-e-photos-add')).resolves.toBe(false);
+    await expect(page.locator('#muse-e-photos-edit').textContent()).resolves.toMatch(/Edit photos/);
+    // A tap shows the second large; the primary stays the first.
+    const large = () => page.locator('#muse-e-photo-main img').getAttribute('alt');
+    await page.waitForSelector('#muse-e-photo-main img');
+    const primaryTitle = await large();
+    await page.click('.muse-photo[data-id="img_two"] .muse-photo-view');
+    await page.waitForFunction(
+      () => document.querySelector('#muse-e-photo-main img')?.alt === 'Peter at court'
+    );
+    await expect(
+      page.locator('.muse-photo[data-id="img_two"]').getAttribute('class')
+    ).resolves.toMatch(/muse-photo-viewing/);
+    expect((await peter(page)).primary).toBe('img_old');
+    // Editing shows the buttons and adding, and the primary large again.
+    await page.click('#muse-e-photos-edit');
+    await expect(visible('#muse-e-photos-add')).resolves.toBe(true);
+    await expect(visible(tile('img_two', 'make-primary'))).resolves.toBe(true);
+    await expect(visible(tile('img_old', 'remove'))).resolves.toBe(true);
+    await expect(large()).resolves.toBe(primaryTitle);
+    await page.click('#muse-e-photos-edit');
+    await expect(page.locator('.muse-photo-btn').count()).resolves.toBe(0);
+    await expect(visible('#muse-e-photos-add')).resolves.toBe(false);
+    // With one photo, reading shows it alone, without the strip.
+    await page.click('#muse-e-photos-edit');
+    await page.click(tile('img_two', 'remove'));
+    await settled(page, 1);
+    await page.click('#muse-e-photos-edit');
+    await expect(visible('#muse-e-photo-strip')).resolves.toBe(false);
+    await expect(visible('#muse-e-photo-main')).resolves.toBe(true);
   });
 
   each('a file that is not an image is refused before anything is sent', async (page) => {

@@ -966,11 +966,37 @@ a.muse-section-tile:focus-visible {
   border-color: var(--muse-accent);
 }
 
+/* Reading: a row of small pictures, each a button that shows it large. */
+.muse-photo-strip-read {
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 0.5rem;
+}
+
+.muse-photo-view {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.muse-photo-strip-read .muse-photo-badge {
+  display: none;
+}
+
+.muse-photo-viewing {
+  border-color: #f3e5f5;
+  box-shadow: 0 0 0 2px var(--muse-accent);
+}
+
 .muse-photo-frame {
   display: flex;
   align-items: center;
   justify-content: center;
   aspect-ratio: 4 / 3;
+  /* Kept 4:3, however tall its picture. */
+  overflow: hidden;
   background: rgba(0, 0, 0, 0.25);
 }
 
@@ -1191,6 +1217,10 @@ a.muse-section-tile:focus-visible {
 
   .muse-photo-strip {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .muse-photo-strip-read {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   }
 
   .muse-cover-picker .muse-p-cover {
