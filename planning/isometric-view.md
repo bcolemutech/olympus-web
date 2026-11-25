@@ -1,6 +1,6 @@
 # The Loom — The Isometric View — Design Document v0.1
 
-**Status:** L-950 shipped (2026-11-22): L-951 to L-957 built, L-958 played by the user, and the bugs it found fixed (#874, #875, #879, #880). Decided 2026-11-15; the spike (§5) is reported in [`isometric-spike-report.md`](./isometric-spike-report.md) and its checkpoint answered (§3). **Revised 2026-11-22 (AW1–AW3):** artwork battle maps are shown flat until there are more assets, L-960 gives the worlds artwork maps, and the worlds stay published. L-960's stories are filed as #908–#911 (§6); L-961 shipped 2026-11-22 (§4.7).
+**Status:** L-950 shipped (2026-11-22): L-951 to L-957 built, L-958 played by the user, and the bugs it found fixed (#874, #875, #879, #880). Decided 2026-11-15; the spike (§5) is reported in [`isometric-spike-report.md`](./isometric-spike-report.md) and its checkpoint answered (§3). **Revised 2026-11-22 (AW1–AW3):** artwork battle maps are shown flat until there are more assets, L-960 gives the worlds artwork maps, and the worlds stay published. L-960's stories are filed as #908–#911 (§6); L-961 shipped 2026-11-22 (§4.7), L-962 2026-11-25 (§6).
 **Project:** Olympus (`olympus-dfa00`)
 **Epics:** L-950 the isometric view (#852), L-960 reworking the worlds (#853); Phase 10 — Levels and Vehicles (milestone #26).
 **Replaces:** the three-quarter view on grid maps ([`game-art.md`](./game-art.md), L-941). Town and region maps keep it.
@@ -245,6 +245,8 @@ The stories of §6 are then filed, updated for what the spike found.
 | L-962 (#909) | **The Border March:** every battle map given artwork (its painting checked against its geometry, or a new one from its guide), played through; published throughout (AW2, AW3) | L-961      | Opus  |
 | L-963 (#910) | **The Corpse Tide:** the same                                                                                                                                                  | L-962      | Opus  |
 | L-964 (#911) | **Nisia:** the same, its 43 paintings first, marked and checked, then the rest by region as the work list shows                                                                | L-963      | Opus  |
+
+**L-962 shipped (2026-11-25):** all 13 of The Border March's battle maps already held a top-down painting made from their layouts (2026-10-29). Each was laid over its geometry with `view_image`, found to line up within half a square, and assigned to its map again, which marked it `top-down`. No new images, so $0. Every grid now grades 100 with nothing missing; the world has no other grids. The maps with walls, doors or blocking terrain were walked from their entries over MCP (`sightFrom`), and the owner played the world through on the live site. The cost and the work list's remaining gaps (realms and tokens for 23 characters, terrain, brief, world lore, the towns' regions) are on #853.
 
 
 ---
