@@ -1815,3 +1815,113 @@ html.muse-sc-locked body {
     width: min(22rem, 85vw);
   }
 }
+
+/* ── The calendar (M-301) ───────────────────────── */
+.muse-cal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.muse-cal-row {
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--muse-line);
+  border-radius: 10px;
+  background: rgba(10, 14, 26, 0.5);
+}
+
+.muse-cal-row .muse-input {
+  flex: 1 1 10rem;
+}
+
+.muse-cal-row .muse-cal-short {
+  flex: 0 1 6rem;
+}
+
+.muse-inline .muse-cal-num,
+.muse-cal-row .muse-cal-num {
+  flex: 0 0 5.5rem;
+  width: 5.5rem;
+}
+
+.muse-cal-n {
+  color: var(--muse-muted);
+  min-width: 1.5rem;
+  text-align: right;
+}
+
+.muse-cal-example {
+  font-size: 1.05rem;
+  color: var(--muse-accent-strong);
+}
+
+.muse-cal-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.muse-cal-first {
+  margin-top: 0.75rem;
+}
+
+.muse-cal-misfits {
+  border-color: rgba(255, 204, 128, 0.35);
+}
+
+.muse-cal-misfit-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.muse-cal-misfit {
+  margin: 0.25rem 0;
+}
+
+.muse-date-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.muse-date .muse-date-era,
+.muse-date .muse-date-month {
+  flex: 1 1 9rem;
+}
+
+.muse-date-time {
+  align-items: center;
+}
+
+.muse-date-time .muse-input {
+  flex: 0 0 4rem;
+  width: 4rem;
+}
+
+.muse-date-shown {
+  margin: 0;
+}
+
+.muse-misfit,
+.muse-date-shown.muse-misfit {
+  color: #ffcc80;
+}
+
+.muse-misfit-flag {
+  font-size: 0.85rem;
+  cursor: help;
+}
+
+.muse-cal-misfit a {
+  color: var(--muse-accent-strong);
+}
+
+.muse-cal-row .muse-hint,
+.muse-date-time .muse-hint {
+  align-self: center;
+  margin: 0;
+}

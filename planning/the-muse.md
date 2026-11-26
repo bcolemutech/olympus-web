@@ -1,6 +1,6 @@
 # The Muse — Design Document v0.1
 
-**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200 shipped 2026-11-25** (M-201 to M-203, #914–#916). **M-300's details decided 2026-11-25** (§3, "M-300 details"), its sub-issues M-301 to M-304 filed as #922–#925 (§7). The later epics' sub-issues are filed when each is next.
+**Status:** Decided 2026-11-20. Epics M-100 (#888), M-200 (#895), M-300 (#896), M-400 (#897) and M-500 (#898) filed. **M-100 shipped 2026-11-23** (M-101 to M-107, #889–#894 and #906). **M-200 shipped 2026-11-25** (M-201 to M-203, #914–#916). **M-300's details decided 2026-11-25** (§3, "M-300 details"), its sub-issues M-301 to M-304 filed as #922–#925 (§7); M-301 built 2026-11-26. The later epics' sub-issues are filed when each is next.
 **Project:** Olympus (`olympus-dfa00`)
 **Phase:** The Muse, its own app and phase (milestone #27), prefix **M-**, label `muse`. From idea #873.
 **Depends on:** the Image Studio (L-700, [`the-image-studio.md`](./the-image-studio.md)), the MCP host (MCP Initiative 1, [`initiative-1-mcp-foundation.md`](./initiative-1-mcp-foundation.md)).
@@ -376,6 +376,16 @@ All under `muse_projects/{projectId}`. Owner only: rules check `resource.data.ow
 | M-302 | Events and epochs        | #923  | M-301       | Sonnet |
 | M-303 | The timeline view        | #924  | M-302       | Opus   |
 | M-304 | Testing the epic by hand | #925  | M-301–M-303 | Sonnet |
+
+**Decided while building M-301 (2026-11-26):**
+
+- **A project without a calendar uses the Gregorian** (365 days, no leap days), so a date written before M-301 reads as before by its numbers and the picker has months from the start; "Start again from" on the Calendar page puts the Gregorian or a blank one in its draft. Its first weekday is set so 2026's weekdays are the real ones; with no leap days they drift a day every four years from there.
+- **An era runs from its `start` to the next era's,** and the first reaches back before its start too. A forward era counts its start as year 1; a backward one counts its last year (the one before the next era) as 1, so it can't be the last era. The Gregorian's are BCE (backward) and CE from year 1, so the running year 0 is 1 BCE.
+- **The pattern's tokens:** `{d}` `{dd}` `{do}` (3rd) `{W}` (weekday) `{M}` `{Ms}` `{m}` `{mm}` `{y}` (the year of its era) `{Y}` (the running year) `{E}` `{EE}`. A date without a day or a month leaves those tokens out with the text that joins them ("Hammer, 1492 T.A." from "the {do} of {M}, {y} {E}"), as do era tokens in a calendar without eras and the weekday on a day outside the week. The time is not a token: it follows the date after a comma ("…, 14:05", or "…, 14h" for an hour alone), and "c. " goes before.
+- **Reading text** finds the era, the month and any weekday by name or short name (the longest match, case and accents aside), "c."/"circa" at the start and a time at the end, then takes the numbers in the order the pattern puts them, dropping the day and then the month when there are fewer. A year without an era named is in the last era, unless the pattern writes the running year. A word that is no month or era is refused, so a misspelling isn't read as something else. Names must hold a letter and be unique across months, weekdays and eras.
+- **A new date must fit the calendar; a stored one is kept as it is** (CA9): saving an element unchanged keeps a date that no longer fits, flagged "Doesn’t fit the calendar" where it shows and in the picker, and listed on the Calendar page (which reads the live elements of the types with date fields), and `get_calendar` lists them as `misfits`.
+- **The rules bound the calendar,** as they do `fields`: its keys, its lists' sizes, the hours, minutes and first weekday as whole numbers in range, and the pattern's length; the plans check each part.
+- **The Calendar page** is `#/p/<id>/calendar`, opened from the project's Settings, where a line says how dates are written. Months, weekdays, seasons and eras are rows with ↑ ↓ and Remove (no dragging); the example under "How dates are written" follows the draft as it is typed.
 
 ### Later epics (planned; filed when next)
 

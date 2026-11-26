@@ -400,6 +400,27 @@ service cloud.firestore {
             && f.get('concept', []) is list && f.get('concept', []).size() <= 30;
       }
 
+      // The project's calendar (M-301, CA1–CA8): its parts and their bounds.
+      // Each month's, era's and season's shape is checked by the page and the
+      // connector (public/apps/muse/js/calendar.js); the rules bound the lists.
+      function validCalendar(c) {
+        return c is map
+            && c.keys().hasOnly(['months', 'weekdays', 'firstWeekday', 'seasons',
+                                 'hoursPerDay', 'minutesPerHour', 'eras', 'format'])
+            && c.get('months', []) is list && c.get('months', []).size() <= 100
+            && c.get('weekdays', []) is list && c.get('weekdays', []).size() <= 30
+            && c.get('seasons', []) is list && c.get('seasons', []).size() <= 24
+            && c.get('eras', []) is list && c.get('eras', []).size() <= 20
+            && c.get('firstWeekday', 0) is int
+            && c.get('firstWeekday', 0) >= 0 && c.get('firstWeekday', 0) < 30
+            && c.get('hoursPerDay', 24) is int
+            && c.get('hoursPerDay', 24) >= 1 && c.get('hoursPerDay', 24) <= 100
+            && c.get('minutesPerHour', 60) is int
+            && c.get('minutesPerHour', 60) >= 1 && c.get('minutesPerHour', 60) <= 100
+            && c.get('format', '{y}') is string
+            && c.get('format', '{y}').size() > 0 && c.get('format', '{y}').size() <= 100;
+      }
+
       function validProject() {
         let data = request.resource.data;
         let required = ['owner', 'title', 'short', 'summary', 'createdAt', 'updatedAt'];
@@ -413,7 +434,7 @@ service cloud.firestore {
                 || (data.cover is string && data.cover.size() > 0 && data.cover.size() <= 200))
             && (!('fields' in data) || validFieldDefs(data.fields))
             && (!('lanes' in data) || data.lanes is list)
-            && (!('calendar' in data) || data.calendar is map);
+            && (!('calendar' in data) || data.calendar == null || validCalendar(data.calendar));
       }
 
       allow read, delete: if museOwns(resource.data);

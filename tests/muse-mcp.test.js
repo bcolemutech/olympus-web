@@ -8,7 +8,9 @@
  * photos, retiring, custom fields and the outline; `search` finding a word in a
  * bio and `lookup` by an alias; the studio's tools without worlds, drawing an
  * element; and who is let in: a token without mcp:muse is refused, and one
- * user never sees another's project. The page's search box goes through the
+ * user never sees another's project. The calendar (M-301 / #922): set over
+ * the connector, a date field written as text and read back in the project's
+ * form, a version kept before set_calendar, and dates that no longer fit. The page's search box goes through the
  * museSearch callable, run here too.
  *
  * Run: firebase emulators:exec --only firestore --project demo-olympus-rules-test \
@@ -238,7 +240,7 @@ describe('elements', () => {
     expect(peter).toMatchObject({
       residence: { id: sea.id, name: 'The Sunken City' },
       photos: [{ id: IMG, title: 'King Peter', link: `https://example.com/${IMG}.png`, primary: true }],
-      fields: [{ key, label: 'Born', kind: 'date', value: { year: 312 }, shown: 'Year 312' }],
+      fields: [{ key, label: 'Born', kind: 'date', value: { year: 312 }, shown: '312 CE' }],
       mentions: [{ id: sea.id, name: 'The Sunken City' }],
       page: `${CANONICAL}/apps/muse/#/p/${project.id}/e/${peter.id}`,
     });
@@ -360,6 +362,114 @@ describe('elements', () => {
     });
     const named = await call(ann, 'save_version', { projectId: project.id, name: 'Before' });
     expect(named.version.id).toEqual(expect.any(String));
+  });
+});
+
+describe('the calendar (M-301)', () => {
+  const HARPTOS = {
+    start: 'blank',
+    months: [
+      { name: 'Hammer', short: 'Ham', days: 30 },
+      { name: 'Midwinter', days: 1, outsideWeek: true },
+      { name: 'Alturiak', days: 30 },
+    ],
+    weekdays: ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'],
+    eras: [
+      { name: 'Before the Founding', short: 'B.F.', start: -1000, backward: true },
+      { name: 'Third Age', short: 'T.A.', start: 1 },
+    ],
+    format: '{d} {M} {y} {E}',
+  };
+
+  test('a project uses the Gregorian until it has a calendar', async () => {
+    const { project } = await court();
+    const read = await call(ann, 'get_calendar', { projectId: project.id });
+    expect(read).toMatchObject({ own: false, daysInYear: 365, example: '3 March 1492 CE' });
+    expect((await call(ann, 'get_project', { projectId: project.id })).calendar).toMatchObject({
+      own: false,
+      example: '3 March 1492 CE',
+    });
+  });
+
+  test('set, with a date field written as text and read back in the project’s form', async () => {
+    const { project, peter } = await court();
+    const set = await call(ann, 'set_calendar', { projectId: project.id, ...HARPTOS });
+    expect(set).toMatchObject({ own: true, daysInYear: 61, example: '3 Alturiak 1492 T.A.' });
+    expect(set.calendar.eras.map((e) => e.short)).toEqual(['B.F.', 'T.A.']);
+    // A version of the project, by mcp, was kept before it was set.
+    const kept = await versionsOf(project.id, `muse_projects/${project.id}`);
+    expect(kept.filter((v) => v.by === 'mcp').length).toBeGreaterThanOrEqual(2);
+    const before = kept.sort((a, b) => b.at.toMillis() - a.at.toMillis())[0];
+    expect(before.snapshot.calendar).toBeUndefined();
+
+    const done = await call(ann, 'update_element', {
+      projectId: project.id,
+      elementId: peter.id,
+      fields: { Born: 'c. the 3rd of Hammer, 200 B.F., 06:30' },
+    });
+    expect(done.element.fields[0]).toMatchObject({
+      value: { year: -199, month: 1, day: 3, hour: 6, minute: 30, circa: true },
+      shown: 'c. 3 Hammer 200 B.F., 06:30',
+    });
+    const stored = await doc(`muse_projects/${project.id}/elements/${peter.id}`);
+    expect(Object.values(stored.fields)[0]).toEqual({
+      year: -199,
+      month: 1,
+      day: 3,
+      hour: 6,
+      minute: 30,
+      circa: true,
+    });
+    // Numbers in an era do as well; a date that doesn't fit is refused.
+    const byEra = await call(ann, 'update_element', {
+      projectId: project.id,
+      elementId: peter.id,
+      fields: { Born: { era: 'T.A.', year: 12, month: 2, day: 1 } },
+    });
+    expect(byEra.element.fields[0].shown).toBe('1 Midwinter 12 T.A.');
+    await expect(
+      call(ann, 'update_element', {
+        projectId: project.id,
+        elementId: peter.id,
+        fields: { Born: '2 Midwinter 12 T.A.' },
+      })
+    ).rejects.toThrow('Midwinter has 1 day, not 2.');
+    await expect(
+      call(ann, 'update_element', { projectId: project.id, elementId: peter.id, fields: { Born: '3 Hamer 5' } })
+    ).rejects.toThrow('not a month or an era');
+  });
+
+  test('a change keeps every date’s numbers, and lists those that no longer fit (CA9)', async () => {
+    const { project, peter } = await court();
+    await call(ann, 'set_calendar', { projectId: project.id, ...HARPTOS });
+    await call(ann, 'update_element', {
+      projectId: project.id,
+      elementId: peter.id,
+      fields: { Born: '30 Alturiak 1492 T.A.' },
+    });
+    const months = HARPTOS.months.map((m) => (m.name === 'Alturiak' ? { ...m, days: 28 } : m));
+    const set = await call(ann, 'set_calendar', { projectId: project.id, months });
+    expect(set.calendar.eras).toHaveLength(2); // the other parts kept
+    expect(set.misfits).toEqual([
+      {
+        element: { id: peter.id, name: 'King Peter', type: 'character' },
+        field: 'Born',
+        value: { year: 1492, month: 3, day: 30 },
+        shown: '30 Alturiak 1492 T.A.',
+        why: 'Alturiak has 28 days, not 30.',
+      },
+    ]);
+    const read = await call(ann, 'get_element', { projectId: project.id, elementId: peter.id });
+    expect(read.fields[0]).toMatchObject({
+      value: { year: 1492, month: 3, day: 30 },
+      misfit: 'Alturiak has 28 days, not 30.',
+    });
+    // Saving it unchanged keeps it; refused: a calendar of the wrong shape.
+    await call(ann, 'update_element', { projectId: project.id, elementId: peter.id, bio: 'Old.' });
+    await expect(
+      call(ann, 'set_calendar', { projectId: project.id, eras: [{ name: 'Night', start: 1, backward: true }] })
+    ).rejects.toThrow('must follow');
+    await expect(call(ann, 'set_calendar', { projectId: project.id })).rejects.toThrow('Say what');
   });
 });
 

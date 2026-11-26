@@ -230,6 +230,7 @@
       var checked = model.checkElement(type, input, {
         defs: defsFor(type),
         elementType: typeOf,
+        calendar: Muse.calendar.of(state.project),
       });
       if (checked.error) return Promise.reject(new Error(checked.error));
       var id = projectRef(projectId).collection('elements').doc().id;
@@ -248,6 +249,7 @@
         elementType: typeOf,
         current: current,
         tree: state.tree,
+        calendar: Muse.calendar.of(state.project),
       });
       if (checked.error) return Promise.reject(new Error(checked.error));
       return commit(model.planUpdate(projectId, current, checked.value));

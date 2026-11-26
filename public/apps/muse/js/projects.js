@@ -3,7 +3,7 @@
 
   // A project's document, read and written by the page (D1):
   // muse_projects/{projectId} = { owner, title, short, summary, cover,
-  // createdAt, updatedAt } (planning/the-muse.md §4). The rules check its
+  // calendar, createdAt, updatedAt } (planning/the-muse.md §4). The rules check its
   // shape and that it is the signed-in user's.
 
   var Muse = window.Muse;
@@ -24,6 +24,7 @@
       summary: data.summary || '',
       cover: data.cover || null,
       fields: data.fields && typeof data.fields === 'object' ? data.fields : {},
+      calendar: data.calendar && typeof data.calendar === 'object' ? data.calendar : null,
       createdAt: data.createdAt || null,
       updatedAt: data.updatedAt || null,
     };
@@ -53,6 +54,11 @@
       var defs = Muse.fields.checkAll(fields.fields);
       if (defs.error) return defs.error;
       fields.fields = defs.value;
+    }
+    if ('calendar' in fields) {
+      var cal = Muse.calendar.check(fields.calendar);
+      if (cal.error) return cal.error;
+      fields.calendar = cal.value;
     }
     if ('cover' in fields) {
       fields.cover = String(fields.cover || '').trim() || null;
@@ -109,10 +115,11 @@
         });
     },
 
-    // Changes some of title, short, summary, cover and fields (EL2).
+    // Changes some of title, short, summary, cover, fields (EL2) and the
+    // calendar (M-301).
     update: function (id, changes) {
       var data = {};
-      ['title', 'short', 'summary', 'cover', 'fields'].forEach(function (key) {
+      ['title', 'short', 'summary', 'cover', 'fields', 'calendar'].forEach(function (key) {
         if (key in changes) data[key] = changes[key];
       });
       var error = check(data);

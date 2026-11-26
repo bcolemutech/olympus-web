@@ -1,4 +1,4 @@
-/* global module, window */
+/* global module, window, require */
 (function () {
   'use strict';
 
@@ -11,8 +11,11 @@
   //
   //   text      a line or a paragraph, up to 10,000 characters
   //   number    any finite number
-  //   date      { year, month?, day? }, whole numbers: just a year, a month or
-  //             a day (TL1). M-300 names the months from the project's calendar.
+  //   date      { year, month?, day?, hour?, minute?, circa? }, whole numbers:
+  //             just a year, a month or a day (TL1), with a time and "c."
+  //             (M-301, D12); `year` the running year. Given as numbers or as
+  //             text in the project's form, read and written by its calendar
+  //             (./calendar.js).
   //   element   an element's id; `options` may name the types it can be
   //   choice    one of `options`, a list of words
   //
@@ -24,6 +27,11 @@
   // Pure: the page uses it, and the Muse connector (M-106) will too. Checks
   // take raw input (from a form or a tool call) and give back { value } or
   // { error }; a value of null means "not set".
+
+  var calendar =
+    typeof window !== 'undefined' && window.Muse && window.Muse.calendar
+      ? window.Muse.calendar
+      : require('./calendar.js');
 
   var TYPES = ['character', 'faction', 'location', 'object', 'concept'];
   var KINDS = [
@@ -163,12 +171,29 @@
     return raw === undefined || raw === null || (typeof raw === 'string' && !raw.trim());
   }
 
+  // The same value, whatever order a map's keys come in (Firestore gives a
+  // date's back sorted).
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (!isPlainObject(value)) return value;
+    var out = {};
+    Object.keys(value)
+      .sort()
+      .forEach(function (k) {
+        out[k] = canonical(value[k]);
+      });
+    return out;
+  }
+
   function sameValue(a, b) {
-    return JSON.stringify(a) === JSON.stringify(b);
+    return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
   }
 
   // Checks a raw value for a field. `context`:
   //   elementType(id) → the type of a live element, or null (element links)
+  //   calendar        the project's calendar (./calendar.js of): a date is
+  //                   read by it and must fit it (CA9); without one, only
+  //                   a date's shape is checked
   //   kept            the value stored now, accepted as it is even where
   //                   a change of definition has made it invalid
   function checkValue(def, raw, context) {
@@ -194,7 +219,7 @@
         return { value: n };
       }
       case 'date':
-        return checkDate(label, raw);
+        return checkDate(label, raw, context.calendar);
       case 'element': {
         var id = String(raw).trim();
         var type = context.elementType ? context.elementType(id) : null;
@@ -216,37 +241,21 @@
     }
   }
 
-  function whole(value) {
-    if (value === undefined || value === null || value === '') return undefined;
-    var n = typeof value === 'number' ? value : Number(String(value).trim());
-    return isFinite(n) && Math.floor(n) === n ? n : NaN;
-  }
-
-  // A date at any precision: a year, a month of a year, or a day of a month.
-  function checkDate(label, raw) {
-    if (!isPlainObject(raw)) return { error: label + ' must be a date.' };
-    var year = whole(raw.year);
-    var month = whole(raw.month);
-    var day = whole(raw.day);
-    if (year === undefined && month === undefined && day === undefined) return { value: null };
-    if (year === undefined || isNaN(year) || Math.abs(year) > 1e9) {
-      return { error: label + ' needs a whole year.' };
+  // A date at any precision: a year, a month of a year, or a day of a month,
+  // with a time and "circa" (D12): numbers, or text in the calendar's form.
+  function checkDate(label, raw, cal) {
+    if (typeof raw === 'string' || typeof raw === 'number') {
+      var read = calendar.parse(cal || calendar.gregorian(), raw);
+      return read.error ? { error: label + ': ' + read.error } : read;
     }
-    var out = { year: year };
-    if (month !== undefined) {
-      if (isNaN(month) || month < 1 || month > 100) {
-        return { error: label + ': the month is a whole number from 1.' };
-      }
-      out.month = month;
+    if (isPlainObject(raw) && raw.era !== undefined && raw.era !== null && raw.era !== '') {
+      var numbers = calendar.fromNumbers(cal || calendar.gregorian(), raw);
+      return numbers.error ? { error: label + ': ' + numbers.error } : numbers;
     }
-    if (day !== undefined) {
-      if (out.month === undefined) return { error: label + ': a day needs its month.' };
-      if (isNaN(day) || day < 1 || day > 1000) {
-        return { error: label + ': the day is a whole number from 1.' };
-      }
-      out.day = day;
-    }
-    return { value: out };
+    var shape = calendar.checkShape(raw, label);
+    if (shape.error || shape.value === null || !cal) return shape;
+    var why = calendar.misfit(cal, shape.value);
+    return why ? { error: label + ': ' + why } : shape;
   }
 
   // An element's values cleaned against its type's definitions: values of
@@ -272,6 +281,7 @@
       var def = defs[i];
       var checked = checkValue(def, raw ? raw[def.key] : null, {
         elementType: context.elementType,
+        calendar: context.calendar,
         kept: kept[def.key],
       });
       if (checked.error) return checked;
@@ -280,7 +290,8 @@
     return { value: out };
   }
 
-  // A value as words to show. `context.elementName(id)` names a link.
+  // A value as words to show. `context.elementName(id)` names a link, and
+  // `context.calendar` writes a date (else the Gregorian does).
   function format(def, value, context) {
     context = context || {};
     if (value === undefined || value === null) return '';
@@ -288,7 +299,7 @@
       case 'number':
         return typeof value === 'number' ? value.toLocaleString() : String(value);
       case 'date':
-        return formatDate(value);
+        return formatDate(value, context.calendar);
       case 'element':
         return (context.elementName && context.elementName(value)) || 'A retired element';
       default:
@@ -296,12 +307,9 @@
     }
   }
 
-  function formatDate(value) {
+  function formatDate(value, cal) {
     if (!isPlainObject(value) || typeof value.year !== 'number') return '';
-    var year = value.year < 0 ? 'Year ' + -value.year + ' before' : 'Year ' + value.year;
-    if (value.month === undefined) return year;
-    if (value.day === undefined) return year + ', month ' + value.month;
-    return year + ', month ' + value.month + ', day ' + value.day;
+    return calendar.write(cal || calendar.gregorian(), value);
   }
 
   var api = {

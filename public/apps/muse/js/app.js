@@ -9,11 +9,12 @@
   //   #/p/<id>/e/<el>/m/<schematic>[/<point>]  its page, open at a schematic (M-202)
   //   #/p/<id>/c/<class>  a class's page (M-201)
   //   #/p/<id>/s/<words>  every element whose text holds the words (M-106)
+  //   #/p/<id>/calendar   the project's calendar (M-301)
   // and, inside a project, the search box in the header (M-103).
 
   var Muse = window.Muse;
   var state = Muse.state;
-  var VIEWS = ['home', 'project', 'type', 'element', 'class', 'text', 'missing'];
+  var VIEWS = ['home', 'project', 'type', 'element', 'class', 'text', 'calendar', 'missing'];
 
   function view(name) {
     VIEWS.forEach(function (v) {
@@ -33,6 +34,13 @@
 
   function go() {
     var hash = window.location.hash || '#/';
+    var cal = /^#\/p\/([^/]+)\/calendar\/?$/.exec(hash);
+    if (cal) {
+      return Muse.calendarPage.show(decodeURIComponent(cal[1])).then(function (ok) {
+        view(ok ? 'calendar' : 'missing');
+        Muse.search.sync(!!ok);
+      });
+    }
     var m = /^#\/p\/([^/]+)(?:\/(t|e|c|s)\/([^/]+)(?:\/m\/([^/]+)(?:\/([^/]+))?)?)?\/?$/.exec(hash);
     if (m) {
       var id = decodeURIComponent(m[1]);
@@ -99,6 +107,7 @@
         Muse.relationships.init();
         Muse.search.init();
         Muse.textSearch.init();
+        Muse.calendarPage.init();
         document.addEventListener('click', function (event) {
           // An element link in a text (muse:el/<id>) opens its page, and a
           // class link (muse:cl/<id>, M-201) the class's.

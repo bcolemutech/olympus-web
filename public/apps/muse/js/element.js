@@ -63,7 +63,14 @@
       var value = e.fields[def.key];
       if (value === undefined || value === null || value === '') return;
       if (def.kind === 'element') fact(list, def.label, elementLink(value), def.key);
-      else fact(list, def.label, F.format(def, value), def.key);
+      else if (def.kind === 'date') {
+        fact(
+          list,
+          def.label,
+          Muse.datePicker.shown(Muse.calendar.of(state.project), value),
+          def.key
+        );
+      } else fact(list, def.label, F.format(def, value), def.key);
     });
     Muse.show(Muse.$('muse-e-facts-empty'), list.children.length === 0);
   }
@@ -230,21 +237,16 @@
         break;
       }
       case 'date': {
-        var label = Muse.el('span', 'muse-label', def.label);
-        body.appendChild(label);
-        wrap = Muse.el('div', 'muse-inline muse-date');
-        wrap.id = id;
-        wrap.setAttribute('role', 'group');
-        wrap.setAttribute('aria-label', def.label);
-        ['year', 'month', 'day'].forEach(function (part) {
-          var box = input('muse-date-' + part);
-          box.inputMode = 'numeric';
-          box.placeholder = part.charAt(0).toUpperCase() + part.slice(1);
-          box.setAttribute('aria-label', def.label + ': ' + part);
-          box.dataset.part = part;
-          box.value = value && value[part] !== undefined ? String(value[part]) : '';
-          wrap.appendChild(box);
+        // Picked in the project's calendar (M-301).
+        body.appendChild(Muse.el('span', 'muse-label', def.label));
+        var picker = Muse.datePicker.make({
+          label: def.label,
+          value: value,
+          calendar: Muse.calendar.of(state.project),
         });
+        wrap = picker.node;
+        wrap.id = id;
+        wrap.museRead = picker.read;
         body.appendChild(wrap);
         break;
       }
@@ -284,13 +286,7 @@
   }
 
   function readField(node, def) {
-    if (def.kind === 'date') {
-      var out = {};
-      node.querySelectorAll('input').forEach(function (box) {
-        if (box.value.trim()) out[box.dataset.part] = box.value.trim();
-      });
-      return Object.keys(out).length ? out : null;
-    }
+    if (def.kind === 'date') return node.museRead();
     return node.value;
   }
 
