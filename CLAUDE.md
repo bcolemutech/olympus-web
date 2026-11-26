@@ -44,7 +44,7 @@ npm run format
 - **JSX Runner** — `public/apps/jsx-runner/`: Dynamic React applet executor
 - **The Loom** — `public/apps/loom/`: AI-narrated game system; plays worlds with Gemini
 - **The Cartographer** — `public/apps/cartographer/`: Turns Azgaar maps into Loom worlds; MCP connector at `/mcp/cartographer`
-- **The Muse** — `public/apps/muse/`: World bibles and manuscripts (M-100 shipped: projects from M-101, elements and custom fields from M-102, relationships, @-links and search from M-103, photo libraries from M-104, versions from M-105, the connector and full-text search from M-106; M-200 in progress: classifications from M-201, schematics from M-202); opened by the `muse` claim; MCP connector at `/mcp/muse`
+- **The Muse** — `public/apps/muse/`: World bibles and manuscripts (M-100 shipped: projects from M-101, elements and custom fields from M-102, relationships, @-links and search from M-103, photo libraries from M-104, versions from M-105, the connector and full-text search from M-106; M-200 shipped: classifications from M-201, schematics from M-202); opened by the `muse` claim; MCP connector at `/mcp/muse`
 - **The Image Studio** — `public/apps/studio/`: The library of art for worlds: browse, search, look at, upload and download images. Opened by the `cartographer` or `muse` claim (`claim:` in `apps.yaml`); its MCP tools are in the Cartographer connector, and without worlds in the Muse's
 - **Scriptorium** — _(MCP connector only)_: Notes managed from Claude at `/mcp/scriptorium`
 
