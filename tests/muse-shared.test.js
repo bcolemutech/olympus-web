@@ -12,7 +12,15 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILES = ['fields.js', 'links.js', 'model.js', 'versions.js', 'classes.js', 'schematics.js'];
+const FILES = [
+  'fields.js',
+  'links.js',
+  'model.js',
+  'versions.js',
+  'classes.js',
+  'schematics.js',
+  'calendar.js',
+];
 
 describe("the page's and the server's copies", () => {
   test.each(FILES)('%s is identical, byte for byte', (file) => {

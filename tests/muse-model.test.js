@@ -120,10 +120,46 @@ describe('custom field values, each kind checked and saved', () => {
     expect(check('born', { year: 1.5 }).error).toMatch(/year/);
     expect(check('born', { year: 312, day: 4 }).error).toMatch(/month/);
     expect(check('born', { year: 312, month: 0 }).error).toMatch(/month/);
-    expect(check('born', '312').error).toMatch(/date/);
+    expect(check('born', ['312']).error).toMatch(/date/);
     expect(check('born', { year: '', month: '' })).toEqual({ value: null });
-    expect(fields.formatDate({ year: 312, month: 3, day: 14 })).toBe('Year 312, month 3, day 14');
-    expect(fields.formatDate({ year: -40 })).toBe('Year 40 before');
+    // Without the project's calendar, the Gregorian (M-301) reads and writes.
+    expect(check('born', '14 March 312')).toEqual({ value: { year: 312, month: 3, day: 14 } });
+    expect(check('born', '30 February 312').error).toMatch(/February has 28 days/);
+    expect(fields.formatDate({ year: 312, month: 3, day: 14 })).toBe('14 March 312 CE');
+    expect(fields.formatDate({ year: -40 })).toBe('41 BCE');
+  });
+
+  test('date: a time and circa (M-301, D12)', () => {
+    expect(check('born', { year: 312, month: 3, day: 14, hour: '9', minute: 5, circa: true })).toEqual({
+      value: { year: 312, month: 3, day: 14, hour: 9, minute: 5, circa: true },
+    });
+    expect(check('born', { year: 312, hour: 9 }).error).toMatch(/day/);
+    expect(check('born', { year: 312, month: 3, day: 14, minute: 5 }).error).toMatch(/hour/);
+    expect(check('born', 'c. 14 March 312, 09:05')).toEqual({
+      value: { year: 312, month: 3, day: 14, hour: 9, minute: 5, circa: true },
+    });
+  });
+
+  test('date: one that no longer fits its calendar is kept until it is changed (CA9)', () => {
+    const short = {
+      months: [{ name: 'Hammer', short: '', days: 20, outsideWeek: false }],
+      weekdays: [],
+      firstWeekday: 0,
+      seasons: [],
+      hoursPerDay: 24,
+      minutesPerHour: 60,
+      eras: [],
+      format: '{d} {M} {y}',
+    };
+    const def = { key: 'born', label: 'Born', kind: 'date' };
+    const stored = { year: 5, month: 1, day: 30 };
+    expect(fields.checkValue(def, { day: 30, month: 1, year: 5 }, { calendar: short, kept: stored })).toEqual({
+      value: stored,
+    });
+    expect(fields.checkValue(def, { year: 5, month: 1, day: 29 }, { calendar: short }).error).toMatch(
+      /Hammer has 20 days/
+    );
+    expect(fields.format(def, { year: 5, month: 1, day: 3 }, { calendar: short })).toBe('3 Hammer 5');
   });
 
   test('element: a live element, of the types allowed', () => {

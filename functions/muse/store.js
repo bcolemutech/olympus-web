@@ -5,6 +5,7 @@ const links = require('./links');
 const model = require('./model');
 const classes = require('./classes');
 const schematics = require('./schematics');
+const calendar = require('./calendar');
 const { createVersionStore } = require('./version-store');
 const { searchText, plainText } = require('./search');
 
@@ -228,6 +229,18 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
         fields.TYPES.map((type) => [type, (p.fields[type] || []).map((def) => ({ ...def }))])
       ),
       counts,
+      calendar: calendarSummary(p),
+    };
+  }
+
+  // How the project writes a date, for get_project: its own calendar or the
+  // Gregorian it uses until it has one.
+  function calendarSummary(p) {
+    const cal = calendar.of(p);
+    return {
+      own: !!p.calendar,
+      example: calendar.write(cal, calendar.example(cal)),
+      note: 'Dates are written in this form, and given as text like it or as numbers (get_calendar).',
     };
   }
 
@@ -301,6 +314,72 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     else delete all[type];
     const version = await writeProject(projectId, { fields: all });
     return { type, fields: checked.value, version };
+  }
+
+  // ── The calendar (M-301) ────────────────────────
+
+  // The live elements of the types that have date fields, with their fields,
+  // for the dates that don't fit (CA9).
+  async function datedElements(p) {
+    const types = fields.TYPES.filter((type) =>
+      (p.fields[type] || []).some((def) => def.kind === 'date')
+    );
+    if (!types.length) return [];
+    const snap = await projectRef(p.id)
+      .collection('elements')
+      .where('retired', '==', false)
+      .where('type', 'in', types)
+      .limit(ELEMENTS_READ)
+      .get();
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  }
+
+  async function calendarView(p) {
+    const cal = calendar.of(p);
+    const dated = await datedElements(p);
+    return {
+      own: !!p.calendar,
+      ...(p.calendar ? {} : { note: 'It has no calendar of its own yet: the Gregorian is used.' }),
+      calendar: cal,
+      daysInYear: calendar.daysInYear(cal),
+      example: calendar.write(cal, calendar.example(cal)),
+      formats: calendar.FORMATS.map((format) => ({
+        format,
+        example: calendar.write(cal, calendar.example(cal), format),
+      })),
+      tokens: calendar.TOKENS.map((t) => `{${t.id}} ${t.name}`),
+      misfits: calendar.misfits(cal, p.fields, dated).map((m) => ({
+        element: { id: m.id, name: m.name, type: m.type },
+        field: m.label,
+        value: m.value,
+        shown: m.text,
+        why: m.why,
+      })),
+    };
+  }
+
+  async function getCalendar(uid, projectId) {
+    return calendarView(await project(uid, projectId));
+  }
+
+  // Sets the calendar (CA7): from `start` ("gregorian" or "blank") or the one
+  // it has now, with the parts given replacing those parts. Dates keep their
+  // numbers (CA9). A version of the project is kept first.
+  async function setCalendar(uid, projectId, { start, ...parts } = {}) {
+    const p = await project(uid, projectId);
+    let base;
+    if (start === 'gregorian') base = calendar.gregorian();
+    else if (start === 'blank') base = calendar.blank();
+    else if (start === undefined || start === null) base = calendar.of(p);
+    else throw invalid('start is "gregorian" or "blank".');
+    const given = Object.fromEntries(Object.entries(parts).filter(([, v]) => v !== undefined));
+    if (!start && !Object.keys(given).length) {
+      throw invalid('Say what to set: start, months, weekdays, seasons, eras, format…');
+    }
+    const checked = calendar.check({ ...base, ...given });
+    if (checked.error) throw invalid(checked.error);
+    const version = await writeProject(projectId, { calendar: checked.value });
+    return { ...(await calendarView({ ...p, calendar: checked.value })), version };
   }
 
   // ── Elements ────────────────────────────────────
@@ -447,6 +526,7 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
   // relationships from its side, what it links to and what links to it.
   async function detail(p, index, el, tree) {
     const name = nameIn(index);
+    const cal = calendar.of(p);
     const defs = p.fields[el.type] || [];
     const rels = await relationshipsOf(p.id, el.id);
     return {
@@ -464,7 +544,10 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
           kind: def.kind,
           value,
           ...(value !== null && (def.kind === 'element' || def.kind === 'date')
-            ? { shown: fields.format(def, value, { elementName: name }) }
+            ? { shown: fields.format(def, value, { elementName: name, calendar: cal }) }
+            : {}),
+          ...(value !== null && def.kind === 'date' && calendar.misfit(cal, value)
+            ? { misfit: calendar.misfit(cal, value) }
             : {}),
         };
       }),
@@ -548,6 +631,7 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     const checked = model.checkElement(type, elementInput(type, input, defs, index), {
       defs,
       elementType: typeIn(index),
+      calendar: calendar.of(p),
     });
     if (checked.error) throw invalid(checked.error);
     let value = checked.value;
@@ -606,7 +690,7 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
       const checked = model.checkElement(
         current.type,
         elementInput(current.type, input, defs, index, current),
-        { defs, elementType: typeIn(index), current }
+        { defs, elementType: typeIn(index), current, calendar: calendar.of(p) }
       );
       if (checked.error) throw invalid(checked.error);
       return model.planUpdate(projectId, current, checked.value);
@@ -1384,6 +1468,8 @@ function createMuseStore({ db, FieldValue, images = { get: async () => null } })
     createProject,
     updateProject,
     setFields,
+    getCalendar,
+    setCalendar,
     listElements,
     findElements,
     getElement,

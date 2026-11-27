@@ -130,6 +130,8 @@
   //   current           the element as stored, when changing one
   //   tree              the project's classifications (./classes.js), when
   //                     classes are given
+  //   calendar          the project's calendar (./calendar.js), which reads
+  //                     its dates and which a date changed must fit (CA9)
   // Gives back { value } (the element's own fields, cleaned) or { error }.
   function checkElement(type, input, context) {
     context = context || {};
@@ -150,6 +152,7 @@
       has('fields') ? input.fields : current.fields,
       {
         elementType: context.elementType,
+        calendar: context.calendar,
         kept: current.fields || {},
       }
     );

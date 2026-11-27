@@ -254,6 +254,15 @@
             </div>
           </div>
 
+          <!-- The calendar (M-301; TL1, CA1–CA9): on a page of its own -->
+          <div class="muse-cal-link" id="muse-p-calendar">
+            <h3 class="muse-subheading">Calendar</h3>
+            <p class="muse-hint" id="muse-p-calendar-line"></p>
+            <a class="muse-btn muse-btn-quiet" id="muse-p-calendar-open" href="#/">
+              Open the calendar
+            </a>
+          </div>
+
           <!-- Versions (VR1; M-105): a copy to come back to -->
           <div class="muse-versions" id="muse-p-versions">
             <h3 class="muse-subheading">Versions</h3>
@@ -680,6 +689,112 @@
         <div class="muse-el-list" id="muse-s-list"></div>
       </section>
 
+      <!-- ── The project's calendar (M-301; TL1, CA1–CA9) ── -->
+      <section class="hidden" id="muse-calendar">
+        <a class="muse-back" id="muse-cal-back" href="#/">&larr; Project</a>
+        <h1 class="muse-t-title">Calendar</h1>
+        <p class="muse-hint" id="muse-cal-note"></p>
+
+        <section class="muse-card muse-cal-misfits hidden" id="muse-cal-misfits">
+          <h2 class="muse-heading">Dates that don't fit</h2>
+          <p class="muse-hint">
+            Dates keep their numbers when the calendar changes. These name a month, a day or a time
+            it no longer has: open each to fix it.
+          </p>
+          <ul class="muse-cal-misfit-list" id="muse-cal-misfit-list"></ul>
+        </section>
+
+        <section class="muse-card">
+          <div class="muse-bar">
+            <h2 class="muse-heading">How dates are written</h2>
+          </div>
+          <p class="muse-cal-example" id="muse-cal-example" aria-live="polite"></p>
+          <label class="muse-label" for="muse-cal-format-pick">Pattern</label>
+          <select class="muse-input muse-select" id="muse-cal-format-pick"></select>
+          <label class="muse-label" for="muse-cal-format">Its tokens</label>
+          <input class="muse-input" id="muse-cal-format" maxlength="100" autocomplete="off" />
+          <p class="muse-hint" id="muse-cal-tokens"></p>
+        </section>
+
+        <section class="muse-card">
+          <h2 class="muse-heading">Months</h2>
+          <p class="muse-hint">
+            A month can be a festival day or a few days, and can stand outside the week. Every year
+            is the same length: there are no leap years.
+          </p>
+          <div class="muse-cal-rows" id="muse-cal-months"></div>
+          <button type="button" class="muse-btn muse-btn-quiet" id="muse-cal-month-add">
+            Add a month
+          </button>
+          <p class="muse-hint" id="muse-cal-year"></p>
+        </section>
+
+        <section class="muse-card">
+          <h2 class="muse-heading">Weekdays</h2>
+          <p class="muse-hint">They run on across months and years. Leave none for no week.</p>
+          <div class="muse-cal-rows" id="muse-cal-weekdays"></div>
+          <button type="button" class="muse-btn muse-btn-quiet" id="muse-cal-weekday-add">
+            Add a weekday
+          </button>
+          <div class="muse-cal-first hidden" id="muse-cal-first-box">
+            <label class="muse-label" for="muse-cal-first">Year 1 begins on a</label>
+            <select class="muse-input muse-select" id="muse-cal-first"></select>
+          </div>
+        </section>
+
+        <section class="muse-card">
+          <h2 class="muse-heading">Seasons</h2>
+          <p class="muse-hint">Each from the day it starts.</p>
+          <div class="muse-cal-rows" id="muse-cal-seasons"></div>
+          <button type="button" class="muse-btn muse-btn-quiet" id="muse-cal-season-add">
+            Add a season
+          </button>
+        </section>
+
+        <section class="muse-card">
+          <h2 class="muse-heading">Hours and minutes</h2>
+          <div class="muse-inline">
+            <label class="muse-label" for="muse-cal-hours">Hours in a day</label>
+            <input class="muse-input muse-cal-num" id="muse-cal-hours" inputmode="numeric" />
+            <label class="muse-label" for="muse-cal-minutes">Minutes in an hour</label>
+            <input class="muse-input muse-cal-num" id="muse-cal-minutes" inputmode="numeric" />
+          </div>
+        </section>
+
+        <section class="muse-card">
+          <h2 class="muse-heading">Eras</h2>
+          <p class="muse-hint">
+            Every date counts years on one running count. Each era starts at a year of that count
+            and runs to the next era; the first also reaches back before its start. An era counting
+            backward, like BC, counts its last year as 1, so another must follow it.
+          </p>
+          <div class="muse-cal-rows" id="muse-cal-eras"></div>
+          <button type="button" class="muse-btn muse-btn-quiet" id="muse-cal-era-add">
+            Add an era
+          </button>
+        </section>
+
+        <section class="muse-card">
+          <p class="muse-error hidden" id="muse-cal-error" role="alert"></p>
+          <p class="muse-done hidden" id="muse-cal-done" role="status"></p>
+          <div class="muse-actions">
+            <button type="button" class="muse-btn" id="muse-cal-save" disabled>
+              Save the calendar
+            </button>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-cal-reset" disabled>
+              Undo changes
+            </button>
+          </div>
+          <div class="muse-cal-start">
+            <span class="muse-hint">Start again from</span>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-cal-gregorian">
+              Gregorian
+            </button>
+            <button type="button" class="muse-btn muse-btn-quiet" id="muse-cal-blank">Blank</button>
+          </div>
+        </section>
+      </section>
+
       <!-- ── A project or element that isn't there ── -->
       <section class="hidden" id="muse-missing">
         <a class="muse-back" href="#/">&larr; All projects</a>
@@ -693,6 +808,7 @@
     <!-- App modules -->
     <script src="/apps/muse/js/state.js"></script>
     <script src="/apps/muse/js/markdown.js"></script>
+    <script src="/apps/muse/js/calendar.js"></script>
     <script src="/apps/muse/js/fields.js"></script>
     <script src="/apps/muse/js/links.js"></script>
     <script src="/apps/muse/js/classes.js"></script>
@@ -712,6 +828,8 @@
     <script src="/apps/muse/js/home.js"></script>
     <script src="/apps/muse/js/project.js"></script>
     <script src="/apps/muse/js/field-editor.js"></script>
+    <script src="/apps/muse/js/date-picker.js"></script>
+    <script src="/apps/muse/js/calendar-page.js"></script>
     <script src="/apps/muse/js/type-list.js"></script>
     <script src="/apps/muse/js/relationships.js"></script>
     <script src="/apps/muse/js/mentioned.js"></script>

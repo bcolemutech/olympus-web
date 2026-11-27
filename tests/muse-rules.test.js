@@ -202,6 +202,18 @@ describe('badly shaped projects are refused', () => {
     'an empty cover id': { cover: '' },
     'fields that are not a map': { fields: 'x' },
     'lanes that are not a list': { lanes: {} },
+    'a calendar that is not a map': { calendar: ['Hammer'] },
+    'a calendar with a part it doesn’t know': { calendar: { moons: [] } },
+    'a calendar’s months not a list': { calendar: { months: 'Hammer' } },
+    'a calendar of 101 months': { calendar: { months: new Array(101).fill({ name: 'M', days: 1 }) } },
+    'a week of 31 days': { calendar: { weekdays: new Array(31).fill('Day') } },
+    'a calendar of 25 seasons': { calendar: { seasons: new Array(25).fill({}) } },
+    'a calendar of 21 eras': { calendar: { eras: new Array(21).fill({}) } },
+    'a day of no hours': { calendar: { hoursPerDay: 0 } },
+    'an hour of 101 minutes': { calendar: { minutesPerHour: 101 } },
+    'a first weekday that is not a whole number': { calendar: { firstWeekday: 1.5 } },
+    'a pattern that is not text': { calendar: { format: 3 } },
+    'a pattern too long': { calendar: { format: 'x'.repeat(101) } },
     'a field it doesn’t know': { colour: 'red' },
     'a made-up time': { createdAt: Timestamp.fromMillis(5) },
   };
@@ -212,6 +224,17 @@ describe('badly shaped projects are refused', () => {
         setDoc(doc(db('ann'), 'muse_projects', 'p1'), newProject('ann', overrides))
       );
     });
+  });
+
+  test('a whole calendar is kept, and changed (M-301)', async () => {
+    await seed('p1', 'ann');
+    const ref = doc(db('ann'), 'muse_projects', 'p1');
+    const calendar = require('../functions/muse/calendar.js');
+    await assertSucceeds(updateDoc(ref, { calendar: calendar.gregorian(), updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(ref, { calendar: calendar.blank(), updatedAt: serverTimestamp() }));
+    await assertFails(
+      updateDoc(ref, { calendar: { hoursPerDay: 'many' }, updatedAt: serverTimestamp() })
+    );
   });
 
   test('on create: a missing summary', async () => {

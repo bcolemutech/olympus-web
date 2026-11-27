@@ -12,7 +12,9 @@
  * Longsword shown by its path, the Objects list filtered by Sword, and a
  * class's page. Schematics (M-202 / #915): a floor plan's points added by a
  * tap and moved by a drag, a pin and its row lit together, zoom and pan, and
- * a linked room's page opening the plan at its pin.
+ * a linked room's page opening the plan at its pin. The calendar (M-301 /
+ * #922): one made with two eras and a festival day, a character's date picked
+ * in it and shown by its pattern, and flagged once a month is shortened.
  *
  * It needs Playwright and its Chromium; where the browser is missing the
  * suite is skipped, with a note.
@@ -828,7 +830,7 @@ describe('elements (M-102)', () => {
     await page.fill('#muse-e-aliases-input', 'Peter\nThe Drowned King');
     await page.selectOption('#muse-e-residence', 'el_sea');
     await page.fill('[data-field="born_ab"] .muse-date-year', '312');
-    await page.fill('[data-field="born_ab"] .muse-date-month', '3');
+    await page.selectOption('[data-field="born_ab"] .muse-date-month', '3');
     await page.selectOption('[data-field="temper_cd"]', 'Fiery');
     await page.fill('#muse-e-appearance-input', 'A crown of *barnacles*.');
     await page.fill('#muse-e-bio-input', '# The king\n\nHe rules the tides.');
@@ -846,7 +848,8 @@ describe('elements (M-102)', () => {
     );
     const fact = (key) => page.locator(`.muse-fact[data-key="${key}"] dd`).innerText();
     await expect(fact('residence')).resolves.toBe('The Sunken City');
-    await expect(fact('born_ab')).resolves.toBe('Year 312, month 3');
+    // Until it has a calendar of its own, the project's is the Gregorian (M-301).
+    await expect(fact('born_ab')).resolves.toBe('March 312 CE');
     await expect(fact('temper_cd')).resolves.toBe('Fiery');
     await expect(page.locator('#muse-e-appearance em').innerText()).resolves.toBe('barnacles');
     await expect(page.locator('#muse-e-bio h1').innerText()).resolves.toBe('The king');
@@ -2674,6 +2677,199 @@ describe('schematics (M-202)', () => {
         page.locator('#muse-sc-stage').getAttribute('data-scale').then(Number)
       ).resolves.toBeGreaterThan(2);
     });
+  });
+});
+
+describe('the calendar (M-301)', () => {
+  const CAL_PROJECT = {
+    'muse_projects/p_cal': {
+      owner: 'ann',
+      title: 'The Realms',
+      short: '',
+      summary: '',
+      cover: null,
+      updatedAt: 1,
+      fields: { character: [{ key: 'born_ab', label: 'Born', kind: 'date' }] },
+    },
+    'muse_projects/p_cal/elements/el_vey': {
+      type: 'character',
+      name: 'Captain Vey',
+      aliases: [],
+      bio: '',
+      fields: {},
+      images: [],
+      primary: null,
+      mentions: [],
+      classes: [],
+      appearance: '',
+      residence: null,
+      shard: '0',
+      retired: false,
+    },
+    'muse_projects/p_cal/index/0': {
+      entries: {
+        el_vey: { type: 'character', name: 'Captain Vey', aliases: [], primary: null, classes: [] },
+      },
+      last: 'el_vey',
+    },
+  };
+
+  const run = (name, fn) =>
+    Object.entries(SCREENS).forEach(([screen, options]) =>
+      test(`${name} (${screen})`, async () => {
+        if (!browser) {
+          console.warn(`Skipped "${name}": Playwright's Chromium isn't installed here.`);
+          return;
+        }
+        const { context, page, errors } = await open(options, {
+          hash: '#/p/p_cal',
+          extra: CAL_PROJECT,
+        });
+        try {
+          await page.waitForSelector('#muse-project:not(.hidden)');
+          await fn(page);
+          expect(errors).toEqual([]);
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+          );
+          expect(overflow).toBeLessThanOrEqual(0);
+        } finally {
+          await context.close();
+        }
+      })
+    );
+
+  const label = (page, text) => page.locator(`[aria-label="${text}"]`);
+  const fact = (page) => page.locator('.muse-fact[data-key="born_ab"] dd').innerText();
+  const born = async (page) =>
+    (await stored(page))['muse_projects/p_cal/elements/el_vey'].fields.born_ab;
+  const openVey = async (page) => {
+    await page.evaluate(() => {
+      window.location.hash = '#/p/p_cal/e/el_vey';
+    });
+    await page.waitForSelector('#muse-element:not(.hidden)');
+  };
+  const pick = async (page, { year, era, month, day }) => {
+    await page.click('#muse-e-edit');
+    await label(page, 'Born: year').fill(String(year));
+    await label(page, 'Born: era').selectOption(String(era));
+    await label(page, 'Born: month').selectOption(String(month));
+    await label(page, 'Born: day').fill(String(day));
+  };
+
+  run('made with two eras and a festival day; a date picked, shown, and flagged when a month is shortened', async (page) => {
+    // Until it has its own, the project writes dates in the Gregorian.
+    await expect(page.locator('#muse-p-calendar-line').innerText()).resolves.toMatch(
+      /Gregorian.*3 March 1492 CE/
+    );
+    await page.click('#muse-p-calendar-open');
+    await page.waitForSelector('#muse-calendar:not(.hidden)');
+    await expect(page.locator('#muse-cal-example').innerText()).resolves.toMatch(
+      /3 March 1492 CE/
+    );
+
+    // A blank start: three months, the second a festival day outside the week.
+    await page.click('#muse-cal-blank');
+    await expect(page.locator('#muse-cal-year').innerText()).resolves.toMatch(/years only/);
+    for (const [i, [name, days]] of [
+      ['Hammer', 30],
+      ['Midwinter', 1],
+      ['Alturiak', 30],
+    ].entries()) {
+      await page.click('#muse-cal-month-add');
+      await label(page, `Month ${i + 1}: name`).fill(name);
+      await label(page, `Month ${i + 1}: days`).fill(String(days));
+    }
+    await page
+      .locator('#muse-cal-months .muse-cal-row[data-month="2"] .muse-check input')
+      .check();
+    for (const w of ['Sul', 'Mol', 'Zor']) {
+      await page.click('#muse-cal-weekday-add');
+      const rows = page.locator('#muse-cal-weekdays .muse-cal-row input');
+      await rows.last().fill(w);
+    }
+    // Two eras: one counting backward to the second.
+    await page.click('#muse-cal-era-add');
+    await label(page, 'Era 1: name').fill('Before the Founding');
+    await label(page, 'Era 1: short name').fill('B.F.');
+    await label(page, 'Era 1: the running year it starts').fill('-1000');
+    await page.locator('#muse-cal-eras .muse-cal-row').first().locator('.muse-check input').check();
+    await page.click('#muse-cal-era-add');
+    await label(page, 'Era 2: name').fill('Third Age');
+    await label(page, 'Era 2: short name').fill('T.A.');
+    await label(page, 'Era 2: the running year it starts').fill('1');
+    await expect(page.locator('#muse-cal-year').innerText()).resolves.toBe('A year of 61 days.');
+    await expect(page.locator('#muse-cal-example').innerText()).resolves.toMatch(
+      /“3 Alturiak 1492 T\.A\.”, “Alturiak 1492 T\.A\.” and “c\. 1492 T\.A\.”\. That day is a Zor\./
+    );
+    // The pattern: picked from those offered, each shown as it writes.
+    const offered = await page.locator('#muse-cal-format-pick option').allInnerTexts();
+    expect(offered).toEqual(
+      expect.arrayContaining(['the 3rd of Alturiak, 1492 T.A.', '1492-03-03'])
+    );
+    await page.click('#muse-cal-save');
+    await expect(page.locator('#muse-cal-done').innerText()).resolves.toBe('Calendar saved.');
+    const cal = (await stored(page))['muse_projects/p_cal'].calendar;
+    expect(cal.months.map((m) => [m.name, m.days, m.outsideWeek])).toEqual([
+      ['Hammer', 30, false],
+      ['Midwinter', 1, true],
+      ['Alturiak', 30, false],
+    ]);
+    expect(cal.eras).toEqual([
+      { name: 'Before the Founding', short: 'B.F.', start: -1000, backward: true },
+      { name: 'Third Age', short: 'T.A.', start: 1, backward: false },
+    ]);
+    expect(cal.weekdays).toEqual(['Sul', 'Mol', 'Zor']);
+
+    // A character's date field, picked in it: the festival day, 200 B.F.
+    await openVey(page);
+    await pick(page, { year: 200, era: 0, month: 2, day: 1 });
+    await expect(page.locator('.muse-date-shown').innerText()).resolves.toBe(
+      'Shows as “1 Midwinter 200 B.F.”'
+    );
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+    await expect(fact(page)).resolves.toBe('1 Midwinter 200 B.F.');
+    expect(await born(page)).toEqual({ year: -199, month: 2, day: 1 });
+
+    // Then the 30th of Alturiak, about 1492 T.A.
+    await pick(page, { year: 1492, era: 1, month: 3, day: 30 });
+    await label(page, 'Born: hour').fill('6');
+    await label(page, 'Born: minute').fill('5');
+    await page.locator('.muse-date-time .muse-check input').check();
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+    await expect(fact(page)).resolves.toBe('c. 30 Alturiak 1492 T.A., 06:05');
+    expect(await born(page)).toEqual({ year: 1492, month: 3, day: 30, hour: 6, minute: 5, circa: true });
+
+    // Alturiak shortened to 28 days: the date keeps its numbers, flagged
+    // where it shows and listed on the calendar's page (CA9).
+    await page.evaluate(() => {
+      window.location.hash = '#/p/p_cal/calendar';
+    });
+    await page.waitForSelector('#muse-calendar:not(.hidden)');
+    await expect(page.locator('#muse-cal-misfits').isHidden()).resolves.toBe(true);
+    await label(page, 'Month 3: days').fill('28');
+    await page.click('#muse-cal-save');
+    await page.waitForSelector('#muse-cal-misfits:not(.hidden)');
+    await expect(page.locator('#muse-cal-misfit-list li').innerText()).resolves.toMatch(
+      /Captain Vey — Born: c\. 30 Alturiak 1492 T\.A\., 06:05\. Alturiak has 28 days, not 30\./
+    );
+    await page.click('#muse-cal-misfit-list a');
+    await page.waitForSelector('#muse-element:not(.hidden)');
+    await expect(fact(page)).resolves.toMatch(/30 Alturiak 1492 T\.A\., 06:05 ⚠ Doesn’t fit/);
+    // Saved unchanged, it is kept; the picker says what is wrong.
+    await page.click('#muse-e-edit');
+    await expect(page.locator('.muse-date-shown').innerText()).resolves.toBe(
+      '⚠ Alturiak has 28 days, not 30.'
+    );
+    await page.click('#muse-e-save');
+    await page.waitForSelector('#muse-e-read:not(.hidden)');
+    expect((await born(page)).day).toBe(30);
+    // Changed, it must fit.
+    await pick(page, { year: 1492, era: 1, month: 3, day: 29 });
+    await page.click('#muse-e-save');
+    await expect(page.locator('#muse-e-form-error').innerText()).resolves.toMatch(/28 days, not 29/);
   });
 });
 

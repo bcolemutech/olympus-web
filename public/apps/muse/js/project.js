@@ -156,10 +156,23 @@
       });
   }
 
+  // How the project writes dates, and its calendar's page (M-301).
+  function drawCalendar() {
+    var p = project();
+    var cal = Muse.calendar.of(p);
+    Muse.$('muse-p-calendar-line').textContent =
+      (p.calendar ? 'Its own calendar. ' : 'The Gregorian calendar, until you make its own. ') +
+      'Dates are written like “' +
+      Muse.calendar.write(cal, Muse.calendar.example(cal)) +
+      '”.';
+    Muse.$('muse-p-calendar-open').href = '#/p/' + encodeURIComponent(p.id) + '/calendar';
+  }
+
   function draw() {
     drawHead();
     drawSummary();
     drawSections();
+    drawCalendar();
     Muse.$('muse-p-rename-title').value = project().title;
   }
 

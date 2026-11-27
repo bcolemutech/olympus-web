@@ -10,6 +10,7 @@ const schematics = require('../../../muse/schematics');
 const fields = require('../../../muse/fields');
 const model = require('../../../muse/model');
 const links = require('../../../muse/links');
+const calendar = require('../../../muse/calendar');
 
 // The Muse's MCP connector (planning/the-muse.md §3 MC1, MC2, EL5, MS5, §5
 // M-100; M-106 / #894). Mounted at /mcp/muse and gated by the `muse` claim
@@ -102,16 +103,44 @@ const VALUE = z.union([
     year: z.number().int(),
     month: z.number().int().min(1).optional(),
     day: z.number().int().min(1).optional(),
+    hour: z.number().int().min(0).optional(),
+    minute: z.number().int().min(0).optional(),
+    circa: z.boolean().optional(),
+    era: z.union([z.string().max(60), z.number().int()]).optional(),
   }),
   z.null(),
 ]);
 const FIELD_VALUES = z
   .record(z.string(), VALUE)
   .describe(
-    'Custom field values, by key or label (get_project lists them): text, a number, a date ' +
-      '{ year, month?, day? }, a choice (one of its options) or an element (its id or a name ' +
-      'only it has). null clears one.'
+    'Custom field values, by key or label (get_project lists them): text, a number, a date, ' +
+      'a choice (one of its options) or an element (its id or a name only it has). null ' +
+      'clears one. A date is text in the project’s own form ("3 Hammer 1492 T.A.", "c. 1200", ' +
+      '"the 3rd of Hammer, 1492, 14:05"; get_project shows it) or numbers { year, month?, ' +
+      'day?, hour?, minute?, circa? }, year the running year, or with era (its name or short ' +
+      'name) that era’s year. It must fit the project’s calendar (get_calendar).'
   );
+const CAL_MONTH = z.object({
+  name: z.string().min(1).max(calendar.LIMITS.name),
+  short: z.string().max(calendar.LIMITS.short).optional(),
+  days: z.number().int().min(1).max(calendar.LIMITS.monthDays),
+  outsideWeek: z
+    .boolean()
+    .optional()
+    .describe('A festival day (or days) standing outside the week: weekdays skip it.'),
+});
+const CAL_ERA = z.object({
+  name: z.string().min(1).max(calendar.LIMITS.eraName),
+  short: z.string().max(calendar.LIMITS.short).optional(),
+  start: z
+    .number()
+    .int()
+    .describe('The running year it starts at; it runs to the next era’s start.'),
+  backward: z
+    .boolean()
+    .optional()
+    .describe('Counts backward like BC: its last year (the one before the next era) is its 1.'),
+});
 const readOnly = { readOnlyHint: true, openWorldHint: false };
 const writes = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 
@@ -321,6 +350,76 @@ function museApp({ store, studio }) {
         annotations: { ...writes, idempotentHint: true },
         handler: run(async (ctx, args) =>
           store.setFields(ctx.uid, args.projectId, args.type, args.fields)
+        ),
+      },
+
+      // ── The calendar (M-301) ──
+      {
+        name: 'get_calendar',
+        title: 'Read a project’s calendar',
+        description:
+          'A project’s calendar: its months (with festival days outside the week), weekdays, ' +
+          'seasons, hours and minutes, eras over one running count of years, and the pattern ' +
+          'dates are written by, with an example of each pattern offered and the tokens to ' +
+          'make one. Until it has its own, a project uses the Gregorian (no leap days). Lists ' +
+          'the dates on elements that no longer fit it (a 31st of a month now 30 long), to fix.',
+        inputSchema: { projectId },
+        annotations: readOnly,
+        handler: run(async (ctx, { projectId: pid }) => store.getCalendar(ctx.uid, pid)),
+      },
+      {
+        name: 'set_calendar',
+        title: 'Set a project’s calendar',
+        description:
+          'Set a project’s calendar: start from "gregorian" (365 days, no leap days) or ' +
+          '"blank" (years only), or from the one it has, and give the parts to replace, each ' +
+          'whole. Every year is the same length. Eras run over one count of years: each starts ' +
+          'at a running year and runs to the next; one counting backward (like BC) counts its ' +
+          'last year as 1, so another must follow it. Dates keep their numbers when it changes: ' +
+          'those that no longer fit are listed (misfits). A version of the project is kept first.',
+        inputSchema: {
+          projectId,
+          start: z.enum(['gregorian', 'blank']).optional(),
+          months: z.array(CAL_MONTH).max(calendar.LIMITS.months).optional(),
+          weekdays: z
+            .array(z.string().min(1).max(calendar.LIMITS.name))
+            .max(calendar.LIMITS.weekdays)
+            .optional()
+            .describe('The week’s days in order; [] for no week.'),
+          firstWeekday: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe('The weekday (its place, from 0) of the first day in the week of year 1.'),
+          seasons: z
+            .array(
+              z.object({
+                name: z.string().min(1).max(calendar.LIMITS.name),
+                month: z.number().int().min(1).describe('The month it starts in, from 1.'),
+                day: z.number().int().min(1).describe('The day it starts on.'),
+              })
+            )
+            .max(calendar.LIMITS.seasons)
+            .optional(),
+          hoursPerDay: z.number().int().min(1).max(calendar.LIMITS.hours).optional(),
+          minutesPerHour: z.number().int().min(1).max(calendar.LIMITS.minutes).optional(),
+          eras: z.array(CAL_ERA).max(calendar.LIMITS.eras).optional(),
+          format: z
+            .string()
+            .min(1)
+            .max(calendar.LIMITS.format)
+            .optional()
+            .describe(
+              'The pattern dates are written by: one of get_calendar’s formats, or made of ' +
+                'tokens: ' +
+                calendar.TOKENS.map((t) => `{${t.id}} ${t.name.toLowerCase()}`).join(', ') +
+                '. A date without a day or month drops those tokens.'
+            ),
+        },
+        annotations: { ...writes, idempotentHint: true },
+        handler: run(async (ctx, { projectId: pid, ...changes }) =>
+          store.setCalendar(ctx.uid, pid, changes)
         ),
       },
 
